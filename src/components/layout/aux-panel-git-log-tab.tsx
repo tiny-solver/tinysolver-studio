@@ -932,8 +932,10 @@ export function GitLogTab() {
             refreshing={loading || refreshing}
           />
         )}
-        <div className="pt-1 text-xs text-muted-foreground">
-          {t("noCommitsFound")}
+        <div className="flex items-center justify-center flex-1 p-4">
+          <p className="text-xs text-muted-foreground text-center">
+            {t("noCommitsFound")}
+          </p>
         </div>
       </div>
     )
