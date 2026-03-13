@@ -9,6 +9,8 @@ import {
   ListTodo,
   Compass,
   FileText,
+  Globe,
+  Search,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -43,13 +45,15 @@ export function PermissionDialog({
     parsed.planEntries.length > 0 || Boolean(parsed.planExplanation)
   const hasPlanMarkdown = Boolean(parsed.planMarkdown)
   const hasAllowedPrompts = parsed.allowedPrompts.length > 0
+  const hasWeb = Boolean(parsed.url) || Boolean(parsed.query)
   const hasStructured =
     Boolean(parsed.command) ||
     hasFileChanges ||
     hasPlan ||
     hasPlanMarkdown ||
     hasAllowedPrompts ||
-    Boolean(parsed.modeTarget)
+    Boolean(parsed.modeTarget) ||
+    hasWeb
 
   return (
     <div className="mx-4 mb-3 rounded-xl border border-border/70 bg-card/95 p-3 shadow-sm">
@@ -186,6 +190,32 @@ export function PermissionDialog({
               <Compass className="h-3.5 w-3.5" />
               <span>{t("targetMode", { mode: parsed.modeTarget })}</span>
             </div>
+          </div>
+        )}
+
+        {hasWeb && (
+          <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-2">
+            {parsed.url && (
+              <div className="flex items-center gap-2 text-xs">
+                <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="break-all font-mono text-foreground/90">
+                  {parsed.url}
+                </span>
+              </div>
+            )}
+            {parsed.query && (
+              <div className="flex items-center gap-2 text-xs">
+                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="break-all text-foreground/90">
+                  {parsed.query}
+                </span>
+              </div>
+            )}
+            {parsed.prompt && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                <MessageResponse>{parsed.prompt}</MessageResponse>
+              </div>
+            )}
           </div>
         )}
 

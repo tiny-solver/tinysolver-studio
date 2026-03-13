@@ -242,7 +242,34 @@ function serializePermissionToolCall(toolCall: unknown): string | null {
   const record = asRecord(toolCall)
   if (!record) return null
   try {
-    return JSON.stringify(record)
+    // Extract the actual tool input from the nested rawInput/raw_input field
+    // rather than serializing the entire permission wrapper (which includes
+    // internal fields like content, kind, title, toolCallId).
+    const nestedInput = record.rawInput ?? record.raw_input
+    if (nestedInput !== undefined && nestedInput !== null) {
+      if (typeof nestedInput === "string") return nestedInput
+      return JSON.stringify(nestedInput)
+    }
+    // Fallback: strip wrapper-only fields to avoid rendering internal
+    // permission structure as raw text.
+    const wrapperKeys = new Set([
+      "content",
+      "kind",
+      "title",
+      "toolCallId",
+      "tool_call_id",
+      "callId",
+      "call_id",
+      "rawInput",
+      "raw_input",
+    ])
+    const rest: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(record)) {
+      if (!wrapperKeys.has(k)) rest[k] = v
+    }
+    return Object.keys(rest).length > 0
+      ? JSON.stringify(rest)
+      : JSON.stringify(record)
   } catch {
     return null
   }

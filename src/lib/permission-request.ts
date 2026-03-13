@@ -38,6 +38,9 @@ export interface ParsedPermissionToolCall {
   planMarkdown: string | null
   allowedPrompts: PermissionAllowedPrompt[]
   modeTarget: string | null
+  url: string | null
+  query: string | null
+  prompt: string | null
   jsonPreview: string
 }
 
@@ -675,6 +678,13 @@ export function parsePermissionToolCall(
       "targetMode",
     ]) ?? null
 
+  const url =
+    pickString(rawInputObj, ["url"]) ?? pickString(toolCallObj, ["url"])
+  const query =
+    pickString(rawInputObj, ["query"]) ?? pickString(toolCallObj, ["query"])
+  const prompt =
+    pickString(rawInputObj, ["prompt"]) ?? pickString(toolCallObj, ["prompt"])
+
   const title =
     pickString(toolCallObj, ["title", "tool_name", "toolName", "name"]) ??
     formatFallbackTitle(normalizedKind)
@@ -693,6 +703,9 @@ export function parsePermissionToolCall(
     planMarkdown,
     allowedPrompts,
     modeTarget,
+    url,
+    query,
+    prompt,
     jsonPreview: stringifyJson(toolCallObj ?? toolCall),
   }
 }
