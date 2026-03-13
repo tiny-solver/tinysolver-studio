@@ -1196,8 +1196,10 @@ export function GitChangesTab() {
     <>
       <div className="h-full min-h-0 overflow-y-auto">
         {trackedChanges.length === 0 && untrackedChanges.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">
-            {t("noChanges")}
+          <div className="flex items-center justify-center h-full p-4">
+            <p className="text-xs text-muted-foreground text-center">
+              {t("noChanges")}
+            </p>
           </div>
         ) : (
           <div className="space-y-2 pb-2">
