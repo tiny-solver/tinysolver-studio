@@ -76,15 +76,17 @@ export function RemoteManageDialog({
   const addDraft = () => {
     setDrafts((prev) => [
       ...prev,
-      { originalName: null, originalUrl: "", name: "", url: "", deleted: false },
+      {
+        originalName: null,
+        originalUrl: "",
+        name: "",
+        url: "",
+        deleted: false,
+      },
     ])
   }
 
-  const updateDraft = (
-    index: number,
-    field: "name" | "url",
-    value: string
-  ) => {
+  const updateDraft = (index: number, field: "name" | "url", value: string) => {
     setDrafts((prev) =>
       prev.map((d, i) => (i === index ? { ...d, [field]: value } : d))
     )

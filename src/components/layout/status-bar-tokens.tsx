@@ -69,8 +69,10 @@ export function StatusBarTokens() {
   const rawLiveSize = activeConn?.usage?.size ?? null
   // Treat live used=0 as "no data" so we fall back to sessionStats —
   // Claude Code sends used=0 for synthetic local commands (/context etc.)
-  const liveContextUsed = rawLiveUsed != null && rawLiveUsed > 0 ? rawLiveUsed : null
-  const liveContextMax = rawLiveSize != null && rawLiveSize > 0 ? rawLiveSize : null
+  const liveContextUsed =
+    rawLiveUsed != null && rawLiveUsed > 0 ? rawLiveUsed : null
+  const liveContextMax =
+    rawLiveSize != null && rawLiveSize > 0 ? rawLiveSize : null
 
   const contextUsed =
     liveContextUsed ?? sessionStats?.context_window_used_tokens ?? null

@@ -550,11 +550,7 @@ function BranchSelector({
     setPopoverOpen(false)
   }
 
-  function renderBranchItem(
-    branch: string,
-    displayName?: string,
-    indent = 0
-  ) {
+  function renderBranchItem(branch: string, displayName?: string, indent = 0) {
     const isCurrent = branch === selectedBranch
     return (
       <button
@@ -617,32 +613,33 @@ function BranchSelector({
                   {t("remoteBranches")}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  {hasMultipleRemotes ? (
-                    remoteNames.map((remoteName) => (
-                      <Collapsible key={remoteName}>
-                        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg py-1.5 pl-5 text-xs hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
-                          <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-                          {remoteName} ({groupedRemoteBranches[remoteName].length})
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          {groupedRemoteBranches[remoteName].map((branch) =>
-                            renderBranchItem(
-                              branch,
-                              branch.substring(remoteName.length + 1),
-                              3
-                            )
-                          )}
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ))
-                  ) : (
-                    branchList.remote.map((branch) => {
-                      const slashIndex = branch.indexOf("/")
-                      const shortName =
-                        slashIndex > 0 ? branch.substring(slashIndex + 1) : branch
-                      return renderBranchItem(branch, shortName, 1)
-                    })
-                  )}
+                  {hasMultipleRemotes
+                    ? remoteNames.map((remoteName) => (
+                        <Collapsible key={remoteName}>
+                          <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg py-1.5 pl-5 text-xs hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
+                            <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+                            {remoteName} (
+                            {groupedRemoteBranches[remoteName].length})
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            {groupedRemoteBranches[remoteName].map((branch) =>
+                              renderBranchItem(
+                                branch,
+                                branch.substring(remoteName.length + 1),
+                                3
+                              )
+                            )}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ))
+                    : branchList.remote.map((branch) => {
+                        const slashIndex = branch.indexOf("/")
+                        const shortName =
+                          slashIndex > 0
+                            ? branch.substring(slashIndex + 1)
+                            : branch
+                        return renderBranchItem(branch, shortName, 1)
+                      })}
                 </CollapsibleContent>
               </Collapsible>
             )}

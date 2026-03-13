@@ -681,7 +681,8 @@ export function BranchDropdown({
                       <Collapsible key={remoteName}>
                         <CollapsibleTrigger className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 pl-6 text-sm hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
                           <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-                          {remoteName} ({groupedRemoteBranches[remoteName].length})
+                          {remoteName} (
+                          {groupedRemoteBranches[remoteName].length})
                         </CollapsibleTrigger>
                         <CollapsibleContent className="pl-3">
                           {groupedRemoteBranches[remoteName].map((b) =>
