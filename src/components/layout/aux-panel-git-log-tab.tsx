@@ -1083,10 +1083,15 @@ export function GitLogTab() {
                                 </time>
                               </span>
                             </div>
-                            <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
-                              <p className="text-xs whitespace-pre-wrap break-words">
+                            <div className="group/msg relative rounded-lg border border-border/60 bg-muted/20 p-2.5">
+                              <p className="text-xs whitespace-pre-wrap break-words pr-6">
                                 {entry.message}
                               </p>
+                              <CommitCopyButton
+                                className="absolute top-1.5 right-1.5 size-5 opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100"
+                                hash={entry.message}
+                                title={t("copyMessage")}
+                              />
                             </div>
                             {entry.files.length === 0 ? (
                               <div className="space-y-1">

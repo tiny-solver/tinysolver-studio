@@ -871,6 +871,7 @@
       "noCommitsFound": "Aucun commit trouvé",
       "hash": "Empreinte",
       "copyHash": "Copier le hash",
+      "copyMessage": "Copier le message",
       "author": "Auteur",
       "noFileChangeDetails": "Aucun détail de changement de fichier disponible.",
       "branchesTitle": "Branches Git",

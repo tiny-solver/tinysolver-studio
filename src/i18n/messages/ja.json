@@ -871,6 +871,7 @@
       "noCommitsFound": "コミットが見つかりません",
       "hash": "ハッシュ",
       "copyHash": "ハッシュをコピー",
+      "copyMessage": "メッセージをコピー",
       "author": "作成者",
       "noFileChangeDetails": "ファイル変更の詳細はありません。",
       "branchesTitle": "ブランチ",

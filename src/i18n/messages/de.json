@@ -871,6 +871,7 @@
       "noCommitsFound": "Keine Commits gefunden",
       "hash": "Hash-Wert",
       "copyHash": "Hash kopieren",
+      "copyMessage": "Nachricht kopieren",
       "author": "Autor",
       "noFileChangeDetails": "Keine Details zu Dateiänderungen verfügbar.",
       "branchesTitle": "Zweige",

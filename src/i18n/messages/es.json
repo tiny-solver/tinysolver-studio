@@ -871,6 +871,7 @@
       "noCommitsFound": "No se encontraron commits",
       "hash": "Hash del commit",
       "copyHash": "Copiar hash",
+      "copyMessage": "Copiar mensaje",
       "author": "Autor",
       "noFileChangeDetails": "No hay detalles de cambios de archivo disponibles.",
       "branchesTitle": "Ramas",

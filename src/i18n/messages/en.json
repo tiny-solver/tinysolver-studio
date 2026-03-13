@@ -871,6 +871,7 @@
       "noCommitsFound": "No commits found",
       "hash": "Hash",
       "copyHash": "Copy hash",
+      "copyMessage": "Copy message",
       "author": "Author",
       "noFileChangeDetails": "No file change details available.",
       "branchesTitle": "Branches",

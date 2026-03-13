@@ -871,6 +871,7 @@
       "noCommitsFound": "لم يتم العثور على التزامات",
       "hash": "بصمة الالتزام",
       "copyHash": "نسخ الـ hash",
+      "copyMessage": "نسخ الرسالة",
       "author": "المؤلف",
       "noFileChangeDetails": "لا توجد تفاصيل تغييرات ملفات متاحة.",
       "branchesTitle": "الفروع",
