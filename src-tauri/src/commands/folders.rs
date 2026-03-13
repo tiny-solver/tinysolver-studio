@@ -54,6 +54,12 @@ pub struct GitCommitResult {
     pub committed_files: usize,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GitRemote {
+    pub name: String,
+    pub url: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct GitCommitSucceededEvent {
     folder_id: i32,
@@ -1098,6 +1104,111 @@ pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCom
         remote,
         worktree_branches,
     })
+}
+
+#[tauri::command]
+pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["remote", "-v"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("remote -v", &output.stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut seen = HashSet::new();
+    let mut remotes = Vec::new();
+    for line in stdout.lines() {
+        // Format: "name\turl (fetch|push)"
+        if !line.ends_with("(fetch)") {
+            continue;
+        }
+        let Some((name, rest)) = line.split_once('\t') else {
+            continue;
+        };
+        let url = rest.trim_end_matches("(fetch)").trim();
+        if seen.insert(name.to_string()) {
+            remotes.push(GitRemote {
+                name: name.to_string(),
+                url: url.to_string(),
+            });
+        }
+    }
+    Ok(remotes)
+}
+
+#[tauri::command]
+pub async fn git_fetch_remote(path: String, name: String) -> Result<String, AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["fetch", &name])
+        .current_dir(&path)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("fetch", &output.stderr));
+    }
+    Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn git_add_remote(
+    path: String,
+    name: String,
+    url: String,
+) -> Result<(), AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["remote", "add", &name, &url])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("remote add", &output.stderr));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_remove_remote(path: String, name: String) -> Result<(), AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["remote", "remove", &name])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("remote remove", &output.stderr));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_set_remote_url(
+    path: String,
+    name: String,
+    url: String,
+) -> Result<(), AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["remote", "set-url", &name, &url])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("remote set-url", &output.stderr));
+    }
+    Ok(())
 }
 
 #[tauri::command]

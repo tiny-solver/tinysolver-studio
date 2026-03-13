@@ -794,6 +794,7 @@
       "newWorktree": "New worktree...",
       "stashChanges": "Stash changes",
       "stashPop": "Pop stash...",
+      "manageRemotes": "Manage Remotes...",
       "localBranches": "Local branches ({count, plural, one {#} other {#}})",
       "noLocalBranches": "No local branches",
       "remoteBranches": "Remote branches ({count, plural, one {#} other {#}})",
@@ -807,7 +808,13 @@
         "newWorktreeDescription": "Create a new worktree from current branch {branch}",
         "branchNameLabel": "Branch name",
         "worktreePathLabel": "Worktree path",
-        "worktreePathPlaceholder": "Worktree path"
+        "worktreePathPlaceholder": "Worktree path",
+        "manageRemotesTitle": "Manage Remotes",
+        "manageRemotesEmpty": "No remotes configured",
+        "remoteNamePlaceholder": "Remote name",
+        "remoteUrlPlaceholder": "Remote URL",
+        "addRemote": "Add",
+        "savingRemotes": "Saving..."
       }
     },
     "commitDialog": {

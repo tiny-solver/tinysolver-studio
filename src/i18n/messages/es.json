@@ -794,6 +794,7 @@
       "newWorktree": "Nuevo worktree...",
       "stashChanges": "Guardar cambios en stash",
       "stashPop": "Aplicar stash...",
+      "manageRemotes": "Gestionar remotos...",
       "localBranches": "Ramas locales ({count, plural, one {#} other {#}})",
       "noLocalBranches": "Sin ramas locales",
       "remoteBranches": "Ramas remotas ({count, plural, one {#} other {#}})",
@@ -807,7 +808,13 @@
         "newWorktreeDescription": "Crear un nuevo worktree desde la rama actual {branch}",
         "branchNameLabel": "Nombre de la rama",
         "worktreePathLabel": "Ruta del worktree",
-        "worktreePathPlaceholder": "Ruta del worktree"
+        "worktreePathPlaceholder": "Ruta del worktree",
+        "manageRemotesTitle": "Gestionar remotos",
+        "manageRemotesEmpty": "No hay remotos configurados",
+        "remoteNamePlaceholder": "Nombre del remoto",
+        "remoteUrlPlaceholder": "URL del remoto",
+        "addRemote": "Añadir",
+        "savingRemotes": "Guardando..."
       }
     },
     "commitDialog": {

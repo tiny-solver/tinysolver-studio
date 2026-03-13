@@ -794,6 +794,7 @@
       "newWorktree": "새 워크트리...",
       "stashChanges": "변경 사항 stash",
       "stashPop": "stash pop...",
+      "manageRemotes": "원격 관리...",
       "localBranches": "로컬 브랜치 ({count, plural, one {#} other {#}})",
       "noLocalBranches": "로컬 브랜치가 없습니다",
       "remoteBranches": "원격 브랜치 ({count, plural, one {#} other {#}})",
@@ -807,7 +808,13 @@
         "newWorktreeDescription": "현재 브랜치 {branch}에서 새 워크트리를 만듭니다",
         "branchNameLabel": "브랜치 이름",
         "worktreePathLabel": "워크트리 경로",
-        "worktreePathPlaceholder": "워크트리 경로"
+        "worktreePathPlaceholder": "워크트리 경로",
+        "manageRemotesTitle": "원격 관리",
+        "manageRemotesEmpty": "구성된 원격이 없습니다",
+        "remoteNamePlaceholder": "원격 이름",
+        "remoteUrlPlaceholder": "원격 URL",
+        "addRemote": "추가",
+        "savingRemotes": "저장 중..."
       }
     },
     "commitDialog": {

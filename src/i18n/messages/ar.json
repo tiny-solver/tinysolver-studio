@@ -794,6 +794,7 @@
       "newWorktree": "Worktree جديد...",
       "stashChanges": "تخزين التغييرات في stash",
       "stashPop": "استرجاع stash...",
+      "manageRemotes": "إدارة المستودعات البعيدة...",
       "localBranches": "الفروع المحلية ({count, plural, one {#} other {#}})",
       "noLocalBranches": "لا توجد فروع محلية",
       "remoteBranches": "الفروع البعيدة ({count, plural, one {#} other {#}})",
@@ -807,7 +808,13 @@
         "newWorktreeDescription": "إنشاء worktree جديد من الفرع الحالي {branch}",
         "branchNameLabel": "اسم الفرع",
         "worktreePathLabel": "مسار worktree",
-        "worktreePathPlaceholder": "مسار worktree"
+        "worktreePathPlaceholder": "مسار worktree",
+        "manageRemotesTitle": "إدارة المستودعات البعيدة",
+        "manageRemotesEmpty": "لم يتم تكوين أي مستودعات بعيدة",
+        "remoteNamePlaceholder": "اسم المستودع البعيد",
+        "remoteUrlPlaceholder": "عنوان URL للمستودع البعيد",
+        "addRemote": "إضافة",
+        "savingRemotes": "جارٍ الحفظ..."
       }
     },
     "commitDialog": {

@@ -21,6 +21,7 @@ import {
   FolderGit2,
   FolderOpen,
   ArrowLeftRight,
+  Globe,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -80,6 +81,7 @@ import {
   openCommitWindow,
   setFolderParentBranch,
 } from "@/lib/tauri"
+import { RemoteManageDialog } from "@/components/layout/remote-manage-dialog"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import type { GitBranchList } from "@/lib/types"
 import { toast } from "sonner"
@@ -131,11 +133,24 @@ export function BranchDropdown({
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   const [worktreeBranchName, setWorktreeBranchName] = useState("")
   const [worktreePath, setWorktreePath] = useState("")
+  const [manageRemotesOpen, setManageRemotesOpen] = useState(false)
   const taskSeq = useRef(0)
   const worktreeBranchSet = useMemo(
     () => new Set(branchList.worktree_branches),
     [branchList.worktree_branches]
   )
+  const groupedRemoteBranches = useMemo(() => {
+    const groups: Record<string, string[]> = {}
+    for (const b of branchList.remote) {
+      const slashIndex = b.indexOf("/")
+      const remoteName = slashIndex > 0 ? b.substring(0, slashIndex) : "origin"
+      if (!groups[remoteName]) groups[remoteName] = []
+      groups[remoteName].push(b)
+    }
+    return groups
+  }, [branchList.remote])
+  const remoteNames = Object.keys(groupedRemoteBranches)
+  const hasMultipleRemotes = remoteNames.length > 1
 
   useEffect(() => {
     if (!folder) return
@@ -611,6 +626,19 @@ export function BranchDropdown({
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              disabled={loading}
+              onSelect={() => {
+                setDropdownOpen(false)
+                setManageRemotesOpen(true)
+              }}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              {t("manageRemotes")}
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
           {branchLoading ? (
             <div className="flex items-center justify-center py-3">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -643,6 +671,20 @@ export function BranchDropdown({
                     <DropdownMenuItem disabled>
                       {t("noRemoteBranches")}
                     </DropdownMenuItem>
+                  ) : hasMultipleRemotes ? (
+                    remoteNames.map((remoteName) => (
+                      <Collapsible key={remoteName}>
+                        <CollapsibleTrigger className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 pl-6 text-sm hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
+                          <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+                          {remoteName} ({groupedRemoteBranches[remoteName].length})
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          {groupedRemoteBranches[remoteName].map((b) =>
+                            renderBranchItem(b, true)
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))
                   ) : (
                     branchList.remote.map((b) => renderBranchItem(b, true))
                   )}
@@ -782,6 +824,13 @@ export function BranchDropdown({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RemoteManageDialog
+        open={manageRemotesOpen}
+        onOpenChange={setManageRemotesOpen}
+        folderPath={folderPath}
+        onSaved={() => loadAllBranches()}
+      />
     </>
   )
 }

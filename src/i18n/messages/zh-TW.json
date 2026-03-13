@@ -794,6 +794,7 @@
       "newWorktree": "新增工作樹...",
       "stashChanges": "暫存變更",
       "stashPop": "取消暫存...",
+      "manageRemotes": "管理遠端...",
       "localBranches": "本地分支 ({count})",
       "noLocalBranches": "無本地分支",
       "remoteBranches": "遠端分支 ({count})",
@@ -807,7 +808,13 @@
         "newWorktreeDescription": "從目前分支 {branch} 建立新的工作樹",
         "branchNameLabel": "分支名稱",
         "worktreePathLabel": "工作樹路徑",
-        "worktreePathPlaceholder": "工作樹路徑"
+        "worktreePathPlaceholder": "工作樹路徑",
+        "manageRemotesTitle": "管理遠端",
+        "manageRemotesEmpty": "未設定遠端儲存庫",
+        "remoteNamePlaceholder": "遠端名稱",
+        "remoteUrlPlaceholder": "遠端 URL",
+        "addRemote": "新增",
+        "savingRemotes": "儲存中..."
       }
     },
     "commitDialog": {

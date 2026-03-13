@@ -25,6 +25,7 @@ import type {
   GitPushResult,
   GitMergeResult,
   GitCommitResult,
+  GitRemote,
   PreflightResult,
   FolderCommand,
   TerminalInfo,
@@ -520,6 +521,40 @@ export async function gitStash(path: string): Promise<string> {
 
 export async function gitStashPop(path: string): Promise<string> {
   return invoke("git_stash_pop", { path })
+}
+
+export async function gitListRemotes(path: string): Promise<GitRemote[]> {
+  return invoke("git_list_remotes", { path })
+}
+
+export async function gitFetchRemote(
+  path: string,
+  name: string
+): Promise<string> {
+  return invoke("git_fetch_remote", { path, name })
+}
+
+export async function gitAddRemote(
+  path: string,
+  name: string,
+  url: string
+): Promise<void> {
+  return invoke("git_add_remote", { path, name, url })
+}
+
+export async function gitRemoveRemote(
+  path: string,
+  name: string
+): Promise<void> {
+  return invoke("git_remove_remote", { path, name })
+}
+
+export async function gitSetRemoteUrl(
+  path: string,
+  name: string,
+  url: string
+): Promise<void> {
+  return invoke("git_set_remote_url", { path, name, url })
 }
 
 export async function gitStatus(path: string): Promise<GitStatusEntry[]> {

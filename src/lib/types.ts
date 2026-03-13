@@ -683,6 +683,11 @@ export interface GitCommitResult {
   committed_files: number
 }
 
+export interface GitRemote {
+  name: string
+  url: string
+}
+
 export type FileTreeNode =
   | { kind: "file"; name: string; path: string }
   | { kind: "dir"; name: string; path: string; children: FileTreeNode[] }
