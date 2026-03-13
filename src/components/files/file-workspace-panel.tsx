@@ -1120,7 +1120,7 @@ export function FileWorkspacePanel() {
               path: diffListContext.path,
               branch: diffListContext.branch,
             })
-          : diffListContext.path
+          : (activeFileTab.description ?? diffListContext.path)
 
     const handleOpenDiff = async (path: string) => {
       if (diffListContext.kind === "commit") {

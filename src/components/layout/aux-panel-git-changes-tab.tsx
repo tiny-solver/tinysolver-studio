@@ -1236,15 +1236,60 @@ export function GitChangesTab() {
                   expanded={expandedTrackedPaths}
                   onExpandedChange={setExpandedTrackedPaths}
                 >
-                  <FileTreeFolder
-                    path={TRACKED_ROOT_PATH}
-                    name={folderName}
-                    suffix={`(${trackedChanges.length})`}
-                    suffixClassName="text-muted-foreground/45"
-                    title={folderName}
-                  >
-                    {trackedTreeNodes.map(renderTrackedNode)}
-                  </FileTreeFolder>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <FileTreeFolder
+                        path={TRACKED_ROOT_PATH}
+                        name={folderName}
+                        suffix={`(${trackedChanges.length})`}
+                        suffixClassName="text-muted-foreground/45"
+                        title={folderName}
+                      >
+                        {trackedTreeNodes.map(renderTrackedNode)}
+                      </FileTreeFolder>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          handleOpenCommitWindow()
+                        }}
+                      >
+                        {t("actions.commitCode")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          void openWorkingTreeDiff(".", {
+                            mode: "overview",
+                          })
+                        }}
+                      >
+                        {tCommon("viewDiff")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          handleRequestRollback({
+                            kind: "dir",
+                            path: "",
+                            name: folderName,
+                          })
+                        }}
+                        variant="destructive"
+                      >
+                        {t("actions.rollback")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          void handleAddToVcs({
+                            kind: "dir",
+                            path: "",
+                            name: folderName,
+                          })
+                        }}
+                      >
+                        {t("actions.addToVcs")}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                 </FileTree>
               </section>
             )}
@@ -1284,15 +1329,60 @@ export function GitChangesTab() {
                   expanded={expandedUntrackedPaths}
                   onExpandedChange={setExpandedUntrackedPaths}
                 >
-                  <FileTreeFolder
-                    path={UNTRACKED_ROOT_PATH}
-                    name={folderName}
-                    suffix={`(${untrackedChanges.length})`}
-                    suffixClassName="text-muted-foreground/45"
-                    title={folderName}
-                  >
-                    {untrackedTreeNodes.map(renderUntrackedNode)}
-                  </FileTreeFolder>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <FileTreeFolder
+                        path={UNTRACKED_ROOT_PATH}
+                        name={folderName}
+                        suffix={`(${untrackedChanges.length})`}
+                        suffixClassName="text-muted-foreground/45"
+                        title={folderName}
+                      >
+                        {untrackedTreeNodes.map(renderUntrackedNode)}
+                      </FileTreeFolder>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          handleOpenCommitWindow()
+                        }}
+                      >
+                        {t("actions.commitCode")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          void openWorkingTreeDiff(".", {
+                            mode: "overview",
+                          })
+                        }}
+                      >
+                        {tCommon("viewDiff")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          handleRequestRollback({
+                            kind: "dir",
+                            path: "",
+                            name: folderName,
+                          })
+                        }}
+                        variant="destructive"
+                      >
+                        {t("actions.rollback")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          void handleAddToVcs({
+                            kind: "dir",
+                            path: "",
+                            name: folderName,
+                          })
+                        }}
+                      >
+                        {t("actions.addToVcs")}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                 </FileTree>
               </section>
             )}

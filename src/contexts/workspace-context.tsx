@@ -440,10 +440,14 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       const mode = options?.mode ?? "auto"
 
       if (mode === "overview") {
+        const isRoot = path === "."
+        const displayPath = isRoot ? folderPath : path
         const encodedPath = encodeURIComponent(path)
         const tabId = `diff:working-overview:${encodedPath}`
-        const title = t("diffTitleFile", { name: fileName(path) })
-        const description = path
+        const title = t("diffTitleFile", {
+          name: fileName(displayPath ?? path),
+        })
+        const description = displayPath ?? path
         upsertLoadingTab(
           loadingTab(tabId, "diff", title, description, path, "diff")
         )

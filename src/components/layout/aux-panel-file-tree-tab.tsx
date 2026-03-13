@@ -1701,6 +1701,22 @@ export function FileTreeTab() {
     return baseName(folder.path)
   }, [folder?.path, t])
 
+  const systemExplorerLabel =
+    typeof navigator === "undefined"
+      ? t("openInFileManager")
+      : (() => {
+          const platform =
+            `${navigator.platform} ${navigator.userAgent}`.toLowerCase()
+          if (platform.includes("mac")) return t("openInFinder")
+          if (platform.includes("win")) return t("openInExplorer")
+          return t("openInFileManager")
+        })()
+
+  const rootTarget: FileActionTarget = useMemo(
+    () => ({ kind: "dir", path: "", name: rootNodeName }),
+    [rootNodeName]
+  )
+
   useEffect(() => {
     if (!isFileTreeTabActive) return
     void fetchTree()
@@ -2009,45 +2025,128 @@ export function FileTreeTab() {
               onSelect={handleTreeSelect}
             >
               {folder?.path && (
-                <FileTreeFolder
-                  path={FILE_TREE_ROOT_PATH}
-                  name={rootNodeName}
-                  className="font-medium"
-                >
-                  {nodes.map((node) => (
-                    <RenderNode
-                      key={node.path}
-                      node={node}
-                      expandedPaths={expandedPaths}
-                      workspacePath={folder.path}
-                      activeSessionTabId={activeSessionTabId}
-                      gitEnabled={gitEnabled}
-                      gitStatusByPath={gitStatusByPath}
-                      gitChangedDirPaths={gitChangedDirPaths}
-                      gitignoreIgnoredPaths={gitignoreIgnoredPaths}
-                      ancestorGitignoreIgnored={false}
-                      onOpenFilePreview={(path) => {
-                        void openFilePreview(path)
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <FileTreeFolder
+                      path={FILE_TREE_ROOT_PATH}
+                      name={rootNodeName}
+                      className="font-medium"
+                    >
+                      {nodes.map((node) => (
+                        <RenderNode
+                          key={node.path}
+                          node={node}
+                          expandedPaths={expandedPaths}
+                          workspacePath={folder.path}
+                          activeSessionTabId={activeSessionTabId}
+                          gitEnabled={gitEnabled}
+                          gitStatusByPath={gitStatusByPath}
+                          gitChangedDirPaths={gitChangedDirPaths}
+                          gitignoreIgnoredPaths={gitignoreIgnoredPaths}
+                          ancestorGitignoreIgnored={false}
+                          onOpenFilePreview={(path) => {
+                            void openFilePreview(path)
+                          }}
+                          onOpenFileDiff={(path) => {
+                            void openWorkingTreeDiff(path)
+                          }}
+                          onOpenDirDiff={(path) => {
+                            void openWorkingTreeDiff(path, {
+                              mode: "overview",
+                            })
+                          }}
+                          onOpenCommitWindow={handleOpenCommitWindow}
+                          onRequestCompareWithBranch={
+                            handleRequestCompareWithBranch
+                          }
+                          onRequestRollback={handleRequestRollback}
+                          onOpenDirInTerminal={handleOpenDirInTerminal}
+                          onRequestAddToVcs={handleAddToVcs}
+                          onRequestRename={handleRequestRename}
+                          onRequestDelete={handleRequestDelete}
+                          onRefresh={fetchTree}
+                        />
+                      ))}
+                    </FileTreeFolder>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuSub>
+                      <ContextMenuSubTrigger disabled={!gitEnabled}>
+                        {t("git")}
+                      </ContextMenuSubTrigger>
+                      <ContextMenuSubContent>
+                        <ContextMenuItem
+                          onSelect={() => handleOpenCommitWindow()}
+                          disabled={!gitEnabled}
+                        >
+                          {t("actions.commitCode")}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onSelect={() => void handleAddToVcs(rootTarget)}
+                          disabled={!gitEnabled}
+                        >
+                          {t("actions.addToVcs")}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onSelect={() =>
+                            void openWorkingTreeDiff(".", {
+                              mode: "overview",
+                            })
+                          }
+                          disabled={!gitEnabled}
+                        >
+                          {tCommon("viewDiff")}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onSelect={() =>
+                            handleRequestCompareWithBranch(rootTarget)
+                          }
+                          disabled={!gitEnabled}
+                        >
+                          {t("compareWithBranch")}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          variant="destructive"
+                          onSelect={() => handleRequestRollback(rootTarget)}
+                          disabled={!gitEnabled}
+                        >
+                          {t("actions.rollback")}
+                        </ContextMenuItem>
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                    <ContextMenuItem
+                      onSelect={() => {
+                        void fetchTree()
                       }}
-                      onOpenFileDiff={(path) => {
-                        void openWorkingTreeDiff(path)
-                      }}
-                      onOpenDirDiff={(path) => {
-                        void openWorkingTreeDiff(path, { mode: "overview" })
-                      }}
-                      onOpenCommitWindow={handleOpenCommitWindow}
-                      onRequestCompareWithBranch={
-                        handleRequestCompareWithBranch
-                      }
-                      onRequestRollback={handleRequestRollback}
-                      onOpenDirInTerminal={handleOpenDirInTerminal}
-                      onRequestAddToVcs={handleAddToVcs}
-                      onRequestRename={handleRequestRename}
-                      onRequestDelete={handleRequestDelete}
-                      onRefresh={fetchTree}
-                    />
-                  ))}
-                </FileTreeFolder>
+                    >
+                      {t("reloadFromDisk")}
+                    </ContextMenuItem>
+                    <ContextMenuSub>
+                      <ContextMenuSubTrigger>
+                        {t("openIn")}
+                      </ContextMenuSubTrigger>
+                      <ContextMenuSubContent>
+                        <ContextMenuItem
+                          onSelect={() => {
+                            void revealItemInDir(folder.path)
+                          }}
+                        >
+                          {systemExplorerLabel}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onSelect={() => {
+                            void handleOpenDirInTerminal(
+                              folder.path,
+                              rootNodeName
+                            )
+                          }}
+                        >
+                          {t("openInTerminal")}
+                        </ContextMenuItem>
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                  </ContextMenuContent>
+                </ContextMenu>
               )}
             </FileTree>
           </div>
