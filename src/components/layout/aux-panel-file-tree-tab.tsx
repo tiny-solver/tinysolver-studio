@@ -1315,6 +1315,19 @@ export function FileTreeTab() {
     }
   }, [compareBranchList, compareFilterKeyword])
 
+  const groupedCompareRemoteBranches = useMemo(() => {
+    const groups: Record<string, string[]> = {}
+    for (const b of filteredCompareBranches.remote) {
+      const slashIndex = b.indexOf("/")
+      const remoteName = slashIndex > 0 ? b.substring(0, slashIndex) : "origin"
+      if (!groups[remoteName]) groups[remoteName] = []
+      groups[remoteName].push(b)
+    }
+    return groups
+  }, [filteredCompareBranches.remote])
+  const compareRemoteNames = Object.keys(groupedCompareRemoteBranches)
+  const hasMultipleCompareRemotes = compareRemoteNames.length > 1
+
   const directoryGitTreeNodes = useMemo(() => {
     if (!directoryGitActionTarget) return []
     return buildDirectoryGitTree(
@@ -2455,21 +2468,58 @@ export function FileTreeTab() {
                       </CollapsibleTrigger>
                       <CollapsibleContent className="space-y-1 pt-1">
                         {filteredCompareBranches.remote.length > 0 ? (
-                          filteredCompareBranches.remote.map((branch) => (
-                            <Button
-                              key={`remote-${branch}`}
-                              type="button"
-                              size="xs"
-                              variant="ghost"
-                              className="w-full justify-start"
-                              onClick={() => {
-                                void handleCompareBranchClick(branch)
-                              }}
-                              disabled={comparing}
-                            >
-                              {branch}
-                            </Button>
-                          ))
+                          hasMultipleCompareRemotes ? (
+                            compareRemoteNames.map((remoteName) => (
+                              <Collapsible key={remoteName}>
+                                <CollapsibleTrigger className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 pl-5 text-sm hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
+                                  <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+                                  {remoteName} ({groupedCompareRemoteBranches[remoteName].length})
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="space-y-1 pt-1 pl-3">
+                                  {groupedCompareRemoteBranches[remoteName].map(
+                                    (branch) => (
+                                      <Button
+                                        key={`remote-${branch}`}
+                                        type="button"
+                                        size="xs"
+                                        variant="ghost"
+                                        className="w-full justify-start"
+                                        onClick={() => {
+                                          void handleCompareBranchClick(branch)
+                                        }}
+                                        disabled={comparing}
+                                      >
+                                        {branch.substring(remoteName.length + 1)}
+                                      </Button>
+                                    )
+                                  )}
+                                </CollapsibleContent>
+                              </Collapsible>
+                            ))
+                          ) : (
+                            filteredCompareBranches.remote.map((branch) => {
+                              const slashIndex = branch.indexOf("/")
+                              const shortName =
+                                slashIndex > 0
+                                  ? branch.substring(slashIndex + 1)
+                                  : branch
+                              return (
+                                <Button
+                                  key={`remote-${branch}`}
+                                  type="button"
+                                  size="xs"
+                                  variant="ghost"
+                                  className="w-full justify-start pl-4"
+                                  onClick={() => {
+                                    void handleCompareBranchClick(branch)
+                                  }}
+                                  disabled={comparing}
+                                >
+                                  {shortName}
+                                </Button>
+                              )
+                            })
+                          )
                         ) : (
                           <div className="px-2 text-xs text-muted-foreground">
                             {t("compareDialog.noMatchingBranches")}

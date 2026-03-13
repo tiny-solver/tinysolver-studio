@@ -10,6 +10,8 @@ import {
 } from "react"
 import { useTranslations } from "next-intl"
 import {
+  ChevronDown,
+  ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleHelp,
@@ -62,15 +64,15 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
@@ -527,55 +529,126 @@ function BranchSelector({
   refreshing: boolean
 }) {
   const t = useTranslations("Folder.gitLogTab.branchSelector")
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(true)
+  const [remoteOpen, setRemoteOpen] = useState(false)
+  const groupedRemoteBranches = useMemo(() => {
+    const groups: Record<string, string[]> = {}
+    for (const b of branchList.remote) {
+      const slashIndex = b.indexOf("/")
+      const remoteName = slashIndex > 0 ? b.substring(0, slashIndex) : "origin"
+      if (!groups[remoteName]) groups[remoteName] = []
+      groups[remoteName].push(b)
+    }
+    return groups
+  }, [branchList.remote])
+  const remoteNames = Object.keys(groupedRemoteBranches)
+  const hasMultipleRemotes = remoteNames.length > 1
+
+  const handleSelect = (branch: string) => {
+    onBranchChange(branch)
+    setPopoverOpen(false)
+  }
+
+  function renderBranchItem(
+    branch: string,
+    displayName?: string,
+    indent = 0
+  ) {
+    const isCurrent = branch === selectedBranch
+    return (
+      <button
+        key={branch}
+        type="button"
+        className={`flex w-full items-center gap-2 rounded-lg py-1.5 text-xs hover:bg-accent hover:text-accent-foreground select-none outline-hidden ${isCurrent ? "bg-accent/50" : ""}`}
+        style={{ paddingLeft: `${(indent + 1) * 0.5 + 0.5}rem` }}
+        onClick={() => handleSelect(branch)}
+      >
+        <span className="truncate">{displayName ?? branch}</span>
+        {branch === currentBranch && (
+          <span className="ml-auto pr-2 text-[10px] text-muted-foreground">
+            {t("current")}
+          </span>
+        )}
+      </button>
+    )
+  }
+
   return (
     <div className="flex items-center gap-1">
-      <Select value={selectedBranch ?? ""} onValueChange={onBranchChange}>
-        <SelectTrigger
-          size="sm"
-          className="cursor-pointer flex-1 w-full text-xs bg-input/30 hover:bg-input/50 aria-expanded:bg-muted"
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer flex-1 w-full text-xs bg-input/30 hover:bg-input/50 justify-start gap-1.5"
+          >
+            <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">
+              {selectedBranch || t("selectBranchPlaceholder")}
+            </span>
+            <ChevronDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-64 p-1"
+          side="bottom"
+          align="start"
+          sideOffset={4}
         >
-          <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <SelectValue placeholder={t("selectBranchPlaceholder")} />
-        </SelectTrigger>
-        <SelectContent position="popper" sideOffset={4}>
-          {branchList.local.length > 0 && (
-            <SelectGroup>
-              <SelectLabel>{t("localBranches")}</SelectLabel>
-              {branchList.local.map((branch) => (
-                <SelectItem
-                  key={`local-${branch}`}
-                  value={branch}
-                  className="text-xs"
-                >
-                  {branch}
-                  {branch === currentBranch && (
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      {t("current")}
-                    </span>
+          <div className="max-h-72 overflow-y-auto">
+            {branchList.local.length > 0 && (
+              <Collapsible open={localOpen} onOpenChange={setLocalOpen}>
+                <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
+                  <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+                  {t("localBranches")}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {branchList.local.map((branch) =>
+                    renderBranchItem(branch, undefined, 1)
                   )}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          )}
-          {branchList.remote.length > 0 && (
-            <>
-              {branchList.local.length > 0 && <SelectSeparator />}
-              <SelectGroup>
-                <SelectLabel>{t("remoteBranches")}</SelectLabel>
-                {branchList.remote.map((branch) => (
-                  <SelectItem
-                    key={`remote-${branch}`}
-                    value={branch}
-                    className="text-xs"
-                  >
-                    {branch}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </>
-          )}
-        </SelectContent>
-      </Select>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+            {branchList.remote.length > 0 && (
+              <Collapsible open={remoteOpen} onOpenChange={setRemoteOpen}>
+                <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
+                  <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+                  {t("remoteBranches")}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {hasMultipleRemotes ? (
+                    remoteNames.map((remoteName) => (
+                      <Collapsible key={remoteName}>
+                        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg py-1.5 pl-5 text-xs hover:bg-accent hover:text-accent-foreground select-none outline-hidden">
+                          <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+                          {remoteName} ({groupedRemoteBranches[remoteName].length})
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          {groupedRemoteBranches[remoteName].map((branch) =>
+                            renderBranchItem(
+                              branch,
+                              branch.substring(remoteName.length + 1),
+                              3
+                            )
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))
+                  ) : (
+                    branchList.remote.map((branch) => {
+                      const slashIndex = branch.indexOf("/")
+                      const shortName =
+                        slashIndex > 0 ? branch.substring(slashIndex + 1) : branch
+                      return renderBranchItem(branch, shortName, 1)
+                    })
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
       <Button
         variant="outline"
         size="icon"

@@ -368,7 +368,12 @@ export function BranchDropdown({
     }
   }
 
-  function renderBranchItem(b: string, isRemote: boolean) {
+  function renderBranchItem(
+    b: string,
+    isRemote: boolean,
+    displayName?: string
+  ) {
+    const label = displayName ?? b
     const isCurrent = b === branch
     const isWorktree = worktreeBranchSet.has(
       isRemote ? b.replace(/^[^/]+\//, "") : b
@@ -382,7 +387,7 @@ export function BranchDropdown({
           className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm opacity-50 select-none"
         >
           <BranchIcon className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{b}</span>
+          <span className="truncate">{label}</span>
           <span className="ml-auto text-xs">{t("current")}</span>
         </div>
       )
@@ -412,7 +417,7 @@ export function BranchDropdown({
           onPointerLeave={(e) => e.preventDefault()}
         >
           <BranchIcon className="h-3.5 w-3.5" />
-          {b}
+          {label}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
           <DropdownMenuItem
@@ -678,15 +683,24 @@ export function BranchDropdown({
                           <ChevronRight className="h-3 w-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
                           {remoteName} ({groupedRemoteBranches[remoteName].length})
                         </CollapsibleTrigger>
-                        <CollapsibleContent>
+                        <CollapsibleContent className="pl-3">
                           {groupedRemoteBranches[remoteName].map((b) =>
-                            renderBranchItem(b, true)
+                            renderBranchItem(
+                              b,
+                              true,
+                              b.substring(remoteName.length + 1)
+                            )
                           )}
                         </CollapsibleContent>
                       </Collapsible>
                     ))
                   ) : (
-                    branchList.remote.map((b) => renderBranchItem(b, true))
+                    branchList.remote.map((b) => {
+                      const slashIndex = b.indexOf("/")
+                      const shortName =
+                        slashIndex > 0 ? b.substring(slashIndex + 1) : b
+                      return renderBranchItem(b, true, shortName)
+                    })
                   )}
                 </CollapsibleContent>
               </Collapsible>

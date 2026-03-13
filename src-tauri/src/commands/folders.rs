@@ -1066,7 +1066,7 @@ pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCom
         Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
             .lines()
             .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty() && !l.contains("HEAD"))
+            .filter(|l| !l.is_empty() && !l.contains("HEAD") && l.contains('/'))
             .collect(),
         _ => vec![],
     };
