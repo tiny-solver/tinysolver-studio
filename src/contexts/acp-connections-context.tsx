@@ -975,6 +975,12 @@ function connectionsReducer(
     case "USAGE_UPDATE": {
       const conn = state.get(action.contextKey)
       if (!conn) return state
+      // Ignore usage updates that reset used to 0 when we already have
+      // valid data — these come from synthetic responses for local commands
+      // like /context and would overwrite the real context window usage.
+      if (action.usage.used === 0 && conn.usage && conn.usage.used > 0) {
+        return state
+      }
       if (
         conn.usage?.used === action.usage.used &&
         conn.usage?.size === action.usage.size
