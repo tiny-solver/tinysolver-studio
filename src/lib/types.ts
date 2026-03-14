@@ -666,8 +666,15 @@ export interface GitBranchList {
   worktree_branches: string[]
 }
 
+export interface GitConflictInfo {
+  has_conflicts: boolean
+  conflicted_files: string[]
+  operation: string
+}
+
 export interface GitPullResult {
   updated_files: number
+  conflict?: GitConflictInfo | null
 }
 
 export interface GitPushResult {
@@ -677,6 +684,19 @@ export interface GitPushResult {
 
 export interface GitMergeResult {
   merged_commits: number
+  conflict?: GitConflictInfo | null
+}
+
+export interface GitRebaseResult {
+  message: string
+  conflict?: GitConflictInfo | null
+}
+
+export interface GitConflictFileVersions {
+  base: string
+  ours: string
+  theirs: string
+  merged: string
 }
 
 export interface GitCommitResult {

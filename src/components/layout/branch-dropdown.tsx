@@ -80,10 +80,13 @@ import {
   openFolderWindow,
   openCommitWindow,
   setFolderParentBranch,
+  gitListConflicts,
 } from "@/lib/tauri"
 import { RemoteManageDialog } from "@/components/layout/remote-manage-dialog"
+import { ConflictDialog } from "@/components/layout/conflict-dialog"
 import { disposeTauriListener } from "@/lib/tauri-listener"
-import type { GitBranchList } from "@/lib/types"
+import { toErrorMessage } from "@/lib/app-error"
+import type { GitBranchList, GitConflictInfo } from "@/lib/types"
 import { toast } from "sonner"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTaskContext } from "@/contexts/task-context"
@@ -134,6 +137,7 @@ export function BranchDropdown({
   const [worktreeBranchName, setWorktreeBranchName] = useState("")
   const [worktreePath, setWorktreePath] = useState("")
   const [manageRemotesOpen, setManageRemotesOpen] = useState(false)
+  const [conflictInfo, setConflictInfo] = useState<GitConflictInfo | null>(null)
   const taskSeq = useRef(0)
   const worktreeBranchSet = useMemo(
     () => new Set(branchList.worktree_branches),
@@ -184,7 +188,7 @@ export function BranchDropdown({
   async function runGitTask<T>(
     label: string,
     action: () => Promise<T>,
-    getSuccessDescription?: (result: T) => string | undefined
+    getSuccessDescription?: (result: T) => string | false | undefined
   ) {
     const taskId = `git-${++taskSeq.current}-${Date.now()}`
     setLoading(true)
@@ -195,19 +199,22 @@ export function BranchDropdown({
       const successDescription = getSuccessDescription?.(result)
       updateTask(taskId, { status: "completed" })
       onBranchChange()
-      toast.success(
-        t("toasts.taskCompleted", { label }),
-        successDescription
-          ? {
-              description: successDescription,
-            }
-          : undefined
-      )
+      if (successDescription !== false) {
+        toast.success(
+          t("toasts.taskCompleted", { label }),
+          successDescription
+            ? {
+                description: successDescription,
+              }
+            : undefined
+        )
+      }
     } catch (err) {
       removeTask(taskId)
       const errorTitle = t("toasts.taskFailed", { label })
-      pushAlert("error", errorTitle, String(err))
-      toast.error(errorTitle, { description: String(err) })
+      const errorMsg = toErrorMessage(err)
+      pushAlert("error", errorTitle, errorMsg)
+      toast.error(errorTitle, { description: errorMsg })
     } finally {
       setLoading(false)
     }
@@ -285,6 +292,117 @@ export function BranchDropdown({
     })
   }
 
+  async function showMergeConflictDialog() {
+    try {
+      const remaining = await gitListConflicts(folderPath)
+      setConflictInfo({
+        has_conflicts: true,
+        conflicted_files: remaining,
+        operation: "merge",
+      })
+    } catch {
+      setConflictInfo({
+        has_conflicts: true,
+        conflicted_files: [],
+        operation: "merge",
+      })
+    }
+  }
+
+  async function handlePush() {
+    const taskId = `git-${++taskSeq.current}-${Date.now()}`
+    const label = t("tasks.pushCode")
+    setLoading(true)
+    addTask(taskId, label)
+    updateTask(taskId, { status: "running" })
+    try {
+      const result = await gitPush(folderPath)
+      updateTask(taskId, { status: "completed" })
+      onBranchChange()
+      let description: string | undefined
+      if (result.upstream_set) {
+        description =
+          result.pushed_commits === 0
+            ? t("toasts.upstreamSet")
+            : t("toasts.upstreamSetAndPushed", {
+                count: result.pushed_commits,
+              })
+      } else if (result.pushed_commits === 0) {
+        description = t("toasts.noCommitsToPush")
+      } else {
+        description = t("toasts.pushedCommits", {
+          count: result.pushed_commits,
+        })
+      }
+      toast.success(t("toasts.taskCompleted", { label }), {
+        description,
+      })
+    } catch (err) {
+      const errorMsg = toErrorMessage(err)
+      if (/MERGE_HEAD|unfinished merge/i.test(errorMsg)) {
+        // Unfinished merge — show conflict dialog
+        removeTask(taskId)
+        await showMergeConflictDialog()
+      } else if (/rejected|fetch first/i.test(errorMsg)) {
+        // Remote has new commits — auto-pull then retry push
+        updateTask(taskId, {
+          status: "running",
+          label: t("tasks.pullCode"),
+        })
+        try {
+          const pullResult = await gitPull(folderPath)
+          if (pullResult.conflict?.has_conflicts) {
+            removeTask(taskId)
+            onBranchChange()
+            setConflictInfo(pullResult.conflict)
+          } else {
+            // Pull succeeded, retry push
+            updateTask(taskId, { status: "running", label })
+            const pushResult = await gitPush(folderPath)
+            updateTask(taskId, { status: "completed" })
+            onBranchChange()
+            let description: string | undefined
+            if (pushResult.upstream_set) {
+              description =
+                pushResult.pushed_commits === 0
+                  ? t("toasts.upstreamSet")
+                  : t("toasts.upstreamSetAndPushed", {
+                      count: pushResult.pushed_commits,
+                    })
+            } else if (pushResult.pushed_commits === 0) {
+              description = t("toasts.noCommitsToPush")
+            } else {
+              description = t("toasts.pushedCommits", {
+                count: pushResult.pushed_commits,
+              })
+            }
+            toast.success(t("toasts.taskCompleted", { label }), {
+              description,
+            })
+          }
+        } catch (pullErr) {
+          const pullErrMsg = toErrorMessage(pullErr)
+          if (/MERGE_HEAD|unfinished merge/i.test(pullErrMsg)) {
+            removeTask(taskId)
+            await showMergeConflictDialog()
+          } else {
+            removeTask(taskId)
+            const pullErrTitle = t("toasts.taskFailed", { label })
+            pushAlert("error", pullErrTitle, pullErrMsg)
+            toast.error(pullErrTitle, { description: pullErrMsg })
+          }
+        }
+      } else {
+        removeTask(taskId)
+        const errorTitle = t("toasts.taskFailed", { label })
+        pushAlert("error", errorTitle, errorMsg)
+        toast.error(errorTitle, { description: errorMsg })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function handleMergeParent() {
     if (!parentBranch) return
     setConfirmAction({ type: "merge", branchName: parentBranch })
@@ -316,6 +434,10 @@ export function BranchDropdown({
           t("tasks.mergeBranch", { branchName }),
           () => gitMerge(folderPath, branchName),
           (result) => {
+            if (result.conflict?.has_conflicts) {
+              setConflictInfo(result.conflict)
+              return false
+            }
             if (result.merged_commits === 0) {
               return t("toasts.mergeNoNewCommits", { branchName })
             }
@@ -324,8 +446,16 @@ export function BranchDropdown({
         )
         break
       case "rebase":
-        await runGitTask(t("tasks.rebaseTo", { branchName }), () =>
-          gitRebase(folderPath, branchName)
+        await runGitTask(
+          t("tasks.rebaseTo", { branchName }),
+          () => gitRebase(folderPath, branchName),
+          (result) => {
+            if (result.conflict?.has_conflicts) {
+              setConflictInfo(result.conflict)
+              return false
+            }
+            return undefined
+          }
         )
         break
       case "delete":
@@ -520,6 +650,10 @@ export function BranchDropdown({
                   t("tasks.pullCode"),
                   () => gitPull(folderPath),
                   (result) => {
+                    if (result.conflict?.has_conflicts) {
+                      setConflictInfo(result.conflict)
+                      return false
+                    }
                     if (result.updated_files === 0) {
                       return t("toasts.allFilesUpToDate")
                     }
@@ -552,39 +686,16 @@ export function BranchDropdown({
                 setDropdownOpen(false)
                 openCommitWindow(folder.id).catch((err) => {
                   const title = t("toasts.openCommitWindowFailed")
-                  pushAlert("error", title, String(err))
-                  toast.error(title, { description: String(err) })
+                  const msg = toErrorMessage(err)
+                  pushAlert("error", title, msg)
+                  toast.error(title, { description: msg })
                 })
               }}
             >
               <GitCommitHorizontal className="h-3.5 w-3.5" />
               {t("openCommitWindow")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={loading}
-              onSelect={() =>
-                runGitTask(
-                  t("tasks.pushCode"),
-                  () => gitPush(folderPath),
-                  (result) => {
-                    if (result.upstream_set) {
-                      if (result.pushed_commits === 0) {
-                        return t("toasts.upstreamSet")
-                      }
-                      return t("toasts.upstreamSetAndPushed", {
-                        count: result.pushed_commits,
-                      })
-                    }
-                    if (result.pushed_commits === 0) {
-                      return t("toasts.noCommitsToPush")
-                    }
-                    return t("toasts.pushedCommits", {
-                      count: result.pushed_commits,
-                    })
-                  }
-                )
-              }
-            >
+            <DropdownMenuItem disabled={loading} onSelect={handlePush}>
               <Upload className="h-3.5 w-3.5" />
               {t("pushCode")}
             </DropdownMenuItem>
@@ -845,6 +956,14 @@ export function BranchDropdown({
         onOpenChange={setManageRemotesOpen}
         folderPath={folderPath}
         onSaved={() => loadAllBranches()}
+      />
+
+      <ConflictDialog
+        conflictInfo={conflictInfo}
+        folderId={folder?.id ?? 0}
+        folderPath={folderPath}
+        onClose={() => setConflictInfo(null)}
+        onResolved={onBranchChange}
       />
     </>
   )

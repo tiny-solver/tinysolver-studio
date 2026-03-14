@@ -42,6 +42,7 @@ pub fn run() {
         .manage(TerminalManager::new())
         .manage(windows::SettingsWindowState::new())
         .manage(windows::CommitWindowState::new())
+        .manage(windows::MergeWindowState::new())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             let app_version = env!("CARGO_PKG_VERSION");
@@ -113,6 +114,18 @@ pub fn run() {
                 }
             }
 
+            if label.starts_with("merge-")
+                && matches!(
+                    event,
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+                )
+            {
+                let app = window.app_handle();
+                if let Some(state) = app.try_state::<windows::MergeWindowState>() {
+                    windows::restore_window_after_merge(app, &state, &label);
+                }
+            }
+
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if label.starts_with("folder-") {
                     let app = window.app_handle();
@@ -181,6 +194,7 @@ pub fn run() {
             folders::get_git_branch,
             folders::git_init,
             folders::git_pull,
+            folders::git_start_pull_merge,
             folders::git_fetch,
             folders::git_push,
             folders::git_new_branch,
@@ -207,6 +221,11 @@ pub fn run() {
             folders::git_merge,
             folders::git_rebase,
             folders::git_delete_branch,
+            folders::git_list_conflicts,
+            folders::git_conflict_file_versions,
+            folders::git_resolve_conflict,
+            folders::git_abort_operation,
+            folders::git_continue_operation,
             folders::save_folder_opened_conversations,
             folders::start_file_tree_watch,
             folders::stop_file_tree_watch,
@@ -226,6 +245,7 @@ pub fn run() {
             windows::open_settings_window,
             windows::list_open_folders,
             windows::focus_folder_window,
+            windows::open_merge_window,
             system_settings::get_system_proxy_settings,
             system_settings::update_system_proxy_settings,
             system_settings::get_system_language_settings,

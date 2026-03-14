@@ -540,6 +540,31 @@
     "invalidFolderId": "Ungültige Ordner-ID",
     "loadingRepo": "Repository wird geladen..."
   },
+  "MergePage": {
+    "title": "Konflikte lösen",
+    "invalidFolderId": "Ungültige Ordner-ID",
+    "loadingRepo": "Repository wird geladen...",
+    "localVersion": "Lokal (Unsere)",
+    "result": "Ergebnis",
+    "remoteVersion": "Remote (Deren)",
+    "acceptLocal": "Lokal übernehmen",
+    "acceptRemote": "Remote übernehmen",
+    "markResolved": "Als gelöst markieren",
+    "abortMerge": "Abbrechen",
+    "completeMerge": "Merge abschließen",
+    "unresolvedConflicts": "Es gibt noch ungelöste Konfliktmarkierungen in dieser Datei",
+    "fileResolved": "Datei erfolgreich gelöst",
+    "allResolved": "Alle Konflikte gelöst",
+    "conflictFiles": "Konfliktdateien",
+    "loadingFile": "Datei wird geladen...",
+    "selectFile": "Datei zum Lösen auswählen",
+    "noConflicts": "Keine Konfliktdateien",
+    "skipFile": "Überspringen",
+    "abortSuccess": "Vorgang abgebrochen",
+    "applyAllNonConflicting": "Alle konfliktfreien Änderungen anwenden",
+    "applyLeftNonConflicting": "Lokal anwenden",
+    "applyRightNonConflicting": "Remote anwenden"
+  },
   "Folder": {
     "common": {
       "all": "Alle",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "Remote-URL",
         "addRemote": "Hinzufügen",
         "savingRemotes": "Speichern..."
+      },
+      "conflict": {
+        "title": "Merge-Konflikte",
+        "description": "Die folgenden Dateien haben Konflikte, die gelöst werden müssen:",
+        "abort": "Merge abbrechen",
+        "openMergeTool": "Merge-Tool öffnen",
+        "completeMerge": "Merge abschließen",
+        "abortSuccess": "Merge erfolgreich abgebrochen",
+        "completeSuccess": "Merge erfolgreich abgeschlossen"
       }
     },
     "commitDialog": {

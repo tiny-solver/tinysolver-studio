@@ -347,3 +347,173 @@
     background-color: rgba(248, 81, 73, 0.2);
   }
 }
+
+/* Merge editor: hunk type decorations (IDEA-style) */
+
+/* Left pane (ours) & Right pane (theirs) — diff highlights */
+.monaco-editor .merge-hunk-added-bg {
+  background-color: rgba(46, 160, 67, 0.12);
+}
+
+.monaco-editor .merge-hunk-modified-bg {
+  background-color: rgba(31, 111, 235, 0.12);
+}
+
+.monaco-editor .merge-hunk-removed-bg {
+  background-color: rgba(128, 128, 128, 0.15);
+}
+
+/* Center pane — conflict regions */
+.monaco-editor .merge-hunk-conflict-bg {
+  background-color: rgba(248, 81, 73, 0.12);
+}
+
+/* Center pane — applied hunk */
+.monaco-editor .merge-hunk-applied-bg {
+  background-color: rgba(46, 160, 67, 0.08);
+}
+
+/* Center pane — pending non-conflict hunk */
+.monaco-editor .merge-hunk-pending-bg {
+  background-color: rgba(234, 179, 8, 0.06);
+}
+
+/* Dark mode overrides */
+.dark .monaco-editor .merge-hunk-added-bg {
+  background-color: rgba(63, 185, 80, 0.18);
+}
+
+.dark .monaco-editor .merge-hunk-modified-bg {
+  background-color: rgba(56, 139, 253, 0.18);
+}
+
+.dark .monaco-editor .merge-hunk-removed-bg {
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
+.dark .monaco-editor .merge-hunk-conflict-bg {
+  background-color: rgba(248, 81, 73, 0.18);
+}
+
+.dark .monaco-editor .merge-hunk-applied-bg {
+  background-color: rgba(63, 185, 80, 0.1);
+}
+
+.dark .monaco-editor .merge-hunk-pending-bg {
+  background-color: rgba(234, 179, 8, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .monaco-editor .merge-hunk-added-bg {
+    background-color: rgba(63, 185, 80, 0.18);
+  }
+
+  :root:not(.light) .monaco-editor .merge-hunk-modified-bg {
+    background-color: rgba(56, 139, 253, 0.18);
+  }
+
+  :root:not(.light) .monaco-editor .merge-hunk-removed-bg {
+    background-color: rgba(128, 128, 128, 0.2);
+  }
+
+  :root:not(.light) .monaco-editor .merge-hunk-conflict-bg {
+    background-color: rgba(248, 81, 73, 0.18);
+  }
+
+  :root:not(.light) .monaco-editor .merge-hunk-applied-bg {
+    background-color: rgba(63, 185, 80, 0.1);
+  }
+
+  :root:not(.light) .monaco-editor .merge-hunk-pending-bg {
+    background-color: rgba(234, 179, 8, 0.08);
+  }
+}
+
+/* Merge arrow gutter columns */
+.merge-gutter-column {
+  position: relative;
+  width: 24px;
+  min-width: 24px;
+  height: 100%;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.merge-gutter-arrow-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0.75;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.merge-gutter-arrow-btn:hover {
+  opacity: 1;
+}
+
+.merge-gutter-arrow-accept {
+  background-color: rgba(46, 160, 67, 0.25);
+  color: #2ea043;
+}
+
+.merge-gutter-arrow-accept:hover {
+  background-color: rgba(46, 160, 67, 0.45);
+}
+
+.merge-gutter-arrow-conflict {
+  background-color: rgba(248, 81, 73, 0.2);
+  color: #f85149;
+}
+
+.merge-gutter-arrow-conflict:hover {
+  background-color: rgba(248, 81, 73, 0.4);
+}
+
+.dark .merge-gutter-arrow-accept {
+  background-color: rgba(63, 185, 80, 0.2);
+  color: #3fb950;
+}
+
+.dark .merge-gutter-arrow-accept:hover {
+  background-color: rgba(63, 185, 80, 0.4);
+}
+
+.dark .merge-gutter-arrow-conflict {
+  background-color: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+
+.dark .merge-gutter-arrow-conflict:hover {
+  background-color: rgba(248, 81, 73, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .merge-gutter-arrow-accept {
+    background-color: rgba(63, 185, 80, 0.2);
+    color: #3fb950;
+  }
+
+  :root:not(.light) .merge-gutter-arrow-accept:hover {
+    background-color: rgba(63, 185, 80, 0.4);
+  }
+
+  :root:not(.light) .merge-gutter-arrow-conflict {
+    background-color: rgba(248, 81, 73, 0.15);
+    color: #f85149;
+  }
+
+  :root:not(.light) .merge-gutter-arrow-conflict:hover {
+    background-color: rgba(248, 81, 73, 0.35);
+  }
+}

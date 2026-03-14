@@ -391,6 +391,108 @@ pub fn restore_window_after_commit(
     }
 }
 
+pub struct MergeWindowState {
+    owner_by_merge_label: Mutex<HashMap<String, String>>,
+}
+
+impl MergeWindowState {
+    pub fn new() -> Self {
+        Self {
+            owner_by_merge_label: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn set_owner(&self, merge_label: String, owner_label: String) {
+        if let Ok(mut owners) = self.owner_by_merge_label.lock() {
+            owners.insert(merge_label, owner_label);
+        }
+    }
+
+    fn take_owner(&self, merge_label: &str) -> Option<String> {
+        self.owner_by_merge_label
+            .lock()
+            .ok()
+            .and_then(|mut owners| owners.remove(merge_label))
+    }
+}
+
+#[tauri::command]
+pub async fn open_merge_window(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    db: tauri::State<'_, AppDatabase>,
+    state: tauri::State<'_, MergeWindowState>,
+    folder_id: i32,
+    operation: String,
+) -> Result<(), AppCommandError> {
+    let owner_label = window.label().to_string();
+    let label = format!("merge-{folder_id}");
+
+    if let Some(existing) = app.get_webview_window(&label) {
+        if let Some(owner_window) = app.get_webview_window(&owner_label) {
+            owner_window.set_enabled(false).map_err(|e| {
+                AppCommandError::window("Failed to disable owner window", e.to_string())
+            })?;
+        }
+        state.set_owner(label.clone(), owner_label);
+        let _ = existing.unminimize();
+        existing
+            .set_focus()
+            .map_err(|e| AppCommandError::window("Failed to focus merge window", e.to_string()))?;
+        return Ok(());
+    }
+
+    let folder = crate::db::service::folder_service::get_folder_by_id(&db.conn, folder_id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| {
+            AppCommandError::not_found(format!("Folder {folder_id} not found"))
+                .with_detail(format!("folder_id={folder_id}"))
+        })?;
+
+    let url = WebviewUrl::App(
+        format!("merge?folderId={folder_id}&operation={operation}").into(),
+    );
+    let builder = WebviewWindowBuilder::new(&app, &label, url)
+        .title(format!("解决冲突 - {}", folder.name))
+        .inner_size(1400.0, 900.0)
+        .min_inner_size(1100.0, 650.0)
+        .always_on_top(true)
+        .center();
+    let merge_window = apply_platform_window_style(builder)
+        .build()
+        .map_err(|e| AppCommandError::window("Failed to open merge window", e.to_string()))?;
+    ensure_windows_undecorated(&merge_window);
+    if let Some(owner_window) = app.get_webview_window(&owner_label) {
+        if let Err(err) = owner_window.set_enabled(false) {
+            let _ = merge_window.close();
+            return Err(AppCommandError::window(
+                "Failed to disable owner window",
+                err.to_string(),
+            ));
+        }
+    }
+    state.set_owner(label, owner_label);
+    merge_window
+        .set_focus()
+        .map_err(|e| AppCommandError::window("Failed to focus merge window", e.to_string()))?;
+
+    Ok(())
+}
+
+pub fn restore_window_after_merge(
+    app: &AppHandle,
+    state: &MergeWindowState,
+    merge_window_label: &str,
+) {
+    if let Some(owner_label) = state.take_owner(merge_window_label) {
+        if let Some(window) = app.get_webview_window(&owner_label) {
+            let _ = window.set_enabled(true);
+            let _ = window.set_focus();
+        }
+    }
+}
+
 pub fn open_welcome_window(app: &AppHandle) -> Result<(), AppCommandError> {
     if let Some(existing) = app.get_webview_window("welcome") {
         ensure_windows_undecorated(&existing);

@@ -540,6 +540,31 @@
     "invalidFolderId": "無效的 folderId",
     "loadingRepo": "正在載入倉庫..."
   },
+  "MergePage": {
+    "title": "解決衝突",
+    "invalidFolderId": "無效的 folderId",
+    "loadingRepo": "正在載入倉庫...",
+    "localVersion": "本地（我們的）",
+    "result": "結果",
+    "remoteVersion": "遠端（他們的）",
+    "acceptLocal": "採用本地",
+    "acceptRemote": "採用遠端",
+    "markResolved": "標記已解決",
+    "abortMerge": "中止",
+    "completeMerge": "完成合併",
+    "unresolvedConflicts": "檔案中仍有未解決的衝突標記",
+    "fileResolved": "檔案已解決",
+    "allResolved": "所有衝突已解決",
+    "conflictFiles": "衝突檔案",
+    "loadingFile": "正在載入檔案...",
+    "selectFile": "選擇一個檔案進行解決",
+    "noConflicts": "無衝突檔案",
+    "skipFile": "跳過",
+    "abortSuccess": "操作已中止",
+    "applyAllNonConflicting": "套用所有非衝突變更",
+    "applyLeftNonConflicting": "套用本地",
+    "applyRightNonConflicting": "套用遠端"
+  },
   "Folder": {
     "common": {
       "all": "全部",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "遠端 URL",
         "addRemote": "新增",
         "savingRemotes": "儲存中..."
+      },
+      "conflict": {
+        "title": "合併衝突",
+        "description": "以下檔案存在衝突，需要手動解決：",
+        "abort": "中止合併",
+        "openMergeTool": "開啟合併工具",
+        "completeMerge": "完成合併",
+        "abortSuccess": "合併已中止",
+        "completeSuccess": "合併完成"
       }
     },
     "commitDialog": {

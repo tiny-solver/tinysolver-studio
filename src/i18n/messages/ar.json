@@ -540,6 +540,31 @@
     "invalidFolderId": "معرّف المجلد غير صالح",
     "loadingRepo": "جارٍ تحميل المستودع..."
   },
+  "MergePage": {
+    "title": "حل التعارضات",
+    "invalidFolderId": "معرّف المجلد غير صالح",
+    "loadingRepo": "جارٍ تحميل المستودع...",
+    "localVersion": "محلي (الخاص بنا)",
+    "result": "النتيجة",
+    "remoteVersion": "بعيد (الخاص بهم)",
+    "acceptLocal": "قبول المحلي",
+    "acceptRemote": "قبول البعيد",
+    "markResolved": "تحديد كمحلول",
+    "abortMerge": "إلغاء",
+    "completeMerge": "إتمام الدمج",
+    "unresolvedConflicts": "لا تزال هناك علامات تعارض غير محلولة في هذا الملف",
+    "fileResolved": "تم حل الملف بنجاح",
+    "allResolved": "تم حل جميع التعارضات",
+    "conflictFiles": "ملفات متعارضة",
+    "loadingFile": "جارٍ تحميل الملف...",
+    "selectFile": "اختر ملفًا لحله",
+    "noConflicts": "لا توجد ملفات متعارضة",
+    "skipFile": "تخطي",
+    "abortSuccess": "تم إلغاء العملية",
+    "applyAllNonConflicting": "تطبيق جميع التغييرات غير المتعارضة",
+    "applyLeftNonConflicting": "تطبيق المحلي",
+    "applyRightNonConflicting": "تطبيق البعيد"
+  },
   "Folder": {
     "common": {
       "all": "الكل",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "عنوان URL للمستودع البعيد",
         "addRemote": "إضافة",
         "savingRemotes": "جارٍ الحفظ..."
+      },
+      "conflict": {
+        "title": "تعارضات الدمج",
+        "description": "الملفات التالية بها تعارضات تحتاج إلى حل:",
+        "abort": "إلغاء الدمج",
+        "openMergeTool": "فتح أداة الدمج",
+        "completeMerge": "إتمام الدمج",
+        "abortSuccess": "تم إلغاء الدمج بنجاح",
+        "completeSuccess": "تم إتمام الدمج بنجاح"
       }
     },
     "commitDialog": {

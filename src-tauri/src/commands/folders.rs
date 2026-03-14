@@ -34,8 +34,16 @@ pub struct GitBranchList {
 }
 
 #[derive(Debug, Serialize)]
+pub struct GitConflictInfo {
+    pub has_conflicts: bool,
+    pub conflicted_files: Vec<String>,
+    pub operation: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct GitPullResult {
     pub updated_files: usize,
+    pub conflict: Option<GitConflictInfo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +55,21 @@ pub struct GitPushResult {
 #[derive(Debug, Serialize)]
 pub struct GitMergeResult {
     pub merged_commits: usize,
+    pub conflict: Option<GitConflictInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitRebaseResult {
+    pub message: String,
+    pub conflict: Option<GitConflictInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitConflictFileVersions {
+    pub base: String,
+    pub ours: String,
+    pub theirs: String,
+    pub merged: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -158,6 +181,25 @@ fn parse_count_from_output(stdout: &[u8]) -> Option<usize> {
 fn git_command_error(operation: &str, stderr: &[u8]) -> AppCommandError {
     let stderr = String::from_utf8_lossy(stderr).trim().to_string();
     AppCommandError::external_command(format!("git {operation} failed"), stderr)
+}
+
+async fn detect_conflicts(path: &str) -> Result<Vec<String>, AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["diff", "--name-only", "--diff-filter=U"])
+        .current_dir(path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Ok(vec![]);
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect())
 }
 
 async fn get_head_hash(path: &str) -> Result<Option<String>, AppCommandError> {
@@ -484,15 +526,110 @@ pub async fn git_init(path: String) -> Result<(), AppCommandError> {
 pub async fn git_pull(path: String) -> Result<GitPullResult, AppCommandError> {
     let head_before = get_head_hash(&path).await?;
 
-    let output = crate::process::tokio_command("git")
-        .args(["pull"])
+    // Step 1: fetch from remote
+    let fetch_output = crate::process::tokio_command("git")
+        .args(["fetch"])
         .current_dir(&path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
 
-    if !output.status.success() {
-        return Err(git_command_error("pull", &output.stderr));
+    if !fetch_output.status.success() {
+        return Err(git_command_error("fetch", &fetch_output.stderr));
+    }
+
+    // Step 2: check if upstream exists
+    let upstream_check = crate::process::tokio_command("git")
+        .args(["rev-parse", "@{u}"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !upstream_check.status.success() {
+        // No upstream configured, nothing to merge
+        return Ok(GitPullResult {
+            updated_files: 0,
+            conflict: None,
+        });
+    }
+
+    // Step 3: check if we can fast-forward
+    let merge_base = crate::process::tokio_command("git")
+        .args(["merge-base", "HEAD", "@{u}"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+    let head_hash = crate::process::tokio_command("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    let base_hash = String::from_utf8_lossy(&merge_base.stdout).trim().to_string();
+    let current_head = String::from_utf8_lossy(&head_hash.stdout).trim().to_string();
+
+    if base_hash == current_head {
+        // Can fast-forward — just do it
+        let ff_output = crate::process::tokio_command("git")
+            .args(["merge", "--ff-only", "@{u}"])
+            .current_dir(&path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?;
+
+        if !ff_output.status.success() {
+            return Err(git_command_error("merge --ff-only", &ff_output.stderr));
+        }
+    } else {
+        // Non-fast-forward: try merge with --no-commit to detect conflicts
+        let merge_output = crate::process::tokio_command("git")
+            .args(["merge", "--no-commit", "@{u}"])
+            .current_dir(&path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?;
+
+        if !merge_output.status.success() {
+            // Check for conflicts
+            let conflicted_files = detect_conflicts(&path).await?;
+            if !conflicted_files.is_empty() {
+                // Abort merge to restore working tree
+                let _ = crate::process::tokio_command("git")
+                    .args(["merge", "--abort"])
+                    .current_dir(&path)
+                    .output()
+                    .await;
+
+                return Ok(GitPullResult {
+                    updated_files: 0,
+                    conflict: Some(GitConflictInfo {
+                        has_conflicts: true,
+                        conflicted_files,
+                        operation: "pull".to_string(),
+                    }),
+                });
+            }
+            return Err(git_command_error("merge", &merge_output.stderr));
+        }
+
+        // Merge succeeded without conflicts — commit
+        let commit_output = crate::process::tokio_command("git")
+            .args(["commit", "--no-edit"])
+            .current_dir(&path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?;
+
+        if !commit_output.status.success() {
+            let stderr = String::from_utf8_lossy(&commit_output.stderr);
+            let stdout = String::from_utf8_lossy(&commit_output.stdout);
+            if !stderr.contains("nothing to commit") && !stdout.contains("nothing to commit") {
+                return Err(git_command_error("commit", &commit_output.stderr));
+            }
+        }
     }
 
     let head_after = get_head_hash(&path).await?;
@@ -504,7 +641,34 @@ pub async fn git_pull(path: String) -> Result<GitPullResult, AppCommandError> {
         _ => 0,
     };
 
-    Ok(GitPullResult { updated_files })
+    Ok(GitPullResult {
+        updated_files,
+        conflict: None,
+    })
+}
+
+/// Start a merge with the upstream branch (used by merge workspace after pull conflict detection).
+/// This recreates the conflict state so that :1:, :2:, :3: stage entries are available.
+#[tauri::command]
+pub async fn git_start_pull_merge(path: String) -> Result<(), AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["merge", "--no-commit", "@{u}"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    // It's expected to fail with conflicts — that's the point.
+    // We just need the merge state to be active so stage entries exist.
+    if !output.status.success() {
+        let conflicted_files = detect_conflicts(&path).await?;
+        if !conflicted_files.is_empty() {
+            return Ok(()); // Conflict state is now active — merge workspace can proceed
+        }
+        return Err(git_command_error("merge", &output.stderr));
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -1241,13 +1405,30 @@ pub async fn git_merge(
         .map_err(AppCommandError::io)?;
 
     if !output.status.success() {
+        let conflicted_files = detect_conflicts(&path).await?;
+        if !conflicted_files.is_empty() {
+            return Ok(GitMergeResult {
+                merged_commits,
+                conflict: Some(GitConflictInfo {
+                    has_conflicts: true,
+                    conflicted_files,
+                    operation: "merge".to_string(),
+                }),
+            });
+        }
         return Err(git_command_error("merge", &output.stderr));
     }
-    Ok(GitMergeResult { merged_commits })
+    Ok(GitMergeResult {
+        merged_commits,
+        conflict: None,
+    })
 }
 
 #[tauri::command]
-pub async fn git_rebase(path: String, branch_name: String) -> Result<String, AppCommandError> {
+pub async fn git_rebase(
+    path: String,
+    branch_name: String,
+) -> Result<GitRebaseResult, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["rebase", &branch_name])
         .current_dir(&path)
@@ -1256,9 +1437,23 @@ pub async fn git_rebase(path: String, branch_name: String) -> Result<String, App
         .map_err(AppCommandError::io)?;
 
     if !output.status.success() {
+        let conflicted_files = detect_conflicts(&path).await?;
+        if !conflicted_files.is_empty() {
+            return Ok(GitRebaseResult {
+                message: String::from_utf8_lossy(&output.stdout).trim().to_string(),
+                conflict: Some(GitConflictInfo {
+                    has_conflicts: true,
+                    conflicted_files,
+                    operation: "rebase".to_string(),
+                }),
+            });
+        }
         return Err(git_command_error("rebase", &output.stderr));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    Ok(GitRebaseResult {
+        message: String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        conflict: None,
+    })
 }
 
 #[tauri::command]
@@ -1279,6 +1474,145 @@ pub async fn git_delete_branch(
         return Err(git_command_error(&format!("branch {flag}"), &output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn git_list_conflicts(path: String) -> Result<Vec<String>, AppCommandError> {
+    detect_conflicts(&path).await
+}
+
+#[tauri::command]
+pub async fn git_conflict_file_versions(
+    path: String,
+    file: String,
+) -> Result<GitConflictFileVersions, AppCommandError> {
+    // :1: = base (common ancestor), :2: = ours (HEAD), :3: = theirs (incoming)
+    let mut versions = Vec::with_capacity(3);
+    for stage in ["1", "2", "3"] {
+        let file_spec = format!(":{}:{}", stage, file);
+        let output = crate::process::tokio_command("git")
+            .args(["show", &file_spec])
+            .current_dir(&path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?;
+
+        if !output.status.success() {
+            // File may not exist at this stage (e.g. newly added on one side)
+            versions.push(String::new());
+        } else {
+            let bytes = &output.stdout;
+            if bytes.iter().take(2048).any(|b| *b == 0) {
+                return Err(
+                    AppCommandError::invalid_input("Binary files are not supported")
+                        .with_detail(file_spec),
+                );
+            }
+            versions.push(String::from_utf8_lossy(bytes).to_string());
+        }
+    }
+
+    // Read the working tree file (contains conflict markers)
+    let file_path = Path::new(&path).join(&file);
+    let merged = std::fs::read_to_string(&file_path).unwrap_or_default();
+
+    Ok(GitConflictFileVersions {
+        base: versions.remove(0),
+        ours: versions.remove(0),
+        theirs: versions.remove(0),
+        merged,
+    })
+}
+
+#[tauri::command]
+pub async fn git_resolve_conflict(
+    path: String,
+    file: String,
+    content: String,
+) -> Result<(), AppCommandError> {
+    let file_path = Path::new(&path).join(&file);
+
+    // Write resolved content
+    std::fs::write(&file_path, content).map_err(|e| {
+        AppCommandError::io_error(format!("Failed to write resolved file: {}", e))
+    })?;
+
+    // Stage the resolved file
+    let output = crate::process::tokio_command("git")
+        .args(["add", &file])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("add", &output.stderr));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_abort_operation(
+    path: String,
+    operation: String,
+) -> Result<(), AppCommandError> {
+    let args = match operation.as_str() {
+        "merge" | "pull" => vec!["merge", "--abort"],
+        "rebase" => vec!["rebase", "--abort"],
+        _ => {
+            return Err(AppCommandError::invalid_input(format!(
+                "Unknown operation: {operation}"
+            )));
+        }
+    };
+
+    let output = crate::process::tokio_command("git")
+        .args(&args)
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error(
+            &format!("{} --abort", operation),
+            &output.stderr,
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_continue_operation(
+    path: String,
+    operation: String,
+) -> Result<(), AppCommandError> {
+    let (program, args): (&str, Vec<&str>) = match operation.as_str() {
+        "merge" | "pull" => ("git", vec!["commit", "--no-edit"]),
+        "rebase" => ("git", vec!["rebase", "--continue"]),
+        _ => {
+            return Err(AppCommandError::invalid_input(format!(
+                "Unknown operation: {operation}"
+            )));
+        }
+    };
+
+    let output = crate::process::tokio_command(program)
+        .args(&args)
+        .current_dir(&path)
+        .env("GIT_EDITOR", "true")
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error(
+            &format!("{} --continue", operation),
+            &output.stderr,
+        ));
+    }
+    Ok(())
 }
 
 const WATCH_IGNORED_DIRS: &[&str] = &["__pycache__"];

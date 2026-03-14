@@ -540,6 +540,31 @@
     "invalidFolderId": "ID de dossier invalide",
     "loadingRepo": "Chargement du dépôt..."
   },
+  "MergePage": {
+    "title": "Résoudre les conflits",
+    "invalidFolderId": "ID de dossier invalide",
+    "loadingRepo": "Chargement du dépôt...",
+    "localVersion": "Local (Le nôtre)",
+    "result": "Résultat",
+    "remoteVersion": "Distant (Le leur)",
+    "acceptLocal": "Accepter le local",
+    "acceptRemote": "Accepter le distant",
+    "markResolved": "Marquer comme résolu",
+    "abortMerge": "Abandonner",
+    "completeMerge": "Terminer la fusion",
+    "unresolvedConflicts": "Il reste des marqueurs de conflit non résolus dans ce fichier",
+    "fileResolved": "Fichier résolu avec succès",
+    "allResolved": "Tous les conflits sont résolus",
+    "conflictFiles": "Fichiers en conflit",
+    "loadingFile": "Chargement du fichier...",
+    "selectFile": "Sélectionner un fichier à résoudre",
+    "noConflicts": "Aucun fichier en conflit",
+    "skipFile": "Passer",
+    "abortSuccess": "Opération abandonnée",
+    "applyAllNonConflicting": "Appliquer tous les changements non conflictuels",
+    "applyLeftNonConflicting": "Appliquer local",
+    "applyRightNonConflicting": "Appliquer distant"
+  },
   "Folder": {
     "common": {
       "all": "Tout",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "URL du dépôt distant",
         "addRemote": "Ajouter",
         "savingRemotes": "Enregistrement..."
+      },
+      "conflict": {
+        "title": "Conflits de fusion",
+        "description": "Les fichiers suivants ont des conflits qui doivent être résolus :",
+        "abort": "Abandonner la fusion",
+        "openMergeTool": "Ouvrir l'outil de fusion",
+        "completeMerge": "Terminer la fusion",
+        "abortSuccess": "Fusion abandonnée avec succès",
+        "completeSuccess": "Fusion terminée avec succès"
       }
     },
     "commitDialog": {

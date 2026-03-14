@@ -540,6 +540,31 @@
     "invalidFolderId": "ID de carpeta no válido",
     "loadingRepo": "Cargando repositorio..."
   },
+  "MergePage": {
+    "title": "Resolver conflictos",
+    "invalidFolderId": "ID de carpeta no válido",
+    "loadingRepo": "Cargando repositorio...",
+    "localVersion": "Local (Nuestro)",
+    "result": "Resultado",
+    "remoteVersion": "Remoto (Suyo)",
+    "acceptLocal": "Aceptar local",
+    "acceptRemote": "Aceptar remoto",
+    "markResolved": "Marcar como resuelto",
+    "abortMerge": "Abortar",
+    "completeMerge": "Completar fusión",
+    "unresolvedConflicts": "Todavía hay marcadores de conflicto sin resolver en este archivo",
+    "fileResolved": "Archivo resuelto correctamente",
+    "allResolved": "Todos los conflictos resueltos",
+    "conflictFiles": "Archivos en conflicto",
+    "loadingFile": "Cargando archivo...",
+    "selectFile": "Seleccionar un archivo para resolver",
+    "noConflicts": "No hay archivos en conflicto",
+    "skipFile": "Omitir",
+    "abortSuccess": "Operación abortada",
+    "applyAllNonConflicting": "Aplicar todos los cambios sin conflicto",
+    "applyLeftNonConflicting": "Aplicar local",
+    "applyRightNonConflicting": "Aplicar remoto"
+  },
   "Folder": {
     "common": {
       "all": "Todo",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "URL del remoto",
         "addRemote": "Añadir",
         "savingRemotes": "Guardando..."
+      },
+      "conflict": {
+        "title": "Conflictos de fusión",
+        "description": "Los siguientes archivos tienen conflictos que necesitan ser resueltos:",
+        "abort": "Abortar fusión",
+        "openMergeTool": "Abrir herramienta de fusión",
+        "completeMerge": "Completar fusión",
+        "abortSuccess": "Fusión abortada correctamente",
+        "completeSuccess": "Fusión completada correctamente"
       }
     },
     "commitDialog": {

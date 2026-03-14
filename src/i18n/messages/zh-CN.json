@@ -540,6 +540,31 @@
     "invalidFolderId": "无效的 folderId",
     "loadingRepo": "正在加载仓库..."
   },
+  "MergePage": {
+    "title": "解决冲突",
+    "invalidFolderId": "无效的 folderId",
+    "loadingRepo": "正在加载仓库...",
+    "localVersion": "本地（我们的）",
+    "result": "结果",
+    "remoteVersion": "远程（他们的）",
+    "acceptLocal": "采用本地",
+    "acceptRemote": "采用远程",
+    "markResolved": "标记已解决",
+    "abortMerge": "中止",
+    "completeMerge": "完成合并",
+    "unresolvedConflicts": "文件中仍有未解决的冲突标记",
+    "fileResolved": "文件已解决",
+    "allResolved": "所有冲突已解决",
+    "conflictFiles": "冲突文件",
+    "loadingFile": "正在加载文件...",
+    "selectFile": "选择一个文件进行解决",
+    "noConflicts": "无冲突文件",
+    "skipFile": "跳过",
+    "abortSuccess": "操作已中止",
+    "applyAllNonConflicting": "应用所有非冲突变更",
+    "applyLeftNonConflicting": "应用本地",
+    "applyRightNonConflicting": "应用远程"
+  },
   "Folder": {
     "common": {
       "all": "全部",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "远程 URL",
         "addRemote": "添加",
         "savingRemotes": "保存中..."
+      },
+      "conflict": {
+        "title": "合并冲突",
+        "description": "以下文件存在冲突，需要手动解决：",
+        "abort": "中止合并",
+        "openMergeTool": "打开合并工具",
+        "completeMerge": "完成合并",
+        "abortSuccess": "合并已中止",
+        "completeSuccess": "合并完成"
       }
     },
     "commitDialog": {

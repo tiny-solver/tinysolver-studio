@@ -540,6 +540,31 @@
     "invalidFolderId": "無効なフォルダID",
     "loadingRepo": "リポジトリを読み込み中..."
   },
+  "MergePage": {
+    "title": "コンフリクトの解決",
+    "invalidFolderId": "無効なフォルダID",
+    "loadingRepo": "リポジトリを読み込み中...",
+    "localVersion": "ローカル（自分側）",
+    "result": "結果",
+    "remoteVersion": "リモート（相手側）",
+    "acceptLocal": "ローカルを採用",
+    "acceptRemote": "リモートを採用",
+    "markResolved": "解決済みにする",
+    "abortMerge": "中止",
+    "completeMerge": "マージ完了",
+    "unresolvedConflicts": "ファイルに未解決のコンフリクトマーカーがあります",
+    "fileResolved": "ファイルが解決されました",
+    "allResolved": "すべてのコンフリクトが解決されました",
+    "conflictFiles": "コンフリクトファイル",
+    "loadingFile": "ファイルを読み込み中...",
+    "selectFile": "解決するファイルを選択してください",
+    "noConflicts": "コンフリクトファイルなし",
+    "skipFile": "スキップ",
+    "abortSuccess": "操作が中止されました",
+    "applyAllNonConflicting": "競合しない変更をすべて適用",
+    "applyLeftNonConflicting": "ローカルを適用",
+    "applyRightNonConflicting": "リモートを適用"
+  },
   "Folder": {
     "common": {
       "all": "すべて",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "リモート URL",
         "addRemote": "追加",
         "savingRemotes": "保存中..."
+      },
+      "conflict": {
+        "title": "マージコンフリクト",
+        "description": "以下のファイルにコンフリクトがあります。解決が必要です：",
+        "abort": "マージを中止",
+        "openMergeTool": "マージツールを開く",
+        "completeMerge": "マージ完了",
+        "abortSuccess": "マージが中止されました",
+        "completeSuccess": "マージが完了しました"
       }
     },
     "commitDialog": {

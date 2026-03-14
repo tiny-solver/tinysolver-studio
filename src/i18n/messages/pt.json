@@ -540,6 +540,31 @@
     "invalidFolderId": "ID de pasta inválido",
     "loadingRepo": "Carregando repositório..."
   },
+  "MergePage": {
+    "title": "Resolver conflitos",
+    "invalidFolderId": "ID de pasta inválido",
+    "loadingRepo": "Carregando repositório...",
+    "localVersion": "Local (Nosso)",
+    "result": "Resultado",
+    "remoteVersion": "Remoto (Deles)",
+    "acceptLocal": "Aceitar local",
+    "acceptRemote": "Aceitar remoto",
+    "markResolved": "Marcar como resolvido",
+    "abortMerge": "Abortar",
+    "completeMerge": "Concluir merge",
+    "unresolvedConflicts": "Ainda há marcadores de conflito não resolvidos neste arquivo",
+    "fileResolved": "Arquivo resolvido com sucesso",
+    "allResolved": "Todos os conflitos resolvidos",
+    "conflictFiles": "Arquivos em conflito",
+    "loadingFile": "Carregando arquivo...",
+    "selectFile": "Selecione um arquivo para resolver",
+    "noConflicts": "Nenhum arquivo em conflito",
+    "skipFile": "Pular",
+    "abortSuccess": "Operação abortada",
+    "applyAllNonConflicting": "Aplicar todas as alterações sem conflito",
+    "applyLeftNonConflicting": "Aplicar local",
+    "applyRightNonConflicting": "Aplicar remoto"
+  },
   "Folder": {
     "common": {
       "all": "Todos",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "URL do remoto",
         "addRemote": "Adicionar",
         "savingRemotes": "Salvando..."
+      },
+      "conflict": {
+        "title": "Conflitos de merge",
+        "description": "Os seguintes arquivos têm conflitos que precisam ser resolvidos:",
+        "abort": "Abortar merge",
+        "openMergeTool": "Abrir ferramenta de merge",
+        "completeMerge": "Concluir merge",
+        "abortSuccess": "Merge abortado com sucesso",
+        "completeSuccess": "Merge concluído com sucesso"
       }
     },
     "commitDialog": {

@@ -24,6 +24,8 @@ import type {
   GitPullResult,
   GitPushResult,
   GitMergeResult,
+  GitRebaseResult,
+  GitConflictFileVersions,
   GitCommitResult,
   GitRemote,
   PreflightResult,
@@ -450,6 +452,10 @@ export async function gitPull(path: string): Promise<GitPullResult> {
   return invoke("git_pull", { path })
 }
 
+export async function gitStartPullMerge(path: string): Promise<void> {
+  return invoke("git_start_pull_merge", { path })
+}
+
 export async function gitFetch(path: string): Promise<string> {
   return invoke("git_fetch", { path })
 }
@@ -503,7 +509,7 @@ export async function gitMerge(
 export async function gitRebase(
   path: string,
   branchName: string
-): Promise<string> {
+): Promise<GitRebaseResult> {
   return invoke("git_rebase", { path, branchName })
 }
 
@@ -513,6 +519,46 @@ export async function gitDeleteBranch(
   force = false
 ): Promise<string> {
   return invoke("git_delete_branch", { path, branchName, force })
+}
+
+export async function gitListConflicts(path: string): Promise<string[]> {
+  return invoke("git_list_conflicts", { path })
+}
+
+export async function gitConflictFileVersions(
+  path: string,
+  file: string
+): Promise<GitConflictFileVersions> {
+  return invoke("git_conflict_file_versions", { path, file })
+}
+
+export async function gitResolveConflict(
+  path: string,
+  file: string,
+  content: string
+): Promise<void> {
+  return invoke("git_resolve_conflict", { path, file, content })
+}
+
+export async function gitAbortOperation(
+  path: string,
+  operation: string
+): Promise<void> {
+  return invoke("git_abort_operation", { path, operation })
+}
+
+export async function gitContinueOperation(
+  path: string,
+  operation: string
+): Promise<void> {
+  return invoke("git_continue_operation", { path, operation })
+}
+
+export async function openMergeWindow(
+  folderId: number,
+  operation: string
+): Promise<void> {
+  return invoke("open_merge_window", { folderId, operation })
 }
 
 export async function gitStash(path: string): Promise<string> {

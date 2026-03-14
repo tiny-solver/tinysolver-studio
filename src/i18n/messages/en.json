@@ -540,6 +540,31 @@
     "invalidFolderId": "Invalid folder ID",
     "loadingRepo": "Loading repository..."
   },
+  "MergePage": {
+    "title": "Resolve Conflicts",
+    "invalidFolderId": "Invalid folder ID",
+    "loadingRepo": "Loading repository...",
+    "localVersion": "Local (Ours)",
+    "result": "Result",
+    "remoteVersion": "Remote (Theirs)",
+    "acceptLocal": "Accept Local",
+    "acceptRemote": "Accept Remote",
+    "markResolved": "Mark Resolved",
+    "abortMerge": "Abort",
+    "completeMerge": "Complete Merge",
+    "unresolvedConflicts": "There are still unresolved conflict markers in this file",
+    "fileResolved": "File resolved successfully",
+    "allResolved": "All conflicts resolved",
+    "conflictFiles": "Conflict Files",
+    "loadingFile": "Loading file...",
+    "selectFile": "Select a file to resolve",
+    "noConflicts": "No conflict files",
+    "skipFile": "Skip",
+    "abortSuccess": "Operation aborted",
+    "applyAllNonConflicting": "Apply All Non-Conflicting",
+    "applyLeftNonConflicting": "Apply Local",
+    "applyRightNonConflicting": "Apply Remote"
+  },
   "Folder": {
     "common": {
       "all": "All",
@@ -815,6 +840,15 @@
         "remoteUrlPlaceholder": "Remote URL",
         "addRemote": "Add",
         "savingRemotes": "Saving..."
+      },
+      "conflict": {
+        "title": "Merge Conflicts",
+        "description": "The following files have conflicts that need to be resolved:",
+        "abort": "Abort Merge",
+        "openMergeTool": "Open Merge Tool",
+        "completeMerge": "Complete Merge",
+        "abortSuccess": "Merge aborted successfully",
+        "completeSuccess": "Merge completed successfully"
       }
     },
     "commitDialog": {
