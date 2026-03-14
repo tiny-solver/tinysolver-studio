@@ -1,13 +1,6 @@
 "use client"
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { TauriEvent } from "@tauri-apps/api/event"
 import { getCurrentWebview } from "@tauri-apps/api/webview"
 import { open } from "@tauri-apps/plugin-dialog"
@@ -1086,9 +1079,6 @@ export function MessageInput({
 
   const hasImageAttachments = imageAttachments.length > 0
   const hasResourceAttachments = resourceAttachments.length > 0
-  const bottomBarRef = useRef<HTMLDivElement | null>(null)
-  const actionAreaRef = useRef<HTMLDivElement | null>(null)
-  const actionButtonRef = useRef<HTMLButtonElement | null>(null)
   const topPaddingClass =
     hasImageAttachments && hasResourceAttachments
       ? "pt-[6.25rem]"
@@ -1097,44 +1087,8 @@ export function MessageInput({
         : hasResourceAttachments
           ? "pt-10"
           : "pt-3"
-  const [bottomPaddingPx, setBottomPaddingPx] = useState(40)
+  const bottomPaddingClass = "pb-14"
   const showDragActive = isDragActive && !disabled
-
-  useLayoutEffect(() => {
-    const bottomOffsetPx = 8 // Tailwind `bottom-2`
-    const bufferPx = 6
-
-    const bottomBar = bottomBarRef.current
-    const actionArea = actionAreaRef.current
-    const actionButton = actionButtonRef.current
-    if (!bottomBar && !actionArea && !actionButton) return
-
-    const measure = () => {
-      const bottomBarHeight = bottomBar?.getBoundingClientRect().height ?? 0
-      const actionAreaHeight = actionArea?.getBoundingClientRect().height ?? 0
-      const actionButtonHeight =
-        actionButton?.getBoundingClientRect().height ?? 0
-      const next = Math.ceil(
-        Math.max(bottomBarHeight, actionAreaHeight, actionButtonHeight) +
-          bottomOffsetPx +
-          bufferPx
-      )
-      setBottomPaddingPx((prev) => (Math.abs(prev - next) < 1 ? prev : next))
-    }
-
-    measure()
-
-    const observer = new ResizeObserver(() => {
-      measure()
-    })
-    if (bottomBar) observer.observe(bottomBar)
-    if (actionArea) observer.observe(actionArea)
-    if (actionButton) observer.observe(actionButton)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [hasAnySelector, isEditingQueueItem, isPrompting])
 
   const selectorItems = (
     <>
@@ -1187,11 +1141,11 @@ export function MessageInput({
         onPaste={handlePaste}
         onFocus={onFocus}
         placeholder={resolvedPlaceholder}
-        style={{ paddingBottom: bottomPaddingPx }}
         className={cn(
           "text-sm pr-12 resize-none bg-transparent",
           showDragActive && "ring-1 ring-primary/40",
           topPaddingClass,
+          bottomPaddingClass,
           className
         )}
         autoFocus={autoFocus}
@@ -1258,14 +1212,13 @@ export function MessageInput({
         </div>
       )}
       <div
-        className="pointer-events-none absolute left-px right-px bottom-px z-10 rounded-b-xl bg-background"
-        style={{ height: bottomPaddingPx }}
+        className={cn(
+          "pointer-events-none absolute left-px right-px bottom-px z-10 rounded-b-xl bg-background",
+          "h-14"
+        )}
         aria-hidden="true"
       />
-      <div
-        ref={bottomBarRef}
-        className="@container absolute left-2 right-24 bottom-2 z-20"
-      >
+      <div className="@container absolute left-2 right-24 bottom-2 z-20">
         <div className="flex items-center gap-1">
           <Button
             onClick={handlePickFiles}
@@ -1302,10 +1255,7 @@ export function MessageInput({
         </div>
       </div>
       {isEditingQueueItem ? (
-        <div
-          ref={actionAreaRef}
-          className="absolute right-2 bottom-2 z-20 flex items-center gap-1"
-        >
+        <div className="absolute right-2 bottom-2 z-20 flex items-center gap-1">
           <Button
             onClick={onCancelQueueEdit}
             variant="ghost"
@@ -1325,10 +1275,7 @@ export function MessageInput({
           </Button>
         </div>
       ) : isPrompting && onCancel ? (
-        <div
-          ref={actionAreaRef}
-          className="absolute right-2 bottom-2 z-20 flex items-center gap-1"
-        >
+        <div className="absolute right-2 bottom-2 z-20 flex items-center gap-1">
           <Button
             onClick={handleSend}
             disabled={!hasSendableContent}
@@ -1350,7 +1297,6 @@ export function MessageInput({
         </div>
       ) : (
         <Button
-          ref={actionButtonRef}
           onClick={handleSend}
           disabled={disabled || !hasSendableContent}
           size="icon"
