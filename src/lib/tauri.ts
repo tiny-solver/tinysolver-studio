@@ -452,8 +452,15 @@ export async function gitPull(path: string): Promise<GitPullResult> {
   return invoke("git_pull", { path })
 }
 
-export async function gitStartPullMerge(path: string): Promise<void> {
-  return invoke("git_start_pull_merge", { path })
+export async function gitStartPullMerge(
+  path: string,
+  upstreamCommit?: string | null
+): Promise<void> {
+  return invoke("git_start_pull_merge", { path, upstreamCommit })
+}
+
+export async function gitHasMergeHead(path: string): Promise<boolean> {
+  return invoke("git_has_merge_head", { path })
 }
 
 export async function gitFetch(path: string): Promise<string> {
@@ -556,9 +563,14 @@ export async function gitContinueOperation(
 
 export async function openMergeWindow(
   folderId: number,
-  operation: string
+  operation: string,
+  upstreamCommit?: string | null
 ): Promise<void> {
-  return invoke("open_merge_window", { folderId, operation })
+  return invoke("open_merge_window", {
+    folderId,
+    operation,
+    upstreamCommit: upstreamCommit ?? null,
+  })
 }
 
 export async function gitStash(path: string): Promise<string> {

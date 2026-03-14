@@ -557,6 +557,7 @@
     "allResolved": "모든 충돌이 해결되었습니다",
     "conflictFiles": "충돌 파일",
     "loadingFile": "파일 로딩 중...",
+    "preparingMerge": "병합 준비 중...",
     "selectFile": "해결할 파일을 선택하세요",
     "noConflicts": "충돌 파일 없음",
     "skipFile": "건너뛰기",

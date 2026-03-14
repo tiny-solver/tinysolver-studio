@@ -38,6 +38,7 @@ pub struct GitConflictInfo {
     pub has_conflicts: bool,
     pub conflicted_files: Vec<String>,
     pub operation: String,
+    pub upstream_commit: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -553,6 +554,9 @@ pub async fn git_pull(path: String) -> Result<GitPullResult, AppCommandError> {
             conflict: None,
         });
     }
+    let upstream_commit = String::from_utf8_lossy(&upstream_check.stdout)
+        .trim()
+        .to_string();
 
     // Step 3: check if we can fast-forward
     let merge_base = crate::process::tokio_command("git")
@@ -609,6 +613,7 @@ pub async fn git_pull(path: String) -> Result<GitPullResult, AppCommandError> {
                         has_conflicts: true,
                         conflicted_files,
                         operation: "pull".to_string(),
+                        upstream_commit: Some(upstream_commit),
                     }),
                 });
             }
@@ -649,10 +654,15 @@ pub async fn git_pull(path: String) -> Result<GitPullResult, AppCommandError> {
 
 /// Start a merge with the upstream branch (used by merge workspace after pull conflict detection).
 /// This recreates the conflict state so that :1:, :2:, :3: stage entries are available.
+/// If `upstream_commit` is provided, merge against that specific commit instead of `@{u}`.
 #[tauri::command]
-pub async fn git_start_pull_merge(path: String) -> Result<(), AppCommandError> {
+pub async fn git_start_pull_merge(
+    path: String,
+    upstream_commit: Option<String>,
+) -> Result<(), AppCommandError> {
+    let target = upstream_commit.as_deref().unwrap_or("@{u}");
     let output = crate::process::tokio_command("git")
-        .args(["merge", "--no-commit", "@{u}"])
+        .args(["merge", "--no-commit", target])
         .current_dir(&path)
         .output()
         .await
@@ -669,6 +679,17 @@ pub async fn git_start_pull_merge(path: String) -> Result<(), AppCommandError> {
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn git_has_merge_head(path: String) -> Result<bool, AppCommandError> {
+    let output = crate::process::tokio_command("git")
+        .args(["rev-parse", "--verify", "MERGE_HEAD"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+    Ok(output.status.success())
 }
 
 #[tauri::command]
@@ -1413,6 +1434,7 @@ pub async fn git_merge(
                     has_conflicts: true,
                     conflicted_files,
                     operation: "merge".to_string(),
+                    upstream_commit: None,
                 }),
             });
         }
@@ -1445,6 +1467,7 @@ pub async fn git_rebase(
                     has_conflicts: true,
                     conflicted_files,
                     operation: "rebase".to_string(),
+                    upstream_commit: None,
                 }),
             });
         }

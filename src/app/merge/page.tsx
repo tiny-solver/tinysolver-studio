@@ -30,6 +30,7 @@ function MergePageInner() {
 
   const folderId = Number(searchParams.get("folderId") ?? "0")
   const operation = searchParams.get("operation") ?? "merge"
+  const upstreamCommit = searchParams.get("upstreamCommit") ?? undefined
   const normalizedFolderId = Number.isFinite(folderId) ? folderId : 0
   const hasValidFolderId = normalizedFolderId > 0
   const loading = hasValidFolderId && state.loadedId !== normalizedFolderId
@@ -104,6 +105,7 @@ function MergePageInner() {
             folderId={normalizedFolderId}
             folderPath={folder.path}
             operation={operation}
+            upstreamCommit={upstreamCommit}
             onCompleted={closeWindow}
             onAborted={closeWindow}
           />

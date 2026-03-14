@@ -557,6 +557,7 @@
     "allResolved": "すべてのコンフリクトが解決されました",
     "conflictFiles": "コンフリクトファイル",
     "loadingFile": "ファイルを読み込み中...",
+    "preparingMerge": "マージを準備中...",
     "selectFile": "解決するファイルを選択してください",
     "noConflicts": "コンフリクトファイルなし",
     "skipFile": "スキップ",

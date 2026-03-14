@@ -81,6 +81,7 @@ import {
   openCommitWindow,
   setFolderParentBranch,
   gitListConflicts,
+  gitHasMergeHead,
 } from "@/lib/tauri"
 import { RemoteManageDialog } from "@/components/layout/remote-manage-dialog"
 import { ConflictDialog } from "@/components/layout/conflict-dialog"
@@ -292,6 +293,9 @@ export function BranchDropdown({
     })
   }
 
+  // Uses operation "merge" intentionally: MERGE_HEAD exists so merge state is
+  // already active. MergeWorkspace won't call gitStartPullMerge (only for "pull"),
+  // and ConflictDialog abort correctly runs git merge --abort.
   async function showMergeConflictDialog() {
     try {
       const remaining = await gitListConflicts(folderPath)
@@ -310,6 +314,16 @@ export function BranchDropdown({
   }
 
   async function handlePush() {
+    // Pre-check: if MERGE_HEAD exists, show conflict dialog immediately
+    try {
+      if (await gitHasMergeHead(folderPath)) {
+        await showMergeConflictDialog()
+        return
+      }
+    } catch {
+      // Pre-check failed, continue with normal push flow
+    }
+
     const taskId = `git-${++taskSeq.current}-${Date.now()}`
     const label = t("tasks.pushCode")
     setLoading(true)

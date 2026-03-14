@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::app_error::AppCommandError;
 use crate::db::AppDatabase;
@@ -424,6 +424,7 @@ pub async fn open_merge_window(
     state: tauri::State<'_, MergeWindowState>,
     folder_id: i32,
     operation: String,
+    upstream_commit: Option<String>,
 ) -> Result<(), AppCommandError> {
     let owner_label = window.label().to_string();
     let label = format!("merge-{folder_id}");
@@ -450,9 +451,11 @@ pub async fn open_merge_window(
                 .with_detail(format!("folder_id={folder_id}"))
         })?;
 
-    let url = WebviewUrl::App(
-        format!("merge?folderId={folder_id}&operation={operation}").into(),
-    );
+    let mut url_str = format!("merge?folderId={folder_id}&operation={operation}");
+    if let Some(ref commit) = upstream_commit {
+        url_str.push_str(&format!("&upstreamCommit={commit}"));
+    }
+    let url = WebviewUrl::App(url_str.into());
     let builder = WebviewWindowBuilder::new(&app, &label, url)
         .title(format!("解决冲突 - {}", folder.name))
         .inner_size(1400.0, 900.0)
@@ -490,6 +493,51 @@ pub fn restore_window_after_merge(
             let _ = window.set_enabled(true);
             let _ = window.set_focus();
         }
+    }
+}
+
+/// Clean up dangling merge state when a merge window is closed without
+/// completing or aborting. Checks if MERGE_HEAD exists, aborts the merge,
+/// and notifies the parent window.
+pub async fn cleanup_dangling_merge(app: &AppHandle, merge_window_label: &str) {
+    let folder_id: i32 = match merge_window_label
+        .strip_prefix("merge-")
+        .and_then(|s| s.parse().ok())
+    {
+        Some(id) => id,
+        None => return,
+    };
+
+    let db = match app.try_state::<AppDatabase>() {
+        Some(db) => db,
+        None => return,
+    };
+
+    let folder =
+        match crate::db::service::folder_service::get_folder_by_id(&db.conn, folder_id).await {
+            Ok(Some(f)) => f,
+            _ => return,
+        };
+
+    // Check if MERGE_HEAD exists
+    let check = crate::process::tokio_command("git")
+        .args(["rev-parse", "--verify", "MERGE_HEAD"])
+        .current_dir(&folder.path)
+        .output()
+        .await;
+    let has_merge_head = check.map(|o| o.status.success()).unwrap_or(false);
+
+    if has_merge_head {
+        let _ = crate::process::tokio_command("git")
+            .args(["merge", "--abort"])
+            .current_dir(&folder.path)
+            .output()
+            .await;
+
+        let _ = app.emit(
+            "folder://merge-aborted",
+            serde_json::json!({ "folder_id": folder_id }),
+        );
     }
 }
 

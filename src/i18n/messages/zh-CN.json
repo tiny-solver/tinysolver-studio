@@ -557,6 +557,7 @@
     "allResolved": "所有冲突已解决",
     "conflictFiles": "冲突文件",
     "loadingFile": "正在加载文件...",
+    "preparingMerge": "正在准备合并...",
     "selectFile": "选择一个文件进行解决",
     "noConflicts": "无冲突文件",
     "skipFile": "跳过",

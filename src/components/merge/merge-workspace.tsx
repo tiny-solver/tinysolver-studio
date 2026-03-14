@@ -29,6 +29,7 @@ interface MergeWorkspaceProps {
   folderId: number
   folderPath: string
   operation: string
+  upstreamCommit?: string
   onCompleted: () => void
   onAborted: () => void
 }
@@ -37,6 +38,7 @@ export function MergeWorkspace({
   folderId,
   folderPath,
   operation,
+  upstreamCommit,
   onCompleted,
   onAborted,
 }: MergeWorkspaceProps) {
@@ -51,6 +53,7 @@ export function MergeWorkspace({
   const [completing, setCompleting] = useState(false)
   const currentContentRef = useRef<string>("")
   const [hasUnresolvedConflicts, setHasUnresolvedConflicts] = useState(true)
+  const [preparing, setPreparing] = useState(false)
 
   // Load conflict files on mount
   useEffect(() => {
@@ -62,7 +65,12 @@ export function MergeWorkspace({
       // For pull operations, the merge was aborted during detection to keep
       // working tree clean. Re-start the merge to create conflict state.
       if (operation === "pull") {
-        await gitStartPullMerge(folderPath)
+        setPreparing(true)
+        try {
+          await gitStartPullMerge(folderPath, upstreamCommit)
+        } finally {
+          setPreparing(false)
+        }
       }
       const conflictFiles = await gitListConflicts(folderPath)
       setFiles(conflictFiles)
@@ -137,7 +145,7 @@ export function MergeWorkspace({
     try {
       await gitAbortOperation(folderPath, operation)
       toast.success(t("abortSuccess"))
-      await emit("folder://merge-completed", { folder_id: folderId })
+      await emit("folder://merge-aborted", { folder_id: folderId })
       onAborted()
     } catch (err) {
       toast.error(toErrorMessage(err))
@@ -221,7 +229,12 @@ export function MergeWorkspace({
 
         {/* Main area: three-pane merge editor */}
         <ResizablePanel defaultSize={82}>
-          {loadingVersions ? (
+          {preparing ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t("preparingMerge")}
+            </div>
+          ) : loadingVersions ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t("loadingFile")}

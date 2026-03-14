@@ -557,6 +557,7 @@
     "allResolved": "Alle Konflikte gelöst",
     "conflictFiles": "Konfliktdateien",
     "loadingFile": "Datei wird geladen...",
+    "preparingMerge": "Merge wird vorbereitet...",
     "selectFile": "Datei zum Lösen auswählen",
     "noConflicts": "Keine Konfliktdateien",
     "skipFile": "Überspringen",

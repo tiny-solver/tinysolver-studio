@@ -44,6 +44,7 @@ export function ConflictDialog({
   const [resolvedFiles, setResolvedFiles] = useState<Set<string>>(new Set())
   const [aborting, setAborting] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [done, setDone] = useState(false)
 
   const open = conflictInfo !== null
   const operation = conflictInfo?.operation ?? "merge"
@@ -53,6 +54,7 @@ export function ConflictDialog({
     if (conflictInfo) {
       setConflictedFiles(conflictInfo.conflicted_files)
       setResolvedFiles(new Set())
+      setDone(false)
     }
   }, [conflictInfo])
 
@@ -76,6 +78,7 @@ export function ConflictDialog({
 
     let unlistenResolved: UnlistenFn | null = null
     let unlistenCompleted: UnlistenFn | null = null
+    let unlistenAborted: UnlistenFn | null = null
 
     listen<{ folder_id: number; file: string }>(
       "folder://merge-conflict-resolved",
@@ -91,11 +94,25 @@ export function ConflictDialog({
 
     listen<{ folder_id: number }>("folder://merge-completed", (event) => {
       if (event.payload.folder_id !== folderId) return
+      setDone(true)
       onResolved()
       onClose()
     })
       .then((fn) => {
         unlistenCompleted = fn
+      })
+      .catch(() => {})
+
+    // Merge was aborted (user clicked abort in merge window, or window closed)
+    // Reset resolved state since abort reverts all changes
+    listen<{ folder_id: number }>("folder://merge-aborted", (event) => {
+      if (event.payload.folder_id !== folderId) return
+      setDone(true)
+      setResolvedFiles(new Set())
+      onClose()
+    })
+      .then((fn) => {
+        unlistenAborted = fn
       })
       .catch(() => {})
 
@@ -105,6 +122,7 @@ export function ConflictDialog({
         "ConflictDialog.mergeConflictResolved"
       )
       disposeTauriListener(unlistenCompleted, "ConflictDialog.mergeCompleted")
+      disposeTauriListener(unlistenAborted, "ConflictDialog.mergeAborted")
     }
   }, [open, folderId, onResolved, onClose])
 
@@ -122,7 +140,7 @@ export function ConflictDialog({
 
   async function handleOpenMergeTool() {
     try {
-      await openMergeWindow(folderId, operation)
+      await openMergeWindow(folderId, operation, conflictInfo?.upstream_commit)
     } catch (err) {
       toast.error(String(err))
     }
@@ -149,6 +167,7 @@ export function ConflictDialog({
   }
 
   async function handleComplete() {
+    if (done) return
     setCompleting(true)
     try {
       await gitContinueOperation(folderPath, operation)
@@ -227,7 +246,7 @@ export function ConflictDialog({
               <Button
                 size="sm"
                 onClick={handleComplete}
-                disabled={completing || aborting}
+                disabled={completing || aborting || done}
               >
                 {completing && (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

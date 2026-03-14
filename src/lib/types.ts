@@ -670,6 +670,7 @@ export interface GitConflictInfo {
   has_conflicts: boolean
   conflicted_files: string[]
   operation: string
+  upstream_commit?: string | null
 }
 
 export interface GitPullResult {

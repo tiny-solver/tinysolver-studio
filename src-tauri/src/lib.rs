@@ -124,6 +124,13 @@ pub fn run() {
                 if let Some(state) = app.try_state::<windows::MergeWindowState>() {
                     windows::restore_window_after_merge(app, &state, &label);
                 }
+                // Clean up dangling merge state (MERGE_HEAD) if window closed
+                // without completing or aborting the merge
+                let app_clone = window.app_handle().clone();
+                let label_clone = label.clone();
+                tauri::async_runtime::spawn(async move {
+                    windows::cleanup_dangling_merge(&app_clone, &label_clone).await;
+                });
             }
 
             if let tauri::WindowEvent::CloseRequested { .. } = event {
@@ -195,6 +202,7 @@ pub fn run() {
             folders::git_init,
             folders::git_pull,
             folders::git_start_pull_merge,
+            folders::git_has_merge_head,
             folders::git_fetch,
             folders::git_push,
             folders::git_new_branch,
