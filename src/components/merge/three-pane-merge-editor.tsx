@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import type { OnMount } from "@monaco-editor/react"
-import type { editor as MonacoEditorNs } from "monaco-editor"
+import type { editor as MonacoEditorNs, IRange } from "monaco-editor"
 import { ArrowLeft, ArrowRight, CheckCheck } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
@@ -676,8 +676,6 @@ function ArrowGutter({
   title,
 }: ArrowGutterProps) {
   const editor = editorRef.current
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _tick = scrollTick // read to establish dependency
 
   const positioned = useMemo(() => {
     if (!editor) return []
@@ -729,7 +727,7 @@ function hunkToEditorRange(
   hunk: DiffHunk,
   allHunks: DiffHunk[],
   totalLines: number
-): MonacoEditorNs.IRange | null {
+): IRange | null {
   let offset = 0
   for (const h of allHunks) {
     if (h.baseStart >= hunk.baseStart) break

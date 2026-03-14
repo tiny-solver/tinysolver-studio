@@ -361,7 +361,6 @@ export function BranchDropdown({
         // Remote has new commits — auto-pull then retry push
         updateTask(taskId, {
           status: "running",
-          label: t("tasks.pullCode"),
         })
         try {
           const pullResult = await gitPull(folderPath)
@@ -371,7 +370,7 @@ export function BranchDropdown({
             setConflictInfo(pullResult.conflict)
           } else {
             // Pull succeeded, retry push
-            updateTask(taskId, { status: "running", label })
+            updateTask(taskId, { status: "running" })
             const pushResult = await gitPush(folderPath)
             updateTask(taskId, { status: "completed" })
             onBranchChange()
