@@ -623,9 +623,8 @@ const ConversationTabView = memo(function ConversationTabView({
       const connectionId = conn.connectionId
       if (!connectionId || connStatus !== "connected") return
       try {
-        const { forkedSessionId, originalSessionId } = await acpFork(
-          connectionId
-        )
+        const { forkedSessionId, originalSessionId } =
+          await acpFork(connectionId)
         const persistedId = dbConvIdRef.current
         if (persistedId != null) {
           const baseTitle = conversationTitle ?? t("newConversation")
