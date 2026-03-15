@@ -86,6 +86,9 @@ pub enum ConnectionCommand {
         request_id: String,
         option_id: String,
     },
+    Fork {
+        reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkResultInfo, AcpError>>,
+    },
     Disconnect,
 }
 
@@ -494,6 +497,7 @@ async fn run_connection(
     let pending_perms: PendingPermissions = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     let terminal_runtime = Arc::new(TerminalRuntime::new());
     let cwd = resolve_working_dir(working_dir.as_deref());
+    let cwd_string = cwd.to_string_lossy().to_string();
     let file_system_runtime = Arc::new(FileSystemRuntime::new(cwd.clone()));
 
     let conn_id = connection_id.clone();
@@ -617,6 +621,16 @@ async fn run_connection(
                 &init_resp.agent_capabilities.prompt_capabilities,
             );
 
+            let supports_fork = init_resp
+                .agent_capabilities
+                .session_capabilities
+                .fork
+                .is_some();
+            eprintln!(
+                "[ACP] Agent capabilities: load_session={}, fork={}",
+                init_resp.agent_capabilities.load_session, supports_fork
+            );
+
             // Emit connected status
             let _ = handle.emit(
                 "acp://event",
@@ -689,26 +703,93 @@ async fn run_connection(
                             &perms,
                             &mut cmd_rx,
                             terminal_runtime.clone(),
+                            &cwd_string,
+                            supports_fork,
                         )
                         .await;
                         terminal_runtime.release_all_for_session(&sid).await;
-                        loop_result
+                        drop(session);
+                        handle_fork_or_exit(
+                            loop_result,
+                            &conn_id,
+                            &handle,
+                            &perms,
+                            &mut cmd_rx,
+                            terminal_runtime.clone(),
+                            &cwd,
+                            &cwd_string,
+                        )
+                        .await
                     }
                     Err(e) => {
+                        // session/load failed (e.g. ephemeral forked session).
+                        // Fall back to session/new so the tab still works.
+                        eprintln!(
+                            "[ACP] session/load failed ({}), falling back to session/new",
+                            e
+                        );
                         let _ = handle.emit(
                             "acp://event",
                             AcpEvent::Error {
                                 connection_id: conn_id.clone(),
-                                message: format!("Failed to load session: {e}"),
+                                message: format!("Failed to load session, starting new: {e}"),
                             },
                         );
-                        Err(e)
+                        let new_resp = cx
+                            .send_request_to(Agent, NewSessionRequest::new(cwd.clone()))
+                            .block_task()
+                            .await?;
+                        let fallback_sid = new_resp.session_id.0.to_string();
+                        let initial_config_options = new_resp.config_options.clone();
+                        let mut session =
+                            cx.attach_session(new_resp, Default::default())?;
+                        let _ = handle.emit(
+                            "acp://event",
+                            AcpEvent::SessionStarted {
+                                connection_id: conn_id.clone(),
+                                session_id: fallback_sid.clone(),
+                            },
+                        );
+                        emit_session_modes(&conn_id, &handle, session.modes());
+                        emit_session_config_options(
+                            &conn_id,
+                            &handle,
+                            &initial_config_options,
+                        );
+                        emit_selectors_ready(&conn_id, &handle);
+
+                        let loop_result = run_conversation_loop(
+                            &mut session,
+                            &conn_id,
+                            &handle,
+                            &perms,
+                            &mut cmd_rx,
+                            terminal_runtime.clone(),
+                            &cwd_string,
+                            supports_fork,
+                        )
+                        .await;
+                        terminal_runtime
+                            .release_all_for_session(&fallback_sid)
+                            .await;
+                        drop(session);
+                        handle_fork_or_exit(
+                            loop_result,
+                            &conn_id,
+                            &handle,
+                            &perms,
+                            &mut cmd_rx,
+                            terminal_runtime.clone(),
+                            &cwd,
+                            &cwd_string,
+                        )
+                        .await
                     }
                 }
             } else {
                 // Create new session
                 let new_resp = cx
-                    .send_request_to(Agent, NewSessionRequest::new(cwd))
+                    .send_request_to(Agent, NewSessionRequest::new(cwd.clone()))
                     .block_task()
                     .await?;
                 let sid = new_resp.session_id.0.to_string();
@@ -732,10 +813,23 @@ async fn run_connection(
                     &perms,
                     &mut cmd_rx,
                     terminal_runtime.clone(),
+                    &cwd_string,
+                    supports_fork,
                 )
                 .await;
                 terminal_runtime.release_all_for_session(&sid).await;
-                loop_result
+                drop(session);
+                handle_fork_or_exit(
+                    loop_result,
+                    &conn_id,
+                    &handle,
+                    &perms,
+                    &mut cmd_rx,
+                    terminal_runtime.clone(),
+                    &cwd,
+                    &cwd_string,
+                )
+                .await
             }
         })
         .await
@@ -1197,7 +1291,96 @@ fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
         .collect()
 }
 
+/// Result when the conversation loop exits due to a fork request.
+struct ForkExitInfo {
+    fork_response: sacp::schema::ForkSessionResponse,
+    original_session_id: String,
+    reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkResultInfo, AcpError>>,
+    connection: ConnectionTo<Agent>,
+}
+
+/// After `run_conversation_loop` returns, handle normal exit or fork transition.
+///
+/// When fork is requested, the original session has already been dropped by the
+/// caller.  We attach to the forked session (S2) directly using the
+/// `ForkSessionResponse` — no separate `session/load` is needed because S2 was
+/// just created in-memory by the agent on this connection.
+async fn handle_fork_or_exit(
+    loop_result: Result<Option<ForkExitInfo>, sacp::Error>,
+    conn_id: &str,
+    handle: &tauri::AppHandle,
+    perms: &PendingPermissions,
+    cmd_rx: &mut mpsc::Receiver<ConnectionCommand>,
+    terminal_runtime: Arc<TerminalRuntime>,
+    _cwd: &std::path::Path,
+    cwd_string: &str,
+) -> Result<(), sacp::Error> {
+    let fork_info = match loop_result {
+        Ok(Some(info)) => info,
+        Ok(None) => return Ok(()),
+        Err(e) => return Err(e),
+    };
+
+    let cx = fork_info.connection;
+    let fork_resp = fork_info.fork_response;
+    let new_sid = fork_resp.session_id.0.to_string();
+
+    eprintln!(
+        "[ACP] Fork transition: attaching to forked session {} (original: {})",
+        new_sid, fork_info.original_session_id
+    );
+
+    // Reply success to the frontend
+    let _ = fork_info.reply.send(Ok(crate::acp::types::ForkResultInfo {
+        forked_session_id: new_sid.clone(),
+        original_session_id: fork_info.original_session_id,
+    }));
+
+    // Build a NewSessionResponse from the ForkSessionResponse so we can
+    // attach directly — the forked session is already live on this process.
+    let initial_config_options = fork_resp.config_options.clone();
+    let new_resp = NewSessionResponse::new(fork_resp.session_id)
+        .modes(fork_resp.modes)
+        .config_options(fork_resp.config_options)
+        .meta(fork_resp.meta);
+    let mut session = cx.attach_session(new_resp, Default::default())?;
+
+    let _ = handle.emit(
+        "acp://event",
+        AcpEvent::SessionStarted {
+            connection_id: conn_id.to_string(),
+            session_id: new_sid.clone(),
+        },
+    );
+    emit_session_modes(conn_id, handle, session.modes());
+    emit_session_config_options(conn_id, handle, &initial_config_options);
+    emit_selectors_ready(conn_id, handle);
+
+    let loop_result = run_conversation_loop(
+        &mut session,
+        conn_id,
+        handle,
+        perms,
+        cmd_rx,
+        terminal_runtime.clone(),
+        cwd_string,
+        true, // fork already succeeded on this process
+    )
+    .await;
+    terminal_runtime.release_all_for_session(&new_sid).await;
+    drop(session);
+
+    // Recursively handle nested forks
+    Box::pin(handle_fork_or_exit(
+        loop_result, conn_id, handle, perms, cmd_rx, terminal_runtime, _cwd, cwd_string,
+    ))
+    .await
+}
+
 /// Main conversation command loop: wait for frontend commands and process them.
+///
+/// Returns `Ok(None)` on normal exit (disconnect / channel closed) or
+/// `Ok(Some(ForkExitInfo))` when the loop should be restarted on a forked session.
 async fn run_conversation_loop<'a>(
     session: &mut sacp::ActiveSession<'a, Agent>,
     conn_id: &str,
@@ -1205,7 +1388,9 @@ async fn run_conversation_loop<'a>(
     perms: &PendingPermissions,
     cmd_rx: &mut mpsc::Receiver<ConnectionCommand>,
     terminal_runtime: Arc<TerminalRuntime>,
-) -> Result<(), sacp::Error> {
+    cwd: &str,
+    supports_fork: bool,
+) -> Result<Option<ForkExitInfo>, sacp::Error> {
     loop {
         // Wait for either a user command or a session update (e.g. available_commands_update)
         let cmd = loop {
@@ -1565,12 +1750,45 @@ async fn run_conversation_loop<'a>(
                     ));
                 }
             }
+            Some(ConnectionCommand::Fork { reply }) => {
+                if !supports_fork {
+                    let _ = reply.send(Err(AcpError::protocol(
+                        "This agent does not support session/fork".to_string(),
+                    )));
+                    continue;
+                }
+                let cx = session.connection();
+                let sid = session.session_id().clone();
+                eprintln!(
+                    "[ACP] Sending session/fork for session_id={} cwd={}",
+                    sid.0, cwd
+                );
+                let result = crate::acp::fork::fork_session(&cx, &sid, cwd).await;
+                match result {
+                    Ok(fork_response) => {
+                        eprintln!(
+                            "[ACP] Fork succeeded: new_session_id={}",
+                            fork_response.session_id.0
+                        );
+                        return Ok(Some(ForkExitInfo {
+                            fork_response,
+                            original_session_id: sid.0.to_string(),
+                            reply,
+                            connection: cx,
+                        }));
+                    }
+                    Err(e) => {
+                        eprintln!("[ACP] Fork failed: {e}");
+                        let _ = reply.send(Err(e));
+                    }
+                }
+            }
             Some(ConnectionCommand::Disconnect) | None => {
                 break;
             }
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 /// Serialize a Vec<ToolCallContent> into a human-readable text string.

@@ -264,6 +264,7 @@ pub fn run() {
             acp_commands::acp_set_mode,
             acp_commands::acp_set_config_option,
             acp_commands::acp_cancel,
+            acp_commands::acp_fork,
             acp_commands::acp_respond_permission,
             acp_commands::acp_disconnect,
             acp_commands::acp_list_connections,

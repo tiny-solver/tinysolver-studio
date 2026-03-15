@@ -624,7 +624,10 @@
       "reloaded": "Conversation rechargée",
       "reload": "Recharger",
       "newConversation": "Nouvelle conversation",
-      "closeConversation": "Fermer la conversation"
+      "closeConversation": "Fermer la conversation",
+      "forkSession": "Dupliquer la session",
+      "forkSessionSuccess": "Session dupliquée avec succès",
+      "forkSessionFailed": "Échec de la duplication de la session : {error}"
     },
     "conversationCard": {
       "untitledConversation": "Conversation sans titre",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "Chargement des paramètres...",
         "loadingMode": "Chargement du mode...",
         "cancel": "Annuler",
-        "send": "Envoyer"
+        "send": "Envoyer",
+        "forkAndSend": "Fork & Envoyer"
       },
       "messageQueue": {
         "addToQueue": "Mettre en file",

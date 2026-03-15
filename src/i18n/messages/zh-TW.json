@@ -624,7 +624,10 @@
       "reloaded": "目前會話已重新載入",
       "reload": "重新載入",
       "newConversation": "新增會話",
-      "closeConversation": "關閉會話"
+      "closeConversation": "關閉會話",
+      "forkSession": "分叉會話",
+      "forkSessionSuccess": "會話分叉成功",
+      "forkSessionFailed": "會話分叉失敗：{error}"
     },
     "conversationCard": {
       "untitledConversation": "未命名會話",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "正在載入設定...",
         "loadingMode": "正在載入模式...",
         "cancel": "取消",
-        "send": "傳送"
+        "send": "傳送",
+        "forkAndSend": "分叉發送"
       },
       "messageQueue": {
         "addToQueue": "加入佇列",

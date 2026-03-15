@@ -41,6 +41,7 @@ interface ChatInputProps {
   isEditingQueueItem?: boolean
   onSaveQueueEdit?: (draft: PromptDraft) => void
   onCancelQueueEdit?: () => void
+  onForkSend?: (draft: PromptDraft, modeId?: string | null) => void
 }
 
 export function ChatInput({
@@ -71,6 +72,7 @@ export function ChatInput({
   isEditingQueueItem,
   onSaveQueueEdit,
   onCancelQueueEdit,
+  onForkSend,
 }: ChatInputProps) {
   const t = useTranslations("Folder.chat.chatInput")
   const isConnected = status === "connected"
@@ -116,6 +118,7 @@ export function ChatInput({
         isEditingQueueItem={isEditingQueueItem}
         onSaveQueueEdit={onSaveQueueEdit}
         onCancelQueueEdit={onCancelQueueEdit}
+        onForkSend={onForkSend}
         placeholder={
           isConnecting
             ? t("connecting")

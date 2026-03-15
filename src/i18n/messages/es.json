@@ -624,7 +624,10 @@
       "reloaded": "Conversación recargada",
       "reload": "Recargar",
       "newConversation": "Nueva conversación",
-      "closeConversation": "Cerrar conversación"
+      "closeConversation": "Cerrar conversación",
+      "forkSession": "Bifurcar sesión",
+      "forkSessionSuccess": "Sesión bifurcada exitosamente",
+      "forkSessionFailed": "Error al bifurcar la sesión: {error}"
     },
     "conversationCard": {
       "untitledConversation": "Conversación sin título",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "Cargando ajustes...",
         "loadingMode": "Cargando modo...",
         "cancel": "Cancelar",
-        "send": "Enviar"
+        "send": "Enviar",
+        "forkAndSend": "Fork y Enviar"
       },
       "messageQueue": {
         "addToQueue": "Agregar a la cola",

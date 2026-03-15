@@ -624,7 +624,10 @@
       "reloaded": "当前会话已重新加载",
       "reload": "重新加载",
       "newConversation": "新建会话",
-      "closeConversation": "关闭会话"
+      "closeConversation": "关闭会话",
+      "forkSession": "分叉会话",
+      "forkSessionSuccess": "会话分叉成功",
+      "forkSessionFailed": "会话分叉失败：{error}"
     },
     "conversationCard": {
       "untitledConversation": "未命名会话",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "正在加载设置...",
         "loadingMode": "正在加载模式...",
         "cancel": "取消",
-        "send": "发送"
+        "send": "发送",
+        "forkAndSend": "分叉发送"
       },
       "messageQueue": {
         "addToQueue": "加入队列",

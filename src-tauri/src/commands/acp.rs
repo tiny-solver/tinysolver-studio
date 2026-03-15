@@ -12,7 +12,7 @@ use crate::acp::preflight::{self, PreflightResult};
 use crate::acp::registry;
 use crate::acp::types::{
     AcpAgentInfo, AgentSkillContent, AgentSkillItem, AgentSkillLayout, AgentSkillLocation,
-    AgentSkillScope, AgentSkillsListResult, ConnectionInfo, PromptInputBlock,
+    AgentSkillScope, AgentSkillsListResult, ConnectionInfo, ForkResultInfo, PromptInputBlock,
 };
 use crate::db::service::agent_setting_service;
 use crate::db::AppDatabase;
@@ -1365,6 +1365,14 @@ pub async fn acp_cancel(
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), AcpError> {
     manager.cancel(&connection_id).await
+}
+
+#[tauri::command]
+pub async fn acp_fork(
+    connection_id: String,
+    manager: State<'_, ConnectionManager>,
+) -> Result<ForkResultInfo, AcpError> {
+    manager.fork_session(&connection_id).await
 }
 
 #[tauri::command]

@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::acp::connection::{spawn_agent_connection, AgentConnection, ConnectionCommand};
 use crate::acp::error::AcpError;
-use crate::acp::types::{ConnectionInfo, PromptInputBlock};
+use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
 use crate::models::agent::AgentType;
 
 pub struct ConnectionManager {
@@ -141,6 +141,24 @@ impl ConnectionManager {
             })
             .await
             .map_err(|_| AcpError::ProcessExited)
+    }
+
+    pub async fn fork_session(&self, conn_id: &str) -> Result<ForkResultInfo, AcpError> {
+        let cmd_tx = {
+            let connections = self.connections.lock().await;
+            let conn = connections
+                .get(conn_id)
+                .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
+            conn.cmd_tx.clone()
+        };
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        cmd_tx
+            .send(ConnectionCommand::Fork { reply: reply_tx })
+            .await
+            .map_err(|_| AcpError::ProcessExited)?;
+        reply_rx
+            .await
+            .map_err(|_| AcpError::protocol("Fork reply channel closed".to_string()))?
     }
 
     pub async fn disconnect(&self, conn_id: &str) -> Result<(), AcpError> {

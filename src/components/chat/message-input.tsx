@@ -15,14 +15,22 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import {
   Check,
+  ChevronUp,
   Ellipsis,
   FileSearch,
+  GitFork,
   ListPlus,
   Plus,
   Send,
   Square,
   X,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
@@ -76,6 +84,7 @@ interface MessageInputProps {
   isEditingQueueItem?: boolean
   onSaveQueueEdit?: (draft: PromptDraft) => void
   onCancelQueueEdit?: () => void
+  onForkSend?: (draft: PromptDraft, modeId?: string | null) => void
 }
 
 interface ResourceInputAttachment {
@@ -280,6 +289,7 @@ export function MessageInput({
   isEditingQueueItem = false,
   onSaveQueueEdit,
   onCancelQueueEdit,
+  onForkSend,
 }: MessageInputProps) {
   const t = useTranslations("Folder.chat.messageInput")
   const tQueue = useTranslations("Folder.chat.messageQueue")
@@ -960,6 +970,24 @@ export function MessageInput({
     effectiveDraftStorageKey,
   ])
 
+  const handleForkSendClick = useCallback(() => {
+    if (!onForkSend) return
+    const draft = buildDraft()
+    if (!draft) return
+    onForkSend(draft, showModeSelector ? effectiveModeId : null)
+    if (effectiveDraftStorageKey) {
+      clearMessageInputDraft(effectiveDraftStorageKey)
+    }
+    setText("")
+    setAttachments([])
+  }, [
+    onForkSend,
+    buildDraft,
+    effectiveModeId,
+    showModeSelector,
+    effectiveDraftStorageKey,
+  ])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (
@@ -1287,6 +1315,35 @@ export function MessageInput({
           >
             <Square className="h-4 w-4" />
           </Button>
+        </div>
+      ) : onForkSend ? (
+        <div className="absolute right-2 bottom-2 flex items-center">
+          <Button
+            onClick={handleSend}
+            disabled={disabled || !hasSendableContent}
+            size="icon"
+            className="rounded-r-none"
+            title={t("send")}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                disabled={disabled || !hasSendableContent}
+                size="icon"
+                className="rounded-l-none border-l border-primary-foreground/20 w-6"
+              >
+                <ChevronUp className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top">
+              <DropdownMenuItem onSelect={handleForkSendClick}>
+                <GitFork className="h-4 w-4" />
+                {t("forkAndSend")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ) : (
         <Button

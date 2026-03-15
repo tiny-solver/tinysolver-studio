@@ -624,7 +624,10 @@
       "reloaded": "대화를 다시 불러왔습니다",
       "reload": "다시 불러오기",
       "newConversation": "새 대화",
-      "closeConversation": "대화 닫기"
+      "closeConversation": "대화 닫기",
+      "forkSession": "세션 포크",
+      "forkSessionSuccess": "세션 포크 성공",
+      "forkSessionFailed": "세션 포크 실패: {error}"
     },
     "conversationCard": {
       "untitledConversation": "제목 없는 대화",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "설정 불러오는 중...",
         "loadingMode": "모드 불러오는 중...",
         "cancel": "취소",
-        "send": "보내기"
+        "send": "보내기",
+        "forkAndSend": "포크 & 전송"
       },
       "messageQueue": {
         "addToQueue": "대기열에 추가",

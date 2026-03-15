@@ -51,6 +51,7 @@ interface ConversationShellProps {
   isEditingQueueItem?: boolean
   onSaveQueueEdit?: (draft: PromptDraft) => void
   onCancelQueueEdit?: () => void
+  onForkSend?: (draft: PromptDraft, modeId?: string | null) => void
 }
 
 export function ConversationShell({
@@ -88,6 +89,7 @@ export function ConversationShell({
   isEditingQueueItem,
   onSaveQueueEdit,
   onCancelQueueEdit,
+  onForkSend,
 }: ConversationShellProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -129,6 +131,7 @@ export function ConversationShell({
           isEditingQueueItem={isEditingQueueItem}
           onSaveQueueEdit={onSaveQueueEdit}
           onCancelQueueEdit={onCancelQueueEdit}
+          onForkSend={onForkSend}
         />
       )}
 

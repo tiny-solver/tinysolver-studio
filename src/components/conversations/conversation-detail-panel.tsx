@@ -24,10 +24,12 @@ import { ConversationShell } from "@/components/chat/conversation-shell"
 import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
 import {
+  acpFork,
   createConversation,
   openSettingsWindow,
   updateConversationExternalId,
   updateConversationStatus,
+  updateConversationTitle,
 } from "@/lib/tauri"
 import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
@@ -137,7 +139,8 @@ const ConversationTabView = memo(function ConversationTabView({
   const tWelcome = useTranslations("Folder.chat.welcomeInputPanel")
   const sharedT = useTranslations("Folder.chat.shared")
   const { folder, folderId, refreshConversations } = useFolderContext()
-  const { bindConversationTab, setTabRuntimeConversationId } = useTabContext()
+  const { tabs, bindConversationTab, setTabRuntimeConversationId } =
+    useTabContext()
   const { setSessionStats } = useSessionStats()
   const {
     appendOptimisticTurn,
@@ -608,6 +611,70 @@ const ConversationTabView = memo(function ConversationTabView({
     handleSendRef.current = handleSend
   }, [handleSend])
 
+  const handleForkSend = useCallback(
+    async (draft: PromptDraft, selectedModeIdArg?: string | null) => {
+      const connectionId = conn.connectionId
+      if (!connectionId || connStatus !== "connected") return
+      try {
+        const { forkedSessionId, originalSessionId } = await acpFork(
+          connectionId
+        )
+        const persistedId = dbConvIdRef.current
+        if (persistedId != null) {
+          const currentTab = tabs.find((tab) => tab.id === tabId)
+          const currentTitle =
+            currentTab?.title || detail?.summary.title || t("newConversation")
+          // Point current conversation at S2 (forked) and add fork tag
+          await updateConversationExternalId(persistedId, forkedSessionId)
+          await updateConversationTitle(
+            persistedId,
+            `[Fork] ${currentTitle}`
+          )
+          // Save original S1 as a separate conversation with original title
+          const s1ConvId = await createConversation(
+            folderId,
+            selectedAgent,
+            currentTitle
+          )
+          await updateConversationExternalId(s1ConvId, originalSessionId)
+          await updateConversationStatus(s1ConvId, "pending_review")
+        }
+        // Update runtime session id to S2
+        sessionIdRef.current = forkedSessionId
+        setExternalId(effectiveConversationId, forkedSessionId)
+
+        await refreshConversations()
+        // Now send the message on the forked session (S2)
+        handleSend(draft, selectedModeIdArg)
+      } catch (err) {
+        toast.error(
+          t("forkSessionFailed", {
+            error:
+              err instanceof Error
+                ? err.message
+                : typeof err === "object" && err !== null
+                  ? JSON.stringify(err)
+                  : String(err),
+          })
+        )
+      }
+    },
+    [
+      conn.connectionId,
+      connStatus,
+      detail?.summary.title,
+      effectiveConversationId,
+      folderId,
+      handleSend,
+      refreshConversations,
+      selectedAgent,
+      setExternalId,
+      t,
+      tabId,
+      tabs,
+    ]
+  )
+
   const handleOpenAgentsSettings = useCallback(() => {
     openSettingsWindow("agents", { agentType: selectedAgent }).catch((err) => {
       console.error(
@@ -757,6 +824,11 @@ const ConversationTabView = memo(function ConversationTabView({
       isEditingQueueItem={mqEditingItemId != null}
       onSaveQueueEdit={handleSaveQueueEdit}
       onCancelQueueEdit={handleQueueCancelEdit}
+      onForkSend={
+        connStatus === "connected" && hasPersistedConversation
+          ? handleForkSend
+          : undefined
+      }
     >
       {isWelcomeMode ? (
         <div className="flex h-full min-h-0 flex-col items-center justify-center">

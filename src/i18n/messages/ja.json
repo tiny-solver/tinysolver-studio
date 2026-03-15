@@ -624,7 +624,10 @@
       "reloaded": "会話を再読み込みしました",
       "reload": "再読み込み",
       "newConversation": "新しい会話",
-      "closeConversation": "会話を閉じる"
+      "closeConversation": "会話を閉じる",
+      "forkSession": "セッションをフォーク",
+      "forkSessionSuccess": "セッションのフォークに成功しました",
+      "forkSessionFailed": "セッションのフォークに失敗しました：{error}"
     },
     "conversationCard": {
       "untitledConversation": "無題の会話",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "設定を読み込み中...",
         "loadingMode": "モードを読み込み中...",
         "cancel": "キャンセル",
-        "send": "送信"
+        "send": "送信",
+        "forkAndSend": "フォークして送信"
       },
       "messageQueue": {
         "addToQueue": "キューに追加",

@@ -624,7 +624,10 @@
       "reloaded": "تمت إعادة تحميل المحادثة",
       "reload": "إعادة تحميل",
       "newConversation": "محادثة جديدة",
-      "closeConversation": "إغلاق المحادثة"
+      "closeConversation": "إغلاق المحادثة",
+      "forkSession": "تفريع الجلسة",
+      "forkSessionSuccess": "تم تفريع الجلسة بنجاح",
+      "forkSessionFailed": "فشل في تفريع الجلسة: {error}"
     },
     "conversationCard": {
       "untitledConversation": "محادثة بدون عنوان",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "جارٍ تحميل الإعدادات...",
         "loadingMode": "جارٍ تحميل الوضع...",
         "cancel": "إلغاء",
-        "send": "إرسال"
+        "send": "إرسال",
+        "forkAndSend": "تفريع وإرسال"
       },
       "messageQueue": {
         "addToQueue": "إضافة للقائمة",

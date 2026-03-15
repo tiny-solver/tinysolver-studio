@@ -289,3 +289,10 @@ pub struct AvailableCommandInfo {
     pub description: String,
     pub input_hint: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkResultInfo {
+    pub forked_session_id: String,
+    pub original_session_id: String,
+}

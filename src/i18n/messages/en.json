@@ -624,7 +624,10 @@
       "reloaded": "Conversation reloaded",
       "reload": "Reload",
       "newConversation": "New Conversation",
-      "closeConversation": "Close Conversation"
+      "closeConversation": "Close Conversation",
+      "forkSession": "Fork Session",
+      "forkSessionSuccess": "Session forked successfully",
+      "forkSessionFailed": "Failed to fork session: {error}"
     },
     "conversationCard": {
       "untitledConversation": "Untitled conversation",
@@ -1197,7 +1200,8 @@
         "loadingSettings": "Loading settings...",
         "loadingMode": "Loading mode...",
         "cancel": "Cancel",
-        "send": "Send"
+        "send": "Send",
+        "forkAndSend": "Fork & Send"
       },
       "messageQueue": {
         "addToQueue": "Queue message",

@@ -119,6 +119,15 @@ export async function acpCancel(connectionId: string): Promise<void> {
   return invoke("acp_cancel", { connectionId })
 }
 
+export interface ForkResult {
+  forkedSessionId: string
+  originalSessionId: string
+}
+
+export async function acpFork(connectionId: string): Promise<ForkResult> {
+  return invoke("acp_fork", { connectionId })
+}
+
 export async function acpRespondPermission(
   connectionId: string,
   requestId: string,
