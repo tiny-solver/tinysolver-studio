@@ -28,6 +28,7 @@ import type {
   GitConflictFileVersions,
   GitCommitResult,
   GitRemote,
+  GitStashEntry,
   PreflightResult,
   FolderCommand,
   TerminalInfo,
@@ -582,12 +583,56 @@ export async function openMergeWindow(
   })
 }
 
-export async function gitStash(path: string): Promise<string> {
-  return invoke("git_stash", { path })
+export async function openStashWindow(folderId: number): Promise<void> {
+  return invoke("open_stash_window", { folderId })
 }
 
-export async function gitStashPop(path: string): Promise<string> {
-  return invoke("git_stash_pop", { path })
+export async function gitStashPush(
+  path: string,
+  message?: string,
+  keepIndex?: boolean
+): Promise<string> {
+  return invoke("git_stash_push", {
+    path,
+    message: message ?? null,
+    keepIndex: keepIndex ?? false,
+  })
+}
+
+export async function gitStashPop(
+  path: string,
+  stashRef?: string
+): Promise<string> {
+  return invoke("git_stash_pop", { path, stashRef: stashRef ?? null })
+}
+
+export async function gitStashList(path: string): Promise<GitStashEntry[]> {
+  return invoke("git_stash_list", { path })
+}
+
+export async function gitStashApply(
+  path: string,
+  stashRef: string
+): Promise<string> {
+  return invoke("git_stash_apply", { path, stashRef })
+}
+
+export async function gitStashDrop(
+  path: string,
+  stashRef: string
+): Promise<string> {
+  return invoke("git_stash_drop", { path, stashRef })
+}
+
+export async function gitStashClear(path: string): Promise<string> {
+  return invoke("git_stash_clear", { path })
+}
+
+export async function gitStashShow(
+  path: string,
+  stashRef: string
+): Promise<GitStatusEntry[]> {
+  return invoke("git_stash_show", { path, stashRef })
 }
 
 export async function gitListRemotes(path: string): Promise<GitRemote[]> {

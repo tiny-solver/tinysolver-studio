@@ -827,7 +827,7 @@
       "pushCode": "Enviar...",
       "newBranch": "Nova branch...",
       "newWorktree": "Novo worktree...",
-      "stashChanges": "Fazer stash das alterações",
+      "stashChanges": "Guardar alterações...",
       "stashPop": "Aplicar stash...",
       "manageRemotes": "Gerenciar remotos...",
       "localBranches": "Branches locais ({count, plural, one {#} other {#}})",
@@ -859,6 +859,31 @@
         "completeMerge": "Concluir merge",
         "abortSuccess": "Merge abortado com sucesso",
         "completeSuccess": "Merge concluído com sucesso"
+      },
+      "stashDialog": {
+        "title": "Guardar alterações no stash",
+        "description": "Guardar as alterações atuais no stash",
+        "messageLabel": "Mensagem",
+        "messagePlaceholder": "Mensagem do stash (opcional)",
+        "keepIndex": "Manter índice (alterações preparadas permanecem preparadas)",
+        "cancel": "Cancelar",
+        "stash": "Guardar",
+        "success": "Alterações guardadas no stash",
+        "error": "Erro ao guardar no stash"
+      },
+      "unstashDialog": {
+        "title": "Aplicar stash",
+        "noStashes": "Nenhum stash encontrado",
+        "selectFile": "Selecione um ficheiro para ver diferenças",
+        "viewDiff": "Ver diferenças",
+        "original": "Original",
+        "modified": "Modificado",
+        "apply": "Aplicar",
+        "drop": "Eliminar",
+        "applySuccess": "Stash aplicado",
+        "dropSuccess": "Stash eliminado",
+        "confirmApply": "Aplicar stash {ref} ao diretório de trabalho?",
+        "cancel": "Cancelar"
       }
     },
     "commitDialog": {

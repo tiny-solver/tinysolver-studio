@@ -709,6 +709,14 @@ export interface GitRemote {
   url: string
 }
 
+export interface GitStashEntry {
+  index: number
+  message: string
+  branch: string
+  date: string
+  ref_name: string
+}
+
 export type FileTreeNode =
   | { kind: "file"; name: string; path: string }
   | { kind: "dir"; name: string; path: string; children: FileTreeNode[] }

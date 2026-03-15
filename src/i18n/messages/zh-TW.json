@@ -827,7 +827,7 @@
       "pushCode": "推送...",
       "newBranch": "新增分支...",
       "newWorktree": "新增工作樹...",
-      "stashChanges": "暫存變更",
+      "stashChanges": "貯藏更改...",
       "stashPop": "取消暫存...",
       "manageRemotes": "管理遠端...",
       "localBranches": "本地分支 ({count})",
@@ -859,6 +859,31 @@
         "completeMerge": "完成合併",
         "abortSuccess": "合併已中止",
         "completeSuccess": "合併完成"
+      },
+      "stashDialog": {
+        "title": "貯藏更改",
+        "description": "將當前更改保存到貯藏區",
+        "messageLabel": "訊息",
+        "messagePlaceholder": "貯藏訊息（可選）",
+        "keepIndex": "保留暫存區（已暫存的更改保持不變）",
+        "cancel": "取消",
+        "stash": "貯藏",
+        "success": "更改已貯藏",
+        "error": "貯藏更改失敗"
+      },
+      "unstashDialog": {
+        "title": "取消貯藏",
+        "noStashes": "沒有貯藏記錄",
+        "selectFile": "選擇檔案查看差異",
+        "viewDiff": "查看差異",
+        "original": "原始",
+        "modified": "修改後",
+        "apply": "套用",
+        "drop": "刪除",
+        "applySuccess": "貯藏已套用",
+        "dropSuccess": "貯藏已刪除",
+        "confirmApply": "將貯藏 {ref} 套用到工作目錄？",
+        "cancel": "取消"
       }
     },
     "commitDialog": {

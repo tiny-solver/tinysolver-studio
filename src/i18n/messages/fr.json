@@ -827,7 +827,7 @@
       "pushCode": "Pousser...",
       "newBranch": "Nouvelle branche...",
       "newWorktree": "Nouveau worktree...",
-      "stashChanges": "Stash des changements",
+      "stashChanges": "Remiser les changements...",
       "stashPop": "Appliquer le stash...",
       "manageRemotes": "Gérer les dépôts distants...",
       "localBranches": "Branches locales ({count, plural, one {#} other {#}})",
@@ -859,6 +859,31 @@
         "completeMerge": "Terminer la fusion",
         "abortSuccess": "Fusion abandonnée avec succès",
         "completeSuccess": "Fusion terminée avec succès"
+      },
+      "stashDialog": {
+        "title": "Remiser les changements",
+        "description": "Sauvegarder les changements actuels dans la remise",
+        "messageLabel": "Message",
+        "messagePlaceholder": "Message de remise (optionnel)",
+        "keepIndex": "Conserver l'index (les changements indexés restent indexés)",
+        "cancel": "Annuler",
+        "stash": "Remiser",
+        "success": "Changements remisés",
+        "error": "Échec de la remise"
+      },
+      "unstashDialog": {
+        "title": "Appliquer la remise",
+        "noStashes": "Aucune remise trouvée",
+        "selectFile": "Sélectionner un fichier pour voir le diff",
+        "viewDiff": "Voir le diff",
+        "original": "Original",
+        "modified": "Modifié",
+        "apply": "Appliquer",
+        "drop": "Supprimer",
+        "applySuccess": "Remise appliquée",
+        "dropSuccess": "Remise supprimée",
+        "confirmApply": "Appliquer la remise {ref} au répertoire de travail ?",
+        "cancel": "Annuler"
       }
     },
     "commitDialog": {

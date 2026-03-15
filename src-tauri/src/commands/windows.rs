@@ -558,3 +558,42 @@ pub fn open_welcome_window(app: &AppHandle) -> Result<(), AppCommandError> {
     ensure_windows_undecorated(&welcome_window);
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_stash_window(
+    app: AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+    folder_id: i32,
+) -> Result<(), AppCommandError> {
+    let label = format!("stash-{folder_id}");
+
+    if let Some(existing) = app.get_webview_window(&label) {
+        ensure_windows_undecorated(&existing);
+        let _ = existing.unminimize();
+        existing
+            .set_focus()
+            .map_err(|e| AppCommandError::window("Failed to focus stash window", e.to_string()))?;
+        return Ok(());
+    }
+
+    let folder = crate::db::service::folder_service::get_folder_by_id(&db.conn, folder_id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| {
+            AppCommandError::not_found(format!("Folder {folder_id} not found"))
+                .with_detail(format!("folder_id={folder_id}"))
+        })?;
+
+    let url = WebviewUrl::App(format!("stash?folderId={folder_id}").into());
+    let builder = WebviewWindowBuilder::new(&app, &label, url)
+        .title(format!("Stash - {}", folder.name))
+        .inner_size(1100.0, 700.0)
+        .min_inner_size(800.0, 500.0)
+        .center();
+    let stash_window = apply_platform_window_style(builder)
+        .build()
+        .map_err(|e| AppCommandError::window("Failed to open stash window", e.to_string()))?;
+    ensure_windows_undecorated(&stash_window);
+
+    Ok(())
+}

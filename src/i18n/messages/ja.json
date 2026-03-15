@@ -827,7 +827,7 @@
       "pushCode": "プッシュ...",
       "newBranch": "新規ブランチ...",
       "newWorktree": "新規ワークツリー...",
-      "stashChanges": "変更を stash",
+      "stashChanges": "スタッシュ...",
       "stashPop": "stash を pop...",
       "manageRemotes": "リモート管理...",
       "localBranches": "ローカルブランチ ({count, plural, one {#} other {#}})",
@@ -859,6 +859,31 @@
         "completeMerge": "マージ完了",
         "abortSuccess": "マージが中止されました",
         "completeSuccess": "マージが完了しました"
+      },
+      "stashDialog": {
+        "title": "変更をスタッシュ",
+        "description": "現在の変更をスタッシュに保存",
+        "messageLabel": "メッセージ",
+        "messagePlaceholder": "スタッシュメッセージ（任意）",
+        "keepIndex": "インデックスを保持（ステージ済みの変更はそのまま）",
+        "cancel": "キャンセル",
+        "stash": "スタッシュ",
+        "success": "変更がスタッシュされました",
+        "error": "スタッシュに失敗しました"
+      },
+      "unstashDialog": {
+        "title": "スタッシュを適用",
+        "noStashes": "スタッシュがありません",
+        "selectFile": "ファイルを選択して差分を表示",
+        "viewDiff": "差分を表示",
+        "original": "元",
+        "modified": "変更後",
+        "apply": "適用",
+        "drop": "削除",
+        "applySuccess": "スタッシュを適用しました",
+        "dropSuccess": "スタッシュを削除しました",
+        "confirmApply": "スタッシュ {ref} を作業ディレクトリに適用しますか？",
+        "cancel": "キャンセル"
       }
     },
     "commitDialog": {

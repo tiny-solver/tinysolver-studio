@@ -827,8 +827,8 @@
       "pushCode": "Push...",
       "newBranch": "New branch...",
       "newWorktree": "New worktree...",
-      "stashChanges": "Stash changes",
-      "stashPop": "Pop stash...",
+      "stashChanges": "Stash changes...",
+      "stashPop": "Unstash...",
       "manageRemotes": "Manage Remotes...",
       "localBranches": "Local branches ({count, plural, one {#} other {#}})",
       "noLocalBranches": "No local branches",
@@ -859,6 +859,31 @@
         "completeMerge": "Complete Merge",
         "abortSuccess": "Merge aborted successfully",
         "completeSuccess": "Merge completed successfully"
+      },
+      "stashDialog": {
+        "title": "Stash Changes",
+        "description": "Save your current changes to a stash",
+        "messageLabel": "Message",
+        "messagePlaceholder": "Stash message (optional)",
+        "keepIndex": "Keep index (staged changes remain staged)",
+        "cancel": "Cancel",
+        "stash": "Stash",
+        "success": "Changes stashed successfully",
+        "error": "Failed to stash changes"
+      },
+      "unstashDialog": {
+        "title": "Unstash Changes",
+        "noStashes": "No stashes found",
+        "selectFile": "Select a file to view diff",
+        "viewDiff": "View Diff",
+        "original": "Original",
+        "modified": "Modified",
+        "apply": "Apply",
+        "drop": "Drop",
+        "applySuccess": "Stash applied successfully",
+        "dropSuccess": "Stash dropped",
+        "confirmApply": "Apply stash {ref} to working directory?",
+        "cancel": "Cancel"
       }
     },
     "commitDialog": {

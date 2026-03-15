@@ -75,16 +75,16 @@ import {
   gitMerge,
   gitRebase,
   gitDeleteBranch,
-  gitStash,
-  gitStashPop,
   openFolderWindow,
   openCommitWindow,
   setFolderParentBranch,
   gitListConflicts,
   gitHasMergeHead,
+  openStashWindow,
 } from "@/lib/tauri"
 import { RemoteManageDialog } from "@/components/layout/remote-manage-dialog"
 import { ConflictDialog } from "@/components/layout/conflict-dialog"
+import { StashDialog } from "@/components/layout/stash-dialog"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import { toErrorMessage } from "@/lib/app-error"
 import type { GitBranchList, GitConflictInfo } from "@/lib/types"
@@ -138,6 +138,7 @@ export function BranchDropdown({
   const [worktreeBranchName, setWorktreeBranchName] = useState("")
   const [worktreePath, setWorktreePath] = useState("")
   const [manageRemotesOpen, setManageRemotesOpen] = useState(false)
+  const [stashDialogOpen, setStashDialogOpen] = useState(false)
   const [conflictInfo, setConflictInfo] = useState<GitConflictInfo | null>(null)
   const taskSeq = useRef(0)
   const worktreeBranchSet = useMemo(
@@ -761,18 +762,23 @@ export function BranchDropdown({
           <DropdownMenuGroup>
             <DropdownMenuItem
               disabled={loading}
-              onSelect={() =>
-                runGitTask(t("tasks.stashChanges"), () => gitStash(folderPath))
-              }
+              onSelect={() => {
+                setDropdownOpen(false)
+                setStashDialogOpen(true)
+              }}
             >
               <Archive className="h-3.5 w-3.5" />
               {t("stashChanges")}
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={loading}
-              onSelect={() =>
-                runGitTask(t("tasks.stashPop"), () => gitStashPop(folderPath))
-              }
+              onSelect={() => {
+                if (!folder) return
+                openStashWindow(folder.id).catch((err) => {
+                  const msg = toErrorMessage(err)
+                  pushAlert("error", t("stashPop"), msg)
+                })
+              }}
             >
               <ArchiveRestore className="h-3.5 w-3.5" />
               {t("stashPop")}
@@ -1001,6 +1007,13 @@ export function BranchDropdown({
         folderPath={folderPath}
         onClose={() => setConflictInfo(null)}
         onResolved={onBranchChange}
+      />
+
+      <StashDialog
+        open={stashDialogOpen}
+        folderPath={folderPath}
+        onClose={() => setStashDialogOpen(false)}
+        onStashed={onBranchChange}
       />
     </>
   )

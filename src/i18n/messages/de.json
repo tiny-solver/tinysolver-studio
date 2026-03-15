@@ -827,7 +827,7 @@
       "pushCode": "Hochladen...",
       "newBranch": "Neuer Branch...",
       "newWorktree": "Neuer Worktree...",
-      "stashChanges": "Änderungen stashen",
+      "stashChanges": "Änderungen stashen...",
       "stashPop": "Stash anwenden...",
       "manageRemotes": "Remotes verwalten...",
       "localBranches": "Lokale Branches ({count, plural, one {#} other {#}})",
@@ -859,6 +859,31 @@
         "completeMerge": "Merge abschließen",
         "abortSuccess": "Merge erfolgreich abgebrochen",
         "completeSuccess": "Merge erfolgreich abgeschlossen"
+      },
+      "stashDialog": {
+        "title": "Änderungen stashen",
+        "description": "Aktuelle Änderungen im Stash speichern",
+        "messageLabel": "Nachricht",
+        "messagePlaceholder": "Stash-Nachricht (optional)",
+        "keepIndex": "Index beibehalten (gestagete Änderungen bleiben erhalten)",
+        "cancel": "Abbrechen",
+        "stash": "Stashen",
+        "success": "Änderungen wurden gestasht",
+        "error": "Stash fehlgeschlagen"
+      },
+      "unstashDialog": {
+        "title": "Stash anwenden",
+        "noStashes": "Keine Stashes vorhanden",
+        "selectFile": "Datei auswählen um Diff anzuzeigen",
+        "viewDiff": "Diff anzeigen",
+        "original": "Original",
+        "modified": "Geändert",
+        "apply": "Anwenden",
+        "drop": "Löschen",
+        "applySuccess": "Stash angewendet",
+        "dropSuccess": "Stash gelöscht",
+        "confirmApply": "Stash {ref} auf das Arbeitsverzeichnis anwenden?",
+        "cancel": "Abbrechen"
       }
     },
     "commitDialog": {

@@ -827,7 +827,7 @@
       "pushCode": "دفع...",
       "newBranch": "فرع جديد...",
       "newWorktree": "Worktree جديد...",
-      "stashChanges": "تخزين التغييرات في stash",
+      "stashChanges": "...تخبئة التغييرات",
       "stashPop": "استرجاع stash...",
       "manageRemotes": "إدارة المستودعات البعيدة...",
       "localBranches": "الفروع المحلية ({count, plural, one {#} other {#}})",
@@ -859,6 +859,31 @@
         "completeMerge": "إتمام الدمج",
         "abortSuccess": "تم إلغاء الدمج بنجاح",
         "completeSuccess": "تم إتمام الدمج بنجاح"
+      },
+      "stashDialog": {
+        "title": "تخبئة التغييرات",
+        "description": "حفظ التغييرات الحالية في المخبأ",
+        "messageLabel": "رسالة",
+        "messagePlaceholder": "رسالة التخبئة (اختياري)",
+        "keepIndex": "الاحتفاظ بالفهرس (التغييرات المرحلة تبقى مرحلة)",
+        "cancel": "إلغاء",
+        "stash": "تخبئة",
+        "success": "تم تخبئة التغييرات",
+        "error": "فشل في تخبئة التغييرات"
+      },
+      "unstashDialog": {
+        "title": "تطبيق المخبأ",
+        "noStashes": "لا توجد تخبئات",
+        "selectFile": "اختر ملفاً لعرض الفرق",
+        "viewDiff": "عرض الفرق",
+        "original": "الأصلي",
+        "modified": "المعدل",
+        "apply": "تطبيق",
+        "drop": "حذف",
+        "applySuccess": "تم تطبيق التخبئة",
+        "dropSuccess": "تم حذف التخبئة",
+        "confirmApply": "تطبيق التخبئة {ref} على دليل العمل؟",
+        "cancel": "إلغاء"
       }
     },
     "commitDialog": {
