@@ -100,7 +100,7 @@ interface BranchDropdownProps {
 }
 
 type ConfirmAction = {
-  type: "merge" | "rebase" | "delete"
+  type: "merge" | "rebase" | "delete" | "forceDelete"
   branchName: string
 }
 
@@ -189,7 +189,8 @@ export function BranchDropdown({
   async function runGitTask<T>(
     label: string,
     action: () => Promise<T>,
-    getSuccessDescription?: (result: T) => string | false | undefined
+    getSuccessDescription?: (result: T) => string | false | undefined,
+    onError?: (errorMsg: string) => boolean
   ) {
     const taskId = `git-${++taskSeq.current}-${Date.now()}`
     setLoading(true)
@@ -212,8 +213,11 @@ export function BranchDropdown({
       }
     } catch (err) {
       removeTask(taskId)
-      const errorTitle = t("toasts.taskFailed", { label })
       const errorMsg = toErrorMessage(err)
+      if (onError?.(errorMsg)) {
+        return
+      }
+      const errorTitle = t("toasts.taskFailed", { label })
       pushAlert("error", errorTitle, errorMsg)
       toast.error(errorTitle, { description: errorMsg })
     } finally {
@@ -472,8 +476,22 @@ export function BranchDropdown({
         )
         break
       case "delete":
+        await runGitTask(
+          t("tasks.deleteBranch", { branchName }),
+          () => gitDeleteBranch(folderPath, branchName),
+          undefined,
+          (errorMsg) => {
+            if (/not fully merged/i.test(errorMsg)) {
+              setConfirmAction({ type: "forceDelete", branchName })
+              return true
+            }
+            return false
+          }
+        )
+        break
+      case "forceDelete":
         await runGitTask(t("tasks.deleteBranch", { branchName }), () =>
-          gitDeleteBranch(folderPath, branchName)
+          gitDeleteBranch(folderPath, branchName, true)
         )
         break
     }
@@ -488,6 +506,8 @@ export function BranchDropdown({
         return t("confirm.rebaseTitle")
       case "delete":
         return t("confirm.deleteTitle")
+      case "forceDelete":
+        return t("confirm.forceDeleteTitle")
     }
   }
 
@@ -506,6 +526,10 @@ export function BranchDropdown({
         })
       case "delete":
         return t("confirm.deleteDescription", {
+          branchName: confirmAction.branchName,
+        })
+      case "forceDelete":
+        return t("confirm.forceDeleteDescription", {
           branchName: confirmAction.branchName,
         })
     }

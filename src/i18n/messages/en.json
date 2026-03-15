@@ -810,7 +810,9 @@
         "deleteTitle": "Delete branch",
         "mergeDescription": "Merge {branchName} into current branch {currentBranch}?",
         "rebaseDescription": "Rebase current branch {currentBranch} onto {branchName}?",
-        "deleteDescription": "Delete branch {branchName}? This action cannot be undone."
+        "deleteDescription": "Delete branch {branchName}? This action cannot be undone.",
+        "forceDeleteTitle": "Force Delete Branch",
+        "forceDeleteDescription": "Branch {branchName} is not fully merged. Are you sure you want to force delete it? This action cannot be undone."
       },
       "current": "Current",
       "switchToBranch": "Switch to this branch",

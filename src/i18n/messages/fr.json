@@ -810,7 +810,9 @@
         "deleteTitle": "Supprimer la branche",
         "mergeDescription": "Fusionner {branchName} dans la branche actuelle {currentBranch} ?",
         "rebaseDescription": "Rebaser la branche actuelle {currentBranch} sur {branchName} ?",
-        "deleteDescription": "Supprimer la branche {branchName} ? Cette action est irréversible."
+        "deleteDescription": "Supprimer la branche {branchName} ? Cette action est irréversible.",
+        "forceDeleteTitle": "Forcer la suppression de la branche",
+        "forceDeleteDescription": "La branche {branchName} n'est pas entièrement fusionnée. Êtes-vous sûr de vouloir la supprimer de force ? Cette action est irréversible."
       },
       "current": "Actuelle",
       "switchToBranch": "Basculer vers cette branche",

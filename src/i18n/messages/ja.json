@@ -810,7 +810,9 @@
         "deleteTitle": "ブランチを削除",
         "mergeDescription": "{branchName} を現在のブランチ {currentBranch} にマージしますか？",
         "rebaseDescription": "現在のブランチ {currentBranch} を {branchName} にリベースしますか？",
-        "deleteDescription": "ブランチ {branchName} を削除しますか？この操作は元に戻せません。"
+        "deleteDescription": "ブランチ {branchName} を削除しますか？この操作は元に戻せません。",
+        "forceDeleteTitle": "ブランチを強制削除",
+        "forceDeleteDescription": "ブランチ {branchName} はまだ完全にマージされていません。強制削除してもよろしいですか？この操作は元に戻せません。"
       },
       "current": "現在",
       "switchToBranch": "このブランチに切り替え",

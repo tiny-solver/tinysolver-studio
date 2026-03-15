@@ -810,7 +810,9 @@
         "deleteTitle": "Excluir branch",
         "mergeDescription": "Mesclar {branchName} na branch atual {currentBranch}?",
         "rebaseDescription": "Fazer rebase da branch atual {currentBranch} sobre {branchName}?",
-        "deleteDescription": "Excluir a branch {branchName}? Esta ação não pode ser desfeita."
+        "deleteDescription": "Excluir a branch {branchName}? Esta ação não pode ser desfeita.",
+        "forceDeleteTitle": "Forçar exclusão do branch",
+        "forceDeleteDescription": "O branch {branchName} não está totalmente mesclado. Tem certeza de que deseja forçar a exclusão? Esta ação não pode ser desfeita."
       },
       "current": "Atual",
       "switchToBranch": "Mudar para esta branch",

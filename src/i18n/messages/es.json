@@ -810,7 +810,9 @@
         "deleteTitle": "Eliminar rama",
         "mergeDescription": "¿Fusionar {branchName} en la rama actual {currentBranch}?",
         "rebaseDescription": "¿Hacer rebase de la rama actual {currentBranch} sobre {branchName}?",
-        "deleteDescription": "¿Eliminar la rama {branchName}? Esta acción no se puede deshacer."
+        "deleteDescription": "¿Eliminar la rama {branchName}? Esta acción no se puede deshacer.",
+        "forceDeleteTitle": "Forzar eliminación de rama",
+        "forceDeleteDescription": "La rama {branchName} no está completamente fusionada. ¿Estás seguro de que quieres forzar su eliminación? Esta acción no se puede deshacer."
       },
       "current": "Actual",
       "switchToBranch": "Cambiar a esta rama",

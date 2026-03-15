@@ -810,7 +810,9 @@
         "deleteTitle": "删除分支",
         "mergeDescription": "确定将 {branchName} 合并到当前分支 {currentBranch} 吗？",
         "rebaseDescription": "确定将当前分支 {currentBranch} 变基到 {branchName} 吗？",
-        "deleteDescription": "确定删除分支 {branchName} 吗？此操作不可恢复。"
+        "deleteDescription": "确定删除分支 {branchName} 吗？此操作不可恢复。",
+        "forceDeleteTitle": "强制删除分支",
+        "forceDeleteDescription": "分支 {branchName} 尚未完全合并，确定要强制删除吗？此操作不可恢复。"
       },
       "current": "当前",
       "switchToBranch": "切换到此分支",
