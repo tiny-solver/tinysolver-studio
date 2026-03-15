@@ -611,6 +611,13 @@ const ConversationTabView = memo(function ConversationTabView({
     handleSendRef.current = handleSend
   }, [handleSend])
 
+  // Resolve the current conversation title from tab context (most up-to-date)
+  // or fall back to the DB detail summary.
+  const conversationTitle = useMemo(() => {
+    const tabTitle = tabs.find((tab) => tab.id === tabId)?.title
+    return tabTitle || detail?.summary.title || null
+  }, [tabs, tabId, detail?.summary.title])
+
   const handleForkSend = useCallback(
     async (draft: PromptDraft, selectedModeIdArg?: string | null) => {
       const connectionId = conn.connectionId
@@ -621,20 +628,17 @@ const ConversationTabView = memo(function ConversationTabView({
         )
         const persistedId = dbConvIdRef.current
         if (persistedId != null) {
-          const currentTab = tabs.find((tab) => tab.id === tabId)
-          const currentTitle =
-            currentTab?.title || detail?.summary.title || t("newConversation")
+          const baseTitle = conversationTitle ?? t("newConversation")
+          // Strip existing [Fork] prefix to avoid stacking
+          const cleanTitle = baseTitle.replace(/^\[Fork]\s*/g, "")
           // Point current conversation at S2 (forked) and add fork tag
           await updateConversationExternalId(persistedId, forkedSessionId)
-          await updateConversationTitle(
-            persistedId,
-            `[Fork] ${currentTitle}`
-          )
+          await updateConversationTitle(persistedId, `[Fork] ${cleanTitle}`)
           // Save original S1 as a separate conversation with original title
           const s1ConvId = await createConversation(
             folderId,
             selectedAgent,
-            currentTitle
+            cleanTitle
           )
           await updateConversationExternalId(s1ConvId, originalSessionId)
           await updateConversationStatus(s1ConvId, "pending_review")
@@ -644,7 +648,7 @@ const ConversationTabView = memo(function ConversationTabView({
         setExternalId(effectiveConversationId, forkedSessionId)
 
         await refreshConversations()
-        // Now send the message on the forked session (S2)
+        // Send the message on the forked session (S2)
         handleSend(draft, selectedModeIdArg)
       } catch (err) {
         toast.error(
@@ -662,7 +666,7 @@ const ConversationTabView = memo(function ConversationTabView({
     [
       conn.connectionId,
       connStatus,
-      detail?.summary.title,
+      conversationTitle,
       effectiveConversationId,
       folderId,
       handleSend,
@@ -670,8 +674,6 @@ const ConversationTabView = memo(function ConversationTabView({
       selectedAgent,
       setExternalId,
       t,
-      tabId,
-      tabs,
     ]
   )
 

@@ -1333,6 +1333,7 @@ export function MessageInput({
                 disabled={disabled || !hasSendableContent}
                 size="icon"
                 className="rounded-l-none border-l border-primary-foreground/20 w-6"
+                aria-label={t("forkAndSend")}
               >
                 <ChevronUp className="h-3 w-3" />
               </Button>
