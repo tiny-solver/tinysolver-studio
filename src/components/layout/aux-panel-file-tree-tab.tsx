@@ -1102,14 +1102,31 @@ export function FileTreeTab() {
           const result = await readFilePreview(folder.path, gitignoreNode.path)
           const matcher = ignore().add(result.content)
 
-          for (const child of children) {
+          // Collect all descendant nodes so multi-level patterns like
+          // "public/vs" can be matched using relative paths.
+          const descendants: FileTreeNode[] = []
+          const collectDescendants = (parent: string) => {
+            const items = dirChildrenByPath.get(parent)
+            if (!items) return
+            for (const item of items) {
+              descendants.push(item)
+              if (item.kind === "dir") collectDescendants(item.path)
+            }
+          }
+          collectDescendants(dirPath)
+
+          for (const desc of descendants) {
+            if (hasIgnoredAncestor(desc.path, nextIgnoredPaths)) continue
+            const relativePath =
+              dirPath === "" ? desc.path : desc.path.slice(dirPath.length + 1)
+            if (!relativePath) continue
             const ignored =
-              child.kind === "dir"
-                ? matcher.ignores(`${child.name}/`) ||
-                  matcher.ignores(`${child.name}/.codeg-ignore-probe`)
-                : matcher.ignores(child.name)
+              desc.kind === "dir"
+                ? matcher.ignores(`${relativePath}/`) ||
+                  matcher.ignores(`${relativePath}/.codeg-ignore-probe`)
+                : matcher.ignores(relativePath)
             if (ignored) {
-              nextIgnoredPaths.add(child.path)
+              nextIgnoredPaths.add(desc.path)
             }
           }
         } catch {
