@@ -406,6 +406,10 @@
     },
     "codex": {
       "configDescription": "Admite configuración rápida de URL de API, API Key, nombre del modelo y reasoning effort, y sincroniza con `auth.json` / `config.toml`.",
+      "authMode": "Modo de Autenticación",
+      "chatgptSubscription": "Suscripción oficial",
+      "chatgptSubscriptionHint": "Iniciar sesión con suscripción oficial de ChatGPT, sin necesidad de API Key",
+      "apiKeyHint": "Conectar usando API Key a OpenAI o servicios API compatibles",
       "selectProvider": "Seleccionar proveedor",
       "modelName": "Nombre del modelo",
       "selectReasoningEffort": "Seleccionar Reasoning Effort",

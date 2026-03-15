@@ -92,6 +92,7 @@ interface AgentDraft {
   googleCloudProject: string
   googleCloudLocation: string
   googleApplicationCredentials: string
+  codexAuthMode: CodexAuthMode
   codexModelProvider: string
   codexProviderOptions: string[]
   codexReasoningEffort: CodexReasoningEffort
@@ -970,6 +971,10 @@ interface CodexImportantValues {
 }
 
 const CODEX_DEFAULT_MODEL_PROVIDER = "codeg"
+
+const CODEX_AUTH_MODES = ["api_key", "chatgpt_subscription"] as const
+type CodexAuthMode = (typeof CODEX_AUTH_MODES)[number]
+
 type CodexReasoningEffort = "low" | "medium" | "high" | "xhigh"
 
 const CODEX_REASONING_EFFORT_OPTIONS: ReadonlyArray<{
@@ -1281,6 +1286,21 @@ function parseCodexAuthJsonObject(authJsonText: string): {
 
 function parseCodexAuthJsonText(authJsonText: string): string | null {
   return parseCodexAuthJsonObject(authJsonText).error
+}
+
+function inferCodexAuthMode(authJsonText: string): CodexAuthMode {
+  const { authObject } = parseCodexAuthJsonObject(authJsonText)
+  if (authObject) {
+    // 官网订阅：auth_mode 为 chatgpt，或没有 OPENAI_API_KEY，或值为 null
+    if (
+      authObject.auth_mode === "chatgpt" ||
+      !("OPENAI_API_KEY" in authObject) ||
+      authObject.OPENAI_API_KEY === null
+    ) {
+      return "chatgpt_subscription"
+    }
+  }
+  return "api_key"
 }
 
 function extractCodexImportantValues(
@@ -1982,6 +2002,10 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     googleCloudProject: geminiImportant.googleCloudProject,
     googleCloudLocation: geminiImportant.googleCloudLocation,
     googleApplicationCredentials: geminiImportant.googleApplicationCredentials,
+    codexAuthMode:
+      agent.agent_type === "codex"
+        ? inferCodexAuthMode(codexAuthJsonText)
+        : "api_key",
     codexModelProvider: codexImportant.modelProvider,
     codexProviderOptions: codexImportant.providerOptions,
     codexReasoningEffort: codexImportant.reasoningEffort,
@@ -3956,6 +3980,7 @@ export function AcpAgentSettings() {
       )
       updateSelectedDraft((current) => ({
         ...current,
+        codexAuthMode: inferCodexAuthMode(nextText),
         codexAuthJsonText: nextText,
         apiBaseUrl: important.apiBaseUrl,
         apiKey: important.apiKey ?? current.apiKey,
@@ -4022,6 +4047,58 @@ export function AcpAgentSettings() {
         codexReasoningEffort: synced.reasoningEffort,
         codexSupportsWebsockets: synced.supportsWebsockets,
         codexConfigTomlText: nextToml,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleCodexAuthModeChange = useCallback(
+    (nextMode: CodexAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "codex"
+      )
+        return
+
+      const nextAuthJsonText =
+        nextMode === "chatgpt_subscription"
+          ? "{}"
+          : JSON.stringify({ OPENAI_API_KEY: "" }, null, 2)
+
+      const nextConfigTomlText =
+        nextMode === "chatgpt_subscription"
+          ? ""
+          : selectedDraft.codexConfigTomlText
+
+      const nextEnvText =
+        nextMode === "chatgpt_subscription"
+          ? patchEnvText(selectedDraft.envText, {
+              OPENAI_API_KEY: "",
+              OPENAI_BASE_URL: "",
+            })
+          : selectedDraft.envText
+
+      const synced = extractCodexImportantValues(
+        nextAuthJsonText,
+        nextConfigTomlText
+      )
+
+      updateSelectedDraft((current) => ({
+        ...current,
+        codexAuthMode: nextMode,
+        codexAuthJsonText: nextAuthJsonText,
+        codexConfigTomlText: nextConfigTomlText,
+        envText: nextEnvText,
+        apiBaseUrl:
+          nextMode === "chatgpt_subscription" ? "" : synced.apiBaseUrl,
+        apiKey:
+          nextMode === "chatgpt_subscription" ? "" : (synced.apiKey ?? ""),
+        model: synced.model,
+        codexModelProvider: synced.modelProvider,
+        codexProviderOptions: synced.providerOptions,
+        codexReasoningEffort: synced.reasoningEffort,
+        codexSupportsWebsockets: synced.supportsWebsockets,
       }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
@@ -4484,106 +4561,148 @@ export function AcpAgentSettings() {
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
-                        Provider
+                        {t("codex.authMode")}
                       </label>
                       <Select
-                        value={selectedDraft.codexModelProvider}
-                        onValueChange={handleCodexModelProviderChange}
+                        value={selectedDraft.codexAuthMode}
+                        onValueChange={(value) => {
+                          if (
+                            CODEX_AUTH_MODES.includes(value as CodexAuthMode)
+                          ) {
+                            handleCodexAuthModeChange(value as CodexAuthMode)
+                          }
+                        }}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue
-                            placeholder={t("codex.selectProvider")}
-                          />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start">
-                          {selectedDraft.codexProviderOptions.map(
-                            (provider) => (
-                              <SelectItem key={provider} value={provider}>
-                                {provider}
-                              </SelectItem>
-                            )
-                          )}
+                          {CODEX_AUTH_MODES.map((mode) => (
+                            <SelectItem key={mode} value={mode}>
+                              {mode === "chatgpt_subscription"
+                                ? t("codex.chatgptSubscription")
+                                : "API Key"}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.codexAuthMode === "chatgpt_subscription"
+                          ? t("codex.chatgptSubscriptionHint")
+                          : t("codex.apiKeyHint")}
+                      </p>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        API URL
-                      </label>
-                      <Input
-                        value={selectedDraft.apiBaseUrl}
-                        onChange={(event) => {
-                          handleCodexImportantConfigChange(
-                            "apiBaseUrl",
-                            event.target.value
-                          )
-                        }}
-                        placeholder="https://api.openai.com/v1"
-                      />
-                    </div>
+                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          Provider
+                        </label>
+                        <Select
+                          value={selectedDraft.codexModelProvider}
+                          onValueChange={handleCodexModelProviderChange}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue
+                              placeholder={t("codex.selectProvider")}
+                            />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            {selectedDraft.codexProviderOptions.map(
+                              (provider) => (
+                                <SelectItem key={provider} value={provider}>
+                                  {provider}
+                                </SelectItem>
+                              )
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        API Key
-                      </label>
-                      <div className="flex items-center gap-2">
+                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          API URL
+                        </label>
                         <Input
-                          type={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? "text"
-                              : "password"
-                          }
-                          value={selectedDraft.apiKey}
+                          value={selectedDraft.apiBaseUrl}
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
-                              "apiKey",
+                              "apiBaseUrl",
                               event.target.value
                             )
                           }}
-                          placeholder="sk-..."
+                          placeholder="https://api.openai.com/v1"
                         />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowApiKeys((prev) => ({
-                              ...prev,
-                              [selectedAgent.agent_type]:
-                                !prev[selectedAgent.agent_type],
-                            }))
-                          }}
-                          title={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? t("actions.hideApiKey")
-                              : t("actions.showApiKey")
-                          }
-                        >
-                          {showApiKeys[selectedAgent.agent_type] ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        {t("codex.modelName")}
-                      </label>
-                      <Input
-                        value={selectedDraft.model}
-                        onChange={(event) => {
-                          handleCodexImportantConfigChange(
-                            "model",
-                            event.target.value
-                          )
-                        }}
-                        placeholder="gpt-5 / gpt-5-mini"
-                      />
-                    </div>
+                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          API Key
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type={
+                              showApiKeys[selectedAgent.agent_type]
+                                ? "text"
+                                : "password"
+                            }
+                            value={selectedDraft.apiKey}
+                            onChange={(event) => {
+                              handleCodexImportantConfigChange(
+                                "apiKey",
+                                event.target.value
+                              )
+                            }}
+                            placeholder="sk-..."
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowApiKeys((prev) => ({
+                                ...prev,
+                                [selectedAgent.agent_type]:
+                                  !prev[selectedAgent.agent_type],
+                              }))
+                            }}
+                            title={
+                              showApiKeys[selectedAgent.agent_type]
+                                ? t("actions.hideApiKey")
+                                : t("actions.showApiKey")
+                            }
+                          >
+                            {showApiKeys[selectedAgent.agent_type] ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("codex.modelName")}
+                        </label>
+                        <Input
+                          value={selectedDraft.model}
+                          onChange={(event) => {
+                            handleCodexImportantConfigChange(
+                              "model",
+                              event.target.value
+                            )
+                          }}
+                          placeholder="gpt-5 / gpt-5-mini"
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
@@ -4679,10 +4798,18 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
+                          const codexEnvText =
+                            selectedDraft.codexAuthMode ===
+                            "chatgpt_subscription"
+                              ? patchEnvText(selectedDraft.envText, {
+                                  OPENAI_API_KEY: "",
+                                  OPENAI_BASE_URL: "",
+                                })
+                              : selectedDraft.envText
                           persistPreferences(
                             selectedAgent.agent_type,
                             selectedDraft.enabled,
-                            selectedDraft.envText,
+                            codexEnvText,
                             selectedDraft.configText,
                             {
                               codexAuthJsonText:

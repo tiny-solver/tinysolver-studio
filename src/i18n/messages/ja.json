@@ -406,6 +406,10 @@
     },
     "codex": {
       "configDescription": "API URL、API Key、モデル名、reasoning effort を素早く設定でき、`auth.json` / `config.toml` と同期します。",
+      "authMode": "認証方式",
+      "chatgptSubscription": "公式サブスクリプション",
+      "chatgptSubscriptionHint": "ChatGPT 公式サブスクリプションでログイン、API Key 不要",
+      "apiKeyHint": "API Key で OpenAI または互換 API サービスに接続",
       "selectProvider": "プロバイダーを選択",
       "modelName": "モデル名",
       "selectReasoningEffort": "Reasoning Effort を選択",

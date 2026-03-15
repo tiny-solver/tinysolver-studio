@@ -406,6 +406,10 @@
     },
     "codex": {
       "configDescription": "يدعم الإعداد السريع لعنوان API ومفتاح API واسم النموذج وجهد الاستدلال، مع المزامنة مع `auth.json` / `config.toml`.",
+      "authMode": "طريقة المصادقة",
+      "chatgptSubscription": "اشتراك رسمي",
+      "chatgptSubscriptionHint": "تسجيل الدخول باشتراك ChatGPT الرسمي، لا حاجة لـ API Key",
+      "apiKeyHint": "الاتصال باستخدام API Key بخدمات OpenAI أو الخدمات المتوافقة",
       "selectProvider": "اختر المزود",
       "modelName": "اسم النموذج",
       "selectReasoningEffort": "اختر Reasoning Effort",
