@@ -195,6 +195,7 @@ fn git_command_error(operation: &str, stderr: &[u8]) -> AppCommandError {
 
 async fn detect_conflicts(path: &str) -> Result<Vec<String>, AppCommandError> {
     let output = crate::process::tokio_command("git")
+        .args(["-c", "core.quotePath=false"])
         .args(["diff", "--name-only", "--diff-filter=U"])
         .current_dir(path)
         .output()
@@ -207,7 +208,7 @@ async fn detect_conflicts(path: &str) -> Result<Vec<String>, AppCommandError> {
 
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
-        .map(|l| l.trim().to_string())
+        .map(|l| unquote_git_path(l))
         .filter(|l| !l.is_empty())
         .collect())
 }
@@ -1046,6 +1047,7 @@ pub async fn git_stash_show(
     stash_ref: String,
 ) -> Result<Vec<GitStatusEntry>, AppCommandError> {
     let output = crate::process::tokio_command("git")
+        .args(["-c", "core.quotePath=false"])
         .args(["stash", "show", "--name-status", &stash_ref])
         .current_dir(&path)
         .output()
@@ -1063,7 +1065,7 @@ pub async fn git_stash_show(
         .filter_map(|line| {
             let mut parts = line.splitn(2, '\t');
             let status = parts.next()?.trim().to_string();
-            let file = parts.next()?.trim().to_string();
+            let file = unquote_git_path(parts.next()?);
             Some(GitStatusEntry { status, file })
         })
         .collect();
@@ -1074,6 +1076,7 @@ pub async fn git_stash_show(
 #[tauri::command]
 pub async fn git_status(path: String) -> Result<Vec<GitStatusEntry>, AppCommandError> {
     let output = crate::process::tokio_command("git")
+        .args(["-c", "core.quotePath=false"])
         .args(["status", "--porcelain=v1", "-uall"])
         .current_dir(&path)
         .output()
@@ -1089,7 +1092,7 @@ pub async fn git_status(path: String) -> Result<Vec<GitStatusEntry>, AppCommandE
         .filter(|l| !l.is_empty())
         .map(|line| {
             let status = line[..2].trim().to_string();
-            let file = line[3..].to_string();
+            let file = unquote_git_path(&line[3..]);
             GitStatusEntry { status, file }
         })
         .collect();
@@ -1835,6 +1838,20 @@ const FILE_WATCH_MAX_CHANGED_PATHS: usize = 2_000;
 
 fn to_git_literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
+}
+
+/// Remove surrounding quotes from a git output path.
+/// Git quotes paths containing non-ASCII or special characters, e.g.
+/// `"path/\344\270\255\346\226\207.txt"`.  With `core.quotePath=false`
+/// the octal escapes are gone, but the quotes may still appear for paths
+/// with spaces, tabs, etc.
+fn unquote_git_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        trimmed[1..trimmed.len() - 1].to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 fn normalize_slash_path(path: &Path) -> String {
@@ -3174,6 +3191,7 @@ pub async fn git_log(
         args.push(b.clone());
     }
     let output = crate::process::tokio_command("git")
+        .args(["-c", "core.quotePath=false"])
         .args(&args)
         .current_dir(&path)
         .output()
@@ -3367,7 +3385,7 @@ impl GitLogEntryBuilder {
 fn parse_raw_file_line(line: &str) -> Option<(String, String)> {
     let mut parts = line.split('\t');
     let meta = parts.next()?;
-    let file_path = parts.next()?.to_string();
+    let file_path = unquote_git_path(parts.next()?);
     let status = meta
         .split_whitespace()
         .last()
@@ -3381,7 +3399,7 @@ fn parse_numstat_file_line(line: &str) -> Option<(u32, u32, String)> {
     let mut parts = line.splitn(3, '\t');
     let additions = parse_numstat_count(parts.next()?);
     let deletions = parse_numstat_count(parts.next()?);
-    let file_path = parts.next()?.to_string();
+    let file_path = unquote_git_path(parts.next()?);
     Some((additions, deletions, file_path))
 }
 
