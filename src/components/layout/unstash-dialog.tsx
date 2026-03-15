@@ -360,7 +360,6 @@ export function StashWorkspace({ folderPath }: StashWorkspaceProps) {
                     handleSelectFile(stash.ref_name, file)
                   }
                   renderNode={(node) => renderNode(node, stash.ref_name)}
-                  t={t}
                 />
               ))}
             </div>
@@ -409,7 +408,6 @@ interface StashCardProps {
   onDrop: () => void
   onSelectFile: (file: string) => void
   renderNode: (node: TreeNode) => React.ReactNode
-  t: ReturnType<typeof useTranslations>
 }
 
 function StashCard({
@@ -424,8 +422,8 @@ function StashCard({
   onDrop,
   onSelectFile,
   renderNode,
-  t,
 }: StashCardProps) {
+  const t = useTranslations("Folder.branchDropdown.unstashDialog")
   const [confirmApplyOpen, setConfirmApplyOpen] = useState(false)
   const tree = useMemo(() => (files ? buildFileTree(files) : []), [files])
 
