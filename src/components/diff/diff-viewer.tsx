@@ -8,6 +8,8 @@ import type { editor as MonacoEditorNs } from "monaco-editor"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
 import { cn } from "@/lib/utils"
 
+import "@/lib/monaco-local"
+
 const MonacoDiffEditor = dynamic(
   async () => {
     const mod = await import("@monaco-editor/react")
@@ -171,6 +173,8 @@ export function DiffViewer({
           modified={modified}
           language={language}
           theme={editorTheme}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
           beforeMount={defineMonacoThemes}
           onMount={handleEditorMount}
           loading={

@@ -291,6 +291,8 @@ function setEditorHiddenAreas(
   hiddenAreaEditor.setHiddenAreas?.(ranges)
 }
 
+import "@/lib/monaco-local"
+
 const MonacoEditor = dynamic(async () => import("@monaco-editor/react"), {
   ssr: false,
 })

@@ -18,6 +18,9 @@ tsconfig.tsbuildinfo
 out/
 next-env.d.ts
 
+# Monaco editor local files (copied from node_modules)
+public/vs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

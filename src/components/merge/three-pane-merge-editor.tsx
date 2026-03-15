@@ -23,6 +23,8 @@ import {
 } from "./merge-diff"
 import { useSyncScroll } from "./use-sync-scroll"
 
+import "@/lib/monaco-local"
+
 const MonacoEditor = dynamic(
   async () => {
     const mod = await import("@monaco-editor/react")
