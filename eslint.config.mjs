@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "src-tauri/target/**",
+    "public/vs/**",
   ]),
   eslintConfigPrettier,
   eslintPluginPrettierRecommended,
