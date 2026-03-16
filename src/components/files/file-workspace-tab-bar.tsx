@@ -221,7 +221,9 @@ export function FileWorkspaceTabBar() {
       {canOpenInBrowser && activeTab?.path && folder?.path && (
         <button
           type="button"
-          onClick={() => openPath(`${folder.path}/${activeTab.path}`)}
+          onClick={() => {
+            openPath(`${folder.path}/${activeTab.path}`).catch(() => {})
+          }}
           className="shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors"
           aria-label={t("preview")}
           title={t("preview")}

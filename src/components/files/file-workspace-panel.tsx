@@ -1375,8 +1375,7 @@ export function FileWorkspacePanel() {
               ),
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
               a: ({ node, href, children, ...aProps }) => {
-                const isRelative =
-                  href && !/^https?:\/\/|^mailto:|^#/.test(href)
+                const isRelative = href && !/^[a-z][a-z0-9+.-]*:|^#/i.test(href)
                 if (isRelative && href) {
                   return (
                     <a
