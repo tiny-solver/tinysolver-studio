@@ -1213,7 +1213,7 @@ export function MessageInput({
       )}
       <div
         className={cn(
-          "pointer-events-none absolute left-px right-px bottom-px z-10 rounded-b-xl bg-background",
+          "pointer-events-none absolute left-px right-12 bottom-px z-10 rounded-bl-xl bg-background",
           "h-14"
         )}
         aria-hidden="true"
