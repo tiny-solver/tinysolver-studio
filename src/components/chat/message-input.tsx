@@ -1107,15 +1107,6 @@ export function MessageInput({
 
   const hasImageAttachments = imageAttachments.length > 0
   const hasResourceAttachments = resourceAttachments.length > 0
-  const topPaddingClass =
-    hasImageAttachments && hasResourceAttachments
-      ? "pt-[6.25rem]"
-      : hasImageAttachments
-        ? "pt-[4.5rem]"
-        : hasResourceAttachments
-          ? "pt-10"
-          : "pt-3"
-  const bottomPaddingClass = "pb-10"
   const showDragActive = isDragActive && !disabled
 
   const selectorItems = (
@@ -1144,6 +1135,88 @@ export function MessageInput({
     </>
   )
 
+  const actionButtons = isEditingQueueItem ? (
+    <div className="flex items-center gap-1">
+      <Button
+        onClick={onCancelQueueEdit}
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        title={tQueue("cancelEdit")}
+      >
+        <X className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={handleSend}
+        disabled={!hasSendableContent}
+        size="icon"
+        title={tQueue("saveEdit")}
+      >
+        <Check className="h-4 w-4" />
+      </Button>
+    </div>
+  ) : isPrompting && onCancel ? (
+    <div className="flex items-center gap-1">
+      <Button
+        onClick={handleSend}
+        disabled={!hasSendableContent}
+        variant="secondary"
+        size="icon"
+        className="h-8 w-8"
+        title={tQueue("addToQueue")}
+      >
+        <ListPlus className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={onCancel}
+        variant="destructive"
+        size="icon"
+        title={t("cancel")}
+      >
+        <Square className="h-4 w-4" />
+      </Button>
+    </div>
+  ) : onForkSend ? (
+    <div className="flex items-center">
+      <Button
+        onClick={handleSend}
+        disabled={disabled || !hasSendableContent}
+        size="icon"
+        className="rounded-r-none"
+        title={t("send")}
+      >
+        <Send className="h-4 w-4" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            disabled={disabled || !hasSendableContent}
+            size="icon"
+            className="rounded-l-none border-l border-primary-foreground/20 w-6"
+            aria-label={t("forkAndSend")}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="top">
+          <DropdownMenuItem onSelect={handleForkSendClick}>
+            <GitFork className="h-4 w-4" />
+            {t("forkAndSend")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  ) : (
+    <Button
+      onClick={handleSend}
+      disabled={disabled || !hasSendableContent}
+      size="icon"
+      title={t("send")}
+    >
+      <Send className="h-4 w-4" />
+    </Button>
+  )
+
   return (
     <div
       ref={containerRef}
@@ -1159,203 +1232,124 @@ export function MessageInput({
           onSelect={handleSlashSelect}
         />
       )}
-      <Textarea
-        ref={textareaRef}
-        value={text}
-        onChange={handleTextChange}
-        onKeyDown={handleKeyDown}
-        onCompositionStart={() => (composingRef.current = true)}
-        onCompositionEnd={() => (composingRef.current = false)}
-        onPaste={handlePaste}
-        onFocus={onFocus}
-        placeholder={resolvedPlaceholder}
+      <div
         className={cn(
-          "text-sm pr-12 resize-none bg-transparent",
+          "flex flex-col rounded-xl border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
           showDragActive && "ring-1 ring-primary/40",
-          topPaddingClass,
-          bottomPaddingClass,
           className
         )}
-        autoFocus={autoFocus}
-      />
-      {(hasImageAttachments || hasResourceAttachments) && (
-        <div className="absolute left-2 right-12 top-2 z-10 flex flex-col gap-1">
-          {hasImageAttachments && (
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-              {imageAttachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
-                >
-                  <Image
-                    src={`data:${attachment.mimeType};base64,${attachment.data}`}
-                    alt={attachment.name}
-                    width={56}
-                    height={56}
-                    unoptimized
-                    className="h-14 w-14 object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(attachment.id)}
-                    className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
-                    aria-label={t("removeAttachmentAria", {
-                      name: attachment.name,
-                    })}
+      >
+        {(hasImageAttachments || hasResourceAttachments) && (
+          <div className="flex shrink-0 flex-col gap-1 px-2 pt-2">
+            {hasImageAttachments && (
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                {imageAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {hasResourceAttachments && (
-            <div className="flex items-center gap-1 overflow-x-auto">
-              {resourceAttachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
-                >
-                  <FileSearch className="h-3 w-3" />
-                  <span className="max-w-40 truncate">{attachment.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(attachment.id)}
-                    className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
-                    aria-label={t("removeAttachmentAria", {
-                      name: attachment.name,
-                    })}
+                    <Image
+                      src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                      alt={attachment.name}
+                      width={56}
+                      height={56}
+                      unoptimized
+                      className="h-14 w-14 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(attachment.id)}
+                      className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
+                      aria-label={t("removeAttachmentAria", {
+                        name: attachment.name,
+                      })}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {hasResourceAttachments && (
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {resourceAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                    <FileSearch className="h-3 w-3" />
+                    <span className="max-w-40 truncate">{attachment.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(attachment.id)}
+                      className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
+                      aria-label={t("removeAttachmentAria", {
+                        name: attachment.name,
+                      })}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <Textarea
+          ref={textareaRef}
+          value={text}
+          onChange={handleTextChange}
+          onKeyDown={handleKeyDown}
+          onCompositionStart={() => (composingRef.current = true)}
+          onCompositionEnd={() => (composingRef.current = false)}
+          onPaste={handlePaste}
+          onFocus={onFocus}
+          placeholder={resolvedPlaceholder}
+          className="min-h-0 flex-1 overflow-y-auto border-0 bg-transparent text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+          autoFocus={autoFocus}
+        />
+        <div className="@container flex shrink-0 items-end justify-between gap-2 px-2 pb-2">
+          <div className="flex min-w-0 items-end gap-1">
+            <Button
+              onClick={handlePickFiles}
+              disabled={disabled}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              title={t("attachFiles")}
+            >
+              <Plus className="size-4" />
+            </Button>
+            {/* 宽屏内联显示，窄屏（<300px）通过"更多"气泡显示 */}
+            <div className="hidden @[300px]:contents">{selectorItems}</div>
+            {hasAnySelector && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 @[300px]:hidden"
+                  >
+                    <Ellipsis className="size-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  className="flex w-auto flex-col gap-1 rounded-xl p-1"
+                >
+                  {selectorItems}
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+          <div className="shrink-0">{actionButtons}</div>
         </div>
-      )}
+      </div>
       {showDragActive && (
         <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-md border border-dashed border-primary/50 bg-background/80 text-xs text-muted-foreground">
           {t("dropFilesToAttach")}
         </div>
-      )}
-      <div className="@container absolute left-2 right-24 bottom-2">
-        <div className="flex items-center gap-1">
-          <Button
-            onClick={handlePickFiles}
-            disabled={disabled}
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0"
-            title={t("attachFiles")}
-          >
-            <Plus className="size-4" />
-          </Button>
-          {/* 宽屏内联显示，窄屏（<300px）通过"更多"气泡显示 */}
-          <div className="hidden @[300px]:contents">{selectorItems}</div>
-          {hasAnySelector && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0 @[300px]:hidden"
-                >
-                  <Ellipsis className="size-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                side="top"
-                align="start"
-                className="flex w-auto flex-col gap-1 rounded-xl p-1"
-              >
-                {selectorItems}
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-      </div>
-      {isEditingQueueItem ? (
-        <div className="absolute right-2 bottom-2 flex items-center gap-1">
-          <Button
-            onClick={onCancelQueueEdit}
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title={tQueue("cancelEdit")}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <Button
-            onClick={handleSend}
-            disabled={!hasSendableContent}
-            size="icon"
-            title={tQueue("saveEdit")}
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : isPrompting && onCancel ? (
-        <div className="absolute right-2 bottom-2 flex items-center gap-1">
-          <Button
-            onClick={handleSend}
-            disabled={!hasSendableContent}
-            variant="secondary"
-            size="icon"
-            className="h-8 w-8"
-            title={tQueue("addToQueue")}
-          >
-            <ListPlus className="h-4 w-4" />
-          </Button>
-          <Button
-            onClick={onCancel}
-            variant="destructive"
-            size="icon"
-            title={t("cancel")}
-          >
-            <Square className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : onForkSend ? (
-        <div className="absolute right-2 bottom-2 flex items-center">
-          <Button
-            onClick={handleSend}
-            disabled={disabled || !hasSendableContent}
-            size="icon"
-            className="rounded-r-none"
-            title={t("send")}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                disabled={disabled || !hasSendableContent}
-                size="icon"
-                className="rounded-l-none border-l border-primary-foreground/20 w-6"
-                aria-label={t("forkAndSend")}
-              >
-                <ChevronUp className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top">
-              <DropdownMenuItem onSelect={handleForkSendClick}>
-                <GitFork className="h-4 w-4" />
-                {t("forkAndSend")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ) : (
-        <Button
-          onClick={handleSend}
-          disabled={disabled || !hasSendableContent}
-          size="icon"
-          className="absolute right-2 bottom-2"
-          title={t("send")}
-        >
-          <Send className="h-4 w-4" />
-        </Button>
       )}
     </div>
   )
