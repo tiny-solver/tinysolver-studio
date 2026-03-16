@@ -730,7 +730,9 @@
       "closeFileTab": "Dateitab schließen",
       "close": "Schließen",
       "closeOthers": "Andere schließen",
-      "closeAll": "Alle schließen"
+      "closeAll": "Alle schließen",
+      "preview": "Vorschau",
+      "editSource": "Quelle bearbeiten"
     },
     "terminal": {
       "rename": "Umbenennen",

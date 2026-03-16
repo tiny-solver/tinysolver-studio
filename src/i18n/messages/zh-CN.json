@@ -730,7 +730,9 @@
       "closeFileTab": "关闭文件标签",
       "close": "关闭",
       "closeOthers": "关闭其它",
-      "closeAll": "关闭所有"
+      "closeAll": "关闭所有",
+      "preview": "预览",
+      "editSource": "编辑源码"
     },
     "terminal": {
       "rename": "重命名",

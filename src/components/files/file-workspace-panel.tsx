@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { ChevronDown, ChevronRight, FileCode2, FileIcon } from "lucide-react"
 import type { editor as MonacoEditorNs } from "monaco-editor"
 import { useTranslations } from "next-intl"
+import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { DiffViewer } from "@/components/diff/diff-viewer"
 import { UnifiedDiffPreview } from "@/components/diff/unified-diff-preview"
@@ -14,8 +15,177 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { cjk } from "@streamdown/cjk"
+import { code } from "@streamdown/code"
+import { math } from "@streamdown/math"
+import { mermaid } from "@streamdown/mermaid"
+import { Streamdown } from "streamdown"
+import { readFileBase64 } from "@/lib/tauri"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
 import "@/lib/monaco-local"
+
+const previewPlugins = { cjk, code, math, mermaid }
+
+function resolveRelativePath(base: string, relative: string): string {
+  // Strip URL fragment (e.g. #gh-light-mode-only) and query string
+  const cleaned = relative.replace(/[#?].*$/, "")
+  // Preserve leading "/" for absolute paths, filter empty segments
+  const isAbsolute = base.startsWith("/")
+  const parts = base.split("/").filter(Boolean)
+  for (const seg of cleaned.split("/")) {
+    if (seg === "..") {
+      if (parts.length > 0) parts.pop()
+    } else if (seg !== "." && seg !== "") {
+      parts.push(seg)
+    }
+  }
+  return (isAbsolute ? "/" : "") + parts.join("/")
+}
+
+/**
+ * Pre-resolve relative paths in markdown image/link syntax before Streamdown.
+ *
+ * rehype-harden resolves "../foo" via `new URL("../foo", "http://example.com")`
+ * which loses directory context (e.g. "../images/a.png" from "docs/readme/"
+ * becomes "/images/a.png" instead of "/docs/images/a.png").
+ *
+ * This function resolves relative paths against the file's directory BEFORE
+ * Streamdown processes them, using "./" prefix so rehype-harden preserves them.
+ */
+function preprocessMarkdownPaths(
+  content: string,
+  relativeFileDir: string
+): string {
+  const resolveUrl = (url: string): string => {
+    // Skip absolute URLs, anchors, and already-root-relative paths
+    if (/^https?:\/\/|^data:|^blob:|^#|^\//.test(url)) return url
+    // Separate fragment/query from path
+    const fragIdx = url.search(/[#?]/)
+    const pathPart = fragIdx >= 0 ? url.slice(0, fragIdx) : url
+    const fragment = fragIdx >= 0 ? url.slice(fragIdx) : ""
+    // Resolve relative to file directory within project
+    const parts = relativeFileDir.split("/").filter(Boolean)
+    for (const seg of pathPart.split("/")) {
+      if (seg === "..") {
+        if (parts.length > 0) parts.pop()
+      } else if (seg !== "." && seg !== "") {
+        parts.push(seg)
+      }
+    }
+    // "./" prefix ensures rehype-harden recognizes it as relative
+    return "./" + parts.join("/") + fragment
+  }
+
+  // Pre-resolve image paths: ![alt](url) or ![alt](url "title")
+  let result = content.replace(
+    /!\[([^\]]*)\]\(([^)\s"']+)([^)]*)\)/g,
+    (match, alt, url, rest) => {
+      const resolved = resolveUrl(url)
+      if (resolved === url) return match
+      return `![${alt}](${resolved}${rest})`
+    }
+  )
+
+  // Pre-resolve image-wrapped link paths: [![alt](img)](url)
+  result = result.replace(
+    /\[(!\[[^\]]*\]\([^)]*\))\]\(([^)\s"']+)([^)]*)\)/g,
+    (match, imgPart, url, rest) => {
+      const resolved = resolveUrl(url)
+      if (resolved === url) return match
+      return `[${imgPart}](${resolved}${rest})`
+    }
+  )
+
+  // Pre-resolve link paths: [text](url) — negative lookbehind to skip images
+  result = result.replace(
+    /(?<!!)\[([^\]]*)\]\(([^)\s"']+)([^)]*)\)/g,
+    (match, text, url, rest) => {
+      const resolved = resolveUrl(url)
+      if (resolved === url) return match
+      return `[${text}](${resolved}${rest})`
+    }
+  )
+
+  // Pre-resolve HTML <a href="..."> and <img src="..."> tags
+  result = result.replace(
+    /<(a\s[^>]*?href|img\s[^>]*?src)=(["'])([^"']+)\2/gi,
+    (match, prefix, quote, url) => {
+      const resolved = resolveUrl(url)
+      if (resolved === url) return match
+      return `<${prefix}=${quote}${resolved}${quote}`
+    }
+  )
+
+  return result
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+}
+
+function useLocalImageSrc(
+  src: string | undefined,
+  fileDir: string | null,
+  folderPath: string | null
+): string | undefined {
+  const [dataUrl, setDataUrl] = useState<string | undefined>(undefined)
+
+  const isLocal = src && fileDir && !/^https?:\/\/|^data:|^blob:/.test(src)
+
+  useEffect(() => {
+    if (!isLocal || !src || !fileDir) return
+    let cancelled = false
+    // rehype-harden resolves "../foo" to "/foo" via new URL(src, "http://example.com")
+    // Root-relative paths (starting with "/") should resolve against folderPath
+    const absPath =
+      src.startsWith("/") && folderPath
+        ? resolveRelativePath(folderPath, src)
+        : resolveRelativePath(fileDir, src)
+    const ext = absPath.split(".").pop()?.toLowerCase() ?? ""
+    const mime = MIME_BY_EXT[ext] ?? "image/png"
+
+    readFileBase64(absPath)
+      .then((b64) => {
+        if (!cancelled) {
+          setDataUrl(`data:${mime};base64,${b64}`)
+        }
+      })
+      .catch((err) => {
+        console.error(
+          `[PreviewImage] readFileBase64 failed for "${absPath}":`,
+          typeof err === "object" ? JSON.stringify(err) : err
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isLocal, src, fileDir, folderPath])
+
+  if (!isLocal) return src
+  return dataUrl
+}
+
+function PreviewImage({
+  fileDir,
+  folderPath,
+  ...props
+}: React.ComponentProps<"img"> & {
+  fileDir: string | null
+  folderPath: string | null
+}) {
+  const src = typeof props.src === "string" ? props.src : undefined
+  const resolvedSrc = useLocalImageSrc(src, fileDir, folderPath)
+
+  // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+  return <img {...props} src={resolvedSrc} />
+}
 
 const AUTO_SAVE_DELAY_MS = 5000
 
@@ -585,9 +755,12 @@ export function FileWorkspacePanel() {
     openCommitDiff,
     openFilePreview,
     openWorkingTreeDiff,
+    previewFileTabIds,
     saveActiveFile,
     updateActiveFileContent,
   } = useWorkspaceContext()
+  const { folder } = useFolderContext()
+  const folderPath = folder?.path ?? null
   const activeScope = activeFileTab?.id ?? "__default__"
   const editorRef = useRef<MonacoEditorNs.IStandaloneCodeEditor | null>(null)
   const cursorListenerRef = useRef<{ dispose: () => void } | null>(null)
@@ -1104,6 +1277,13 @@ export function FileWorkspacePanel() {
     )
   }
 
+  // Preview mode for markdown files
+  const isPreviewMode =
+    isFileTab &&
+    activeFileTab &&
+    previewFileTabIds.has(activeFileTab.id) &&
+    activeFileTab.language === "markdown"
+
   // Diff overview list view (commit / directory)
   if (diffListContext && diffOutline) {
     const badge =
@@ -1153,6 +1333,86 @@ export function FileWorkspacePanel() {
             openFilePreview={openFilePreview}
           />
         )}
+      </div>
+    )
+  }
+
+  if (isPreviewMode && activeFileTab) {
+    const absFilePath =
+      activeFileTab.path && folderPath
+        ? `${folderPath}/${activeFileTab.path}`
+        : null
+    const fileDir = absFilePath
+      ? absFilePath.replace(/\/[^/]*$/, "")
+      : folderPath
+    // Pre-resolve relative paths before Streamdown/rehype-harden mangles them
+    const relativeFileDir = activeFileTab.path?.includes("/")
+      ? activeFileTab.path.replace(/\/[^/]*$/, "")
+      : ""
+    const preprocessedContent = preprocessMarkdownPaths(
+      renderedContent,
+      relativeFileDir
+    )
+
+    return (
+      <div className="h-full relative">
+        {activeFileTab.loading && (
+          <div className="absolute top-2 right-3 z-10 rounded-md bg-background/70 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur-sm">
+            {t("loading")}
+          </div>
+        )}
+        <div className="h-full overflow-auto p-6 [&_a_img]:inline">
+          <Streamdown
+            plugins={previewPlugins}
+            components={{
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              img: ({ node, ...imgProps }) => (
+                <PreviewImage
+                  {...imgProps}
+                  fileDir={fileDir}
+                  folderPath={folderPath}
+                />
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              a: ({ node, href, children, ...aProps }) => {
+                const isRelative =
+                  href && !/^https?:\/\/|^mailto:|^#/.test(href)
+                if (isRelative && href) {
+                  return (
+                    <a
+                      {...aProps}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        // After preprocessing + rehype-harden, paths are
+                        // root-relative like "/docs/images/foo.png"
+                        const clean = href.replace(/[#?].*$/, "")
+                        const target = clean
+                          .replace(/^\/+/, "")
+                          .replace(/\/\/+/g, "/")
+                        openFilePreview(target)
+                      }}
+                    >
+                      {children}
+                    </a>
+                  )
+                }
+                return (
+                  <a
+                    {...aProps}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {children}
+                  </a>
+                )
+              },
+            }}
+          >
+            {preprocessedContent}
+          </Streamdown>
+        </div>
       </div>
     )
   }

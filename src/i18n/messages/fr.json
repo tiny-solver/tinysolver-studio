@@ -730,7 +730,9 @@
       "closeFileTab": "Fermer l’onglet fichier",
       "close": "Fermer",
       "closeOthers": "Fermer les autres",
-      "closeAll": "Tout fermer"
+      "closeAll": "Tout fermer",
+      "preview": "Aperçu",
+      "editSource": "Modifier la source"
     },
     "terminal": {
       "rename": "Renommer",

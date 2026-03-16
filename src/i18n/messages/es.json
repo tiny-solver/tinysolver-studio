@@ -730,7 +730,9 @@
       "closeFileTab": "Cerrar pestaña de archivo",
       "close": "Cerrar",
       "closeOthers": "Cerrar otros",
-      "closeAll": "Cerrar todo"
+      "closeAll": "Cerrar todo",
+      "preview": "Vista previa",
+      "editSource": "Editar fuente"
     },
     "terminal": {
       "rename": "Renombrar",

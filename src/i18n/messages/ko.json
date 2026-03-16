@@ -730,7 +730,9 @@
       "closeFileTab": "파일 탭 닫기",
       "close": "닫기",
       "closeOthers": "다른 항목 닫기",
-      "closeAll": "모두 닫기"
+      "closeAll": "모두 닫기",
+      "preview": "미리보기",
+      "editSource": "소스 편집"
     },
     "terminal": {
       "rename": "이름 변경",

@@ -730,7 +730,9 @@
       "closeFileTab": "Fechar aba de arquivo",
       "close": "Fechar",
       "closeOthers": "Fechar outros",
-      "closeAll": "Fechar tudo"
+      "closeAll": "Fechar tudo",
+      "preview": "Visualizar",
+      "editSource": "Editar fonte"
     },
     "terminal": {
       "rename": "Renomear",

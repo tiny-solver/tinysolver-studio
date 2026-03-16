@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Reorder } from "motion/react"
-import { FileText, GitCompare, X } from "lucide-react"
+import { Code, Eye, ExternalLink, FileText, GitCompare, X } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { openPath } from "@tauri-apps/plugin-opener"
+import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
@@ -28,7 +30,10 @@ export function FileWorkspaceTabBar() {
     closeOtherFileTabs,
     closeAllFileTabs,
     reorderFileTabs,
+    previewFileTabIds,
+    toggleFileTabPreview,
   } = useWorkspaceContext()
+  const { folder } = useFolderContext()
   const { shortcuts } = useShortcutSettings()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
@@ -79,6 +84,16 @@ export function FileWorkspaceTabBar() {
     shortcuts.close_current_tab,
   ])
 
+  const activeTab = fileTabs.find((tab) => tab.id === activeFileTabId)
+  const canPreview =
+    activeTab?.kind === "file" && activeTab.language === "markdown"
+  const canOpenInBrowser =
+    activeTab?.kind === "file" && activeTab.language === "html"
+  const isPreviewActive =
+    canPreview && activeFileTabId
+      ? previewFileTabIds.has(activeFileTabId)
+      : false
+
   if (fileTabs.length === 0) {
     return (
       <div className="h-10 px-3 flex items-center border-b border-border text-xs text-muted-foreground">
@@ -88,101 +103,132 @@ export function FileWorkspaceTabBar() {
   }
 
   return (
-    <Reorder.Group
-      as="div"
-      ref={scrollRef}
-      role="tablist"
-      axis="x"
-      values={fileTabs}
-      onReorder={reorderFileTabs}
-      onWheel={handleWheel}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={cn(
-        "h-10 pt-1.5 px-1.5 flex items-stretch gap-1.5 border-b border-border",
-        "overflow-x-scroll",
-        isHovered
-          ? [
-              "pb-0.5",
-              "[&::-webkit-scrollbar]:h-1",
-              "[&::-webkit-scrollbar-track]:bg-transparent",
-              "[&::-webkit-scrollbar-thumb]:rounded-full",
-              "[&::-webkit-scrollbar-thumb]:bg-border",
-            ]
-          : ["pb-1.5", "[&::-webkit-scrollbar]:h-0"]
-      )}
-    >
-      {fileTabs.map((tab) => {
-        const active = tab.id === activeFileTabId
-        const isDiff = tab.kind === "diff" || tab.kind === "rich-diff"
-        const isDirty = tab.kind === "file" && Boolean(tab.isDirty)
+    <div className="flex items-stretch border-b border-border">
+      <Reorder.Group
+        as="div"
+        ref={scrollRef}
+        role="tablist"
+        axis="x"
+        values={fileTabs}
+        onReorder={reorderFileTabs}
+        onWheel={handleWheel}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={cn(
+          "h-10 pt-1.5 px-1.5 flex-1 min-w-0 flex items-stretch gap-1.5",
+          "overflow-x-scroll",
+          isHovered
+            ? [
+                "pb-0.5",
+                "[&::-webkit-scrollbar]:h-1",
+                "[&::-webkit-scrollbar-track]:bg-transparent",
+                "[&::-webkit-scrollbar-thumb]:rounded-full",
+                "[&::-webkit-scrollbar-thumb]:bg-border",
+              ]
+            : ["pb-1.5", "[&::-webkit-scrollbar]:h-0"]
+        )}
+      >
+        {fileTabs.map((tab) => {
+          const active = tab.id === activeFileTabId
+          const isDiff = tab.kind === "diff" || tab.kind === "rich-diff"
+          const isDirty = tab.kind === "file" && Boolean(tab.isDirty)
 
-        return (
-          <Reorder.Item
-            key={tab.id}
-            as="div"
-            value={tab}
-            data-file-tab-id={tab.id}
-            className="shrink-0 rounded-full cursor-grab active:cursor-grabbing"
-          >
-            <ContextMenu>
-              <ContextMenuTrigger asChild>
-                <div
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => switchFileTab(tab.id)}
-                  className={cn(
-                    "group/filetab relative flex items-center h-full gap-1.5 px-3 text-xs rounded-full",
-                    "cursor-pointer select-none shrink-0 hover:bg-primary/8 transition-colors",
-                    active
-                      ? "bg-primary/10 text-foreground"
-                      : "text-muted-foreground"
-                  )}
-                  title={tab.description ?? tab.title}
-                >
-                  {isDiff ? (
-                    <GitCompare className="h-3.5 w-3.5" />
-                  ) : (
-                    <FileText className="h-3.5 w-3.5" />
-                  )}
-                  <span className="truncate max-w-[180px]">
-                    {tab.title}
-                    {isDirty ? " *" : ""}
-                  </span>
-                  <button
-                    type="button"
+          return (
+            <Reorder.Item
+              key={tab.id}
+              as="div"
+              value={tab}
+              data-file-tab-id={tab.id}
+              className="shrink-0 rounded-full cursor-grab active:cursor-grabbing"
+            >
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => switchFileTab(tab.id)}
                     className={cn(
-                      "rounded-full p-0.5 hover:bg-muted",
+                      "group/filetab relative flex items-center h-full gap-1.5 px-3 text-xs rounded-full",
+                      "cursor-pointer select-none shrink-0 hover:bg-primary/8 transition-colors",
                       active
-                        ? "opacity-100"
-                        : "opacity-0 group-hover/filetab:opacity-100"
+                        ? "bg-primary/10 text-foreground"
+                        : "text-muted-foreground"
                     )}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      closeFileTab(tab.id)
-                    }}
-                    aria-label={t("closeFileTab")}
+                    title={tab.description ?? tab.title}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onSelect={() => closeFileTab(tab.id)}>
-                  {t("close")}
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => closeOtherFileTabs(tab.id)}>
-                  {t("closeOthers")}
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onSelect={closeAllFileTabs}>
-                  {t("closeAll")}
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          </Reorder.Item>
-        )
-      })}
-    </Reorder.Group>
+                    {isDiff ? (
+                      <GitCompare className="h-3.5 w-3.5" />
+                    ) : (
+                      <FileText className="h-3.5 w-3.5" />
+                    )}
+                    <span className="truncate max-w-[180px]">
+                      {tab.title}
+                      {isDirty ? " *" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-full p-0.5 hover:bg-muted",
+                        active
+                          ? "opacity-100"
+                          : "opacity-0 group-hover/filetab:opacity-100"
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        closeFileTab(tab.id)
+                      }}
+                      aria-label={t("closeFileTab")}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => closeFileTab(tab.id)}>
+                    {t("close")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => closeOtherFileTabs(tab.id)}>
+                    {t("closeOthers")}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onSelect={closeAllFileTabs}>
+                    {t("closeAll")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            </Reorder.Item>
+          )
+        })}
+      </Reorder.Group>
+      {canPreview && activeFileTabId && (
+        <button
+          type="button"
+          onClick={() => toggleFileTabPreview(activeFileTabId)}
+          className={cn(
+            "shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors",
+            isPreviewActive && "text-primary"
+          )}
+          aria-label={isPreviewActive ? t("editSource") : t("preview")}
+          title={isPreviewActive ? t("editSource") : t("preview")}
+        >
+          {isPreviewActive ? (
+            <Code className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
+        </button>
+      )}
+      {canOpenInBrowser && activeTab?.path && folder?.path && (
+        <button
+          type="button"
+          onClick={() => openPath(`${folder.path}/${activeTab.path}`)}
+          className="shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors"
+          aria-label={t("preview")}
+          title={t("preview")}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   )
 }

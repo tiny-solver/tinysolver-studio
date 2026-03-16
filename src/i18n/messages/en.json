@@ -730,7 +730,9 @@
       "closeFileTab": "Close file tab",
       "close": "Close",
       "closeOthers": "Close Others",
-      "closeAll": "Close All"
+      "closeAll": "Close All",
+      "preview": "Preview",
+      "editSource": "Edit Source"
     },
     "terminal": {
       "rename": "Rename",

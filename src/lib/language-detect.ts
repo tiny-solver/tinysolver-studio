@@ -31,6 +31,7 @@ export function languageFromPath(path: string): string {
     case "css":
       return "css"
     case "html":
+    case "htm":
       return "html"
     case "sh":
       return "shell"

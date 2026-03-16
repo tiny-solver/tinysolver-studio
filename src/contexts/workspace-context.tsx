@@ -110,6 +110,8 @@ interface WorkspaceContextValue {
   updateActiveFileContent: (content: string) => void
   saveActiveFile: (options?: { force?: boolean }) => Promise<boolean>
   reloadActiveFile: () => Promise<void>
+  previewFileTabIds: Set<string>
+  toggleFileTabPreview: (tabId: string) => void
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -197,6 +199,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     path: string
     line: number
   } | null>(null)
+  const [previewFileTabIds, setPreviewFileTabIds] = useState<Set<string>>(
+    new Set()
+  )
   const fileTabsRef = useRef<FileWorkspaceTab[]>([])
   const fileRevealRequestIdRef = useRef(0)
 
@@ -933,6 +938,13 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
           return next[nextIdx].id
         })
 
+        setPreviewFileTabIds((prev) => {
+          if (!prev.has(tabId)) return prev
+          const updated = new Set(prev)
+          updated.delete(tabId)
+          return updated
+        })
+
         return next
       })
     },
@@ -967,6 +979,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       }
 
       setActiveFileTabId(null)
+      setPreviewFileTabIds(new Set())
       activateConversationPane()
       return []
     })
@@ -982,6 +995,18 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   )
 
   const activeFilePath = activeFileTab?.path ?? null
+
+  const toggleFileTabPreview = useCallback((tabId: string) => {
+    setPreviewFileTabIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tabId)) {
+        next.delete(tabId)
+      } else {
+        next.add(tabId)
+      }
+      return next
+    })
+  }, [])
 
   const value = useMemo<WorkspaceContextValue>(
     () => ({
@@ -1011,6 +1036,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       updateActiveFileContent,
       saveActiveFile,
       reloadActiveFile,
+      previewFileTabIds,
+      toggleFileTabPreview,
     }),
     [
       mode,
@@ -1039,6 +1066,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       updateActiveFileContent,
       saveActiveFile,
       reloadActiveFile,
+      previewFileTabIds,
+      toggleFileTabPreview,
     ]
   )
 
