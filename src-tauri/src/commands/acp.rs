@@ -38,46 +38,6 @@ fn emit_acp_agents_updated(
     );
 }
 
-fn parse_version_output(output: &std::process::Output) -> Option<String> {
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let mut first_non_empty: Option<String> = None;
-
-    for raw_line in stdout.lines().chain(stderr.lines()) {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if first_non_empty.is_none() {
-            first_non_empty = Some(line.to_string());
-        }
-
-        for raw_token in line.split_whitespace() {
-            let token = raw_token.trim_matches(|c: char| {
-                !(c.is_ascii_alphanumeric() || c == '.' || c == '@' || c == '-' || c == '_')
-            });
-            if token.is_empty() {
-                continue;
-            }
-
-            let candidate = token
-                .rsplit('@')
-                .next()
-                .unwrap_or(token)
-                .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-')
-                .trim_start_matches('v');
-
-            let is_version_like =
-                candidate.chars().any(|c| c.is_ascii_digit()) && candidate.contains('.');
-            if is_version_like {
-                return Some(candidate.to_string());
-            }
-        }
-    }
-
-    first_non_empty
-}
-
 fn is_version_like(value: &str) -> bool {
     value.chars().any(|c| c.is_ascii_digit()) && value.contains('.')
 }
@@ -260,28 +220,12 @@ async fn detect_npx_cached_version(package: &str) -> Option<String> {
     detected
 }
 
-async fn detect_uvx_cached_version(package: &str) -> Option<String> {
-    let output = crate::process::tokio_command("uvx")
-        .arg(package)
-        .arg("--version")
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    parse_version_output(&output).and_then(|value| normalize_version_candidate(&value))
-}
-
 async fn detect_local_version(agent_type: AgentType) -> Option<String> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
         registry::AgentDistribution::Npx { package, .. } => {
             detect_npx_cached_version(package).await
         }
-        registry::AgentDistribution::Uvx { package, .. } => detect_uvx_cached_version(package)
-            .await
-            .or_else(|| version_from_package_spec(package)),
         registry::AgentDistribution::Binary { cmd, .. } => {
             binary_cache::detect_installed_version(agent_type, cmd)
                 .ok()
@@ -316,27 +260,6 @@ async fn prepare_npx_package(package: &str) -> Result<(), AcpError> {
     // Some npm packages ship bin scripts without executable bit.
     // Normalize permissions in local npx cache to avoid runtime spawn failures.
     ensure_npx_cached_bins_executable(package).await?;
-
-    Ok(())
-}
-
-async fn prepare_uvx_package(package: &str) -> Result<(), AcpError> {
-    let output = crate::process::tokio_command("uvx")
-        .arg(package)
-        .arg("--version")
-        .output()
-        .await
-        .map_err(|e| AcpError::protocol(format!("failed to run uvx: {e}")))?;
-
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if err.is_empty() {
-            "failed to prepare uvx package".to_string()
-        } else {
-            format!("failed to prepare uvx package: {err}")
-        };
-        return Err(AcpError::protocol(msg));
-    }
 
     Ok(())
 }
@@ -410,29 +333,6 @@ async fn uninstall_npx_package(package: &str) -> Result<(), AcpError> {
     if let Some(cache_dir) = npm_cache_dir().await {
         remove_npx_package_cache(&cache_dir, &package_name)?;
     }
-
-    Ok(())
-}
-
-async fn uninstall_uvx_package(package: &str) -> Result<(), AcpError> {
-    let package_name = package_name_from_spec(package);
-    if package_name.is_empty() {
-        return Ok(());
-    }
-
-    // Best effort: remove package cache and any explicitly installed tool.
-    let _ = crate::process::tokio_command("uv")
-        .arg("cache")
-        .arg("clean")
-        .arg(&package_name)
-        .output()
-        .await;
-    let _ = crate::process::tokio_command("uv")
-        .arg("tool")
-        .arg("uninstall")
-        .arg(&package_name)
-        .output()
-        .await;
 
     Ok(())
 }
@@ -983,7 +883,6 @@ fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSpec> {
             global_dirs: vec![home_dir_or_default().join(".openclaw").join("skills")],
             project_rel_dirs: vec!["skills"],
         }),
-        _ => None,
     }
 }
 
@@ -1444,11 +1343,6 @@ pub async fn acp_list_agents(
                 "npx",
                 setting.and_then(|m| m.installed_version.clone()),
             ),
-            registry::AgentDistribution::Uvx { .. } => (
-                true,
-                "uvx",
-                setting.and_then(|m| m.installed_version.clone()),
-            ),
             registry::AgentDistribution::Binary { platforms, cmd, .. } => {
                 let detected = binary_cache::detect_installed_version(agent_type, cmd)
                     .ok()
@@ -1684,7 +1578,7 @@ pub async fn acp_download_agent_binary(
             emit_acp_agents_updated(&app, "binary_downloaded", Some(agent_type));
             Ok(())
         }
-        registry::AgentDistribution::Npx { .. } | registry::AgentDistribution::Uvx { .. } => Err(
+        registry::AgentDistribution::Npx { .. } => Err(
             AcpError::protocol("download is only supported for binary agents"),
         ),
     }
@@ -1770,69 +1664,6 @@ pub async fn acp_prepare_npx_agent(
         registry::AgentDistribution::Binary { .. } => Err(AcpError::protocol(
             "prepare is only supported for npx agents",
         )),
-        registry::AgentDistribution::Uvx { .. } => Err(AcpError::protocol(
-            "prepare is only supported for npx agents",
-        )),
-    }
-}
-
-#[tauri::command]
-pub async fn acp_prepare_uvx_agent(
-    agent_type: AgentType,
-    registry_version: Option<String>,
-    db: State<'_, AppDatabase>,
-    app: tauri::AppHandle,
-) -> Result<String, AcpError> {
-    let meta = registry::get_agent_meta(agent_type);
-    match meta.distribution {
-        registry::AgentDistribution::Uvx { package, .. } => {
-            let default = agent_setting_service::AgentDefaultInput {
-                agent_type,
-                registry_id: registry::registry_id_for(agent_type).to_string(),
-                default_sort_order: i32::MAX / 2,
-            };
-            agent_setting_service::ensure_defaults(&db.conn, &[default])
-                .await
-                .map_err(|e| AcpError::protocol(e.to_string()))?;
-
-            let existing = agent_setting_service::get_by_agent_type(&db.conn, agent_type)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|m| m.installed_version);
-
-            prepare_uvx_package(package).await?;
-            let resolved = detect_local_version(agent_type)
-                .await
-                .or_else(|| version_from_package_spec(package))
-                .or_else(|| {
-                    registry_version
-                        .as_deref()
-                        .and_then(normalize_version_candidate)
-                })
-                .or(existing)
-                .ok_or_else(|| {
-                    AcpError::protocol(
-                        "uvx install succeeded but failed to determine local version",
-                    )
-                })?;
-
-            agent_setting_service::set_installed_version(
-                &db.conn,
-                agent_type,
-                Some(resolved.clone()),
-            )
-            .await
-            .map_err(|e| AcpError::protocol(e.to_string()))?;
-            emit_acp_agents_updated(&app, "uvx_prepared", Some(agent_type));
-            Ok(resolved)
-        }
-        registry::AgentDistribution::Npx { .. } => Err(AcpError::protocol(
-            "prepare is only supported for uvx agents",
-        )),
-        registry::AgentDistribution::Binary { .. } => Err(AcpError::protocol(
-            "prepare is only supported for uvx agents",
-        )),
     }
 }
 
@@ -1849,9 +1680,6 @@ pub async fn acp_uninstall_agent(
         }
         registry::AgentDistribution::Npx { package, .. } => {
             uninstall_npx_package(package).await?;
-        }
-        registry::AgentDistribution::Uvx { package, .. } => {
-            uninstall_uvx_package(package).await?;
         }
     }
 

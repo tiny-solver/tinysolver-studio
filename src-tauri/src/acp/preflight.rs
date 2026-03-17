@@ -9,10 +9,6 @@ use crate::models::agent::AgentType;
 /// Stores `Some(checks)` after a successful (all-pass) run;
 /// stays `None` if checks failed so they are retried next time.
 static NPX_ENV_CACHE: Mutex<Option<Vec<CheckItem>>> = Mutex::new(None);
-/// Cache for UVX environment check results.
-/// Stores `Some(checks)` after a successful (all-pass) run;
-/// stays `None` if checks failed so they are retried next time.
-static UVX_ENV_CACHE: Mutex<Option<Vec<CheckItem>>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,7 +53,6 @@ pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
     debug_assert_eq!(meta.agent_type, agent_type);
     let checks = match &meta.distribution {
         AgentDistribution::Npx { node_required, .. } => check_npx_environment(*node_required).await,
-        AgentDistribution::Uvx { .. } => check_uvx_environment().await,
         AgentDistribution::Binary {
             version,
             cmd,
@@ -257,81 +252,6 @@ fn build_node_version_check(current_version: Option<&str>, required: &str) -> Ch
             fixes: vec![],
         },
     }
-}
-
-async fn check_uvx_environment() -> Vec<CheckItem> {
-    // Return cached result if a previous check passed
-    let cached = UVX_ENV_CACHE.lock().unwrap().clone();
-    if let Some(cached) = cached {
-        return cached;
-    }
-
-    // Run uv and uvx checks in parallel
-    let (uv_result, uvx_result) = tokio::join!(
-        crate::process::tokio_command("uv")
-            .arg("--version")
-            .output(),
-        crate::process::tokio_command("uvx")
-            .arg("--version")
-            .output(),
-    );
-
-    let install_fix = vec![FixAction {
-        label: "Install uv".into(),
-        kind: FixActionKind::OpenUrl,
-        payload: "https://docs.astral.sh/uv/getting-started/installation/".into(),
-    }];
-
-    let uv_check = match uv_result {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            CheckItem {
-                check_id: "uv_available".into(),
-                label: "uv".into(),
-                status: CheckStatus::Pass,
-                message: format!("uv {version} available"),
-                fixes: vec![],
-            }
-        }
-        _ => CheckItem {
-            check_id: "uv_available".into(),
-            label: "uv".into(),
-            status: CheckStatus::Fail,
-            message: "uv is not installed or not in PATH".into(),
-            fixes: install_fix.clone(),
-        },
-    };
-
-    let uvx_check = match uvx_result {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            CheckItem {
-                check_id: "uvx_available".into(),
-                label: "uvx".into(),
-                status: CheckStatus::Pass,
-                message: format!("uvx {version} available"),
-                fixes: vec![],
-            }
-        }
-        _ => CheckItem {
-            check_id: "uvx_available".into(),
-            label: "uvx".into(),
-            status: CheckStatus::Fail,
-            message: "uvx is not installed or not in PATH".into(),
-            fixes: install_fix,
-        },
-    };
-
-    let checks = vec![uv_check, uvx_check];
-
-    let all_passed = checks
-        .iter()
-        .all(|c| !matches!(c.status, CheckStatus::Fail));
-    if all_passed {
-        *UVX_ENV_CACHE.lock().unwrap() = Some(checks.clone());
-    }
-
-    checks
 }
 
 async fn check_binary_environment(

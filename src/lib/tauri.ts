@@ -179,16 +179,6 @@ export async function acpPrepareNpxAgent(
   })
 }
 
-export async function acpPrepareUvxAgent(
-  agentType: AgentType,
-  registryVersion?: string | null
-): Promise<string> {
-  return invoke("acp_prepare_uvx_agent", {
-    agentType,
-    registryVersion: registryVersion ?? null,
-  })
-}
-
 export async function acpUninstallAgent(agentType: AgentType): Promise<void> {
   return invoke("acp_uninstall_agent", { agentType })
 }

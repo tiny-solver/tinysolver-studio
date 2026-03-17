@@ -142,12 +142,6 @@ pub async fn get_conversation(
             AgentType::OpenCode => Box::new(OpenCodeParser::new()),
             AgentType::Gemini => Box::new(GeminiParser::new()),
             AgentType::OpenClaw => Box::new(OpenClawParser::new()),
-            _ => {
-                return Err(AppCommandError::invalid_input(
-                    "Conversation parsing is not supported for this agent",
-                )
-                .with_detail(format!("agent_type={agent_type}")))
-            }
         };
 
         parser
@@ -280,7 +274,6 @@ pub async fn get_folder_conversation(
                 AgentType::OpenCode => Box::new(OpenCodeParser::new()),
                 AgentType::Gemini => Box::new(GeminiParser::new()),
                 AgentType::OpenClaw => Box::new(OpenClawParser::new()),
-                _ => return Ok((vec![], None, None)),
             };
             match parser.get_conversation(&eid) {
                 Ok(d) => Ok((d.turns, d.session_stats, None)),

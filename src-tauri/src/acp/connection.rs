@@ -169,22 +169,6 @@ async fn build_agent(
             let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
             AcpAgent::from_args(&refs).map_err(|e| AcpError::SpawnFailed(e.to_string()))
         }
-        AgentDistribution::Uvx {
-            package, args, env, ..
-        } => {
-            let merged_env = merge_agent_env(env, runtime_env);
-            let mut parts: Vec<String> = Vec::new();
-            for (k, v) in &merged_env {
-                parts.push(format!("{k}={v}"));
-            }
-            parts.push("uvx".into());
-            parts.push(package.into());
-            for a in args {
-                parts.push((*a).into());
-            }
-            let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
-            AcpAgent::from_args(&refs).map_err(|e| AcpError::SpawnFailed(e.to_string()))
-        }
         AgentDistribution::Binary {
             version,
             cmd,

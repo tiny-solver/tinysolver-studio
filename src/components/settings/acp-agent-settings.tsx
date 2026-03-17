@@ -61,7 +61,6 @@ import {
   acpListAgents,
   acpPreflight,
   acpPrepareNpxAgent,
-  acpPrepareUvxAgent,
   acpReorderAgents,
   acpUninstallAgent,
   acpUpdateAgentPreferences,
@@ -115,11 +114,8 @@ type RunningActionKind =
   | "upgrade_binary"
   | "install_npx"
   | "upgrade_npx"
-  | "install_uvx"
-  | "upgrade_uvx"
   | "uninstall_binary"
   | "uninstall_npx"
-  | "uninstall_uvx"
   | "redownload_binary"
 
 type UiFixAction =
@@ -131,11 +127,8 @@ type UiFixAction =
         | "upgrade_binary"
         | "install_npx"
         | "upgrade_npx"
-        | "install_uvx"
-        | "upgrade_uvx"
         | "uninstall_binary"
         | "uninstall_npx"
-        | "uninstall_uvx"
       payload: string
     }
 
@@ -2049,8 +2042,7 @@ function hasComparableVersion(
 function buildVersionCheck(agent: AcpAgentInfo): UiCheckItem | null {
   if (
     agent.distribution_type !== "binary" &&
-    agent.distribution_type !== "npx" &&
-    agent.distribution_type !== "uvx"
+    agent.distribution_type !== "npx"
   )
     return null
 
@@ -2063,23 +2055,11 @@ function buildVersionCheck(agent: AcpAgentInfo): UiCheckItem | null {
     { remoteVersion, localVersion }
   )
   const installAction: RunningActionKind =
-    agent.distribution_type === "binary"
-      ? "download_binary"
-      : agent.distribution_type === "uvx"
-        ? "install_uvx"
-        : "install_npx"
+    agent.distribution_type === "binary" ? "download_binary" : "install_npx"
   const upgradeAction: RunningActionKind =
-    agent.distribution_type === "binary"
-      ? "upgrade_binary"
-      : agent.distribution_type === "uvx"
-        ? "upgrade_uvx"
-        : "upgrade_npx"
+    agent.distribution_type === "binary" ? "upgrade_binary" : "upgrade_npx"
   const uninstallAction: RunningActionKind =
-    agent.distribution_type === "binary"
-      ? "uninstall_binary"
-      : agent.distribution_type === "uvx"
-        ? "uninstall_uvx"
-        : "uninstall_npx"
+    agent.distribution_type === "binary" ? "uninstall_binary" : "uninstall_npx"
 
   if (!agent.available) {
     return {
@@ -2739,78 +2719,6 @@ export function AcpAgentSettings() {
     [runPreflight, t]
   )
 
-  const runUvxAction = useCallback(
-    async (agent: AcpAgentInfo, mode: "install" | "upgrade") => {
-      if (busyActionRef.current.has(agent.agent_type)) return
-      busyActionRef.current.add(agent.agent_type)
-      setBusyBinaryAction((prev) => ({ ...prev, [agent.agent_type]: true }))
-      setRunningActionKind((prev) => ({
-        ...prev,
-        [agent.agent_type]: mode === "install" ? "install_uvx" : "upgrade_uvx",
-      }))
-      try {
-        const installedVersion = await acpPrepareUvxAgent(
-          agent.agent_type,
-          agent.registry_version
-        )
-        setAgents((prev) =>
-          prev.map((item) =>
-            item.agent_type === agent.agent_type
-              ? { ...item, installed_version: installedVersion }
-              : item
-          )
-        )
-        await runPreflight(agent.agent_type)
-        const detectedVersion = await acpDetectAgentLocalVersion(
-          agent.agent_type
-        )
-        if (detectedVersion && detectedVersion !== installedVersion) {
-          setAgents((prev) =>
-            prev.map((item) =>
-              item.agent_type === agent.agent_type
-                ? { ...item, installed_version: detectedVersion }
-                : item
-            )
-          )
-        }
-        const finalVersion = detectedVersion ?? installedVersion
-        toast.success(
-          t("toasts.agentActionCompleted", {
-            name: agent.name,
-            action:
-              mode === "upgrade" ? t("actions.upgrade") : t("actions.install"),
-          }),
-          {
-            description: finalVersion
-              ? t("toasts.localVersion", { version: finalVersion })
-              : t("toasts.installCompletedVersionLater"),
-          }
-        )
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(
-          t("toasts.agentActionFailed", {
-            name: agent.name,
-            action:
-              mode === "upgrade" ? t("actions.upgrade") : t("actions.install"),
-          }),
-          {
-            description: message,
-          }
-        )
-        throw err
-      } finally {
-        busyActionRef.current.delete(agent.agent_type)
-        setBusyBinaryAction((prev) => ({ ...prev, [agent.agent_type]: false }))
-        setRunningActionKind((prev) => ({
-          ...prev,
-          [agent.agent_type]: undefined,
-        }))
-      }
-    },
-    [runPreflight, t]
-  )
-
   const runUninstallAction = useCallback(
     async (agent: AcpAgentInfo) => {
       if (busyActionRef.current.has(agent.agent_type)) return
@@ -2821,9 +2729,7 @@ export function AcpAgentSettings() {
         [agent.agent_type]:
           agent.distribution_type === "binary"
             ? "uninstall_binary"
-            : agent.distribution_type === "uvx"
-              ? "uninstall_uvx"
-              : "uninstall_npx",
+            : "uninstall_npx",
       }))
       try {
         await acpUninstallAgent(agent.agent_type)
@@ -2883,18 +2789,9 @@ export function AcpAgentSettings() {
       await runNpxAction(agent, "upgrade")
       return
     }
-    if (action.kind === "install_uvx") {
-      await runUvxAction(agent, "install")
-      return
-    }
-    if (action.kind === "upgrade_uvx") {
-      await runUvxAction(agent, "upgrade")
-      return
-    }
     if (
       action.kind === "uninstall_binary" ||
-      action.kind === "uninstall_npx" ||
-      action.kind === "uninstall_uvx"
+      action.kind === "uninstall_npx"
     ) {
       setUninstallConfirmAgent(agent)
       return
@@ -3001,11 +2898,8 @@ export function AcpAgentSettings() {
                         "upgrade_binary",
                         "install_npx",
                         "upgrade_npx",
-                        "install_uvx",
-                        "upgrade_uvx",
                         "uninstall_binary",
                         "uninstall_npx",
-                        "uninstall_uvx",
                         "redownload_binary",
                       ].includes(fix.kind)
                     }
@@ -3018,17 +2912,14 @@ export function AcpAgentSettings() {
                     {runningActionKind[agent.agent_type] === fix.kind ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : fix.kind === "download_binary" ||
-                      fix.kind === "install_npx" ||
-                      fix.kind === "install_uvx" ? (
+                      fix.kind === "install_npx" ? (
                       <Download className="h-3 w-3" />
                     ) : fix.kind === "upgrade_binary" ||
                       fix.kind === "upgrade_npx" ||
-                      fix.kind === "upgrade_uvx" ||
                       fix.kind === "redownload_binary" ? (
                       <Wrench className="h-3 w-3" />
                     ) : fix.kind === "uninstall_binary" ||
-                      fix.kind === "uninstall_npx" ||
-                      fix.kind === "uninstall_uvx" ? (
+                      fix.kind === "uninstall_npx" ? (
                       <Trash2 className="h-3 w-3" />
                     ) : null}
                     {fix.label}
