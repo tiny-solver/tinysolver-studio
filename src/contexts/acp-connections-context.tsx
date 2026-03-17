@@ -22,7 +22,6 @@ import {
   acpCancel,
   acpRespondPermission,
   acpDisconnect,
-  acpPreflight,
 } from "@/lib/tauri"
 import type {
   AgentType,
@@ -35,7 +34,6 @@ import type {
   SessionConfigOptionInfo,
   SessionModeStateInfo,
   SessionUsageUpdateInfo,
-  FixAction,
   PromptCapabilitiesInfo,
   PromptInputBlock,
 } from "@/lib/types"
@@ -1732,80 +1730,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
               blocked.kind === "sdk_missing" ? blocked.reason : blocked.reason
             )
           }
-        }
-
-        // Run preflight checks
-        try {
-          const preflight = await acpPreflight(agentType)
-          if (!preflight.passed) {
-            const failedChecks = preflight.checks.filter(
-              (c) => c.status === "fail"
-            )
-            const detail = failedChecks.map((c) => c.message).join("\n")
-
-            if (isAutoLink) {
-              const message =
-                detail.trim().length > 0
-                  ? detail
-                  : t("preflightCheckFailedDefault")
-              pushAlertRef.current(
-                "error",
-                t("autoLinkFailedTitle", { agent: preflight.agent_name }),
-                `${message}\n${t("agentsSetupHint")}`,
-                [buildOpenAgentsSettingsAction(agentType)]
-              )
-              throw createAlertedError(message)
-            }
-
-            // Collect fix actions from all failed checks
-            const fixes: AlertAction[] = failedChecks.flatMap((c) =>
-              c.fixes.map(
-                (f: FixAction): AlertAction => ({
-                  label: f.label,
-                  kind: f.kind,
-                  payload: f.payload,
-                })
-              )
-            )
-
-            // Add retry action
-            fixes.push({
-              label: t("actions.retry"),
-              kind: "retry_connection",
-              payload: JSON.stringify({
-                agentType,
-                contextKey,
-                workingDir,
-                sessionId,
-              }),
-            })
-
-            pushAlertRef.current(
-              "error",
-              t("preflightFailedTitle", { agent: preflight.agent_name }),
-              detail,
-              fixes
-            )
-            return
-          }
-        } catch (e) {
-          if (isAutoLink) {
-            if (isAlertedError(e)) {
-              throw e
-            }
-            const reason = t("autoLinkPreflightFailed", {
-              message: normalizeErrorMessage(e),
-            })
-            pushAlertRef.current(
-              "error",
-              t("autoLinkFailedTitle", { agent: AGENT_LABELS[agentType] }),
-              `${reason}\n${t("agentsSetupHint")}`,
-              [buildOpenAgentsSettingsAction(agentType)]
-            )
-            throw createAlertedError(reason)
-          }
-          // Preflight itself failed — log and continue
-          console.warn("[AcpConnections] preflight error, continuing:", e)
         }
 
         const existing = storeRef.current.connections.get(contextKey)
