@@ -163,8 +163,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Auggie CLI",
             description: "Augment Code's powerful software agent, backed by industry-leading context engine",
             distribution: AgentDistribution::Npx {
-                version: "0.18.1",
-                package: "@augmentcode/auggie@0.18.1",
+                version: "0.19.0",
+                package: "@augmentcode/auggie@0.19.0",
                 args: &["--acp"],
                 env: &[("AUGMENT_DISABLE_AUTO_UPDATE", "1")],
                 node_required: None,
@@ -187,8 +187,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Claude Code",
             description: "ACP wrapper for Anthropic's Claude",
             distribution: AgentDistribution::Npx {
-                version: "0.21.0",
-                package: "@zed-industries/claude-agent-acp@0.21.0",
+                version: "0.22.0",
+                package: "@zed-industries/claude-agent-acp@0.22.0",
                 args: &[],
                 env: &[],
                 node_required: None,
@@ -199,8 +199,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Cline",
             description: "Autonomous coding agent CLI - capable of creating/editing files, running commands, using the browser, and more",
             distribution: AgentDistribution::Npx {
-                version: "2.6.1",
-                package: "cline@2.6.1",
+                version: "2.8.0",
+                package: "cline@2.8.0",
                 args: &["--acp"],
                 env: &[],
                 node_required: None,
@@ -211,8 +211,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Codebuddy Code",
             description: "Tencent Cloud's official intelligent coding tool",
             distribution: AgentDistribution::Npx {
-                version: "2.55.1",
-                package: "@tencent-ai/codebuddy-code@2.55.1",
+                version: "2.63.1",
+                package: "@tencent-ai/codebuddy-code@2.63.1",
                 args: &["--acp"],
                 env: &[],
                 node_required: None,
@@ -260,22 +260,26 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Corust Agent",
             description: "Co-building with a seasoned Rust partner.",
             distribution: AgentDistribution::Binary {
-                version: "0.3.7",
+                version: "0.3.8",
                 cmd: "corust-agent-acp",
                 args: &[],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.7/agent-darwin-arm64.tar.gz",
+                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.8/agent-darwin-arm64.tar.gz",
+                    },
+                    PlatformBinary {
+                        platform: "darwin-x86_64",
+                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.8/agent-darwin-x64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.7/agent-linux-x64.tar.gz",
+                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.8/agent-linux-x64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.7/agent-windows-x64.zip",
+                        url: "https://github.com/Corust-ai/corust-agent-release/releases/download/v0.3.8/agent-windows-x64.zip",
                     },
                 ],
             },
@@ -285,8 +289,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Factory Droid",
             description: "Factory Droid - AI coding agent powered by Factory AI",
             distribution: AgentDistribution::Npx {
-                version: "0.70.0",
-                package: "droid@0.70.0",
+                version: "0.76.0",
+                package: "droid@0.76.0",
                 args: &["exec", "--output-format", "acp"],
                 env: &[("DROID_DISABLE_AUTO_UPDATE", "true"), ("FACTORY_DROID_AUTO_UPDATE_ENABLED", "false")],
                 node_required: None,
@@ -297,9 +301,9 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
             distribution: AgentDistribution::Npx {
-                version: "0.33.1",
-                package: "@google/gemini-cli@0.33.1",
-                args: &["--experimental-acp"],
+                version: "0.33.2",
+                package: "@google/gemini-cli@0.33.2",
+                args: &["--acp"],
                 env: &[],
                 node_required: None,
             },
@@ -309,8 +313,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "GitHub Copilot",
             description: "GitHub's AI pair programmer",
             distribution: AgentDistribution::Npx {
-                version: "1.0.2",
-                package: "@github/copilot@1.0.2",
+                version: "1.0.6",
+                package: "@github/copilot@1.0.6",
                 args: &["--acp"],
                 env: &[],
                 node_required: None,
@@ -353,12 +357,33 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             agent_type,
             name: "Junie",
             description: "AI Coding Agent by JetBrains",
-            distribution: AgentDistribution::Npx {
-                version: "888.173.0",
-                package: "@jetbrains/junie@888.173.0",
+            distribution: AgentDistribution::Binary {
+                version: "888.195.0",
+                cmd: "junie",
                 args: &["--acp=true"],
                 env: &[],
-                node_required: None,
+                platforms: &[
+                    PlatformBinary {
+                        platform: "darwin-aarch64",
+                        url: "https://github.com/JetBrains/junie/releases/download/888.195/junie-release-888.195-macos-aarch64.zip",
+                    },
+                    PlatformBinary {
+                        platform: "darwin-x86_64",
+                        url: "https://github.com/JetBrains/junie/releases/download/888.195/junie-release-888.195-macos-amd64.zip",
+                    },
+                    PlatformBinary {
+                        platform: "linux-aarch64",
+                        url: "https://github.com/JetBrains/junie/releases/download/888.195/junie-release-888.195-linux-aarch64.zip",
+                    },
+                    PlatformBinary {
+                        platform: "linux-x86_64",
+                        url: "https://github.com/JetBrains/junie/releases/download/888.195/junie-release-888.195-linux-amd64.zip",
+                    },
+                    PlatformBinary {
+                        platform: "windows-x86_64",
+                        url: "https://github.com/JetBrains/junie/releases/download/888.195/junie-release-888.195-windows-amd64.zip",
+                    },
+                ],
             },
         },
         AgentType::Kimi => AcpAgentMeta {
@@ -366,26 +391,26 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Kimi CLI",
             description: "Moonshot AI's coding assistant",
             distribution: AgentDistribution::Binary {
-                version: "1.17.0",
+                version: "1.22.0",
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.17.0/kimi-1.17.0-aarch64-apple-darwin.tar.gz",
+                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.22.0/kimi-1.22.0-aarch64-apple-darwin.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.17.0/kimi-1.17.0-aarch64-unknown-linux-gnu.tar.gz",
+                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.22.0/kimi-1.22.0-aarch64-unknown-linux-gnu.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.17.0/kimi-1.17.0-x86_64-unknown-linux-gnu.tar.gz",
+                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.22.0/kimi-1.22.0-x86_64-unknown-linux-gnu.tar.gz",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.17.0/kimi-1.17.0-x86_64-pc-windows-msvc.zip",
+                        url: "https://github.com/MoonshotAI/kimi-cli/releases/download/1.22.0/kimi-1.22.0-x86_64-pc-windows-msvc.zip",
                     },
                 ],
             },
@@ -395,8 +420,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Minion Code",
             description: "An enhanced AI code assistant built on the Minion framework with rich development tools",
             distribution: AgentDistribution::Uvx {
-                version: "0.1.39",
-                package: "minion-code@0.1.39",
+                version: "0.1.44",
+                package: "minion-code@0.1.44",
                 args: &["acp"],
                 env: &[],
             },
@@ -406,34 +431,34 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Mistral Vibe",
             description: "Mistral's open-source coding assistant",
             distribution: AgentDistribution::Binary {
-                version: "2.3.0",
+                version: "2.5.0",
                 cmd: "vibe-acp",
                 args: &[],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.3.0/vibe-acp-darwin-aarch64-2.3.0.zip",
+                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.5.0/vibe-acp-darwin-aarch64-2.5.0.zip",
                     },
                     PlatformBinary {
                         platform: "darwin-x86_64",
-                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.3.0/vibe-acp-darwin-x86_64-2.3.0.zip",
+                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.5.0/vibe-acp-darwin-x86_64-2.5.0.zip",
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.3.0/vibe-acp-linux-aarch64-2.3.0.zip",
+                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.5.0/vibe-acp-linux-aarch64-2.5.0.zip",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.3.0/vibe-acp-linux-x86_64-2.3.0.zip",
+                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.5.0/vibe-acp-linux-x86_64-2.5.0.zip",
                     },
                     PlatformBinary {
                         platform: "windows-aarch64",
-                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.3.0/vibe-acp-windows-aarch64-2.3.0.zip",
+                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.5.0/vibe-acp-windows-aarch64-2.5.0.zip",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.3.0/vibe-acp-windows-x86_64-2.3.0.zip",
+                        url: "https://github.com/mistralai/mistral-vibe/releases/download/v2.5.0/vibe-acp-windows-x86_64-2.5.0.zip",
                     },
                 ],
             },
@@ -441,10 +466,10 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         AgentType::OpenClaw => AcpAgentMeta {
             agent_type,
             name: "OpenClaw",
-            description: "Open-source personal AI assistant with ACP bridge",
+            description: "OpenClaw is a personal AI assistant you run on your own devices.",
             distribution: AgentDistribution::Npx {
-                version: "2026.2.26",
-                package: "openclaw@2026.2.26",
+                version: "2026.3.13",
+                package: "openclaw@2026.3.13",
                 args: &["acp"],
                 env: &[],
                 node_required: Some("22.12.0"),
@@ -455,30 +480,30 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "OpenCode",
             description: "The open source coding agent",
             distribution: AgentDistribution::Binary {
-                version: "1.2.26",
+                version: "1.2.27",
                 cmd: "opencode",
                 args: &["acp"],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.26/opencode-darwin-arm64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.27/opencode-darwin-arm64.zip",
                     },
                     PlatformBinary {
                         platform: "darwin-x86_64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.26/opencode-darwin-x64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.27/opencode-darwin-x64.zip",
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.26/opencode-linux-arm64.tar.gz",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.27/opencode-linux-arm64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.26/opencode-linux-x64.tar.gz",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.27/opencode-linux-x64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.26/opencode-windows-x64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.2.27/opencode-windows-x64.zip",
                     },
                 ],
             },
@@ -488,8 +513,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Qoder CLI",
             description: "AI coding assistant with agentic capabilities",
             distribution: AgentDistribution::Npx {
-                version: "0.1.29",
-                package: "@qoder-ai/qodercli@0.1.29",
+                version: "0.1.31",
+                package: "@qoder-ai/qodercli@0.1.31",
                 args: &["--acp"],
                 env: &[],
                 node_required: None,
@@ -500,8 +525,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Qwen Code",
             description: "Alibaba's Qwen coding assistant",
             distribution: AgentDistribution::Npx {
-                version: "0.11.1",
-                package: "@qwen-code/qwen-code@0.11.1",
+                version: "0.12.5",
+                package: "@qwen-code/qwen-code@0.12.5",
                 args: &["--acp", "--experimental-skills"],
                 env: &[],
                 node_required: None,
@@ -512,30 +537,30 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Stakpak",
             description: "Open-source DevOps agent in Rust with enterprise-grade security",
             distribution: AgentDistribution::Binary {
-                version: "0.3.66",
+                version: "0.3.68",
                 cmd: "stakpak",
                 args: &["acp"],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/stakpak/agent/releases/download/v0.3.66/stakpak-darwin-aarch64.tar.gz",
+                        url: "https://github.com/stakpak/agent/releases/download/v0.3.68/stakpak-darwin-aarch64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "darwin-x86_64",
-                        url: "https://github.com/stakpak/agent/releases/download/v0.3.66/stakpak-darwin-x86_64.tar.gz",
+                        url: "https://github.com/stakpak/agent/releases/download/v0.3.68/stakpak-darwin-x86_64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://github.com/stakpak/agent/releases/download/v0.3.66/stakpak-linux-aarch64.tar.gz",
+                        url: "https://github.com/stakpak/agent/releases/download/v0.3.68/stakpak-linux-aarch64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/stakpak/agent/releases/download/v0.3.66/stakpak-linux-x86_64.tar.gz",
+                        url: "https://github.com/stakpak/agent/releases/download/v0.3.68/stakpak-linux-x86_64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/stakpak/agent/releases/download/v0.3.66/stakpak-windows-x86_64.zip",
+                        url: "https://github.com/stakpak/agent/releases/download/v0.3.68/stakpak-windows-x86_64.zip",
                     },
                 ],
             },
