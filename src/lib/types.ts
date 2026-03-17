@@ -464,6 +464,11 @@ export type AcpEvent =
       prompt_capabilities: PromptCapabilitiesInfo
     }
   | {
+      type: "fork_supported"
+      connection_id: string
+      supported: boolean
+    }
+  | {
       type: "mode_changed"
       connection_id: string
       mode_id: string

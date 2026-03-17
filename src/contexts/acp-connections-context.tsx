@@ -90,6 +90,7 @@ export interface ConnectionState {
   agentType: AgentType
   status: ConnectionStatus
   promptCapabilities: PromptCapabilitiesInfo
+  supportsFork: boolean
   selectorsReady: boolean
   sessionId: string | null
   modes: SessionModeStateInfo | null
@@ -179,6 +180,11 @@ type Action =
       type: "PROMPT_CAPABILITIES"
       contextKey: string
       promptCapabilities: PromptCapabilitiesInfo
+    }
+  | {
+      type: "FORK_SUPPORTED"
+      contextKey: string
+      supported: boolean
     }
   | { type: "MODE_CHANGED"; contextKey: string; modeId: string }
   | {
@@ -500,6 +506,7 @@ function connectionsReducer(
           audio: false,
           embedded_context: false,
         },
+        supportsFork: false,
         selectorsReady: false,
         sessionId: null,
         modes: null,
@@ -885,6 +892,18 @@ function connectionsReducer(
       next.set(action.contextKey, {
         ...conn,
         promptCapabilities: action.promptCapabilities,
+      })
+      return next
+    }
+
+    case "FORK_SUPPORTED": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      if (conn.supportsFork === action.supported) return state
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        supportsFork: action.supported,
       })
       return next
     }
@@ -1467,6 +1486,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             type: "PROMPT_CAPABILITIES",
             contextKey,
             promptCapabilities: e.prompt_capabilities,
+          })
+          break
+        case "fork_supported":
+          flushStreamingQueue()
+          dispatch({
+            type: "FORK_SUPPORTED",
+            contextKey,
+            supported: e.supported,
           })
           break
         case "mode_changed":

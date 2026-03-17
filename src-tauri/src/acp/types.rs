@@ -105,6 +105,11 @@ pub enum AcpEvent {
         connection_id: String,
         prompt_capabilities: PromptCapabilitiesInfo,
     },
+    /// Whether the agent supports session/fork
+    ForkSupported {
+        connection_id: String,
+        supported: bool,
+    },
     /// Current session mode changed
     ModeChanged {
         connection_id: String,

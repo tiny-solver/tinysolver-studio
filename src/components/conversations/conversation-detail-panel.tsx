@@ -826,7 +826,9 @@ const ConversationTabView = memo(function ConversationTabView({
       onSaveQueueEdit={handleSaveQueueEdit}
       onCancelQueueEdit={handleQueueCancelEdit}
       onForkSend={
-        connStatus === "connected" && hasPersistedConversation
+        connStatus === "connected" &&
+        hasPersistedConversation &&
+        conn.supportsFork
           ? handleForkSend
           : undefined
       }

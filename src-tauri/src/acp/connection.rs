@@ -640,6 +640,15 @@ async fn run_connection(
                 init_resp.agent_capabilities.load_session, supports_fork
             );
 
+            // Emit fork support capability
+            let _ = handle.emit(
+                "acp://event",
+                AcpEvent::ForkSupported {
+                    connection_id: conn_id.clone(),
+                    supported: supports_fork,
+                },
+            );
+
             // Emit connected status
             let _ = handle.emit(
                 "acp://event",

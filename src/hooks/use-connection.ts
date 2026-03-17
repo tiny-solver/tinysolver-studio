@@ -30,6 +30,7 @@ export interface UseConnectionReturn {
   connectionId: string | null
   status: ConnectionStatus | null
   promptCapabilities: PromptCapabilitiesInfo
+  supportsFork: boolean
   selectorsReady: boolean
   sessionId: string | null
   modes: SessionModeStateInfo | null
@@ -76,6 +77,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const status = connection?.status ?? null
   const promptCapabilities =
     connection?.promptCapabilities ?? DEFAULT_PROMPT_CAPABILITIES
+  const supportsFork = connection?.supportsFork ?? false
   const selectorsReady = connection?.selectorsReady ?? false
   const sessionId = connection?.sessionId ?? null
   const modes = connection?.modes ?? null
@@ -133,6 +135,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       connectionId,
       status,
       promptCapabilities,
+      supportsFork,
       selectorsReady,
       sessionId,
       modes,
@@ -154,6 +157,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       connectionId,
       status,
       promptCapabilities,
+      supportsFork,
       selectorsReady,
       sessionId,
       modes,
