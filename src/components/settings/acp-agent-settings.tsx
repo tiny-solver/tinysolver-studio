@@ -2388,11 +2388,12 @@ export function AcpAgentSettings() {
     }
   }, [])
 
-  const runPreflight = useCallback(async (agentType: AgentType) => {
+  const runPreflight = useCallback(
+    async (agentType: AgentType, forceRefresh?: boolean) => {
     setChecking((prev) => ({ ...prev, [agentType]: true }))
     try {
       const [resultState, versionState] = await Promise.allSettled([
-        acpPreflight(agentType),
+        acpPreflight(agentType, forceRefresh),
         acpDetectAgentLocalVersion(agentType),
       ])
 
@@ -4243,12 +4244,14 @@ export function AcpAgentSettings() {
                               })}
                               onClick={(event) => {
                                 event.stopPropagation()
-                                runPreflight(agent.agent_type).catch((err) => {
-                                  console.error(
-                                    "[Settings] single preflight failed:",
-                                    err
-                                  )
-                                })
+                                runPreflight(agent.agent_type, true).catch(
+                                  (err) => {
+                                    console.error(
+                                      "[Settings] single preflight failed:",
+                                      err
+                                    )
+                                  }
+                                )
                               }}
                             >
                               <RefreshCw className="h-3 w-3 shrink-0" />

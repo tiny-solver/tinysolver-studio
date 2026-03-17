@@ -992,7 +992,13 @@ fn build_runtime_env_from_setting(
 }
 
 #[tauri::command]
-pub async fn acp_preflight(agent_type: AgentType) -> Result<PreflightResult, AcpError> {
+pub async fn acp_preflight(
+    agent_type: AgentType,
+    force_refresh: Option<bool>,
+) -> Result<PreflightResult, AcpError> {
+    if force_refresh.unwrap_or(false) {
+        preflight::clear_npm_env_cache();
+    }
     Ok(preflight::run_preflight(agent_type).await)
 }
 

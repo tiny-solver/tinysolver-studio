@@ -210,9 +210,13 @@ export async function acpReorderAgents(agentTypes: AgentType[]): Promise<void> {
 }
 
 export async function acpPreflight(
-  agentType: AgentType
+  agentType: AgentType,
+  forceRefresh?: boolean
 ): Promise<PreflightResult> {
-  return invoke("acp_preflight", { agentType })
+  return invoke("acp_preflight", {
+    agentType,
+    forceRefresh: forceRefresh ?? null,
+  })
 }
 
 export async function acpListAgentSkills(params: {
