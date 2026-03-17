@@ -8,6 +8,7 @@ use crate::models::*;
 use crate::parsers::claude::ClaudeParser;
 use crate::parsers::codex::CodexParser;
 use crate::parsers::gemini::GeminiParser;
+use crate::parsers::openclaw::OpenClawParser;
 use crate::parsers::opencode::OpenCodeParser;
 use crate::parsers::{path_eq_for_matching, AgentParser, ParseError};
 
@@ -40,6 +41,7 @@ fn list_conversations_sync(
         (AgentType::Codex, Box::new(CodexParser::new())),
         (AgentType::OpenCode, Box::new(OpenCodeParser::new())),
         (AgentType::Gemini, Box::new(GeminiParser::new())),
+        (AgentType::OpenClaw, Box::new(OpenClawParser::new())),
     ];
 
     for (at, parser) in &parsers {
@@ -139,6 +141,7 @@ pub async fn get_conversation(
             AgentType::Codex => Box::new(CodexParser::new()),
             AgentType::OpenCode => Box::new(OpenCodeParser::new()),
             AgentType::Gemini => Box::new(GeminiParser::new()),
+            AgentType::OpenClaw => Box::new(OpenClawParser::new()),
             _ => {
                 return Err(AppCommandError::invalid_input(
                     "Conversation parsing is not supported for this agent",
@@ -267,6 +270,7 @@ pub async fn get_folder_conversation(
                 AgentType::Codex => Box::new(CodexParser::new()),
                 AgentType::OpenCode => Box::new(OpenCodeParser::new()),
                 AgentType::Gemini => Box::new(GeminiParser::new()),
+                AgentType::OpenClaw => Box::new(OpenClawParser::new()),
                 _ => return Ok((vec![], None)),
             };
             // If the external session file doesn't exist yet (e.g., new ACP session
