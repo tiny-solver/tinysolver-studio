@@ -48,6 +48,10 @@ pub struct PreflightResult {
     pub checks: Vec<CheckItem>,
 }
 
+pub fn clear_npm_env_cache() {
+    *NPM_ENV_CACHE.lock().unwrap() = None;
+}
+
 pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
     let meta = registry::get_agent_meta(agent_type);
     debug_assert_eq!(meta.agent_type, agent_type);
