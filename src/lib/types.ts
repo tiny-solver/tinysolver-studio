@@ -463,6 +463,14 @@ export interface AcpAgentInfo {
   codex_config_toml: string | null
 }
 
+// Lightweight agent status returned by acp_get_agent_status
+export interface AcpAgentStatus {
+  agent_type: AgentType
+  available: boolean
+  enabled: boolean
+  installed_version: string | null
+}
+
 export type AgentSkillScope = "global" | "project"
 export type AgentSkillLayout = "markdown_file" | "skill_directory"
 

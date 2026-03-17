@@ -15,7 +15,7 @@ import { disposeTauriListener } from "@/lib/tauri-listener"
 import { inferLiveToolName } from "@/lib/tool-call-normalization"
 import {
   acpConnect,
-  acpListAgents,
+  acpGetAgentStatus,
   acpPrompt,
   acpSetMode,
   acpSetConfigOption,
@@ -25,7 +25,7 @@ import {
 } from "@/lib/tauri"
 import type {
   AgentType,
-  AcpAgentInfo,
+  AcpAgentStatus,
   AcpEvent,
   AvailableCommandInfo,
   ConnectionStatus,
@@ -1169,7 +1169,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   )
 
   const resolveAutoLinkBlockState = useCallback(
-    (agent: AcpAgentInfo | null): AutoLinkBlockState => {
+    (agent: AcpAgentStatus | null): AutoLinkBlockState => {
       if (!agent) {
         return { kind: "missing_config", reason: t("blocked.missingConfig") }
       }
@@ -1685,11 +1685,9 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
       try {
         if (isAutoLink) {
-          let configuredAgent: AcpAgentInfo | null = null
+          let configuredAgent: AcpAgentStatus | null = null
           try {
-            const agents = await acpListAgents()
-            configuredAgent =
-              agents.find((agent) => agent.agent_type === agentType) ?? null
+            configuredAgent = await acpGetAgentStatus(agentType)
           } catch (error) {
             const reason = t("unableReadAgentConfig", {
               message: normalizeErrorMessage(error),

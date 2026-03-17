@@ -244,6 +244,15 @@ pub struct AcpAgentInfo {
     pub codex_config_toml: Option<String>,
 }
 
+/// Lightweight status info for a single agent, used by connect() pre-check.
+#[derive(Debug, Clone, Serialize)]
+pub struct AcpAgentStatus {
+    pub agent_type: crate::models::agent::AgentType,
+    pub available: bool,
+    pub enabled: bool,
+    pub installed_version: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentSkillScope {

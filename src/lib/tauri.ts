@@ -9,6 +9,7 @@ import type {
   SidebarData,
   ConnectionInfo,
   AcpAgentInfo,
+  AcpAgentStatus,
   AgentSkillScope,
   AgentSkillLayout,
   AgentSkillItem,
@@ -151,6 +152,12 @@ export async function acpListConnections(): Promise<ConnectionInfo[]> {
 
 export async function acpListAgents(): Promise<AcpAgentInfo[]> {
   return invoke("acp_list_agents")
+}
+
+export async function acpGetAgentStatus(
+  agentType: AgentType
+): Promise<AcpAgentStatus> {
+  return invoke("acp_get_agent_status", { agentType })
 }
 
 export async function acpClearBinaryCache(agentType: AgentType): Promise<void> {

@@ -1128,6 +1128,44 @@ pub async fn acp_list_connections(
 }
 
 #[tauri::command]
+pub async fn acp_get_agent_status(
+    agent_type: AgentType,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<crate::acp::types::AcpAgentStatus, AcpError> {
+    let platform = registry::current_platform();
+    let meta = registry::get_agent_meta(agent_type);
+    let setting = agent_setting_service::get_by_agent_type(&db.conn, agent_type)
+        .await
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+
+    let (available, installed_version) = match &meta.distribution {
+        registry::AgentDistribution::Npx { .. } => (
+            true,
+            setting.as_ref().and_then(|m| m.installed_version.clone()),
+        ),
+        registry::AgentDistribution::Binary {
+            platforms, cmd, ..
+        } => {
+            let detected =
+                binary_cache::detect_installed_version(agent_type, cmd)
+                    .ok()
+                    .flatten();
+            (
+                platforms.iter().any(|p| p.platform == platform),
+                detected,
+            )
+        }
+    };
+
+    Ok(crate::acp::types::AcpAgentStatus {
+        agent_type,
+        available,
+        enabled: setting.map(|m| m.enabled).unwrap_or(true),
+        installed_version,
+    })
+}
+
+#[tauri::command]
 pub async fn acp_list_agents(
     db: tauri::State<'_, AppDatabase>,
 ) -> Result<Vec<AcpAgentInfo>, AcpError> {

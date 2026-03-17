@@ -275,6 +275,7 @@ pub fn run() {
             acp_commands::acp_disconnect,
             acp_commands::acp_list_connections,
             acp_commands::acp_list_agents,
+            acp_commands::acp_get_agent_status,
             acp_commands::acp_clear_binary_cache,
             acp_commands::acp_download_agent_binary,
             acp_commands::acp_detect_agent_local_version,
