@@ -58,7 +58,7 @@ Git/ファイル/ターミナル連携ワークフローを提供します。
 
 ### 2) ACP リアルタイムセッション
 
-内蔵レジストリには、Claude Code、Codex CLI、Gemini CLI、OpenCode、OpenClaw、GitHub Copilot、Cline、Qwen Code など 20 以上のアダプターが含まれています。
+現在、Claude Code、Codex CLI、Gemini CLI、OpenCode、OpenClaw の 5 つのエージェントをサポートしています。
 
 ### 3) Skills 設定サポート
 

@@ -58,7 +58,7 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 
 ### 2) ACP 실시간 세션
 
-내장 레지스트리에는 Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, GitHub Copilot, Cline, Qwen Code 등 20개 이상의 어댑터가 포함되어 있습니다.
+현재 Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw 5가지 에이전트를 지원합니다.
 
 ### 3) Skills 설정 지원
 

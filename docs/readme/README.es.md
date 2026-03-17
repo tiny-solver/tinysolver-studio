@@ -60,8 +60,7 @@ flujos integrados de Git/archivos/terminal.
 
 ### 2) Sesiones en tiempo real con ACP
 
-El registro integrado incluye más de 20 adaptadores, como Claude Code, Codex CLI,
-Gemini CLI, OpenCode, OpenClaw, GitHub Copilot, Cline, Qwen Code, entre otros.
+Actualmente soporta 5 agentes: Claude Code, Codex CLI, Gemini CLI, OpenCode y OpenClaw.
 
 ### 3) Configuración de Skills
 

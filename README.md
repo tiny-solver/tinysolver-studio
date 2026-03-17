@@ -58,8 +58,7 @@ development, MCP/Skills management, and integrated Git/file/terminal workflows.
 
 ### 2) ACP real-time sessions
 
-Built-in registry includes 20+ adapters, such as Claude Code, Codex CLI,
-Gemini CLI, OpenCode, OpenClaw, GitHub Copilot, Cline, Qwen Code, and others.
+Currently supports 5 agents: Claude Code, Codex CLI, Gemini CLI, OpenCode, and OpenClaw.
 
 ### 3) Skills settings support
 

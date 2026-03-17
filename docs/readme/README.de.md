@@ -60,8 +60,7 @@ Git/Datei/Terminal-Workflows.
 
 ### 2) ACP-Echtzeitsitzungen
 
-Das integrierte Registry enthält über 20 Adapter, darunter Claude Code, Codex CLI,
-Gemini CLI, OpenCode, OpenClaw, GitHub Copilot, Cline, Qwen Code und weitere.
+Unterstützt derzeit 5 Agenten: Claude Code, Codex CLI, Gemini CLI, OpenCode und OpenClaw.
 
 ### 3) Skills-Einstellungen
 

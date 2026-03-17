@@ -58,8 +58,7 @@ paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de 
 
 ### 2) Sessões em tempo real ACP
 
-O registro integrado inclui mais de 20 adaptadores, como Claude Code, Codex CLI,
-Gemini CLI, OpenCode, OpenClaw, GitHub Copilot, Cline, Qwen Code, entre outros.
+Atualmente suporta 5 agentes: Claude Code, Codex CLI, Gemini CLI, OpenCode e OpenClaw.
 
 ### 3) Suporte a configurações de Skills
 

@@ -58,8 +58,7 @@ OpenClaw 等）统一到一个桌面应用中，支持会话聚合、并行 `git
 
 ### 2) ACP 实时会话
 
-内置注册表包含 20+ 适配器，如 Claude Code、Codex CLI、
-Gemini CLI、OpenCode、OpenClaw、GitHub Copilot、Cline、Qwen Code 等。
+目前支持 5 种代理：Claude Code、Codex CLI、Gemini CLI、OpenCode 和 OpenClaw。
 
 ### 3) Skills 设置支持
 
