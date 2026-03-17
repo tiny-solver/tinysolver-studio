@@ -31,7 +31,7 @@ OpenClaw 等）整合到一個桌面應用中，支援會話彙整、並行 `git
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> 目前狀態：`v0.1.x`（快速迭代中，適合早期使用者）
+> 目前狀態：`v0.2.x`（快速迭代中，適合早期使用者）
 
 ## 核心亮點
 

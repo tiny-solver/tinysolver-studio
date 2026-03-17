@@ -31,7 +31,7 @@ Git/ファイル/ターミナル連携ワークフローを提供します。
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> 現在のステータス: `v0.1.x`（高速イテレーション中、アーリーアダプター向け）
+> 現在のステータス: `v0.2.x`（高速イテレーション中、アーリーアダプター向け）
 
 ## ハイライト
 

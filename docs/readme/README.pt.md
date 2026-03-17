@@ -31,7 +31,7 @@ paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de 
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> Status atual: `v0.1.x` (iteração rápida, adequado para adotantes iniciais)
+> Status atual: `v0.2.x` (iteração rápida, adequado para adotantes iniciais)
 
 ## Destaques
 

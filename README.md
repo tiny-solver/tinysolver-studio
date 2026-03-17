@@ -31,7 +31,7 @@ development, MCP/Skills management, and integrated Git/file/terminal workflows.
 ![Codeg Light](./docs/images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](./docs/images/main2-dark.png#gh-dark-mode-only)
 
-> Current status: `v0.1.x` (fast iteration, suitable for early adopters)
+> Current status: `v0.2.x` (fast iteration, suitable for early adopters)
 
 ## Highlights
 

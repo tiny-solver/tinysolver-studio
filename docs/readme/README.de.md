@@ -33,7 +33,7 @@ Git/Datei/Terminal-Workflows.
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> Aktueller Status: `v0.1.x` (schnelle Iteration, geeignet für Early Adopters)
+> Aktueller Status: `v0.2.x` (schnelle Iteration, geeignet für Early Adopters)
 
 ## Highlights
 

@@ -31,7 +31,7 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> 현재 상태: `v0.1.x` (빠른 반복 개발 중, 얼리 어답터에 적합)
+> 현재 상태: `v0.2.x` (빠른 반복 개발 중, 얼리 어답터에 적합)
 
 ## 하이라이트
 

@@ -31,7 +31,7 @@ parallèle via `git worktree`, gestion MCP/Skills et workflows intégrés Git/fi
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> Statut actuel : `v0.1.x` (itération rapide, adapté aux utilisateurs précoces)
+> Statut actuel : `v0.2.x` (itération rapide, adapté aux utilisateurs précoces)
 
 ## Points forts
 

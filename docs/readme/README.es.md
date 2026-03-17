@@ -33,7 +33,7 @@ flujos integrados de Git/archivos/terminal.
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> Estado actual: `v0.1.x` (iteración rápida, adecuado para early adopters)
+> Estado actual: `v0.2.x` (iteración rápida, adecuado para early adopters)
 
 ## Puntos destacados
 
