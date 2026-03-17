@@ -5,6 +5,8 @@ pub enum AgentDistribution {
     Npx {
         version: &'static str,
         package: &'static str,
+        /// The command name provided by this npx package (e.g. "gemini", "openclaw").
+        cmd: &'static str,
         args: &'static [&'static str],
         env: &'static [(&'static str, &'static str)],
         /// Minimum Node.js version required, e.g. "22.12.0". None means no specific requirement.
@@ -113,6 +115,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             distribution: AgentDistribution::Npx {
                 version: "0.22.0",
                 package: "@zed-industries/claude-agent-acp@0.22.0",
+                cmd: "claude-agent-acp",
                 args: &[],
                 env: &[],
                 node_required: None,
@@ -162,6 +165,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             distribution: AgentDistribution::Npx {
                 version: "0.33.2",
                 package: "@google/gemini-cli@0.33.2",
+                cmd: "gemini",
                 args: &["--acp"],
                 env: &[],
                 node_required: None,
@@ -174,6 +178,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             distribution: AgentDistribution::Npx {
                 version: "2026.3.13",
                 package: "openclaw@2026.3.13",
+                cmd: "openclaw",
                 args: &["acp"],
                 env: &[],
                 node_required: Some("22.12.0"),
