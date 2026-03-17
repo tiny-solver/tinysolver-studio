@@ -1306,8 +1306,14 @@ pub async fn acp_connect(
         )));
     }
     let local_config_json = load_agent_local_config_json(agent_type);
-    let runtime_env =
+    let mut runtime_env =
         build_runtime_env_from_setting(agent_type, setting.as_ref(), local_config_json.as_deref());
+
+    // For OpenClaw: when creating a new conversation (no session_id to resume),
+    // signal that we want a fresh transcript via --reset-session.
+    if agent_type == AgentType::OpenClaw && session_id.is_none() {
+        runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
+    }
 
     if let registry::AgentDistribution::Npx { package, .. } = meta.distribution {
         if detect_npx_cached_version(package).await.is_none() {

@@ -156,6 +156,15 @@ async fn build_agent(
                     parts.push("--session".into());
                     parts.push(key.clone());
                 }
+                // When creating a new conversation (no session_id to resume),
+                // pass --reset-session so OpenClaw mints a fresh transcript
+                // instead of appending to the previous one.
+                if runtime_env
+                    .get("OPENCLAW_RESET_SESSION")
+                    .map_or(false, |v| v == "1")
+                {
+                    parts.push("--reset-session".into());
+                }
             }
             let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
             AcpAgent::from_args(&refs).map_err(|e| AcpError::SpawnFailed(e.to_string()))

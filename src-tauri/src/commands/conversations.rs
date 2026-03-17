@@ -261,9 +261,18 @@ pub async fn get_folder_conversation(
         .await
         .map_err(AppCommandError::from)?;
 
-    let (turns, session_stats) = if let Some(ref ext_id) = summary.external_id {
+    let (turns, session_stats, resolved_ext_id) = if let Some(ref ext_id) = summary.external_id
+    {
         let at = summary.agent_type;
         let eid = ext_id.clone();
+        let db_created_at = summary.created_at;
+        let folder_path_for_fallback = {
+            let folder = folder_service::get_folder_by_id(&db.conn, summary.folder_id)
+                .await
+                .ok()
+                .flatten();
+            folder.map(|f| f.path)
+        };
         tokio::task::spawn_blocking(move || -> Result<_, AppCommandError> {
             let parser: Box<dyn AgentParser> = match at {
                 AgentType::ClaudeCode => Box::new(ClaudeParser::new()),
@@ -271,13 +280,47 @@ pub async fn get_folder_conversation(
                 AgentType::OpenCode => Box::new(OpenCodeParser::new()),
                 AgentType::Gemini => Box::new(GeminiParser::new()),
                 AgentType::OpenClaw => Box::new(OpenClawParser::new()),
-                _ => return Ok((vec![], None)),
+                _ => return Ok((vec![], None, None)),
             };
-            // If the external session file doesn't exist yet (e.g., new ACP session
-            // not yet synced to disk), return empty turns instead of failing.
             match parser.get_conversation(&eid) {
-                Ok(d) => Ok((d.turns, d.session_stats)),
-                Err(crate::parsers::ParseError::ConversationNotFound(_)) => Ok((vec![], None)),
+                Ok(d) => Ok((d.turns, d.session_stats, None)),
+                Err(crate::parsers::ParseError::ConversationNotFound(_)) => {
+                    // For OpenClaw, the external_id may be an ACP session UUID that
+                    // doesn't correspond to any JSONL file.  Fall back to matching
+                    // by title and folder_path from the parsed conversation list.
+                    if at == AgentType::OpenClaw {
+                        if let Ok(all) = parser.list_conversations() {
+                            // Filter by folder_path first, then find the closest
+                            // started_at match within 300 seconds of db_created_at.
+                            let matched = all
+                                .into_iter()
+                                .filter(|c| {
+                                    c.folder_path
+                                        .as_ref()
+                                        .zip(folder_path_for_fallback.as_ref())
+                                        .is_some_and(|(a, b)| path_eq_for_matching(a, b))
+                                })
+                                .min_by_key(|c| {
+                                    (c.started_at - db_created_at).num_seconds().unsigned_abs()
+                                })
+                                .filter(|c| {
+                                    let diff = (c.started_at - db_created_at).num_seconds().unsigned_abs();
+                                    diff < 300
+                                });
+                            if let Some(conv) = matched {
+                                let new_ext_id = conv.id.clone();
+                                if let Ok(d) = parser.get_conversation(&new_ext_id) {
+                                    return Ok((
+                                        d.turns,
+                                        d.session_stats,
+                                        Some(new_ext_id),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    Ok((vec![], None, None))
+                }
                 Err(e) => Err(parse_error_to_app_error(e)),
             }
         })
@@ -289,8 +332,15 @@ pub async fn get_folder_conversation(
             .with_detail(e.to_string())
         })??
     } else {
-        (vec![], None)
+        (vec![], None, None)
     };
+
+    // If we resolved a different external_id (e.g. ACP UUID → parser branch ID),
+    // update the database so future lookups are direct.
+    if let Some(new_ext_id) = resolved_ext_id {
+        let _ =
+            conversation_service::update_external_id(&db.conn, conversation_id, new_ext_id).await;
+    }
 
     let mut summary = summary;
     summary.message_count = turns.len() as u32;
