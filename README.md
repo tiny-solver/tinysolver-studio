@@ -20,7 +20,7 @@
 
 Codeg (Code Generation) is an enterprise-grade multi-agent coding workspace.
 It unifies local AI coding agents (Claude Code, Codex CLI, OpenCode, Gemini CLI,
-etc.) in one desktop app with session aggregation, parallel `git worktree`
+OpenClaw, etc.) in one desktop app with session aggregation, parallel `git worktree`
 development, MCP/Skills management, and integrated Git/file/terminal workflows.
 
 ## Main Interface
@@ -52,6 +52,7 @@ development, MCP/Skills management, and integrated Git/file/terminal workflows.
 | Codex CLI | `$CODEX_HOME/sessions` | `~/.codex/sessions` | `%USERPROFILE%\\.codex\\sessions` |
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
+| OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
 
 > Note: environment variables take precedence over fallback paths.
 

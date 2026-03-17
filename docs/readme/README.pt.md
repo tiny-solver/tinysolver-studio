@@ -2,6 +2,8 @@
 
 [![Release](https://img.shields.io/github/v/release/xintaofei/codeg)](https://github.com/xintaofei/codeg/releases)
 [![License](https://img.shields.io/github/license/xintaofei/codeg)](../../LICENSE)
+[![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 
 <p>
   <a href="../../README.md">English</a> |
@@ -16,56 +18,138 @@
   <a href="./README.ar.md">العربية</a>
 </p>
 
-Codeg (Code Generation) é um workspace empresarial para geração de código com
-múltiplos Agent.
-Ele unifica agentes locais como Claude Code, Codex CLI, OpenCode e Gemini CLI
-em um único app desktop com agregação de sessões, desenvolvimento paralelo com
-`git worktree`, gestão de MCP/Skills e fluxo integrado de Git/arquivos/terminal.
+Codeg (Code Generation) é um workspace de codificação multi-agentes de nível empresarial.
+Ele unifica agentes de codificação IA locais (Claude Code, Codex CLI, OpenCode, Gemini CLI,
+OpenClaw, etc.) em um único aplicativo desktop com agregação de sessões, desenvolvimento
+paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de Git/arquivos/terminal.
 
 ## Interface principal
-
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
 
-## Exibição em mosaico de sessões
-
+## Exibição em mosaico das sessões
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> Versão atual: `v0.1.x` (iteração rápida)
+> Status atual: `v0.1.x` (iteração rápida, adequado para adotantes iniciais)
 
 ## Destaques
 
-- Workspace unificado para múltiplos Agent
-- Agregação local de sessões com visualização estruturada
-- Desenvolvimento paralelo com `git worktree`
-- Gestão de MCP (varredura local + busca/instalação)
-- Gestão de Skills (global e por projeto)
+- Workspace multi-agentes unificado no mesmo projeto
+- Ingestão local de sessões com renderização estruturada
+- Desenvolvimento paralelo com fluxos `git worktree` integrados
+- Gerenciamento de MCP (varredura local + busca/instalação no registro)
+- Gerenciamento de Skills (escopo global e por projeto)
+- Ciclo de engenharia integrado (árvore de arquivos, diff, alterações git, commit, terminal)
+
+## Escopo suportado
+
+### 1) Ingestão de sessões (sessões históricas)
+
+| Agente | Caminho por variável de ambiente | Padrão macOS / Linux | Padrão Windows |
+| --- | --- | --- | --- |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` |
+| Codex CLI | `$CODEX_HOME/sessions` | `~/.codex/sessions` | `%USERPROFILE%\\.codex\\sessions` |
+| OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
+| Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
+| OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+
+> Nota: as variáveis de ambiente têm prioridade sobre os caminhos padrão.
+
+### 2) Sessões em tempo real ACP
+
+O registro integrado inclui mais de 20 adaptadores, como Claude Code, Codex CLI,
+Gemini CLI, OpenCode, OpenClaw, GitHub Copilot, Cline, Qwen Code, entre outros.
+
+### 3) Suporte a configurações de Skills
+
+- Suportado: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- Mais adaptadores serão adicionados progressivamente
+
+### 4) Aplicativos alvo MCP
+
+Alvos de escrita atuais:
+
+- Claude Code
+- Codex
+- OpenCode
 
 ## Início rápido
 
 ### Requisitos
 
-- Node.js `>=22`
+- Node.js `>=22` (recomendado)
 - pnpm `>=10`
 - Rust stable (2021 edition)
 - Dependências de build do Tauri 2
 
-### Comandos
+Exemplo Linux (Debian/Ubuntu):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+```
+
+### Desenvolvimento
 
 ```bash
 pnpm install
+
+# Aplicativo desktop completo (Tauri + Next.js)
 pnpm tauri dev
+
+# Apenas frontend
 pnpm dev
+
+# Exportação estática do frontend para out/
 pnpm build
+
+# Build do aplicativo desktop
 pnpm tauri build
+
+# Lint
 pnpm eslint .
 
-# Executar em src-tauri/
+# Verificações Rust (executar em src-tauri/)
 cargo check
 cargo clippy
 cargo build
 ```
+
+## Arquitetura
+
+```text
+Next.js 16 (Static Export) + React 19
+        |
+        | invoke()
+        v
+Tauri 2 Commands (Rust)
+  |- ACP Manager
+  |- Parsers (local session ingestion)
+  |- Git / File Tree / Terminal runtime
+  |- MCP marketplace + local config writer
+  |- SeaORM + SQLite
+        |
+        v
+Local Filesystem / Local Agent Data / Git Repos
+```
+
+## Restrições
+
+- O frontend usa exportação estática (`output: "export"`)
+- Sem rotas dinâmicas do Next.js (`[param]`); use parâmetros de consulta em vez disso
+- Parâmetros de comandos Tauri: `camelCase` no frontend, `snake_case` no Rust
+- TypeScript em modo strict
+
+## Privacidade e segurança
+
+- Local-first por padrão para análise, armazenamento e operações do projeto
+- O acesso à rede ocorre apenas em ações iniciadas pelo usuário
+- Suporte a proxy do sistema para ambientes corporativos
 
 ## Licença
 
