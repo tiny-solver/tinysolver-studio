@@ -142,7 +142,8 @@ export function SearchCommandDialog({
                 entry.relativePath
               )
               const lastSlash = entry.relativePath.lastIndexOf("/")
-              const dir = lastSlash === -1 ? "" : entry.relativePath.slice(0, lastSlash)
+              const dir =
+                lastSlash === -1 ? "" : entry.relativePath.slice(0, lastSlash)
               matchers.push({
                 prefix: dir ? dir + "/" : "",
                 matcher: ig().add(result.content),
@@ -168,8 +169,7 @@ export function SearchCommandDialog({
             if (!f.relativePath.startsWith(prefix)) continue
             const relPath = f.relativePath.slice(prefix.length)
             if (!relPath) continue
-            const testPath =
-              f.kind === "dir" ? `${relPath}/` : relPath
+            const testPath = f.kind === "dir" ? `${relPath}/` : relPath
             if (matcher.ignores(testPath)) {
               if (f.kind === "dir") ignoredDirs.add(f.relativePath)
               return false
@@ -284,9 +284,7 @@ export function SearchCommandDialog({
   )
 
   const placeholder =
-    activeTab === "conversations"
-      ? t("placeholder")
-      : t("filePlaceholder")
+    activeTab === "conversations" ? t("placeholder") : t("filePlaceholder")
 
   return (
     <CommandDialog
@@ -387,9 +385,8 @@ export function SearchCommandDialog({
                     <span
                       className={cn(
                         "w-2 h-2 rounded-full shrink-0",
-                        STATUS_COLORS[
-                          conv.status as ConversationStatus
-                        ] ?? "bg-gray-400"
+                        STATUS_COLORS[conv.status as ConversationStatus] ??
+                          "bg-gray-400"
                       )}
                     />
                     <span className="flex-1 truncate">
@@ -430,13 +427,11 @@ export function SearchCommandDialog({
                     onSelect={() => handleSelectFile(entry)}
                   >
                     {entry.kind === "dir" ? (
-                      <Folder className="w-4 h-4 shrink-0 text-muted-foreground" />
+                      <Folder className="w-4 h-4 shrink-0 text-blue-500" />
                     ) : (
                       <File className="w-4 h-4 shrink-0 text-muted-foreground" />
                     )}
-                    <span className="flex-1 truncate">
-                      {entry.name}
-                    </span>
+                    <span className="flex-1 truncate">{entry.name}</span>
                     <span className="text-xs text-muted-foreground shrink-0 truncate max-w-48">
                       {entry.relativePath}
                     </span>

@@ -2040,10 +2040,7 @@ function hasComparableVersion(
 }
 
 function buildVersionCheck(agent: AcpAgentInfo): UiCheckItem | null {
-  if (
-    agent.distribution_type !== "binary" &&
-    agent.distribution_type !== "npx"
-  )
+  if (agent.distribution_type !== "binary" && agent.distribution_type !== "npx")
     return null
 
   const remoteVersion = agent.registry_version ?? "unknown"
@@ -2390,46 +2387,51 @@ export function AcpAgentSettings() {
 
   const runPreflight = useCallback(
     async (agentType: AgentType, forceRefresh?: boolean) => {
-    setChecking((prev) => ({ ...prev, [agentType]: true }))
-    try {
-      const [resultState, versionState] = await Promise.allSettled([
-        acpPreflight(agentType, forceRefresh),
-        acpDetectAgentLocalVersion(agentType),
-      ])
+      setChecking((prev) => ({ ...prev, [agentType]: true }))
+      try {
+        const [resultState, versionState] = await Promise.allSettled([
+          acpPreflight(agentType, forceRefresh),
+          acpDetectAgentLocalVersion(agentType),
+        ])
 
-      if (versionState.status === "fulfilled") {
-        setAgents((prev) => {
-          if (versionState.value === null) return prev
-          let changed = false
-          const next = prev.map((agent) => {
-            if (agent.agent_type !== agentType) return agent
-            if (agent.installed_version === versionState.value) return agent
-            changed = true
-            return { ...agent, installed_version: versionState.value }
+        if (versionState.status === "fulfilled") {
+          setAgents((prev) => {
+            if (versionState.value === null) return prev
+            let changed = false
+            const next = prev.map((agent) => {
+              if (agent.agent_type !== agentType) return agent
+              if (agent.installed_version === versionState.value) return agent
+              changed = true
+              return { ...agent, installed_version: versionState.value }
+            })
+            return changed ? next : prev
           })
-          return changed ? next : prev
-        })
-      }
+        }
 
-      if (resultState.status === "fulfilled") {
-        setCheckState((prev) => ({
-          ...prev,
-          [agentType]: { result: resultState.value },
-        }))
-      } else {
-        const message =
-          resultState.reason instanceof Error
-            ? resultState.reason.message
-            : String(resultState.reason)
+        if (resultState.status === "fulfilled") {
+          setCheckState((prev) => ({
+            ...prev,
+            [agentType]: { result: resultState.value },
+          }))
+        } else {
+          const message =
+            resultState.reason instanceof Error
+              ? resultState.reason.message
+              : String(resultState.reason)
+          setCheckState((prev) => ({
+            ...prev,
+            [agentType]: { error: message },
+          }))
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
         setCheckState((prev) => ({ ...prev, [agentType]: { error: message } }))
+      } finally {
+        setChecking((prev) => ({ ...prev, [agentType]: false }))
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setCheckState((prev) => ({ ...prev, [agentType]: { error: message } }))
-    } finally {
-      setChecking((prev) => ({ ...prev, [agentType]: false }))
-    }
-  }, [])
+    },
+    []
+  )
 
   const runAllPreflight = useCallback(
     async (agentTypes: AgentType[]) => {
@@ -2790,10 +2792,7 @@ export function AcpAgentSettings() {
       await runNpxAction(agent, "upgrade")
       return
     }
-    if (
-      action.kind === "uninstall_binary" ||
-      action.kind === "uninstall_npx"
-    ) {
+    if (action.kind === "uninstall_binary" || action.kind === "uninstall_npx") {
       setUninstallConfirmAgent(agent)
       return
     }

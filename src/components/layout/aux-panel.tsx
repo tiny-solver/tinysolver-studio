@@ -26,13 +26,15 @@ export function AuxPanel() {
     activeTab === "git_log"
   )
 
-  // Sync mount flags when activeTab changes programmatically (e.g. revealInFileTree)
+  // Sync mount flags when activeTab changes programmatically (e.g. revealInFileTree).
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isOpen) return
     if (activeTab === "file_tree") setHasMountedFileTree(true)
     else if (activeTab === "changes") setHasMountedChanges(true)
     else if (activeTab === "git_log") setHasMountedGitLog(true)
   }, [isOpen, activeTab])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleTabValueChange = useCallback(
     (value: string) => {
