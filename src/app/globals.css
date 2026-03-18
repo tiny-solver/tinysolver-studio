@@ -166,18 +166,24 @@
   }
 }
 
-/* Shiki dual-theme: switch to dark CSS variables in dark mode */
-.dark .shiki,
-.dark .shiki span {
-  color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg) !important;
+/* Streamdown code blocks: dark mode via shiki dual-theme CSS variables */
+.dark [data-streamdown="code-block-body"] {
+  background-color: var(--shiki-dark-bg, var(--sdm-bg, transparent)) !important;
+  color: var(--shiki-dark, var(--sdm-fg, inherit)) !important;
+}
+
+.dark [data-streamdown="code-block-body"] code > span > span {
+  color: var(--shiki-dark, var(--sdm-c, inherit)) !important;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not(.light) .shiki,
-  :root:not(.light) .shiki span {
-    color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
+  :root:not(.light) [data-streamdown="code-block-body"] {
+    background-color: var(--shiki-dark-bg, var(--sdm-bg, transparent)) !important;
+    color: var(--shiki-dark, var(--sdm-fg, inherit)) !important;
+  }
+
+  :root:not(.light) [data-streamdown="code-block-body"] code > span > span {
+    color: var(--shiki-dark, var(--sdm-c, inherit)) !important;
   }
 }
 
