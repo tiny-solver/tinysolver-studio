@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { FileDiff, Folder, FolderPen, GitCommit } from "lucide-react"
 import { useTranslations } from "next-intl"
 import {
@@ -25,6 +25,14 @@ export function AuxPanel() {
   const [hasMountedGitLog, setHasMountedGitLog] = useState(
     activeTab === "git_log"
   )
+
+  // Sync mount flags when activeTab changes programmatically (e.g. revealInFileTree)
+  useEffect(() => {
+    if (!isOpen) return
+    if (activeTab === "file_tree") setHasMountedFileTree(true)
+    else if (activeTab === "changes") setHasMountedChanges(true)
+    else if (activeTab === "git_log") setHasMountedGitLog(true)
+  }, [isOpen, activeTab])
 
   const handleTabValueChange = useCallback(
     (value: string) => {

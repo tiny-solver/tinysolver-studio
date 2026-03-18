@@ -648,11 +648,15 @@
       "save": "儲存"
     },
     "search": {
-      "dialogTitle": "搜尋會話",
+      "dialogTitle": "搜尋",
+      "tabConversations": "會話",
+      "tabFiles": "檔案",
       "placeholder": "搜尋會話...",
+      "filePlaceholder": "搜尋檔案或目錄...",
       "allAgents": "全部",
       "searching": "搜尋中...",
       "typeToSearch": "輸入關鍵字搜尋會話",
+      "typeToSearchFiles": "輸入關鍵字搜尋檔案或目錄",
       "noResults": "找不到結果。",
       "untitledConversation": "未命名會話"
     },

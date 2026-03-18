@@ -31,6 +31,9 @@ interface AuxPanelContextValue {
   setWidth: (w: number) => void
   setActiveTab: (tab: AuxPanelTab) => void
   openTab: (tab: AuxPanelTab) => void
+  pendingRevealPath: string | null
+  revealInFileTree: (path: string) => void
+  consumePendingRevealPath: () => void
 }
 
 const AuxPanelContext = createContext<AuxPanelContextValue | null>(null)
@@ -64,6 +67,9 @@ export function AuxPanelProvider({
   const [width, setWidthState] = useState(DEFAULT_WIDTH)
   const [restored, setRestored] = useState(false)
   const [activeTab, setActiveTab] = useState<AuxPanelTab>("session_files")
+  const [pendingRevealPath, setPendingRevealPath] = useState<string | null>(
+    null
+  )
 
   const toggle = useCallback(() => setIsOpen((prev) => !prev), [])
 
@@ -74,6 +80,16 @@ export function AuxPanelProvider({
   const openTab = useCallback((tab: AuxPanelTab) => {
     setActiveTab(tab)
     setIsOpen(true)
+  }, [])
+
+  const revealInFileTree = useCallback((path: string) => {
+    setPendingRevealPath(path)
+    setActiveTab("file_tree")
+    setIsOpen(true)
+  }, [])
+
+  const consumePendingRevealPath = useCallback(() => {
+    setPendingRevealPath(null)
   }, [])
 
   useEffect(() => {
@@ -101,8 +117,21 @@ export function AuxPanelProvider({
       setWidth,
       setActiveTab,
       openTab,
+      pendingRevealPath,
+      revealInFileTree,
+      consumePendingRevealPath,
     }),
-    [isOpen, width, activeTab, toggle, setWidth, openTab]
+    [
+      isOpen,
+      width,
+      activeTab,
+      toggle,
+      setWidth,
+      openTab,
+      pendingRevealPath,
+      revealInFileTree,
+      consumePendingRevealPath,
+    ]
   )
 
   return (

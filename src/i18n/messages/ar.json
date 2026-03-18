@@ -648,11 +648,15 @@
       "save": "حفظ"
     },
     "search": {
-      "dialogTitle": "البحث في المحادثات",
+      "dialogTitle": "بحث",
+      "tabConversations": "المحادثات",
+      "tabFiles": "الملفات",
       "placeholder": "البحث في المحادثات...",
+      "filePlaceholder": "البحث في الملفات أو المجلدات...",
       "allAgents": "الكل",
       "searching": "جارٍ البحث...",
       "typeToSearch": "اكتب للبحث في المحادثات",
+      "typeToSearchFiles": "اكتب للبحث في الملفات أو المجلدات",
       "noResults": "لم يتم العثور على نتائج.",
       "untitledConversation": "محادثة بدون عنوان"
     },

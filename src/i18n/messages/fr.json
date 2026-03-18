@@ -648,11 +648,15 @@
       "save": "Enregistrer"
     },
     "search": {
-      "dialogTitle": "Rechercher des conversations",
+      "dialogTitle": "Rechercher",
+      "tabConversations": "Conversations",
+      "tabFiles": "Fichiers",
       "placeholder": "Rechercher des conversations...",
+      "filePlaceholder": "Rechercher des fichiers ou répertoires...",
       "allAgents": "Tout",
       "searching": "Recherche...",
       "typeToSearch": "Tapez pour rechercher des conversations",
+      "typeToSearchFiles": "Tapez pour rechercher des fichiers ou répertoires",
       "noResults": "Aucun résultat trouvé.",
       "untitledConversation": "Conversation sans titre"
     },
