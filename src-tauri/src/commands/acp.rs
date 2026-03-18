@@ -78,19 +78,6 @@ fn package_name_from_spec(package: &str) -> String {
     normalized.to_string()
 }
 
-async fn detect_global_cmd_version(cmd: &str) -> Option<String> {
-    let output = crate::process::tokio_command(cmd)
-        .arg("--version")
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    normalize_version_candidate(&raw)
-}
-
 /// Check whether a command is available on the system PATH.
 /// Uses `which` on unix and `where` on windows — lightweight and does not
 /// invoke the target binary itself, avoiding side-effects or slow startups.
@@ -113,8 +100,12 @@ async fn is_cmd_available(cmd: &str) -> bool {
 async fn detect_local_version(agent_type: AgentType) -> Option<String> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
-        registry::AgentDistribution::Npx { cmd, .. } => {
-            detect_global_cmd_version(cmd).await
+        registry::AgentDistribution::Npx { cmd, package, .. } => {
+            if is_cmd_available(cmd).await {
+                version_from_package_spec(package)
+            } else {
+                None
+            }
         }
         registry::AgentDistribution::Binary { cmd, .. } => {
             binary_cache::detect_installed_version(agent_type, cmd)
