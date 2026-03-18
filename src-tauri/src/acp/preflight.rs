@@ -93,14 +93,24 @@ async fn check_npm_environment(node_required: Option<&str>) -> Vec<CheckItem> {
         return checks;
     }
 
-    // Run node and npm checks in parallel
+    // Resolve absolute paths via `which` crate to avoid GUI PATH issues,
+    // then run version checks in parallel.
+    let node_path = which::which("node").ok();
+    let npm_path = which::which("npm").ok();
+
     let (node_result, npm_result) = tokio::join!(
-        crate::process::tokio_command("node")
-            .arg("--version")
-            .output(),
-        crate::process::tokio_command("npm")
-            .arg("--version")
-            .output(),
+        async {
+            match &node_path {
+                Some(p) => crate::process::tokio_command(p).arg("--version").output().await,
+                None => Err(std::io::Error::new(std::io::ErrorKind::NotFound, "node not found in PATH")),
+            }
+        },
+        async {
+            match &npm_path {
+                Some(p) => crate::process::tokio_command(p).arg("--version").output().await,
+                None => Err(std::io::Error::new(std::io::ErrorKind::NotFound, "npm not found in PATH")),
+            }
+        },
     );
 
     // Track the raw node version string for reuse in the version check
