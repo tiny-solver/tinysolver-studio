@@ -1314,6 +1314,7 @@
       "liveTurnStats": {
         "thinking": "Denkt nach...",
         "streaming": "Übertragung",
+        "elapsedHours": "{value} Std",
         "elapsedMinutes": "{value} Min",
         "elapsedSeconds": "{value} Sek",
         "toolUseCount": "{count} Tool {count, plural, one {use} other {uses}}"

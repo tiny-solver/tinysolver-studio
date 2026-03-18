@@ -282,7 +282,7 @@ export function LiveTurnStats({
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsed(Date.now() - message.startedAt)
-    }, 100)
+    }, 1_000)
     return () => clearInterval(timer)
   }, [message.startedAt])
 
@@ -307,9 +307,11 @@ export function LiveTurnStats({
     lastBlock?.type === "thinking"
 
   const elapsedLabel =
-    elapsed >= 60_000
-      ? t("elapsedMinutes", { value: (elapsed / 60_000).toFixed(1) })
-      : t("elapsedSeconds", { value: (elapsed / 1_000).toFixed(1) })
+    elapsed >= 3_600_000
+      ? `${t("elapsedHours", { value: Math.floor(elapsed / 3_600_000) })} ${t("elapsedMinutes", { value: Math.floor((elapsed % 3_600_000) / 60_000) })} ${t("elapsedSeconds", { value: Math.floor((elapsed % 60_000) / 1_000) })}`
+      : elapsed >= 60_000
+        ? `${t("elapsedMinutes", { value: Math.floor(elapsed / 60_000) })} ${t("elapsedSeconds", { value: Math.floor((elapsed % 60_000) / 1_000) })}`
+        : t("elapsedSeconds", { value: Math.floor(elapsed / 1_000) })
 
   return (
     <div className="flex h-8 shrink-0 items-center justify-center gap-3 px-4 text-xs leading-none text-muted-foreground">

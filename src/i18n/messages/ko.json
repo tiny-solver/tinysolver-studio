@@ -1314,6 +1314,7 @@
       "liveTurnStats": {
         "thinking": "생각 중...",
         "streaming": "스트리밍 중",
+        "elapsedHours": "{value}시간",
         "elapsedMinutes": "{value}분",
         "elapsedSeconds": "{value}초",
         "toolUseCount": "{count}개 도구 {count, plural, one {use} other {uses}}"

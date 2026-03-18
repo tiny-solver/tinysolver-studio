@@ -1314,6 +1314,7 @@
       "liveTurnStats": {
         "thinking": "جارٍ التفكير...",
         "streaming": "جارٍ البث",
+        "elapsedHours": "{value}س",
         "elapsedMinutes": "{value}د",
         "elapsedSeconds": "{value}ث",
         "toolUseCount": "{count} أداة {count, plural, one {use} other {uses}}"
