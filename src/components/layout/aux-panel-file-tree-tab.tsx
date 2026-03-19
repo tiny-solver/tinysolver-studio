@@ -744,7 +744,8 @@ function RenderNode({
 export function FileTreeTab() {
   const t = useTranslations("Folder.fileTreeTab")
   const tCommon = useTranslations("Folder.common")
-  const { activeTab } = useAuxPanelContext()
+  const { activeTab, pendingRevealPath, consumePendingRevealPath } =
+    useAuxPanelContext()
   const { folder } = useFolderContext()
   const { tabs, activeTabId } = useTabContext()
   const { createTerminalInDirectory } = useTerminalContext()
@@ -856,6 +857,24 @@ export function FileTreeTab() {
     setSavingExternalConflictCopy(false)
     externalConflictSignatureByPathRef.current.clear()
   }, [folder?.path])
+
+  // Handle pending reveal path: expand all ancestor directories once tree is loaded
+  const hasNodes = nodes.length > 0
+  useEffect(() => {
+    if (!pendingRevealPath || !hasNodes) return
+    consumePendingRevealPath()
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      next.add(FILE_TREE_ROOT_PATH)
+      let idx = pendingRevealPath.indexOf("/")
+      while (idx !== -1) {
+        next.add(pendingRevealPath.slice(0, idx))
+        idx = pendingRevealPath.indexOf("/", idx + 1)
+      }
+      next.add(pendingRevealPath)
+      return next
+    })
+  }, [pendingRevealPath, consumePendingRevealPath, hasNodes])
 
   useEffect(() => {
     if (!activeFileTab || activeFileTab.kind !== "file") return

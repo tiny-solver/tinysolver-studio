@@ -13,32 +13,23 @@ import { GitChangesTab } from "./aux-panel-git-changes-tab"
 import { GitLogTab } from "./aux-panel-git-log-tab"
 import { SessionFilesTab } from "./aux-panel-session-files-tab"
 
+const LAZY_TABS: AuxPanelTab[] = ["file_tree", "changes", "git_log"]
+
 export function AuxPanel() {
   const t = useTranslations("Folder.auxPanel.tabs")
   const { isOpen, activeTab, setActiveTab } = useAuxPanelContext()
-  const [hasMountedFileTree, setHasMountedFileTree] = useState(
-    activeTab === "file_tree"
+  const [mountedTabs, setMountedTabs] = useState<Set<AuxPanelTab>>(
+    () => new Set(LAZY_TABS.filter((tab) => tab === activeTab))
   )
-  const [hasMountedChanges, setHasMountedChanges] = useState(
-    activeTab === "changes"
-  )
-  const [hasMountedGitLog, setHasMountedGitLog] = useState(
-    activeTab === "git_log"
-  )
+
+  // Ensure the active tab is mounted (covers both user clicks and programmatic changes)
+  if (isOpen && LAZY_TABS.includes(activeTab) && !mountedTabs.has(activeTab)) {
+    setMountedTabs((prev) => new Set(prev).add(activeTab))
+  }
 
   const handleTabValueChange = useCallback(
     (value: string) => {
-      const nextTab = value as AuxPanelTab
-      setActiveTab(nextTab)
-      if (nextTab === "file_tree") {
-        setHasMountedFileTree(true)
-      }
-      if (nextTab === "changes") {
-        setHasMountedChanges(true)
-      }
-      if (nextTab === "git_log") {
-        setHasMountedGitLog(true)
-      }
+      setActiveTab(value as AuxPanelTab)
     },
     [setActiveTab]
   )
@@ -97,21 +88,21 @@ export function AuxPanel() {
           forceMount
           className="mt-0 flex-1 min-h-0 overflow-hidden"
         >
-          {hasMountedFileTree ? <FileTreeTab /> : null}
+          {mountedTabs.has("file_tree") ? <FileTreeTab /> : null}
         </TabsContent>
         <TabsContent
           value="changes"
           forceMount
           className="mt-0 flex-1 min-h-0 overflow-hidden"
         >
-          {hasMountedChanges ? <GitChangesTab /> : null}
+          {mountedTabs.has("changes") ? <GitChangesTab /> : null}
         </TabsContent>
         <TabsContent
           value="git_log"
           forceMount
           className="mt-0 flex-1 min-h-0 overflow-hidden"
         >
-          {hasMountedGitLog ? <GitLogTab /> : null}
+          {mountedTabs.has("git_log") ? <GitLogTab /> : null}
         </TabsContent>
       </Tabs>
     </aside>

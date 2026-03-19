@@ -26,15 +26,22 @@ function Command({
 function CommandDialog({
   title = "Command",
   children,
+  shouldFilter,
   ...props
-}: React.ComponentProps<typeof Dialog> & { title?: string }) {
+}: React.ComponentProps<typeof Dialog> & {
+  title?: string
+  shouldFilter?: boolean
+}) {
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0 rounded-2xl max-w-lg">
         <VisuallyHidden.Root>
           <DialogTitle>{title}</DialogTitle>
         </VisuallyHidden.Root>
-        <Command className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3">
+        <Command
+          shouldFilter={shouldFilter}
+          className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3"
+        >
           {children}
         </Command>
       </DialogContent>

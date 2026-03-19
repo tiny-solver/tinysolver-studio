@@ -131,9 +131,13 @@ async fn build_agent(
                 parts.push(format!("{k}={v}"));
             }
             parts.push(
-                crate::process::normalized_program(cmd)
-                    .to_string_lossy()
-                    .to_string(),
+                which::which(cmd)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| {
+                        crate::process::normalized_program(cmd)
+                            .to_string_lossy()
+                            .to_string()
+                    }),
             );
             for a in args {
                 parts.push((*a).into());

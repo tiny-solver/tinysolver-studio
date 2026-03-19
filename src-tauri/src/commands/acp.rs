@@ -81,31 +81,49 @@ fn package_name_from_spec(package: &str) -> String {
 /// Check whether a command is available on the system PATH.
 /// Uses `which` on unix and `where` on windows — lightweight and does not
 /// invoke the target binary itself, avoiding side-effects or slow startups.
-async fn is_cmd_available(cmd: &str) -> bool {
-    #[cfg(unix)]
-    let check_cmd = "which";
-    #[cfg(windows)]
-    let check_cmd = "where";
+fn is_cmd_available(cmd: &str) -> bool {
+    which::which(cmd).is_ok()
+}
 
-    crate::process::tokio_command(check_cmd)
-        .arg(cmd)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
+/// Detect the actual installed version of an npm global package by running
+/// `npm list -g <package_name> --json` and parsing the JSON output.
+async fn detect_npm_global_version(package_name: &str) -> Option<String> {
+    let npm_path = which::which("npm").ok()?;
+    let output = crate::process::tokio_command(npm_path)
+        .arg("list")
+        .arg("-g")
+        .arg(package_name)
+        .arg("--json")
+        .arg("--depth=0")
+        .output()
         .await
-        .map(|s| s.success())
-        .unwrap_or(false)
+        .ok()?;
+    // npm list --json may exit non-zero when package is missing, but still
+    // outputs valid JSON with an empty dependencies object.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout).ok()?;
+    let version = json
+        .get("dependencies")?
+        .get(package_name)?
+        .get("version")?
+        .as_str()?;
+    normalize_version_candidate(version)
 }
 
 async fn detect_local_version(agent_type: AgentType) -> Option<String> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
         registry::AgentDistribution::Npx { cmd, package, .. } => {
-            if is_cmd_available(cmd).await {
-                version_from_package_spec(package)
-            } else {
-                None
+            if !is_cmd_available(cmd) {
+                return None;
             }
+            // Try `npm list -g <package_name> --json` to get the real installed version.
+            let pkg_name = package_name_from_spec(package);
+            if let Some(v) = detect_npm_global_version(&pkg_name).await {
+                return Some(v);
+            }
+            // Fallback: parse version from registry package spec
+            version_from_package_spec(package)
         }
         registry::AgentDistribution::Binary { cmd, .. } => {
             binary_cache::detect_installed_version(agent_type, cmd)
@@ -1047,7 +1065,7 @@ pub async fn acp_connect(
     }
 
     if let registry::AgentDistribution::Npx { cmd, .. } = meta.distribution {
-        if !is_cmd_available(cmd).await {
+        if !is_cmd_available(cmd) {
             return Err(AcpError::protocol(format!(
                 "{} SDK is not installed. Please install it in Agent Settings.",
                 meta.name
