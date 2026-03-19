@@ -127,7 +127,11 @@ impl OpenCodeParser {
 
         let mut conversations = Vec::with_capacity(rows.len());
         for row in rows {
-            conversations.push(Self::parse_sqlite_summary_row(&row)?);
+            let summary = Self::parse_sqlite_summary_row(&row)?;
+            if summary.message_count == 0 {
+                continue;
+            }
+            conversations.push(summary);
         }
 
         Ok(conversations)
