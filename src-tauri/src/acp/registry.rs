@@ -163,8 +163,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
             distribution: AgentDistribution::Npx {
-                version: "0.34.0",
-                package: "@google/gemini-cli@0.34.0",
+                version: "0.33.2",
+                package: "@google/gemini-cli@0.33.2",
                 cmd: "gemini",
                 args: &["--acp"],
                 env: &[],
