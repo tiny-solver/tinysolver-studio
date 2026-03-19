@@ -1,7 +1,7 @@
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
 use std::fs::{File, OpenOptions};
 use std::hash::{Hash, Hasher};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{mpsc, LazyLock, Mutex};
@@ -134,7 +134,6 @@ pub enum FileTreeNode {
 pub struct FilePreviewContent {
     pub path: String,
     pub content: String,
-    pub truncated: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,7 +143,6 @@ pub struct FileEditContent {
     pub etag: String,
     pub mtime_ms: Option<i64>,
     pub readonly: bool,
-    pub truncated: bool,
     pub line_ending: String,
 }
 
@@ -208,7 +206,7 @@ async fn detect_conflicts(path: &str) -> Result<Vec<String>, AppCommandError> {
 
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
-        .map(|l| unquote_git_path(l))
+        .map(unquote_git_path)
         .filter(|l| !l.is_empty())
         .collect())
 }
@@ -1819,11 +1817,10 @@ pub async fn git_continue_operation(
 const WATCH_IGNORED_DIRS: &[&str] = &["__pycache__"];
 const FILE_TREE_IGNORED_DIRS: &[&str] = &[".git", "__pycache__"];
 
-const FILE_PREVIEW_DEFAULT_MAX_BYTES: usize = 200_000;
-const FILE_PREVIEW_MIN_BYTES: usize = 4_096;
-const FILE_PREVIEW_MAX_BYTES: usize = 2_000_000;
-const FILE_EDIT_DEFAULT_MAX_BYTES: usize = 400_000;
-const FILE_EDIT_MAX_BYTES: usize = 2_000_000;
+/// Hard limit: refuse to open files larger than 50 MB in the text editor.
+const FILE_OPEN_HARD_LIMIT: usize = 50_000_000;
+/// Save limit: refuse to save content larger than 50 MB.
+const FILE_SAVE_HARD_LIMIT: usize = 50_000_000;
 const FILE_BASE64_DEFAULT_MAX_BYTES: usize = 20_000_000;
 const FILE_BASE64_MAX_BYTES: usize = 100_000_000;
 const FILE_IO_MAX_CONCURRENT_OPS: usize = 8;
@@ -2431,14 +2428,20 @@ fn ensure_path_in_workspace(root: &Path, target: &Path) -> Result<(), AppCommand
     Ok(())
 }
 
-fn read_text_preview(target: &Path, limit: usize) -> Result<(String, bool), AppCommandError> {
+fn read_text_full(target: &Path, hard_limit: usize) -> Result<String, AppCommandError> {
     let metadata = std::fs::metadata(target).map_err(AppCommandError::io)?;
-    let mut file = File::open(target).map_err(AppCommandError::io)?;
-    let mut bytes = Vec::new();
-    let mut limited_reader = (&mut file).take(limit as u64 + 1);
-    limited_reader
-        .read_to_end(&mut bytes)
-        .map_err(AppCommandError::io)?;
+    if metadata.len() > hard_limit as u64 {
+        return Err(
+            AppCommandError::invalid_input("File is too large to open in editor")
+                .with_detail(format!(
+                    "size={}, limit={}",
+                    metadata.len(),
+                    hard_limit
+                )),
+        );
+    }
+
+    let bytes = std::fs::read(target).map_err(AppCommandError::io)?;
 
     if bytes.iter().take(2_048).any(|b| *b == 0) {
         return Err(AppCommandError::invalid_input(
@@ -2446,11 +2449,7 @@ fn read_text_preview(target: &Path, limit: usize) -> Result<(String, bool), AppC
         ));
     }
 
-    let truncated = bytes.len() > limit || metadata.len() > limit as u64;
-    if bytes.len() > limit {
-        bytes.truncate(limit);
-    }
-    Ok((String::from_utf8_lossy(&bytes).to_string(), truncated))
+    Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
 fn atomic_write_text(path: &Path, bytes: &[u8]) -> Result<(), AppCommandError> {
@@ -2726,7 +2725,7 @@ pub async fn read_file_base64(
 
     let limit = max_bytes
         .unwrap_or(FILE_BASE64_DEFAULT_MAX_BYTES)
-        .clamp(FILE_PREVIEW_MIN_BYTES, FILE_BASE64_MAX_BYTES);
+        .clamp(4_096, FILE_BASE64_MAX_BYTES);
 
     run_file_io(move || {
         let metadata = std::fs::metadata(&target).map_err(AppCommandError::io)?;
@@ -2752,7 +2751,6 @@ pub async fn read_file_base64(
 pub async fn read_file_preview(
     root_path: String,
     path: String,
-    max_bytes: Option<usize>,
 ) -> Result<FilePreviewContent, AppCommandError> {
     let root = PathBuf::from(&root_path);
     if !root.exists() || !root.is_dir() {
@@ -2766,18 +2764,14 @@ pub async fn read_file_preview(
     if !target.is_file() {
         return Err(AppCommandError::invalid_input("Path is not a file"));
     }
-    let limit = max_bytes
-        .unwrap_or(FILE_PREVIEW_DEFAULT_MAX_BYTES)
-        .clamp(FILE_PREVIEW_MIN_BYTES, FILE_PREVIEW_MAX_BYTES);
     let path_for_response = path.clone();
 
     run_file_io(move || {
         ensure_path_in_workspace(&root, &target)?;
-        let (content, truncated) = read_text_preview(&target, limit)?;
+        let content = read_text_full(&target, FILE_OPEN_HARD_LIMIT)?;
         Ok(FilePreviewContent {
             path: path_for_response,
             content,
-            truncated,
         })
     })
     .await
@@ -2787,7 +2781,6 @@ pub async fn read_file_preview(
 pub async fn read_file_for_edit(
     root_path: String,
     path: String,
-    max_bytes: Option<usize>,
 ) -> Result<FileEditContent, AppCommandError> {
     let root = PathBuf::from(&root_path);
     if !root.exists() || !root.is_dir() {
@@ -2802,23 +2795,15 @@ pub async fn read_file_for_edit(
         return Err(AppCommandError::invalid_input("Path is not a file"));
     }
 
-    let limit = max_bytes
-        .unwrap_or(FILE_EDIT_DEFAULT_MAX_BYTES)
-        .clamp(FILE_PREVIEW_MIN_BYTES, FILE_EDIT_MAX_BYTES);
     let path_for_response = path.clone();
 
     run_file_io(move || {
         ensure_path_in_workspace(&root, &target)?;
         let metadata = std::fs::metadata(&target).map_err(AppCommandError::io)?;
-        let (content, truncated) = read_text_preview(&target, limit)?;
-        let readonly = metadata.permissions().readonly() || truncated;
+        let content = read_text_full(&target, FILE_OPEN_HARD_LIMIT)?;
+        let readonly = metadata.permissions().readonly();
         let mtime_ms = file_mtime_ms(&metadata);
-        let etag_source = if truncated {
-            format!("{}:{}", metadata.len(), mtime_ms.unwrap_or_default()).into_bytes()
-        } else {
-            content.as_bytes().to_vec()
-        };
-        let etag = compute_etag(&etag_source, &metadata);
+        let etag = compute_etag(content.as_bytes(), &metadata);
         let line_ending = detect_line_ending(content.as_bytes());
 
         Ok(FileEditContent {
@@ -2827,7 +2812,6 @@ pub async fn read_file_for_edit(
             etag,
             mtime_ms,
             readonly,
-            truncated,
             line_ending,
         })
     })
@@ -2845,10 +2829,10 @@ pub async fn save_file_content(
     if !root.exists() || !root.is_dir() {
         return Err(AppCommandError::not_found("Folder does not exist"));
     }
-    if content.len() > FILE_EDIT_MAX_BYTES {
+    if content.len() > FILE_SAVE_HARD_LIMIT {
         return Err(
             AppCommandError::invalid_input("File is too large to save in editor")
-                .with_detail(format!("max_bytes={FILE_EDIT_MAX_BYTES}")),
+                .with_detail(format!("max_bytes={FILE_SAVE_HARD_LIMIT}")),
         );
     }
 
@@ -2944,10 +2928,10 @@ pub async fn save_file_copy(
     if !root.exists() || !root.is_dir() {
         return Err(AppCommandError::not_found("Folder does not exist"));
     }
-    if content.len() > FILE_EDIT_MAX_BYTES {
+    if content.len() > FILE_SAVE_HARD_LIMIT {
         return Err(
             AppCommandError::invalid_input("File is too large to save in editor")
-                .with_detail(format!("max_bytes={FILE_EDIT_MAX_BYTES}")),
+                .with_detail(format!("max_bytes={FILE_SAVE_HARD_LIMIT}")),
         );
     }
 

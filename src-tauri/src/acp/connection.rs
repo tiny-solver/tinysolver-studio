@@ -159,7 +159,7 @@ async fn build_agent(
                 // instead of appending to the previous one.
                 if runtime_env
                     .get("OPENCLAW_RESET_SESSION")
-                    .map_or(false, |v| v == "1")
+                    .is_some_and(|v| v == "1")
                 {
                     parts.push("--reset-session".into());
                 }
