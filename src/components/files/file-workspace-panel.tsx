@@ -777,10 +777,9 @@ export function FileWorkspacePanel() {
   const renderedContent = activeFileTab?.content ?? ""
   const isFileTab = activeFileTab?.kind === "file"
   const fileReadonly = isFileTab ? Boolean(activeFileTab.readonly) : true
-  const fileTruncated = isFileTab ? Boolean(activeFileTab.truncated) : false
   const fileSaveState = isFileTab ? (activeFileTab.saveState ?? "idle") : "idle"
   const fileIsDirty = isFileTab ? Boolean(activeFileTab.isDirty) : false
-  const canEdit = isFileTab && !fileReadonly && !fileTruncated
+  const canEdit = isFileTab && !fileReadonly
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoSaveGuardRef = useRef({
     canEdit: false,

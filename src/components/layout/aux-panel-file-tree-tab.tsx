@@ -2302,7 +2302,9 @@ export function FileTreeTab() {
         <DialogContent
           onOpenAutoFocus={(e) => {
             e.preventDefault()
-            const input = (e.currentTarget as HTMLElement | null)?.querySelector("input")
+            const input = (
+              e.currentTarget as HTMLElement | null
+            )?.querySelector("input")
             if (input) requestAnimationFrame(() => input.focus())
           }}
         >
@@ -2369,7 +2371,9 @@ export function FileTreeTab() {
         <DialogContent
           onOpenAutoFocus={(e) => {
             e.preventDefault()
-            const input = (e.currentTarget as HTMLElement | null)?.querySelector("input")
+            const input = (
+              e.currentTarget as HTMLElement | null
+            )?.querySelector("input")
             if (input) requestAnimationFrame(() => input.focus())
           }}
         >

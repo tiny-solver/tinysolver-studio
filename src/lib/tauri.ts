@@ -900,26 +900,16 @@ export async function readFileBase64(
 
 export async function readFilePreview(
   rootPath: string,
-  path: string,
-  maxBytes?: number
+  path: string
 ): Promise<FilePreviewContent> {
-  return invoke("read_file_preview", {
-    rootPath,
-    path,
-    maxBytes: maxBytes ?? null,
-  })
+  return invoke("read_file_preview", { rootPath, path })
 }
 
 export async function readFileForEdit(
   rootPath: string,
-  path: string,
-  maxBytes?: number
+  path: string
 ): Promise<FileEditContent> {
-  return invoke("read_file_for_edit", {
-    rootPath,
-    path,
-    maxBytes: maxBytes ?? null,
-  })
+  return invoke("read_file_for_edit", { rootPath, path })
 }
 
 export async function saveFileContent(

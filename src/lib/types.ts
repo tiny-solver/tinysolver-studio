@@ -677,7 +677,6 @@ export type FileTreeNode =
 export interface FilePreviewContent {
   path: string
   content: string
-  truncated: boolean
 }
 
 export interface FileEditContent {
@@ -686,7 +685,6 @@ export interface FileEditContent {
   etag: string
   mtime_ms: number | null
   readonly: boolean
-  truncated: boolean
   line_ending: "lf" | "crlf" | "mixed" | "none"
 }
 

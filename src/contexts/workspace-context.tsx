@@ -54,7 +54,6 @@ export interface FileWorkspaceTab {
   etag?: string | null
   mtimeMs?: number | null
   readonly?: boolean
-  truncated?: boolean
   lineEnding?: LineEnding
   saveState?: FileSaveState
   saveError?: string | null
@@ -150,7 +149,6 @@ function loadingTab(
     etag: null,
     mtimeMs: null,
     readonly: kind !== "file",
-    truncated: false,
     lineEnding: "none",
     saveState: "idle",
     saveError: null,
@@ -390,7 +388,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
                   etag: result.etag,
                   mtimeMs: result.mtime_ms,
                   readonly: result.readonly,
-                  truncated: result.truncated,
                   lineEnding: result.line_ending,
                   saveState: "idle",
                   saveError: null,
@@ -512,7 +509,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
             gitShowFile(folderPath, path).catch(() => ""),
             readFilePreview(folderPath, path).catch(() => ({
               content: "",
-              truncated: false,
               path: "",
             })),
           ]),
@@ -564,7 +560,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
               gitShowFile(folderPath, path, targetBranch).catch(() => ""),
               readFilePreview(folderPath, path).catch(() => ({
                 content: "",
-                truncated: false,
                 path: "",
               })),
             ]),
@@ -715,7 +710,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       setFileTabs((prev) =>
         prev.map((tab) => {
           if (tab.id !== activeFileTabId || tab.kind !== "file") return tab
-          if (tab.loading || tab.readonly || tab.truncated) return tab
+          if (tab.loading || tab.readonly) return tab
           if (tab.content === content) return tab
 
           const savedContent = tab.savedContent ?? ""
@@ -739,7 +734,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         (candidate) => candidate.id === tabId
       )
       if (!tab || tab.kind !== "file") return false
-      if (tab.loading || tab.readonly || tab.truncated) return false
+      if (tab.loading || tab.readonly) return false
       if (!tab.path) return false
       if (!tab.isDirty) return true
 
@@ -868,7 +863,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
                   etag: result.etag,
                   mtimeMs: result.mtime_ms,
                   readonly: result.readonly,
-                  truncated: result.truncated,
                   lineEnding: result.line_ending,
                   saveState: "idle",
                   saveError: null,
