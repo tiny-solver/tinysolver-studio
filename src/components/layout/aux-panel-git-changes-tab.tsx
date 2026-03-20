@@ -147,7 +147,7 @@ function normalizePathSegments(path: string): string[] {
 }
 
 function normalizeGitStatusPath(path: string): string {
-  const normalized = path.trim()
+  const normalized = path.trim().replace(/\/+$/, "")
   const renameSeparator = " -> "
   const renameIndex = normalized.lastIndexOf(renameSeparator)
   if (renameIndex < 0) return normalized

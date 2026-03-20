@@ -1075,7 +1075,7 @@ pub async fn git_stash_show(
 pub async fn git_status(path: String) -> Result<Vec<GitStatusEntry>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["-c", "core.quotePath=false"])
-        .args(["status", "--porcelain=v1", "-uall"])
+        .args(["status", "--porcelain=v1", "-unormal"])
         .current_dir(&path)
         .output()
         .await
