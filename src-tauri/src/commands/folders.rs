@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{mpsc, LazyLock, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
@@ -1883,7 +1883,7 @@ fn git_check_ignored_paths(
         return Ok(HashSet::new());
     }
 
-    let mut child = Command::new("git")
+    let mut child = crate::process::std_command("git")
         .args(["check-ignore", "--stdin", "-z"])
         .current_dir(repo_path)
         .stdin(Stdio::piped())

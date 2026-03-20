@@ -1,10 +1,30 @@
 use std::ffi::{OsStr, OsString};
+use std::process::Command;
 
 #[cfg(windows)]
 use std::path::Path;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+pub fn configure_std_command(command: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command
+}
+
+pub fn std_command<S>(program: S) -> Command
+where
+    S: AsRef<OsStr>,
+{
+    let mut command = Command::new(normalized_program(program));
+    configure_std_command(&mut command);
+    command
+}
 
 pub fn configure_tokio_command(
     command: &mut tokio::process::Command,
