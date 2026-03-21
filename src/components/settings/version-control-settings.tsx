@@ -75,6 +75,7 @@ function AccountRow({
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-muted/10 px-3 py-2.5">
       {account.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={account.avatar_url}
           alt={account.username}

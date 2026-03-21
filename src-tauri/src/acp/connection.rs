@@ -1309,6 +1309,7 @@ struct ForkExitInfo {
 /// caller.  We attach to the forked session (S2) directly using the
 /// `ForkSessionResponse` — no separate `session/load` is needed because S2 was
 /// just created in-memory by the agent on this connection.
+#[allow(clippy::too_many_arguments)]
 async fn handle_fork_or_exit(
     loop_result: Result<Option<ForkExitInfo>, sacp::Error>,
     conn_id: &str,
@@ -1385,6 +1386,7 @@ async fn handle_fork_or_exit(
 ///
 /// Returns `Ok(None)` on normal exit (disconnect / channel closed) or
 /// `Ok(Some(ForkExitInfo))` when the loop should be restarted on a forked session.
+#[allow(clippy::too_many_arguments)]
 async fn run_conversation_loop<'a>(
     session: &mut sacp::ActiveSession<'a, Agent>,
     conn_id: &str,

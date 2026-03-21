@@ -1561,7 +1561,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
               const title = fn ? `${fn} - Codeg` : "Codeg"
               notifyTurnComplete(
                 title,
-                t("notificationTurnComplete", { agent: agentLabel }),
+                t("notificationTurnComplete", { agent: agentLabel })
               ).catch(() => {})
             }
           }
