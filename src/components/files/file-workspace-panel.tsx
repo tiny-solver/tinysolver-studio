@@ -1563,38 +1563,44 @@ export function FileWorkspacePanel() {
           </div>
         )}
         <div className="flex-1 min-h-0">
-          <MonacoEditor
-            beforeMount={defineMonacoThemes}
-            onMount={handleEditorMount}
-            path={buildMonacoModelPath(activeFileTab.path, activeFileTab.id)}
-            value={renderedContent}
-            onChange={(value) => {
-              if (!isFileTab) return
-              updateActiveFileContent(value ?? "")
-            }}
-            language={activeFileTab.language}
-            theme={editorTheme}
-            loading={
-              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                {t("loadingEditor")}
-              </div>
-            }
-            options={{
-              readOnly: !canEdit,
-              minimap: { enabled: false },
-              automaticLayout: true,
-              fontSize: 13,
-              lineNumbersMinChars,
-              lineDecorationsWidth: 10,
-              wordWrap: "off",
-              scrollBeyondLastLine: false,
-              scrollBeyondLastColumn: 8,
-              renderLineHighlight: "line",
-              scrollbar: {
-                horizontal: "auto",
-              },
-            }}
-          />
+          {activeFileTab.loading ? (
+            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+              {t("loadingEditor")}
+            </div>
+          ) : (
+            <MonacoEditor
+              beforeMount={defineMonacoThemes}
+              onMount={handleEditorMount}
+              path={buildMonacoModelPath(activeFileTab.path, activeFileTab.id)}
+              value={renderedContent}
+              onChange={(value) => {
+                if (!isFileTab) return
+                updateActiveFileContent(value ?? "")
+              }}
+              language={activeFileTab.language}
+              theme={editorTheme}
+              loading={
+                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                  {t("loadingEditor")}
+                </div>
+              }
+              options={{
+                readOnly: !canEdit,
+                minimap: { enabled: false },
+                automaticLayout: true,
+                fontSize: 13,
+                lineNumbersMinChars,
+                lineDecorationsWidth: 10,
+                wordWrap: "off",
+                scrollBeyondLastLine: false,
+                scrollBeyondLastColumn: 8,
+                renderLineHighlight: "line",
+                scrollbar: {
+                  horizontal: "auto",
+                },
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

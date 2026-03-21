@@ -409,8 +409,10 @@ interface RenderNodeProps {
   gitEnabled: boolean
   gitStatusByPath: ReadonlyMap<string, string>
   gitChangedDirPaths: ReadonlySet<string>
+  untrackedDirPaths: ReadonlySet<string>
   gitignoreIgnoredPaths: ReadonlySet<string>
   ancestorGitignoreIgnored: boolean
+  ancestorUntracked: boolean
   onOpenFilePreview: (path: string) => void
   onOpenFileDiff: (path: string) => void
   onOpenDirDiff: (path: string) => void
@@ -433,8 +435,10 @@ function RenderNode({
   gitEnabled,
   gitStatusByPath,
   gitChangedDirPaths,
+  untrackedDirPaths,
   gitignoreIgnoredPaths,
   ancestorGitignoreIgnored,
+  ancestorUntracked,
   onOpenFilePreview,
   onOpenFileDiff,
   onOpenDirDiff,
@@ -465,7 +469,8 @@ function RenderNode({
         })()
 
   if (node.kind === "file") {
-    const gitStatusCode = gitStatusByPath.get(node.path)
+    const gitStatusCode =
+      gitStatusByPath.get(node.path) ?? (ancestorUntracked ? "??" : undefined)
     const absolutePath = joinFsPath(workspacePath, node.path)
     const dirPath = parentDir(absolutePath)
     const isGitMenuDisabled = !gitEnabled || isGitignoreIgnored
@@ -599,7 +604,11 @@ function RenderNode({
   }
 
   const absolutePath = joinFsPath(workspacePath, node.path)
-  const dirHasChanges = !isGitignoreIgnored && gitChangedDirPaths.has(node.path)
+  const isThisDirUntracked =
+    ancestorUntracked || untrackedDirPaths.has(node.path)
+  const dirHasChanges =
+    !isGitignoreIgnored &&
+    (gitChangedDirPaths.has(node.path) || isThisDirUntracked)
   const isGitMenuDisabled = !gitEnabled || isGitignoreIgnored
   const shouldRenderChildren = expandedPaths.has(node.path)
 
@@ -638,8 +647,10 @@ function RenderNode({
                   gitEnabled={gitEnabled}
                   gitStatusByPath={gitStatusByPath}
                   gitChangedDirPaths={gitChangedDirPaths}
+                  untrackedDirPaths={untrackedDirPaths}
                   gitignoreIgnoredPaths={gitignoreIgnoredPaths}
                   ancestorGitignoreIgnored={isGitignoreIgnored}
+                  ancestorUntracked={isThisDirUntracked}
                   onOpenFilePreview={onOpenFilePreview}
                   onOpenFileDiff={onOpenFileDiff}
                   onOpenDirDiff={onOpenDirDiff}
@@ -908,7 +919,10 @@ export function FileTreeTab() {
     (entries: { file: string; status: string }[]) => {
       const nextStatusByPath = new Map<string, string>()
       for (const entry of entries) {
-        const normalizedPath = normalizeGitStatusPath(entry.file)
+        const raw = normalizeGitStatusPath(entry.file)
+        if (!raw) continue
+        // Strip trailing slash (directory entries from -unormal)
+        const normalizedPath = raw.replace(/\/+$/, "")
         if (!normalizedPath) continue
         nextStatusByPath.set(normalizedPath, entry.status)
       }
@@ -1181,6 +1195,20 @@ export function FileTreeTab() {
     }
     return dirs
   }, [gitStatusByPath])
+
+  // Directories that are entirely untracked (from git status -unormal)
+  const untrackedDirPaths = useMemo(() => {
+    const dirs = new Set<string>()
+    for (const [path, status] of gitStatusByPath.entries()) {
+      if (status.trim() === "??") {
+        // Check if this path is a directory in the file tree
+        if (dirChildrenByPath.has(path)) {
+          dirs.add(path)
+        }
+      }
+    }
+    return dirs
+  }, [gitStatusByPath, dirChildrenByPath])
 
   const handleTreeSelect = useCallback(
     (path: string) => {
@@ -2163,8 +2191,10 @@ export function FileTreeTab() {
                           gitEnabled={gitEnabled}
                           gitStatusByPath={gitStatusByPath}
                           gitChangedDirPaths={gitChangedDirPaths}
+                          untrackedDirPaths={untrackedDirPaths}
                           gitignoreIgnoredPaths={gitignoreIgnoredPaths}
                           ancestorGitignoreIgnored={false}
+                          ancestorUntracked={false}
                           onOpenFilePreview={(path) => {
                             void openFilePreview(path)
                           }}

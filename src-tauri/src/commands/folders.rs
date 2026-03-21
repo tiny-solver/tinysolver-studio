@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{mpsc, LazyLock, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
@@ -1075,7 +1075,7 @@ pub async fn git_stash_show(
 pub async fn git_status(path: String) -> Result<Vec<GitStatusEntry>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["-c", "core.quotePath=false"])
-        .args(["status", "--porcelain=v1", "-uall"])
+        .args(["status", "--porcelain=v1", "-unormal"])
         .current_dir(&path)
         .output()
         .await
@@ -1883,7 +1883,7 @@ fn git_check_ignored_paths(
         return Ok(HashSet::new());
     }
 
-    let mut child = Command::new("git")
+    let mut child = crate::process::std_command("git")
         .args(["check-ignore", "--stdin", "-z"])
         .current_dir(repo_path)
         .stdin(Stdio::piped())
