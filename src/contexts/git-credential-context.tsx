@@ -325,6 +325,7 @@ export function GitCredentialProvider({
       operation: (credentials?: GitCredentials) => Promise<T>,
       hint: GitRemoteHint
     ): Promise<T> => {
+      // First attempt — no explicit credentials
       try {
         return await operation()
       } catch (firstError) {
@@ -336,13 +337,6 @@ export function GitCredentialProvider({
           ? "github"
           : "generic"
 
-        // Show credential dialog
-        const creds = await requestCredentials(dialogMode, host)
-        if (!creds) {
-          setOpen(false)
-          throw firstError
-        }
-
         // Helper: save credentials after successful operation
         const maybeSave = async (c: GitCredentials) => {
           if (modeRef.current === "generic" && saveCredentialsRef.current) {
@@ -351,15 +345,31 @@ export function GitCredentialProvider({
           // GitHub mode saves during handleGitHubSubmit, no extra work needed
         }
 
-        // Retry with credentials
-        try {
-          const result = await operation(creds)
-          await maybeSave(creds)
+        // Show credential dialog for the first time
+        let creds = await requestCredentials(dialogMode, host)
+        if (!creds) {
           setOpen(false)
-          return result
-        } catch (retryError) {
-          setSubmitting(false)
-          if (isAuthError(retryError)) {
+          throw firstError
+        }
+
+        // Retry loop — keep trying until success or user cancels
+        let lastError: unknown = firstError
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          try {
+            const result = await operation(creds)
+            await maybeSave(creds)
+            setOpen(false)
+            return result
+          } catch (retryError) {
+            lastError = retryError
+            if (!isAuthError(retryError)) {
+              // Non-auth error — stop retrying
+              setOpen(false)
+              throw retryError
+            }
+            // Auth error — show error and let user try again
+            setSubmitting(false)
             setError(t("invalidCredentials"))
             const retryCreds = await new Promise<GitCredentials | null>(
               (resolve) => {
@@ -368,20 +378,10 @@ export function GitCredentialProvider({
             )
             if (!retryCreds) {
               setOpen(false)
-              throw retryError
+              throw lastError
             }
-            try {
-              const result = await operation(retryCreds)
-              await maybeSave(retryCreds)
-              setOpen(false)
-              return result
-            } catch (thirdError) {
-              setOpen(false)
-              throw thirdError
-            }
+            creds = retryCreds
           }
-          setOpen(false)
-          throw retryError
         }
       }
     },

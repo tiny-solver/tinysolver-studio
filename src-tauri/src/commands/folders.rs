@@ -91,8 +91,10 @@ fn classify_remote_git_error(operation: &str, stderr: &[u8]) -> AppCommandError 
         || lower.contains("could not read username")
         || lower.contains("could not read password")
         || lower.contains("logon failed")
-        || lower.contains("401")
-        || lower.contains("403")
+        || lower.contains("terminal prompts disabled")
+        || lower.contains("the requested url returned error: 401")
+        || lower.contains("the requested url returned error: 403")
+        || lower.contains("http basic: access denied")
     {
         return AppCommandError::authentication_failed(format!(
             "git {operation}: authentication failed. Configure a GitHub account in Settings → Version Control."
@@ -565,6 +567,12 @@ fn classify_git_clone_error(stderr: &str) -> AppCommandError {
 
     if normalized.contains("authentication failed")
         || normalized.contains("could not read username")
+        || normalized.contains("could not read password")
+        || normalized.contains("logon failed")
+        || normalized.contains("terminal prompts disabled")
+        || normalized.contains("the requested url returned error: 401")
+        || normalized.contains("the requested url returned error: 403")
+        || normalized.contains("http basic: access denied")
         || normalized.contains("permission denied (publickey)")
     {
         return AppCommandError::authentication_failed(
