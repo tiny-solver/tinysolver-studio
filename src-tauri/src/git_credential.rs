@@ -7,6 +7,147 @@ use crate::models::system::{GitHubAccount, GitHubAccountsSettings};
 
 const GITHUB_ACCOUNTS_KEY: &str = "github_accounts";
 
+/// Write a git credential-store file containing all stored accounts.
+///
+/// The credential-store format is one URL per line:
+/// `https://username:token@hostname`
+///
+/// Returns the path to the written file.
+pub fn write_credential_store_file(
+    accounts: &[GitHubAccount],
+    file_path: &Path,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut content = String::new();
+    for account in accounts {
+        let host = extract_host(&account.server_url).unwrap_or_default();
+        if host.is_empty() {
+            continue;
+        }
+        // URL-encode username and token to handle special characters
+        let username = urlencoding::encode(&account.username);
+        let token = urlencoding::encode(&account.token);
+        content.push_str(&format!("https://{}:{}@{}\n", username, token, host));
+    }
+
+    let mut file = std::fs::File::create(file_path)?;
+    file.write_all(content.as_bytes())?;
+
+    // Restrict permissions on Unix (owner read/write only)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(file_path, std::fs::Permissions::from_mode(0o600))?;
+    }
+
+    Ok(())
+}
+
+/// Create a terminal-specific GIT_ASKPASS script that reads credentials
+/// from a credential-store file, selecting by hostname from the git prompt.
+///
+/// Unlike the simple askpass script (which uses env vars for a single credential),
+/// this one supports multiple hosts by parsing the credential store file.
+pub fn create_terminal_askpass_script(
+    app_data_dir: &Path,
+    cred_store_path: &Path,
+) -> std::io::Result<PathBuf> {
+    let cred_store_str = cred_store_path.to_string_lossy();
+
+    #[cfg(unix)]
+    {
+        let script_path = app_data_dir.join("git-askpass-terminal.sh");
+        // Always overwrite — cred store path may change between sessions
+        let content = format!(
+            r#"#!/bin/sh
+# Terminal askpass helper: reads from credential store file.
+# Parses hostname from git's prompt (e.g. "Username for 'https://github.com': ")
+CRED_FILE="{cred_file}"
+PROMPT="$1"
+
+# Extract hostname from prompt (between :// and next / or ')
+HOST=$(echo "$PROMPT" | sed -n "s|.*://\([^/']*\).*|\1|p")
+[ -z "$HOST" ] && exit 1
+[ ! -f "$CRED_FILE" ] && exit 1
+
+# Find matching line in credential store
+LINE=$(grep -i "@$HOST" "$CRED_FILE" | head -1)
+[ -z "$LINE" ] && exit 1
+
+# Parse username and password from https://user:pass@host
+USERPASS=$(echo "$LINE" | sed 's|https://||' | sed 's|@.*||')
+USER=$(echo "$USERPASS" | cut -d: -f1)
+PASS=$(echo "$USERPASS" | cut -d: -f2-)
+
+case "$PROMPT" in
+    *[Uu]sername*) echo "$USER" ;;
+    *[Pp]assword*) echo "$PASS" ;;
+    *) exit 1 ;;
+esac
+"#,
+            cred_file = cred_store_str
+        );
+        std::fs::write(&script_path, content)?;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
+        Ok(script_path)
+    }
+
+    #[cfg(windows)]
+    {
+        let script_path = app_data_dir.join("git-askpass-terminal.bat");
+        let content = format!(
+            r#"@echo off
+setlocal enabledelayedexpansion
+set "CRED_FILE={cred_file}"
+set "PROMPT=%~1"
+
+:: Extract hostname from prompt
+for /f "tokens=2 delims=/" %%a in ("!PROMPT!") do (
+    for /f "tokens=1 delims=/' " %%b in ("%%a") do set "HOST=%%b"
+)
+if not defined HOST exit /b 1
+if not exist "!CRED_FILE!" exit /b 1
+
+:: Search credential file for matching host
+for /f "usebackq delims=" %%L in ("!CRED_FILE!") do (
+    echo %%L | findstr /i "!HOST!" >nul
+    if !errorlevel! equ 0 (
+        set "LINE=%%L"
+        goto :found
+    )
+)
+exit /b 1
+
+:found
+:: Parse https://user:pass@host
+set "LINE=!LINE:https://=!"
+for /f "tokens=1 delims=@" %%a in ("!LINE!") do set "USERPASS=%%a"
+for /f "tokens=1,2 delims=:" %%a in ("!USERPASS!") do (
+    set "USER=%%a"
+    set "PASS=%%b"
+)
+
+echo !PROMPT! | findstr /i "username" >nul
+if !errorlevel! equ 0 (
+    echo !USER!
+    exit /b
+)
+echo !PROMPT! | findstr /i "password" >nul
+if !errorlevel! equ 0 (
+    echo !PASS!
+    exit /b
+)
+exit /b 1
+"#,
+            cred_file = cred_store_str
+        );
+        std::fs::write(&script_path, content)?;
+        Ok(script_path)
+    }
+}
+
 /// Ensure the GIT_ASKPASS helper script exists in the app data directory.
 /// Returns the path to the script.
 pub fn ensure_askpass_script(app_data_dir: &Path) -> std::io::Result<PathBuf> {
@@ -113,6 +254,7 @@ fn extract_host(remote_url: &str) -> Option<String> {
 /// Find the best matching account for a given remote URL.
 ///
 /// Only returns an account whose server_url hostname matches the remote URL host.
+/// When multiple accounts match the same hostname, prefers the one marked `is_default`.
 /// Does NOT fall back to unrelated accounts — if no hostname matches, returns None
 /// so the caller can fall back to git config defaults.
 pub fn find_matching_account<'a>(
@@ -125,11 +267,21 @@ pub fn find_matching_account<'a>(
 
     let remote_host = extract_host(remote_url)?;
 
-    accounts.iter().find(|a| {
-        let account_host = extract_host(&a.server_url)
-            .unwrap_or_else(|| a.server_url.trim().trim_end_matches('/').to_lowercase());
-        account_host == remote_host
-    })
+    let matching: Vec<&GitHubAccount> = accounts
+        .iter()
+        .filter(|a| {
+            let account_host = extract_host(&a.server_url)
+                .unwrap_or_else(|| a.server_url.trim().trim_end_matches('/').to_lowercase());
+            account_host == remote_host
+        })
+        .collect();
+
+    // Prefer the default account among matches, otherwise take the first
+    matching
+        .iter()
+        .find(|a| a.is_default)
+        .or(matching.first())
+        .copied()
 }
 
 /// Load GitHub accounts from the database.
@@ -203,7 +355,10 @@ pub async fn try_inject_for_repo(
 
     let askpass = match ensure_askpass_script(app_data_dir) {
         Ok(p) => p,
-        Err(_) => return false,
+        Err(e) => {
+            eprintln!("[GIT_CRED] failed to create askpass script: {}", e);
+            return false;
+        }
     };
 
     inject_credentials(cmd, &account.username, &account.token, &askpass);
@@ -234,7 +389,10 @@ pub async fn try_inject_for_url(
 
     let askpass = match ensure_askpass_script(app_data_dir) {
         Ok(p) => p,
-        Err(_) => return false,
+        Err(e) => {
+            eprintln!("[GIT_CRED] failed to create askpass script: {}", e);
+            return false;
+        }
     };
 
     inject_credentials(cmd, &account.username, &account.token, &askpass);
@@ -303,5 +461,35 @@ mod tests {
         // Unknown host returns None — no fallback to unrelated accounts
         let matched = find_matching_account(&accounts, "https://unknown.com/repo");
         assert!(matched.is_none());
+    }
+
+    #[test]
+    fn test_find_matching_account_prefers_default() {
+        let accounts = vec![
+            GitHubAccount {
+                id: "1".into(),
+                server_url: "https://github.com".into(),
+                username: "personal".into(),
+                token: "tok1".into(),
+                scopes: vec![],
+                avatar_url: None,
+                is_default: false,
+                created_at: String::new(),
+            },
+            GitHubAccount {
+                id: "2".into(),
+                server_url: "https://github.com".into(),
+                username: "work".into(),
+                token: "tok2".into(),
+                scopes: vec![],
+                avatar_url: None,
+                is_default: true,
+                created_at: String::new(),
+            },
+        ];
+
+        // Should pick the default account when multiple match the same host
+        let matched = find_matching_account(&accounts, "https://github.com/org/repo.git");
+        assert_eq!(matched.unwrap().username, "work");
     }
 }

@@ -17,6 +17,8 @@ struct TerminalInstance {
     _child: Box<dyn portable_pty::Child + Send>,
     title: String,
     owner_window_label: String,
+    /// Temp credential file to clean up on kill.
+    credential_file: Option<std::path::PathBuf>,
 }
 
 pub struct TerminalManager {
@@ -130,6 +132,16 @@ fn configure_shell_command(cmd: &mut CommandBuilder, shell: &str, initial_comman
     }
 }
 
+/// Options for spawning a new terminal session.
+pub struct SpawnOptions {
+    pub terminal_id: String,
+    pub working_dir: String,
+    pub owner_window_label: String,
+    pub initial_command: Option<String>,
+    pub extra_env: Option<HashMap<String, String>>,
+    pub credential_file: Option<std::path::PathBuf>,
+}
+
 impl TerminalManager {
     pub fn new() -> Self {
         Self {
@@ -137,12 +149,11 @@ impl TerminalManager {
         }
     }
 
-    pub fn spawn(
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_with_id(
         &self,
-        working_dir: String,
-        owner_window_label: String,
+        opts: SpawnOptions,
         app_handle: tauri::AppHandle,
-        initial_command: Option<String>,
     ) -> Result<String, TerminalError> {
         let pty_system = native_pty_system();
 
@@ -157,8 +168,15 @@ impl TerminalManager {
 
         let shell = resolve_shell();
         let mut cmd = CommandBuilder::new(&shell);
-        configure_shell_command(&mut cmd, &shell, initial_command.as_deref());
-        cmd.cwd(&working_dir);
+        configure_shell_command(&mut cmd, &shell, opts.initial_command.as_deref());
+        cmd.cwd(&opts.working_dir);
+
+        // Inject extra environment variables (e.g. git credential helper config)
+        if let Some(env) = &opts.extra_env {
+            for (key, value) in env {
+                cmd.env(key, value);
+            }
+        }
 
         let child = pair
             .slave
@@ -177,7 +195,7 @@ impl TerminalManager {
             .try_clone_reader()
             .map_err(|e| TerminalError::SpawnFailed(e.to_string()))?;
 
-        let terminal_id = uuid::Uuid::new_v4().to_string();
+        let terminal_id = opts.terminal_id;
 
         let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>();
 
@@ -186,7 +204,8 @@ impl TerminalManager {
             master: pair.master,
             _child: child,
             title: "Terminal".to_string(),
-            owner_window_label,
+            owner_window_label: opts.owner_window_label,
+            credential_file: opts.credential_file,
         };
 
         self.terminals
@@ -346,6 +365,10 @@ impl TerminalManager {
 fn terminate_terminal(instance: &mut TerminalInstance) {
     let _ = instance._child.kill();
     let _ = instance._child.wait();
+    // Clean up temp credential file
+    if let Some(path) = instance.credential_file.take() {
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 fn write_loop(mut writer: Box<dyn Write + Send>, rx: mpsc::Receiver<Vec<u8>>) {
@@ -388,8 +411,12 @@ fn read_loop(
         }
     }
 
-    // Terminal exited — remove from map
-    terminals.lock().unwrap().remove(&terminal_id);
+    // Terminal exited — remove from map and clean up credential file
+    if let Some(mut instance) = terminals.lock().unwrap().remove(&terminal_id) {
+        if let Some(path) = instance.credential_file.take() {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 
     emit_terminal_exit_event(app_handle, &terminal_id);
 }
