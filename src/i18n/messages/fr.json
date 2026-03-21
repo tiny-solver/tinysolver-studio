@@ -882,6 +882,7 @@
         "allFilesUpToDate": "Tous les fichiers sont à jour",
         "updatedFiles": "{count, plural, one {# fichier mis à jour} other {# fichiers mis à jour}}",
         "openCommitWindowFailed": "Impossible d’ouvrir la fenêtre de commit",
+        "openPushWindowFailed": "Impossible d’ouvrir la fenêtre de push",
         "upstreamSet": "La branche upstream a été définie",
         "upstreamSetAndPushed": "Branche upstream définie et {count, plural, one {# commit} other {# commits}} poussé(s)",
         "noCommitsToPush": "Aucun commit à pousser",
@@ -1031,6 +1032,23 @@
       "workingTree": "Arbre de travail",
       "clickFileToDiff": "Cliquez sur un nom de fichier pour voir le diff",
       "loadingDiff": "Chargement du diff..."
+    },
+    "pushWindow": {
+      "title": "Pousser le code",
+      "noUnpushedCommits": "Aucun commit non poussé",
+      "unpushed": "Non poussé",
+      "selectFileToViewDiff": "Sélectionnez un fichier pour voir les différences",
+      "before": "Avant",
+      "after": "Après",
+      "push": "Pousser",
+      "toasts": {
+        "pushSuccess": "Push réussi",
+        "pushFailed": "Échec du push",
+        "upstreamSet": "La branche distante a été configurée",
+        "upstreamSetAndPushed": "Branche distante configurée et {count} commits poussés",
+        "noCommitsToPush": "Aucun commit à pousser",
+        "pushedCommits": "{count} commits poussés"
+      }
     },
     "gitLogTab": {
       "filesTitle": "Fichiers",

@@ -661,6 +661,10 @@ export async function openStashWindow(folderId: number): Promise<void> {
   return invoke("open_stash_window", { folderId })
 }
 
+export async function openPushWindow(folderId: number): Promise<void> {
+  return invoke("open_push_window", { folderId })
+}
+
 export async function gitStashPush(
   path: string,
   message?: string,

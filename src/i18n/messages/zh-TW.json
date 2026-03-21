@@ -882,6 +882,7 @@
         "allFilesUpToDate": "所有檔案均為最新版本",
         "updatedFiles": "已更新 {count} 個檔案",
         "openCommitWindowFailed": "打開提交視窗失敗",
+        "openPushWindowFailed": "開啟推送視窗失敗",
         "upstreamSet": "已設定遠端追蹤分支",
         "upstreamSetAndPushed": "已設定遠端追蹤分支並推送 {count} 個提交",
         "noCommitsToPush": "沒有可推送的提交",
@@ -1031,6 +1032,23 @@
       "workingTree": "工作目錄",
       "clickFileToDiff": "點擊檔案名稱查看差異",
       "loadingDiff": "載入差異中..."
+    },
+    "pushWindow": {
+      "title": "推送程式碼",
+      "noUnpushedCommits": "沒有未推送的提交",
+      "unpushed": "未推送",
+      "selectFileToViewDiff": "選擇檔案查看差異",
+      "before": "修改前",
+      "after": "修改後",
+      "push": "推送",
+      "toasts": {
+        "pushSuccess": "推送成功",
+        "pushFailed": "推送失敗",
+        "upstreamSet": "已設定遠端追蹤分支",
+        "upstreamSetAndPushed": "已設定遠端追蹤分支並推送 {count} 個提交",
+        "noCommitsToPush": "沒有可推送的提交",
+        "pushedCommits": "已推送 {count} 個提交"
+      }
     },
     "gitLogTab": {
       "filesTitle": "檔案",

@@ -882,6 +882,7 @@
         "allFilesUpToDate": "모든 파일이 최신 상태입니다",
         "updatedFiles": "{count, plural, one {#개 파일 업데이트됨} other {#개 파일 업데이트됨}}",
         "openCommitWindowFailed": "커밋 창을 열지 못했습니다",
+        "openPushWindowFailed": "푸시 창 열기 실패",
         "upstreamSet": "업스트림 브랜치가 설정되었습니다",
         "upstreamSetAndPushed": "업스트림 브랜치를 설정하고 {count, plural, one {#개 커밋} other {#개 커밋}}을 푸시했습니다",
         "noCommitsToPush": "푸시할 커밋이 없습니다",
@@ -1031,6 +1032,23 @@
       "workingTree": "작업 트리",
       "clickFileToDiff": "파일 이름을 클릭해 diff를 확인하세요",
       "loadingDiff": "diff 로딩 중..."
+    },
+    "pushWindow": {
+      "title": "코드 푸시",
+      "noUnpushedCommits": "푸시되지 않은 커밋이 없습니다",
+      "unpushed": "미푸시",
+      "selectFileToViewDiff": "파일을 선택하여 차이 보기",
+      "before": "변경 전",
+      "after": "변경 후",
+      "push": "푸시",
+      "toasts": {
+        "pushSuccess": "푸시 성공",
+        "pushFailed": "푸시 실패",
+        "upstreamSet": "원격 추적 브랜치가 설정되었습니다",
+        "upstreamSetAndPushed": "원격 추적 브랜치 설정 및 {count}개 커밋 푸시 완료",
+        "noCommitsToPush": "푸시할 커밋이 없습니다",
+        "pushedCommits": "{count}개 커밋 푸시 완료"
+      }
     },
     "gitLogTab": {
       "filesTitle": "파일",

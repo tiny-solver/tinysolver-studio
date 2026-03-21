@@ -597,3 +597,42 @@ pub async fn open_stash_window(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_push_window(
+    app: AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+    folder_id: i32,
+) -> Result<(), AppCommandError> {
+    let label = format!("push-{folder_id}");
+
+    if let Some(existing) = app.get_webview_window(&label) {
+        ensure_windows_undecorated(&existing);
+        let _ = existing.unminimize();
+        existing
+            .set_focus()
+            .map_err(|e| AppCommandError::window("Failed to focus push window", e.to_string()))?;
+        return Ok(());
+    }
+
+    let folder = crate::db::service::folder_service::get_folder_by_id(&db.conn, folder_id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| {
+            AppCommandError::not_found(format!("Folder {folder_id} not found"))
+                .with_detail(format!("folder_id={folder_id}"))
+        })?;
+
+    let url = WebviewUrl::App(format!("push?folderId={folder_id}").into());
+    let builder = WebviewWindowBuilder::new(&app, &label, url)
+        .title(format!("Push - {}", folder.name))
+        .inner_size(1100.0, 700.0)
+        .min_inner_size(800.0, 500.0)
+        .center();
+    let push_window = apply_platform_window_style(builder)
+        .build()
+        .map_err(|e| AppCommandError::window("Failed to open push window", e.to_string()))?;
+    ensure_windows_undecorated(&push_window);
+
+    Ok(())
+}

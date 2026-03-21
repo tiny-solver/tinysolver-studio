@@ -882,6 +882,7 @@
         "allFilesUpToDate": "Todos los archivos están actualizados",
         "updatedFiles": "{count, plural, one {# archivo actualizado} other {# archivos actualizados}}",
         "openCommitWindowFailed": "No se pudo abrir la ventana de commit",
+        "openPushWindowFailed": "Error al abrir la ventana de envío",
         "upstreamSet": "La rama upstream se ha configurado",
         "upstreamSetAndPushed": "Rama upstream configurada y se enviaron {count, plural, one {# commit} other {# commits}}",
         "noCommitsToPush": "No hay commits para enviar",
@@ -1031,6 +1032,23 @@
       "workingTree": "Árbol de trabajo",
       "clickFileToDiff": "Haz clic en un nombre de archivo para ver diff",
       "loadingDiff": "Cargando diff..."
+    },
+    "pushWindow": {
+      "title": "Enviar código",
+      "noUnpushedCommits": "No hay commits sin enviar",
+      "unpushed": "Sin enviar",
+      "selectFileToViewDiff": "Selecciona un archivo para ver las diferencias",
+      "before": "Antes",
+      "after": "Después",
+      "push": "Enviar",
+      "toasts": {
+        "pushSuccess": "Envío exitoso",
+        "pushFailed": "Error al enviar",
+        "upstreamSet": "Se ha configurado la rama remota",
+        "upstreamSetAndPushed": "Rama remota configurada y enviados {count} commits",
+        "noCommitsToPush": "No hay commits para enviar",
+        "pushedCommits": "Enviados {count} commits"
+      }
     },
     "gitLogTab": {
       "filesTitle": "Archivos",

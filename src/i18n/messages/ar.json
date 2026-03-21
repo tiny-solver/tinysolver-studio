@@ -882,6 +882,7 @@
         "allFilesUpToDate": "كل الملفات محدثة",
         "updatedFiles": "{count, plural, one {# ملف تم تحديثه} other {# ملفات تم تحديثها}}",
         "openCommitWindowFailed": "فشل فتح نافذة الالتزام",
+        "openPushWindowFailed": "فشل فتح نافذة الدفع",
         "upstreamSet": "تم تعيين فرع upstream",
         "upstreamSetAndPushed": "تم تعيين فرع upstream ودفع {count, plural, one {# التزام} other {# التزامات}}",
         "noCommitsToPush": "لا توجد التزامات للدفع",
@@ -1031,6 +1032,23 @@
       "workingTree": "شجرة العمل",
       "clickFileToDiff": "انقر اسم الملف لعرض الفرق",
       "loadingDiff": "جارٍ تحميل diff..."
+    },
+    "pushWindow": {
+      "title": "دفع الكود",
+      "noUnpushedCommits": "لا توجد التزامات غير مدفوعة",
+      "unpushed": "غير مدفوع",
+      "selectFileToViewDiff": "اختر ملفًا لعرض الفرق",
+      "before": "قبل",
+      "after": "بعد",
+      "push": "دفع",
+      "toasts": {
+        "pushSuccess": "تم الدفع بنجاح",
+        "pushFailed": "فشل الدفع",
+        "upstreamSet": "تم تعيين الفرع البعيد",
+        "upstreamSetAndPushed": "تم تعيين الفرع البعيد ودفع {count} التزام",
+        "noCommitsToPush": "لا توجد التزامات للدفع",
+        "pushedCommits": "تم دفع {count} التزام"
+      }
     },
     "gitLogTab": {
       "filesTitle": "الملفات",

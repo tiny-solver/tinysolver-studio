@@ -263,6 +263,7 @@ pub fn run() {
             windows::focus_folder_window,
             windows::open_merge_window,
             windows::open_stash_window,
+            windows::open_push_window,
             system_settings::get_system_proxy_settings,
             system_settings::update_system_proxy_settings,
             system_settings::get_system_language_settings,

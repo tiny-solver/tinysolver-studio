@@ -882,6 +882,7 @@
         "allFilesUpToDate": "Todos os arquivos estão atualizados",
         "updatedFiles": "{count, plural, one {# arquivo atualizado} other {# arquivos atualizados}}",
         "openCommitWindowFailed": "Falha ao abrir a janela de commit",
+        "openPushWindowFailed": "Falha ao abrir janela de envio",
         "upstreamSet": "A branch upstream foi definida",
         "upstreamSetAndPushed": "Branch upstream definida e {count, plural, one {# commit} other {# commits}} enviado(s)",
         "noCommitsToPush": "Não há commits para enviar",
@@ -1031,6 +1032,23 @@
       "workingTree": "Árvore de trabalho",
       "clickFileToDiff": "Clique no nome do arquivo para ver o diff",
       "loadingDiff": "Carregando diff..."
+    },
+    "pushWindow": {
+      "title": "Enviar código",
+      "noUnpushedCommits": "Nenhum commit não enviado",
+      "unpushed": "Não enviado",
+      "selectFileToViewDiff": "Selecione um arquivo para ver as diferenças",
+      "before": "Antes",
+      "after": "Depois",
+      "push": "Enviar",
+      "toasts": {
+        "pushSuccess": "Envio bem-sucedido",
+        "pushFailed": "Falha no envio",
+        "upstreamSet": "Branch remoto foi configurado",
+        "upstreamSetAndPushed": "Branch remoto configurado e {count} commits enviados",
+        "noCommitsToPush": "Nenhum commit para enviar",
+        "pushedCommits": "{count} commits enviados"
+      }
     },
     "gitLogTab": {
       "filesTitle": "Arquivos",

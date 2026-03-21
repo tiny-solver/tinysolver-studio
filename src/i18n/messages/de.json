@@ -882,6 +882,7 @@
         "allFilesUpToDate": "Alle Dateien sind aktuell",
         "updatedFiles": "{count, plural, one {# Datei aktualisiert} other {# Dateien aktualisiert}}",
         "openCommitWindowFailed": "Commit-Fenster konnte nicht geöffnet werden",
+        "openPushWindowFailed": "Push-Fenster konnte nicht geöffnet werden",
         "upstreamSet": "Upstream-Branch wurde gesetzt",
         "upstreamSetAndPushed": "Upstream-Branch gesetzt und {count, plural, one {# Commit} other {# Commits}} gepusht",
         "noCommitsToPush": "Keine Commits zum Pushen",
@@ -1031,6 +1032,23 @@
       "workingTree": "Arbeitsverzeichnis",
       "clickFileToDiff": "Dateinamen anklicken, um Diff zu sehen",
       "loadingDiff": "Diff wird geladen..."
+    },
+    "pushWindow": {
+      "title": "Code pushen",
+      "noUnpushedCommits": "Keine ungepushten Commits",
+      "unpushed": "Nicht gepusht",
+      "selectFileToViewDiff": "Datei auswählen, um Unterschiede anzuzeigen",
+      "before": "Vorher",
+      "after": "Nachher",
+      "push": "Pushen",
+      "toasts": {
+        "pushSuccess": "Push erfolgreich",
+        "pushFailed": "Push fehlgeschlagen",
+        "upstreamSet": "Remote-Tracking-Branch wurde eingerichtet",
+        "upstreamSetAndPushed": "Remote-Tracking-Branch eingerichtet und {count} Commits gepusht",
+        "noCommitsToPush": "Keine Commits zum Pushen",
+        "pushedCommits": "{count} Commits gepusht"
+      }
     },
     "gitLogTab": {
       "filesTitle": "Dateien",

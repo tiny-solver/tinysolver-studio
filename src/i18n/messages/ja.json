@@ -882,6 +882,7 @@
         "allFilesUpToDate": "すべてのファイルは最新です",
         "updatedFiles": "{count, plural, one {# 個のファイルを更新} other {# 個のファイルを更新}}",
         "openCommitWindowFailed": "コミットウィンドウを開けませんでした",
+        "openPushWindowFailed": "プッシュウィンドウを開けませんでした",
         "upstreamSet": "アップストリームブランチを設定しました",
         "upstreamSetAndPushed": "アップストリームブランチを設定し、{count, plural, one {# 件のコミット} other {# 件のコミット}}をプッシュしました",
         "noCommitsToPush": "プッシュするコミットはありません",
@@ -1031,6 +1032,23 @@
       "workingTree": "作業ツリー",
       "clickFileToDiff": "ファイル名をクリックして差分を表示",
       "loadingDiff": "差分を読み込み中..."
+    },
+    "pushWindow": {
+      "title": "コードをプッシュ",
+      "noUnpushedCommits": "未プッシュのコミットはありません",
+      "unpushed": "未プッシュ",
+      "selectFileToViewDiff": "ファイルを選択して差分を表示",
+      "before": "変更前",
+      "after": "変更後",
+      "push": "プッシュ",
+      "toasts": {
+        "pushSuccess": "プッシュ成功",
+        "pushFailed": "プッシュ失敗",
+        "upstreamSet": "リモート追跡ブランチが設定されました",
+        "upstreamSetAndPushed": "リモート追跡ブランチを設定し、{count}件のコミットをプッシュしました",
+        "noCommitsToPush": "プッシュするコミットはありません",
+        "pushedCommits": "{count}件のコミットをプッシュしました"
+      }
     },
     "gitLogTab": {
       "filesTitle": "ファイル",

@@ -882,6 +882,7 @@
         "allFilesUpToDate": "All files are up to date",
         "updatedFiles": "Updated {count, plural, one {# file} other {# files}}",
         "openCommitWindowFailed": "Failed to open commit window",
+        "openPushWindowFailed": "Failed to open push window",
         "upstreamSet": "Upstream branch has been set",
         "upstreamSetAndPushed": "Upstream branch set and pushed {count, plural, one {# commit} other {# commits}}",
         "noCommitsToPush": "No commits to push",
@@ -1031,6 +1032,23 @@
       "workingTree": "Working Tree",
       "clickFileToDiff": "Click a file name to view diff",
       "loadingDiff": "Loading diff..."
+    },
+    "pushWindow": {
+      "title": "Push Code",
+      "noUnpushedCommits": "No unpushed commits",
+      "unpushed": "Unpushed",
+      "selectFileToViewDiff": "Select a file to view diff",
+      "before": "Before",
+      "after": "After",
+      "push": "Push",
+      "toasts": {
+        "pushSuccess": "Push successful",
+        "pushFailed": "Push failed",
+        "upstreamSet": "Upstream branch has been set",
+        "upstreamSetAndPushed": "Upstream branch set and pushed {count, plural, one {# commit} other {# commits}}",
+        "noCommitsToPush": "No commits to push",
+        "pushedCommits": "Pushed {count, plural, one {# commit} other {# commits}}"
+      }
     },
     "gitLogTab": {
       "filesTitle": "Files",
