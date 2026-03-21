@@ -156,6 +156,33 @@ pub async fn load_github_accounts(
     serde_json::from_str::<GitHubAccountsSettings>(&raw).ok()
 }
 
+/// Resolve the commit author (name + email) from the matching account for a repo.
+///
+/// Returns `Some((name, email))` if a matching account is found.
+/// Uses GitHub's noreply email format: `username@users.noreply.github.com`.
+pub async fn resolve_commit_author(
+    repo_path: &str,
+    conn: &DatabaseConnection,
+) -> Option<(String, String)> {
+    let settings = load_github_accounts(conn).await?;
+    if settings.accounts.is_empty() {
+        return None;
+    }
+
+    let remote_url = get_remote_url(repo_path).await?;
+    let account = find_matching_account(&settings.accounts, &remote_url)?;
+
+    let host = extract_host(&remote_url).unwrap_or_default();
+    let email = if host == "github.com" {
+        format!("{}@users.noreply.github.com", account.username)
+    } else {
+        // For non-GitHub hosts, use username@host as a reasonable fallback
+        format!("{}@{}", account.username, host)
+    };
+
+    Some((account.username.clone(), email))
+}
+
 /// Resolve credentials for a git repository and inject them into the command.
 ///
 /// This is the main entry point: given a repo path and a git command,

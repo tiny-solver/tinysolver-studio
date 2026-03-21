@@ -1372,6 +1372,7 @@ pub async fn git_show_file(
 pub async fn git_commit(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
+    db: tauri::State<'_, AppDatabase>,
     path: String,
     message: String,
     files: Vec<String>,
@@ -1391,10 +1392,23 @@ pub async fn git_commit(
         return Err(git_command_error("add", &add_output.stderr));
     }
 
+    // Resolve commit author from matching account (e.g. GitHub username)
+    let author_override =
+        crate::git_credential::resolve_commit_author(&path, &db.conn).await;
+
     // Commit
-    let commit_output = crate::process::tokio_command("git")
-        .args(["commit", "-m", &message])
-        .current_dir(&path)
+    let mut commit_cmd = crate::process::tokio_command("git");
+    if let Some((ref name, ref email)) = author_override {
+        commit_cmd.args([
+            "-c",
+            &format!("user.name={name}"),
+            "-c",
+            &format!("user.email={email}"),
+        ]);
+    }
+    commit_cmd.args(["commit", "-m", &message]).current_dir(&path);
+
+    let commit_output = commit_cmd
         .output()
         .await
         .map_err(AppCommandError::io)?;
