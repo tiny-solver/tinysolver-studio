@@ -21,6 +21,7 @@ import {
   GitBranchPlus,
   GitCompare,
   RefreshCw,
+  Upload,
 } from "lucide-react"
 import {
   Commit,
@@ -82,6 +83,7 @@ import {
   gitListAllBranches,
   gitLog,
   gitNewBranch,
+  openPushWindow,
 } from "@/lib/tauri"
 import type { GitBranchList, GitLogEntry, GitLogFileChange } from "@/lib/types"
 import { toast } from "sonner"
@@ -1168,6 +1170,28 @@ export function GitLogTab() {
                       <GitCompare className="h-3.5 w-3.5" />
                       {tCommon("viewDiff")}
                     </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={() => {
+                        void fetchLog()
+                      }}
+                    >
+                      <RefreshCw className="size-3.5" />
+                      {tCommon("refresh")}
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={() => {
+                        if (!folder) return
+                        openPushWindow(folder.id).catch((err) => {
+                          const msg = toErrorMessage(err)
+                          toast.error(t("toasts.openPushWindowFailed"), {
+                            description: msg,
+                          })
+                        })
+                      }}
+                    >
+                      <Upload className="size-3.5" />
+                      {tCommon("push")}
+                    </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>
               )
@@ -1180,7 +1204,22 @@ export function GitLogTab() {
               void fetchLog()
             }}
           >
+            <RefreshCw className="size-3.5" />
             {tCommon("refresh")}
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => {
+              if (!folder) return
+              openPushWindow(folder.id).catch((err) => {
+                const msg = toErrorMessage(err)
+                toast.error(t("toasts.openPushWindowFailed"), {
+                  description: msg,
+                })
+              })
+            }}
+          >
+            <Upload className="size-3.5" />
+            {tCommon("push")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

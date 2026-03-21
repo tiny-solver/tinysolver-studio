@@ -678,7 +678,8 @@
       "create": "إنشاء",
       "createAndSwitch": "إنشاء والتبديل",
       "openFile": "فتح الملف",
-      "viewDiff": "عرض Diff"
+      "viewDiff": "عرض Diff",
+      "push": "دفع..."
     },
     "modes": {
       "conversation": "وضع المحادثة",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "تم إنشاء فرع جديد والتبديل إليه",
         "newBranchFromCommit": "{name} (من {shortHash})",
-        "createBranchFailed": "فشل إنشاء الفرع"
+        "createBranchFailed": "فشل إنشاء الفرع",
+        "openPushWindowFailed": "فشل فتح نافذة الدفع"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "اختر فرعًا...",

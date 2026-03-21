@@ -678,7 +678,8 @@
       "create": "创建",
       "createAndSwitch": "创建并切换",
       "openFile": "打开文件",
-      "viewDiff": "查看差异"
+      "viewDiff": "查看差异",
+      "push": "推送..."
     },
     "modes": {
       "conversation": "会话模式",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "已创建并切换到新分支",
         "newBranchFromCommit": "{name}（来自 {shortHash}）",
-        "createBranchFailed": "新建分支失败"
+        "createBranchFailed": "新建分支失败",
+        "openPushWindowFailed": "打开推送窗口失败"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "选择分支...",

@@ -678,7 +678,8 @@
       "create": "Crear",
       "createAndSwitch": "Crear y cambiar",
       "openFile": "Abrir archivo",
-      "viewDiff": "Ver Diff"
+      "viewDiff": "Ver Diff",
+      "push": "Enviar..."
     },
     "modes": {
       "conversation": "Modo conversación",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "Nueva rama creada y activada",
         "newBranchFromCommit": "{name} (desde {shortHash})",
-        "createBranchFailed": "No se pudo crear la rama"
+        "createBranchFailed": "No se pudo crear la rama",
+        "openPushWindowFailed": "No se pudo abrir la ventana de envío"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Seleccionar rama...",

@@ -678,7 +678,8 @@
       "create": "Erstellen",
       "createAndSwitch": "Erstellen und wechseln",
       "openFile": "Datei öffnen",
-      "viewDiff": "Diff anzeigen"
+      "viewDiff": "Diff anzeigen",
+      "push": "Pushen..."
     },
     "modes": {
       "conversation": "Konversationsmodus",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "Neuen Branch erstellt und gewechselt",
         "newBranchFromCommit": "{name} (aus {shortHash})",
-        "createBranchFailed": "Branch konnte nicht erstellt werden"
+        "createBranchFailed": "Branch konnte nicht erstellt werden",
+        "openPushWindowFailed": "Push-Fenster konnte nicht geöffnet werden"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Branch auswählen...",

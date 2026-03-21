@@ -678,7 +678,8 @@
       "create": "作成",
       "createAndSwitch": "作成して切り替え",
       "openFile": "ファイルを開く",
-      "viewDiff": "差分を見る"
+      "viewDiff": "差分を見る",
+      "push": "プッシュ..."
     },
     "modes": {
       "conversation": "会話モード",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "新しいブランチを作成して切り替えました",
         "newBranchFromCommit": "{name}（{shortHash} から）",
-        "createBranchFailed": "ブランチ作成に失敗しました"
+        "createBranchFailed": "ブランチ作成に失敗しました",
+        "openPushWindowFailed": "プッシュウィンドウを開けませんでした"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "ブランチを選択...",

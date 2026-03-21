@@ -678,7 +678,8 @@
       "create": "생성",
       "createAndSwitch": "생성 후 전환",
       "openFile": "파일 열기",
-      "viewDiff": "Diff 보기"
+      "viewDiff": "Diff 보기",
+      "push": "푸시..."
     },
     "modes": {
       "conversation": "대화 모드",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "새 브랜치를 생성하고 전환했습니다",
         "newBranchFromCommit": "{name} ({shortHash}에서 생성)",
-        "createBranchFailed": "브랜치 생성에 실패했습니다"
+        "createBranchFailed": "브랜치 생성에 실패했습니다",
+        "openPushWindowFailed": "푸시 창을 열지 못했습니다"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "브랜치 선택...",

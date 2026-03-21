@@ -678,7 +678,8 @@
       "create": "Criar",
       "createAndSwitch": "Criar e alternar",
       "openFile": "Abrir arquivo",
-      "viewDiff": "Ver Diff"
+      "viewDiff": "Ver Diff",
+      "push": "Enviar..."
     },
     "modes": {
       "conversation": "Modo conversa",
@@ -1083,7 +1084,8 @@
       "toasts": {
         "createdAndSwitchedNewBranch": "Nova branch criada e selecionada",
         "newBranchFromCommit": "{name} (de {shortHash})",
-        "createBranchFailed": "Falha ao criar branch"
+        "createBranchFailed": "Falha ao criar branch",
+        "openPushWindowFailed": "Falha ao abrir a janela de push"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Selecionar branch...",
