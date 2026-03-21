@@ -13,6 +13,7 @@ import { Plus, RefreshCw, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { disposeTauriListener } from "@/lib/tauri-listener"
+import { useAcpActions } from "@/contexts/acp-connections-context"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useSessionStats } from "@/contexts/session-stats-context"
@@ -941,7 +942,9 @@ export function ConversationDetailPanel() {
     openNewConversationTab,
     closeTab,
     switchTab,
+    onPreviewTabReplaced,
   } = useTabContext()
+  const { disconnect: disconnectByKey } = useAcpActions()
   const [reloadByTabId, setReloadByTabId] = useState<Record<string, number>>({})
   const tabsRef = useRef(tabs)
   const conversationsRef = useRef(conversations)
@@ -953,6 +956,13 @@ export function ConversationDetailPanel() {
   useEffect(() => {
     conversationsRef.current = conversations
   }, [conversations])
+
+  // Disconnect the old connection immediately when a preview tab is replaced
+  useEffect(() => {
+    return onPreviewTabReplaced((replacedTabId) => {
+      disconnectByKey(replacedTabId).catch(() => {})
+    })
+  }, [onPreviewTabReplaced, disconnectByKey])
 
   // Background turn_complete handler: for conversations not open in tabs
   useEffect(() => {

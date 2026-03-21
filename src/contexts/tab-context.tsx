@@ -67,6 +67,7 @@ interface TabContextValue {
     runtimeConversationId: number
   ) => void
   reorderTabs: (reorderedTabs: TabItem[]) => void
+  onPreviewTabReplaced: (callback: (tabId: string) => void) => () => void
 }
 
 const TabContext = createContext<TabContextValue | null>(null)
@@ -165,6 +166,20 @@ export function TabProvider({ children }: TabProviderProps) {
   useEffect(() => {
     conversationsRef.current = conversations
   }, [conversations])
+
+  // Callback set for preview tab replacement notifications
+  const previewReplacedCallbacksRef = useRef(
+    new Set<(tabId: string) => void>()
+  )
+  const onPreviewTabReplaced = useCallback(
+    (callback: (tabId: string) => void) => {
+      previewReplacedCallbacksRef.current.add(callback)
+      return () => {
+        previewReplacedCallbacksRef.current.delete(callback)
+      }
+    },
+    []
+  )
 
   // Restore tabs from folder.opened_conversations when folder first loads
   const [restoredFolderId, setRestoredFolderId] = useState<number | null>(() =>
@@ -328,6 +343,7 @@ export function TabProvider({ children }: TabProviderProps) {
       title?: string
     ) => {
       let activateTabId: string | undefined
+      let replacedPreviewTabId: string | undefined
 
       setTabs((prev) => {
         const existingIndex = findTabIndexForConversation(
@@ -375,6 +391,7 @@ export function TabProvider({ children }: TabProviderProps) {
         // Preview (not pinned): replace existing preview tab
         const previewIndex = prev.findIndex((t) => !t.isPinned)
         if (previewIndex >= 0) {
+          replacedPreviewTabId = prev[previewIndex].id
           const updated = [...prev]
           updated[previewIndex] = newTab
           return updated
@@ -382,6 +399,13 @@ export function TabProvider({ children }: TabProviderProps) {
 
         return [...prev, newTab]
       })
+
+      // Notify listeners about the replaced preview tab
+      if (replacedPreviewTabId) {
+        for (const cb of previewReplacedCallbacksRef.current) {
+          cb(replacedPreviewTabId)
+        }
+      }
 
       if (activateTabId) {
         setActiveTabId(activateTabId)
@@ -642,6 +666,7 @@ export function TabProvider({ children }: TabProviderProps) {
       bindConversationTab,
       setTabRuntimeConversationId,
       reorderTabs,
+      onPreviewTabReplaced,
     }),
     [
       tabs,
@@ -659,6 +684,7 @@ export function TabProvider({ children }: TabProviderProps) {
       bindConversationTab,
       setTabRuntimeConversationId,
       reorderTabs,
+      onPreviewTabReplaced,
     ]
   )
 
