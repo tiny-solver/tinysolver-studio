@@ -1311,7 +1311,8 @@
         "autoLinkPreflightFailed": "Falló la verificación previa del autovínculo: {message}",
         "connectFailedTitle": "Falló la conexión de {agent}",
         "toolFallbackTitle": "Herramienta",
-        "eventErrorTitle": "Error del agente"
+        "eventErrorTitle": "Error del agente",
+        "notificationTurnComplete": "{agent} ha terminado de responder"
       },
       "connectionLifecycle": {
         "tasks": {

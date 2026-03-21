@@ -1311,7 +1311,8 @@
         "autoLinkPreflightFailed": "Auto-Link-Preflight fehlgeschlagen: {message}",
         "connectFailedTitle": "{agent} Verbindung fehlgeschlagen",
         "toolFallbackTitle": "Werkzeug",
-        "eventErrorTitle": "Agentenfehler"
+        "eventErrorTitle": "Agentenfehler",
+        "notificationTurnComplete": "{agent} hat die Antwort abgeschlossen"
       },
       "connectionLifecycle": {
         "tasks": {

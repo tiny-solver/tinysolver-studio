@@ -1311,7 +1311,8 @@
         "autoLinkPreflightFailed": "自動リンクの事前チェックに失敗しました: {message}",
         "connectFailedTitle": "{agent} の接続に失敗しました",
         "toolFallbackTitle": "ツール",
-        "eventErrorTitle": "エージェントエラー"
+        "eventErrorTitle": "エージェントエラー",
+        "notificationTurnComplete": "{agent} の応答が完了しました"
       },
       "connectionLifecycle": {
         "tasks": {

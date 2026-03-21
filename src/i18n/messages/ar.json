@@ -1311,7 +1311,8 @@
         "autoLinkPreflightFailed": "فشل فحص ما قبل التشغيل للربط التلقائي: {message}",
         "connectFailedTitle": "فشل اتصال {agent}",
         "toolFallbackTitle": "أداة",
-        "eventErrorTitle": "خطأ الوكيل"
+        "eventErrorTitle": "خطأ الوكيل",
+        "notificationTurnComplete": "{agent} أنهى الاستجابة"
       },
       "connectionLifecycle": {
         "tasks": {

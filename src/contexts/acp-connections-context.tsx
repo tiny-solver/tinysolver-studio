@@ -42,6 +42,7 @@ import {
   CONNECTION_IDLE_TIMEOUT_MS,
   IDLE_SWEEP_INTERVAL_MS,
 } from "@/lib/constants"
+import { notifyTurnComplete } from "@/lib/notification"
 import { useAlertContext, type AlertAction } from "@/contexts/alert-context"
 
 // ── Shared types (re-exported for consumers) ──
@@ -1543,6 +1544,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
                 }
                 break
               }
+            }
+          }
+          // Send OS notification when window is not focused
+          {
+            const nc = storeRef.current.connections.get(contextKey)
+            if (nc) {
+              const agentLabel = AGENT_LABELS[nc.agentType]
+              notifyTurnComplete(
+                "Codeg",
+                t("notificationTurnComplete", { agent: agentLabel }),
+              ).catch(() => {})
             }
           }
           break

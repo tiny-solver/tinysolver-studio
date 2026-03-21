@@ -1311,7 +1311,8 @@
         "autoLinkPreflightFailed": "自動連結預檢查失敗：{message}",
         "connectFailedTitle": "{agent} 連線失敗",
         "toolFallbackTitle": "工具",
-        "eventErrorTitle": "Agent 錯誤"
+        "eventErrorTitle": "Agent 錯誤",
+        "notificationTurnComplete": "{agent} 已完成回應"
       },
       "connectionLifecycle": {
         "tasks": {
