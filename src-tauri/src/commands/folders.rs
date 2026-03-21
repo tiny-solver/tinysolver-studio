@@ -14,11 +14,37 @@ use tauri::Emitter;
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
 
+use tauri::Manager;
+
 use crate::app_error::AppCommandError;
 use crate::db::error::DbError;
 use crate::db::service::folder_service;
 use crate::db::AppDatabase;
 use crate::models::{FolderDetail, FolderHistoryEntry, OpenedConversation};
+
+/// Inject stored GitHub credentials into a git command for a given repository.
+async fn inject_repo_credentials(
+    cmd: &mut tokio::process::Command,
+    repo_path: &str,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
+) {
+    if let Ok(data_dir) = app_handle.path().app_data_dir() {
+        crate::git_credential::try_inject_for_repo(cmd, repo_path, &db.conn, &data_dir).await;
+    }
+}
+
+/// Inject stored GitHub credentials for a clone URL (no repo path yet).
+async fn inject_url_credentials(
+    cmd: &mut tokio::process::Command,
+    clone_url: &str,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
+) {
+    if let Ok(data_dir) = app_handle.path().app_data_dir() {
+        crate::git_credential::try_inject_for_url(cmd, clone_url, &db.conn, &data_dir).await;
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct GitStatusEntry {
@@ -409,15 +435,23 @@ pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError
 }
 
 #[tauri::command]
-pub async fn clone_repository(url: String, target_dir: String) -> Result<(), AppCommandError> {
+pub async fn clone_repository(
+    url: String,
+    target_dir: String,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppCommandError> {
     if url.trim().is_empty() || target_dir.trim().is_empty() {
         return Err(AppCommandError::invalid_input(
             "Repository URL and target directory are required",
         ));
     }
 
-    let output = crate::process::tokio_command("git")
-        .args(["clone", &url, &target_dir])
+    let mut cmd = crate::process::tokio_command("git");
+    cmd.args(["clone", &url, &target_dir]);
+    inject_url_credentials(&mut cmd, &url, &db, &app_handle).await;
+
+    let output = cmd
         .output()
         .await
         .map_err(|e| {
@@ -532,13 +566,19 @@ pub async fn git_init(path: String) -> Result<(), AppCommandError> {
 }
 
 #[tauri::command]
-pub async fn git_pull(path: String) -> Result<GitPullResult, AppCommandError> {
+pub async fn git_pull(
+    path: String,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<GitPullResult, AppCommandError> {
     let head_before = get_head_hash(&path).await?;
 
     // Step 1: fetch from remote
-    let fetch_output = crate::process::tokio_command("git")
-        .args(["fetch"])
-        .current_dir(&path)
+    let mut fetch_cmd = crate::process::tokio_command("git");
+    fetch_cmd.args(["fetch"]).current_dir(&path);
+    inject_repo_credentials(&mut fetch_cmd, &path, &db, &app_handle).await;
+
+    let fetch_output = fetch_cmd
         .output()
         .await
         .map_err(AppCommandError::io)?;
@@ -701,10 +741,16 @@ pub async fn git_has_merge_head(path: String) -> Result<bool, AppCommandError> {
 }
 
 #[tauri::command]
-pub async fn git_fetch(path: String) -> Result<String, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["fetch", "--all"])
-        .current_dir(&path)
+pub async fn git_fetch(
+    path: String,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, AppCommandError> {
+    let mut cmd = crate::process::tokio_command("git");
+    cmd.args(["fetch", "--all"]).current_dir(&path);
+    inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+
+    let output = cmd
         .output()
         .await
         .map_err(AppCommandError::io)?;
@@ -716,7 +762,11 @@ pub async fn git_fetch(path: String) -> Result<String, AppCommandError> {
 }
 
 #[tauri::command]
-pub async fn git_push(path: String) -> Result<GitPushResult, AppCommandError> {
+pub async fn git_push(
+    path: String,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<GitPushResult, AppCommandError> {
     let pushed_commits = estimate_push_commit_count(&path).await;
 
     // Check if the current branch has an upstream configured
@@ -741,19 +791,16 @@ pub async fn git_push(path: String) -> Result<GitPushResult, AppCommandError> {
             .trim()
             .to_string();
 
-        crate::process::tokio_command("git")
-            .args(["push", "--set-upstream", "origin", &branch])
-            .current_dir(&path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?
+        let mut cmd = crate::process::tokio_command("git");
+        cmd.args(["push", "--set-upstream", "origin", &branch])
+            .current_dir(&path);
+        inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+        cmd.output().await.map_err(AppCommandError::io)?
     } else {
-        crate::process::tokio_command("git")
-            .args(["push"])
-            .current_dir(&path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?
+        let mut cmd = crate::process::tokio_command("git");
+        cmd.args(["push"]).current_dir(&path);
+        inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+        cmd.output().await.map_err(AppCommandError::io)?
     };
 
     if !output.status.success() {
@@ -1503,12 +1550,20 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommand
 }
 
 #[tauri::command]
-pub async fn git_fetch_remote(path: String, name: String) -> Result<String, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["fetch", &name])
+pub async fn git_fetch_remote(
+    path: String,
+    name: String,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, AppCommandError> {
+    let mut cmd = crate::process::tokio_command("git");
+    cmd.args(["fetch", &name])
         .current_dir(&path)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(std::process::Stdio::null())
+        .stdin(std::process::Stdio::null());
+    inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+
+    let output = cmd
         .output()
         .await
         .map_err(AppCommandError::io)?;
