@@ -62,11 +62,12 @@ async fn prepare_credential_env(
         "GIT_CONFIG_KEY_0".to_string(),
         "credential.helper".to_string(),
     );
-    // Git parses credential.helper values using shell rules, so paths with
-    // spaces (e.g. "Application Support") must be quoted.
+    // credential.helper values without '!' prefix get "git-credential-" prepended.
+    // The '!' prefix tells git to run it as a raw shell command.
+    // Paths with spaces (e.g. "Application Support") must be quoted.
     env.insert(
         "GIT_CONFIG_VALUE_0".to_string(),
-        format!("\"{}\"", helper_path_str),
+        format!("!\"{}\"", helper_path_str),
     );
 
     let files = TerminalCredFiles {
