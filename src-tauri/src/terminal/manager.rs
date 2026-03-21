@@ -17,8 +17,8 @@ struct TerminalInstance {
     _child: Box<dyn portable_pty::Child + Send>,
     title: String,
     owner_window_label: String,
-    /// Temp credential file to clean up on kill.
-    credential_file: Option<std::path::PathBuf>,
+    /// Temp files (credential store + helper script) to clean up on exit.
+    temp_files: Vec<std::path::PathBuf>,
 }
 
 pub struct TerminalManager {
@@ -139,7 +139,7 @@ pub struct SpawnOptions {
     pub owner_window_label: String,
     pub initial_command: Option<String>,
     pub extra_env: Option<HashMap<String, String>>,
-    pub credential_file: Option<std::path::PathBuf>,
+    pub temp_files: Vec<std::path::PathBuf>,
 }
 
 impl TerminalManager {
@@ -205,7 +205,7 @@ impl TerminalManager {
             _child: child,
             title: "Terminal".to_string(),
             owner_window_label: opts.owner_window_label,
-            credential_file: opts.credential_file,
+            temp_files: opts.temp_files,
         };
 
         self.terminals
@@ -365,8 +365,11 @@ impl TerminalManager {
 fn terminate_terminal(instance: &mut TerminalInstance) {
     let _ = instance._child.kill();
     let _ = instance._child.wait();
-    // Clean up temp credential file
-    if let Some(path) = instance.credential_file.take() {
+    cleanup_temp_files(&mut instance.temp_files);
+}
+
+fn cleanup_temp_files(files: &mut Vec<std::path::PathBuf>) {
+    for path in files.drain(..) {
         let _ = std::fs::remove_file(&path);
     }
 }
@@ -411,11 +414,9 @@ fn read_loop(
         }
     }
 
-    // Terminal exited — remove from map and clean up credential file
+    // Terminal exited — remove from map and clean up temp files
     if let Some(mut instance) = terminals.lock().unwrap().remove(&terminal_id) {
-        if let Some(path) = instance.credential_file.take() {
-            let _ = std::fs::remove_file(&path);
-        }
+        cleanup_temp_files(&mut instance.temp_files);
     }
 
     emit_terminal_exit_event(app_handle, &terminal_id);

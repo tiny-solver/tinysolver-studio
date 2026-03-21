@@ -44,47 +44,64 @@ pub fn write_credential_store_file(
     Ok(())
 }
 
-/// Create a terminal-specific GIT_ASKPASS script that reads credentials
-/// from a credential-store file, selecting by hostname from the git prompt.
+/// Create a credential helper script that reads from a credential-store file
+/// using git's structured credential protocol.
 ///
-/// Unlike the simple askpass script (which uses env vars for a single credential),
-/// this one supports multiple hosts by parsing the credential store file.
-pub fn create_terminal_askpass_script(
+/// Git's credential helper protocol passes structured key=value pairs on stdin:
+///   protocol=https
+///   host=github.com
+///
+/// And expects the response on stdout:
+///   username=xxx
+///   password=xxx
+///
+/// This is far more reliable than GIT_ASKPASS (which requires parsing English prompts).
+/// The script is per-terminal (named with terminal_id) to avoid race conditions.
+pub fn create_credential_helper_script(
     app_data_dir: &Path,
     cred_store_path: &Path,
+    terminal_id: &str,
 ) -> std::io::Result<PathBuf> {
     let cred_store_str = cred_store_path.to_string_lossy();
 
     #[cfg(unix)]
     {
-        let script_path = app_data_dir.join("git-askpass-terminal.sh");
-        // Always overwrite — cred store path may change between sessions
+        let script_path = app_data_dir.join(format!("git-credential-codeg-{}.sh", &terminal_id[..8]));
         let content = format!(
             r#"#!/bin/sh
-# Terminal askpass helper: reads from credential store file.
-# Parses hostname from git's prompt (e.g. "Username for 'https://github.com': ")
+# Codeg credential helper: reads from credential store file.
+# Only responds to "get" action; ignores "store" and "erase".
+[ "$1" != "get" ] && exit 0
+
 CRED_FILE="{cred_file}"
-PROMPT="$1"
+[ ! -f "$CRED_FILE" ] && exit 0
 
-# Extract hostname from prompt (between :// and next / or ')
-HOST=$(echo "$PROMPT" | sed -n "s|.*://\([^/']*\).*|\1|p")
-[ -z "$HOST" ] && exit 1
-[ ! -f "$CRED_FILE" ] && exit 1
+# Read protocol and host from stdin
+HOST=""
+PROTO=""
+while IFS='=' read -r key value; do
+    [ -z "$key" ] && break
+    case "$key" in
+        host) HOST="$value" ;;
+        protocol) PROTO="$value" ;;
+    esac
+done
 
-# Find matching line in credential store
+[ -z "$HOST" ] && exit 0
+
+# Find matching line: https://user:pass@host
 LINE=$(grep -i "@$HOST" "$CRED_FILE" | head -1)
-[ -z "$LINE" ] && exit 1
+[ -z "$LINE" ] && exit 0
 
 # Parse username and password from https://user:pass@host
-USERPASS=$(echo "$LINE" | sed 's|https://||' | sed 's|@.*||')
+USERPASS=$(echo "$LINE" | sed 's|https*://||' | sed 's|@.*||')
 USER=$(echo "$USERPASS" | cut -d: -f1)
 PASS=$(echo "$USERPASS" | cut -d: -f2-)
 
-case "$PROMPT" in
-    *[Uu]sername*) echo "$USER" ;;
-    *[Pp]assword*) echo "$PASS" ;;
-    *) exit 1 ;;
-esac
+[ -z "$USER" ] && exit 0
+
+echo "username=$USER"
+echo "password=$PASS"
 "#,
             cred_file = cred_store_str
         );
@@ -96,50 +113,44 @@ esac
 
     #[cfg(windows)]
     {
-        let script_path = app_data_dir.join("git-askpass-terminal.bat");
+        let script_path = app_data_dir.join(format!("git-credential-codeg-{}.bat", &terminal_id[..8]));
         let content = format!(
             r#"@echo off
 setlocal enabledelayedexpansion
+if not "%~1"=="get" exit /b 0
+
 set "CRED_FILE={cred_file}"
-set "PROMPT=%~1"
+if not exist "!CRED_FILE!" exit /b 0
 
-:: Extract hostname from prompt
-for /f "tokens=2 delims=/" %%a in ("!PROMPT!") do (
-    for /f "tokens=1 delims=/' " %%b in ("%%a") do set "HOST=%%b"
+set "HOST="
+set "PROTO="
+:readloop
+set /p "LINE=" || goto :match
+for /f "tokens=1,* delims==" %%a in ("!LINE!") do (
+    if "%%a"=="host" set "HOST=%%b"
+    if "%%a"=="protocol" set "PROTO=%%b"
 )
-if not defined HOST exit /b 1
-if not exist "!CRED_FILE!" exit /b 1
+if defined LINE goto :readloop
 
-:: Search credential file for matching host
+:match
+if not defined HOST exit /b 0
+
 for /f "usebackq delims=" %%L in ("!CRED_FILE!") do (
     echo %%L | findstr /i "!HOST!" >nul
     if !errorlevel! equ 0 (
-        set "LINE=%%L"
-        goto :found
+        set "FOUND=%%L"
+        goto :parse
     )
 )
-exit /b 1
+exit /b 0
 
-:found
-:: Parse https://user:pass@host
-set "LINE=!LINE:https://=!"
-for /f "tokens=1 delims=@" %%a in ("!LINE!") do set "USERPASS=%%a"
+:parse
+set "FOUND=!FOUND:https://=!"
+for /f "tokens=1 delims=@" %%a in ("!FOUND!") do set "USERPASS=%%a"
 for /f "tokens=1,2 delims=:" %%a in ("!USERPASS!") do (
-    set "USER=%%a"
-    set "PASS=%%b"
+    echo username=%%a
+    echo password=%%b
 )
-
-echo !PROMPT! | findstr /i "username" >nul
-if !errorlevel! equ 0 (
-    echo !USER!
-    exit /b
-)
-echo !PROMPT! | findstr /i "password" >nul
-if !errorlevel! equ 0 (
-    echo !PASS!
-    exit /b
-)
-exit /b 1
 "#,
             cred_file = cred_store_str
         );
