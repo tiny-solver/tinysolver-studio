@@ -196,7 +196,26 @@
     "removeCancel": "Abbrechen",
     "removeSuccess": "Konto entfernt.",
     "scopes": "Berechtigungen",
-    "loadFailed": "Einstellungen konnten nicht geladen werden: {message}"
+    "loadFailed": "Einstellungen konnten nicht geladen werden: {message}",
+    "gitAccount": {
+      "sectionTitle": "Git-Server-Konten",
+      "sectionDescription": "Verwalten Sie Anmeldedaten für Nicht-GitHub-Git-Server (GitLab, Bitbucket, selbst gehostet usw.).",
+      "noAccounts": "Keine Git-Server-Konten konfiguriert.",
+      "addAccount": "Konto hinzufügen",
+      "addTitle": "Git-Konto hinzufügen",
+      "addDescription": "Geben Sie Serveradresse, Benutzername und Passwort oder Zugriffstoken ein.",
+      "serverUrl": "Server-URL",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "Benutzername",
+      "usernamePlaceholder": "Benutzername oder E-Mail",
+      "password": "Passwort / Token",
+      "passwordPlaceholder": "Passwort oder Zugriffstoken",
+      "passwordHint": "Geben Sie das Passwort oder Zugriffstoken des Servers ein.",
+      "add": "Hinzufügen",
+      "serverRequired": "Server-URL ist erforderlich.",
+      "usernameRequired": "Benutzername ist erforderlich.",
+      "passwordRequired": "Passwort ist erforderlich."
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "Kurzbefehle",

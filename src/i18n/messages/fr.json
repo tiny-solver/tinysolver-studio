@@ -196,7 +196,26 @@
     "removeCancel": "Annuler",
     "removeSuccess": "Compte supprimé.",
     "scopes": "Portées",
-    "loadFailed": "Échec du chargement des paramètres : {message}"
+    "loadFailed": "Échec du chargement des paramètres : {message}",
+    "gitAccount": {
+      "sectionTitle": "Comptes serveur Git",
+      "sectionDescription": "Gérez les identifiants pour les serveurs Git non GitHub (GitLab, Bitbucket, auto-hébergé, etc.).",
+      "noAccounts": "Aucun compte de serveur Git configuré.",
+      "addAccount": "Ajouter un compte",
+      "addTitle": "Ajouter un compte Git",
+      "addDescription": "Entrez l'adresse du serveur, le nom d'utilisateur et le mot de passe ou jeton d'accès.",
+      "serverUrl": "URL du serveur",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "Nom d'utilisateur",
+      "usernamePlaceholder": "Nom d'utilisateur ou e-mail",
+      "password": "Mot de passe / Jeton",
+      "passwordPlaceholder": "Mot de passe ou jeton d'accès",
+      "passwordHint": "Entrez le mot de passe ou le jeton d'accès du serveur.",
+      "add": "Ajouter",
+      "serverRequired": "L'URL du serveur est requise.",
+      "usernameRequired": "Le nom d'utilisateur est requis.",
+      "passwordRequired": "Le mot de passe est requis."
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "Raccourcis",

@@ -196,7 +196,26 @@
     "removeCancel": "취소",
     "removeSuccess": "계정이 삭제되었습니다.",
     "scopes": "범위",
-    "loadFailed": "설정 로드 실패: {message}"
+    "loadFailed": "설정 로드 실패: {message}",
+    "gitAccount": {
+      "sectionTitle": "Git 서버 계정",
+      "sectionDescription": "GitHub 이외의 Git 서버 자격 증명을 관리합니다 (GitLab, Bitbucket, 자체 호스팅 등).",
+      "noAccounts": "설정된 Git 서버 계정이 없습니다.",
+      "addAccount": "계정 추가",
+      "addTitle": "Git 계정 추가",
+      "addDescription": "서버 주소, 사용자 이름, 비밀번호 또는 액세스 토큰을 입력하세요.",
+      "serverUrl": "서버 URL",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "사용자 이름",
+      "usernamePlaceholder": "사용자 이름 또는 이메일",
+      "password": "비밀번호 / 토큰",
+      "passwordPlaceholder": "비밀번호 또는 액세스 토큰",
+      "passwordHint": "서버의 비밀번호 또는 액세스 토큰을 입력하세요.",
+      "add": "추가",
+      "serverRequired": "서버 URL을 입력하세요.",
+      "usernameRequired": "사용자 이름을 입력하세요.",
+      "passwordRequired": "비밀번호를 입력하세요."
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "단축키",

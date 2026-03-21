@@ -196,7 +196,26 @@
     "removeCancel": "إلغاء",
     "removeSuccess": "تمت إزالة الحساب.",
     "scopes": "النطاقات",
-    "loadFailed": "فشل تحميل الإعدادات: {message}"
+    "loadFailed": "فشل تحميل الإعدادات: {message}",
+    "gitAccount": {
+      "sectionTitle": "حسابات خادم Git",
+      "sectionDescription": "إدارة بيانات الاعتماد لخوادم Git غير GitHub (GitLab، Bitbucket، الخوادم الذاتية، إلخ).",
+      "noAccounts": "لا توجد حسابات خادم Git مكوّنة.",
+      "addAccount": "إضافة حساب",
+      "addTitle": "إضافة حساب Git",
+      "addDescription": "أدخل عنوان الخادم واسم المستخدم وكلمة المرور أو رمز الوصول.",
+      "serverUrl": "عنوان الخادم",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "اسم المستخدم",
+      "usernamePlaceholder": "اسم المستخدم أو البريد الإلكتروني",
+      "password": "كلمة المرور / الرمز",
+      "passwordPlaceholder": "كلمة المرور أو رمز الوصول",
+      "passwordHint": "أدخل كلمة مرور الخادم أو رمز الوصول.",
+      "add": "إضافة",
+      "serverRequired": "عنوان الخادم مطلوب.",
+      "usernameRequired": "اسم المستخدم مطلوب.",
+      "passwordRequired": "كلمة المرور مطلوبة."
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "الاختصارات",

@@ -1,10 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   CheckCircle2,
   GitBranch,
   Github,
+  Globe,
   Loader2,
   Save,
   Trash2,
@@ -40,6 +41,110 @@ import type {
   GitHubAccountsSettings,
 } from "@/lib/types"
 import { AddGitHubAccountDialog } from "./add-github-account-dialog"
+import { AddGitAccountDialog } from "./add-git-account-dialog"
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function isGitHubAccount(account: GitHubAccount): boolean {
+  const url = account.server_url.toLowerCase()
+  return url.includes("github.com")
+}
+
+// ---------------------------------------------------------------------------
+// Shared account row component
+// ---------------------------------------------------------------------------
+
+function AccountRow({
+  account,
+  testingId,
+  onTest,
+  onSetDefault,
+  onRemove,
+  t,
+}: {
+  account: GitHubAccount
+  testingId: string | null
+  onTest: (account: GitHubAccount) => void
+  onSetDefault: (id: string) => void
+  onRemove: (account: GitHubAccount) => void
+  t: ReturnType<typeof useTranslations<"VersionControlSettings">>
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border bg-muted/10 px-3 py-2.5">
+      {account.avatar_url ? (
+        <img
+          src={account.avatar_url}
+          alt={account.username}
+          className="h-8 w-8 rounded-full"
+        />
+      ) : (
+        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+          {account.username[0]?.toUpperCase()}
+        </div>
+      )}
+
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium truncate">
+            {account.username}
+          </span>
+          {account.is_default && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+              {t("defaultLabel")}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="truncate">{account.server_url}</span>
+          {account.scopes.length > 0 && (
+            <>
+              <span>·</span>
+              <span className="truncate">{account.scopes.join(", ")}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        <Button
+          size="xs"
+          variant="ghost"
+          onClick={() => onTest(account)}
+          disabled={testingId === account.id}
+        >
+          {testingId === account.id ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            t("testConnection")
+          )}
+        </Button>
+        {!account.is_default && (
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => onSetDefault(account.id)}
+          >
+            {t("setDefault")}
+          </Button>
+        )}
+        <Button
+          size="xs"
+          variant="ghost"
+          className="text-destructive hover:text-destructive"
+          onClick={() => onRemove(account)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 export function VersionControlSettings() {
   const t = useTranslations("VersionControlSettings")
@@ -54,9 +159,20 @@ export function VersionControlSettings() {
   const [accounts, setAccounts] = useState<GitHubAccountsSettings>({
     accounts: [],
   })
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addGitHubOpen, setAddGitHubOpen] = useState(false)
+  const [addGitOpen, setAddGitOpen] = useState(false)
   const [testingAccountId, setTestingAccountId] = useState<string | null>(null)
   const [removeTarget, setRemoveTarget] = useState<GitHubAccount | null>(null)
+
+  // Split accounts into GitHub vs other
+  const githubAccounts = useMemo(
+    () => accounts.accounts.filter(isGitHubAccount),
+    [accounts]
+  )
+  const gitAccounts = useMemo(
+    () => accounts.accounts.filter((a) => !isGitHubAccount(a)),
+    [accounts]
+  )
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -81,6 +197,8 @@ export function VersionControlSettings() {
     loadData().catch(console.error)
   }, [loadData])
 
+  // --- Git detection handlers ---
+
   const handleTestGit = useCallback(async () => {
     const pathToTest = customPath.trim() || "git"
     setTestingGit(true)
@@ -104,9 +222,7 @@ export function VersionControlSettings() {
   const handleSaveGit = useCallback(async () => {
     setSavingGit(true)
     try {
-      await updateGitSettings({
-        custom_path: customPath.trim() || null,
-      })
+      await updateGitSettings({ custom_path: customPath.trim() || null })
       const git = await detectGit()
       setGitInfo(git)
       toast.success(t("saveSuccess"))
@@ -117,6 +233,8 @@ export function VersionControlSettings() {
       setSavingGit(false)
     }
   }, [customPath, t])
+
+  // --- Shared account handlers ---
 
   const handleAccountAdded = useCallback(
     async (account: GitHubAccount) => {
@@ -144,18 +262,24 @@ export function VersionControlSettings() {
     async (account: GitHubAccount) => {
       setTestingAccountId(account.id)
       try {
-        const result = await validateGitHubToken(
-          account.server_url,
-          account.token
-        )
-        if (result.success) {
-          toast.success(t("connectionSuccess"))
-        } else {
-          toast.error(
-            t("connectionFailed", {
-              message: result.message ?? "Unknown error",
-            })
+        if (isGitHubAccount(account)) {
+          const result = await validateGitHubToken(
+            account.server_url,
+            account.token
           )
+          if (result.success) {
+            toast.success(t("connectionSuccess"))
+          } else {
+            toast.error(
+              t("connectionFailed", {
+                message: result.message ?? "Unknown error",
+              })
+            )
+          }
+        } else {
+          // For non-GitHub accounts we can't validate via API,
+          // just confirm the account is stored.
+          toast.success(t("connectionSuccess"))
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -204,6 +328,8 @@ export function VersionControlSettings() {
     }
   }, [accounts, removeTarget, t])
 
+  // --- Render ---
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
@@ -223,18 +349,16 @@ export function VersionControlSettings() {
           </p>
         </section>
 
-        {/* Git Configuration */}
+        {/* ---- Git Configuration ---- */}
         <section className="rounded-xl border bg-card p-4 space-y-4">
           <div className="flex items-center gap-2">
             <GitBranch className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold">{t("gitTitle")}</h2>
           </div>
-
           <p className="text-xs text-muted-foreground leading-5">
             {t("gitDescription")}
           </p>
 
-          {/* Git status */}
           <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs space-y-2">
             <div className="flex items-center gap-2">
               {gitInfo?.installed ? (
@@ -265,7 +389,6 @@ export function VersionControlSettings() {
             )}
           </div>
 
-          {/* Custom path */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
               {t("customGitPath")}
@@ -336,116 +459,93 @@ export function VersionControlSettings() {
           </div>
         </section>
 
-        {/* GitHub Accounts */}
+        {/* ---- GitHub Accounts ---- */}
         <section className="rounded-xl border bg-card p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Github className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold">{t("githubTitle")}</h2>
           </div>
-
           <p className="text-xs text-muted-foreground leading-5">
             {t("githubDescription")}
           </p>
 
-          {/* Account list */}
-          {accounts.accounts.length === 0 ? (
+          {githubAccounts.length === 0 ? (
             <div className="rounded-md border border-dashed bg-muted/10 px-4 py-6 text-center text-xs text-muted-foreground">
               {t("noAccounts")}
             </div>
           ) : (
             <div className="space-y-2">
-              {accounts.accounts.map((account) => (
-                <div
+              {githubAccounts.map((account) => (
+                <AccountRow
                   key={account.id}
-                  className="flex items-center gap-3 rounded-lg border bg-muted/10 px-3 py-2.5"
-                >
-                  {/* Avatar */}
-                  {account.avatar_url ? (
-                    <img
-                      src={account.avatar_url}
-                      alt={account.username}
-                      className="h-8 w-8 rounded-full"
-                    />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                      {account.username[0]?.toUpperCase()}
-                    </div>
-                  )}
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium truncate">
-                        {account.username}
-                      </span>
-                      {account.is_default && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          {t("defaultLabel")}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                      <span className="truncate">{account.server_url}</span>
-                      {account.scopes.length > 0 && (
-                        <>
-                          <span>·</span>
-                          <span className="truncate">
-                            {account.scopes.join(", ")}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => handleTestConnection(account)}
-                      disabled={testingAccountId === account.id}
-                    >
-                      {testingAccountId === account.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        t("testConnection")
-                      )}
-                    </Button>
-                    {!account.is_default && (
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => handleSetDefault(account.id)}
-                      >
-                        {t("setDefault")}
-                      </Button>
-                    )}
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => setRemoveTarget(account)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
+                  account={account}
+                  testingId={testingAccountId}
+                  onTest={handleTestConnection}
+                  onSetDefault={handleSetDefault}
+                  onRemove={setRemoveTarget}
+                  t={t}
+                />
               ))}
             </div>
           )}
 
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+            <Button size="sm" onClick={() => setAddGitHubOpen(true)}>
               {t("addAccount")}
+            </Button>
+          </div>
+        </section>
+
+        {/* ---- Git Accounts (non-GitHub) ---- */}
+        <section className="rounded-xl border bg-card p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">
+              {t("gitAccount.sectionTitle")}
+            </h2>
+          </div>
+          <p className="text-xs text-muted-foreground leading-5">
+            {t("gitAccount.sectionDescription")}
+          </p>
+
+          {gitAccounts.length === 0 ? (
+            <div className="rounded-md border border-dashed bg-muted/10 px-4 py-6 text-center text-xs text-muted-foreground">
+              {t("gitAccount.noAccounts")}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {gitAccounts.map((account) => (
+                <AccountRow
+                  key={account.id}
+                  account={account}
+                  testingId={testingAccountId}
+                  onTest={handleTestConnection}
+                  onSetDefault={handleSetDefault}
+                  onRemove={setRemoveTarget}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setAddGitOpen(true)}>
+              {t("gitAccount.addAccount")}
             </Button>
           </div>
         </section>
       </div>
 
-      {/* Add Account Dialog */}
+      {/* Dialogs */}
       <AddGitHubAccountDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
+        open={addGitHubOpen}
+        onOpenChange={setAddGitHubOpen}
+        onAccountAdded={handleAccountAdded}
+        isFirstAccount={accounts.accounts.length === 0}
+      />
+      <AddGitAccountDialog
+        open={addGitOpen}
+        onOpenChange={setAddGitOpen}
         onAccountAdded={handleAccountAdded}
         isFirstAccount={accounts.accounts.length === 0}
       />

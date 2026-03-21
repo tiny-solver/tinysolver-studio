@@ -196,7 +196,26 @@
     "removeCancel": "取消",
     "removeSuccess": "帳號已刪除。",
     "scopes": "權限範圍",
-    "loadFailed": "載入設定失敗：{message}"
+    "loadFailed": "載入設定失敗：{message}",
+    "gitAccount": {
+      "sectionTitle": "Git 伺服器帳號",
+      "sectionDescription": "管理非 GitHub 的 Git 伺服器憑據（GitLab、Bitbucket、自建服務等）。",
+      "noAccounts": "尚未設定 Git 伺服器帳號。",
+      "addAccount": "新增帳號",
+      "addTitle": "新增 Git 帳號",
+      "addDescription": "輸入伺服器網址、使用者名稱和密碼或存取權杖。",
+      "serverUrl": "伺服器網址",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "使用者名稱",
+      "usernamePlaceholder": "使用者名稱或電子郵件",
+      "password": "密碼 / 權杖",
+      "passwordPlaceholder": "密碼或存取權杖",
+      "passwordHint": "輸入伺服器的密碼或個人存取權杖。",
+      "add": "新增",
+      "serverRequired": "請輸入伺服器網址。",
+      "usernameRequired": "請輸入使用者名稱。",
+      "passwordRequired": "請輸入密碼。"
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "快捷鍵",

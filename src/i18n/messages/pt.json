@@ -196,7 +196,26 @@
     "removeCancel": "Cancelar",
     "removeSuccess": "Conta removida.",
     "scopes": "Escopos",
-    "loadFailed": "Falha ao carregar configurações: {message}"
+    "loadFailed": "Falha ao carregar configurações: {message}",
+    "gitAccount": {
+      "sectionTitle": "Contas de servidor Git",
+      "sectionDescription": "Gerencie credenciais para servidores Git que não são GitHub (GitLab, Bitbucket, auto-hospedados, etc.).",
+      "noAccounts": "Nenhuma conta de servidor Git configurada.",
+      "addAccount": "Adicionar conta",
+      "addTitle": "Adicionar conta Git",
+      "addDescription": "Insira o endereço do servidor, nome de usuário e senha ou token de acesso.",
+      "serverUrl": "URL do servidor",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "Nome de usuário",
+      "usernamePlaceholder": "Nome de usuário ou e-mail",
+      "password": "Senha / Token",
+      "passwordPlaceholder": "Senha ou token de acesso",
+      "passwordHint": "Insira a senha ou o token de acesso do servidor.",
+      "add": "Adicionar",
+      "serverRequired": "A URL do servidor é obrigatória.",
+      "usernameRequired": "O nome de usuário é obrigatório.",
+      "passwordRequired": "A senha é obrigatória."
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "Atalhos",

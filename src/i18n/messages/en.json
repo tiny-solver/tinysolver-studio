@@ -196,7 +196,26 @@
     "removeCancel": "Cancel",
     "removeSuccess": "Account removed.",
     "scopes": "Scopes",
-    "loadFailed": "Failed to load settings: {message}"
+    "loadFailed": "Failed to load settings: {message}",
+    "gitAccount": {
+      "sectionTitle": "Git Accounts",
+      "sectionDescription": "Manage credentials for non-GitHub Git servers (GitLab, Bitbucket, self-hosted, etc.).",
+      "noAccounts": "No Git server accounts configured.",
+      "addAccount": "Add Account",
+      "addTitle": "Add Git Account",
+      "addDescription": "Enter the server address, username, and password or access token.",
+      "serverUrl": "Server URL",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "Username",
+      "usernamePlaceholder": "Username or email",
+      "password": "Password / Token",
+      "passwordPlaceholder": "Password or access token",
+      "passwordHint": "Enter your password or a personal access token for the server.",
+      "add": "Add",
+      "serverRequired": "Server URL is required.",
+      "usernameRequired": "Username is required.",
+      "passwordRequired": "Password is required."
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "Shortcuts",

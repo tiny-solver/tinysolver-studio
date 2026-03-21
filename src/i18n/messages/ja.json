@@ -196,7 +196,26 @@
     "removeCancel": "キャンセル",
     "removeSuccess": "アカウントを削除しました。",
     "scopes": "スコープ",
-    "loadFailed": "設定の読み込みに失敗しました：{message}"
+    "loadFailed": "設定の読み込みに失敗しました：{message}",
+    "gitAccount": {
+      "sectionTitle": "Git サーバーアカウント",
+      "sectionDescription": "GitHub 以外の Git サーバーの認証情報を管理します（GitLab、Bitbucket、セルフホストなど）。",
+      "noAccounts": "Git サーバーアカウントが設定されていません。",
+      "addAccount": "アカウントを追加",
+      "addTitle": "Git アカウントを追加",
+      "addDescription": "サーバーアドレス、ユーザー名、パスワードまたはアクセストークンを入力してください。",
+      "serverUrl": "サーバー URL",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "ユーザー名",
+      "usernamePlaceholder": "ユーザー名またはメールアドレス",
+      "password": "パスワード / トークン",
+      "passwordPlaceholder": "パスワードまたはアクセストークン",
+      "passwordHint": "サーバーのパスワードまたはアクセストークンを入力してください。",
+      "add": "追加",
+      "serverRequired": "サーバー URL を入力してください。",
+      "usernameRequired": "ユーザー名を入力してください。",
+      "passwordRequired": "パスワードを入力してください。"
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "ショートカット",

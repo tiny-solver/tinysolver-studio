@@ -196,7 +196,26 @@
     "removeCancel": "取消",
     "removeSuccess": "账号已删除。",
     "scopes": "权限范围",
-    "loadFailed": "加载设置失败：{message}"
+    "loadFailed": "加载设置失败：{message}",
+    "gitAccount": {
+      "sectionTitle": "Git 服务器账号",
+      "sectionDescription": "管理非 GitHub 的 Git 服务器凭据（GitLab、Bitbucket、自建服务等）。",
+      "noAccounts": "暂无 Git 服务器账号。",
+      "addAccount": "添加账号",
+      "addTitle": "添加 Git 账号",
+      "addDescription": "输入服务器地址、用户名和密码或访问令牌。",
+      "serverUrl": "服务器地址",
+      "serverUrlPlaceholder": "https://gitlab.example.com",
+      "username": "用户名",
+      "usernamePlaceholder": "用户名或邮箱",
+      "password": "密码 / 令牌",
+      "passwordPlaceholder": "密码或访问令牌",
+      "passwordHint": "输入服务器的密码或个人访问令牌。",
+      "add": "添加",
+      "serverRequired": "请输入服务器地址。",
+      "usernameRequired": "请输入用户名。",
+      "passwordRequired": "请输入密码。"
+    }
   },
   "ShortcutSettings": {
     "sectionTitle": "快捷键",
