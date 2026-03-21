@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use acp::manager::ConnectionManager;
 use commands::{
     acp as acp_commands, conversations, folder_commands, folders, mcp as mcp_commands,
-    system_settings, terminal as terminal_commands, version_control, windows,
+    notification, system_settings, terminal as terminal_commands, version_control, windows,
 };
 use tauri::Manager;
 use terminal::manager::TerminalManager;
@@ -319,6 +319,7 @@ pub fn run() {
             mcp_commands::mcp_upsert_local_server,
             mcp_commands::mcp_set_server_apps,
             mcp_commands::mcp_remove_server,
+            notification::send_notification,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

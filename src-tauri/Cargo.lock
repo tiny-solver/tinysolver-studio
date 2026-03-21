@@ -804,6 +804,7 @@ dependencies = [
  "futures",
  "keyring",
  "kill_tree",
+ "mac-notification-sys",
  "notify",
  "portable-pty",
  "regex",

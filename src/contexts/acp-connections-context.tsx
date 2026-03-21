@@ -44,6 +44,7 @@ import {
 } from "@/lib/constants"
 import { notifyTurnComplete } from "@/lib/notification"
 import { useAlertContext, type AlertAction } from "@/contexts/alert-context"
+import { useFolderContext } from "@/contexts/folder-context"
 
 // ── Shared types (re-exported for consumers) ──
 
@@ -1125,6 +1126,11 @@ function isAlertedError(error: unknown): error is AlertedError {
 export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const t = useTranslations("Folder.chat.acpConnections")
   const { pushAlert } = useAlertContext()
+  const { folder } = useFolderContext()
+  const folderNameRef = useRef(folder?.name)
+  useEffect(() => {
+    folderNameRef.current = folder?.name
+  }, [folder?.name])
   const pushAlertRef = useRef(pushAlert)
   useEffect(() => {
     pushAlertRef.current = pushAlert
@@ -1551,8 +1557,10 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             const nc = storeRef.current.connections.get(contextKey)
             if (nc) {
               const agentLabel = AGENT_LABELS[nc.agentType]
+              const fn = folderNameRef.current
+              const title = fn ? `${fn} - Codeg` : "Codeg"
               notifyTurnComplete(
-                "Codeg",
+                title,
                 t("notificationTurnComplete", { agent: agentLabel }),
               ).catch(() => {})
             }
