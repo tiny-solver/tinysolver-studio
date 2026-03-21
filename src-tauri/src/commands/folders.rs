@@ -84,6 +84,7 @@ async fn prepare_remote_git_cmd_for_url(
 /// Classify a git remote command error, detecting authentication failures.
 fn classify_remote_git_error(operation: &str, stderr: &[u8]) -> AppCommandError {
     let msg = String::from_utf8_lossy(stderr).trim().to_string();
+    eprintln!("[GIT_CMD] {} failed, stderr: {}", operation, msg);
     let lower = msg.to_lowercase();
 
     if lower.contains("authentication failed")

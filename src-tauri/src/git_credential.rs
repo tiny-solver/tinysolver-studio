@@ -198,7 +198,14 @@ pub fn inject_credentials(
     token: &str,
     askpass_path: &Path,
 ) {
-    cmd.env("GIT_ASKPASS", askpass_path)
+    // Clear all system credential helpers (e.g. macOS Keychain `osxkeychain`)
+    // so git falls through to GIT_ASKPASS. Without this, a system credential
+    // helper may return stale/wrong credentials and GIT_ASKPASS is never called.
+    // Per git docs, setting credential.helper="" resets the helper list.
+    cmd.env("GIT_CONFIG_COUNT", "1")
+        .env("GIT_CONFIG_KEY_0", "credential.helper")
+        .env("GIT_CONFIG_VALUE_0", "")
+        .env("GIT_ASKPASS", askpass_path)
         .env("CODEG_GIT_USERNAME", username)
         .env("CODEG_GIT_PASSWORD", token)
         .env("GIT_TERMINAL_PROMPT", "0");
@@ -335,22 +342,41 @@ pub async fn try_inject_for_repo(
 ) -> bool {
     let settings = match load_github_accounts(conn).await {
         Some(s) if !s.accounts.is_empty() => s,
-        _ => return false,
+        _ => {
+            eprintln!("[GIT_CRED] no accounts configured");
+            return false;
+        }
     };
 
     let remote_url = match get_remote_url(repo_path).await {
         Some(url) => url,
-        None => return false,
+        None => {
+            eprintln!("[GIT_CRED] no remote URL found for {}", repo_path);
+            return false;
+        }
     };
 
     // Only inject for HTTPS URLs (SSH uses keys, not tokens)
     if !remote_url.starts_with("https://") && !remote_url.starts_with("http://") {
+        eprintln!("[GIT_CRED] skipping non-HTTPS URL: {}", remote_url);
         return false;
     }
 
     let account = match find_matching_account(&settings.accounts, &remote_url) {
         Some(a) => a,
-        None => return false,
+        None => {
+            eprintln!(
+                "[GIT_CRED] no matching account for remote {}. Available hosts: {}",
+                remote_url,
+                settings
+                    .accounts
+                    .iter()
+                    .map(|a| a.server_url.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            return false;
+        }
     };
 
     let askpass = match ensure_askpass_script(app_data_dir) {
@@ -361,6 +387,10 @@ pub async fn try_inject_for_repo(
         }
     };
 
+    eprintln!(
+        "[GIT_CRED] injecting credentials for {} (user: {})",
+        remote_url, account.username
+    );
     inject_credentials(cmd, &account.username, &account.token, &askpass);
     true
 }
