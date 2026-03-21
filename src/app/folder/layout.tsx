@@ -22,6 +22,7 @@ import {
   TerminalProvider,
   useTerminalContext,
 } from "@/contexts/terminal-context"
+import { GitCredentialProvider } from "@/contexts/git-credential-context"
 import {
   WorkspaceProvider,
   useWorkspaceContext,
@@ -642,7 +643,8 @@ function FolderLayoutInner({ children }: { children: React.ReactNode }) {
       initialAgentType={agentType}
     >
       <AlertProvider>
-        <TaskProvider>
+        <GitCredentialProvider>
+          <TaskProvider>
           <AcpConnectionsProvider>
             <ConversationRuntimeProvider>
               <WorkspaceProvider key={`workspace-${normalizedFolderId}`}>
@@ -677,7 +679,8 @@ function FolderLayoutInner({ children }: { children: React.ReactNode }) {
               </WorkspaceProvider>
             </ConversationRuntimeProvider>
           </AcpConnectionsProvider>
-        </TaskProvider>
+          </TaskProvider>
+        </GitCredentialProvider>
       </AlertProvider>
     </FolderProvider>
   )

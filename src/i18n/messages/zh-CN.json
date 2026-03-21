@@ -57,6 +57,26 @@
       "clone": "克隆"
     }
   },
+  "GitCredentialDialog": {
+    "title": "需要身份验证",
+    "description": "远程服务器要求输入凭据。请输入用户名和密码（或个人访问令牌）。",
+    "username": "用户名",
+    "usernamePlaceholder": "用户名或邮箱",
+    "password": "密码 / 令牌",
+    "passwordPlaceholder": "密码或个人访问令牌",
+    "passwordHint": "请输入服务器的用户名和密码。",
+    "cancel": "取消",
+    "authenticate": "认证",
+    "authenticating": "认证中...",
+    "invalidCredentials": "凭据无效，请重试。",
+    "saveCredentials": "保存凭据以供后续操作使用",
+    "githubTitle": "GitHub 身份验证",
+    "githubDescription": "输入个人访问令牌以连接 GitHub。令牌验证成功后将自动保存到账号列表。",
+    "githubToken": "个人访问令牌",
+    "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "githubTokenHint": "在 GitHub → Settings → Developer settings → Personal access tokens 中生成令牌。",
+    "githubAuthenticate": "验证并连接"
+  },
   "SettingsShell": {
     "title": "设置",
     "preferences": "偏好设置",

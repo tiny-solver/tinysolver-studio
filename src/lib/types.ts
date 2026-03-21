@@ -525,6 +525,11 @@ export interface SystemLanguageSettings {
 
 // --- Version Control ---
 
+export interface GitCredentials {
+  username: string
+  password: string
+}
+
 export interface GitDetectResult {
   installed: boolean
   version: string | null

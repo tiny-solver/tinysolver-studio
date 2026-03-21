@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { cloneRepository, openFolderWindow } from "@/lib/tauri"
+import { useGitCredential } from "@/contexts/git-credential-context"
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ interface CloneDialogProps {
 
 export function CloneDialog({ open: isOpen, onOpenChange }: CloneDialogProps) {
   const t = useTranslations("WelcomePage")
+  const { withCredentialRetry } = useGitCredential()
   const [url, setUrl] = useState("")
   const [targetDir, setTargetDir] = useState("")
   const [cloning, setCloning] = useState(false)
@@ -55,7 +57,10 @@ export function CloneDialog({ open: isOpen, onOpenChange }: CloneDialogProps) {
     setError(null)
 
     try {
-      await cloneRepository(url, fullPath)
+      await withCredentialRetry(
+        (creds) => cloneRepository(url, fullPath, creds),
+        { remoteUrl: url }
+      )
       await openFolderWindow(fullPath)
       onOpenChange(false)
       resetForm()

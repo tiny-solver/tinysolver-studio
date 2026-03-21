@@ -57,6 +57,26 @@
       "clone": "Clone"
     }
   },
+  "GitCredentialDialog": {
+    "title": "Authentication Required",
+    "description": "The remote server requires credentials. Enter your username and password (or personal access token).",
+    "username": "Username",
+    "usernamePlaceholder": "Username or email",
+    "password": "Password / Token",
+    "passwordPlaceholder": "Password or personal access token",
+    "passwordHint": "For non-GitHub servers, enter your username and password.",
+    "cancel": "Cancel",
+    "authenticate": "Authenticate",
+    "authenticating": "Authenticating...",
+    "invalidCredentials": "Invalid credentials. Please try again.",
+    "saveCredentials": "Save credentials for future operations",
+    "githubTitle": "GitHub Authentication",
+    "githubDescription": "Enter a personal access token to authenticate with GitHub. The token will be validated and saved to your accounts.",
+    "githubToken": "Personal Access Token",
+    "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "githubTokenHint": "Generate a token at GitHub → Settings → Developer settings → Personal access tokens.",
+    "githubAuthenticate": "Validate & Connect"
+  },
   "SettingsShell": {
     "title": "Settings",
     "preferences": "Preferences",

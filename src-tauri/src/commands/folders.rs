@@ -20,30 +20,96 @@ use crate::app_error::AppCommandError;
 use crate::db::error::DbError;
 use crate::db::service::folder_service;
 use crate::db::AppDatabase;
-use crate::models::{FolderDetail, FolderHistoryEntry, OpenedConversation};
+use crate::models::{FolderDetail, FolderHistoryEntry, GitCredentials, OpenedConversation};
 
-/// Inject stored GitHub credentials into a git command for a given repository.
-async fn inject_repo_credentials(
+/// Configure a git command for remote operations:
+/// - Always disable interactive prompts (prevent hanging in a GUI app)
+/// - If explicit credentials are provided, use them directly
+/// - Otherwise, try to inject stored account credentials
+async fn prepare_remote_git_cmd(
     cmd: &mut tokio::process::Command,
     repo_path: &str,
+    credentials: Option<&GitCredentials>,
     db: &AppDatabase,
     app_handle: &tauri::AppHandle,
 ) {
+    cmd.env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(Stdio::null());
+
     if let Ok(data_dir) = app_handle.path().app_data_dir() {
-        crate::git_credential::try_inject_for_repo(cmd, repo_path, &db.conn, &data_dir).await;
+        if let Some(creds) = credentials {
+            // Explicit credentials provided (e.g. from credential dialog)
+            if let Ok(askpass) = crate::git_credential::ensure_askpass_script(&data_dir) {
+                crate::git_credential::inject_credentials(
+                    cmd,
+                    &creds.username,
+                    &creds.password,
+                    &askpass,
+                );
+            }
+        } else {
+            // Fall back to stored accounts
+            crate::git_credential::try_inject_for_repo(cmd, repo_path, &db.conn, &data_dir).await;
+        }
     }
 }
 
-/// Inject stored GitHub credentials for a clone URL (no repo path yet).
-async fn inject_url_credentials(
+/// Same as `prepare_remote_git_cmd` but for clone (URL only, no repo yet).
+async fn prepare_remote_git_cmd_for_url(
     cmd: &mut tokio::process::Command,
     clone_url: &str,
+    credentials: Option<&GitCredentials>,
     db: &AppDatabase,
     app_handle: &tauri::AppHandle,
 ) {
+    cmd.env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(Stdio::null());
+
     if let Ok(data_dir) = app_handle.path().app_data_dir() {
-        crate::git_credential::try_inject_for_url(cmd, clone_url, &db.conn, &data_dir).await;
+        if let Some(creds) = credentials {
+            if let Ok(askpass) = crate::git_credential::ensure_askpass_script(&data_dir) {
+                crate::git_credential::inject_credentials(
+                    cmd,
+                    &creds.username,
+                    &creds.password,
+                    &askpass,
+                );
+            }
+        } else {
+            crate::git_credential::try_inject_for_url(cmd, clone_url, &db.conn, &data_dir).await;
+        }
     }
+}
+
+/// Classify a git remote command error, detecting authentication failures.
+fn classify_remote_git_error(operation: &str, stderr: &[u8]) -> AppCommandError {
+    let msg = String::from_utf8_lossy(stderr).trim().to_string();
+    let lower = msg.to_lowercase();
+
+    if lower.contains("authentication failed")
+        || lower.contains("invalid credentials")
+        || lower.contains("could not read username")
+        || lower.contains("could not read password")
+        || lower.contains("logon failed")
+        || lower.contains("401")
+        || lower.contains("403")
+    {
+        return AppCommandError::authentication_failed(format!(
+            "git {operation}: authentication failed. Configure a GitHub account in Settings → Version Control."
+        ))
+        .with_detail(msg);
+    }
+
+    if lower.contains("could not resolve host")
+        || lower.contains("unable to access")
+        || lower.contains("connection refused")
+        || lower.contains("network is unreachable")
+    {
+        return AppCommandError::network(format!("git {operation}: network error"))
+            .with_detail(msg);
+    }
+
+    AppCommandError::external_command(format!("git {operation} failed"), msg)
 }
 
 #[derive(Debug, Serialize)]
@@ -438,6 +504,7 @@ pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError
 pub async fn clone_repository(
     url: String,
     target_dir: String,
+    credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppCommandError> {
@@ -449,7 +516,7 @@ pub async fn clone_repository(
 
     let mut cmd = crate::process::tokio_command("git");
     cmd.args(["clone", &url, &target_dir]);
-    inject_url_credentials(&mut cmd, &url, &db, &app_handle).await;
+    prepare_remote_git_cmd_for_url(&mut cmd, &url, credentials.as_ref(), &db, &app_handle).await;
 
     let output = cmd
         .output()
@@ -568,6 +635,7 @@ pub async fn git_init(path: String) -> Result<(), AppCommandError> {
 #[tauri::command]
 pub async fn git_pull(
     path: String,
+    credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<GitPullResult, AppCommandError> {
@@ -576,7 +644,7 @@ pub async fn git_pull(
     // Step 1: fetch from remote
     let mut fetch_cmd = crate::process::tokio_command("git");
     fetch_cmd.args(["fetch"]).current_dir(&path);
-    inject_repo_credentials(&mut fetch_cmd, &path, &db, &app_handle).await;
+    prepare_remote_git_cmd(&mut fetch_cmd, &path, credentials.as_ref(), &db, &app_handle).await;
 
     let fetch_output = fetch_cmd
         .output()
@@ -584,7 +652,7 @@ pub async fn git_pull(
         .map_err(AppCommandError::io)?;
 
     if !fetch_output.status.success() {
-        return Err(git_command_error("fetch", &fetch_output.stderr));
+        return Err(classify_remote_git_error("fetch", &fetch_output.stderr));
     }
 
     // Step 2: check if upstream exists
@@ -743,12 +811,13 @@ pub async fn git_has_merge_head(path: String) -> Result<bool, AppCommandError> {
 #[tauri::command]
 pub async fn git_fetch(
     path: String,
+    credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
     cmd.args(["fetch", "--all"]).current_dir(&path);
-    inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+    prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
 
     let output = cmd
         .output()
@@ -756,7 +825,7 @@ pub async fn git_fetch(
         .map_err(AppCommandError::io)?;
 
     if !output.status.success() {
-        return Err(git_command_error("fetch --all", &output.stderr));
+        return Err(classify_remote_git_error("fetch --all", &output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
 }
@@ -764,6 +833,7 @@ pub async fn git_fetch(
 #[tauri::command]
 pub async fn git_push(
     path: String,
+    credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<GitPushResult, AppCommandError> {
@@ -794,17 +864,17 @@ pub async fn git_push(
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", "--set-upstream", "origin", &branch])
             .current_dir(&path);
-        inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push"]).current_dir(&path);
-        inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
 
     if !output.status.success() {
-        return Err(git_command_error("push", &output.stderr));
+        return Err(classify_remote_git_error("push", &output.stderr));
     }
 
     Ok(GitPushResult {
@@ -1553,15 +1623,13 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommand
 pub async fn git_fetch_remote(
     path: String,
     name: String,
+    credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["fetch", &name])
-        .current_dir(&path)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(std::process::Stdio::null());
-    inject_repo_credentials(&mut cmd, &path, &db, &app_handle).await;
+    cmd.args(["fetch", &name]).current_dir(&path);
+    prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
 
     let output = cmd
         .output()
@@ -1569,7 +1637,7 @@ pub async fn git_fetch_remote(
         .map_err(AppCommandError::io)?;
 
     if !output.status.success() {
-        return Err(git_command_error("fetch", &output.stderr));
+        return Err(classify_remote_git_error("fetch", &output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
 }

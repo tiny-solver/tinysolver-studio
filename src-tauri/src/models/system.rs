@@ -39,6 +39,13 @@ pub struct SystemLanguageSettings {
 
 // --- Version Control ---
 
+/// Explicit credentials for a single git remote operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitCredentials {
+    pub username: String,
+    pub password: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitDetectResult {
     pub installed: bool,

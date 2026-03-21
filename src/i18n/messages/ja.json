@@ -57,6 +57,26 @@
       "clone": "クローン"
     }
   },
+  "GitCredentialDialog": {
+    "title": "認証が必要です",
+    "description": "リモートサーバーが認証情報を要求しています。ユーザー名とパスワード（またはアクセストークン）を入力してください。",
+    "username": "ユーザー名",
+    "usernamePlaceholder": "ユーザー名またはメールアドレス",
+    "password": "パスワード / トークン",
+    "passwordPlaceholder": "パスワードまたはアクセストークン",
+    "passwordHint": "サーバーのユーザー名とパスワードを入力してください。",
+    "cancel": "キャンセル",
+    "authenticate": "認証",
+    "authenticating": "認証中...",
+    "invalidCredentials": "認証情報が無効です。再試行してください。",
+    "saveCredentials": "今後の操作のために認証情報を保存する",
+    "githubTitle": "GitHub 認証",
+    "githubDescription": "個人アクセストークンを入力して GitHub に接続します。トークン検証後、自動的にアカウントに保存されます。",
+    "githubToken": "個人アクセストークン",
+    "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "githubTokenHint": "GitHub → Settings → Developer settings → Personal access tokens でトークンを生成してください。",
+    "githubAuthenticate": "検証して接続"
+  },
   "SettingsShell": {
     "title": "設定",
     "preferences": "環境設定",

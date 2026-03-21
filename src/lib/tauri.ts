@@ -41,6 +41,7 @@ import type {
   GitLogEntry,
   SystemLanguageSettings,
   SystemProxySettings,
+  GitCredentials,
   GitDetectResult,
   GitSettings,
   GitHubAccountsSettings,
@@ -487,9 +488,14 @@ export async function createFolderDirectory(path: string): Promise<void> {
 
 export async function cloneRepository(
   url: string,
-  targetDir: string
+  targetDir: string,
+  credentials?: GitCredentials | null
 ): Promise<void> {
-  return invoke("clone_repository", { url, targetDir })
+  return invoke("clone_repository", {
+    url,
+    targetDir,
+    credentials: credentials ?? null,
+  })
 }
 
 export async function getGitBranch(path: string): Promise<string | null> {
@@ -500,8 +506,11 @@ export async function gitInit(path: string): Promise<void> {
   return invoke("git_init", { path })
 }
 
-export async function gitPull(path: string): Promise<GitPullResult> {
-  return invoke("git_pull", { path })
+export async function gitPull(
+  path: string,
+  credentials?: GitCredentials | null
+): Promise<GitPullResult> {
+  return invoke("git_pull", { path, credentials: credentials ?? null })
 }
 
 export async function gitStartPullMerge(
@@ -515,12 +524,18 @@ export async function gitHasMergeHead(path: string): Promise<boolean> {
   return invoke("git_has_merge_head", { path })
 }
 
-export async function gitFetch(path: string): Promise<string> {
-  return invoke("git_fetch", { path })
+export async function gitFetch(
+  path: string,
+  credentials?: GitCredentials | null
+): Promise<string> {
+  return invoke("git_fetch", { path, credentials: credentials ?? null })
 }
 
-export async function gitPush(path: string): Promise<GitPushResult> {
-  return invoke("git_push", { path })
+export async function gitPush(
+  path: string,
+  credentials?: GitCredentials | null
+): Promise<GitPushResult> {
+  return invoke("git_push", { path, credentials: credentials ?? null })
 }
 
 export async function gitNewBranch(
@@ -683,9 +698,14 @@ export async function gitListRemotes(path: string): Promise<GitRemote[]> {
 
 export async function gitFetchRemote(
   path: string,
-  name: string
+  name: string,
+  credentials?: GitCredentials | null
 ): Promise<string> {
-  return invoke("git_fetch_remote", { path, name })
+  return invoke("git_fetch_remote", {
+    path,
+    name,
+    credentials: credentials ?? null,
+  })
 }
 
 export async function gitAddRemote(

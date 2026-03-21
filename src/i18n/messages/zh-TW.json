@@ -57,6 +57,26 @@
       "clone": "複製"
     }
   },
+  "GitCredentialDialog": {
+    "title": "需要身份驗證",
+    "description": "遠端伺服器要求輸入憑據。請輸入使用者名稱和密碼（或個人存取權杖）。",
+    "username": "使用者名稱",
+    "usernamePlaceholder": "使用者名稱或電子郵件",
+    "password": "密碼 / 權杖",
+    "passwordPlaceholder": "密碼或個人存取權杖",
+    "passwordHint": "請輸入伺服器的使用者名稱和密碼。",
+    "cancel": "取消",
+    "authenticate": "驗證",
+    "authenticating": "驗證中...",
+    "invalidCredentials": "憑據無效，請重試。",
+    "saveCredentials": "儲存憑據以供後續操作使用",
+    "githubTitle": "GitHub 身份驗證",
+    "githubDescription": "輸入個人存取權杖以連線 GitHub。權杖驗證成功後將自動儲存至帳號列表。",
+    "githubToken": "個人存取權杖",
+    "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "githubTokenHint": "在 GitHub → Settings → Developer settings → Personal access tokens 中產生權杖。",
+    "githubAuthenticate": "驗證並連線"
+  },
   "SettingsShell": {
     "title": "設定",
     "preferences": "偏好設定",

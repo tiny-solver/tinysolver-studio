@@ -57,6 +57,26 @@
       "clone": "Cloner"
     }
   },
+  "GitCredentialDialog": {
+    "title": "Authentification requise",
+    "description": "Le serveur distant nécessite des identifiants. Entrez votre nom d'utilisateur et votre mot de passe (ou jeton d'accès personnel).",
+    "username": "Nom d'utilisateur",
+    "usernamePlaceholder": "Nom d'utilisateur ou e-mail",
+    "password": "Mot de passe / Jeton",
+    "passwordPlaceholder": "Mot de passe ou jeton d'accès personnel",
+    "passwordHint": "Entrez le nom d'utilisateur et le mot de passe du serveur.",
+    "cancel": "Annuler",
+    "authenticate": "Authentifier",
+    "authenticating": "Authentification...",
+    "invalidCredentials": "Identifiants invalides. Veuillez réessayer.",
+    "saveCredentials": "Enregistrer les identifiants pour les opérations futures",
+    "githubTitle": "Authentification GitHub",
+    "githubDescription": "Entrez un jeton d'accès personnel pour vous connecter à GitHub. Le jeton sera validé et enregistré automatiquement.",
+    "githubToken": "Jeton d'accès personnel",
+    "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "githubTokenHint": "Générez un jeton dans GitHub → Settings → Developer settings → Personal access tokens.",
+    "githubAuthenticate": "Valider et connecter"
+  },
   "SettingsShell": {
     "title": "Paramètres",
     "preferences": "Préférences",

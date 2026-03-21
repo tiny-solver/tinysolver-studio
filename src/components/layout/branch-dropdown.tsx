@@ -92,6 +92,7 @@ import { toast } from "sonner"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTaskContext } from "@/contexts/task-context"
 import { useAlertContext } from "@/contexts/alert-context"
+import { useGitCredential } from "@/contexts/git-credential-context"
 
 interface BranchDropdownProps {
   branch: string | null
@@ -120,6 +121,7 @@ export function BranchDropdown({
   const folderPath = folder?.path ?? ""
   const { addTask, updateTask, removeTask } = useTaskContext()
   const { pushAlert } = useAlertContext()
+  const { withCredentialRetry } = useGitCredential()
   const [branchList, setBranchList] = useState<GitBranchList>({
     local: [],
     remote: [],
@@ -335,7 +337,10 @@ export function BranchDropdown({
     addTask(taskId, label)
     updateTask(taskId, { status: "running" })
     try {
-      const result = await gitPush(folderPath)
+      const result = await withCredentialRetry(
+        (creds) => gitPush(folderPath, creds),
+        { folderPath }
+      )
       updateTask(taskId, { status: "completed" })
       onBranchChange()
       let description: string | undefined
@@ -368,7 +373,10 @@ export function BranchDropdown({
           status: "running",
         })
         try {
-          const pullResult = await gitPull(folderPath)
+          const pullResult = await withCredentialRetry(
+            (creds) => gitPull(folderPath, creds),
+            { folderPath }
+          )
           if (pullResult.conflict?.has_conflicts) {
             removeTask(taskId)
             onBranchChange()
@@ -376,7 +384,10 @@ export function BranchDropdown({
           } else {
             // Pull succeeded, retry push
             updateTask(taskId, { status: "running" })
-            const pushResult = await gitPush(folderPath)
+            const pushResult = await withCredentialRetry(
+              (creds) => gitPush(folderPath, creds),
+              { folderPath }
+            )
             updateTask(taskId, { status: "completed" })
             onBranchChange()
             let description: string | undefined
@@ -686,7 +697,11 @@ export function BranchDropdown({
               onSelect={() =>
                 runGitTask(
                   t("tasks.pullCode"),
-                  () => gitPull(folderPath),
+                  () =>
+                    withCredentialRetry(
+                      (creds) => gitPull(folderPath, creds),
+                      { folderPath }
+                    ),
                   (result) => {
                     if (result.conflict?.has_conflicts) {
                       setConflictInfo(result.conflict)
@@ -708,7 +723,12 @@ export function BranchDropdown({
             <DropdownMenuItem
               disabled={loading}
               onSelect={() =>
-                runGitTask(t("tasks.fetchInfo"), () => gitFetch(folderPath))
+                runGitTask(t("tasks.fetchInfo"), () =>
+                  withCredentialRetry(
+                    (creds) => gitFetch(folderPath, creds),
+                    { folderPath }
+                  )
+                )
               }
             >
               <RefreshCw className="h-3.5 w-3.5" />
