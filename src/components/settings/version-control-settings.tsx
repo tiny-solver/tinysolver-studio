@@ -7,7 +7,6 @@ import {
   Github,
   Globe,
   Loader2,
-  Save,
   Trash2,
   XCircle,
 } from "lucide-react"
@@ -152,9 +151,8 @@ export function VersionControlSettings() {
   const [loading, setLoading] = useState(true)
   const [gitInfo, setGitInfo] = useState<GitDetectResult | null>(null)
   const [customPath, setCustomPath] = useState("")
+  const [editingPath, setEditingPath] = useState(false)
   const [savingGit, setSavingGit] = useState(false)
-  const [testingGit, setTestingGit] = useState(false)
-  const [testResult, setTestResult] = useState<GitDetectResult | null>(null)
 
   const [accounts, setAccounts] = useState<GitHubAccountsSettings>({
     accounts: [],
@@ -197,34 +195,24 @@ export function VersionControlSettings() {
     loadData().catch(console.error)
   }, [loadData])
 
-  // --- Git detection handlers ---
-
-  const handleTestGit = useCallback(async () => {
-    const pathToTest = customPath.trim() || "git"
-    setTestingGit(true)
-    setTestResult(null)
-    try {
-      const result = await testGitPath(pathToTest)
-      setTestResult(result)
-      if (result.installed) {
-        toast.success(t("testSuccess"))
-      } else {
-        toast.error(t("testFailed", { message: "not a valid git executable" }))
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.error(t("testFailed", { message }))
-    } finally {
-      setTestingGit(false)
-    }
-  }, [customPath, t])
+  // --- Git path handlers ---
 
   const handleSaveGit = useCallback(async () => {
+    const trimmed = customPath.trim()
     setSavingGit(true)
     try {
-      await updateGitSettings({ custom_path: customPath.trim() || null })
+      // Test first if a custom path is provided
+      if (trimmed) {
+        const result = await testGitPath(trimmed)
+        if (!result.installed) {
+          toast.error(t("testFailed", { message: "not a valid git executable" }))
+          return
+        }
+      }
+      await updateGitSettings({ custom_path: trimmed || null })
       const git = await detectGit()
       setGitInfo(git)
+      setEditingPath(false)
       toast.success(t("saveSuccess"))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -233,6 +221,14 @@ export function VersionControlSettings() {
       setSavingGit(false)
     }
   }, [customPath, t])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingPath(false)
+    // Restore to the saved value
+    getGitSettings()
+      .then((s) => setCustomPath(s.custom_path ?? ""))
+      .catch(() => {})
+  }, [])
 
   // --- Shared account handlers ---
 
@@ -355,33 +351,42 @@ export function VersionControlSettings() {
             <GitBranch className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold">{t("gitTitle")}</h2>
           </div>
-          <p className="text-xs text-muted-foreground leading-5">
-            {t("gitDescription")}
-          </p>
 
           <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs space-y-2">
-            <div className="flex items-center gap-2">
-              {gitInfo?.installed ? (
-                <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    {t("gitDetected")}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {gitInfo?.installed ? (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    <span className="text-green-600 dark:text-green-400 font-medium">
+                      {t("gitDetected")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-3.5 w-3.5 text-red-500" />
+                    <span className="text-red-600 dark:text-red-400 font-medium">
+                      {t("gitNotFound")}
+                    </span>
+                  </>
+                )}
+                {gitInfo?.version && (
+                  <span className="text-muted-foreground">
+                    {gitInfo.version}
                   </span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-3.5 w-3.5 text-red-500" />
-                  <span className="text-red-600 dark:text-red-400 font-medium">
-                    {t("gitNotFound")}
-                  </span>
-                </>
+                )}
+              </div>
+              {!editingPath && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() => setEditingPath(true)}
+                >
+                  {t("customGitPath")}
+                </Button>
               )}
             </div>
-            {gitInfo?.version && (
-              <p className="text-muted-foreground">
-                {t("gitVersion")}: {gitInfo.version}
-              </p>
-            )}
             {gitInfo?.path && (
               <p className="text-muted-foreground">
                 {t("gitPath")}: {gitInfo.path}
@@ -389,74 +394,44 @@ export function VersionControlSettings() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t("customGitPath")}
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={customPath}
-                onChange={(e) => {
-                  setCustomPath(e.target.value)
-                  setTestResult(null)
-                }}
-                placeholder={t("customGitPathPlaceholder")}
-                className="flex-1"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleTestGit}
-                disabled={testingGit}
-              >
-                {testingGit ? (
-                  <>
+          {editingPath && (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                {t("customGitPath")}
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  value={customPath}
+                  onChange={(e) => setCustomPath(e.target.value)}
+                  placeholder={t("customGitPathPlaceholder")}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCancelEdit}
+                  disabled={savingGit}
+                >
+                  {t("removeCancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveGit}
+                  disabled={savingGit}
+                >
+                  {savingGit ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {t("testing")}
-                  </>
-                ) : (
-                  t("test")
-                )}
-              </Button>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              {t("customGitPathHint")}
-            </p>
-            {testResult && (
-              <div
-                className={`flex items-center gap-1.5 text-xs ${
-                  testResult.installed
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400"
-                }`}
-              >
-                {testResult.installed ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : (
-                  <XCircle className="h-3 w-3" />
-                )}
-                {testResult.installed
-                  ? `${t("testSuccess")} (${testResult.version})`
-                  : t("testFailed", { message: "invalid" })}
+                  ) : (
+                    t("save")
+                  )}
+                </Button>
               </div>
-            )}
-          </div>
-
-          <div className="flex justify-end">
-            <Button size="sm" onClick={handleSaveGit} disabled={savingGit}>
-              {savingGit ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t("saving")}
-                </>
-              ) : (
-                <>
-                  <Save className="h-3.5 w-3.5" />
-                  {t("save")}
-                </>
-              )}
-            </Button>
-          </div>
+              <p className="text-[11px] text-muted-foreground">
+                {t("customGitPathHint")}
+              </p>
+            </div>
+          )}
         </section>
 
         {/* ---- GitHub Accounts ---- */}
