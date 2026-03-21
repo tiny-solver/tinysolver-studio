@@ -41,6 +41,10 @@ import type {
   GitLogEntry,
   SystemLanguageSettings,
   SystemProxySettings,
+  GitDetectResult,
+  GitSettings,
+  GitHubAccountsSettings,
+  GitHubTokenValidation,
   McpAppType,
   LocalMcpServer,
   McpMarketplaceProvider,
@@ -300,6 +304,43 @@ export async function updateSystemLanguageSettings(
   settings: SystemLanguageSettings
 ): Promise<SystemLanguageSettings> {
   return invoke("update_system_language_settings", { settings })
+}
+
+// --- Version Control ---
+
+export async function detectGit(): Promise<GitDetectResult> {
+  return invoke("detect_git")
+}
+
+export async function testGitPath(path: string): Promise<GitDetectResult> {
+  return invoke("test_git_path", { path })
+}
+
+export async function getGitSettings(): Promise<GitSettings> {
+  return invoke("get_git_settings")
+}
+
+export async function updateGitSettings(
+  settings: GitSettings
+): Promise<GitSettings> {
+  return invoke("update_git_settings", { settings })
+}
+
+export async function getGitHubAccounts(): Promise<GitHubAccountsSettings> {
+  return invoke("get_github_accounts")
+}
+
+export async function validateGitHubToken(
+  serverUrl: string,
+  token: string
+): Promise<GitHubTokenValidation> {
+  return invoke("validate_github_token", { serverUrl, token })
+}
+
+export async function updateGitHubAccounts(
+  settings: GitHubAccountsSettings
+): Promise<GitHubAccountsSettings> {
+  return invoke("update_github_accounts", { settings })
 }
 
 export async function mcpScanLocal(): Promise<LocalMcpServer[]> {

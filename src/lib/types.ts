@@ -523,6 +523,41 @@ export interface SystemLanguageSettings {
   language: AppLocale
 }
 
+// --- Version Control ---
+
+export interface GitDetectResult {
+  installed: boolean
+  version: string | null
+  path: string | null
+}
+
+export interface GitSettings {
+  custom_path: string | null
+}
+
+export interface GitHubAccount {
+  id: string
+  server_url: string
+  username: string
+  token: string
+  scopes: string[]
+  avatar_url: string | null
+  is_default: boolean
+  created_at: string
+}
+
+export interface GitHubAccountsSettings {
+  accounts: GitHubAccount[]
+}
+
+export interface GitHubTokenValidation {
+  success: boolean
+  username: string | null
+  scopes: string[]
+  avatar_url: string | null
+  message: string | null
+}
+
 export type McpAppType = "claude_code" | "codex" | "open_code"
 
 export interface LocalMcpServer {

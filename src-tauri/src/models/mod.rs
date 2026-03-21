@@ -12,4 +12,7 @@ pub use conversation::{
 };
 pub use folder::{FolderCommandInfo, FolderDetail, FolderHistoryEntry, OpenedConversation};
 pub use message::{ContentBlock, MessageRole, MessageTurn, TurnRole, TurnUsage, UnifiedMessage};
-pub use system::{SystemLanguageSettings, SystemProxySettings};
+pub use system::{
+    GitDetectResult, GitHubAccountsSettings, GitHubTokenValidation, GitSettings,
+    SystemLanguageSettings, SystemProxySettings,
+};

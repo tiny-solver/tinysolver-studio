@@ -4,6 +4,7 @@ import { useCallback, type ComponentType, type ReactNode } from "react"
 import {
   Bot,
   BookOpenText,
+  GitBranch,
   Keyboard,
   Palette,
   PlugZap,
@@ -19,7 +20,14 @@ import { AppTitleBar } from "@/components/layout/app-title-bar"
 
 interface SettingsNavItem {
   href: string
-  labelKey: "appearance" | "agents" | "mcp" | "skills" | "shortcuts" | "system"
+  labelKey:
+    | "appearance"
+    | "agents"
+    | "mcp"
+    | "skills"
+    | "shortcuts"
+    | "version_control"
+    | "system"
   icon: ComponentType<{ className?: string }>
 }
 
@@ -48,6 +56,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/shortcuts",
     labelKey: "shortcuts",
     icon: Keyboard,
+  },
+  {
+    href: "/settings/version-control",
+    labelKey: "version_control",
+    icon: GitBranch,
   },
   {
     href: "/settings/system",
