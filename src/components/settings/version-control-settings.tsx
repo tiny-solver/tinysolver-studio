@@ -33,6 +33,8 @@ import {
   getGitHubAccounts,
   updateGitHubAccounts,
   validateGitHubToken,
+  getAccountToken,
+  deleteAccountToken,
 } from "@/lib/tauri"
 import type {
   GitDetectResult,
@@ -260,10 +262,15 @@ export function VersionControlSettings() {
     async (account: GitHubAccount) => {
       setTestingAccountId(account.id)
       try {
+        const token = await getAccountToken(account.id)
+        if (!token) {
+          toast.error(t("connectionFailed", { message: "Token not found" }))
+          return
+        }
         if (isGitHubAccount(account)) {
           const result = await validateGitHubToken(
             account.server_url,
-            account.token
+            token
           )
           if (result.success) {
             toast.success(t("connectionSuccess"))
@@ -276,7 +283,7 @@ export function VersionControlSettings() {
           }
         } else {
           // For non-GitHub accounts we can't validate via API,
-          // just confirm the account is stored.
+          // just confirm the token exists in keyring.
           toast.success(t("connectionSuccess"))
         }
       } catch (err) {
@@ -315,6 +322,7 @@ export function VersionControlSettings() {
       accounts: accounts.accounts.filter((a) => a.id !== removeTarget.id),
     }
     try {
+      await deleteAccountToken(removeTarget.id)
       const saved = await updateGitHubAccounts(updated)
       setAccounts(saved)
       toast.success(t("removeSuccess"))

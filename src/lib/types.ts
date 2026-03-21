@@ -544,7 +544,6 @@ export interface GitHubAccount {
   id: string
   server_url: string
   username: string
-  token: string
   scopes: string[]
   avatar_url: string | null
   is_default: boolean

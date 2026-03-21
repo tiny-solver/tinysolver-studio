@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { saveAccountToken } from "@/lib/tauri"
 import type { GitHubAccount } from "@/lib/types"
 
 interface AddGitAccountDialogProps {
@@ -52,7 +53,7 @@ export function AddGitAccountDialog({
     [onOpenChange, resetForm]
   )
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const trimmedUrl = serverUrl.trim()
     const trimmedUser = username.trim()
     const trimmedPass = password.trim()
@@ -74,11 +75,17 @@ export function AddGitAccountDialog({
       id: crypto.randomUUID(),
       server_url: trimmedUrl,
       username: trimmedUser,
-      token: trimmedPass,
       scopes: [],
       avatar_url: null,
       is_default: isFirstAccount,
       created_at: new Date().toISOString(),
+    }
+
+    try {
+      await saveAccountToken(account.id, trimmedPass)
+    } catch {
+      setError(t("gitAccount.passwordRequired"))
+      return
     }
 
     onAccountAdded(account)

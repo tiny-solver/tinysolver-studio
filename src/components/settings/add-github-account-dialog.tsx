@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { validateGitHubToken } from "@/lib/tauri"
+import { validateGitHubToken, saveAccountToken } from "@/lib/tauri"
 import type { GitHubAccount } from "@/lib/types"
 
 interface AddGitHubAccountDialogProps {
@@ -94,13 +94,13 @@ export function AddGitHubAccountDialog({
         id: crypto.randomUUID(),
         server_url: serverUrl.trim() || "https://github.com",
         username: result.username ?? "unknown",
-        token: trimmedToken,
         scopes: result.scopes,
         avatar_url: result.avatar_url,
         is_default: isFirstAccount,
         created_at: new Date().toISOString(),
       }
 
+      await saveAccountToken(account.id, trimmedToken)
       onAccountAdded(account)
       handleOpenChange(false)
     } catch (err) {

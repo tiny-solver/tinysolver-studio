@@ -3,6 +3,7 @@ mod app_error;
 mod commands;
 mod db;
 pub mod git_credential;
+pub mod keyring_store;
 mod models;
 mod network;
 mod parsers;
@@ -272,6 +273,9 @@ pub fn run() {
             version_control::get_github_accounts,
             version_control::validate_github_token,
             version_control::update_github_accounts,
+            version_control::save_account_token,
+            version_control::get_account_token,
+            version_control::delete_account_token,
             acp_commands::acp_preflight,
             acp_commands::acp_connect,
             acp_commands::acp_prompt,

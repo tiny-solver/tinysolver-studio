@@ -36,6 +36,7 @@ import {
   validateGitHubToken,
   getGitHubAccounts,
   updateGitHubAccounts,
+  saveAccountToken,
 } from "@/lib/tauri"
 
 // ---------------------------------------------------------------------------
@@ -146,14 +147,15 @@ async function saveGenericAccount(
       (a) => a.username === creds.username && extractHost(a.server_url) === host
     )
     if (!isDuplicate) {
+      const newId = crypto.randomUUID()
+      await saveAccountToken(newId, creds.password)
       await updateGitHubAccounts({
         accounts: [
           ...existing.accounts,
           {
-            id: crypto.randomUUID(),
+            id: newId,
             server_url: serverUrl,
             username: creds.username,
-            token: creds.password,
             scopes: [],
             avatar_url: null,
             is_default: existing.accounts.length === 0,
@@ -284,12 +286,12 @@ export function GitCredentialProvider({ children }: { children: ReactNode }) {
             id: crypto.randomUUID(),
             server_url: serverUrl,
             username: result.username ?? "unknown",
-            token: trimmedToken,
             scopes: result.scopes,
             avatar_url: result.avatar_url,
             is_default: existing.accounts.length === 0,
             created_at: new Date().toISOString(),
           }
+          await saveAccountToken(newAccount.id, trimmedToken)
           await updateGitHubAccounts({
             accounts: [...existing.accounts, newAccount],
           })

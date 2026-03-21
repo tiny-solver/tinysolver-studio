@@ -123,8 +123,10 @@ pub fn run_credential_helper() {
 
         let remote_url = format!("https://{}", host);
         if let Some(account) = find_matching_account(&settings.accounts, &remote_url) {
-            println!("username={}", account.username);
-            println!("password={}", account.token);
+            if let Some(token) = crate::keyring_store::get_token(&account.id) {
+                println!("username={}", account.username);
+                println!("password={}", token);
+            }
         }
     });
 }
@@ -387,11 +389,19 @@ pub async fn try_inject_for_repo(
         }
     };
 
+    let token = match crate::keyring_store::get_token(&account.id) {
+        Some(t) => t,
+        None => {
+            eprintln!("[GIT_CRED] no token in keyring for account {}", account.id);
+            return false;
+        }
+    };
+
     eprintln!(
         "[GIT_CRED] injecting credentials for {} (user: {})",
         remote_url, account.username
     );
-    inject_credentials(cmd, &account.username, &account.token, &askpass);
+    inject_credentials(cmd, &account.username, &token, &askpass);
     true
 }
 
@@ -417,6 +427,14 @@ pub async fn try_inject_for_url(
         None => return false,
     };
 
+    let token = match crate::keyring_store::get_token(&account.id) {
+        Some(t) => t,
+        None => {
+            eprintln!("[GIT_CRED] no token in keyring for account {}", account.id);
+            return false;
+        }
+    };
+
     let askpass = match ensure_askpass_script(app_data_dir) {
         Ok(p) => p,
         Err(e) => {
@@ -425,7 +443,7 @@ pub async fn try_inject_for_url(
         }
     };
 
-    inject_credentials(cmd, &account.username, &account.token, &askpass);
+    inject_credentials(cmd, &account.username, &token, &askpass);
     true
 }
 
@@ -464,7 +482,6 @@ mod tests {
                 id: "1".into(),
                 server_url: "https://github.com".into(),
                 username: "user1".into(),
-                token: "tok1".into(),
                 scopes: vec![],
                 avatar_url: None,
                 is_default: false,
@@ -474,7 +491,6 @@ mod tests {
                 id: "2".into(),
                 server_url: "https://gitlab.example.com".into(),
                 username: "user2".into(),
-                token: "tok2".into(),
                 scopes: vec![],
                 avatar_url: None,
                 is_default: true,
@@ -500,7 +516,6 @@ mod tests {
                 id: "1".into(),
                 server_url: "https://github.com".into(),
                 username: "personal".into(),
-                token: "tok1".into(),
                 scopes: vec![],
                 avatar_url: None,
                 is_default: false,
@@ -510,7 +525,6 @@ mod tests {
                 id: "2".into(),
                 server_url: "https://github.com".into(),
                 username: "work".into(),
-                token: "tok2".into(),
                 scopes: vec![],
                 avatar_url: None,
                 is_default: true,

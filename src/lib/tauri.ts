@@ -344,6 +344,25 @@ export async function updateGitHubAccounts(
   return invoke("update_github_accounts", { settings })
 }
 
+export async function saveAccountToken(
+  accountId: string,
+  token: string
+): Promise<void> {
+  return invoke("save_account_token", { accountId, token })
+}
+
+export async function getAccountToken(
+  accountId: string
+): Promise<string | null> {
+  return invoke("get_account_token", { accountId })
+}
+
+export async function deleteAccountToken(
+  accountId: string
+): Promise<void> {
+  return invoke("delete_account_token", { accountId })
+}
+
 export async function mcpScanLocal(): Promise<LocalMcpServer[]> {
   return invoke("mcp_scan_local")
 }

@@ -64,7 +64,6 @@ pub struct GitHubAccount {
     pub id: String,
     pub server_url: String,
     pub username: String,
-    pub token: String,
     pub scopes: Vec<String>,
     pub avatar_url: Option<String>,
     pub is_default: bool,

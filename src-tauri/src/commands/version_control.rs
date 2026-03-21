@@ -203,6 +203,38 @@ pub async fn update_github_accounts(
     Ok(settings)
 }
 
+// ---------------------------------------------------------------------------
+// Keyring token management
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn save_account_token(
+    account_id: String,
+    token: String,
+) -> Result<(), AppCommandError> {
+    crate::keyring_store::set_token(&account_id, &token)
+        .map_err(|e| AppCommandError::io_error("Failed to save token to keyring").with_detail(e))
+}
+
+#[tauri::command]
+pub async fn get_account_token(
+    account_id: String,
+) -> Result<Option<String>, AppCommandError> {
+    Ok(crate::keyring_store::get_token(&account_id))
+}
+
+#[tauri::command]
+pub async fn delete_account_token(
+    account_id: String,
+) -> Result<(), AppCommandError> {
+    crate::keyring_store::delete_token(&account_id)
+        .map_err(|e| AppCommandError::io_error("Failed to delete token from keyring").with_detail(e))
+}
+
+// ---------------------------------------------------------------------------
+// GitHub token validation
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Deserialize)]
 struct GitHubUserResponse {
     login: String,
