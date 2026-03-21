@@ -268,10 +268,7 @@ export function VersionControlSettings() {
           return
         }
         if (isGitHubAccount(account)) {
-          const result = await validateGitHubToken(
-            account.server_url,
-            token
-          )
+          const result = await validateGitHubToken(account.server_url, token)
           if (result.success) {
             toast.success(t("connectionSuccess"))
           } else {
