@@ -110,12 +110,11 @@ fn extract_host(remote_url: &str) -> Option<String> {
     None
 }
 
-/// Find the best matching GitHub account for a given remote URL.
+/// Find the best matching account for a given remote URL.
 ///
-/// Matching logic:
-/// 1. Match by server_url hostname against the remote URL host
-/// 2. Fall back to the default account
-/// 3. Fall back to the first account
+/// Only returns an account whose server_url hostname matches the remote URL host.
+/// Does NOT fall back to unrelated accounts — if no hostname matches, returns None
+/// so the caller can fall back to git config defaults.
 pub fn find_matching_account<'a>(
     accounts: &'a [GitHubAccount],
     remote_url: &str,
@@ -124,25 +123,13 @@ pub fn find_matching_account<'a>(
         return None;
     }
 
-    let remote_host = extract_host(remote_url);
+    let remote_host = extract_host(remote_url)?;
 
-    // Try to match by hostname
-    if let Some(ref host) = remote_host {
-        let matched = accounts.iter().find(|a| {
-            let account_host = extract_host(&a.server_url)
-                .unwrap_or_else(|| a.server_url.trim().trim_end_matches('/').to_lowercase());
-            account_host == *host
-        });
-        if matched.is_some() {
-            return matched;
-        }
-    }
-
-    // Fall back to default account
-    accounts
-        .iter()
-        .find(|a| a.is_default)
-        .or_else(|| accounts.first())
+    accounts.iter().find(|a| {
+        let account_host = extract_host(&a.server_url)
+            .unwrap_or_else(|| a.server_url.trim().trim_end_matches('/').to_lowercase());
+        account_host == remote_host
+    })
 }
 
 /// Load GitHub accounts from the database.
@@ -313,8 +300,8 @@ mod tests {
         let matched = find_matching_account(&accounts, "https://gitlab.example.com/org/repo");
         assert_eq!(matched.unwrap().username, "user2");
 
-        // Unknown host falls back to default
+        // Unknown host returns None — no fallback to unrelated accounts
         let matched = find_matching_account(&accounts, "https://unknown.com/repo");
-        assert_eq!(matched.unwrap().username, "user2");
+        assert!(matched.is_none());
     }
 }
