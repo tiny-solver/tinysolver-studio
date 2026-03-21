@@ -7,103 +7,32 @@ use crate::models::system::{GitHubAccount, GitHubAccountsSettings};
 
 const GITHUB_ACCOUNTS_KEY: &str = "github_accounts";
 
-/// Write a git credential-store file containing all stored accounts.
+/// Create a credential helper that calls the app binary directly with
+/// `--credential-helper` flag. The app binary opens the DB, looks up
+/// the matching account, and outputs credentials to stdout.
 ///
-/// The credential-store format is one URL per line:
-/// `https://username:token@hostname`
-///
-/// Returns the path to the written file.
-pub fn write_credential_store_file(
-    accounts: &[GitHubAccount],
-    file_path: &Path,
-) -> std::io::Result<()> {
-    use std::io::Write;
-
-    let mut content = String::new();
-    for account in accounts {
-        let host = extract_host(&account.server_url).unwrap_or_default();
-        if host.is_empty() {
-            continue;
-        }
-        // URL-encode username and token to handle special characters
-        let username = urlencoding::encode(&account.username);
-        let token = urlencoding::encode(&account.token);
-        content.push_str(&format!("https://{}:{}@{}\n", username, token, host));
-    }
-
-    let mut file = std::fs::File::create(file_path)?;
-    file.write_all(content.as_bytes())?;
-
-    // Restrict permissions on Unix (owner read/write only)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(file_path, std::fs::Permissions::from_mode(0o600))?;
-    }
-
-    Ok(())
-}
-
-/// Create a credential helper script that reads from a credential-store file
-/// using git's structured credential protocol.
-///
-/// Git's credential helper protocol passes structured key=value pairs on stdin:
-///   protocol=https
-///   host=github.com
-///
-/// And expects the response on stdout:
-///   username=xxx
-///   password=xxx
-///
-/// This is far more reliable than GIT_ASKPASS (which requires parsing English prompts).
-/// The script is per-terminal (named with terminal_id) to avoid race conditions.
+/// This is the simplest and most reliable approach:
+/// - No HTTP server, no temp credential files
+/// - Always reads latest accounts from DB
+/// - No special-character / encoding issues (Rust handles strings natively)
+/// - Single shared script across all terminals
 pub fn create_credential_helper_script(
     app_data_dir: &Path,
-    cred_store_path: &Path,
-    terminal_id: &str,
+    app_binary_path: &Path,
 ) -> std::io::Result<PathBuf> {
-    let cred_store_str = cred_store_path.to_string_lossy();
+    let binary_str = app_binary_path.to_string_lossy();
 
     #[cfg(unix)]
     {
-        let script_path = app_data_dir.join(format!("git-credential-codeg-{}.sh", &terminal_id[..8]));
+        let script_path = app_data_dir.join("git-credential-codeg.sh");
         let content = format!(
             r#"#!/bin/sh
-# Codeg credential helper: reads from credential store file.
+# Codeg credential helper — calls the app binary to look up credentials.
 # Only responds to "get" action; ignores "store" and "erase".
 [ "$1" != "get" ] && exit 0
-
-CRED_FILE="{cred_file}"
-[ ! -f "$CRED_FILE" ] && exit 0
-
-# Read protocol and host from stdin
-HOST=""
-PROTO=""
-while IFS='=' read -r key value; do
-    [ -z "$key" ] && break
-    case "$key" in
-        host) HOST="$value" ;;
-        protocol) PROTO="$value" ;;
-    esac
-done
-
-[ -z "$HOST" ] && exit 0
-
-# Find matching line: https://user:pass@host
-LINE=$(grep -i "@$HOST" "$CRED_FILE" | head -1)
-[ -z "$LINE" ] && exit 0
-
-# Parse username and password from https://user:pass@host
-USERPASS=$(echo "$LINE" | sed 's|https*://||' | sed 's|@.*||')
-USER=$(echo "$USERPASS" | cut -d: -f1)
-PASS=$(echo "$USERPASS" | cut -d: -f2-)
-
-[ -z "$USER" ] && exit 0
-
-echo "username=$USER"
-echo "password=$PASS"
+exec "{binary}" --credential-helper < /dev/stdin
 "#,
-            cred_file = cred_store_str
+            binary = binary_str
         );
         std::fs::write(&script_path, content)?;
         use std::os::unix::fs::PermissionsExt;
@@ -113,49 +42,109 @@ echo "password=$PASS"
 
     #[cfg(windows)]
     {
-        let script_path = app_data_dir.join(format!("git-credential-codeg-{}.bat", &terminal_id[..8]));
+        let script_path = app_data_dir.join("git-credential-codeg.bat");
         let content = format!(
             r#"@echo off
-setlocal enabledelayedexpansion
 if not "%~1"=="get" exit /b 0
-
-set "CRED_FILE={cred_file}"
-if not exist "!CRED_FILE!" exit /b 0
-
-set "HOST="
-set "PROTO="
-:readloop
-set /p "LINE=" || goto :match
-for /f "tokens=1,* delims==" %%a in ("!LINE!") do (
-    if "%%a"=="host" set "HOST=%%b"
-    if "%%a"=="protocol" set "PROTO=%%b"
-)
-if defined LINE goto :readloop
-
-:match
-if not defined HOST exit /b 0
-
-for /f "usebackq delims=" %%L in ("!CRED_FILE!") do (
-    echo %%L | findstr /i "!HOST!" >nul
-    if !errorlevel! equ 0 (
-        set "FOUND=%%L"
-        goto :parse
-    )
-)
-exit /b 0
-
-:parse
-set "FOUND=!FOUND:https://=!"
-for /f "tokens=1 delims=@" %%a in ("!FOUND!") do set "USERPASS=%%a"
-for /f "tokens=1,2 delims=:" %%a in ("!USERPASS!") do (
-    echo username=%%a
-    echo password=%%b
-)
+"{binary}" --credential-helper
 "#,
-            cred_file = cred_store_str
+            binary = binary_str
         );
         std::fs::write(&script_path, content)?;
         Ok(script_path)
+    }
+}
+
+/// Run the credential helper mode (called from main when `--credential-helper` is detected).
+///
+/// Reads git's credential protocol from stdin (host=xxx, protocol=xxx),
+/// opens the DB, finds the matching account, and outputs username/password
+/// to stdout. Exits immediately — does NOT start the Tauri GUI.
+pub fn run_credential_helper() {
+    use std::io::BufRead;
+
+    // Read host from stdin (git credential protocol)
+    let mut host = String::new();
+    let stdin = std::io::stdin();
+    for line in stdin.lock().lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => break,
+        };
+        if line.is_empty() {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("host=") {
+            host = value.to_string();
+        }
+    }
+
+    if host.is_empty() {
+        return;
+    }
+
+    // Resolve app data dir the same way Tauri does: ~/Library/Application Support/<identifier>
+    let app_data_dir = match resolve_app_data_dir() {
+        Some(d) => d,
+        None => return,
+    };
+
+    let db_path = app_data_dir.join("codeg.db");
+    if !db_path.exists() {
+        return;
+    }
+
+    // Open DB with a lightweight synchronous connection (no async runtime needed)
+    let db_url = format!(
+        "sqlite:{}?mode=ro",
+        urlencoding::encode(&db_path.to_string_lossy())
+    );
+
+    // Use a minimal tokio runtime just for the DB query
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(_) => return,
+    };
+
+    rt.block_on(async {
+        let opts = sea_orm::ConnectOptions::new(db_url);
+        let conn = match sea_orm::Database::connect(opts).await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        let settings = match load_github_accounts(&conn).await {
+            Some(s) => s,
+            None => return,
+        };
+
+        let remote_url = format!("https://{}", host);
+        if let Some(account) = find_matching_account(&settings.accounts, &remote_url) {
+            println!("username={}", account.username);
+            println!("password={}", account.token);
+        }
+    });
+}
+
+/// Resolve the app data directory (same path Tauri uses).
+fn resolve_app_data_dir() -> Option<std::path::PathBuf> {
+    // On macOS: ~/Library/Application Support/app.codeg
+    // On Linux: ~/.local/share/app.codeg
+    // On Windows: %APPDATA%/app.codeg
+    #[cfg(target_os = "macos")]
+    {
+        dirs::data_dir().map(|d| d.join("app.codeg"))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        dirs::data_dir().map(|d| d.join("app.codeg"))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        dirs::data_dir().map(|d| d.join("app.codeg"))
     }
 }
 

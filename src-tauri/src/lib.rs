@@ -2,7 +2,7 @@ mod acp;
 mod app_error;
 mod commands;
 mod db;
-mod git_credential;
+pub mod git_credential;
 mod models;
 mod network;
 mod parsers;
