@@ -75,7 +75,8 @@
     "githubToken": "개인 액세스 토큰",
     "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
     "githubTokenHint": "GitHub → Settings → Developer settings → Personal access tokens에서 토큰을 생성하세요.",
-    "githubAuthenticate": "확인 및 연결"
+    "githubAuthenticate": "확인 및 연결",
+    "generateToken": "토큰 생성"
   },
   "SettingsShell": {
     "title": "설정",
@@ -178,6 +179,7 @@
     "serverUrlPlaceholder": "https://github.com",
     "token": "개인 액세스 토큰",
     "tokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "generateToken": "토큰 생성",
     "tokenHint": "GitHub → Settings → Developer settings → Personal access tokens에서 토큰을 생성하세요.",
     "validateAndAdd": "검증 및 추가",
     "validating": "검증 중...",

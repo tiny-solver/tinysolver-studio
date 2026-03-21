@@ -75,7 +75,8 @@
     "githubToken": "個人アクセストークン",
     "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
     "githubTokenHint": "GitHub → Settings → Developer settings → Personal access tokens でトークンを生成してください。",
-    "githubAuthenticate": "検証して接続"
+    "githubAuthenticate": "検証して接続",
+    "generateToken": "トークンを生成"
   },
   "SettingsShell": {
     "title": "設定",
@@ -178,6 +179,7 @@
     "serverUrlPlaceholder": "https://github.com",
     "token": "個人アクセストークン",
     "tokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "generateToken": "トークンを生成",
     "tokenHint": "GitHub → Settings → Developer settings → Personal access tokens でトークンを生成してください。",
     "validateAndAdd": "検証して追加",
     "validating": "検証中...",

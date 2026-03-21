@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { ExternalLink, Eye, EyeOff, Loader2 } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +37,20 @@ export function AddGitHubAccountDialog({
   const [showToken, setShowToken] = useState(false)
   const [validating, setValidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleGenerateToken = useCallback(async () => {
+    const base = serverUrl.trim().replace(/\/+$/, "") || "https://github.com"
+    const params = new URLSearchParams({
+      description: "codeg",
+      scopes: "repo,read:org,workflow,gist,read:user,user:email",
+    })
+    const url = `${base}/settings/tokens/new?${params.toString()}`
+    try {
+      await openUrl(url)
+    } catch {
+      // fallback: ignore if opener fails
+    }
+  }, [serverUrl])
 
   const resetForm = useCallback(() => {
     setServerUrl("https://github.com")
@@ -117,9 +132,21 @@ export function AddGitHubAccountDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t("token")}
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">
+                {t("token")}
+              </label>
+              <Button
+                type="button"
+                variant="link"
+                size="xs"
+                className="h-auto p-0 text-xs"
+                onClick={handleGenerateToken}
+              >
+                {t("generateToken")}
+                <ExternalLink className="ml-1 h-3 w-3" />
+              </Button>
+            </div>
             <div className="relative">
               <Input
                 type={showToken ? "text" : "password"}

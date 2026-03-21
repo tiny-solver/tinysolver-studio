@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Eye, EyeOff, Github, KeyRound, Loader2 } from "lucide-react"
+import { ExternalLink, Eye, EyeOff, Github, KeyRound, Loader2 } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -183,6 +184,20 @@ export function GitCredentialProvider({
 
   // Save credentials checkbox (generic mode)
   const [saveCredentials, setSaveCredentials] = useState(true)
+
+  const handleGenerateToken = useCallback(async () => {
+    const host = remoteHost || "github.com"
+    const base = `https://${host}`
+    const params = new URLSearchParams({
+      description: "codeg",
+      scopes: "repo,read:org,workflow,gist,read:user,user:email",
+    })
+    try {
+      await openUrl(`${base}/settings/tokens/new?${params.toString()}`)
+    } catch {
+      // ignore
+    }
+  }, [remoteHost])
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -401,9 +416,22 @@ export function GitCredentialProvider({
             {mode === "github" ? (
               /* ---- GitHub Token Mode ---- */
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {t("githubToken")}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t("githubToken")}
+                  </label>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    className="h-auto p-0 text-xs"
+                    onClick={handleGenerateToken}
+                    disabled={submitting}
+                  >
+                    {t("generateToken")}
+                    <ExternalLink className="ml-1 h-3 w-3" />
+                  </Button>
+                </div>
                 <div className="relative">
                   <Input
                     type={showToken ? "text" : "password"}

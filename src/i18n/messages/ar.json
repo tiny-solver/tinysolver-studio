@@ -75,7 +75,8 @@
     "githubToken": "رمز الوصول الشخصي",
     "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
     "githubTokenHint": "أنشئ رمزًا في GitHub → Settings → Developer settings → Personal access tokens.",
-    "githubAuthenticate": "التحقق والاتصال"
+    "githubAuthenticate": "التحقق والاتصال",
+    "generateToken": "إنشاء رمز"
   },
   "SettingsShell": {
     "title": "الإعدادات",
@@ -178,6 +179,7 @@
     "serverUrlPlaceholder": "https://github.com",
     "token": "رمز الوصول الشخصي",
     "tokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "generateToken": "إنشاء رمز",
     "tokenHint": "أنشئ رمزًا في GitHub → Settings → Developer settings → Personal access tokens.",
     "validateAndAdd": "التحقق والإضافة",
     "validating": "جارٍ التحقق...",

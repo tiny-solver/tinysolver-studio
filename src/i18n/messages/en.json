@@ -75,7 +75,8 @@
     "githubToken": "Personal Access Token",
     "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
     "githubTokenHint": "Generate a token at GitHub → Settings → Developer settings → Personal access tokens.",
-    "githubAuthenticate": "Validate & Connect"
+    "githubAuthenticate": "Validate & Connect",
+    "generateToken": "Generate token"
   },
   "SettingsShell": {
     "title": "Settings",
@@ -178,6 +179,7 @@
     "serverUrlPlaceholder": "https://github.com",
     "token": "Personal Access Token",
     "tokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "generateToken": "Generate token",
     "tokenHint": "Generate a token at GitHub → Settings → Developer settings → Personal access tokens.",
     "validateAndAdd": "Validate & Add",
     "validating": "Validating...",

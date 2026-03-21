@@ -75,7 +75,8 @@
     "githubToken": "個人存取權杖",
     "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
     "githubTokenHint": "在 GitHub → Settings → Developer settings → Personal access tokens 中產生權杖。",
-    "githubAuthenticate": "驗證並連線"
+    "githubAuthenticate": "驗證並連線",
+    "generateToken": "產生權杖"
   },
   "SettingsShell": {
     "title": "設定",
@@ -178,6 +179,7 @@
     "serverUrlPlaceholder": "https://github.com",
     "token": "個人存取權杖",
     "tokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "generateToken": "產生權杖",
     "tokenHint": "在 GitHub → Settings → Developer settings → Personal access tokens 中產生權杖。",
     "validateAndAdd": "驗證並新增",
     "validating": "驗證中...",

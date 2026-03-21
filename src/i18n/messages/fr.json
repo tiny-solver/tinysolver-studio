@@ -75,7 +75,8 @@
     "githubToken": "Jeton d'accès personnel",
     "githubTokenPlaceholder": "ghp_xxxxxxxxxxxx",
     "githubTokenHint": "Générez un jeton dans GitHub → Settings → Developer settings → Personal access tokens.",
-    "githubAuthenticate": "Valider et connecter"
+    "githubAuthenticate": "Valider et connecter",
+    "generateToken": "Générer un jeton"
   },
   "SettingsShell": {
     "title": "Paramètres",
@@ -178,6 +179,7 @@
     "serverUrlPlaceholder": "https://github.com",
     "token": "Jeton d'accès personnel",
     "tokenPlaceholder": "ghp_xxxxxxxxxxxx",
+    "generateToken": "Générer un jeton",
     "tokenHint": "Générez un jeton dans GitHub → Settings → Developer settings → Personal access tokens.",
     "validateAndAdd": "Valider et ajouter",
     "validating": "Validation...",
