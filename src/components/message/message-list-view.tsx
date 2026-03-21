@@ -15,7 +15,10 @@ import { UserResourceLinks } from "./user-resource-links"
 import { UserImageAttachments } from "./user-image-attachments"
 import { useSessionStats } from "@/contexts/session-stats-context"
 import { AgentPlanOverlay } from "@/components/chat/agent-plan-overlay"
-import { MessageThread } from "@/components/ai-elements/message-thread"
+import {
+  MessageThread,
+  MessageThreadScrollButton,
+} from "@/components/ai-elements/message-thread"
 import { Message, MessageContent } from "@/components/ai-elements/message"
 import { Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -304,6 +307,7 @@ export function MessageListView({
           estimateSize={180}
           overscan={10}
         />
+        <MessageThreadScrollButton />
       </MessageThread>
       {liveMessage && connStatus === "prompting" && (
         <LiveTurnStats
