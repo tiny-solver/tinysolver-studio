@@ -186,10 +186,7 @@ export function AddGitHubAccountDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            onClick={handleSubmit}
-            disabled={validating || !token.trim()}
-          >
+          <Button onClick={handleSubmit} disabled={validating || !token.trim()}>
             {validating ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

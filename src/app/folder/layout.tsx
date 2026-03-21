@@ -645,40 +645,40 @@ function FolderLayoutInner({ children }: { children: React.ReactNode }) {
       <AlertProvider>
         <GitCredentialProvider>
           <TaskProvider>
-          <AcpConnectionsProvider>
-            <ConversationRuntimeProvider>
-              <WorkspaceProvider key={`workspace-${normalizedFolderId}`}>
-                <TabProvider>
-                  <SessionStatsProvider>
-                    <SidebarProvider
-                      key={`left-sidebar-${normalizedFolderId}`}
-                      folderId={normalizedFolderId}
-                    >
-                      <AuxPanelProvider
-                        key={`right-sidebar-${normalizedFolderId}`}
+            <AcpConnectionsProvider>
+              <ConversationRuntimeProvider>
+                <WorkspaceProvider key={`workspace-${normalizedFolderId}`}>
+                  <TabProvider>
+                    <SessionStatsProvider>
+                      <SidebarProvider
+                        key={`left-sidebar-${normalizedFolderId}`}
                         folderId={normalizedFolderId}
                       >
-                        <TerminalProvider>
-                          <div className="flex h-screen flex-col overflow-hidden">
-                            <FolderTitleBar />
-                            <FolderWorkspaceShell>
-                              {children}
-                            </FolderWorkspaceShell>
-                            <StatusBar />
-                            <AppToaster
-                              position="bottom-right"
-                              duration={TOAST_DURATION_MS}
-                              closeButton
-                            />
-                          </div>
-                        </TerminalProvider>
-                      </AuxPanelProvider>
-                    </SidebarProvider>
-                  </SessionStatsProvider>
-                </TabProvider>
-              </WorkspaceProvider>
-            </ConversationRuntimeProvider>
-          </AcpConnectionsProvider>
+                        <AuxPanelProvider
+                          key={`right-sidebar-${normalizedFolderId}`}
+                          folderId={normalizedFolderId}
+                        >
+                          <TerminalProvider>
+                            <div className="flex h-screen flex-col overflow-hidden">
+                              <FolderTitleBar />
+                              <FolderWorkspaceShell>
+                                {children}
+                              </FolderWorkspaceShell>
+                              <StatusBar />
+                              <AppToaster
+                                position="bottom-right"
+                                duration={TOAST_DURATION_MS}
+                                closeButton
+                              />
+                            </div>
+                          </TerminalProvider>
+                        </AuxPanelProvider>
+                      </SidebarProvider>
+                    </SessionStatsProvider>
+                  </TabProvider>
+                </WorkspaceProvider>
+              </ConversationRuntimeProvider>
+            </AcpConnectionsProvider>
           </TaskProvider>
         </GitCredentialProvider>
       </AlertProvider>

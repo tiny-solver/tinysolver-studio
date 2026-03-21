@@ -205,7 +205,9 @@ export function VersionControlSettings() {
       if (trimmed) {
         const result = await testGitPath(trimmed)
         if (!result.installed) {
-          toast.error(t("testFailed", { message: "not a valid git executable" }))
+          toast.error(
+            t("testFailed", { message: "not a valid git executable" })
+          )
           return
         }
       }
@@ -415,11 +417,7 @@ export function VersionControlSettings() {
                 >
                   {t("removeCancel")}
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSaveGit}
-                  disabled={savingGit}
-                >
+                <Button size="sm" onClick={handleSaveGit} disabled={savingGit}>
                   {savingGit ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (

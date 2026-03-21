@@ -4,11 +4,19 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react"
-import { ExternalLink, Eye, EyeOff, Github, KeyRound, Loader2 } from "lucide-react"
+import {
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Github,
+  KeyRound,
+  Loader2,
+} from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
@@ -39,9 +47,7 @@ import {
  * - `folderPath`: detect remote from an existing repo's origin URL.
  * - `remoteUrl`: use this URL directly (e.g. for clone operations).
  */
-export type GitRemoteHint =
-  | { folderPath: string }
-  | { remoteUrl: string }
+export type GitRemoteHint = { folderPath: string } | { remoteUrl: string }
 
 interface GitCredentialContextValue {
   /**
@@ -57,8 +63,9 @@ interface GitCredentialContextValue {
   ) => Promise<T>
 }
 
-const GitCredentialContext =
-  createContext<GitCredentialContextValue | null>(null)
+const GitCredentialContext = createContext<GitCredentialContextValue | null>(
+  null
+)
 
 export function useGitCredential(): GitCredentialContextValue {
   const ctx = useContext(GitCredentialContext)
@@ -136,9 +143,7 @@ async function saveGenericAccount(
   try {
     const existing = await getGitHubAccounts()
     const isDuplicate = existing.accounts.some(
-      (a) =>
-        a.username === creds.username &&
-        extractHost(a.server_url) === host
+      (a) => a.username === creds.username && extractHost(a.server_url) === host
     )
     if (!isDuplicate) {
       await updateGitHubAccounts({
@@ -162,11 +167,7 @@ async function saveGenericAccount(
   }
 }
 
-export function GitCredentialProvider({
-  children,
-}: {
-  children: ReactNode
-}) {
+export function GitCredentialProvider({ children }: { children: ReactNode }) {
   const t = useTranslations("GitCredentialDialog")
 
   const [open, setOpen] = useState(false)
@@ -204,11 +205,18 @@ export function GitCredentialProvider({
 
   const pendingRef = useRef<PendingRequest | null>(null)
   const saveCredentialsRef = useRef(saveCredentials)
-  saveCredentialsRef.current = saveCredentials
   const remoteHostRef = useRef(remoteHost)
-  remoteHostRef.current = remoteHost
   const modeRef = useRef(mode)
-  modeRef.current = mode
+
+  useEffect(() => {
+    saveCredentialsRef.current = saveCredentials
+  }, [saveCredentials])
+  useEffect(() => {
+    remoteHostRef.current = remoteHost
+  }, [remoteHost])
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
 
   const resetForm = useCallback(() => {
     setUsername("")
@@ -222,7 +230,10 @@ export function GitCredentialProvider({
   }, [])
 
   const requestCredentials = useCallback(
-    (dialogMode: DialogMode, host: string | null): Promise<GitCredentials | null> => {
+    (
+      dialogMode: DialogMode,
+      host: string | null
+    ): Promise<GitCredentials | null> => {
       return new Promise((resolve) => {
         pendingRef.current = { resolve }
         resetForm()
@@ -333,9 +344,7 @@ export function GitCredentialProvider({
 
         // Detect remote host to decide dialog mode
         const host = await resolveRemoteHost(hint)
-        const dialogMode: DialogMode = isGitHubHost(host)
-          ? "github"
-          : "generic"
+        const dialogMode: DialogMode = isGitHubHost(host) ? "github" : "generic"
 
         // Helper: save credentials after successful operation
         const maybeSave = async (c: GitCredentials) => {
@@ -354,7 +363,7 @@ export function GitCredentialProvider({
 
         // Retry loop — keep trying until success or user cancels
         let lastError: unknown = firstError
-        // eslint-disable-next-line no-constant-condition
+
         while (true) {
           try {
             const result = await operation(creds)
@@ -389,7 +398,8 @@ export function GitCredentialProvider({
   )
 
   const canSubmitGitHub = token.trim().length > 0
-  const canSubmitGeneric = username.trim().length > 0 && password.trim().length > 0
+  const canSubmitGeneric =
+    username.trim().length > 0 && password.trim().length > 0
   const canSubmit = mode === "github" ? canSubmitGitHub : canSubmitGeneric
 
   return (

@@ -168,9 +168,7 @@ export function TabProvider({ children }: TabProviderProps) {
   }, [conversations])
 
   // Callback set for preview tab replacement notifications
-  const previewReplacedCallbacksRef = useRef(
-    new Set<(tabId: string) => void>()
-  )
+  const previewReplacedCallbacksRef = useRef(new Set<(tabId: string) => void>())
   const onPreviewTabReplaced = useCallback(
     (callback: (tabId: string) => void) => {
       previewReplacedCallbacksRef.current.add(callback)

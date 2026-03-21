@@ -698,10 +698,9 @@ export function BranchDropdown({
                 runGitTask(
                   t("tasks.pullCode"),
                   () =>
-                    withCredentialRetry(
-                      (creds) => gitPull(folderPath, creds),
-                      { folderPath }
-                    ),
+                    withCredentialRetry((creds) => gitPull(folderPath, creds), {
+                      folderPath,
+                    }),
                   (result) => {
                     if (result.conflict?.has_conflicts) {
                       setConflictInfo(result.conflict)
@@ -724,10 +723,9 @@ export function BranchDropdown({
               disabled={loading}
               onSelect={() =>
                 runGitTask(t("tasks.fetchInfo"), () =>
-                  withCredentialRetry(
-                    (creds) => gitFetch(folderPath, creds),
-                    { folderPath }
-                  )
+                  withCredentialRetry((creds) => gitFetch(folderPath, creds), {
+                    folderPath,
+                  })
                 )
               }
             >

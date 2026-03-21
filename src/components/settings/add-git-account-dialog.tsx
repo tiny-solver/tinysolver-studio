@@ -83,7 +83,15 @@ export function AddGitAccountDialog({
 
     onAccountAdded(account)
     handleOpenChange(false)
-  }, [serverUrl, username, password, isFirstAccount, onAccountAdded, handleOpenChange, t])
+  }, [
+    serverUrl,
+    username,
+    password,
+    isFirstAccount,
+    onAccountAdded,
+    handleOpenChange,
+    t,
+  ])
 
   const canSubmit =
     serverUrl.trim().length > 0 &&
