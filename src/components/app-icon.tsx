@@ -7,8 +7,8 @@ export function AppIcon({ className }: { className?: string }) {
     >
       <defs>
         <linearGradient id="ai-code" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#e0e7ff" />
-          <stop offset="100%" stopColor="#c7d2fe" />
+          <stop offset="0%" stopColor="#dcdfe9" />
+          <stop offset="100%" stopColor="#cdd1e2" />
         </linearGradient>
         <linearGradient id="ai-b1" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#ff4081" />
@@ -33,7 +33,7 @@ export function AppIcon({ className }: { className?: string }) {
         fill="#1a1a2e"
       />
       <polyline
-        points="190,180 120,240 190,300"
+        points="180,186 100,256 180,326"
         fill="none"
         stroke="url(#ai-code)"
         strokeWidth="32"
@@ -41,26 +41,16 @@ export function AppIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
       />
       <polyline
-        points="322,180 392,240 322,300"
+        points="332,186 412,256 332,326"
         fill="none"
         stroke="url(#ai-code)"
         strokeWidth="32"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <line
-        x1="280"
-        y1="160"
-        x2="232"
-        y2="320"
-        stroke="url(#ai-code)"
-        strokeWidth="28"
-        strokeLinecap="round"
-        opacity="0.7"
-      />
-      <circle cx="176" cy="396" r="28" fill="url(#ai-b1)" opacity="0.95" />
-      <circle cx="256" cy="396" r="28" fill="url(#ai-b2)" opacity="0.95" />
-      <circle cx="336" cy="396" r="28" fill="url(#ai-b3)" opacity="0.95" />
+      <circle cx="206" cy="256" r="30" fill="url(#ai-b1)" opacity="0.95" />
+      <circle cx="256" cy="256" r="36" fill="url(#ai-b2)" opacity="0.95" />
+      <circle cx="306" cy="256" r="30" fill="url(#ai-b3)" opacity="0.95" />
     </svg>
   )
 }
