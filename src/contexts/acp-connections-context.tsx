@@ -1082,6 +1082,7 @@ export interface AcpActionsValue {
   ): Promise<void>
   setActiveKey(key: string | null): void
   touchActivity(contextKey: string): void
+  registerOpenTabKeys(keys: Set<string>): void
 }
 
 const AcpActionsContext = createContext<AcpActionsValue | null>(null)
@@ -1146,6 +1147,9 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
   // connectionId → contextKey reverse mapping
   const reverseMapRef = useRef(new Map<string, string>())
+
+  // Open tab keys — updated by child TabProvider via registerOpenTabKeys
+  const openTabKeysRef = useRef(new Set<string>())
 
   // Guard against concurrent connect() calls
   const connectingKeysRef = useRef(new Set<string>())
@@ -1307,6 +1311,10 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
   const touchActivity = useCallback((contextKey: string) => {
     lastActivityRef.current.set(contextKey, Date.now())
+  }, [])
+
+  const registerOpenTabKeys = useCallback((keys: Set<string>) => {
+    openTabKeysRef.current = keys
   }, [])
 
   const flushStreamingQueue = useCallback(() => {
@@ -1649,9 +1657,11 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       const now = Date.now()
       const currentActiveKey = storeRef.current.activeKey
 
+      const currentOpenTabKeys = openTabKeysRef.current
       const toDisconnect: { contextKey: string; connectionId: string }[] = []
       for (const [contextKey, conn] of storeRef.current.connections) {
         if (contextKey === currentActiveKey) continue
+        if (currentOpenTabKeys.has(contextKey)) continue
         if (
           conn.status === "prompting" ||
           conn.status === "connecting" ||
@@ -1923,6 +1933,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       respondPermission,
       setActiveKey,
       touchActivity,
+      registerOpenTabKeys,
     }),
     [
       connect,
@@ -1935,6 +1946,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       respondPermission,
       setActiveKey,
       touchActivity,
+      registerOpenTabKeys,
     ]
   )
 
