@@ -19,6 +19,7 @@ import type {
   ConversationStatus,
   OpenedConversation,
 } from "@/lib/types"
+import { AGENT_DISPLAY_ORDER } from "@/lib/types"
 
 interface TabItemInternal {
   id: string
@@ -54,7 +55,7 @@ interface TabContextValue {
   switchTab: (tabId: string) => void
   pinTab: (tabId: string) => void
   toggleTileMode: () => void
-  openNewConversationTab: (agentType: AgentType, workingDir: string) => void
+  openNewConversationTab: (workingDir: string) => void
   bindConversationTab: (
     tabId: string,
     conversationId: number,
@@ -419,7 +420,7 @@ export function TabProvider({ children }: TabProviderProps) {
       id: makeNewConversationTabId(),
       kind: "conversation",
       conversationId: null,
-      agentType: preferred?.agentType ?? "codex",
+      agentType: AGENT_DISPLAY_ORDER[0],
       title: t("newConversation"),
       isPinned: true,
       workingDir: preferred?.workingDir ?? folder?.path,
@@ -553,18 +554,27 @@ export function TabProvider({ children }: TabProviderProps) {
   )
 
   const openNewConversationTab = useCallback(
-    (agentType: AgentType, workingDir: string) => {
+    (workingDir: string) => {
       const existingTab = rawTabsRef.current.find(
-        (t) => t.conversationId == null && t.agentType === agentType
+        (t) => t.conversationId == null
       )
 
       if (existingTab) {
+        // Update workingDir if it differs from the request
+        if (existingTab.workingDir !== workingDir) {
+          setTabs((prev) =>
+            prev.map((t) =>
+              t.id === existingTab.id ? { ...t, workingDir } : t
+            )
+          )
+        }
         setActiveTabId(existingTab.id)
         syncFolderContext(existingTab)
         activateConversationPane()
         return
       }
 
+      const agentType = AGENT_DISPLAY_ORDER[0]
       const tabId = makeNewConversationTabId()
       const newTab: TabItemInternal = {
         id: tabId,

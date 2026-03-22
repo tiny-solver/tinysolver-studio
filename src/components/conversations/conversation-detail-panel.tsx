@@ -694,6 +694,12 @@ const ConversationTabView = memo(function ConversationTabView({
       setDraftAgentType(nextAgentType)
       setModeId(null)
       setAgentConnectError(null)
+
+      // If not yet connected, just update state — auto-connect will use the
+      // new agentType once canAutoConnect is satisfied.
+      const s = connStatusRef.current
+      if (!s || s === "disconnected" || s === "error") return
+
       connDisconnect()
         .catch((e) =>
           console.error("[ConversationTabView] disconnect old agent:", e)
@@ -1090,7 +1096,7 @@ export function ConversationDetailPanel() {
 
   const handleNewConversation = useCallback(() => {
     if (!folder) return
-    openNewConversationTab("codex", folder.path)
+    openNewConversationTab(folder.path)
   }, [folder, openNewConversationTab])
 
   const handleCloseActiveTab = useCallback(() => {
@@ -1103,18 +1109,9 @@ export function ConversationDetailPanel() {
     if (!folder) return
 
     if (hasNoTabs) {
-      openNewConversationTab(
-        newConversation?.agentType ?? "codex",
-        newConversation?.workingDir ?? folder.path
-      )
+      openNewConversationTab(newConversation?.workingDir ?? folder.path)
     }
-  }, [
-    folder,
-    hasNoTabs,
-    newConversation?.agentType,
-    newConversation?.workingDir,
-    openNewConversationTab,
-  ])
+  }, [folder, hasNoTabs, newConversation?.workingDir, openNewConversationTab])
 
   const canTile = isTileMode && tabs.length > 1
 

@@ -373,7 +373,7 @@ export function SidebarConversationList({
 
   const handleNewConversation = useCallback(() => {
     if (!folder) return
-    openNewConversationTab("codex", folder.path)
+    openNewConversationTab(folder.path)
   }, [folder, openNewConversationTab])
 
   const handleImport = useCallback(async () => {

@@ -21,7 +21,7 @@ export function Sidebar() {
 
   const handleNewConversation = useCallback(() => {
     if (!folder) return
-    openNewConversationTab("codex", folder.path)
+    openNewConversationTab(folder.path)
   }, [folder, openNewConversationTab])
 
   if (!isOpen) return null

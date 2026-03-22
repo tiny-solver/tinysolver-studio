@@ -151,7 +151,7 @@ export function FolderTitleBar() {
       if (matchShortcutEvent(e, shortcuts.new_conversation)) {
         if (!folderPath) return
         e.preventDefault()
-        openNewConversationTab("codex", folderPath)
+        openNewConversationTab(folderPath)
         return
       }
       if (matchShortcutEvent(e, shortcuts.open_folder)) {
