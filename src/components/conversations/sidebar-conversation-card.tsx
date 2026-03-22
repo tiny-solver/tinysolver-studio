@@ -117,9 +117,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             onClick={handleClick}
             onDoubleClick={handleDblClick}
             className={cn(
-              "w-full text-left px-3 py-2.5 rounded-md transition-colors",
-              "hover:bg-sidebar-accent/50",
-              isSelected && "bg-sidebar-accent text-sidebar-accent-foreground"
+              "w-full text-left px-3 py-2.5 mb-1 rounded-md transition-colors",
+              isSelected
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "hover:bg-sidebar-accent/50"
             )}
           >
             <div className="flex items-center gap-1.5 min-w-0">

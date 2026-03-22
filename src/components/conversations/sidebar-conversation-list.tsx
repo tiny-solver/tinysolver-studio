@@ -72,7 +72,7 @@ type FlatItem =
   | { type: "conversation"; conversation: DbConversationSummary }
 
 const HEADER_HEIGHT = 32
-const CARD_HEIGHT = 58
+const CARD_HEIGHT = 62
 
 const GroupHeader = memo(function GroupHeader({
   status,
@@ -102,9 +102,7 @@ const GroupHeader = memo(function GroupHeader({
         className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[status])}
       />
       <span>{tStatus(status)}</span>
-      <span className="ml-auto text-muted-foreground/60 tabular-nums">
-        {count}
-      </span>
+      <span className="text-muted-foreground/60 tabular-nums">({count})</span>
     </button>
   )
 })
@@ -148,8 +146,8 @@ const PendingReviewHeader = memo(function PendingReviewHeader({
             )}
           />
           <span>{tStatus("pending_review")}</span>
-          <span className="ml-auto text-muted-foreground/60 tabular-nums">
-            {count}
+          <span className="text-muted-foreground/60 tabular-nums">
+            ({count})
           </span>
         </button>
       </ContextMenuTrigger>
