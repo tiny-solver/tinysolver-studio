@@ -209,6 +209,10 @@ const ConversationTabView = memo(function ConversationTabView({
   const statusUpdatedRef = useRef(false)
   const selectedAgentRef = useRef(selectedAgent)
   const createConversationPendingRef = useRef(false)
+  // When the turn finishes (cancel / complete) before createConversation
+  // resolves, we can't update the DB status yet.  This ref records the
+  // desired status so the createConversation callback can apply it.
+  const deferredStatusRef = useRef<string | null>(null)
   const externalIdSavedRef = useRef(false)
   const sessionIdRef = useRef<string | null>(null)
   const syncCancelRef = useRef<(() => void) | null>(null)
@@ -333,8 +337,21 @@ const ConversationTabView = memo(function ConversationTabView({
     syncCancelRef.current?.()
     syncCancelRef.current = null
 
+    const targetStatus =
+      connStatus === "disconnected" || connStatus === "error"
+        ? null
+        : "pending_review"
+
     const persistedId = dbConvIdRef.current
-    if (!persistedId) return
+    if (!persistedId) {
+      // Conversation hasn't been persisted yet (createConversation still
+      // in flight).  Record the desired status so the create callback
+      // can apply it once the DB row exists.
+      if (targetStatus) {
+        deferredStatusRef.current = targetStatus
+      }
+      return
+    }
 
     // Async patch metadata (usage, duration_ms, model, session_stats)
     if (persistedId > 0) {
@@ -344,8 +361,8 @@ const ConversationTabView = memo(function ConversationTabView({
       )
     }
 
-    if (connStatus !== "disconnected" && connStatus !== "error") {
-      updateConversationStatus(persistedId, "pending_review")
+    if (targetStatus) {
+      updateConversationStatus(persistedId, targetStatus)
         .then(() => refreshConversations())
         .catch((e: unknown) =>
           console.error("[ConversationTabView] update status:", e)
@@ -573,7 +590,12 @@ const ConversationTabView = memo(function ConversationTabView({
             buildConversationDraftStorageKey(selectedAgent, newConversationId)
           )
           statusUpdatedRef.current = false
-          updateConversationStatus(newConversationId, "in_progress")
+          // If the turn already finished while we were creating the
+          // conversation, apply the deferred status directly instead
+          // of setting "in_progress" (which would never be updated).
+          const initialStatus = deferredStatusRef.current ?? "in_progress"
+          deferredStatusRef.current = null
+          updateConversationStatus(newConversationId, initialStatus)
             .then(() => refreshConversations())
             .catch((e: unknown) =>
               console.error("[ConversationTabView] update status:", e)

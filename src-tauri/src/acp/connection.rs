@@ -1454,11 +1454,13 @@ async fn run_conversation_loop<'a>(
                 let cx = session.connection();
                 let sid = session.session_id().clone();
                 let prompt_request = PromptRequest::new(sid.clone(), prompt_blocks);
-                let prompt_response = cx
-                    .clone()
-                    .send_request_to(Agent, prompt_request)
-                    .block_task();
-                tokio::pin!(prompt_response);
+                // Use Box::pin (heap) instead of tokio::pin! (stack) so the
+                // future can be moved into a background task on cancel.
+                let mut prompt_response = Box::pin(
+                    cx.clone()
+                        .send_request_to(Agent, prompt_request)
+                        .block_task(),
+                );
                 let mut tracked_terminal_tool_calls: HashMap<String, TrackedTerminalToolCall> =
                     HashMap::new();
                 let mut terminal_poll_interval = tokio::time::interval(
@@ -1659,6 +1661,25 @@ async fn run_conversation_loop<'a>(
                                             RequestPermissionOutcome::Cancelled,
                                         ));
                                     }
+                                    // Immediately emit TurnComplete so the frontend
+                                    // transitions out of "prompting" and the user can
+                                    // send new messages.  Don't wait for the agent —
+                                    // it may be slow to respond or not respond at all.
+                                    let _ = handle.emit(
+                                        "acp://event",
+                                        AcpEvent::TurnComplete {
+                                            connection_id: conn_id.into(),
+                                            session_id: sid.0.to_string(),
+                                            stop_reason: "cancelled".into(),
+                                        },
+                                    );
+                                    // Drain the prompt response in the background so
+                                    // the SACP library doesn't log "receiver dropped"
+                                    // errors when the agent eventually responds.
+                                    tokio::spawn(async move {
+                                        let _ = prompt_response.await;
+                                    });
+                                    break;
                                 }
                                 Some(ConnectionCommand::Disconnect) | None => {
                                     eprintln!(
