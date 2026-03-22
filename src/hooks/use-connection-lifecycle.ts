@@ -55,6 +55,7 @@ export function useConnectionLifecycle({
     status,
     selectorsReady,
     connect: connConnect,
+    disconnect: connDisconnect,
     sendPrompt,
     setMode: connSetMode,
     setConfigOption: connSetConfigOption,
@@ -256,9 +257,18 @@ export function useConnectionLifecycle({
     t,
   ])
 
-  // Clean up lingering task on unmount (e.g. tab closed while connecting)
+  // Keep a ref to disconnect so the unmount cleanup always calls the
+  // latest version without adding it as a dependency.
+  const connDisconnectRef = useRef(connDisconnect)
+  useEffect(() => {
+    connDisconnectRef.current = connDisconnect
+  }, [connDisconnect])
+
+  // Clean up on unmount (e.g. tab closed): disconnect the ACP connection
+  // so it doesn't leak, and remove lingering tasks.
   useEffect(() => {
     return () => {
+      connDisconnectRef.current().catch(() => {})
       if (taskIdRef.current) {
         removeTask(taskIdRef.current)
       }

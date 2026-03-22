@@ -1149,6 +1149,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
   // Guard against concurrent connect() calls
   const connectingKeysRef = useRef(new Set<string>())
+  // Keys whose disconnect was requested while connect was still in flight
+  const abandonedKeysRef = useRef(new Set<string>())
 
   type AutoLinkBlockState =
     | { kind: "none"; reason: "" }
@@ -1772,6 +1774,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
         await waitForListenerReady()
         const connectionId = await acpConnect(agentType, workingDir, sessionId)
+
+        // If disconnect was requested while connect was in flight,
+        // tear down immediately instead of registering the connection.
+        if (abandonedKeysRef.current.delete(contextKey)) {
+          acpDisconnect(connectionId).catch(() => {})
+          return
+        }
+
         reverseMapRef.current.set(connectionId, contextKey)
         lastActivityRef.current.set(contextKey, Date.now())
         dispatch({
@@ -1800,6 +1810,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         throw err
       } finally {
         connectingKeysRef.current.delete(contextKey)
+        abandonedKeysRef.current.delete(contextKey)
       }
     },
     [
@@ -1816,7 +1827,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(
     async (contextKey: string) => {
       const conn = storeRef.current.connections.get(contextKey)
-      if (!conn) return
+      if (!conn) {
+        // connect() is still in flight — mark as abandoned so it
+        // tears down immediately when acpConnect returns.
+        if (connectingKeysRef.current.has(contextKey)) {
+          abandonedKeysRef.current.add(contextKey)
+        }
+        return
+      }
       await acpDisconnect(conn.connectionId)
       reverseMapRef.current.delete(conn.connectionId)
       lastActivityRef.current.delete(contextKey)

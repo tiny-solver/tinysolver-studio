@@ -964,7 +964,33 @@ export function ConversationDetailPanel() {
     })
   }, [onPreviewTabReplaced, disconnectByKey])
 
-  // Background turn_complete handler: for conversations not open in tabs
+  // Refs for background turn_complete handler so the listener
+  // can be registered once and always read the latest values.
+  const getConversationIdByExternalIdRef = useRef(getConversationIdByExternalId)
+  const getSessionRef = useRef(getSession)
+  const runtimeCompleteTurnRef = useRef(runtimeCompleteTurn)
+  const runtimeRemoveConversationRef = useRef(runtimeRemoveConversation)
+  const refreshConversationsRef = useRef(refreshConversations)
+  useEffect(() => {
+    getConversationIdByExternalIdRef.current = getConversationIdByExternalId
+  }, [getConversationIdByExternalId])
+  useEffect(() => {
+    getSessionRef.current = getSession
+  }, [getSession])
+  useEffect(() => {
+    runtimeCompleteTurnRef.current = runtimeCompleteTurn
+  }, [runtimeCompleteTurn])
+  useEffect(() => {
+    runtimeRemoveConversationRef.current = runtimeRemoveConversation
+  }, [runtimeRemoveConversation])
+  useEffect(() => {
+    refreshConversationsRef.current = refreshConversations
+  }, [refreshConversations])
+
+  // Background turn_complete handler: for conversations not open in tabs.
+  // Registered once — uses refs to avoid re-creating the listener on every
+  // state change, which would cause "Couldn't find callback id" warnings
+  // due to the async gap between unlisten and the new listen().
   useEffect(() => {
     let cancelled = false
     let unlisten: (() => void | Promise<void>) | null = null
@@ -975,9 +1001,8 @@ export function ConversationDetailPanel() {
           const payload = event.payload
           if (payload.type !== "turn_complete") return
 
-          const runtimeConversationId = getConversationIdByExternalId(
-            payload.session_id
-          )
+          const runtimeConversationId =
+            getConversationIdByExternalIdRef.current(payload.session_id)
           const summary = conversationsRef.current.find(
             (item) => item.external_id === payload.session_id
           )
@@ -997,12 +1022,12 @@ export function ConversationDetailPanel() {
           if (isOpenInTabs) return
 
           // Promote liveMessage + optimisticTurns to localTurns immediately
-          runtimeCompleteTurn(matchedConversationId)
+          runtimeCompleteTurnRef.current(matchedConversationId)
 
           // If tab was closed while agent was responding, clean up now
-          const session = getSession(matchedConversationId)
+          const session = getSessionRef.current(matchedConversationId)
           if (session?.pendingCleanup) {
-            runtimeRemoveConversation(matchedConversationId)
+            runtimeRemoveConversationRef.current(matchedConversationId)
           }
 
           // Update conversation status — use the DB summary (found by
@@ -1013,7 +1038,7 @@ export function ConversationDetailPanel() {
             (matchedConversationId > 0 ? matchedConversationId : null)
           if (dbId && (!summary || summary.status === "in_progress")) {
             updateConversationStatus(dbId, "pending_review")
-              .then(() => refreshConversations())
+              .then(() => refreshConversationsRef.current())
               .catch((error: unknown) =>
                 console.error(
                   "[ConversationDetailPanel] background update status:",
@@ -1044,13 +1069,7 @@ export function ConversationDetailPanel() {
         "ConversationDetailPanel.backgroundRefresh"
       )
     }
-  }, [
-    getConversationIdByExternalId,
-    getSession,
-    runtimeCompleteTurn,
-    runtimeRemoveConversation,
-    refreshConversations,
-  ])
+  }, [])
 
   const hasNoTabs = tabs.length === 0 && !activeTabId
   const activeConversationTab = useMemo(
