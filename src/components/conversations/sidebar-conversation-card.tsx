@@ -1,12 +1,12 @@
 "use client"
 
-import { memo, useState, useCallback } from "react"
+import { memo, useState, useCallback, useMemo } from "react"
 import { formatDistanceToNow } from "date-fns"
 import { enUS, zhCN, zhTW } from "date-fns/locale"
 import { GitBranch, Pencil, Trash2, Circle, Download, Plus } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
-import { STATUS_COLORS } from "@/lib/types"
+import { STATUS_ORDER, STATUS_COLORS } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { AgentIcon } from "@/components/agent-icon"
 import {
@@ -39,12 +39,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-const ALL_STATUSES: ConversationStatus[] = [
-  "in_progress",
-  "pending_review",
-  "completed",
-  "cancelled",
-]
 
 interface SidebarConversationCardProps {
   conversation: DbConversationSummary
@@ -80,10 +74,14 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [renameValue, setRenameValue] = useState("")
 
-  const timeAgo = formatDistanceToNow(new Date(conversation.updated_at), {
-    addSuffix: true,
-    locale: dateFnsLocale,
-  })
+  const timeAgo = useMemo(
+    () =>
+      formatDistanceToNow(new Date(conversation.updated_at), {
+        addSuffix: true,
+        locale: dateFnsLocale,
+      }),
+    [conversation.updated_at, dateFnsLocale]
+  )
 
   const handleClick = useCallback(() => {
     onSelect(conversation.id, conversation.agent_type)
@@ -166,7 +164,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               {t("status")}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
-              {ALL_STATUSES.filter((s) => s !== conversation.status).map(
+              {STATUS_ORDER.filter((s) => s !== conversation.status).map(
                 (s) => (
                   <ContextMenuItem
                     key={s}

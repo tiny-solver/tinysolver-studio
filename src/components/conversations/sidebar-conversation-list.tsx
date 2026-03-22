@@ -1,7 +1,9 @@
 "use client"
 
 import {
+  memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -10,6 +12,7 @@ import {
 } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { CheckCheck, ChevronRight, Download, Loader2, Plus } from "lucide-react"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTabContext } from "@/contexts/tab-context"
@@ -25,11 +28,6 @@ import { STATUS_ORDER, STATUS_COLORS } from "@/lib/types"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -68,6 +66,108 @@ function compareByUpdatedAtDesc(
 
   return right.id - left.id
 }
+
+type FlatItem =
+  | { type: "header"; status: ConversationStatus; count: number }
+  | { type: "conversation"; conversation: DbConversationSummary }
+
+const HEADER_HEIGHT = 32
+const CARD_HEIGHT = 58
+
+const GroupHeader = memo(function GroupHeader({
+  status,
+  count,
+  isOpen,
+  onToggle,
+  tStatus,
+}: {
+  status: ConversationStatus
+  count: number
+  isOpen: boolean
+  onToggle: (status: ConversationStatus) => void
+  tStatus: ReturnType<typeof useTranslations>
+}) {
+  return (
+    <button
+      onClick={() => onToggle(status)}
+      className="flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+    >
+      <ChevronRight
+        className={cn(
+          "h-3.5 w-3.5 shrink-0 transition-transform",
+          isOpen && "rotate-90"
+        )}
+      />
+      <span
+        className={cn(
+          "w-2 h-2 rounded-full shrink-0",
+          STATUS_COLORS[status]
+        )}
+      />
+      <span>{tStatus(status)}</span>
+      <span className="ml-auto text-muted-foreground/60 tabular-nums">
+        {count}
+      </span>
+    </button>
+  )
+})
+
+const PendingReviewHeader = memo(function PendingReviewHeader({
+  count,
+  isOpen,
+  onToggle,
+  reviewConversationCount,
+  completingReview,
+  onCompleteReview,
+  tStatus,
+  t,
+}: {
+  count: number
+  isOpen: boolean
+  onToggle: (status: ConversationStatus) => void
+  reviewConversationCount: number
+  completingReview: boolean
+  onCompleteReview: () => void
+  tStatus: ReturnType<typeof useTranslations>
+  t: ReturnType<typeof useTranslations>
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          onClick={() => onToggle("pending_review")}
+          className="flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          <ChevronRight
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 transition-transform",
+              isOpen && "rotate-90"
+            )}
+          />
+          <span
+            className={cn(
+              "w-2 h-2 rounded-full shrink-0",
+              STATUS_COLORS.pending_review
+            )}
+          />
+          <span>{tStatus("pending_review")}</span>
+          <span className="ml-auto text-muted-foreground/60 tabular-nums">
+            {count}
+          </span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          disabled={reviewConversationCount === 0 || completingReview}
+          onSelect={onCompleteReview}
+        >
+          <CheckCheck className="h-4 w-4" />
+          {t("completeAllSessions")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+})
 
 export interface SidebarConversationListHandle {
   scrollToActive: () => void
@@ -112,30 +212,14 @@ export function SidebarConversationList({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  const scrollToActiveRef = useRef<() => void>(() => {})
+  const pendingScrollRef = useRef(false)
+  const virtualizerRef =
+    useRef<ReturnType<typeof useVirtualizer<HTMLDivElement, Element>>>(null)
+
   useImperativeHandle(ref, () => ({
     scrollToActive() {
-      if (!selectedConversation) return
-      const conv = conversations.find(
-        (c) =>
-          c.id === selectedConversation.id &&
-          c.agent_type === selectedConversation.agentType
-      )
-      if (!conv) return
-      const status = conv.status as ConversationStatus
-      if (!groupExpanded[status]) {
-        setGroupExpanded((prev) => ({ ...prev, [status]: true }))
-        requestAnimationFrame(() => {
-          const el = scrollContainerRef.current?.querySelector(
-            `[data-conversation-id="${selectedConversation.id}"]`
-          )
-          el?.scrollIntoView({ block: "center", behavior: "smooth" })
-        })
-      } else {
-        const el = scrollContainerRef.current?.querySelector(
-          `[data-conversation-id="${selectedConversation.id}"]`
-        )
-        el?.scrollIntoView({ block: "center", behavior: "smooth" })
-      }
+      scrollToActiveRef.current()
     },
     expandAll() {
       setGroupExpanded({
@@ -172,15 +256,86 @@ export function SidebarConversationList({
     return map
   }, [conversations])
 
+  const flatItems = useMemo<FlatItem[]>(() => {
+    const items: FlatItem[] = []
+    for (const status of STATUS_ORDER) {
+      const list = grouped.get(status)
+      if (!list || list.length === 0) continue
+      items.push({ type: "header", status, count: list.length })
+      if (groupExpanded[status]) {
+        for (const conv of list) {
+          items.push({ type: "conversation", conversation: conv })
+        }
+      }
+    }
+    return items
+  }, [grouped, groupExpanded])
+
   const reviewConversations = useMemo(
     () => grouped.get("pending_review") ?? [],
     [grouped]
   )
   const reviewConversationCount = reviewConversations.length
 
+  const virtualizer = useVirtualizer({
+    count: flatItems.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) =>
+      flatItems[index].type === "header" ? HEADER_HEIGHT : CARD_HEIGHT,
+    getItemKey: (index) => {
+      const item = flatItems[index]
+      return item.type === "header"
+        ? `header-${item.status}`
+        : `conv-${item.conversation.id}`
+    },
+    overscan: 5,
+  })
+
+  virtualizerRef.current = virtualizer
+
+  useEffect(() => {
+    scrollToActiveRef.current = () => {
+      if (!selectedConversation) return
+      const targetId = selectedConversation.id
+      const targetAgent = selectedConversation.agentType
+      const conv = conversations.find(
+        (c) => c.id === targetId && c.agent_type === targetAgent
+      )
+      if (!conv) return
+      const status = conv.status as ConversationStatus
+      if (!groupExpanded[status]) {
+        setGroupExpanded((prev) => ({ ...prev, [status]: true }))
+        pendingScrollRef.current = true
+        return
+      }
+      const index = flatItems.findIndex(
+        (item) =>
+          item.type === "conversation" &&
+          item.conversation.id === targetId &&
+          item.conversation.agent_type === targetAgent
+      )
+      if (index >= 0) {
+        virtualizerRef.current?.scrollToIndex(index, {
+          align: "center",
+          behavior: "smooth",
+        })
+      }
+    }
+
+    if (pendingScrollRef.current) {
+      pendingScrollRef.current = false
+      scrollToActiveRef.current()
+    }
+  }, [selectedConversation, flatItems, conversations, groupExpanded])
+
   const toggleGroup = useCallback((status: ConversationStatus) => {
     setGroupExpanded((prev) => ({ ...prev, [status]: !prev[status] }))
   }, [])
+
+  const handleOpenCompleteReview = useCallback(
+    () => setCompleteReviewOpen(true),
+    []
+  )
 
   const handleSelect = useCallback(
     (id: number, agentType: string) => {
@@ -349,84 +504,71 @@ export function SidebarConversationList({
                 "[&::-webkit-scrollbar-thumb]:bg-border"
               )}
             >
-              {STATUS_ORDER.map((status) => {
-                const items = grouped.get(status)
-                if (!items || items.length === 0) return null
-                const isOpen = groupExpanded[status]
-                const groupHeader = (
-                  <CollapsibleTrigger className="sticky top-0 z-10 bg-sidebar flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                    <ChevronRight
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0 transition-transform",
-                        isOpen && "rotate-90"
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "w-2 h-2 rounded-full shrink-0",
-                        STATUS_COLORS[status]
-                      )}
-                    />
-                    <span>{tStatus(status)}</span>
-                    <span className="ml-auto text-muted-foreground/60 tabular-nums">
-                      {items.length}
-                    </span>
-                  </CollapsibleTrigger>
-                )
-                return (
-                  <Collapsible
-                    key={status}
-                    open={isOpen}
-                    onOpenChange={() => toggleGroup(status)}
-                  >
-                    {status === "pending_review" ? (
-                      <ContextMenu>
-                        <ContextMenuTrigger asChild>
-                          {groupHeader}
-                        </ContextMenuTrigger>
-                        <ContextMenuContent>
-                          <ContextMenuItem
-                            disabled={
-                              reviewConversationCount === 0 || completingReview
-                            }
-                            onSelect={() => setCompleteReviewOpen(true)}
-                          >
-                            <CheckCheck className="h-4 w-4" />
-                            {t("completeAllSessions")}
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-                    ) : (
-                      groupHeader
-                    )}
-                    <CollapsibleContent>
-                      <div className="space-y-0.5 pb-1">
-                        {items.map((conversation) => {
-                          const isSelected =
+              <div
+                style={{
+                  height: virtualizer.getTotalSize(),
+                  position: "relative",
+                  width: "100%",
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const item = flatItems[virtualRow.index]
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      {item.type === "header" ? (
+                        item.status === "pending_review" ? (
+                          <PendingReviewHeader
+                            count={item.count}
+                            isOpen={groupExpanded[item.status]}
+                            onToggle={toggleGroup}
+                            reviewConversationCount={reviewConversationCount}
+                            completingReview={completingReview}
+                            onCompleteReview={handleOpenCompleteReview}
+                            tStatus={tStatus}
+                            t={t}
+                          />
+                        ) : (
+                          <GroupHeader
+                            status={item.status}
+                            count={item.count}
+                            isOpen={groupExpanded[item.status]}
+                            onToggle={toggleGroup}
+                            tStatus={tStatus}
+                          />
+                        )
+                      ) : (
+                        <SidebarConversationCard
+                          conversation={item.conversation}
+                          isSelected={
                             selectedConversation?.agentType ===
-                              conversation.agent_type &&
-                            selectedConversation?.id === conversation.id
-                          return (
-                            <SidebarConversationCard
-                              key={conversation.id}
-                              conversation={conversation}
-                              isSelected={isSelected}
-                              onSelect={handleSelect}
-                              onDoubleClick={handleDoubleClick}
-                              onRename={handleRename}
-                              onDelete={handleDelete}
-                              onStatusChange={handleStatusChange}
-                              onNewConversation={handleNewConversation}
-                              onImport={handleImport}
-                              importing={importing}
-                            />
-                          )
-                        })}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )
-              })}
+                              item.conversation.agent_type &&
+                            selectedConversation?.id === item.conversation.id
+                          }
+                          onSelect={handleSelect}
+                          onDoubleClick={handleDoubleClick}
+                          onRename={handleRename}
+                          onDelete={handleDelete}
+                          onStatusChange={handleStatusChange}
+                          onNewConversation={handleNewConversation}
+                          onImport={handleImport}
+                          importing={importing}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
