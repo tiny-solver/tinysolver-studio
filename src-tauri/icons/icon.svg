@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- 代码符号渐变 -->
+    <linearGradient id="code" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e0e7ff"/>
+      <stop offset="100%" style="stop-color:#c7d2fe"/>
+    </linearGradient>
+    <!-- 色料三元色 -->
+    <linearGradient id="bubble1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff4081"/>
+      <stop offset="100%" style="stop-color:#e91e63"/>
+    </linearGradient>
+    <linearGradient id="bubble2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffeb3b"/>
+      <stop offset="100%" style="stop-color:#fdd835"/>
+    </linearGradient>
+    <linearGradient id="bubble3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#29b6f6"/>
+      <stop offset="100%" style="stop-color:#03a9f4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角矩形背景 -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="#1a1a2e"/>
+
+  <!-- 代码尖括号 < > -->
+  <polyline points="190,180 120,240 190,300"
+    fill="none" stroke="url(#code)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="322,180 392,240 322,300"
+    fill="none" stroke="url(#code)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 中间斜杠 / -->
+  <line x1="280" y1="160" x2="232" y2="320"
+    stroke="url(#code)" stroke-width="28" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- 底部三个圆点 -->
+  <circle cx="176" cy="396" r="28" fill="url(#bubble1)" opacity="0.95"/>
+  <circle cx="256" cy="396" r="28" fill="url(#bubble2)" opacity="0.95"/>
+  <circle cx="336" cy="396" r="28" fill="url(#bubble3)" opacity="0.95"/>
+</svg>

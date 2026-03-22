@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { MessageCircleCode } from "lucide-react"
+import { AppIcon } from "@/components/app-icon"
 import { useTranslations } from "next-intl"
 import { getCurrentAppVersion } from "@/lib/updater"
 
@@ -18,8 +18,8 @@ export function SoftwareInfo() {
   }, [])
 
   return (
-    <div className="w-full flex gap-4 px-6 py-8">
-      <MessageCircleCode className="size-12" />
+    <div className="w-full flex items-center gap-4 px-6 py-8">
+      <AppIcon className="size-12" />
       <div className="flex flex-col">
         <span className="text-base">Codeg</span>
         <span className="text-sm text-muted-foreground">
