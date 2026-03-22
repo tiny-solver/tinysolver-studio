@@ -875,6 +875,7 @@
     "branchDropdown": {
       "toasts": {
         "commitCodeCompleted": "코드 커밋이 완료되었습니다",
+        "pushCodeCompleted": "코드 푸시가 완료되었습니다",
         "committedFiles": "{count, plural, one {#개 파일 커밋됨} other {#개 파일 커밋됨}}",
         "taskCompleted": "{label} 완료",
         "taskFailed": "{label} 실패",

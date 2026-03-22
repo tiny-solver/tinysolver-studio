@@ -1,8 +1,9 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { getCurrentWindow } from "@tauri-apps/api/window"
 import { Loader2 } from "lucide-react"
 import { PushWorkspace } from "@/components/layout/push-workspace"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
@@ -26,6 +27,14 @@ function PushPageInner() {
     folder: null,
     error: null,
   })
+
+  const closeWindow = useCallback(() => {
+    getCurrentWindow()
+      .close()
+      .catch((err) => {
+        console.error("[PushPage] failed to close window:", err)
+      })
+  }, [])
 
   const folderId = Number(searchParams.get("folderId") ?? "0")
   const normalizedFolderId = Number.isFinite(folderId) ? folderId : 0
@@ -89,7 +98,11 @@ function PushPageInner() {
             {error}
           </div>
         ) : folder ? (
-          <PushWorkspace folderPath={folder.path} folderName={folder.name} />
+          <PushWorkspace
+            folderPath={folder.path}
+            folderName={folder.name}
+            onPushed={closeWindow}
+          />
         ) : null}
       </main>
 

@@ -875,6 +875,7 @@
     "branchDropdown": {
       "toasts": {
         "commitCodeCompleted": "اكتمل التزام الكود",
+        "pushCodeCompleted": "اكتمل دفع الكود",
         "committedFiles": "{count, plural, one {# ملف تم الالتزام به} other {# ملفات تم الالتزام بها}}",
         "taskCompleted": "اكتمل {label}",
         "taskFailed": "فشل {label}",

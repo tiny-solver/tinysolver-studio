@@ -108,6 +108,12 @@ interface GitCommitSucceededEventPayload {
   committed_files: number
 }
 
+interface GitPushSucceededEventPayload {
+  folder_id: number
+  pushed_commits: number
+  upstream_set: boolean
+}
+
 export function BranchDropdown({
   branch,
   parentBranch,
@@ -184,6 +190,43 @@ export function BranchDropdown({
 
     return () => {
       disposeTauriListener(unlisten, "BranchDropdown.gitCommitSucceeded")
+    }
+  }, [folder, onBranchChange, t])
+
+  useEffect(() => {
+    if (!folder) return
+
+    let unlisten: UnlistenFn | null = null
+
+    listen<GitPushSucceededEventPayload>(
+      "folder://git-push-succeeded",
+      (event) => {
+        if (event.payload.folder_id !== folder.id) return
+        const { pushed_commits, upstream_set } = event.payload
+        let description: string
+        if (upstream_set) {
+          description =
+            pushed_commits === 0
+              ? t("toasts.upstreamSet")
+              : t("toasts.upstreamSetAndPushed", { count: pushed_commits })
+        } else if (pushed_commits === 0) {
+          description = t("toasts.noCommitsToPush")
+        } else {
+          description = t("toasts.pushedCommits", { count: pushed_commits })
+        }
+        toast.success(t("toasts.pushCodeCompleted"), { description })
+        onBranchChange()
+      }
+    )
+      .then((fn) => {
+        unlisten = fn
+      })
+      .catch((err) => {
+        console.error("[BranchDropdown] failed to listen push event:", err)
+      })
+
+    return () => {
+      disposeTauriListener(unlisten, "BranchDropdown.gitPushSucceeded")
     }
   }, [folder, onBranchChange, t])
 

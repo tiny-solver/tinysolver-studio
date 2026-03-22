@@ -875,6 +875,7 @@
     "branchDropdown": {
       "toasts": {
         "commitCodeCompleted": "Commit de código concluído",
+        "pushCodeCompleted": "Push de código concluído",
         "committedFiles": "{count, plural, one {# arquivo commitado} other {# arquivos commitados}}",
         "taskCompleted": "{label} concluído",
         "taskFailed": "{label} falhou",

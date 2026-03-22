@@ -875,6 +875,7 @@
     "branchDropdown": {
       "toasts": {
         "commitCodeCompleted": "提交程式碼完成",
+        "pushCodeCompleted": "推送程式碼完成",
         "committedFiles": "已提交 {count} 個檔案",
         "taskCompleted": "{label} 完成",
         "taskFailed": "{label} 失敗",

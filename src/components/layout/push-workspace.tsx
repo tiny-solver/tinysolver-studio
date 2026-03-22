@@ -266,9 +266,14 @@ function parseDate(dateStr: string): Date | null {
 interface PushWorkspaceProps {
   folderPath: string
   folderName: string
+  onPushed?: () => void
 }
 
-export function PushWorkspace({ folderPath, folderName }: PushWorkspaceProps) {
+export function PushWorkspace({
+  folderPath,
+  folderName,
+  onPushed,
+}: PushWorkspaceProps) {
   const t = useTranslations("Folder.pushWindow")
   const tLog = useTranslations("Folder.gitLogTab")
   const { withCredentialRetry } = useGitCredential()
@@ -327,30 +332,10 @@ export function PushWorkspace({ folderPath, folderName }: PushWorkspaceProps) {
   async function handlePush() {
     setPushing(true)
     try {
-      const result = await withCredentialRetry(
-        (creds) => gitPush(folderPath, creds),
-        { folderPath }
-      )
-      let description: string | undefined
-      if (result.upstream_set) {
-        description =
-          result.pushed_commits === 0
-            ? t("toasts.upstreamSet")
-            : t("toasts.upstreamSetAndPushed", {
-                count: result.pushed_commits,
-              })
-      } else if (result.pushed_commits === 0) {
-        description = t("toasts.noCommitsToPush")
-      } else {
-        description = t("toasts.pushedCommits", {
-          count: result.pushed_commits,
-        })
-      }
-      toast.success(t("toasts.pushSuccess"), { description })
-      await loadCommits()
-      setSelectedFile(null)
-      setSelectedCommit(null)
-      setOpenByCommit({})
+      await withCredentialRetry((creds) => gitPush(folderPath, creds), {
+        folderPath,
+      })
+      onPushed?.()
     } catch (err) {
       toast.error(t("toasts.pushFailed"), {
         description: toErrorMessage(err),

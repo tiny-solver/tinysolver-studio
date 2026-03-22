@@ -194,6 +194,13 @@ struct GitCommitSucceededEvent {
     committed_files: usize,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct GitPushSucceededEvent {
+    folder_id: i32,
+    pushed_commits: usize,
+    upstream_set: bool,
+}
+
 struct FileWatchEntry {
     root_canonical: PathBuf,
     root_display: String,
@@ -841,10 +848,11 @@ pub async fn git_fetch(
 
 #[tauri::command]
 pub async fn git_push(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     path: String,
     credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
 ) -> Result<GitPushResult, AppCommandError> {
     let pushed_commits = estimate_push_commit_count(&path).await;
 
@@ -873,12 +881,12 @@ pub async fn git_push(
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", "--set-upstream", "origin", &branch])
             .current_dir(&path);
-        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
+        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push"]).current_dir(&path);
-        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
+        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
 
@@ -886,9 +894,26 @@ pub async fn git_push(
         return Err(classify_remote_git_error("push", &output.stderr));
     }
 
+    let upstream_set = !has_upstream;
+
+    if let Some(folder_id) = window
+        .label()
+        .strip_prefix("push-")
+        .and_then(|value| value.parse::<i32>().ok())
+    {
+        let _ = app.emit(
+            "folder://git-push-succeeded",
+            GitPushSucceededEvent {
+                folder_id,
+                pushed_commits,
+                upstream_set,
+            },
+        );
+    }
+
     Ok(GitPushResult {
         pushed_commits,
-        upstream_set: !has_upstream,
+        upstream_set,
     })
 }
 

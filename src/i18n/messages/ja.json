@@ -875,6 +875,7 @@
     "branchDropdown": {
       "toasts": {
         "commitCodeCompleted": "コードコミットが完了しました",
+        "pushCodeCompleted": "コードプッシュが完了しました",
         "committedFiles": "{count, plural, one {# 個のファイルをコミット} other {# 個のファイルをコミット}}",
         "taskCompleted": "{label} が完了しました",
         "taskFailed": "{label} が失敗しました",
