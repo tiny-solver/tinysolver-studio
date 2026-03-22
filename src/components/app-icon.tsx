@@ -23,7 +23,15 @@ export function AppIcon({ className }: { className?: string }) {
           <stop offset="100%" stopColor="#03a9f4" />
         </linearGradient>
       </defs>
-      <rect x="0" y="0" width="512" height="512" rx="90" ry="90" fill="#1a1a2e" />
+      <rect
+        x="0"
+        y="0"
+        width="512"
+        height="512"
+        rx="90"
+        ry="90"
+        fill="#1a1a2e"
+      />
       <polyline
         points="180,186 100,256 180,326"
         fill="none"
