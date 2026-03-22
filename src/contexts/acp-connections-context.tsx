@@ -1893,11 +1893,22 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     []
   )
 
-  const cancel = useCallback(async (contextKey: string) => {
-    const conn = storeRef.current.connections.get(contextKey)
-    if (!conn) return
-    await acpCancel(conn.connectionId)
-  }, [])
+  const cancel = useCallback(
+    async (contextKey: string) => {
+      const conn = storeRef.current.connections.get(contextKey)
+      if (!conn) return
+      await acpCancel(conn.connectionId)
+      // Optimistically transition status so the UI stops showing
+      // "responding" immediately.  If the agent was slow to respond to
+      // the CancelNotification the frontend would otherwise stay stuck
+      // in the "prompting" state indefinitely.
+      const current = storeRef.current.connections.get(contextKey)
+      if (current?.status === "prompting") {
+        dispatch({ type: "STATUS_CHANGED", contextKey, status: "connected" })
+      }
+    },
+    [dispatch]
+  )
 
   const respondPermission = useCallback(
     async (contextKey: string, requestId: string, optionId: string) => {
