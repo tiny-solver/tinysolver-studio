@@ -39,7 +39,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-
 interface SidebarConversationCardProps {
   conversation: DbConversationSummary
   isSelected: boolean
