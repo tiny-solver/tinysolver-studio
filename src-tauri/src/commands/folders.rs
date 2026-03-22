@@ -1,5 +1,5 @@
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
@@ -2692,7 +2692,7 @@ fn replace_file(temp_path: &Path, target_path: &Path) -> Result<(), AppCommandEr
 
 #[cfg(unix)]
 fn sync_directory(path: &Path) -> Result<(), AppCommandError> {
-    let dir = File::open(path).map_err(AppCommandError::io)?;
+    let dir = std::fs::File::open(path).map_err(AppCommandError::io)?;
     dir.sync_all().map_err(AppCommandError::io)
 }
 
