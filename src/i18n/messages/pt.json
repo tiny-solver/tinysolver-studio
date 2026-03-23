@@ -613,6 +613,7 @@
       "openClawSaved": "Configuração do OpenClaw salva",
       "saveOpenClawFailed": "Falha ao salvar configuração do OpenClaw",
       "configSaved": "Configuração salva",
+      "configSavedHint": "Sessões existentes precisam ser reabertas para que as alterações tenham efeito",
       "saveConfigManagementFailed": "Falha ao salvar o gerenciamento de configuração"
     },
     "version": {

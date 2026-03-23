@@ -613,6 +613,7 @@
       "openClawSaved": "OpenClaw config saved",
       "saveOpenClawFailed": "Failed to save OpenClaw config",
       "configSaved": "Config saved",
+      "configSavedHint": "Existing sessions need to be reopened to take effect",
       "saveConfigManagementFailed": "Failed to save config management"
     },
     "version": {

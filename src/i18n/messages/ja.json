@@ -613,6 +613,7 @@
       "openClawSaved": "OpenClaw設定を保存しました",
       "saveOpenClawFailed": "OpenClaw設定の保存に失敗しました",
       "configSaved": "設定を保存しました",
+      "configSavedHint": "既存のセッションは再度開く必要があります",
       "saveConfigManagementFailed": "設定管理の保存に失敗しました"
     },
     "version": {

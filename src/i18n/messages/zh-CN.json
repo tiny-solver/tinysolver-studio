@@ -613,6 +613,7 @@
       "openClawSaved": "OpenClaw 配置已保存",
       "saveOpenClawFailed": "保存 OpenClaw 配置失败",
       "configSaved": "配置已保存",
+      "configSavedHint": "已有会话需要重新打开才能生效",
       "saveConfigManagementFailed": "保存配置管理失败"
     },
     "version": {

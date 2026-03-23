@@ -613,6 +613,7 @@
       "openClawSaved": "OpenClaw-Konfiguration gespeichert",
       "saveOpenClawFailed": "Speichern der OpenClaw-Konfiguration fehlgeschlagen",
       "configSaved": "Konfiguration gespeichert",
+      "configSavedHint": "Bestehende Sitzungen müssen neu geöffnet werden, damit die Änderungen wirksam werden",
       "saveConfigManagementFailed": "Speichern der Konfigurationsverwaltung fehlgeschlagen"
     },
     "version": {

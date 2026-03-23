@@ -613,6 +613,7 @@
       "openClawSaved": "تم حفظ إعداد OpenClaw",
       "saveOpenClawFailed": "فشل حفظ إعداد OpenClaw",
       "configSaved": "تم حفظ الإعداد",
+      "configSavedHint": "يجب إعادة فتح الجلسات الحالية لتطبيق التغييرات",
       "saveConfigManagementFailed": "فشل حفظ إدارة الإعدادات"
     },
     "version": {

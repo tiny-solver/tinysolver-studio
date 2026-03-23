@@ -613,6 +613,7 @@
       "openClawSaved": "OpenClaw 설정 저장됨",
       "saveOpenClawFailed": "OpenClaw 설정 저장 실패",
       "configSaved": "구성이 저장되었습니다",
+      "configSavedHint": "기존 세션은 다시 열어야 적용됩니다",
       "saveConfigManagementFailed": "구성 관리 저장 실패"
     },
     "version": {
