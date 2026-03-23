@@ -33,6 +33,19 @@ async fn prepare_remote_git_cmd(
     db: &AppDatabase,
     app_handle: &tauri::AppHandle,
 ) {
+    prepare_remote_git_cmd_with_remote(cmd, repo_path, None, credentials, db, app_handle).await;
+}
+
+/// Same as `prepare_remote_git_cmd` but allows specifying a remote name
+/// to match credentials against the correct remote URL.
+async fn prepare_remote_git_cmd_with_remote(
+    cmd: &mut tokio::process::Command,
+    repo_path: &str,
+    remote_name: Option<&str>,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
+) {
     cmd.env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::null());
 
@@ -48,8 +61,11 @@ async fn prepare_remote_git_cmd(
                 );
             }
         } else {
-            // Fall back to stored accounts
-            crate::git_credential::try_inject_for_repo(cmd, repo_path, &db.conn, &data_dir).await;
+            // Fall back to stored accounts, matching against the specified remote
+            crate::git_credential::try_inject_for_repo_remote(
+                cmd, repo_path, remote_name, &db.conn, &data_dir,
+            )
+            .await;
         }
     }
 }
@@ -948,13 +964,13 @@ pub async fn git_push(
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", "--set-upstream", &target_remote, &branch])
             .current_dir(&path);
-        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app).await;
+        prepare_remote_git_cmd_with_remote(&mut cmd, &path, Some(&target_remote), credentials.as_ref(), &db, &app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", &target_remote, &branch])
             .current_dir(&path);
-        prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app).await;
+        prepare_remote_git_cmd_with_remote(&mut cmd, &path, Some(&target_remote), credentials.as_ref(), &db, &app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
 
@@ -1745,7 +1761,7 @@ pub async fn git_fetch_remote(
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
     cmd.args(["fetch", &name]).current_dir(&path);
-    prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
+    prepare_remote_git_cmd_with_remote(&mut cmd, &path, Some(&name), credentials.as_ref(), &db, &app_handle).await;
 
     let output = cmd
         .output()

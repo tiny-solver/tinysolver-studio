@@ -55,7 +55,10 @@ import { gitLog, gitPush, gitPushInfo, gitShowFile } from "@/lib/tauri"
 import { toErrorMessage } from "@/lib/app-error"
 import { languageFromPath } from "@/lib/language-detect"
 import type { GitLogEntry, GitLogFileChange, GitPushInfo } from "@/lib/types"
-import { useGitCredential } from "@/contexts/git-credential-context"
+import {
+  useGitCredential,
+  type GitRemoteHint,
+} from "@/contexts/git-credential-context"
 
 // --- File tree types & builder (same as aux-panel-git-log-tab) ---
 
@@ -383,9 +386,14 @@ export function PushWorkspace({
   async function handlePush() {
     setPushing(true)
     try {
+      // Resolve the selected remote's URL for credential matching
+      const remoteUrl = pushInfoData?.remotes.find(
+        (r) => r.name === selectedRemote
+      )?.url
+      const hint: GitRemoteHint = remoteUrl ? { remoteUrl } : { folderPath }
       await withCredentialRetry(
         (creds) => gitPush(folderPath, selectedRemote, creds),
-        { folderPath }
+        hint
       )
       onPushed?.()
     } catch (err) {
