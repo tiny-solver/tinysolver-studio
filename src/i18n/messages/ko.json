@@ -127,6 +127,7 @@
     "languageSaveSuccess": "언어 설정이 저장되었습니다",
     "languageSaveFailed": "언어 설정 저장 실패: {message}",
     "updateTitle": "앱 업데이트",
+    "versionTitle": "소프트웨어 업데이트",
     "updateDescription": "설정된 릴리스 소스에서 새 버전을 확인하고 가능하면 바로 설치합니다.",
     "currentVersion": "현재 버전",
     "upgradableVersion": "최신 버전",

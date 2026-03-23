@@ -127,6 +127,7 @@
     "languageSaveSuccess": "Les paramètres de langue ont été enregistrés",
     "languageSaveFailed": "Échec de l’enregistrement des paramètres de langue : {message}",
     "updateTitle": "Mise à jour de l’app",
+    "versionTitle": "Mise à jour logicielle",
     "updateDescription": "Vérifiez les nouvelles versions depuis la source de publication configurée et installez-les directement si disponibles.",
     "currentVersion": "Version actuelle",
     "upgradableVersion": "Dernière version",

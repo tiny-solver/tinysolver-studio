@@ -127,6 +127,7 @@
     "languageSaveSuccess": "تم حفظ إعدادات اللغة",
     "languageSaveFailed": "فشل حفظ إعدادات اللغة: {message}",
     "updateTitle": "تحديث التطبيق",
+    "versionTitle": "تحديث البرنامج",
     "updateDescription": "تحقق من المصدر المهيأ للإصدارات الأحدث وثبّت التحديث مباشرة عند توفره.",
     "currentVersion": "الإصدار الحالي",
     "upgradableVersion": "أحدث إصدار",

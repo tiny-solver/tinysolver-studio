@@ -127,6 +127,7 @@
     "languageSaveSuccess": "As configurações de idioma foram salvas",
     "languageSaveFailed": "Falha ao salvar as configurações de idioma: {message}",
     "updateTitle": "Atualização do app",
+    "versionTitle": "Atualização de software",
     "updateDescription": "Verifique versões mais novas na fonte de releases configurada e instale diretamente quando disponíveis.",
     "currentVersion": "Versão atual",
     "upgradableVersion": "Versão mais recente",

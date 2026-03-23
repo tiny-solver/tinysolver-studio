@@ -127,6 +127,7 @@
     "languageSaveSuccess": "Spracheinstellungen wurden gespeichert",
     "languageSaveFailed": "Spracheinstellungen konnten nicht gespeichert werden: {message}",
     "updateTitle": "App-Update",
+    "versionTitle": "Softwareupdate",
     "updateDescription": "Prüft die konfigurierte Release-Quelle auf neue Versionen und installiert sie bei Verfügbarkeit direkt.",
     "currentVersion": "Aktuelle Version",
     "upgradableVersion": "Neueste Version",
