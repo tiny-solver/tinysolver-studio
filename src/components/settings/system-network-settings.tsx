@@ -197,8 +197,7 @@ export function SystemNetworkSettings() {
       try {
         const next = await updateSystemLanguageSettings({
           mode: lang === "system" ? "system" : "manual",
-          language:
-            lang === "system" ? languageSettings.language : lang,
+          language: lang === "system" ? languageSettings.language : lang,
         })
 
         setLanguageSettings(next)
