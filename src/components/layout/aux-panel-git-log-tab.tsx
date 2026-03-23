@@ -782,10 +782,12 @@ export function GitLogTab() {
       }
       setError(null)
       try {
-        const log = await gitLog(folder.path, 100, branch ?? undefined)
-        setEntries(log)
+        const result = await gitLog(folder.path, 100, branch ?? undefined)
+        setEntries(result.entries)
         if (inline) {
-          const commitHashes = new Set(log.map((entry) => entry.full_hash))
+          const commitHashes = new Set(
+            result.entries.map((entry) => entry.full_hash)
+          )
           setOpenByCommit((prev) =>
             filterRecordByCommitHashes(prev, commitHashes)
           )

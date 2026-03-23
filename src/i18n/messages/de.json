@@ -1039,6 +1039,7 @@
     "pushWindow": {
       "title": "Code pushen",
       "noUnpushedCommits": "Keine ungepushten Commits",
+      "newBranchNoPushedCommits": "Neuer Branch — pushen, um Remote-Tracking-Branch zu erstellen",
       "unpushed": "Nicht gepusht",
       "selectFileToViewDiff": "Datei auswählen, um Unterschiede anzuzeigen",
       "before": "Vorher",

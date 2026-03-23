@@ -38,7 +38,7 @@ import type {
   FilePreviewContent,
   FileEditContent,
   FileSaveResult,
-  GitLogEntry,
+  GitLogResult,
   SystemLanguageSettings,
   SystemProxySettings,
   GitCredentials,
@@ -1048,7 +1048,7 @@ export async function gitLog(
   path: string,
   limit?: number,
   branch?: string
-): Promise<GitLogEntry[]> {
+): Promise<GitLogResult> {
   return invoke("git_log", {
     path,
     limit: limit ?? null,

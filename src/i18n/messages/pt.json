@@ -1039,6 +1039,7 @@
     "pushWindow": {
       "title": "Enviar código",
       "noUnpushedCommits": "Nenhum commit não enviado",
+      "newBranchNoPushedCommits": "Nova branch — enviar para criar branch de rastreamento remota",
       "unpushed": "Não enviado",
       "selectFileToViewDiff": "Selecione um arquivo para ver as diferenças",
       "before": "Antes",

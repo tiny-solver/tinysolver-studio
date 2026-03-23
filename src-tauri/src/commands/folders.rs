@@ -276,6 +276,12 @@ pub struct GitLogFileChange {
     pub deletions: u32,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GitLogResult {
+    pub entries: Vec<GitLogEntry>,
+    pub has_upstream: bool,
+}
+
 fn count_non_empty_lines(content: &str) -> usize {
     content
         .lines()
@@ -3327,7 +3333,7 @@ pub async fn git_log(
     path: String,
     limit: Option<u32>,
     branch: Option<String>,
-) -> Result<Vec<GitLogEntry>, AppCommandError> {
+) -> Result<GitLogResult, AppCommandError> {
     const COMMIT_META_PREFIX: &str = "__COMMIT__\0";
     const MESSAGE_END_MARKER: &str = "__COMMIT_MESSAGE_END__";
 
@@ -3359,7 +3365,10 @@ pub async fn git_log(
         if stderr_str.contains("does not have any commits yet")
             || stderr_str.contains("unknown revision or path not in the working tree")
         {
-            return Ok(Vec::new());
+            return Ok(GitLogResult {
+                entries: Vec::new(),
+                has_upstream: false,
+            });
         }
         return Err(git_command_error("log", &output.stderr));
     }
@@ -3421,14 +3430,20 @@ pub async fn git_log(
         entries.push(entry.finish());
     }
 
-    let unpushed_hashes = get_unpushed_hashes(&path).await.ok().flatten();
+    let log_limit = limit.unwrap_or(100);
+    let (unpushed_hashes, has_upstream) = get_unpushed_hashes(&path, log_limit)
+        .await
+        .unwrap_or((None, false));
     for entry in entries.iter_mut() {
         entry.pushed = unpushed_hashes
             .as_ref()
             .map(|hashes| !hashes.contains(&entry.full_hash));
     }
 
-    Ok(entries)
+    Ok(GitLogResult {
+        entries,
+        has_upstream,
+    })
 }
 
 #[tauri::command]
@@ -3566,7 +3581,13 @@ fn parse_numstat_count(value: &str) -> u32 {
     value.parse::<u32>().unwrap_or(0)
 }
 
-async fn get_unpushed_hashes(path: &str) -> Result<Option<HashSet<String>>, AppCommandError> {
+/// Returns (unpushed_hashes, has_upstream).
+async fn get_unpushed_hashes(
+    path: &str,
+    limit: u32,
+) -> Result<(Option<HashSet<String>>, bool), AppCommandError> {
+    let limit_arg = format!("-{}", limit);
+
     let upstream_output = crate::process::tokio_command("git")
         .args([
             "rev-parse",
@@ -3579,27 +3600,65 @@ async fn get_unpushed_hashes(path: &str) -> Result<Option<HashSet<String>>, AppC
         .await
         .map_err(AppCommandError::io)?;
 
-    if !upstream_output.status.success() {
-        return Ok(None);
-    }
+    let has_upstream = upstream_output.status.success()
+        && !String::from_utf8_lossy(&upstream_output.stdout)
+            .trim()
+            .is_empty();
 
-    let upstream = String::from_utf8_lossy(&upstream_output.stdout)
-        .trim()
-        .to_string();
-    if upstream.is_empty() {
-        return Ok(None);
-    }
+    let rev_list_output = if has_upstream {
+        let upstream = String::from_utf8_lossy(&upstream_output.stdout)
+            .trim()
+            .to_string();
+        let range = format!("{upstream}..HEAD");
+        crate::process::tokio_command("git")
+            .args(["rev-list", &limit_arg, &range])
+            .current_dir(path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?
+    } else {
+        // No upstream (e.g. newly created branch): fall back to comparing
+        // against all remote branches to find commits not yet pushed.
+        let branch_output = crate::process::tokio_command("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?;
+        if !branch_output.status.success() {
+            return Ok((None, has_upstream));
+        }
+        let branch = String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_string();
+        if branch.is_empty() || branch == "HEAD" {
+            return Ok((None, has_upstream));
+        }
 
-    let range = format!("{upstream}..HEAD");
-    let rev_list_output = crate::process::tokio_command("git")
-        .args(["rev-list", &range])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
+        let remote_key = format!("branch.{}.remote", branch);
+        let remote_output = crate::process::tokio_command("git")
+            .args(["config", "--get", &remote_key])
+            .current_dir(path)
+            .output()
+            .await;
+        let remote = remote_output
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "origin".to_string());
+
+        let remote_arg = format!("--remotes={}", remote);
+        crate::process::tokio_command("git")
+            .args(["rev-list", &limit_arg, "HEAD", "--not", &remote_arg])
+            .current_dir(path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?
+    };
 
     if !rev_list_output.status.success() {
-        return Ok(None);
+        return Ok((None, has_upstream));
     }
 
     let hashes = String::from_utf8_lossy(&rev_list_output.stdout)
@@ -3608,5 +3667,5 @@ async fn get_unpushed_hashes(path: &str) -> Result<Option<HashSet<String>>, AppC
         .map(|line| line.to_string())
         .collect::<HashSet<_>>();
 
-    Ok(Some(hashes))
+    Ok((Some(hashes), has_upstream))
 }

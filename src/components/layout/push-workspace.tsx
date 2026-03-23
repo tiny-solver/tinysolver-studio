@@ -279,6 +279,7 @@ export function PushWorkspace({
   const { withCredentialRetry } = useGitCredential()
 
   const [commits, setCommits] = useState<GitLogEntry[]>([])
+  const [hasUpstream, setHasUpstream] = useState(true)
   const [listLoading, setListLoading] = useState(false)
   const [openByCommit, setOpenByCommit] = useState<Record<string, boolean>>({})
   const [pushing, setPushing] = useState(false)
@@ -297,8 +298,9 @@ export function PushWorkspace({
   const loadCommits = useCallback(async () => {
     setListLoading(true)
     try {
-      const entries = await gitLog(folderPath, 100)
-      setCommits(entries)
+      const result = await gitLog(folderPath, 100)
+      setCommits(result.entries)
+      setHasUpstream(result.has_upstream)
     } catch (err) {
       toast.error(toErrorMessage(err))
     } finally {
@@ -358,7 +360,9 @@ export function PushWorkspace({
                 </div>
               ) : unpushedCommits.length === 0 ? (
                 <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                  {t("noUnpushedCommits")}
+                  {!hasUpstream
+                    ? t("newBranchNoPushedCommits")
+                    : t("noUnpushedCommits")}
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 p-2">
@@ -433,7 +437,9 @@ export function PushWorkspace({
             <div className="border-t p-2">
               <Button
                 className="w-full"
-                disabled={pushing || unpushedCommits.length === 0}
+                disabled={
+                  pushing || (hasUpstream && unpushedCommits.length === 0)
+                }
                 onClick={handlePush}
               >
                 {pushing ? (

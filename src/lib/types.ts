@@ -743,6 +743,11 @@ export interface FileTreeChangedEvent {
   refresh_git_status: boolean
 }
 
+export interface GitLogResult {
+  entries: GitLogEntry[]
+  has_upstream: boolean
+}
+
 export interface GitLogEntry {
   hash: string
   full_hash: string

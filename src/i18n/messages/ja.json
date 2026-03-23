@@ -1039,6 +1039,7 @@
     "pushWindow": {
       "title": "コードをプッシュ",
       "noUnpushedCommits": "未プッシュのコミットはありません",
+      "newBranchNoPushedCommits": "新しいブランチ — プッシュしてリモート追跡ブランチを作成",
       "unpushed": "未プッシュ",
       "selectFileToViewDiff": "ファイルを選択して差分を表示",
       "before": "変更前",

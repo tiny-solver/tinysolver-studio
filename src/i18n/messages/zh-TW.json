@@ -1039,6 +1039,7 @@
     "pushWindow": {
       "title": "推送程式碼",
       "noUnpushedCommits": "沒有未推送的提交",
+      "newBranchNoPushedCommits": "新分支 — 推送以建立遠端追蹤分支",
       "unpushed": "未推送",
       "selectFileToViewDiff": "選擇檔案查看差異",
       "before": "修改前",
