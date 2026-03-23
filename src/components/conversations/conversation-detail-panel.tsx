@@ -717,30 +717,34 @@ const ConversationTabView = memo(function ConversationTabView({
       setModeId(null)
       setAgentConnectError(null)
 
-      // If not yet connected, just update state — auto-connect will use the
-      // new agentType once canAutoConnect is satisfied.
       const s = connStatusRef.current
-      if (!s || s === "disconnected" || s === "error") return
+      const doConnect = () => {
+        if (!workingDirForConnection) return
+        connConnect(nextAgentType, workingDirForConnection, undefined, {
+          source: "auto_link",
+        })
+          .then(() => {
+            setAgentConnectError(null)
+          })
+          .catch((e) => {
+            setAgentConnectError(normalizeErrorMessage(e))
+            if (!isExpectedAutoLinkError(e)) {
+              console.error("[ConversationTabView] switch agent:", e)
+            }
+          })
+      }
+
+      // If not yet connected, directly attempt to connect with the new agent.
+      if (!s || s === "disconnected" || s === "error") {
+        doConnect()
+        return
+      }
 
       connDisconnect()
         .catch((e) =>
           console.error("[ConversationTabView] disconnect old agent:", e)
         )
-        .finally(() => {
-          if (!workingDirForConnection) return
-          connConnect(nextAgentType, workingDirForConnection, undefined, {
-            source: "auto_link",
-          })
-            .then(() => {
-              setAgentConnectError(null)
-            })
-            .catch((e) => {
-              setAgentConnectError(normalizeErrorMessage(e))
-              if (!isExpectedAutoLinkError(e)) {
-                console.error("[ConversationTabView] switch agent:", e)
-              }
-            })
-        })
+        .finally(doConnect)
     },
     [connConnect, connDisconnect, workingDirForConnection]
   )
