@@ -102,9 +102,9 @@ fn claude_context_window_max_tokens_for_model(model: Option<&str>) -> Option<u64
         return Some(suffixed_limit);
     }
 
-    // Claude models default to 200k when no explicit capacity is provided.
+    // Claude models default to 1M when no explicit capacity is provided.
     if model.to_ascii_lowercase().starts_with("claude") {
-        return Some(200_000);
+        return Some(1_000_000);
     }
 
     None
