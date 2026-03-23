@@ -675,6 +675,12 @@ export interface GitPushResult {
   upstream_set: boolean
 }
 
+export interface GitPushInfo {
+  branch: string
+  remotes: GitRemote[]
+  tracking_remote: string | null
+}
+
 export interface GitMergeResult {
   merged_commits: number
   conflict?: GitConflictInfo | null

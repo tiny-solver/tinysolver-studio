@@ -149,6 +149,13 @@ pub struct GitPushResult {
 }
 
 #[derive(Debug, Serialize)]
+pub struct GitPushInfo {
+    pub branch: String,
+    pub remotes: Vec<GitRemote>,
+    pub tracking_remote: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct GitMergeResult {
     pub merged_commits: usize,
     pub conflict: Option<GitConflictInfo>,
@@ -853,16 +860,67 @@ pub async fn git_fetch(
 }
 
 #[tauri::command]
+pub async fn git_push_info(path: String) -> Result<GitPushInfo, AppCommandError> {
+    // Get current branch name
+    let branch_output = crate::process::tokio_command("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+    let branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+
+    // Get tracking remote for current branch
+    let remote_key = format!("branch.{}.remote", branch);
+    let remote_output = crate::process::tokio_command("git")
+        .args(["config", "--get", &remote_key])
+        .current_dir(&path)
+        .output()
+        .await;
+    let tracking_remote = remote_output
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|v| !v.is_empty());
+
+    // Get all remotes
+    let remotes = git_list_remotes(path).await?;
+
+    Ok(GitPushInfo {
+        branch,
+        remotes,
+        tracking_remote,
+    })
+}
+
+#[tauri::command]
 pub async fn git_push(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     path: String,
+    remote: Option<String>,
     credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
 ) -> Result<GitPushResult, AppCommandError> {
     let pushed_commits = estimate_push_commit_count(&path).await;
 
-    // Check if the current branch has an upstream configured
+    // Determine the target remote (use provided or fall back to tracking remote)
+    let target_remote = remote.unwrap_or_else(|| "origin".to_string());
+
+    // Check if the current branch has an upstream configured for this remote
+    let branch_output = crate::process::tokio_command("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+    let branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+
+    // Check if upstream is set and points to the target remote
     let upstream_check = crate::process::tokio_command("git")
         .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
         .current_dir(&path)
@@ -870,28 +928,32 @@ pub async fn git_push(
         .await
         .map_err(AppCommandError::io)?;
 
-    let has_upstream = upstream_check.status.success();
+    let current_upstream = if upstream_check.status.success() {
+        Some(
+            String::from_utf8_lossy(&upstream_check.stdout)
+                .trim()
+                .to_string(),
+        )
+    } else {
+        None
+    };
 
-    let output = if !has_upstream {
-        // No upstream: get current branch name and push with --set-upstream
-        let branch_output = crate::process::tokio_command("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .current_dir(&path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-        let branch = String::from_utf8_lossy(&branch_output.stdout)
-            .trim()
-            .to_string();
+    // Need to set upstream if: no upstream at all, or upstream points to a different remote
+    let needs_set_upstream = match &current_upstream {
+        None => true,
+        Some(upstream) => !upstream.starts_with(&format!("{}/", target_remote)),
+    };
 
+    let output = if needs_set_upstream {
         let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push", "--set-upstream", "origin", &branch])
+        cmd.args(["push", "--set-upstream", &target_remote, &branch])
             .current_dir(&path);
         prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push"]).current_dir(&path);
+        cmd.args(["push", &target_remote, &branch])
+            .current_dir(&path);
         prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
@@ -900,7 +962,7 @@ pub async fn git_push(
         return Err(classify_remote_git_error("push", &output.stderr));
     }
 
-    let upstream_set = !has_upstream;
+    let upstream_set = needs_set_upstream;
 
     if let Some(folder_id) = window
         .label()
@@ -3333,6 +3395,7 @@ pub async fn git_log(
     path: String,
     limit: Option<u32>,
     branch: Option<String>,
+    remote: Option<String>,
 ) -> Result<GitLogResult, AppCommandError> {
     const COMMIT_META_PREFIX: &str = "__COMMIT__\0";
     const MESSAGE_END_MARKER: &str = "__COMMIT_MESSAGE_END__";
@@ -3431,7 +3494,7 @@ pub async fn git_log(
     }
 
     let log_limit = limit.unwrap_or(100);
-    let (unpushed_hashes, has_upstream) = get_unpushed_hashes(&path, log_limit)
+    let (unpushed_hashes, has_upstream) = get_unpushed_hashes(&path, log_limit, remote.as_deref())
         .await
         .unwrap_or((None, false));
     for entry in entries.iter_mut() {
@@ -3585,6 +3648,7 @@ fn parse_numstat_count(value: &str) -> u32 {
 async fn get_unpushed_hashes(
     path: &str,
     limit: u32,
+    remote_override: Option<&str>,
 ) -> Result<(Option<HashSet<String>>, bool), AppCommandError> {
     let limit_arg = format!("-{}", limit);
 
@@ -3605,7 +3669,16 @@ async fn get_unpushed_hashes(
             .trim()
             .is_empty();
 
-    let rev_list_output = if has_upstream {
+    // When remote_override is specified, always compare against that remote
+    let rev_list_output = if let Some(target_remote) = remote_override {
+        let remote_arg = format!("--remotes={}", target_remote);
+        crate::process::tokio_command("git")
+            .args(["rev-list", &limit_arg, "HEAD", "--not", &remote_arg])
+            .current_dir(path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?
+    } else if has_upstream {
         let upstream = String::from_utf8_lossy(&upstream_output.stdout)
             .trim()
             .to_string();
