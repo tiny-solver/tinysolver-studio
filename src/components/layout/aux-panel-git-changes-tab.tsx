@@ -583,7 +583,7 @@ export function GitChangesTab() {
       setError(null)
 
       try {
-        const statusEntries = await gitStatus(folder.path)
+        const statusEntries = await gitStatus(folder.path, true)
         const hasTrackedEntries = statusEntries.some(
           (entry) => !isUntrackedStatus(entry.status)
         )
@@ -739,7 +739,7 @@ export function GitChangesTab() {
       setDirectoryGitLoading(true)
 
       try {
-        const statusEntries = await gitStatus(folder.path)
+        const statusEntries = await gitStatus(folder.path, true)
         const scopedEntries = scopeGitStatusEntriesForDirectory(
           statusEntries,
           target.path

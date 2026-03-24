@@ -318,7 +318,7 @@ export function CommitWorkspace({
     setLoadingStatus(true)
     setError(null)
     try {
-      const result = await gitStatus(folderPath)
+      const result = await gitStatus(folderPath, true)
       setEntries(result)
       const tracked = result.filter(
         (entry) => entry.status !== UNTRACKED_STATUS

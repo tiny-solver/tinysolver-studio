@@ -762,8 +762,14 @@ export async function gitSetRemoteUrl(
   return invoke("git_set_remote_url", { path, name, url })
 }
 
-export async function gitStatus(path: string): Promise<GitStatusEntry[]> {
-  return invoke("git_status", { path })
+export async function gitStatus(
+  path: string,
+  showAllUntracked?: boolean
+): Promise<GitStatusEntry[]> {
+  return invoke("git_status", {
+    path,
+    showAllUntracked: showAllUntracked ?? null,
+  })
 }
 
 export async function gitDiff(path: string, file?: string): Promise<string> {

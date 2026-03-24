@@ -1307,10 +1307,18 @@ pub async fn git_stash_show(
 }
 
 #[tauri::command]
-pub async fn git_status(path: String) -> Result<Vec<GitStatusEntry>, AppCommandError> {
+pub async fn git_status(
+    path: String,
+    show_all_untracked: Option<bool>,
+) -> Result<Vec<GitStatusEntry>, AppCommandError> {
+    let untracked_mode = if show_all_untracked.unwrap_or(false) {
+        "-uall"
+    } else {
+        "-unormal"
+    };
     let output = crate::process::tokio_command("git")
         .args(["-c", "core.quotePath=false"])
-        .args(["status", "--porcelain=v1", "-unormal"])
+        .args(["status", "--porcelain=v1", untracked_mode])
         .current_dir(&path)
         .output()
         .await
