@@ -49,6 +49,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import type { AgentType } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 const TOAST_DURATION_MS = 15000
 const WORKSPACE_PANEL_GROUP_ID = "workspace-panel-group"
@@ -61,8 +62,6 @@ const FOLDER_SHELL_RIGHT_PANEL_ID = "folder-shell-right-panel"
 const FOLDER_MAIN_GROUP_ID = "folder-main-group"
 const FOLDER_MAIN_WORKSPACE_PANEL_ID = "folder-main-workspace-panel"
 const FOLDER_MAIN_TERMINAL_PANEL_ID = "folder-main-terminal-panel"
-const CONVERSATION_ONLY_LAYOUT: [number, number] = [100, 0]
-const FILES_ONLY_LAYOUT: [number, number] = [0, 100]
 const DEFAULT_FUSION_LAYOUT: [number, number] = [56, 44]
 const MIN_CENTER_WIDTH_PX = 420
 const MIN_WORKSPACE_HEIGHT_PX = 220
@@ -145,15 +144,10 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (mode === "fusion") {
       applyLayout(fusionLayoutRef.current)
-      return
     }
-
-    if (mode === "conversation") {
-      applyLayout(CONVERSATION_ONLY_LAYOUT)
-      return
-    }
-
-    applyLayout(FILES_ONLY_LAYOUT)
+    // Non-fusion modes keep panels at their current sizes to preserve
+    // scroll positions. CSS overlay on the active section provides
+    // full-width display (see absolute inset-0 below).
   }, [applyLayout, mode])
 
   const handleLayout = useCallback(
@@ -179,7 +173,7 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div className="h-full min-h-0 overflow-hidden">
+    <div className="relative h-full min-h-0 overflow-hidden">
       <ResizablePanelGroup
         id={WORKSPACE_PANEL_GROUP_ID}
         ref={panelGroupRef}
@@ -193,7 +187,10 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
           minSize={mode === "fusion" ? 25 : 0}
         >
           <section
-            className="flex h-full min-h-0 flex-col overflow-hidden"
+            className={cn(
+              "flex h-full min-h-0 flex-col overflow-hidden",
+              mode === "conversation" && "absolute inset-0 z-30 bg-background"
+            )}
             onPointerDownCapture={markConversationActive}
             onFocusCapture={markConversationActive}
             aria-hidden={mode === "files"}
@@ -219,7 +216,10 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
           minSize={mode === "fusion" ? 20 : 0}
         >
           <section
-            className="flex h-full min-h-0 flex-col overflow-hidden"
+            className={cn(
+              "flex h-full min-h-0 flex-col overflow-hidden",
+              mode === "files" && "absolute inset-0 z-30 bg-background"
+            )}
             onPointerDownCapture={markFileActive}
             onFocusCapture={markFileActive}
             aria-hidden={mode === "conversation"}
