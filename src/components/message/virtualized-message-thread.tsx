@@ -74,7 +74,7 @@ export function VirtualizedMessageThread<T>({
           key={virtualItem.key}
           ref={virtualizer.measureElement}
           data-index={virtualItem.index}
-          className="absolute left-0 top-0 w-full"
+          className="absolute left-0 top-0 w-full bg-background"
           style={{
             transform: `translate3d(0, ${virtualItem.start}px, 0)`,
             willChange: "transform",

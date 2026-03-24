@@ -119,14 +119,20 @@ export const ToolHeader = ({
 
 export type ToolContentProps = ComponentProps<typeof CollapsibleContent>
 
-export const ToolContent = ({ className, ...props }: ToolContentProps) => (
+export const ToolContent = ({
+  className,
+  children,
+  ...props
+}: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
-      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
+      "tool-collapsible-content overflow-hidden text-popover-foreground outline-none",
       className
     )}
     {...props}
-  />
+  >
+    <div className="space-y-4 p-4">{children}</div>
+  </CollapsibleContent>
 )
 
 export type ToolInputProps = ComponentProps<"div"> & {
