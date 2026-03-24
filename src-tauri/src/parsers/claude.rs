@@ -863,11 +863,9 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
             let turn_model = msg.model.clone();
             i += 1;
 
-            // Absorb consecutive assistant msgs AND tool-result-only user msgs
-            while i < messages.len()
-                && (matches!(messages[i].role, MessageRole::Assistant)
-                    || is_tool_result_only(&messages[i]))
-            {
+            // Only absorb immediately following tool-result-only user msgs
+            // (stop at the next assistant message to keep turns small for virtualization)
+            while i < messages.len() && is_tool_result_only(&messages[i]) {
                 blocks.extend(messages[i].content.clone());
                 i += 1;
             }

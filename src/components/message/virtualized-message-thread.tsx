@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import type { ReactNode } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useStickToBottomContext } from "use-stick-to-bottom"
@@ -17,6 +17,7 @@ interface VirtualizedMessageThreadProps<T> {
   emptyState?: ReactNode
   estimateSize?: number
   overscan?: number
+  gap?: number
   className?: string
   contentClassName?: string
   contentProps?: Omit<MessageThreadContentProps, "children" | "className">
@@ -29,6 +30,7 @@ export function VirtualizedMessageThread<T>({
   emptyState,
   estimateSize = 160,
   overscan = 8,
+  gap = 16,
   className,
   contentClassName,
   contentProps,
@@ -45,12 +47,22 @@ export function VirtualizedMessageThread<T>({
     isScrollingResetDelay: 100,
     paddingStart: 16,
     paddingEnd: 16,
-    gap: 32,
+    gap,
     getItemKey: (index) => {
       const item = items[index]
       return item ? getItemKey(item, index) : index
     },
   })
+
+  // Adjust scroll position when items above the viewport are measured
+  // differently from their estimates — prevents blank gaps when scrolling up
+  useEffect(() => {
+    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+      item,
+      _delta,
+      instance
+    ) => item.start < (instance.scrollOffset ?? 0)
+  }, [virtualizer])
 
   const renderVirtualRow = useCallback(
     (virtualItem: ReturnType<typeof virtualizer.getVirtualItems>[number]) => {

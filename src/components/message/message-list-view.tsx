@@ -60,6 +60,8 @@ type ThreadRenderItem =
       kind: "turn"
       group: ResolvedMessageGroup
       phase: "persisted" | "optimistic" | "streaming"
+      showStats: boolean
+      isRoleTransition: boolean
     }
   | {
       key: string
@@ -69,9 +71,11 @@ type ThreadRenderItem =
 const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
   group,
   dimmed = false,
+  showStats = true,
 }: {
   group: ResolvedMessageGroup
   dimmed?: boolean
+  showStats?: boolean
 }) {
   return (
     <div className={dimmed ? "opacity-70" : undefined}>
@@ -86,7 +90,7 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
           <UserResourceLinks resources={group.resources} className="self-end" />
         ) : null}
       </Message>
-      {group.role === "assistant" && (
+      {showStats && group.role === "assistant" && (
         <TurnStats
           usage={group.usage}
           duration_ms={group.duration_ms}
@@ -214,8 +218,39 @@ export function MessageListView({
           model: msg.model,
         },
         phase,
+        showStats: false,
+        isRoleTransition: false,
       }
     })
+
+    // Compute showStats and isRoleTransition for each turn item
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx]
+      if (item.kind !== "turn") continue
+
+      // isRoleTransition: role differs from previous turn item
+      if (idx > 0) {
+        const prev = items[idx - 1]
+        if (
+          prev.kind === "turn" &&
+          prev.group.role !== item.group.role
+        ) {
+          item.isRoleTransition = true
+        }
+      }
+
+      // showStats: only on the last assistant turn before a non-assistant or end
+      if (item.group.role === "assistant") {
+        const next = items[idx + 1]
+        if (
+          !next ||
+          next.kind !== "turn" ||
+          next.group.role !== "assistant"
+        ) {
+          item.showStats = true
+        }
+      }
+    }
 
     const lastPhase = timelineTurns[timelineTurns.length - 1]?.phase ?? null
     if (
@@ -237,21 +272,29 @@ export function MessageListView({
     [historicalPlanEntries]
   )
 
-  const renderThreadItem = useCallback((item: ThreadRenderItem) => {
-    switch (item.kind) {
-      case "turn":
-        return (
-          <HistoricalMessageGroup
-            group={item.group}
-            dimmed={item.phase === "optimistic"}
-          />
-        )
-      case "typing":
-        return <PendingTypingIndicator />
-      default:
-        return null
-    }
-  }, [])
+  const renderThreadItem = useCallback(
+    (item: ThreadRenderItem) => {
+      switch (item.kind) {
+        case "turn": {
+          const pt = item.isRoleTransition ? 16 : 0
+          return (
+            <div style={pt > 0 ? { paddingTop: pt } : undefined}>
+              <HistoricalMessageGroup
+                group={item.group}
+                dimmed={item.phase === "optimistic"}
+                showStats={item.showStats}
+              />
+            </div>
+          )
+        }
+        case "typing":
+          return <PendingTypingIndicator />
+        default:
+          return null
+      }
+    },
+    []
+  )
 
   const emptyState = useMemo(
     () =>
@@ -304,7 +347,7 @@ export function MessageListView({
           getItemKey={(item) => item.key}
           renderItem={renderThreadItem}
           emptyState={emptyState}
-          estimateSize={180}
+          estimateSize={100}
           overscan={10}
         />
         <MessageThreadScrollButton />
