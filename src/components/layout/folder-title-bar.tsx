@@ -38,6 +38,7 @@ import { FolderNameDropdown } from "./folder-name-dropdown"
 import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
+import { cn } from "@/lib/utils"
 
 const MODE_TABS = [
   {
@@ -185,8 +186,43 @@ export function FolderTitleBar() {
       setBranch(null)
     }
   }, [folderPath])
-  const modeIndex = MODE_TABS.findIndex((item) => item.mode === mode)
-  const indicatorLeft = `${2 + modeIndex * 32}px`
+  const modeContainerRef = useRef<HTMLDivElement>(null)
+  const modeItemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [modeIndicator, setModeIndicator] = useState<{
+    left: number
+    width: number
+  } | null>(null)
+
+  useEffect(() => {
+    const container = modeContainerRef.current
+    if (!container) return
+
+    const measure = () => {
+      const btn = modeItemRefs.current.get(mode)
+      if (!btn || !container) {
+        setModeIndicator(null)
+        return
+      }
+      const containerRect = container.getBoundingClientRect()
+      const btnRect = btn.getBoundingClientRect()
+      setModeIndicator({
+        left: btnRect.left - containerRect.left,
+        width: btnRect.width,
+      })
+    }
+
+    const ro = new ResizeObserver(() => measure())
+    for (const btn of modeItemRefs.current.values()) {
+      ro.observe(btn)
+    }
+    ro.observe(container)
+    measure()
+
+    return () => {
+      ro.disconnect()
+    }
+  }, [mode])
+
   const handleModeKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>, nextMode: typeof mode) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -214,14 +250,20 @@ export function FolderTitleBar() {
         }
         center={
           <div
+            ref={modeContainerRef}
             role="tablist"
             aria-label={tModes("workspaceModesAria")}
-            className="relative flex h-[27px] items-center rounded-full border border-border/80 bg-background/80 p-0.5"
+            className="relative inline-flex h-[27px] items-center rounded-full border border-border/50 bg-muted/50 p-0.5"
           >
-            <div
-              className="pointer-events-none absolute bottom-[2px] top-[2px] w-8 rounded-full bg-accent transition-[left] duration-300 ease-out"
-              style={{ left: indicatorLeft }}
-            />
+            {modeIndicator && (
+              <div
+                className="pointer-events-none absolute top-0.5 bottom-0.5 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                style={{
+                  left: modeIndicator.left,
+                  width: modeIndicator.width,
+                }}
+              />
+            )}
             {MODE_TABS.map((item) => {
               const Icon = item.icon
               const isActive = mode === item.mode
@@ -229,17 +271,26 @@ export function FolderTitleBar() {
               return (
                 <div
                   key={item.mode}
+                  ref={(el) => {
+                    if (el) {
+                      modeItemRefs.current.set(item.mode, el)
+                    } else {
+                      modeItemRefs.current.delete(item.mode)
+                    }
+                  }}
                   role="tab"
                   tabIndex={0}
-                  className={`relative z-10 m-0 flex h-[23px] w-8 cursor-pointer select-none items-center justify-center rounded-full border-0 bg-transparent p-0 align-middle leading-none transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${
+                  className={cn(
+                    "relative z-10 m-0 flex h-[23px] cursor-pointer select-none items-center justify-center gap-1 rounded-full border-0 bg-transparent p-0 align-middle text-xs font-medium leading-none transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                    isActive ? "px-2.5" : "px-2",
                     isActive
                       ? "text-foreground"
-                      : "text-muted-foreground hover:text-foreground/80"
-                  }`}
+                      : "text-muted-foreground hover:text-foreground/70"
+                  )}
                   onClick={() => setMode(item.mode)}
                   onKeyDown={(event) => handleModeKeyDown(event, item.mode)}
                   onMouseDown={(event) => event.preventDefault()}
-                  title={title}
+                  title={!isActive ? title : undefined}
                   aria-label={title}
                   aria-selected={isActive}
                 >
@@ -247,6 +298,16 @@ export function FolderTitleBar() {
                     className="block h-3 w-3 shrink-0"
                     shapeRendering="geometricPrecision"
                   />
+                  <span
+                    className={cn(
+                      "overflow-hidden whitespace-nowrap transition-all duration-300",
+                      isActive
+                        ? "max-w-[60px] opacity-100"
+                        : "max-w-0 opacity-0"
+                    )}
+                  >
+                    {title}
+                  </span>
                 </div>
               )
             })}
