@@ -1445,7 +1445,8 @@
         "attachedResources": "Ressources jointes",
         "loading": "Chargement...",
         "error": "Erreur : {message}",
-        "emptyConversation": "Aucun message dans cette conversation."
+        "emptyConversation": "Aucun message dans cette conversation.",
+        "systemMessage": "Message système"
       },
       "liveTurnStats": {
         "thinking": "Réflexion...",

@@ -1445,7 +1445,8 @@
         "attachedResources": "Recursos adjuntos",
         "loading": "Cargando...",
         "error": "Error del chat: {message}",
-        "emptyConversation": "No hay mensajes en esta conversación."
+        "emptyConversation": "No hay mensajes en esta conversación.",
+        "systemMessage": "Mensaje del sistema"
       },
       "liveTurnStats": {
         "thinking": "Pensando...",

@@ -1445,7 +1445,8 @@
         "attachedResources": "الموارد المرفقة",
         "loading": "جارٍ التحميل...",
         "error": "خطأ: {message}",
-        "emptyConversation": "لا توجد رسائل في هذه المحادثة."
+        "emptyConversation": "لا توجد رسائل في هذه المحادثة.",
+        "systemMessage": "رسالة النظام"
       },
       "liveTurnStats": {
         "thinking": "جارٍ التفكير...",

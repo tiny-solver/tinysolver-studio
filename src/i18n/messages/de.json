@@ -1445,7 +1445,8 @@
         "attachedResources": "Angehängte Ressourcen",
         "loading": "Lädt...",
         "error": "Fehler: {message}",
-        "emptyConversation": "Keine Nachrichten in dieser Unterhaltung."
+        "emptyConversation": "Keine Nachrichten in dieser Unterhaltung.",
+        "systemMessage": "Systemnachricht"
       },
       "liveTurnStats": {
         "thinking": "Denkt nach...",

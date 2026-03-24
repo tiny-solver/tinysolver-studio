@@ -1445,7 +1445,8 @@
         "attachedResources": "附加資源",
         "loading": "載入中...",
         "error": "錯誤：{message}",
-        "emptyConversation": "目前會話暫無訊息。"
+        "emptyConversation": "目前會話暫無訊息。",
+        "systemMessage": "系統訊息"
       },
       "liveTurnStats": {
         "thinking": "思考中...",

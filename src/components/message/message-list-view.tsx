@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { ContentPartsRenderer } from "./content-parts-renderer"
 import {
@@ -20,7 +20,7 @@ import {
   MessageThreadScrollButton,
 } from "@/components/ai-elements/message-thread"
 import { Message, MessageContent } from "@/components/ai-elements/message"
-import { Loader2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Info, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import {
   buildPlanKey,
@@ -68,6 +68,41 @@ type ThreadRenderItem =
       kind: "typing"
     }
 
+const CollapsibleSystemMessage = memo(function CollapsibleSystemMessage({
+  group,
+}: {
+  group: ResolvedMessageGroup
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const t = useTranslations("Folder.chat.messageList")
+
+  return (
+    <div className="border rounded-md text-sm border-yellow-500/30 bg-yellow-500/5">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 w-full px-3 py-2.5 text-left hover:bg-yellow-500/10 transition-colors"
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-500" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-500" />
+        )}
+        <Info className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-500" />
+        <span className="font-medium text-yellow-700 dark:text-yellow-400">
+          {t("systemMessage")}
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-yellow-500/20">
+          <div className="text-sm text-muted-foreground mt-2.5 max-h-96 overflow-auto">
+            <ContentPartsRenderer parts={group.parts} role={group.role} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
 const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
   group,
   dimmed = false,
@@ -77,6 +112,10 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
   dimmed?: boolean
   showStats?: boolean
 }) {
+  if (group.role === "system") {
+    return <CollapsibleSystemMessage group={group} />
+  }
+
   return (
     <div className={dimmed ? "opacity-70" : undefined}>
       <Message from={group.role}>

@@ -1445,7 +1445,8 @@
         "attachedResources": "첨부된 리소스",
         "loading": "불러오는 중...",
         "error": "오류: {message}",
-        "emptyConversation": "이 대화에는 메시지가 없습니다."
+        "emptyConversation": "이 대화에는 메시지가 없습니다.",
+        "systemMessage": "시스템 메시지"
       },
       "liveTurnStats": {
         "thinking": "생각 중...",

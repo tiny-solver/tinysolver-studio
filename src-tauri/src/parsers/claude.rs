@@ -24,6 +24,8 @@ fn system_tag_regex() -> &'static Regex {
             r"|<command-args>.*?</command-args>",
             r"|<local-command-stdout>.*?</local-command-stdout>",
             r"|<user-prompt-submit-hook>.*?</user-prompt-submit-hook>",
+            r"|<task-notification>.*?</task-notification>",
+            r"|<fast_mode_info>.*?</fast_mode_info>",
         ))
         .unwrap()
     })
@@ -62,6 +64,21 @@ fn is_meta_message(value: &serde_json::Value) -> bool {
 /// Claude Code for local commands like `/context` or `/model`).
 /// These carry `model: "<synthetic>"` and all-zero usage, so they should be
 /// excluded from conversation turns and stats.
+const CONTEXT_CONTINUATION_PREFIX: &str =
+    "This session is being continued from a previous conversation";
+
+/// Detect Claude Code context continuation summary messages.
+/// These are injected as "user" type but are actually system context.
+fn is_context_continuation(content: &[ContentBlock]) -> bool {
+    content.iter().any(|block| {
+        if let ContentBlock::Text { text } = block {
+            text.starts_with(CONTEXT_CONTINUATION_PREFIX)
+        } else {
+            false
+        }
+    })
+}
+
 fn is_synthetic_assistant(value: &serde_json::Value) -> bool {
     value
         .get("message")
@@ -486,18 +503,24 @@ impl ClaudeParser {
                         .unwrap_or("")
                         .to_string();
 
-                    if title.is_none() {
-                        if let Some(first_text) = content.iter().find_map(|c| match c {
-                            ContentBlock::Text { text } => Some(text.clone()),
-                            _ => None,
-                        }) {
-                            title = Some(truncate_str(&first_text, 100));
+                    // Detect context continuation summary and treat as system message
+                    let role = if is_context_continuation(&content) {
+                        MessageRole::System
+                    } else {
+                        if title.is_none() {
+                            if let Some(first_text) = content.iter().find_map(|c| match c {
+                                ContentBlock::Text { text } => Some(text.clone()),
+                                _ => None,
+                            }) {
+                                title = Some(truncate_str(&first_text, 100));
+                            }
                         }
-                    }
+                        MessageRole::User
+                    };
 
                     messages.push(UnifiedMessage {
                         id: uuid,
-                        role: MessageRole::User,
+                        role,
                         content,
                         timestamp,
                         usage: None,

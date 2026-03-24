@@ -1445,7 +1445,8 @@
         "attachedResources": "附加资源",
         "loading": "加载中...",
         "error": "错误：{message}",
-        "emptyConversation": "当前会话暂无消息。"
+        "emptyConversation": "当前会话暂无消息。",
+        "systemMessage": "系统消息"
       },
       "liveTurnStats": {
         "thinking": "思考中...",

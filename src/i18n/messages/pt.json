@@ -1445,7 +1445,8 @@
         "attachedResources": "Recursos anexados",
         "loading": "Carregando...",
         "error": "Erro: {message}",
-        "emptyConversation": "Nenhuma mensagem nesta conversa."
+        "emptyConversation": "Nenhuma mensagem nesta conversa.",
+        "systemMessage": "Mensagem do sistema"
       },
       "liveTurnStats": {
         "thinking": "Pensando...",
