@@ -243,9 +243,7 @@ export function AgentSelector({
             <span
               className={cn(
                 "overflow-hidden whitespace-nowrap transition-all duration-300",
-                isSelected
-                  ? "max-w-[80px] opacity-100"
-                  : "max-w-0 opacity-0"
+                isSelected ? "max-w-[80px] opacity-100" : "max-w-0 opacity-0"
               )}
             >
               {AGENT_LABELS[agent.agent_type]}
