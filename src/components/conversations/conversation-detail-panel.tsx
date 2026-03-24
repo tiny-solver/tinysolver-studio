@@ -140,7 +140,7 @@ const ConversationTabView = memo(function ConversationTabView({
   const tWelcome = useTranslations("Folder.chat.welcomeInputPanel")
   const sharedT = useTranslations("Folder.chat.shared")
   const { folder, folderId, refreshConversations } = useFolderContext()
-  const { tabs, bindConversationTab, setTabRuntimeConversationId } =
+  const { tabs, bindConversationTab, setTabRuntimeConversationId, pinTab } =
     useTabContext()
   const { setSessionStats } = useSessionStats()
   const {
@@ -542,6 +542,12 @@ const ConversationTabView = memo(function ConversationTabView({
       setSendSignal((prev) => prev + 1)
       setSyncState(effectiveConversationId, "awaiting_persist")
       setHasSentMessage(true)
+
+      // Pin the tab if it was a temporary preview (single-click opened)
+      const currentTab = tabs.find((tab) => tab.id === tabId)
+      if (currentTab && !currentTab.isPinned) {
+        pinTab(tabId)
+      }
       lifecycleSend(draft, selectedModeIdArg)
 
       const persistedId = dbConvIdRef.current
@@ -617,12 +623,14 @@ const ConversationTabView = memo(function ConversationTabView({
       folderId,
       hasPersistedConversation,
       lifecycleSend,
+      pinTab,
       refreshConversations,
       selectedAgent,
       setExternalId,
       setPendingCleanup,
       setSyncState,
       sharedT,
+      tabs,
       tWelcome,
       tabId,
       trySaveExternalId,
