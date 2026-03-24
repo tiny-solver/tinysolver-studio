@@ -872,7 +872,10 @@
       "next": "下一个",
       "jumpToLine": "跳转到第 {line} 行",
       "noParsedDiffSections": "未解析到差异区块",
-      "loadingEditor": "编辑器加载中..."
+      "loadingEditor": "编辑器加载中...",
+      "imageZoomIn": "放大",
+      "imageZoomOut": "缩小",
+      "imageZoomReset": "重置缩放"
     },
     "branchDropdown": {
       "toasts": {

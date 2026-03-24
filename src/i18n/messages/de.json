@@ -872,7 +872,10 @@
       "next": "Weiter",
       "jumpToLine": "Zu Zeile {line} springen",
       "noParsedDiffSections": "Keine geparsten Diff-Abschnitte",
-      "loadingEditor": "Editor wird geladen..."
+      "loadingEditor": "Editor wird geladen...",
+      "imageZoomIn": "Vergrößern",
+      "imageZoomOut": "Verkleinern",
+      "imageZoomReset": "Zoom zurücksetzen"
     },
     "branchDropdown": {
       "toasts": {

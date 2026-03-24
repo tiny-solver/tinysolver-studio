@@ -18,6 +18,7 @@ import {
   gitIsTracked,
   gitShowDiff,
   gitShowFile,
+  readFileBase64,
   readFileForEdit,
   readFilePreview,
   saveFileContent,
@@ -125,6 +126,33 @@ function fileName(path: string): string {
 
 function isDirtyFileTab(tab: FileWorkspaceTab): boolean {
   return tab.kind === "file" && Boolean(tab.isDirty)
+}
+
+const IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "svg",
+  "webp",
+  "bmp",
+  "ico",
+])
+
+const IMAGE_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+}
+
+function isImageFile(path: string): boolean {
+  const ext = path.split(".").pop()?.toLowerCase() ?? ""
+  return IMAGE_EXTENSIONS.has(ext)
 }
 
 function loadingTab(
@@ -350,6 +378,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         setPendingFileReveal(null)
       }
       const tabId = `file:${path}`
+      const image = isImageFile(path)
       upsertLoadingTab(
         loadingTab(
           tabId,
@@ -357,9 +386,42 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
           fileName(path),
           path,
           path,
-          languageFromPath(path)
+          image ? "image" : languageFromPath(path)
         )
       )
+
+      if (image) {
+        try {
+          const absPath = `${folderPath}/${path}`
+          const ext = path.split(".").pop()?.toLowerCase() ?? ""
+          const mime = IMAGE_MIME[ext] ?? "image/png"
+          const b64 = await withTimeout(
+            readFileBase64(absPath),
+            15_000,
+            t("previewRequestTimedOut")
+          )
+          setFileTabs((prev) =>
+            prev.map((tab) =>
+              tab.id === tabId
+                ? {
+                    ...tab,
+                    content: `data:${mime};base64,${b64}`,
+                    readonly: true,
+                    loading: false,
+                    saveState: "idle",
+                    saveError: null,
+                  }
+                : tab
+            )
+          )
+        } catch (error) {
+          rejectTab(
+            tabId,
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+        return
+      }
 
       try {
         const [result, gitBaseContent] = await withTimeout(

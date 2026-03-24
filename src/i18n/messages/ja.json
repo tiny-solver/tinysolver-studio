@@ -872,7 +872,10 @@
       "next": "次",
       "jumpToLine": "{line} 行へ移動",
       "noParsedDiffSections": "解析済みの差分セクションがありません",
-      "loadingEditor": "エディターを読み込み中..."
+      "loadingEditor": "エディターを読み込み中...",
+      "imageZoomIn": "拡大",
+      "imageZoomOut": "縮小",
+      "imageZoomReset": "ズームをリセット"
     },
     "branchDropdown": {
       "toasts": {

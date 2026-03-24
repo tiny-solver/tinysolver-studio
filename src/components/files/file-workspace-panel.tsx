@@ -7,6 +7,7 @@ import type { editor as MonacoEditorNs } from "monaco-editor"
 import { useTranslations } from "next-intl"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
+import { ImagePreview } from "@/components/files/image-preview"
 import { DiffViewer } from "@/components/diff/diff-viewer"
 import { UnifiedDiffPreview } from "@/components/diff/unified-diff-preview"
 import {
@@ -1334,6 +1335,11 @@ export function FileWorkspacePanel() {
         )}
       </div>
     )
+  }
+
+  // Image preview
+  if (isFileTab && activeFileTab && activeFileTab.language === "image") {
+    return <ImagePreview key={activeFileTab.id} tab={activeFileTab} />
   }
 
   if (isPreviewMode && activeFileTab) {

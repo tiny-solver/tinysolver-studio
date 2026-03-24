@@ -872,7 +872,10 @@
       "next": "التالي",
       "jumpToLine": "الانتقال إلى السطر {line}",
       "noParsedDiffSections": "لا توجد أقسام diff محللة",
-      "loadingEditor": "جارٍ تحميل المحرر..."
+      "loadingEditor": "جارٍ تحميل المحرر...",
+      "imageZoomIn": "تكبير",
+      "imageZoomOut": "تصغير",
+      "imageZoomReset": "إعادة تعيين التكبير"
     },
     "branchDropdown": {
       "toasts": {

@@ -872,7 +872,10 @@
       "next": "다음",
       "jumpToLine": "{line}행으로 이동",
       "noParsedDiffSections": "파싱된 diff 섹션이 없습니다",
-      "loadingEditor": "에디터 로딩 중..."
+      "loadingEditor": "에디터 로딩 중...",
+      "imageZoomIn": "확대",
+      "imageZoomOut": "축소",
+      "imageZoomReset": "확대/축소 초기화"
     },
     "branchDropdown": {
       "toasts": {
