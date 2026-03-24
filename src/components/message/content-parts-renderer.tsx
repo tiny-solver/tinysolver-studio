@@ -2012,36 +2012,84 @@ function stripMarkdownCodeFence(text: string): string {
   return result
 }
 
-function stripCliExecutionEnvelope(text: string): string {
+/** Regex matching metadata lines in CLI execution output envelopes. */
+const CLI_META_LINE_RE =
+  /^(exit code\s*[:=]|wall time\s*[:=]|chunk id\s*[:=]|original token count\s*[:=]|total output lines\s*[:=]|process exited with code\s)/i
+
+/**
+ * Parse a CLI execution envelope, stripping all metadata and the "Output:"
+ * separator, returning only the actual command output and the wall time.
+ *
+ * Handles formats like:
+ *   Chunk ID: 065b2b
+ *   Wall time: 0.05s
+ *   Process exited with code 0
+ *   Original token count: 27006
+ *   Output:
+ *   Total output lines: 1134
+ *   <actual output here>
+ */
+function parseCliExecutionEnvelope(text: string): {
+  output: string
+  wallTime: string | null
+} {
   const lines = text.split("\n")
+  let wallTime: string | null = null
+
+  // Look for "Output:" separator and extract wall time from header
+  let outputSepIndex = -1
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    const wtMatch = trimmed.match(/^wall time\s*:\s*(.+)/i)
+    if (wtMatch) wallTime = wtMatch[1].trim()
+    if (/^output:\s*$/i.test(trimmed)) {
+      outputSepIndex = i
+      break
+    }
+    // Stop scanning if we hit a non-metadata, non-blank line (actual content)
+    if (!CLI_META_LINE_RE.test(trimmed) && trimmed.length > 0) break
+  }
+
+  // If "Output:" separator found, skip everything before it plus any
+  // remaining metadata/blank lines after it
+  if (outputSepIndex >= 0) {
+    let start = outputSepIndex + 1
+    while (start < lines.length) {
+      const trimmed = lines[start].trim()
+      if (CLI_META_LINE_RE.test(trimmed) || trimmed.length === 0) {
+        start++
+        continue
+      }
+      break
+    }
+    return { output: lines.slice(start).join("\n"), wallTime }
+  }
+
+  // No "Output:" separator — strip leading metadata lines
   let index = 0
   let sawMeta = false
-
   while (index < lines.length) {
     const trimmed = lines[index].trim()
-    if (/^exit code:\s*/i.test(trimmed) || /^wall time:\s*/i.test(trimmed)) {
+    if (CLI_META_LINE_RE.test(trimmed)) {
       sawMeta = true
-      index += 1
+      if (!wallTime) {
+        const wtMatch = trimmed.match(/^wall time\s*:\s*(.+)/i)
+        if (wtMatch) wallTime = wtMatch[1].trim()
+      }
+      index++
       continue
     }
     if (sawMeta && trimmed.length === 0) {
-      index += 1
+      index++
       continue
     }
     break
   }
 
-  if (!sawMeta) return text
+  if (!sawMeta) return { output: text, wallTime: null }
 
-  if (index < lines.length && /^output:\s*$/i.test(lines[index].trim())) {
-    index += 1
-  }
-
-  while (index < lines.length && lines[index].trim().length === 0) {
-    index += 1
-  }
-
-  return lines.slice(index).join("\n")
+  while (index < lines.length && lines[index].trim().length === 0) index++
+  return { output: lines.slice(index).join("\n"), wallTime }
 }
 
 // ── Part components ───────────────────────────────────────────────────
@@ -2123,26 +2171,51 @@ const ToolCallPart = memo(function ToolCallPart({
     }
     return null
   }, [toolNameLower, part.input, part.output, part.errorText])
+  const wallTime = useMemo(() => {
+    const source = part.output ?? part.errorText
+    if (!source) return null
+    const normalized = commandOutputFromJsonString(source) ?? source
+    const match = normalized.match(/^wall time\s*:\s*(.+)/im)
+    if (!match) return null
+    const raw = match[1].trim()
+    // Parse "0.0519 seconds" → "52ms", "1.234 seconds" → "1.2s"
+    const numMatch = raw.match(/^([\d.]+)\s*s/)
+    if (!numMatch) return raw
+    const sec = parseFloat(numMatch[1])
+    if (Number.isNaN(sec)) return raw
+    if (sec < 0.001) return "<1ms"
+    if (sec < 1) return `${Math.round(sec * 1000)}ms`
+    if (sec < 60) return `${sec.toFixed(1)}s`
+    return `${(sec / 60).toFixed(1)}m`
+  }, [part.output, part.errorText])
   const titleSuffix = useMemo(() => {
-    if (!lineChangeStats) return null
+    const hasStats =
+      lineChangeStats &&
+      (lineChangeStats.additions > 0 || lineChangeStats.deletions > 0)
+    if (!hasStats && !wallTime) return null
 
     return (
       <span className="flex items-center gap-1.5 text-xs font-medium">
-        {lineChangeStats.additions > 0 && (
+        {hasStats && lineChangeStats.additions > 0 && (
           <span className="inline-flex items-center gap-0.5 text-green-600 dark:text-green-400">
             <PlusIcon className="size-3" />
             {lineChangeStats.additions}
           </span>
         )}
-        {lineChangeStats.deletions > 0 && (
+        {hasStats && lineChangeStats.deletions > 0 && (
           <span className="inline-flex items-center gap-0.5 text-red-600 dark:text-red-400">
             <MinusIcon className="size-3" />
             {lineChangeStats.deletions}
           </span>
         )}
+        {wallTime && (
+          <span className="text-muted-foreground/60 font-normal">
+            {wallTime}
+          </span>
+        )}
       </span>
     )
-  }, [lineChangeStats])
+  }, [lineChangeStats, wallTime])
 
   const icon = useMemo(
     () => getToolIcon(normalizedToolName, part.input),
@@ -2157,9 +2230,7 @@ const ToolCallPart = memo(function ToolCallPart({
     )
   }, [isCommandTool, part.input, part.output, part.errorText])
   const commandOutput = useMemo(() => {
-    if (!isCommandLikeTool) {
-      return null
-    }
+    if (!isCommandLikeTool) return null
     const source =
       typeof part.output === "string"
         ? part.output
@@ -2168,7 +2239,8 @@ const ToolCallPart = memo(function ToolCallPart({
           : null
     if (!source) return null
     const normalized = commandOutputFromJsonString(source) ?? source
-    return stripMarkdownCodeFence(stripCliExecutionEnvelope(normalized))
+    const envelope = parseCliExecutionEnvelope(normalized)
+    return stripMarkdownCodeFence(envelope.output)
   }, [isCommandLikeTool, part.output, part.errorText])
   const hasLiveOutput =
     isRunning && isCommandTool && typeof commandOutput === "string"

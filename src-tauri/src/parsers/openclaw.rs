@@ -650,7 +650,8 @@ impl OpenClawParser {
 
         let folder_path = cwd.clone();
         let folder_name = folder_path.as_ref().map(|p| folder_name_from_path(p));
-        let turns = group_into_turns(messages);
+        let mut turns = group_into_turns(messages);
+        super::relocate_orphaned_tool_results(&mut turns);
 
         let context_window_used_tokens = latest_turn_total_usage_tokens(&turns);
         let context_window_max_tokens = session_meta

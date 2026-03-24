@@ -4,12 +4,13 @@ pub mod gemini;
 pub mod openclaw;
 pub mod opencode;
 
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use regex::Regex;
 
 use crate::models::{
-    ConversationDetail, ConversationSummary, MessageTurn, SessionStats, TurnUsage,
+    ContentBlock, ConversationDetail, ConversationSummary, MessageTurn, SessionStats, TurnUsage,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -204,6 +205,91 @@ pub fn merge_context_window_stats(
             context_window_usage_percent: usage_percent,
         }),
     }
+}
+
+/// Relocate orphaned tool_result blocks to the turn that contains their matching tool_use.
+///
+/// After `group_into_turns` splits assistant rounds, async tool execution can cause
+/// a tool_result to land in a later turn than its corresponding tool_use.
+/// This post-processing step moves such orphaned results back.
+pub fn relocate_orphaned_tool_results(turns: &mut Vec<MessageTurn>) {
+    // Build map: tool_use_id → turn index
+    let mut tool_use_turn: HashMap<String, usize> = HashMap::new();
+    for (idx, turn) in turns.iter().enumerate() {
+        for block in &turn.blocks {
+            if let ContentBlock::ToolUse {
+                tool_use_id: Some(ref id),
+                ..
+            } = block
+            {
+                tool_use_turn.insert(id.clone(), idx);
+            }
+        }
+    }
+
+    if tool_use_turn.is_empty() {
+        return;
+    }
+
+    // Collect (source_turn, target_turn, block) for orphaned results
+    let mut relocations: Vec<(usize, usize, ContentBlock)> = Vec::new();
+    for (turn_idx, turn) in turns.iter().enumerate() {
+        for block in &turn.blocks {
+            if let ContentBlock::ToolResult {
+                tool_use_id: Some(ref id),
+                ..
+            } = block
+            {
+                if let Some(&target) = tool_use_turn.get(id) {
+                    if target != turn_idx {
+                        relocations.push((turn_idx, target, block.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    if relocations.is_empty() {
+        return;
+    }
+
+    // Build set of (turn_idx, tool_use_id) to remove
+    let remove_set: HashMap<usize, Vec<String>> = {
+        let mut map: HashMap<usize, Vec<String>> = HashMap::new();
+        for (from, _, block) in &relocations {
+            if let ContentBlock::ToolResult {
+                tool_use_id: Some(ref id),
+                ..
+            } = block
+            {
+                map.entry(*from).or_default().push(id.clone());
+            }
+        }
+        map
+    };
+
+    // Remove from source turns
+    for (&turn_idx, ids) in &remove_set {
+        turns[turn_idx].blocks.retain(|block| {
+            if let ContentBlock::ToolResult {
+                tool_use_id: Some(ref id),
+                ..
+            } = block
+            {
+                !ids.contains(id)
+            } else {
+                true
+            }
+        });
+    }
+
+    // Append to target turns
+    for (_, target, block) in relocations {
+        turns[target].blocks.push(block);
+    }
+
+    // Remove turns that became empty after relocation
+    turns.retain(|turn| !turn.blocks.is_empty());
 }
 
 /// Extract the last path component as the folder name.

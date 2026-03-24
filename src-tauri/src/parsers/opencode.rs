@@ -187,7 +187,8 @@ impl OpenCodeParser {
             .ok_or_else(|| ParseError::ConversationNotFound(conversation_id.to_string()))?;
 
         let messages = self.load_sqlite_messages(&conn, conversation_id).await?;
-        let turns = group_into_turns(messages);
+        let mut turns = group_into_turns(messages);
+        super::relocate_orphaned_tool_results(&mut turns);
         let context_window_used_tokens = super::latest_turn_total_usage_tokens(&turns);
         let context_window_max_tokens =
             super::infer_context_window_max_tokens(summary.model.as_deref());

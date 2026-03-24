@@ -231,10 +231,7 @@ export function MessageListView({
       // isRoleTransition: role differs from previous turn item
       if (idx > 0) {
         const prev = items[idx - 1]
-        if (
-          prev.kind === "turn" &&
-          prev.group.role !== item.group.role
-        ) {
+        if (prev.kind === "turn" && prev.group.role !== item.group.role) {
           item.isRoleTransition = true
         }
       }
@@ -242,11 +239,7 @@ export function MessageListView({
       // showStats: only on the last assistant turn before a non-assistant or end
       if (item.group.role === "assistant") {
         const next = items[idx + 1]
-        if (
-          !next ||
-          next.kind !== "turn" ||
-          next.group.role !== "assistant"
-        ) {
+        if (!next || next.kind !== "turn" || next.group.role !== "assistant") {
           item.showStats = true
         }
       }
@@ -272,29 +265,26 @@ export function MessageListView({
     [historicalPlanEntries]
   )
 
-  const renderThreadItem = useCallback(
-    (item: ThreadRenderItem) => {
-      switch (item.kind) {
-        case "turn": {
-          const pt = item.isRoleTransition ? 16 : 0
-          return (
-            <div style={pt > 0 ? { paddingTop: pt } : undefined}>
-              <HistoricalMessageGroup
-                group={item.group}
-                dimmed={item.phase === "optimistic"}
-                showStats={item.showStats}
-              />
-            </div>
-          )
-        }
-        case "typing":
-          return <PendingTypingIndicator />
-        default:
-          return null
+  const renderThreadItem = useCallback((item: ThreadRenderItem) => {
+    switch (item.kind) {
+      case "turn": {
+        const pt = item.isRoleTransition ? 16 : 0
+        return (
+          <div style={pt > 0 ? { paddingTop: pt } : undefined}>
+            <HistoricalMessageGroup
+              group={item.group}
+              dimmed={item.phase === "optimistic"}
+              showStats={item.showStats}
+            />
+          </div>
+        )
       }
-    },
-    []
-  )
+      case "typing":
+        return <PendingTypingIndicator />
+      default:
+        return null
+    }
+  }, [])
 
   const emptyState = useMemo(
     () =>

@@ -554,7 +554,8 @@ impl GeminiParser {
             }
         }
 
-        let turns = group_into_turns(messages);
+        let mut turns = group_into_turns(messages);
+        super::relocate_orphaned_tool_results(&mut turns);
         summary.message_count = turns.len() as u32;
         summary.id = conversation_id.to_string();
         let context_window_used_tokens = super::latest_turn_total_usage_tokens(&turns);
