@@ -2379,7 +2379,7 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
   role,
 }: ContentPartsRendererProps) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {parts.map((part, i) => {
         if (part.type === "text") {
           return (

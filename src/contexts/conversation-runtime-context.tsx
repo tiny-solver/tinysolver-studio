@@ -161,26 +161,41 @@ function formatLivePlanEntries(
   return `Plan updated:\n${lines.join("\n")}`
 }
 
-function buildStreamingTurnFromLiveMessage(
+function buildStreamingTurnsFromLiveMessage(
   conversationId: number,
   liveMessage: LiveMessage
-): MessageTurn | null {
-  const blocks: MessageTurn["blocks"] = []
+): MessageTurn[] {
+  // Split streaming content into multiple turns matching the historical
+  // pattern: each "round" (text/thinking + tool calls + tool results) is a
+  // separate turn. A new turn starts when a text/thinking/plan block appears
+  // after completed tool calls in the current group.
+  const groups: MessageTurn["blocks"][] = [[]]
+  let currentGroupHasCompletedTool = false
 
   for (const block of liveMessage.content) {
+    const isContentBlock =
+      block.type === "text" || block.type === "thinking" || block.type === "plan"
+
+    if (isContentBlock && currentGroupHasCompletedTool) {
+      groups.push([])
+      currentGroupHasCompletedTool = false
+    }
+
+    const currentBlocks = groups[groups.length - 1]
+
     switch (block.type) {
       case "text":
         if (block.text.length > 0) {
-          blocks.push({ type: "text", text: block.text })
+          currentBlocks.push({ type: "text", text: block.text })
         }
         break
       case "thinking":
         if (block.text.length > 0) {
-          blocks.push({ type: "thinking", text: block.text })
+          currentBlocks.push({ type: "thinking", text: block.text })
         }
         break
       case "plan": {
-        blocks.push({
+        currentBlocks.push({
           type: "thinking",
           text: formatLivePlanEntries(block.entries),
         })
@@ -192,7 +207,7 @@ function buildStreamingTurnFromLiveMessage(
           kind: block.info.kind,
           rawInput: block.info.raw_input,
         })
-        blocks.push({
+        currentBlocks.push({
           type: "tool_use",
           tool_use_id: block.info.tool_call_id,
           tool_name: toolName,
@@ -201,26 +216,31 @@ function buildStreamingTurnFromLiveMessage(
         const isFinalState =
           block.info.status === "completed" || block.info.status === "failed"
         if (isFinalState) {
-          blocks.push({
+          currentBlocks.push({
             type: "tool_result",
             tool_use_id: block.info.tool_call_id,
             output_preview: block.info.raw_output ?? block.info.content,
             is_error: block.info.status === "failed",
           })
+          currentGroupHasCompletedTool = true
         }
         break
       }
     }
   }
 
-  if (blocks.length === 0) return null
-
-  return {
-    id: `live-${conversationId}-${liveMessage.id}`,
-    role: "assistant",
-    blocks,
-    timestamp: new Date(liveMessage.startedAt).toISOString(),
-  }
+  const timestamp = new Date(liveMessage.startedAt).toISOString()
+  return groups
+    .filter((blocks) => blocks.length > 0)
+    .map((blocks, i) => ({
+      id:
+        i === 0
+          ? `live-${conversationId}-${liveMessage.id}`
+          : `live-${conversationId}-${liveMessage.id}-${i}`,
+      role: "assistant" as const,
+      blocks,
+      timestamp,
+    }))
 }
 
 function upsertExternalIdIndex(
@@ -315,17 +335,17 @@ function reducer(
       const current = state.byConversationId.get(action.conversationId)
       if (!current) return state
 
-      // Convert liveMessage to a completed MessageTurn
-      const streamingTurn = current.liveMessage
-        ? buildStreamingTurnFromLiveMessage(
+      // Convert liveMessage to completed MessageTurns (split into rounds)
+      const streamingTurns = current.liveMessage
+        ? buildStreamingTurnsFromLiveMessage(
             current.conversationId,
             current.liveMessage
           )
-        : null
+        : []
 
-      // Promote: optimisticTurns + streamingTurn → localTurns
+      // Promote: optimisticTurns + streamingTurns → localTurns
       const promoted = [...current.localTurns, ...current.optimisticTurns]
-      if (streamingTurn) promoted.push(streamingTurn)
+      promoted.push(...streamingTurns)
 
       return updateSessionInState(state, action.conversationId, () => ({
         ...current,
@@ -609,18 +629,18 @@ export function ConversationRuntimeProvider({
           phase: "optimistic",
         }))
 
-      // Phase 4: Streaming turn (live agent response)
+      // Phase 4: Streaming turns (live agent response, split into rounds)
       const streamingMessage = session.liveMessage
-      const streamingTurn = streamingMessage
-        ? buildStreamingTurnFromLiveMessage(conversationId, streamingMessage)
-        : null
+      const streamingTurns = streamingMessage
+        ? buildStreamingTurnsFromLiveMessage(conversationId, streamingMessage)
+        : []
 
       const result = [...persisted, ...local, ...optimistic]
 
-      if (streamingTurn) {
+      for (const [i, turn] of streamingTurns.entries()) {
         result.push({
-          key: `streaming-${conversationId}-${streamingMessage?.id ?? "unknown"}`,
-          turn: streamingTurn,
+          key: `streaming-${conversationId}-${streamingMessage?.id ?? "unknown"}-${i}`,
+          turn,
           phase: "streaming",
         })
       }
