@@ -174,7 +174,9 @@ function buildStreamingTurnsFromLiveMessage(
 
   for (const block of liveMessage.content) {
     const isContentBlock =
-      block.type === "text" || block.type === "thinking" || block.type === "plan"
+      block.type === "text" ||
+      block.type === "thinking" ||
+      block.type === "plan"
 
     if (isContentBlock && currentGroupHasCompletedTool) {
       groups.push([])

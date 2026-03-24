@@ -39,12 +39,13 @@ import {
   extractUserResourcesFromDraft,
   getPromptDraftDisplayText,
 } from "@/lib/prompt-draft"
-import type {
-  AcpEvent,
-  AgentType,
-  ContentBlock,
-  MessageTurn,
-  PromptDraft,
+import {
+  AGENT_LABELS,
+  type AcpEvent,
+  type AgentType,
+  type ContentBlock,
+  type MessageTurn,
+  type PromptDraft,
 } from "@/lib/types"
 import {
   buildConversationDraftStorageKey,
@@ -836,6 +837,7 @@ const ConversationTabView = memo(function ConversationTabView({
       status={connStatus}
       promptCapabilities={conn.promptCapabilities}
       defaultPath={workingDirForConnection}
+      agentName={AGENT_LABELS[selectedAgent]}
       error={conn.error}
       pendingPermission={conn.pendingPermission}
       pendingQuestion={conn.pendingQuestion}
@@ -910,6 +912,7 @@ const ConversationTabView = memo(function ConversationTabView({
               status={connStatus}
               promptCapabilities={conn.promptCapabilities}
               defaultPath={workingDirForConnection}
+              agentName={AGENT_LABELS[selectedAgent]}
               onFocus={handleFocus}
               onSend={handleSend}
               onCancel={handleCancel}

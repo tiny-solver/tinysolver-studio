@@ -1362,7 +1362,7 @@
       },
       "chatInput": {
         "connecting": "連線中...",
-        "agentResponding": "Agent 正在回應...",
+        "agentResponding": "{agent} 正在回應...",
         "sendMessage": "傳送訊息..."
       },
       "messageInput": {
@@ -1395,7 +1395,7 @@
         "openAgentsSettings": "開啟 Agents 設定"
       },
       "agentPlanOverlay": {
-        "title": "Agent 計畫",
+        "title": "計畫任務",
         "collapsePlanAria": "摺疊計畫",
         "collapsedSummary": "計畫 {completed}/{total}",
         "status": {

@@ -1362,7 +1362,7 @@
       },
       "chatInput": {
         "connecting": "연결 중...",
-        "agentResponding": "에이전트가 응답 중...",
+        "agentResponding": "{agent} 응답 중...",
         "sendMessage": "메시지 보내기..."
       },
       "messageInput": {

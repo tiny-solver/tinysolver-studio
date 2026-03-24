@@ -17,6 +17,7 @@ interface ChatInputProps {
   status: ConnectionStatus | null
   promptCapabilities: PromptCapabilitiesInfo
   defaultPath?: string
+  agentName?: string
   onFocus?: () => void
   onSend: (draft: PromptDraft, modeId?: string | null) => void
   onCancel: () => void
@@ -48,6 +49,7 @@ export function ChatInput({
   status,
   promptCapabilities,
   defaultPath,
+  agentName,
   onFocus,
   onSend,
   onCancel,
@@ -123,7 +125,7 @@ export function ChatInput({
           isConnecting
             ? t("connecting")
             : isPrompting
-              ? t("agentResponding")
+              ? t("agentResponding", { agent: agentName ?? "Agent" })
               : t("sendMessage")
         }
         className="min-h-28 max-h-60"

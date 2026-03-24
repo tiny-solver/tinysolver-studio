@@ -1362,7 +1362,7 @@
       },
       "chatInput": {
         "connecting": "连接中...",
-        "agentResponding": "Agent 正在响应...",
+        "agentResponding": "{agent} 正在响应...",
         "sendMessage": "发送消息..."
       },
       "messageInput": {
@@ -1395,7 +1395,7 @@
         "openAgentsSettings": "打开 Agents 设置"
       },
       "agentPlanOverlay": {
-        "title": "Agent 计划",
+        "title": "计划任务",
         "collapsePlanAria": "折叠计划",
         "collapsedSummary": "计划 {completed}/{total}",
         "status": {

@@ -1362,7 +1362,7 @@
       },
       "chatInput": {
         "connecting": "接続中...",
-        "agentResponding": "エージェントが応答中...",
+        "agentResponding": "{agent} が応答中...",
         "sendMessage": "メッセージを送信..."
       },
       "messageInput": {

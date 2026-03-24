@@ -1362,7 +1362,7 @@
       },
       "chatInput": {
         "connecting": "Conectando...",
-        "agentResponding": "El agente está respondiendo...",
+        "agentResponding": "{agent} está respondiendo...",
         "sendMessage": "Enviar un mensaje..."
       },
       "messageInput": {

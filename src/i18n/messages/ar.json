@@ -1362,7 +1362,7 @@
       },
       "chatInput": {
         "connecting": "جارٍ الاتصال...",
-        "agentResponding": "الوكيل يرد...",
+        "agentResponding": "{agent} يرد...",
         "sendMessage": "أرسل رسالة..."
       },
       "messageInput": {

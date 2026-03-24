@@ -20,6 +20,7 @@ interface ConversationShellProps {
   status: ConnectionStatus | null
   promptCapabilities: PromptCapabilitiesInfo
   defaultPath?: string
+  agentName?: string
   error: string | null
   pendingPermission: PendingPermission | null
   pendingQuestion: PendingQuestion | null
@@ -58,6 +59,7 @@ export function ConversationShell({
   status,
   promptCapabilities,
   defaultPath,
+  agentName,
   error,
   pendingPermission,
   pendingQuestion,
@@ -107,6 +109,7 @@ export function ConversationShell({
           status={status}
           promptCapabilities={promptCapabilities}
           defaultPath={defaultPath}
+          agentName={agentName}
           onFocus={onFocus}
           onSend={onSend}
           onCancel={onCancel}
