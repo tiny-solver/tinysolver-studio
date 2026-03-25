@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -9,7 +9,6 @@ use crate::models::FolderHistoryEntry;
 
 pub struct SettingsWindowState {
     owner_window_label: Mutex<Option<String>>,
-    disabled_windows: Mutex<HashSet<String>>,
 }
 
 pub struct CommitWindowState {
@@ -57,7 +56,6 @@ impl SettingsWindowState {
     pub fn new() -> Self {
         Self {
             owner_window_label: Mutex::new(None),
-            disabled_windows: Mutex::new(HashSet::new()),
         }
     }
 
@@ -72,19 +70,6 @@ impl SettingsWindowState {
             .lock()
             .ok()
             .and_then(|mut owner| owner.take())
-    }
-
-    fn set_disabled_windows(&self, labels: HashSet<String>) {
-        if let Ok(mut disabled) = self.disabled_windows.lock() {
-            *disabled = labels;
-        }
-    }
-
-    fn take_disabled_windows(&self) -> HashSet<String> {
-        self.disabled_windows
-            .lock()
-            .map(|mut disabled| std::mem::take(&mut *disabled))
-            .unwrap_or_default()
     }
 }
 
@@ -339,25 +324,13 @@ pub async fn open_settings_window(
         .title("Settings")
         .inner_size(1080.0, 700.0)
         .min_inner_size(1080.0, 600.0)
-        .always_on_top(true)
         .center();
     let settings_window = apply_platform_window_style(builder)
         .build()
         .map_err(|e| AppCommandError::window("Failed to open settings window", e.to_string()))?;
     ensure_windows_undecorated(&settings_window);
 
-    let mut disabled = HashSet::new();
-    for (label, webview) in app.webview_windows() {
-        if label != "settings" {
-            webview.set_enabled(false).map_err(|e| {
-                AppCommandError::window("Failed to update window enabled state", e.to_string())
-            })?;
-            disabled.insert(label);
-        }
-    }
-
     state.set_owner(owner_label);
-    state.set_disabled_windows(disabled);
     settings_window
         .set_focus()
         .map_err(|e| AppCommandError::window("Failed to focus settings window", e.to_string()))?;
@@ -365,12 +338,6 @@ pub async fn open_settings_window(
 }
 
 pub fn restore_windows_after_settings(app: &AppHandle, state: &SettingsWindowState) {
-    for label in state.take_disabled_windows() {
-        if let Some(window) = app.get_webview_window(&label) {
-            let _ = window.set_enabled(true);
-        }
-    }
-
     if let Some(owner_label) = state.take_owner() {
         if let Some(window) = app.get_webview_window(&owner_label) {
             let _ = window.set_focus();
