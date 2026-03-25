@@ -11,6 +11,7 @@ import {
 } from "react"
 import { useTranslations } from "next-intl"
 import { subscribe } from "@/lib/platform"
+import { randomUUID } from "@/lib/utils"
 import { inferLiveToolName } from "@/lib/tool-call-normalization"
 import {
   acpConnect,
@@ -536,7 +537,7 @@ function connectionsReducer(
       const updated = { ...conn, status: action.status }
       if (action.status === "prompting") {
         updated.liveMessage = {
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           role: "assistant",
           content: [],
           startedAt: Date.now(),

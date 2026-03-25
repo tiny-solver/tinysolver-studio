@@ -35,6 +35,7 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         .route("/update_conversation_status", post(handlers::conversations::update_conversation_status))
         .route("/update_conversation_title", post(handlers::conversations::update_conversation_title))
         .route("/delete_conversation", post(handlers::conversations::delete_conversation))
+        .route("/update_conversation_external_id", post(handlers::conversations::update_conversation_external_id))
         // Folders
         .route("/load_folder_history", post(handlers::folders::load_folder_history))
         .route("/get_folder", post(handlers::folders::get_folder))
@@ -42,6 +43,35 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         // System settings
         .route("/get_system_proxy_settings", post(handlers::system_settings::get_system_proxy_settings))
         .route("/get_system_language_settings", post(handlers::system_settings::get_system_language_settings))
+        // Folders (extended)
+        .route("/save_folder_opened_conversations", post(handlers::folders::save_folder_opened_conversations))
+        .route("/get_git_branch", post(handlers::folders::get_git_branch))
+        .route("/get_file_tree", post(handlers::folders::get_file_tree))
+        .route("/start_file_tree_watch", post(handlers::folders::start_file_tree_watch))
+        .route("/stop_file_tree_watch", post(handlers::folders::stop_file_tree_watch))
+        .route("/open_settings_window", post(handlers::folders::open_settings_window))
+        // Version control
+        .route("/git_log", post(handlers::version_control::git_log))
+        // Folder commands
+        .route("/list_folder_commands", post(handlers::folder_commands::list_folder_commands))
+        // Git operations
+        .route("/git_status", post(handlers::folders::git_status))
+        .route("/git_list_all_branches", post(handlers::folders::git_list_all_branches))
+        .route("/git_commit_branches", post(handlers::folders::git_commit_branches))
+        .route("/git_show_file", post(handlers::folders::git_show_file))
+        .route("/git_diff", post(handlers::folders::git_diff))
+        .route("/git_list_remotes", post(handlers::folders::git_list_remotes))
+        .route("/open_commit_window", post(handlers::folders::open_commit_window))
+        // File operations
+        .route("/read_file_preview", post(handlers::folders::read_file_preview))
+        // ACP
+        .route("/acp_get_agent_status", post(handlers::acp::acp_get_agent_status))
+        .route("/acp_list_agents", post(handlers::acp::acp_list_agents))
+        .route("/acp_connect", post(handlers::acp::acp_connect))
+        .route("/acp_disconnect", post(handlers::acp::acp_disconnect))
+        .route("/acp_prompt", post(handlers::acp::acp_prompt))
+        // Terminal
+        .route("/terminal_spawn", post(handlers::terminal::terminal_spawn))
         // Catch-all: return proper JSON 404 for unimplemented API endpoints
         .fallback(api_not_found)
         // Auth middleware for API routes

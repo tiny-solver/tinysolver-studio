@@ -262,3 +262,21 @@ pub async fn delete_conversation(
         .map_err(AppCommandError::from)?;
     Ok(Json(()))
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateConversationExternalIdParams {
+    pub conversation_id: i32,
+    pub external_id: String,
+}
+
+pub async fn update_conversation_external_id(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(params): Json<UpdateConversationExternalIdParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    conversation_service::update_external_id(&db.conn, params.conversation_id, params.external_id)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(()))
+}

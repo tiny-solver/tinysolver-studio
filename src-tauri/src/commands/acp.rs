@@ -82,7 +82,7 @@ fn package_name_from_spec(package: &str) -> String {
 /// Check whether a command is available on the system PATH.
 /// Uses `which` on unix and `where` on windows — lightweight and does not
 /// invoke the target binary itself, avoiding side-effects or slow startups.
-fn is_cmd_available(cmd: &str) -> bool {
+pub(crate) fn is_cmd_available(cmd: &str) -> bool {
     which::which(cmd).is_ok()
 }
 
@@ -597,7 +597,7 @@ fn agent_local_config_path(agent_type: AgentType) -> Option<PathBuf> {
     }
 }
 
-fn load_agent_local_config_json(agent_type: AgentType) -> Option<String> {
+pub(crate) fn load_agent_local_config_json(agent_type: AgentType) -> Option<String> {
     if agent_type == AgentType::Codex {
         return load_codex_local_config_json();
     }
@@ -979,7 +979,7 @@ fn important_env_targets(agent_type: AgentType) -> (&'static str, &'static str, 
     }
 }
 
-fn build_runtime_env_from_setting(
+pub(crate) fn build_runtime_env_from_setting(
     agent_type: AgentType,
     setting: Option<&crate::db::entities::agent_setting::Model>,
     local_config_json: Option<&str>,

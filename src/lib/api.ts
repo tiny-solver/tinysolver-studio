@@ -852,7 +852,14 @@ export async function openFolderWindow(path: string): Promise<void> {
 }
 
 export async function openCommitWindow(folderId: number): Promise<void> {
-  return getTransport().call("open_commit_window", { folderId })
+  if (getTransport().isDesktop()) {
+    return getTransport().call("open_commit_window", { folderId })
+  }
+  const result = await getTransport().call<{ path: string }>(
+    "open_commit_window",
+    { folderId },
+  )
+  window.location.href = result.path
 }
 
 export type SettingsSection =
@@ -871,10 +878,21 @@ export async function openSettingsWindow(
   section?: SettingsSection,
   options?: OpenSettingsWindowOptions
 ): Promise<void> {
-  return getTransport().call("open_settings_window", {
-    section: section ?? null,
-    agentType: options?.agentType ?? null,
-  })
+  if (getTransport().isDesktop()) {
+    return getTransport().call("open_settings_window", {
+      section: section ?? null,
+      agentType: options?.agentType ?? null,
+    })
+  }
+  // Web mode: get navigation path from backend and navigate
+  const result = await getTransport().call<{ path: string }>(
+    "open_settings_window",
+    {
+      section: section ?? null,
+      agentType: options?.agentType ?? null,
+    },
+  )
+  window.location.href = result.path
 }
 
 export async function listOpenFolders(): Promise<FolderHistoryEntry[]> {

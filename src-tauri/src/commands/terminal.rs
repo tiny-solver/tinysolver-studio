@@ -13,7 +13,7 @@ use crate::terminal::types::TerminalInfo;
 /// Uses `credential.helper` with a script that calls the app binary with
 /// `--credential-helper`. The binary opens the DB, looks up the matching
 /// account, and outputs credentials. No credentials are written to disk.
-fn prepare_credential_env(
+pub(crate) fn prepare_credential_env(
     app_data_dir: &std::path::Path,
 ) -> Option<HashMap<String, String>> {
     // Get the path to the current running binary

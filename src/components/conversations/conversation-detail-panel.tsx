@@ -17,7 +17,7 @@ import { useAcpActions } from "@/contexts/acp-connections-context"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useSessionStats } from "@/contexts/session-stats-context"
-import { cn } from "@/lib/utils"
+import { cn, randomUUID } from "@/lib/utils"
 import { useConnectionLifecycle } from "@/hooks/use-connection-lifecycle"
 import { useMessageQueue, type QueuedMessage } from "@/hooks/use-message-queue"
 import { MessageListView } from "@/components/message/message-list-view"
@@ -103,7 +103,7 @@ function buildOptimisticUserTurnFromDraft(
   blocks.push({ type: "text", text })
 
   return {
-    id: `optimistic-${crypto.randomUUID()}`,
+    id: `optimistic-${randomUUID()}`,
     role: "user",
     blocks,
     timestamp: new Date().toISOString(),
@@ -762,7 +762,7 @@ const ConversationTabView = memo(function ConversationTabView({
     (answer: string) => {
       if (connStatus !== "connected") return
       const optimisticTurn: MessageTurn = {
-        id: `optimistic-${crypto.randomUUID()}`,
+        id: `optimistic-${randomUUID()}`,
         role: "user",
         blocks: [{ type: "text", text: answer }],
         timestamp: new Date().toISOString(),

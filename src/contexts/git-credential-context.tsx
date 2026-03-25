@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { randomUUID } from "@/lib/utils"
 import {
   ExternalLink,
   Eye,
@@ -147,7 +148,7 @@ async function saveGenericAccount(
       (a) => a.username === creds.username && extractHost(a.server_url) === host
     )
     if (!isDuplicate) {
-      const newId = crypto.randomUUID()
+      const newId = randomUUID()
       await saveAccountToken(newId, creds.password)
       await updateGitHubAccounts({
         accounts: [
@@ -283,7 +284,7 @@ export function GitCredentialProvider({ children }: { children: ReactNode }) {
         )
         if (!isDuplicate) {
           const newAccount = {
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             server_url: serverUrl,
             username: result.username ?? "unknown",
             scopes: result.scopes,

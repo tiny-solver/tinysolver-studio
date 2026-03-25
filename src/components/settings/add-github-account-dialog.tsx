@@ -4,6 +4,7 @@ import { useCallback, useState } from "react"
 import { ExternalLink, Eye, EyeOff, Loader2 } from "lucide-react"
 import { openUrl } from "@/lib/platform"
 import { useTranslations } from "next-intl"
+import { randomUUID } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -91,7 +92,7 @@ export function AddGitHubAccountDialog({
       }
 
       const account: GitHubAccount = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         server_url: serverUrl.trim() || "https://github.com",
         username: result.username ?? "unknown",
         scopes: result.scopes,

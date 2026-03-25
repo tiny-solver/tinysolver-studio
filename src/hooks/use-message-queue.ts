@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { PromptDraft } from "@/lib/types"
+import { randomUUID } from "@/lib/utils"
 
 export interface QueuedMessage {
   id: string
@@ -31,7 +32,7 @@ export function useMessageQueue(): UseMessageQueueReturn {
 
   const enqueue = useCallback((draft: PromptDraft, modeId: string | null) => {
     const item: QueuedMessage = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       draft,
       modeId,
     }

@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
+import { cn, randomUUID } from "@/lib/utils"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { readFileBase64 } from "@/lib/api"
@@ -245,7 +245,7 @@ function isTextLikeFile(file: File): boolean {
 
 function buildClipboardResourceUri(name: string): string {
   const normalizedName = name.trim() || "clipboard-resource"
-  return `clipboard://${encodeURIComponent(normalizedName)}-${crypto.randomUUID()}`
+  return `clipboard://${encodeURIComponent(normalizedName)}-${randomUUID()}`
 }
 
 function buildDataUri(base64Data: string, mimeType: string | null): string {
@@ -491,7 +491,7 @@ export function MessageInput({
       setAttachments((prev) => [
         ...prev,
         ...resources.map((resource) => ({
-          id: `resource-embedded:${crypto.randomUUID()}`,
+          id: `resource-embedded:${randomUUID()}`,
           type: "resource" as const,
           kind: "embedded" as const,
           uri: resource.uri,
@@ -530,7 +530,7 @@ export function MessageInput({
 
       for (const file of files) {
         const path = getFilePath(file)
-        const name = file.name || `resource-${crypto.randomUUID()}`
+        const name = file.name || `resource-${randomUUID()}`
         const mimeType = file.type || mimeTypeFromPath(name)
         if (path) {
           const uri = toFileUri(path)
@@ -596,7 +596,7 @@ export function MessageInput({
             : (mimeTypeFromPath(file.name) ?? "image/png")
         const base64Data = await blobToBase64(file)
         return {
-          id: `image:${Date.now()}:${index}:${crypto.randomUUID()}`,
+          id: `image:${Date.now()}:${index}:${randomUUID()}`,
           type: "image" as const,
           data: base64Data,
           uri: null,
@@ -615,7 +615,7 @@ export function MessageInput({
         paths.map(async (path, index) => {
           const data = await readFileBase64(path, DRAG_DROP_IMAGE_MAX_BYTES)
           return {
-            id: `image:${Date.now()}:${index}:${crypto.randomUUID()}`,
+            id: `image:${Date.now()}:${index}:${randomUUID()}`,
             type: "image" as const,
             data,
             uri: toFileUri(path),
