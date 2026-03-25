@@ -660,19 +660,44 @@ export async function openMergeWindow(
   operation: string,
   upstreamCommit?: string | null
 ): Promise<void> {
-  return getTransport().call("open_merge_window", {
-    folderId,
-    operation,
-    upstreamCommit: upstreamCommit ?? null,
-  })
+  if (getTransport().isDesktop()) {
+    return getTransport().call("open_merge_window", {
+      folderId,
+      operation,
+      upstreamCommit: upstreamCommit ?? null,
+    })
+  }
+  const result = await getTransport().call<{ path: string }>(
+    "open_merge_window",
+    {
+      folderId,
+      operation,
+      upstreamCommit: upstreamCommit ?? null,
+    },
+  )
+  window.open(result.path, `merge-${folderId}`)
 }
 
 export async function openStashWindow(folderId: number): Promise<void> {
-  return getTransport().call("open_stash_window", { folderId })
+  if (getTransport().isDesktop()) {
+    return getTransport().call("open_stash_window", { folderId })
+  }
+  const result = await getTransport().call<{ path: string }>(
+    "open_stash_window",
+    { folderId },
+  )
+  window.open(result.path, `stash-${folderId}`)
 }
 
 export async function openPushWindow(folderId: number): Promise<void> {
-  return getTransport().call("open_push_window", { folderId })
+  if (getTransport().isDesktop()) {
+    return getTransport().call("open_push_window", { folderId })
+  }
+  const result = await getTransport().call<{ path: string }>(
+    "open_push_window",
+    { folderId },
+  )
+  window.open(result.path, `push-${folderId}`)
 }
 
 export async function gitStashPush(
@@ -866,7 +891,7 @@ export async function openCommitWindow(folderId: number): Promise<void> {
     "open_commit_window",
     { folderId },
   )
-  window.location.href = result.path
+  window.open(result.path, `commit-${folderId}`)
 }
 
 export type SettingsSection =
@@ -891,7 +916,7 @@ export async function openSettingsWindow(
       agentType: options?.agentType ?? null,
     })
   }
-  // Web mode: get navigation path from backend and navigate
+  // Web mode: open in new window
   const result = await getTransport().call<{ path: string }>(
     "open_settings_window",
     {
@@ -899,7 +924,7 @@ export async function openSettingsWindow(
       agentType: options?.agentType ?? null,
     },
   )
-  window.location.href = result.path
+  window.open(result.path, `settings-${section ?? "general"}`)
 }
 
 export async function listOpenFolders(): Promise<FolderHistoryEntry[]> {
