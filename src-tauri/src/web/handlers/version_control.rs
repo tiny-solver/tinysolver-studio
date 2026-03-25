@@ -41,6 +41,16 @@ pub struct SaveAccountTokenParams {
     pub token: String,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateGitSettingsParams {
+    pub settings: GitSettings,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateGitHubAccountsParams {
+    pub settings: GitHubAccountsSettings,
+}
+
 // ---------------------------------------------------------------------------
 // Git detection
 // ---------------------------------------------------------------------------
@@ -84,8 +94,9 @@ pub async fn get_git_settings(
 
 pub async fn update_git_settings(
     Extension(app): Extension<tauri::AppHandle>,
-    Json(settings): Json<GitSettings>,
+    Json(params): Json<UpdateGitSettingsParams>,
 ) -> Result<Json<GitSettings>, AppCommandError> {
+    let settings = params.settings;
     let db = app.state::<AppDatabase>();
     let serialized = serde_json::to_string(&settings).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize git settings")
@@ -125,8 +136,9 @@ pub async fn get_github_accounts(
 
 pub async fn update_github_accounts(
     Extension(app): Extension<tauri::AppHandle>,
-    Json(settings): Json<GitHubAccountsSettings>,
+    Json(params): Json<UpdateGitHubAccountsParams>,
 ) -> Result<Json<GitHubAccountsSettings>, AppCommandError> {
+    let settings = params.settings;
     let db = app.state::<AppDatabase>();
     let serialized = serde_json::to_string(&settings).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize GitHub accounts")
