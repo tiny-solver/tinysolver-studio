@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { toErrorMessage } from "@/lib/app-error"
-import { getFolder, listFolderConversations, closeFolderWindow } from "@/lib/api"
+import { getFolder, listFolderConversations } from "@/lib/api"
 import { isDesktop } from "@/lib/transport"
 import type {
   AgentType,
@@ -196,20 +196,11 @@ export function FolderProvider({
     }
   }, [])
 
-  // Web mode: register this tab's name so that window.open(url, "folder-{id}")
+  // Web mode: register this tab's name so that window.open("", "folder-{id}")
   // from other pages can find and reuse it instead of opening duplicates.
-  // Also notify backend when the folder tab closes.
   useEffect(() => {
     if (isDesktop() || !folderId) return
-
     window.name = `folder-${folderId}`
-
-    const onUnload = () => closeFolderWindow(folderId)
-    window.addEventListener("pagehide", onUnload)
-
-    return () => {
-      window.removeEventListener("pagehide", onUnload)
-    }
   }, [folderId])
 
   const selectConversation = useCallback((id: number, agentType: AgentType) => {

@@ -910,22 +910,12 @@ export async function focusFolderWindow(folderId: number): Promise<void> {
   if (getTransport().isDesktop()) {
     return getTransport().call("focus_folder_window", { folderId })
   }
-  // Web mode: use named window — reuses existing tab if still open,
-  // otherwise opens a new one.
-  window.open(`/folder?id=${folderId}`, `folder-${folderId}`)
-}
-
-/**
- * Notify the backend that a folder tab has been closed.
- * Uses sendBeacon for reliability during page unload.
- */
-export function closeFolderWindow(folderId: number): void {
-  if (getTransport().isDesktop()) return
-  const token = localStorage.getItem("codeg_token") ?? ""
-  navigator.sendBeacon(
-    `/api/close_folder_window?token=${encodeURIComponent(token)}`,
-    JSON.stringify({ folderId }),
-  )
+  // Web mode: open empty string to focus existing named window without reload.
+  // If the window doesn't exist (was closed), open the folder page.
+  const win = window.open("", `folder-${folderId}`)
+  if (!win || win.closed || !win.location.href || win.location.href === "about:blank") {
+    window.open(`/folder?id=${folderId}`, `folder-${folderId}`)
+  }
 }
 
 // Conversation CRUD commands
