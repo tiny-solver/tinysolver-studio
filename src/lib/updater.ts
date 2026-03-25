@@ -1,3 +1,5 @@
+import { getTransport, isDesktop } from "./transport"
+
 // All updater imports are dynamic to avoid crashing in non-Tauri browsers.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Update = any
@@ -20,15 +22,22 @@ export interface AppUpdateErrorInfo {
 }
 
 export async function getCurrentAppVersion(): Promise<string> {
+  if (!isDesktop()) {
+    const result = await getTransport().call<AppUpdateCheckResult>("check_app_update")
+    return result.currentVersion
+  }
   try {
     const { getVersion } = await import("@tauri-apps/api/app")
     return await getVersion()
   } catch {
-    return "web"
+    return "unknown"
   }
 }
 
 export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
+  if (!isDesktop()) {
+    return getTransport().call<AppUpdateCheckResult>("check_app_update")
+  }
   const { getVersion } = await import("@tauri-apps/api/app")
   const { check } = await import("@tauri-apps/plugin-updater")
   const [currentVersion, update] = await Promise.all([getVersion(), check()])

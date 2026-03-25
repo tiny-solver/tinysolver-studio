@@ -40,11 +40,11 @@ pub struct WebServerInfo {
     pub addresses: Vec<String>,
 }
 
-fn generate_random_token() -> String {
+pub(crate) fn generate_random_token() -> String {
     uuid::Uuid::new_v4().to_string().replace('-', "")
 }
 
-fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
+pub(crate) fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
     // 1. Production: Tauri bundles frontendDist into the resource directory.
     let resource = app.path().resource_dir().ok();
     if let Some(ref dir) = resource {
@@ -83,7 +83,7 @@ fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
     cwd_out
 }
 
-fn get_local_addresses(port: u16) -> Vec<String> {
+pub(crate) fn get_local_addresses(port: u16) -> Vec<String> {
     let mut addrs = vec![format!("http://127.0.0.1:{}", port)];
     // Try to get LAN IPs
     if let Ok(interfaces) = std::net::UdpSocket::bind("0.0.0.0:0") {
@@ -97,14 +97,14 @@ fn get_local_addresses(port: u16) -> Vec<String> {
     addrs
 }
 
-#[tauri::command]
-pub async fn start_web_server(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, WebServerState>,
+// ── Core logic (shared by Tauri commands and web handlers) ──
+
+pub(crate) async fn do_start_web_server(
+    app: &tauri::AppHandle,
+    state: &WebServerState,
     port: Option<u16>,
     host: Option<String>,
 ) -> Result<WebServerInfo, AppCommandError> {
-    // Check if already running
     if state.running.load(Ordering::Relaxed) {
         return Err(AppCommandError::new(
             AppErrorCode::AlreadyExists,
@@ -116,11 +116,7 @@ pub async fn start_web_server(
     let host = host.unwrap_or_else(|| "0.0.0.0".to_string());
     let token = generate_random_token();
 
-    // Determine static directory for serving the frontend.
-    // In production: files are bundled into the resource directory.
-    // In dev: the "out/" directory is at the project root (one level above src-tauri/).
-    let static_dir = find_static_dir(&app);
-
+    let static_dir = find_static_dir(app);
     let router = router::build_router(app.clone(), token.clone(), static_dir);
 
     let addr: SocketAddr = format!("{}:{}", host, port)
@@ -142,14 +138,12 @@ pub async fn start_web_server(
         }
     });
 
-    // Store state
     *state.handle.lock().unwrap() = Some(handle);
     state.port.store(actual_port, Ordering::Relaxed);
     *state.token.lock().unwrap() = token.clone();
     state.running.store(true, Ordering::Relaxed);
 
     let addresses = get_local_addresses(actual_port);
-
     Ok(WebServerInfo {
         port: actual_port,
         token,
@@ -157,10 +151,7 @@ pub async fn start_web_server(
     })
 }
 
-#[tauri::command]
-pub async fn stop_web_server(
-    state: tauri::State<'_, WebServerState>,
-) -> Result<(), AppCommandError> {
+pub(crate) fn do_stop_web_server(state: &WebServerState) {
     if let Some(handle) = state.handle.lock().unwrap().take() {
         handle.abort();
     }
@@ -168,6 +159,39 @@ pub async fn stop_web_server(
     state.port.store(0, Ordering::Relaxed);
     *state.token.lock().unwrap() = String::new();
     eprintln!("[WEB] Web server stopped");
+}
+
+pub(crate) fn do_get_web_server_status(state: &WebServerState) -> Option<WebServerInfo> {
+    if !state.running.load(Ordering::Relaxed) {
+        return None;
+    }
+    let port = state.port.load(Ordering::Relaxed);
+    let token = state.token.lock().unwrap().clone();
+    let addresses = get_local_addresses(port);
+    Some(WebServerInfo {
+        port,
+        token,
+        addresses,
+    })
+}
+
+// ── Tauri commands (thin wrappers) ──
+
+#[tauri::command]
+pub async fn start_web_server(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WebServerState>,
+    port: Option<u16>,
+    host: Option<String>,
+) -> Result<WebServerInfo, AppCommandError> {
+    do_start_web_server(&app, &state, port, host).await
+}
+
+#[tauri::command]
+pub async fn stop_web_server(
+    state: tauri::State<'_, WebServerState>,
+) -> Result<(), AppCommandError> {
+    do_stop_web_server(&state);
     Ok(())
 }
 
@@ -175,15 +199,5 @@ pub async fn stop_web_server(
 pub async fn get_web_server_status(
     state: tauri::State<'_, WebServerState>,
 ) -> Result<Option<WebServerInfo>, AppCommandError> {
-    if !state.running.load(Ordering::Relaxed) {
-        return Ok(None);
-    }
-    let port = state.port.load(Ordering::Relaxed);
-    let token = state.token.lock().unwrap().clone();
-    let addresses = get_local_addresses(port);
-    Ok(Some(WebServerInfo {
-        port,
-        token,
-        addresses,
-    }))
+    Ok(do_get_web_server_status(&state))
 }

@@ -9,3 +9,4 @@ pub mod version_control;
 pub mod folder_commands;
 pub mod mcp;
 pub mod git;
+pub mod web_server;

@@ -167,6 +167,11 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         .route("/acp_read_agent_skill", post(handlers::acp::acp_read_agent_skill))
         .route("/acp_save_agent_skill", post(handlers::acp::acp_save_agent_skill))
         .route("/acp_delete_agent_skill", post(handlers::acp::acp_delete_agent_skill))
+        // ─── Web Server ───
+        .route("/get_web_server_status", post(handlers::web_server::get_web_server_status))
+        .route("/start_web_server", post(handlers::web_server::start_web_server))
+        .route("/stop_web_server", post(handlers::web_server::stop_web_server))
+        .route("/check_app_update", post(handlers::web_server::check_app_update))
         // ─── Terminal ───
         .route("/terminal_spawn", post(handlers::terminal::terminal_spawn))
         .route("/terminal_write", post(handlers::terminal::terminal_write))
