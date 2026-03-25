@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, type ComponentType, type ReactNode } from "react"
+import { useCallback, useEffect, type ComponentType, type ReactNode } from "react"
 import {
   Bot,
   BookOpenText,
@@ -98,6 +98,10 @@ export function SettingsShell({ children }: SettingsShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const normalizedPathname = normalizePath(pathname)
+
+  useEffect(() => {
+    document.title = `${t("title")} - codeg`
+  }, [t])
 
   const navigateTo = useCallback(
     (href: string) => {

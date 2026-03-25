@@ -64,6 +64,14 @@ function StashPageInner() {
     }
   }, [hasValidFolderId, normalizedFolderId])
 
+  const pageTitle = folder
+    ? `${t("title")} · ${folder.name}`
+    : t("title")
+
+  useEffect(() => {
+    document.title = `${pageTitle} - codeg`
+  }, [pageTitle])
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <AppTitleBar

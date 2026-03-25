@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { isDesktop } from "@/lib/platform"
 
@@ -9,6 +9,10 @@ export default function LoginPage() {
   const [token, setToken] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    document.title = "Login - codeg"
+  }, [])
 
   // Desktop users skip login entirely
   if (isDesktop()) {

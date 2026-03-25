@@ -50,6 +50,17 @@ import {
 } from "@/components/ui/resizable"
 import type { AgentType } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useFolderContext } from "@/contexts/folder-context"
+
+function FolderDocumentTitle() {
+  const { folder } = useFolderContext()
+
+  useEffect(() => {
+    document.title = folder ? `${folder.name} - codeg` : "codeg"
+  }, [folder])
+
+  return null
+}
 
 const TOAST_DURATION_MS = 15000
 const WORKSPACE_PANEL_GROUP_ID = "workspace-panel-group"
@@ -663,6 +674,7 @@ function FolderLayoutInner({ children }: { children: React.ReactNode }) {
       initialConversationId={conversationId ? Number(conversationId) : null}
       initialAgentType={agentType}
     >
+      <FolderDocumentTitle />
       <AlertProvider>
         <GitCredentialProvider>
           <TaskProvider>
