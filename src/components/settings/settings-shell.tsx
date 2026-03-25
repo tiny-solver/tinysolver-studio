@@ -65,14 +65,14 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: GitBranch,
   },
   {
-    href: "/settings/system",
-    labelKey: "system",
-    icon: Settings,
-  },
-  {
     href: "/settings/web-service",
     labelKey: "web_service",
     icon: Globe,
+  },
+  {
+    href: "/settings/system",
+    labelKey: "system",
+    icon: Settings,
   },
 ]
 

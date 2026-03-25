@@ -1,12 +1,85 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { Check, Copy, Eye, EyeOff } from "lucide-react"
 import {
   startWebServer,
   stopWebServer,
   getWebServerStatus,
   type WebServerInfo,
 } from "@/lib/api"
+
+function CopyableCard({
+  label,
+  value,
+  masked,
+}: {
+  label: string
+  value: string
+  masked?: boolean
+}) {
+  const [hovered, setHovered] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  const displayValue =
+    masked && !revealed
+      ? value.slice(0, 4) + "\u2022".repeat(Math.max(value.length - 4, 8))
+      : value
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div
+        className="group relative flex items-center rounded-md border bg-muted/40 px-3 py-2"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <code className="min-w-0 flex-1 truncate text-sm select-all">
+          {displayValue}
+        </code>
+        <div
+          className={`ml-2 flex shrink-0 items-center gap-1 transition-opacity ${
+            hovered ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {masked && (
+            <button
+              type="button"
+              onClick={() => setRevealed((v) => !v)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              title={revealed ? "隐藏" : "显示"}
+            >
+              {revealed ? (
+                <EyeOff className="h-3.5 w-3.5" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            title="复制"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function WebServiceSettings() {
   const [status, setStatus] = useState<WebServerInfo | null>(null)
@@ -58,20 +131,6 @@ export function WebServiceSettings() {
       setError("停止失败")
     } finally {
       setLoading(false)
-    }
-  }
-
-  function copyToken() {
-    if (status?.token) {
-      navigator.clipboard.writeText(status.token)
-    }
-  }
-
-  function copyUrl() {
-    if (status?.addresses?.[1]) {
-      navigator.clipboard.writeText(status.addresses[1])
-    } else if (status?.addresses?.[0]) {
-      navigator.clipboard.writeText(status.addresses[0])
     }
   }
 
@@ -133,41 +192,15 @@ export function WebServiceSettings() {
 
         {/* Connection info */}
         {isRunning && (
-          <div className="rounded-md border p-4 space-y-3">
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">
-                访问地址
-              </div>
-              {status.addresses.map((addr) => (
-                <div key={addr} className="flex items-center gap-2">
-                  <code className="text-sm">{addr}</code>
-                </div>
-              ))}
-              <button
-                onClick={copyUrl}
-                className="text-xs text-primary hover:underline"
-              >
-                复制局域网地址
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">
-                访问 Token
-              </div>
-              <div className="flex items-center gap-2">
-                <code className="rounded bg-muted px-2 py-0.5 text-xs">
-                  {status.token}
-                </code>
-                <button
-                  onClick={copyToken}
-                  className="text-xs text-primary hover:underline"
-                >
-                  复制
-                </button>
-              </div>
-            </div>
-
+          <div className="space-y-3">
+            {status.addresses.map((addr) => (
+              <CopyableCard key={addr} label="访问地址" value={addr} />
+            ))}
+            <CopyableCard
+              label="访问 Token"
+              value={status.token}
+              masked
+            />
             <p className="text-xs text-muted-foreground">
               Web 客户端首次访问时需输入此 Token
             </p>
