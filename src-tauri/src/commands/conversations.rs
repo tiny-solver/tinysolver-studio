@@ -246,12 +246,13 @@ pub async fn import_local_conversations(
         .map_err(AppCommandError::from)
 }
 
-#[tauri::command]
-pub async fn get_folder_conversation(
-    db: tauri::State<'_, AppDatabase>,
+/// Core logic for loading a folder conversation with full OpenClaw fallback.
+/// Shared by both the Tauri command and the web handler.
+pub async fn get_folder_conversation_core(
+    conn: &sea_orm::DatabaseConnection,
     conversation_id: i32,
 ) -> Result<DbConversationDetail, AppCommandError> {
-    let summary = conversation_service::get_by_id(&db.conn, conversation_id)
+    let summary = conversation_service::get_by_id(conn, conversation_id)
         .await
         .map_err(AppCommandError::from)?;
 
@@ -261,7 +262,7 @@ pub async fn get_folder_conversation(
         let eid = ext_id.clone();
         let db_created_at = summary.created_at;
         let folder_path_for_fallback = {
-            let folder = folder_service::get_folder_by_id(&db.conn, summary.folder_id)
+            let folder = folder_service::get_folder_by_id(conn, summary.folder_id)
                 .await
                 .ok()
                 .flatten();
@@ -332,7 +333,7 @@ pub async fn get_folder_conversation(
     // update the database so future lookups are direct.
     if let Some(new_ext_id) = resolved_ext_id {
         let _ =
-            conversation_service::update_external_id(&db.conn, conversation_id, new_ext_id).await;
+            conversation_service::update_external_id(conn, conversation_id, new_ext_id).await;
     }
 
     let mut summary = summary;
@@ -346,14 +347,22 @@ pub async fn get_folder_conversation(
 }
 
 #[tauri::command]
-pub async fn create_conversation(
+pub async fn get_folder_conversation(
     db: tauri::State<'_, AppDatabase>,
+    conversation_id: i32,
+) -> Result<DbConversationDetail, AppCommandError> {
+    get_folder_conversation_core(&db.conn, conversation_id).await
+}
+
+/// Core logic for creating a conversation with git branch detection.
+/// Shared by both the Tauri command and the web handler.
+pub async fn create_conversation_core(
+    conn: &sea_orm::DatabaseConnection,
     folder_id: i32,
     agent_type: AgentType,
     title: Option<String>,
 ) -> Result<i32, AppCommandError> {
-    // Detect current git branch from the folder path
-    let git_branch = if let Some(folder) = folder_service::get_folder_by_id(&db.conn, folder_id)
+    let git_branch = if let Some(folder) = folder_service::get_folder_by_id(conn, folder_id)
         .await
         .map_err(AppCommandError::from)?
     {
@@ -362,10 +371,20 @@ pub async fn create_conversation(
         None
     };
 
-    let model = conversation_service::create(&db.conn, folder_id, agent_type, title, git_branch)
+    let model = conversation_service::create(conn, folder_id, agent_type, title, git_branch)
         .await
         .map_err(AppCommandError::from)?;
     Ok(model.id)
+}
+
+#[tauri::command]
+pub async fn create_conversation(
+    db: tauri::State<'_, AppDatabase>,
+    folder_id: i32,
+    agent_type: AgentType,
+    title: Option<String>,
+) -> Result<i32, AppCommandError> {
+    create_conversation_core(&db.conn, folder_id, agent_type, title).await
 }
 
 async fn detect_git_branch(path: &str) -> Option<String> {
@@ -457,60 +476,6 @@ fn compute_stats(all_conversations: &[ConversationSummary]) -> AgentStats {
         total_messages,
         by_agent,
     }
-}
-
-// ── Public helpers for the embedded web server ──
-
-pub async fn list_conversations_for_web(
-    agent_type: Option<AgentType>,
-    search: Option<String>,
-    sort_by: Option<String>,
-    folder_path: Option<String>,
-) -> Result<Vec<ConversationSummary>, AppCommandError> {
-    tokio::task::spawn_blocking(move || list_conversations_sync(agent_type, search, sort_by, folder_path))
-        .await
-        .map_err(|e| {
-            AppCommandError::task_execution_failed("Failed to list conversations")
-                .with_detail(e.to_string())
-        })
-}
-
-pub async fn list_folders_for_web() -> Result<Vec<FolderInfo>, AppCommandError> {
-    tokio::task::spawn_blocking(move || {
-        let all = list_conversations_sync(None, None, None, None);
-        compute_folders(&all)
-    })
-    .await
-    .map_err(|e| {
-        AppCommandError::task_execution_failed("Failed to list folders").with_detail(e.to_string())
-    })
-}
-
-pub async fn get_stats_for_web() -> Result<AgentStats, AppCommandError> {
-    tokio::task::spawn_blocking(move || {
-        let all = list_conversations_sync(None, None, None, None);
-        compute_stats(&all)
-    })
-    .await
-    .map_err(|e| {
-        AppCommandError::task_execution_failed("Failed to compute stats")
-            .with_detail(e.to_string())
-    })
-}
-
-pub async fn get_sidebar_data_for_web() -> Result<SidebarData, AppCommandError> {
-    tokio::task::spawn_blocking(move || {
-        let all = list_conversations_sync(None, None, None, None);
-        SidebarData {
-            folders: compute_folders(&all),
-            stats: compute_stats(&all),
-        }
-    })
-    .await
-    .map_err(|e| {
-        AppCommandError::task_execution_failed("Failed to build sidebar data")
-            .with_detail(e.to_string())
-    })
 }
 
 fn parse_error_to_app_error(error: ParseError) -> AppCommandError {

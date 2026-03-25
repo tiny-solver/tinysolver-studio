@@ -3,15 +3,10 @@ use serde::Deserialize;
 use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::commands::conversations as conv_commands;
 use crate::db::service::{conversation_service, folder_service, import_service};
 use crate::db::AppDatabase;
 use crate::models::*;
-use crate::parsers::claude::ClaudeParser;
-use crate::parsers::codex::CodexParser;
-use crate::parsers::gemini::GeminiParser;
-use crate::parsers::openclaw::OpenClawParser;
-use crate::parsers::opencode::OpenCodeParser;
-use crate::parsers::AgentParser;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +48,7 @@ pub struct ListConversationsParams {
 pub async fn list_conversations(
     Json(params): Json<ListConversationsParams>,
 ) -> Result<Json<Vec<ConversationSummary>>, AppCommandError> {
-    let result = crate::commands::conversations::list_conversations_for_web(
+    let result = conv_commands::list_conversations(
         params.agent_type,
         params.search,
         params.sort_by,
@@ -73,25 +68,8 @@ pub struct GetConversationParams {
 pub async fn get_conversation(
     Json(params): Json<GetConversationParams>,
 ) -> Result<Json<ConversationDetail>, AppCommandError> {
-    let at = params.agent_type;
-    let cid = params.conversation_id;
-    let result = tokio::task::spawn_blocking(move || -> Result<ConversationDetail, AppCommandError> {
-        let parser: Box<dyn AgentParser> = match at {
-            AgentType::ClaudeCode => Box::new(ClaudeParser::new()),
-            AgentType::Codex => Box::new(CodexParser::new()),
-            AgentType::OpenCode => Box::new(OpenCodeParser::new()),
-            AgentType::Gemini => Box::new(GeminiParser::new()),
-            AgentType::OpenClaw => Box::new(OpenClawParser::new()),
-        };
-        parser
-            .get_conversation(&cid)
-            .map_err(|e| AppCommandError::not_found("Conversation not found").with_detail(e.to_string()))
-    })
-    .await
-    .map_err(|e| {
-        AppCommandError::task_execution_failed("Failed to load conversation")
-            .with_detail(e.to_string())
-    })??;
+    let result =
+        conv_commands::get_conversation(params.agent_type, params.conversation_id).await?;
     Ok(Json(result))
 }
 
@@ -106,57 +84,23 @@ pub async fn get_folder_conversation(
     Json(params): Json<GetFolderConversationParams>,
 ) -> Result<Json<DbConversationDetail>, AppCommandError> {
     let db = app.state::<AppDatabase>();
-    let summary = conversation_service::get_by_id(&db.conn, params.conversation_id)
-        .await
-        .map_err(AppCommandError::from)?;
-
-    let (turns, session_stats, _resolved_ext_id) = if let Some(ref ext_id) = summary.external_id {
-        let at = summary.agent_type;
-        let eid = ext_id.clone();
-        tokio::task::spawn_blocking(move || -> Result<_, AppCommandError> {
-            let parser: Box<dyn AgentParser> = match at {
-                AgentType::ClaudeCode => Box::new(ClaudeParser::new()),
-                AgentType::Codex => Box::new(CodexParser::new()),
-                AgentType::OpenCode => Box::new(OpenCodeParser::new()),
-                AgentType::Gemini => Box::new(GeminiParser::new()),
-                AgentType::OpenClaw => Box::new(OpenClawParser::new()),
-            };
-            match parser.get_conversation(&eid) {
-                Ok(d) => Ok((d.turns, d.session_stats, None::<String>)),
-                Err(_) => Ok((vec![], None, None)),
-            }
-        })
-        .await
-        .map_err(|e| {
-            AppCommandError::task_execution_failed("Failed to read conversation turns")
-                .with_detail(e.to_string())
-        })??
-    } else {
-        (vec![], None, None)
-    };
-
-    let mut summary = summary;
-    summary.message_count = turns.len() as u32;
-
-    Ok(Json(DbConversationDetail {
-        summary,
-        turns,
-        session_stats,
-    }))
+    let result =
+        conv_commands::get_folder_conversation_core(&db.conn, params.conversation_id).await?;
+    Ok(Json(result))
 }
 
 pub async fn list_folders() -> Result<Json<Vec<FolderInfo>>, AppCommandError> {
-    let result = crate::commands::conversations::list_folders_for_web().await?;
+    let result = conv_commands::list_folders().await?;
     Ok(Json(result))
 }
 
 pub async fn get_stats() -> Result<Json<AgentStats>, AppCommandError> {
-    let result = crate::commands::conversations::get_stats_for_web().await?;
+    let result = conv_commands::get_stats().await?;
     Ok(Json(result))
 }
 
 pub async fn get_sidebar_data() -> Result<Json<SidebarData>, AppCommandError> {
-    let result = crate::commands::conversations::get_sidebar_data_for_web().await?;
+    let result = conv_commands::get_sidebar_data().await?;
     Ok(Json(result))
 }
 
@@ -194,16 +138,14 @@ pub async fn create_conversation(
     Json(params): Json<CreateConversationParams>,
 ) -> Result<Json<i32>, AppCommandError> {
     let db = app.state::<AppDatabase>();
-    let model = conversation_service::create(
+    let result = conv_commands::create_conversation_core(
         &db.conn,
         params.folder_id,
         params.agent_type,
         params.title,
-        None,
     )
-    .await
-    .map_err(AppCommandError::from)?;
-    Ok(Json(model.id))
+    .await?;
+    Ok(Json(result))
 }
 
 #[derive(Deserialize)]

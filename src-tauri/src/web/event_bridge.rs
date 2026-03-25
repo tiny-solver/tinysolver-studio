@@ -32,10 +32,6 @@ impl WebEventBroadcaster {
     pub fn subscribe(&self) -> broadcast::Receiver<WebEvent> {
         self.sender.subscribe()
     }
-
-    pub fn has_subscribers(&self) -> bool {
-        self.sender.receiver_count() > 0
-    }
 }
 
 /// Unified event emission: sends to both Tauri webview and Web clients.

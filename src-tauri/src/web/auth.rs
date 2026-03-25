@@ -5,9 +5,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-#[derive(Clone)]
-pub struct AuthToken(pub String);
-
 pub async fn require_token(
     request: Request,
     next: Next,
