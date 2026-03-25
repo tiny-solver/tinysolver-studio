@@ -21,7 +21,7 @@ import { code } from "@streamdown/code"
 import { math } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
 import { Streamdown } from "streamdown"
-import { readFileBase64 } from "@/lib/tauri"
+import { readFileBase64 } from "@/lib/api"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
 import "@/lib/monaco-local"
 

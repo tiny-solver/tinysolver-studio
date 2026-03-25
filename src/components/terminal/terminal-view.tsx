@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { listen } from "@tauri-apps/api/event"
-import { terminalWrite, terminalResize } from "@/lib/tauri"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+import { subscribe } from "@/lib/platform"
+import { terminalWrite, terminalResize } from "@/lib/api"
 import type { TerminalEvent } from "@/lib/types"
 import type { ITheme } from "@xterm/xterm"
 
@@ -169,14 +168,14 @@ export function TerminalView({
       )
 
       // Set up event listeners BEFORE fit so initial output is captured
-      const unlisten = await listen<TerminalEvent>(
+      const unlisten = await subscribe<TerminalEvent>(
         `terminal://output/${terminalId}`,
-        (event) => {
-          term.write(event.payload.data)
+        (payload) => {
+          term.write(payload.data)
         }
       )
 
-      const unlistenExit = await listen<TerminalEvent>(
+      const unlistenExit = await subscribe<TerminalEvent>(
         `terminal://exit/${terminalId}`,
         () => {
           term.write("\r\n\x1b[90m[Process exited]\x1b[0m\r\n")
@@ -187,8 +186,8 @@ export function TerminalView({
         themeObserver.disconnect()
         onDataDisposable.dispose()
         onResizeDisposable.dispose()
-        disposeTauriListener(unlisten, "TerminalView.output")
-        disposeTauriListener(unlistenExit, "TerminalView.exit")
+        unlisten()
+        unlistenExit()
         term.dispose()
         return
       }
@@ -222,8 +221,8 @@ export function TerminalView({
         themeObserver.disconnect()
         onDataDisposable.dispose()
         onResizeDisposable.dispose()
-        disposeTauriListener(unlisten, "TerminalView.output")
-        disposeTauriListener(unlistenExit, "TerminalView.exit")
+        unlisten()
+        unlistenExit()
         resizeObserver.disconnect()
         term.dispose()
         fitAddonRef.current = null

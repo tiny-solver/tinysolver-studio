@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { saveAccountToken } from "@/lib/tauri"
+import { saveAccountToken } from "@/lib/api"
 import type { GitHubAccount } from "@/lib/types"
 
 interface AddGitAccountDialogProps {

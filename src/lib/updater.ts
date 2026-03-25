@@ -1,6 +1,6 @@
-import { getVersion } from "@tauri-apps/api/app"
-import { relaunch } from "@tauri-apps/plugin-process"
-import { check, type Update } from "@tauri-apps/plugin-updater"
+// All updater imports are dynamic to avoid crashing in non-Tauri browsers.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Update = any
 
 export interface AppUpdateCheckResult {
   currentVersion: string
@@ -20,23 +20,31 @@ export interface AppUpdateErrorInfo {
 }
 
 export async function getCurrentAppVersion(): Promise<string> {
-  return getVersion()
+  try {
+    const { getVersion } = await import("@tauri-apps/api/app")
+    return await getVersion()
+  } catch {
+    return "web"
+  }
 }
 
 export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
+  const { getVersion } = await import("@tauri-apps/api/app")
+  const { check } = await import("@tauri-apps/plugin-updater")
   const [currentVersion, update] = await Promise.all([getVersion(), check()])
   return { currentVersion, update }
 }
 
-export async function installAppUpdate(update: Update): Promise<void> {
+export async function installAppUpdate(update: NonNullable<Update>): Promise<void> {
   await update.downloadAndInstall()
 }
 
 export async function relaunchApp(): Promise<void> {
+  const { relaunch } = await import("@tauri-apps/plugin-process")
   await relaunch()
 }
 
-export async function closeAppUpdate(update: Update): Promise<void> {
+export async function closeAppUpdate(update: NonNullable<Update>): Promise<void> {
   await update.close()
 }
 

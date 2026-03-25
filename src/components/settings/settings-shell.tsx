@@ -5,6 +5,7 @@ import {
   Bot,
   BookOpenText,
   GitBranch,
+  Globe,
   Keyboard,
   Palette,
   PlugZap,
@@ -28,6 +29,7 @@ interface SettingsNavItem {
     | "shortcuts"
     | "version_control"
     | "system"
+    | "web_service"
   icon: ComponentType<{ className?: string }>
 }
 
@@ -66,6 +68,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/system",
     labelKey: "system",
     icon: Settings,
+  },
+  {
+    href: "/settings/web-service",
+    labelKey: "web_service",
+    icon: Globe,
   },
 ]
 

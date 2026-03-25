@@ -1,72 +1,74 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { getCurrentWindow } from "@tauri-apps/api/window"
+import { useEffect, useRef, useState } from "react"
+import { isDesktop } from "@/lib/platform"
 import { useTranslations } from "next-intl"
 import { usePlatform } from "@/hooks/use-platform"
-import { disposeTauriListener } from "@/lib/tauri-listener"
 import { cn } from "@/lib/utils"
+
+async function getTauriWindow() {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window")
+  return getCurrentWindow()
+}
 
 export function WindowControls() {
   const t = useTranslations("Folder.windowControls")
   const { isWindows } = usePlatform()
   const [isMaximized, setIsMaximized] = useState(false)
+  const appWindowRef = useRef<Awaited<
+    ReturnType<typeof getTauriWindow>
+  > | null>(null)
 
   useEffect(() => {
-    if (!isWindows) return
+    if (!isWindows || !isDesktop()) return
 
     let disposed = false
     let unlistenResize: (() => void) | null = null
     let resizeFrame: number | null = null
-    const appWindow = getCurrentWindow()
 
-    const syncMaximized = async () => {
-      try {
-        const maximized = await appWindow.isMaximized()
-        if (!disposed) {
-          setIsMaximized(maximized)
-        }
-      } catch {
-        if (!disposed) {
-          setIsMaximized(false)
+    getTauriWindow().then((appWindow) => {
+      if (disposed) return
+      appWindowRef.current = appWindow
+
+      const syncMaximized = async () => {
+        try {
+          const maximized = await appWindow.isMaximized()
+          if (!disposed) setIsMaximized(maximized)
+        } catch {
+          if (!disposed) setIsMaximized(false)
         }
       }
-    }
 
-    const scheduleSync = () => {
-      if (resizeFrame !== null) return
+      const scheduleSync = () => {
+        if (resizeFrame !== null) return
+        resizeFrame = window.requestAnimationFrame(() => {
+          resizeFrame = null
+          void syncMaximized()
+        })
+      }
 
-      resizeFrame = window.requestAnimationFrame(() => {
-        resizeFrame = null
-        void syncMaximized()
-      })
-    }
+      void syncMaximized()
 
-    void syncMaximized()
-
-    appWindow
-      .onResized(() => {
-        scheduleSync()
-      })
-      .then((unlisten) => {
-        unlistenResize = unlisten
-      })
-      .catch(() => {
-        unlistenResize = null
-      })
+      appWindow
+        .onResized(() => scheduleSync())
+        .then((unlisten) => {
+          unlistenResize = unlisten
+        })
+        .catch(() => {
+          unlistenResize = null
+        })
+    })
 
     return () => {
       disposed = true
       if (resizeFrame !== null) {
         window.cancelAnimationFrame(resizeFrame)
       }
-      disposeTauriListener(unlistenResize, "WindowControls.resize")
+      unlistenResize?.()
     }
   }, [isWindows])
 
-  if (!isWindows) return null
-
-  const appWindow = getCurrentWindow()
+  if (!isWindows || !isDesktop()) return null
 
   return (
     <div className="flex h-8 items-stretch [-webkit-app-region:no-drag]">
@@ -74,7 +76,7 @@ export function WindowControls() {
         type="button"
         className={buttonClass}
         onClick={() => {
-          appWindow.minimize().catch((err) => {
+          appWindowRef.current?.minimize().catch((err: unknown) => {
             console.error("[WindowControls] failed to minimize:", err)
           })
         }}
@@ -87,7 +89,7 @@ export function WindowControls() {
         type="button"
         className={buttonClass}
         onClick={() => {
-          appWindow.toggleMaximize().catch((err) => {
+          appWindowRef.current?.toggleMaximize().catch((err: unknown) => {
             console.error("[WindowControls] failed to toggle maximize:", err)
           })
         }}
@@ -103,7 +105,7 @@ export function WindowControls() {
           "hover:bg-[#e81123] hover:text-white active:bg-[#c50f1f] active:text-white"
         )}
         onClick={() => {
-          appWindow.close().catch((err) => {
+          appWindowRef.current?.close().catch((err: unknown) => {
             console.error("[WindowControls] failed to close:", err)
           })
         }}

@@ -22,7 +22,7 @@ import {
   updateConversationTitle,
   updateConversationStatus,
   deleteConversation,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
 import { STATUS_ORDER, STATUS_COLORS } from "@/lib/types"
 import { SidebarConversationCard } from "./sidebar-conversation-card"

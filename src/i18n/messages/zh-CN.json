@@ -88,7 +88,8 @@
       "skills": "Skills",
       "shortcuts": "快捷键",
       "version_control": "版本控制",
-      "system": "系统"
+      "system": "系统",
+      "web_service": "Web 服务"
     }
   },
   "AppearanceSettings": {

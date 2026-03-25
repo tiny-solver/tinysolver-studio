@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react"
 import type { LiveMessage } from "@/contexts/acp-connections-context"
-import { getFolderConversation } from "@/lib/tauri"
+import { getFolderConversation } from "@/lib/api"
 import type {
   DbConversationDetail,
   MessageTurn,

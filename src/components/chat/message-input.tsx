@@ -1,9 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { TauriEvent } from "@tauri-apps/api/event"
-import { getCurrentWebview } from "@tauri-apps/api/webview"
-import { open } from "@tauri-apps/plugin-dialog"
+import { isDesktop } from "@/lib/platform"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
@@ -34,7 +32,8 @@ import {
 import { cn } from "@/lib/utils"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
-import { readFileBase64 } from "@/lib/tauri"
+import { readFileBase64 } from "@/lib/api"
+import { openFileDialog } from "@/lib/platform"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import type {
   AvailableCommandInfo,
@@ -751,10 +750,9 @@ export function MessageInput({
   const handlePickFiles = useCallback(async () => {
     if (disabled) return
     try {
-      const selected = await open({
+      const selected = await openFileDialog({
         multiple: true,
         directory: false,
-        defaultPath: defaultPath || undefined,
       })
       if (!selected) return
       const picked = Array.isArray(selected) ? selected : [selected]
@@ -846,6 +844,9 @@ export function MessageInput({
     }
 
     const setup = async () => {
+      if (!isDesktop()) return
+      const { getCurrentWebview } = await import("@tauri-apps/api/webview")
+      const { TauriEvent } = await import("@tauri-apps/api/event")
       const webview = getCurrentWebview()
       try {
         const unlistenEnter = await webview.listen<{

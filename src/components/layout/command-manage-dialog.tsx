@@ -18,7 +18,7 @@ import {
   createFolderCommand,
   updateFolderCommand,
   deleteFolderCommand,
-} from "@/lib/tauri"
+} from "@/lib/api"
 
 interface CommandDraft {
   id: number | null

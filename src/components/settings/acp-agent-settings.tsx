@@ -28,7 +28,7 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { openUrl } from "@/lib/platform"
 import { toast } from "sonner"
 import { AgentIcon } from "@/components/agent-icon"
 import {
@@ -64,7 +64,7 @@ import {
   acpReorderAgents,
   acpUninstallAgent,
   acpUpdateAgentPreferences,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type {
   AcpAgentInfo,
   AgentType,

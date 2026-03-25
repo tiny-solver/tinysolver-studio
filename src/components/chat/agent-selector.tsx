@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
-import { acpListAgents } from "@/lib/tauri"
+import { acpListAgents } from "@/lib/api"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import type { AgentType, AcpAgentInfo } from "@/lib/types"
 import { AGENT_LABELS } from "@/lib/types"

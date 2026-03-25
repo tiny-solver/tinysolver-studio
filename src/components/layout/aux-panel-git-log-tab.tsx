@@ -75,8 +75,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
-import { listen, type UnlistenFn } from "@tauri-apps/api/event"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+import { subscribe } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import {
@@ -86,7 +85,7 @@ import {
   gitLog,
   gitNewBranch,
   openPushWindow,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type { GitBranchList, GitLogEntry, GitLogFileChange } from "@/lib/types"
 import { toast } from "sonner"
 import { toErrorMessage } from "@/lib/app-error"
@@ -874,11 +873,11 @@ export function GitLogTab() {
       "folder://git-push-succeeded",
     ] as const
 
-    const unlistens: (UnlistenFn | null)[] = events.map(() => null)
+    const unlistens: ((() => void) | null)[] = events.map(() => null)
 
     events.forEach((eventName, i) => {
-      listen<{ folder_id: number }>(eventName, (event) => {
-        if (event.payload.folder_id !== folder.id) return
+      subscribe<{ folder_id: number }>(eventName, (payload) => {
+        if (payload.folder_id !== folder.id) return
         void refreshBranches()
         void fetchLog({ inline: true })
       })
@@ -891,8 +890,8 @@ export function GitLogTab() {
     })
 
     return () => {
-      events.forEach((eventName, i) => {
-        disposeTauriListener(unlistens[i], `GitLogTab.${eventName}`)
+      events.forEach((_eventName, i) => {
+        unlistens[i]?.()
       })
     }
   }, [folder, refreshBranches, fetchLog])

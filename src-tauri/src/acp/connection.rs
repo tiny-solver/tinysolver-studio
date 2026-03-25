@@ -24,7 +24,6 @@ use sacp::{
     on_receive_request, Agent, Client, ConnectionTo, Responder, SessionMessage, UntypedMessage,
 };
 use sacp_tokio::AcpAgent;
-use tauri::Emitter;
 use tokio::sync::mpsc;
 
 use crate::acp::error::AcpError;
@@ -195,7 +194,8 @@ async fn build_agent(
                     .flatten()
                     .is_some();
             if !has_cached_binary {
-                let _ = app_handle.emit(
+                crate::web::event_bridge::emit_event(
+                    app_handle,
                     "acp://event",
                     AcpEvent::StatusChanged {
                         connection_id: connection_id.into(),
@@ -237,7 +237,8 @@ pub async fn spawn_agent_connection(
     owner_window_label: String,
     app_handle: tauri::AppHandle,
 ) -> Result<AgentConnection, AcpError> {
-    let _ = app_handle.emit(
+    crate::web::event_bridge::emit_event(
+        &app_handle,
         "acp://event",
         AcpEvent::StatusChanged {
             connection_id: connection_id.clone(),
@@ -263,7 +264,8 @@ pub async fn spawn_agent_connection(
         .await;
 
         if let Err(e) = result {
-            let _ = handle.emit(
+            crate::web::event_bridge::emit_event(
+                &handle,
                 "acp://event",
                 AcpEvent::Error {
                     connection_id: conn_id.clone(),
@@ -272,7 +274,8 @@ pub async fn spawn_agent_connection(
             );
         }
 
-        let _ = handle.emit(
+        crate::web::event_bridge::emit_event(
+            &handle,
             "acp://event",
             AcpEvent::StatusChanged {
                 connection_id: conn_id,
@@ -315,7 +318,8 @@ fn emit_session_modes(
     modes: &Option<SessionModeState>,
 ) {
     if let Some(mode_state) = modes {
-        let _ = app_handle.emit(
+        crate::web::event_bridge::emit_event(
+            app_handle,
             "acp://event",
             AcpEvent::SessionModes {
                 connection_id: connection_id.into(),
@@ -416,7 +420,8 @@ fn emit_session_config_options_values(
     config_options: Vec<SessionConfigOption>,
 ) {
     let mapped = map_session_config_options(&config_options);
-    let _ = app_handle.emit(
+    crate::web::event_bridge::emit_event(
+        app_handle,
         "acp://event",
         AcpEvent::SessionConfigOptions {
             connection_id: connection_id.into(),
@@ -439,7 +444,8 @@ fn emit_session_config_options(
 }
 
 fn emit_selectors_ready(connection_id: &str, app_handle: &tauri::AppHandle) {
-    let _ = app_handle.emit(
+    crate::web::event_bridge::emit_event(
+        app_handle,
         "acp://event",
         AcpEvent::SelectorsReady {
             connection_id: connection_id.into(),
@@ -452,7 +458,8 @@ fn emit_prompt_capabilities(
     app_handle: &tauri::AppHandle,
     capabilities: &sacp::schema::PromptCapabilities,
 ) {
-    let _ = app_handle.emit(
+    crate::web::event_bridge::emit_event(
+        app_handle,
         "acp://event",
         AcpEvent::PromptCapabilities {
             connection_id: connection_id.into(),
@@ -627,7 +634,8 @@ async fn run_connection(
             );
 
             // Emit fork support capability
-            let _ = handle.emit(
+            crate::web::event_bridge::emit_event(
+                &handle,
                 "acp://event",
                 AcpEvent::ForkSupported {
                     connection_id: conn_id.clone(),
@@ -636,7 +644,8 @@ async fn run_connection(
             );
 
             // Emit connected status
-            let _ = handle.emit(
+            crate::web::event_bridge::emit_event(
+                &handle,
                 "acp://event",
                 AcpEvent::StatusChanged {
                     connection_id: conn_id.clone(),
@@ -689,7 +698,8 @@ async fn run_connection(
                             eprintln!("[ACP] Drained {drained} historical replay notifications");
                         }
 
-                        let _ = handle.emit(
+                        crate::web::event_bridge::emit_event(
+                            &handle,
                             "acp://event",
                             AcpEvent::SessionStarted {
                                 connection_id: conn_id.clone(),
@@ -732,7 +742,8 @@ async fn run_connection(
                             "[ACP] session/load failed ({}), falling back to session/new",
                             e
                         );
-                        let _ = handle.emit(
+                        crate::web::event_bridge::emit_event(
+                            &handle,
                             "acp://event",
                             AcpEvent::Error {
                                 connection_id: conn_id.clone(),
@@ -747,7 +758,8 @@ async fn run_connection(
                         let initial_config_options = new_resp.config_options.clone();
                         let mut session =
                             cx.attach_session(new_resp, Default::default())?;
-                        let _ = handle.emit(
+                        crate::web::event_bridge::emit_event(
+                            &handle,
                             "acp://event",
                             AcpEvent::SessionStarted {
                                 connection_id: conn_id.clone(),
@@ -799,7 +811,8 @@ async fn run_connection(
                 let sid = new_resp.session_id.0.to_string();
                 let initial_config_options = new_resp.config_options.clone();
                 let mut session = cx.attach_session(new_resp, Default::default())?;
-                let _ = handle.emit(
+                crate::web::event_bridge::emit_event(
+                    &handle,
                     "acp://event",
                     AcpEvent::SessionStarted {
                         connection_id: conn_id.clone(),
@@ -870,7 +883,8 @@ async fn handle_permission_request(
 
     perms.lock().await.insert(request_id.clone(), responder);
 
-    let _ = handle.emit(
+    crate::web::event_bridge::emit_event(
+        handle,
         "acp://event",
         AcpEvent::PermissionRequest {
             connection_id: conn_id.into(),
@@ -914,7 +928,8 @@ async fn set_session_mode(
         .block_task()
         .await?;
 
-    let _ = handle.emit(
+    crate::web::event_bridge::emit_event(
+        handle,
         "acp://event",
         AcpEvent::ModeChanged {
             connection_id: conn_id.into(),
@@ -1166,7 +1181,8 @@ fn emit_terminal_output_update(
     output: String,
     append: bool,
 ) {
-    let _ = app_handle.emit(
+    crate::web::event_bridge::emit_event(
+        app_handle,
         "acp://event",
         AcpEvent::ToolCallUpdate {
             connection_id: connection_id.into(),
@@ -1350,7 +1366,8 @@ async fn handle_fork_or_exit(
         .meta(fork_resp.meta);
     let mut session = cx.attach_session(new_resp, Default::default())?;
 
-    let _ = handle.emit(
+    crate::web::event_bridge::emit_event(
+        handle,
         "acp://event",
         AcpEvent::SessionStarted {
             connection_id: conn_id.to_string(),
@@ -1430,7 +1447,8 @@ async fn run_conversation_loop<'a>(
             Some(ConnectionCommand::Prompt { blocks }) => {
                 let prompt_blocks = map_prompt_blocks(blocks);
                 if prompt_blocks.is_empty() {
-                    let _ = handle.emit(
+                    crate::web::event_bridge::emit_event(
+                        handle,
                         "acp://event",
                         AcpEvent::Error {
                             connection_id: conn_id.into(),
@@ -1440,7 +1458,8 @@ async fn run_conversation_loop<'a>(
                     continue;
                 }
 
-                let _ = handle.emit(
+                crate::web::event_bridge::emit_event(
+                    handle,
                     "acp://event",
                     AcpEvent::StatusChanged {
                         connection_id: conn_id.into(),
@@ -1532,7 +1551,8 @@ async fn run_conversation_loop<'a>(
                                         StopReason::Cancelled => "cancelled",
                                         _ => "unknown",
                                     };
-                                    let _ = handle.emit(
+                                    crate::web::event_bridge::emit_event(
+                                        handle,
                                         "acp://event",
                                         AcpEvent::TurnComplete {
                                             connection_id: conn_id.into(),
@@ -1562,7 +1582,8 @@ async fn run_conversation_loop<'a>(
                                 StopReason::Cancelled => "cancelled",
                                 _ => "unknown",
                             };
-                            let _ = handle.emit(
+                            crate::web::event_bridge::emit_event(
+                                handle,
                                 "acp://event",
                                 AcpEvent::TurnComplete {
                                     connection_id: conn_id.into(),
@@ -1599,7 +1620,8 @@ async fn run_conversation_loop<'a>(
                                     let req = SetSessionModeRequest::new(sid.clone(), mode_id.clone());
                                     match cx.send_request_to(Agent, req).block_task().await {
                                         Ok(_) => {
-                                            let _ = handle.emit(
+                                            crate::web::event_bridge::emit_event(
+                                                handle,
                                                 "acp://event",
                                                 AcpEvent::ModeChanged {
                                                     connection_id: conn_id.into(),
@@ -1608,7 +1630,8 @@ async fn run_conversation_loop<'a>(
                                             );
                                         }
                                         Err(e) => {
-                                            let _ = handle.emit(
+                                            crate::web::event_bridge::emit_event(
+                                                handle,
                                                 "acp://event",
                                                 AcpEvent::Error {
                                                     connection_id: conn_id.into(),
@@ -1632,7 +1655,8 @@ async fn run_conversation_loop<'a>(
                                     )
                                     .await
                                     {
-                                        let _ = handle.emit(
+                                        crate::web::event_bridge::emit_event(
+                                            handle,
                                             "acp://event",
                                             AcpEvent::Error {
                                                 connection_id: conn_id.into(),
@@ -1665,7 +1689,8 @@ async fn run_conversation_loop<'a>(
                                     // transitions out of "prompting" and the user can
                                     // send new messages.  Don't wait for the agent —
                                     // it may be slow to respond or not respond at all.
-                                    let _ = handle.emit(
+                                    crate::web::event_bridge::emit_event(
+                                        handle,
                                         "acp://event",
                                         AcpEvent::TurnComplete {
                                             connection_id: conn_id.into(),
@@ -1715,7 +1740,8 @@ async fn run_conversation_loop<'a>(
                     break;
                 }
 
-                let _ = handle.emit(
+                crate::web::event_bridge::emit_event(
+                    handle,
                     "acp://event",
                     AcpEvent::StatusChanged {
                         connection_id: conn_id.into(),
@@ -1736,7 +1762,8 @@ async fn run_conversation_loop<'a>(
             }
             Some(ConnectionCommand::SetMode { mode_id }) => {
                 if let Err(e) = set_session_mode(session, conn_id, handle, mode_id).await {
-                    let _ = handle.emit(
+                    crate::web::event_bridge::emit_event(
+                        handle,
                         "acp://event",
                         AcpEvent::Error {
                             connection_id: conn_id.into(),
@@ -1754,7 +1781,8 @@ async fn run_conversation_loop<'a>(
                 if let Err(e) =
                     set_session_config_option(&cx, &sid, conn_id, handle, config_id, value_id).await
                 {
-                    let _ = handle.emit(
+                    crate::web::event_bridge::emit_event(
+                        handle,
                         "acp://event",
                         AcpEvent::Error {
                             connection_id: conn_id.into(),
@@ -1908,7 +1936,8 @@ fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::ContentDelta {
                     connection_id: connection_id.into(),
@@ -1923,7 +1952,8 @@ fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::Thinking {
                     connection_id: connection_id.into(),
@@ -1938,7 +1968,8 @@ fn emit_conversation_update(
             let content = serialize_tool_call_content(&tc.content);
             let raw_input = json_value_to_text(&tc.raw_input);
             let raw_output = json_value_to_text(&tc.raw_output);
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::ToolCall {
                     connection_id: connection_id.into(),
@@ -1960,7 +1991,8 @@ fn emit_conversation_update(
                 .and_then(serialize_tool_call_content);
             let raw_input = json_value_to_text(&tcu.fields.raw_input);
             let raw_output = json_value_to_text(&tcu.fields.raw_output);
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::ToolCallUpdate {
                     connection_id: connection_id.into(),
@@ -1975,7 +2007,8 @@ fn emit_conversation_update(
             );
         }
         SessionUpdate::CurrentModeUpdate(update) => {
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::ModeChanged {
                     connection_id: connection_id.into(),
@@ -1984,7 +2017,8 @@ fn emit_conversation_update(
             );
         }
         SessionUpdate::Plan(plan) => {
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::PlanUpdate {
                     connection_id: connection_id.into(),
@@ -2011,7 +2045,8 @@ fn emit_conversation_update(
                     }
                 })
                 .collect();
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::AvailableCommands {
                     connection_id: connection_id.into(),
@@ -2020,7 +2055,8 @@ fn emit_conversation_update(
             );
         }
         SessionUpdate::UsageUpdate(update) => {
-            let _ = app_handle.emit(
+            crate::web::event_bridge::emit_event(
+                app_handle,
                 "acp://event",
                 AcpEvent::UsageUpdate {
                     connection_id: connection_id.into(),

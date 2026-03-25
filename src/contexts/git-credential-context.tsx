@@ -17,7 +17,7 @@ import {
   KeyRound,
   Loader2,
 } from "lucide-react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { openUrl } from "@/lib/platform"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,7 +37,7 @@ import {
   getGitHubAccounts,
   updateGitHubAccounts,
   saveAccountToken,
-} from "@/lib/tauri"
+} from "@/lib/api"
 
 // ---------------------------------------------------------------------------
 // Context

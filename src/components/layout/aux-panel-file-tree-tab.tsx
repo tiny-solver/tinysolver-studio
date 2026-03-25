@@ -8,8 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { listen, type UnlistenFn } from "@tauri-apps/api/event"
-import { revealItemInDir } from "@tauri-apps/plugin-opener"
+import { revealItemInDir, subscribe } from "@/lib/platform"
 import ignore from "ignore"
 import { Check, ChevronRight } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -36,8 +35,7 @@ import {
   saveFileCopy,
   startFileTreeWatch,
   stopFileTreeWatch,
-} from "@/lib/tauri"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+} from "@/lib/api"
 import {
   emitAttachFileToSession,
   emitAppendTextToSession,
@@ -1907,7 +1905,7 @@ export function FileTreeTab() {
     const rootPath = folder?.path
     if (!rootPath) return
 
-    let unlisten: UnlistenFn | null = null
+    let unlisten: (() => void) | null = null
     const normalizedRootPath = normalizeComparePath(rootPath)
 
     const scheduleTreeRefresh = (refreshGitStatus: boolean) => {
@@ -2046,20 +2044,17 @@ export function FileTreeTab() {
       }
 
       try {
-        unlisten = await listen<FileTreeChangedEvent>(
+        unlisten = await subscribe<FileTreeChangedEvent>(
           "folder://file-tree-changed",
-          (event) => {
+          (payload) => {
             if (
-              normalizeComparePath(event.payload.root_path) !==
-              normalizedRootPath
+              normalizeComparePath(payload.root_path) !== normalizedRootPath
             ) {
               return
             }
 
-            const changedPaths =
-              event.payload.changed_paths.map(normalizeComparePath)
-            const shouldRefreshGitStatus =
-              event.payload.refresh_git_status ?? true
+            const changedPaths = payload.changed_paths.map(normalizeComparePath)
+            const shouldRefreshGitStatus = payload.refresh_git_status ?? true
             const nonGitChangedPaths = changedPaths.filter(
               (path) => !isGitMetadataPath(path)
             )
@@ -2069,13 +2064,13 @@ export function FileTreeTab() {
               (path) => !filePathSetRef.current.has(path)
             )
             const needsTreeRefresh =
-              event.payload.full_reload ||
+              payload.full_reload ||
               (!onlyGitMetadataChanges &&
-                (event.payload.kind !== "modify" ||
+                (payload.kind !== "modify" ||
                   nonGitChangedPaths.length === 0 ||
                   hasUnknownPath))
 
-            if (onlyGitMetadataChanges && !event.payload.full_reload) {
+            if (onlyGitMetadataChanges && !payload.full_reload) {
               if (shouldRefreshGitStatus) {
                 scheduleStatusRefresh()
               }
@@ -2085,13 +2080,13 @@ export function FileTreeTab() {
               scheduleStatusRefresh()
             }
 
-            if (onlyGitMetadataChanges && !event.payload.full_reload) {
+            if (onlyGitMetadataChanges && !payload.full_reload) {
               return
             }
 
             const changedActivePath = getActiveChangedFilePath(
               nonGitChangedPaths,
-              event.payload.full_reload
+              payload.full_reload
             )
             if (!changedActivePath) return
 
@@ -2145,7 +2140,7 @@ export function FileTreeTab() {
       pendingTreeRefreshRef.current = false
       pendingTreeRefreshNeedsStatusRef.current = false
       pendingStatusRefreshRef.current = false
-      disposeTauriListener(unlisten, "AuxPanelFileTree.fileTreeChanged")
+      unlisten?.()
       void stopFileTreeWatch(rootPath)
     }
   }, [fetchTree, folder?.path, openFilePreview, t])

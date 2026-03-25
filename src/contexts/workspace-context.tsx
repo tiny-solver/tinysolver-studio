@@ -22,7 +22,7 @@ import {
   readFileForEdit,
   readFilePreview,
   saveFileContent,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import { languageFromPath } from "@/lib/language-detect"
 import {
   loadPersistedWorkspaceMode,

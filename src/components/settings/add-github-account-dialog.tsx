@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react"
 import { ExternalLink, Eye, EyeOff, Loader2 } from "lucide-react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { openUrl } from "@/lib/platform"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { validateGitHubToken, saveAccountToken } from "@/lib/tauri"
+import { validateGitHubToken, saveAccountToken } from "@/lib/api"
 import type { GitHubAccount } from "@/lib/types"
 
 interface AddGitHubAccountDialogProps {

@@ -9,7 +9,8 @@ import {
   RefreshCw,
   Wifi,
 } from "lucide-react"
-import type { Update } from "@tauri-apps/plugin-updater"
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Update = any
 import { useLocale, useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { useAppI18n } from "@/components/i18n-provider"
@@ -26,7 +27,7 @@ import {
   getSystemProxySettings,
   updateSystemLanguageSettings,
   updateSystemProxySettings,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type { AppLocale } from "@/lib/types"
 import {
   checkAppUpdate,

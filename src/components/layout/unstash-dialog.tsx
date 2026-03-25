@@ -43,7 +43,7 @@ import {
   gitStashApply,
   gitStashDrop,
   gitShowFile,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { languageFromPath } from "@/lib/language-detect"
 import type { GitStashEntry, GitStatusEntry } from "@/lib/types"

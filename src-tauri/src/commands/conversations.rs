@@ -459,6 +459,60 @@ fn compute_stats(all_conversations: &[ConversationSummary]) -> AgentStats {
     }
 }
 
+// ── Public helpers for the embedded web server ──
+
+pub async fn list_conversations_for_web(
+    agent_type: Option<AgentType>,
+    search: Option<String>,
+    sort_by: Option<String>,
+    folder_path: Option<String>,
+) -> Result<Vec<ConversationSummary>, AppCommandError> {
+    tokio::task::spawn_blocking(move || list_conversations_sync(agent_type, search, sort_by, folder_path))
+        .await
+        .map_err(|e| {
+            AppCommandError::task_execution_failed("Failed to list conversations")
+                .with_detail(e.to_string())
+        })
+}
+
+pub async fn list_folders_for_web() -> Result<Vec<FolderInfo>, AppCommandError> {
+    tokio::task::spawn_blocking(move || {
+        let all = list_conversations_sync(None, None, None, None);
+        compute_folders(&all)
+    })
+    .await
+    .map_err(|e| {
+        AppCommandError::task_execution_failed("Failed to list folders").with_detail(e.to_string())
+    })
+}
+
+pub async fn get_stats_for_web() -> Result<AgentStats, AppCommandError> {
+    tokio::task::spawn_blocking(move || {
+        let all = list_conversations_sync(None, None, None, None);
+        compute_stats(&all)
+    })
+    .await
+    .map_err(|e| {
+        AppCommandError::task_execution_failed("Failed to compute stats")
+            .with_detail(e.to_string())
+    })
+}
+
+pub async fn get_sidebar_data_for_web() -> Result<SidebarData, AppCommandError> {
+    tokio::task::spawn_blocking(move || {
+        let all = list_conversations_sync(None, None, None, None);
+        SidebarData {
+            folders: compute_folders(&all),
+            stats: compute_stats(&all),
+        }
+    })
+    .await
+    .map_err(|e| {
+        AppCommandError::task_execution_failed("Failed to build sidebar data")
+            .with_detail(e.to_string())
+    })
+}
+
 fn parse_error_to_app_error(error: ParseError) -> AppCommandError {
     match error {
         ParseError::ConversationNotFound(id) => {

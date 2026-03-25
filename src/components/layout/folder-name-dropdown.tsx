@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { ChevronDown, Folder, FolderOpen, GitBranch } from "lucide-react"
-import { open } from "@tauri-apps/plugin-dialog"
 import { useTranslations } from "next-intl"
 import {
   DropdownMenu,
@@ -17,7 +16,8 @@ import {
   listOpenFolders,
   loadFolderHistory,
   openFolderWindow,
-} from "@/lib/tauri"
+} from "@/lib/api"
+import { openFileDialog } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
 import { CloneDialog } from "@/components/welcome/clone-dialog"
 import type { FolderHistoryEntry } from "@/lib/types"
@@ -50,9 +50,11 @@ export function FolderNameDropdown() {
   }
 
   async function handleOpenFolder() {
-    const selected = await open({ directory: true, multiple: false })
+    const selected = await openFileDialog({ directory: true, multiple: false })
     if (selected) {
-      await openFolderWindow(selected)
+      await openFolderWindow(
+        Array.isArray(selected) ? selected[0] : selected,
+      )
     }
   }
 

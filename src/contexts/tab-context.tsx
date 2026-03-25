@@ -13,7 +13,7 @@ import {
 import { useTranslations } from "next-intl"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
-import { saveFolderOpenedConversations } from "@/lib/tauri"
+import { saveFolderOpenedConversations } from "@/lib/api"
 import type {
   AgentType,
   ConversationStatus,

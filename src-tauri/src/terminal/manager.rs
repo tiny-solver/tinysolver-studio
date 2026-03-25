@@ -6,7 +6,6 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use tauri::Emitter;
 
 use super::error::TerminalError;
 use super::types::{TerminalEvent, TerminalInfo};
@@ -408,7 +407,7 @@ fn read_loop(
                     terminal_id: terminal_id.clone(),
                     data,
                 };
-                let _ = app_handle.emit(&output_event, &event);
+                crate::web::event_bridge::emit_event(app_handle, &output_event, event.clone());
             }
             Err(_) => break,
         }
@@ -428,5 +427,5 @@ fn emit_terminal_exit_event(app_handle: &tauri::AppHandle, terminal_id: &str) {
         terminal_id: terminal_id.to_string(),
         data: String::new(),
     };
-    let _ = app_handle.emit(&exit_event, &event);
+    crate::web::event_bridge::emit_event(app_handle, &exit_event, event.clone());
 }

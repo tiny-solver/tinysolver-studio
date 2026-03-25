@@ -3,12 +3,12 @@
 import { Suspense, useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { getCurrentWindow } from "@tauri-apps/api/window"
+const getCurrentWindow = async () => { const m = await import("@tauri-apps/api/window"); return m.getCurrentWindow() }
 import { Loader2 } from "lucide-react"
 import { MergeWorkspace } from "@/components/merge/merge-workspace"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
 import { AppToaster } from "@/components/ui/app-toaster"
-import { getFolder } from "@/lib/tauri"
+import { getFolder } from "@/lib/api"
 import type { FolderDetail } from "@/lib/types"
 
 const TOAST_DURATION_MS = 6000
@@ -37,12 +37,13 @@ function MergePageInner() {
   const folder = state.loadedId === normalizedFolderId ? state.folder : null
   const error = state.loadedId === normalizedFolderId ? state.error : null
 
-  const closeWindow = useCallback(() => {
-    getCurrentWindow()
-      .close()
-      .catch((err) => {
-        console.error("[MergePage] failed to close window:", err)
-      })
+  const closeWindow = useCallback(async () => {
+    try {
+      const win = await getCurrentWindow()
+      await win.close()
+    } catch (err) {
+      console.error("[MergePage] failed to close window:", err)
+    }
   }, [])
 
   useEffect(() => {

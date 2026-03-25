@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::app_error::AppCommandError;
 use crate::db::AppDatabase;
@@ -534,7 +534,8 @@ pub async fn cleanup_dangling_merge(app: &AppHandle, merge_window_label: &str) {
             .output()
             .await;
 
-        let _ = app.emit(
+        crate::web::event_bridge::emit_event(
+            app,
             "folder://merge-aborted",
             serde_json::json!({ "folder_id": folder_id }),
         );

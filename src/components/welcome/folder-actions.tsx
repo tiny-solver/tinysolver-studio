@@ -4,8 +4,8 @@ import { useState } from "react"
 import { FolderOpen, GitBranch } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { open } from "@tauri-apps/plugin-dialog"
-import { openFolderWindow } from "@/lib/tauri"
+import { openFolderWindow } from "@/lib/api"
+import { openFileDialog } from "@/lib/platform"
 import { Button } from "@/components/ui/button"
 import { CloneDialog } from "./clone-dialog"
 import { resolveWelcomeError } from "@/components/welcome/error-utils"
@@ -15,8 +15,9 @@ export function FolderActions() {
   const [cloneOpen, setCloneOpen] = useState(false)
 
   const handleOpen = async () => {
-    const selected = await open({ directory: true, multiple: false })
-    if (!selected) return
+    const result = await openFileDialog({ directory: true, multiple: false })
+    if (!result) return
+    const selected = Array.isArray(result) ? result[0] : result
 
     try {
       await openFolderWindow(selected)

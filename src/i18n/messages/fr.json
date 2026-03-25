@@ -88,7 +88,8 @@
       "skills": "Skills",
       "shortcuts": "Raccourcis",
       "version_control": "Contrôle de version",
-      "system": "Système"
+      "system": "Système",
+      "web_service": "Service Web"
     }
   },
   "AppearanceSettings": {

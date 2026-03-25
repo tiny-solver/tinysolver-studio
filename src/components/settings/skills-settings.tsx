@@ -55,7 +55,7 @@ import {
   openFolderWindow,
   acpReadAgentSkill,
   acpSaveAgentSkill,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type {
   AcpAgentInfo,
   AgentSkillItem,

@@ -88,7 +88,8 @@
       "skills": "Skills",
       "shortcuts": "ショートカット",
       "version_control": "バージョン管理",
-      "system": "システム"
+      "system": "システム",
+      "web_service": "Webサービス"
     }
   },
   "AppearanceSettings": {

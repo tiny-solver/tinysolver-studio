@@ -22,7 +22,7 @@ import {
   toIntlLocale,
   type IntlLocale,
 } from "@/lib/i18n"
-import { getSystemLanguageSettings } from "@/lib/tauri"
+import { getSystemLanguageSettings } from "@/lib/api"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import { AppBootLoading } from "@/components/layout/app-boot-loading"
 import type { AppLocale, SystemLanguageSettings } from "@/lib/types"

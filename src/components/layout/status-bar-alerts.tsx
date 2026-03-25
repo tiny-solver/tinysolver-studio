@@ -13,8 +13,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useAcpActions } from "@/contexts/acp-connections-context"
-import { openUrl } from "@tauri-apps/plugin-opener"
-import { openSettingsWindow } from "@/lib/tauri"
+import { openUrl } from "@/lib/platform"
+import { openSettingsWindow } from "@/lib/api"
 import { AGENT_LABELS, type AgentType } from "@/lib/types"
 
 const KNOWN_AGENT_TYPES = new Set<AgentType>(

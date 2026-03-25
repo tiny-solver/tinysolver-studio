@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { terminalSpawn, terminalKill } from "@/lib/tauri"
+import { terminalSpawn, terminalKill } from "@/lib/api"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { listen, type UnlistenFn } from "@tauri-apps/api/event"
+import { subscribe } from "@/lib/platform"
 import { AlertTriangle, Check, FileWarning, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -20,8 +20,7 @@ import {
   gitAbortOperation,
   gitContinueOperation,
   openMergeWindow,
-} from "@/lib/tauri"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+} from "@/lib/api"
 import type { GitConflictInfo } from "@/lib/types"
 
 interface ConflictDialogProps {
@@ -76,15 +75,15 @@ export function ConflictDialog({
   useEffect(() => {
     if (!open) return
 
-    let unlistenResolved: UnlistenFn | null = null
-    let unlistenCompleted: UnlistenFn | null = null
-    let unlistenAborted: UnlistenFn | null = null
+    let unlistenResolved: (() => void) | null = null
+    let unlistenCompleted: (() => void) | null = null
+    let unlistenAborted: (() => void) | null = null
 
-    listen<{ folder_id: number; file: string }>(
+    subscribe<{ folder_id: number; file: string }>(
       "folder://merge-conflict-resolved",
-      (event) => {
-        if (event.payload.folder_id !== folderId) return
-        setResolvedFiles((prev) => new Set([...prev, event.payload.file]))
+      (payload) => {
+        if (payload.folder_id !== folderId) return
+        setResolvedFiles((prev) => new Set([...prev, payload.file]))
       }
     )
       .then((fn) => {
@@ -92,8 +91,8 @@ export function ConflictDialog({
       })
       .catch(() => {})
 
-    listen<{ folder_id: number }>("folder://merge-completed", (event) => {
-      if (event.payload.folder_id !== folderId) return
+    subscribe<{ folder_id: number }>("folder://merge-completed", (payload) => {
+      if (payload.folder_id !== folderId) return
       setDone(true)
       onResolved()
       onClose()
@@ -105,8 +104,8 @@ export function ConflictDialog({
 
     // Merge was aborted (user clicked abort in merge window, or window closed)
     // Reset resolved state since abort reverts all changes
-    listen<{ folder_id: number }>("folder://merge-aborted", (event) => {
-      if (event.payload.folder_id !== folderId) return
+    subscribe<{ folder_id: number }>("folder://merge-aborted", (payload) => {
+      if (payload.folder_id !== folderId) return
       setDone(true)
       setResolvedFiles(new Set())
       onClose()
@@ -117,12 +116,9 @@ export function ConflictDialog({
       .catch(() => {})
 
     return () => {
-      disposeTauriListener(
-        unlistenResolved,
-        "ConflictDialog.mergeConflictResolved"
-      )
-      disposeTauriListener(unlistenCompleted, "ConflictDialog.mergeCompleted")
-      disposeTauriListener(unlistenAborted, "ConflictDialog.mergeAborted")
+      unlistenResolved?.()
+      unlistenCompleted?.()
+      unlistenAborted?.()
     }
   }, [open, folderId, onResolved, onClose])
 

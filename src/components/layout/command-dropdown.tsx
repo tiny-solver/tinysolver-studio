@@ -1,6 +1,6 @@
 "use client"
 
-import { listen, type UnlistenFn } from "@tauri-apps/api/event"
+import { subscribe } from "@/lib/platform"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { ChevronDown, Play, Plus, Square } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -19,8 +19,7 @@ import {
   listFolderCommands,
   terminalKill,
   terminalList,
-} from "@/lib/tauri"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+} from "@/lib/api"
 import type { FolderCommand, TerminalEvent } from "@/lib/types"
 import { CommandManageDialog } from "./command-manage-dialog"
 
@@ -54,7 +53,7 @@ export function CommandDropdown() {
   const [runningCommandTerminals, setRunningCommandTerminals] = useState<
     Record<number, string>
   >({})
-  const exitUnlistenersRef = useRef<Map<string, UnlistenFn>>(new Map())
+  const exitUnlistenersRef = useRef<Map<string, () => void>>(new Map())
   const runningCommandTerminalsRef = useRef<Record<number, string>>({})
 
   const folderId = folder?.id ?? 0
@@ -67,7 +66,7 @@ export function CommandDropdown() {
   const clearRunningByTerminalId = useCallback((terminalId: string) => {
     const unlisten = exitUnlistenersRef.current.get(terminalId)
     if (unlisten) {
-      disposeTauriListener(unlisten, "CommandDropdown.terminalExit")
+      unlisten()
       exitUnlistenersRef.current.delete(terminalId)
     }
 
@@ -86,7 +85,7 @@ export function CommandDropdown() {
 
   const clearAllRunningStates = useCallback(() => {
     for (const unlisten of exitUnlistenersRef.current.values()) {
-      disposeTauriListener(unlisten, "CommandDropdown.terminalExit")
+      unlisten()
     }
     exitUnlistenersRef.current.clear()
     setRunningCommandTerminals({})
@@ -165,7 +164,7 @@ export function CommandDropdown() {
     async (terminalId: string) => {
       if (exitUnlistenersRef.current.has(terminalId)) return
       try {
-        const unlisten = await listen<TerminalEvent>(
+        const unlisten = await subscribe<TerminalEvent>(
           `terminal://exit/${terminalId}`,
           () => {
             clearRunningByTerminalId(terminalId)

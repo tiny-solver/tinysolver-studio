@@ -51,7 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { gitLog, gitPush, gitPushInfo, gitShowFile } from "@/lib/tauri"
+import { gitLog, gitPush, gitPushInfo, gitShowFile } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { languageFromPath } from "@/lib/language-detect"
 import type { GitLogEntry, GitLogFileChange, GitPushInfo } from "@/lib/types"

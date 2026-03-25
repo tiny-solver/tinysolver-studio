@@ -88,7 +88,8 @@
       "skills": "Skills",
       "shortcuts": "الاختصارات",
       "version_control": "التحكم بالإصدارات",
-      "system": "النظام"
+      "system": "النظام",
+      "web_service": "خدمة الويب"
     }
   },
   "AppearanceSettings": {

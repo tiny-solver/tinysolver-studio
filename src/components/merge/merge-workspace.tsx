@@ -1,7 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { emit } from "@tauri-apps/api/event"
+async function emitEvent(event: string, payload?: unknown) {
+  try {
+    const { emit } = await import("@tauri-apps/api/event")
+    await emit(event, payload)
+  } catch { /* not in Tauri */ }
+}
 import { Check, FileWarning, Loader2, X, CheckCheck } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -19,7 +24,7 @@ import {
   gitAbortOperation,
   gitContinueOperation,
   gitStartPullMerge,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import { languageFromPath } from "@/lib/language-detect"
 import { toErrorMessage } from "@/lib/app-error"
 import type { GitConflictFileVersions } from "@/lib/types"
@@ -121,7 +126,7 @@ export function MergeWorkspace({
       setResolvedFiles((prev) => new Set([...prev, selectedFile]))
 
       // Notify parent window
-      await emit("folder://merge-conflict-resolved", {
+      await emitEvent("folder://merge-conflict-resolved", {
         folder_id: folderId,
         file: selectedFile,
       })
@@ -145,7 +150,7 @@ export function MergeWorkspace({
     try {
       await gitAbortOperation(folderPath, operation)
       toast.success(t("abortSuccess"))
-      await emit("folder://merge-aborted", { folder_id: folderId })
+      await emitEvent("folder://merge-aborted", { folder_id: folderId })
       onAborted()
     } catch (err) {
       toast.error(toErrorMessage(err))
@@ -159,7 +164,7 @@ export function MergeWorkspace({
     try {
       await gitContinueOperation(folderPath, operation)
       toast.success(t("allResolved"))
-      await emit("folder://merge-completed", { folder_id: folderId })
+      await emitEvent("folder://merge-completed", { folder_id: folderId })
       onCompleted()
     } catch (err) {
       toast.error(toErrorMessage(err))

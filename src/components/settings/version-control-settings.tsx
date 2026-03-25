@@ -35,7 +35,7 @@ import {
   validateGitHubToken,
   getAccountToken,
   deleteAccountToken,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type {
   GitDetectResult,
   GitHubAccount,

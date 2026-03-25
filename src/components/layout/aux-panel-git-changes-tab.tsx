@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { listen, type UnlistenFn } from "@tauri-apps/api/event"
+import { subscribe } from "@/lib/platform"
 import { ChevronsDownUp, ChevronsUpDown } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -46,8 +46,7 @@ import {
   openCommitWindow,
   startFileTreeWatch,
   stopFileTreeWatch,
-} from "@/lib/tauri"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+} from "@/lib/api"
 import type { FileTreeChangedEvent, GitStatusEntry } from "@/lib/types"
 import {
   AlertDialog,
@@ -611,7 +610,7 @@ export function GitChangesTab() {
     const rootPath = folder?.path
     if (!rootPath || !isChangesTabActive) return
 
-    let unlisten: UnlistenFn | null = null
+    let unlisten: (() => void) | null = null
     const normalizedRootPath = normalizeComparePath(rootPath)
 
     const scheduleRefresh = () => {
@@ -631,16 +630,15 @@ export function GitChangesTab() {
       }
 
       try {
-        unlisten = await listen<FileTreeChangedEvent>(
+        unlisten = await subscribe<FileTreeChangedEvent>(
           "folder://file-tree-changed",
-          (event) => {
+          (payload) => {
             if (
-              normalizeComparePath(event.payload.root_path) !==
-              normalizedRootPath
+              normalizeComparePath(payload.root_path) !== normalizedRootPath
             ) {
               return
             }
-            if (!shouldRefreshFromEvent(event.payload)) return
+            if (!shouldRefreshFromEvent(payload)) return
             scheduleRefresh()
           }
         )
@@ -656,7 +654,7 @@ export function GitChangesTab() {
         clearTimeout(refreshTimerRef.current)
         refreshTimerRef.current = null
       }
-      disposeTauriListener(unlisten, "AuxPanelGitChanges.fileTreeChanged")
+      unlisten?.()
       void stopFileTreeWatch(rootPath)
     }
   }, [fetchChanges, folder?.path, isChangesTabActive])

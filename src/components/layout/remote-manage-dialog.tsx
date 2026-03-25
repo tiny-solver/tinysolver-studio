@@ -19,7 +19,7 @@ import {
   gitAddRemote,
   gitRemoveRemote,
   gitSetRemoteUrl,
-} from "@/lib/tauri"
+} from "@/lib/api"
 
 interface RemoteDraft {
   originalName: string | null

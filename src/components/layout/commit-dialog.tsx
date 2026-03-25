@@ -41,7 +41,7 @@ import {
   gitStatus,
   deleteFileTreeEntry,
   readFilePreview,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type { GitStatusEntry } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"

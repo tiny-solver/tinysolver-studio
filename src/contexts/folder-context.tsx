@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { toErrorMessage } from "@/lib/app-error"
-import { getFolder, listFolderConversations } from "@/lib/tauri"
+import { getFolder, listFolderConversations } from "@/lib/api"
 import type {
   AgentType,
   AgentStats,

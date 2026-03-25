@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { openUrl } from "@/lib/platform"
 import type { LinkSafetyConfig, LinkSafetyModalProps } from "streamdown"
 import { toast } from "sonner"
 import { useFolderContext } from "@/contexts/folder-context"

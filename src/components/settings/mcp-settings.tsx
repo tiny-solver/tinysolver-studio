@@ -45,7 +45,7 @@ import {
   mcpScanLocal,
   mcpSearchMarketplace,
   mcpUpsertLocalServer,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type {
   LocalMcpServer,

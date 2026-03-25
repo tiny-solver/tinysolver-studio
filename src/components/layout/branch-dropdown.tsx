@@ -1,7 +1,13 @@
 "use client"
 
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event"
+const emitEvent = async (event: string, payload?: unknown) => {
+  try {
+    const { emit } = await import("@tauri-apps/api/event")
+    await emit(event, payload)
+  } catch { /* not in Tauri */ }
+}
+import { openFileDialog, subscribe } from "@/lib/platform"
 import {
   GitBranch,
   ChevronDown,
@@ -62,7 +68,6 @@ import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { open } from "@tauri-apps/plugin-dialog"
 import {
   gitInit,
   gitPull,
@@ -79,11 +84,10 @@ import {
   setFolderParentBranch,
   openStashWindow,
   openPushWindow,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import { RemoteManageDialog } from "@/components/layout/remote-manage-dialog"
 import { ConflictDialog } from "@/components/layout/conflict-dialog"
 import { StashDialog } from "@/components/layout/stash-dialog"
-import { disposeTauriListener } from "@/lib/tauri-listener"
 import { toErrorMessage } from "@/lib/app-error"
 import type { GitBranchList, GitConflictInfo } from "@/lib/types"
 import { toast } from "sonner"
@@ -167,15 +171,15 @@ export function BranchDropdown({
   useEffect(() => {
     if (!folder) return
 
-    let unlisten: UnlistenFn | null = null
+    let unlisten: (() => void) | null = null
 
-    listen<GitCommitSucceededEventPayload>(
+    subscribe<GitCommitSucceededEventPayload>(
       "folder://git-commit-succeeded",
-      (event) => {
-        if (event.payload.folder_id !== folder.id) return
+      (payload) => {
+        if (payload.folder_id !== folder.id) return
         toast.success(t("toasts.commitCodeCompleted"), {
           description: t("toasts.committedFiles", {
-            count: event.payload.committed_files,
+            count: payload.committed_files,
           }),
         })
         onBranchChange()
@@ -189,20 +193,20 @@ export function BranchDropdown({
       })
 
     return () => {
-      disposeTauriListener(unlisten, "BranchDropdown.gitCommitSucceeded")
+      unlisten?.()
     }
   }, [folder, onBranchChange, t])
 
   useEffect(() => {
     if (!folder) return
 
-    let unlisten: UnlistenFn | null = null
+    let unlisten: (() => void) | null = null
 
-    listen<GitPushSucceededEventPayload>(
+    subscribe<GitPushSucceededEventPayload>(
       "folder://git-push-succeeded",
-      (event) => {
-        if (event.payload.folder_id !== folder.id) return
-        const { pushed_commits, upstream_set } = event.payload
+      (payload) => {
+        if (payload.folder_id !== folder.id) return
+        const { pushed_commits, upstream_set } = payload
         let description: string
         if (upstream_set) {
           description =
@@ -226,7 +230,7 @@ export function BranchDropdown({
       })
 
     return () => {
-      disposeTauriListener(unlisten, "BranchDropdown.gitPushSucceeded")
+      unlisten?.()
     }
   }, [folder, onBranchChange, t])
 
@@ -245,7 +249,7 @@ export function BranchDropdown({
       const successDescription = getSuccessDescription?.(result)
       updateTask(taskId, { status: "completed" })
       onBranchChange()
-      void emit("folder://git-branch-changed", {
+      void emitEvent("folder://git-branch-changed", {
         folder_id: folder?.id,
       })
       if (successDescription !== false) {
@@ -326,9 +330,11 @@ export function BranchDropdown({
   }
 
   async function handleBrowseWorktreePath() {
-    const selected = await open({ directory: true, multiple: false })
+    const selected = await openFileDialog({ directory: true, multiple: false })
     if (selected) {
-      setWorktreePath(selected)
+      setWorktreePath(
+        Array.isArray(selected) ? selected[0] : selected,
+      )
     }
   }
 

@@ -9,6 +9,7 @@ mod network;
 mod parsers;
 mod process;
 mod terminal;
+mod web;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -46,6 +47,8 @@ pub fn run() {
         .manage(windows::SettingsWindowState::new())
         .manage(windows::CommitWindowState::new())
         .manage(windows::MergeWindowState::new())
+        .manage(web::WebServerState::new())
+        .manage(web::event_bridge::WebEventBroadcaster::new())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             let app_version = env!("CARGO_PKG_VERSION");
@@ -322,12 +325,19 @@ pub fn run() {
             mcp_commands::mcp_set_server_apps,
             mcp_commands::mcp_remove_server,
             notification::send_notification,
+            web::start_web_server,
+            web::stop_web_server,
+            web::get_web_server_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 APP_QUITTING.store(true, Ordering::Relaxed);
+                // Stop the embedded web server if running.
+                if let Some(ws) = app.try_state::<web::WebServerState>() {
+                    let _ = tauri::async_runtime::block_on(web::stop_web_server(ws));
+                }
                 // Kill all terminal sessions to prevent orphaned processes.
                 if let Some(tm) = app.try_state::<TerminalManager>() {
                     tm.kill_all();

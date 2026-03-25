@@ -31,7 +31,7 @@ import {
   updateConversationExternalId,
   updateConversationStatus,
   updateConversationTitle,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
 import {

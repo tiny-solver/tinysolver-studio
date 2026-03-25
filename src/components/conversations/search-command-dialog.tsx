@@ -14,7 +14,7 @@ import {
   getFileTree,
   listFolderConversations,
   readFilePreview,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type {
   AgentType,
   ConversationStatus,

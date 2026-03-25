@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { open } from "@tauri-apps/plugin-dialog"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { cloneRepository, openFolderWindow } from "@/lib/tauri"
+import { cloneRepository, openFolderWindow } from "@/lib/api"
+import { openFileDialog } from "@/lib/platform"
 import { useGitCredential } from "@/contexts/git-credential-context"
 import {
   Dialog,
@@ -36,9 +36,9 @@ export function CloneDialog({ open: isOpen, onOpenChange }: CloneDialogProps) {
   } | null>(null)
 
   const handleBrowse = async () => {
-    const selected = await open({ directory: true, multiple: false })
+    const selected = await openFileDialog({ directory: true, multiple: false })
     if (selected) {
-      setTargetDir(selected)
+      setTargetDir(Array.isArray(selected) ? selected[0] : selected)
     }
   }
 

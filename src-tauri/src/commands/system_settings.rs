@@ -1,5 +1,5 @@
 use sea_orm::DatabaseConnection;
-use tauri::{Emitter, State};
+use tauri::State;
 
 use crate::app_error::AppCommandError;
 use crate::db::service::app_metadata_service;
@@ -130,7 +130,7 @@ pub async fn update_system_language_settings(
         .await
         .map_err(AppCommandError::from)?;
 
-    let _ = app.emit(LANGUAGE_SETTINGS_UPDATED_EVENT, &settings);
+    crate::web::event_bridge::emit_event(&app, LANGUAGE_SETTINGS_UPDATED_EVENT, settings.clone());
 
     Ok(settings)
 }

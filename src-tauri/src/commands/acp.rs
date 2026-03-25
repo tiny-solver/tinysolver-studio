@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, State};
+use tauri::State;
 
 use crate::acp::binary_cache;
 use crate::acp::error::AcpError;
@@ -32,7 +32,8 @@ fn emit_acp_agents_updated(
     reason: &'static str,
     agent_type: Option<AgentType>,
 ) {
-    let _ = app.emit(
+    crate::web::event_bridge::emit_event(
+        app,
         ACP_AGENTS_UPDATED_EVENT,
         AcpAgentsUpdatedEventPayload { reason, agent_type },
     );

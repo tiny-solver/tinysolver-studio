@@ -10,7 +10,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use base64::Engine as _;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
-use tauri::Emitter;
+
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
 
@@ -985,7 +985,8 @@ pub async fn git_push(
         .strip_prefix("push-")
         .and_then(|value| value.parse::<i32>().ok())
     {
-        let _ = app.emit(
+        crate::web::event_bridge::emit_event(
+            &app,
             "folder://git-push-succeeded",
             GitPushSucceededEvent {
                 folder_id,
@@ -1552,7 +1553,8 @@ pub async fn git_commit(
         .strip_prefix("commit-")
         .and_then(|value| value.parse::<i32>().ok())
     {
-        let _ = app.emit(
+        crate::web::event_bridge::emit_event(
+            &app,
             "folder://git-commit-succeeded",
             GitCommitSucceededEvent {
                 folder_id,
@@ -2384,7 +2386,7 @@ impl WatchEventBatch {
             full_reload: self.overflowed,
         };
 
-        let _ = app.emit("folder://file-tree-changed", payload);
+        crate::web::event_bridge::emit_event(app, "folder://file-tree-changed", payload);
     }
 }
 

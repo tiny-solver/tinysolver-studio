@@ -7,7 +7,6 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react"
-import { open } from "@tauri-apps/plugin-dialog"
 import {
   Columns2,
   FileCode2,
@@ -19,7 +18,8 @@ import {
   Settings,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { getGitBranch, openFolderWindow, openSettingsWindow } from "@/lib/tauri"
+import { getGitBranch, openFolderWindow, openSettingsWindow } from "@/lib/api"
+import { openFileDialog } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
 import { Button } from "@/components/ui/button"
 import { useSidebarContext } from "@/contexts/sidebar-context"
@@ -79,8 +79,9 @@ export function FolderTitleBar() {
 
   const handleOpenFolder = useCallback(async () => {
     try {
-      const selected = await open({ directory: true, multiple: false })
-      if (!selected) return
+      const result = await openFileDialog({ directory: true, multiple: false })
+      if (!result) return
+      const selected = Array.isArray(result) ? result[0] : result
       await openFolderWindow(selected)
     } catch (err) {
       console.error("[FolderTitleBar] failed to open folder:", err)

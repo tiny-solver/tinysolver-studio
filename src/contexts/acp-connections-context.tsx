@@ -10,8 +10,7 @@ import {
   type ReactNode,
 } from "react"
 import { useTranslations } from "next-intl"
-import { listen, type UnlistenFn } from "@tauri-apps/api/event"
-import { disposeTauriListener } from "@/lib/tauri-listener"
+import { subscribe } from "@/lib/platform"
 import { inferLiveToolName } from "@/lib/tool-call-normalization"
 import {
   acpConnect,
@@ -22,7 +21,7 @@ import {
   acpCancel,
   acpRespondPermission,
   acpDisconnect,
-} from "@/lib/tauri"
+} from "@/lib/api"
 import type {
   AgentType,
   AcpAgentStatus,
@@ -1609,25 +1608,24 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   // Single global event listener
   useEffect(() => {
     let cancelled = false
-    let unlisten: UnlistenFn | null = null
+    let unlisten: (() => void) | null = null
 
     listenerReadyRef.current = false
 
-    listen<AcpEvent>("acp://event", (event) => {
-      const e = event.payload
-      const contextKey = reverseMapRef.current.get(e.connection_id)
+    subscribe<AcpEvent>("acp://event", (payload) => {
+      const contextKey = reverseMapRef.current.get(payload.connection_id)
       if (!contextKey) {
-        bufferUnmappedEvent(e)
+        bufferUnmappedEvent(payload)
         return
       }
 
       // Touch activity on every incoming event
       lastActivityRef.current.set(contextKey, Date.now())
-      handleMappedEvent(contextKey, e)
+      handleMappedEvent(contextKey, payload)
     })
       .then((fn) => {
         if (cancelled) {
-          disposeTauriListener(fn, "AcpConnectionsProvider.globalEvent")
+          fn()
         } else {
           unlisten = fn
           listenerReadyRef.current = true
@@ -1647,7 +1645,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         clearTimeout(flushTimerRef.current)
         flushTimerRef.current = null
       }
-      disposeTauriListener(unlisten, "AcpConnectionsProvider.globalEvent")
+      unlisten?.()
     }
   }, [bufferUnmappedEvent, handleMappedEvent, resolveListenerReadyWaiters])
 
