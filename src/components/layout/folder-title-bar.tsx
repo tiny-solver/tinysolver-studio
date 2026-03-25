@@ -239,7 +239,7 @@ export function FolderTitleBar() {
       <AppTitleBar
         centerInteractive
         left={
-          <div className="flex items-center gap-4 min-w-0 pl-4">
+          <div className="flex min-w-0 items-center gap-4">
             <FolderNameDropdown />
             <BranchDropdown
               branch={branch}
