@@ -45,19 +45,18 @@ pub(crate) fn generate_random_token() -> String {
 }
 
 pub(crate) fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
-    // 1. Production: Tauri bundles frontendDist into the resource directory.
+    // 1. Production: bundle.resources copies out/ → web/ inside the resource directory.
     let resource = app.path().resource_dir().ok();
     if let Some(ref dir) = resource {
-        // In production builds, the HTML files are at the resource root.
+        let web = dir.join("web");
+        if web.join("index.html").exists() {
+            eprintln!("[WEB] Serving static files from resource/web: {}", web.display());
+            return web;
+        }
+        // Fallback: files at resource root.
         if dir.join("index.html").exists() {
             eprintln!("[WEB] Serving static files from resource dir: {}", dir.display());
             return dir.clone();
-        }
-        // Or possibly in an "out" subdirectory.
-        let out = dir.join("out");
-        if out.join("index.html").exists() {
-            eprintln!("[WEB] Serving static files from resource/out: {}", out.display());
-            return out;
         }
     }
 
