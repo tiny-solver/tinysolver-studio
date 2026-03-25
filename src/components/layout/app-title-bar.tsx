@@ -31,7 +31,7 @@ export function AppTitleBar({
 
   const rowPadding = cn(
     "px-3",
-    isMac && hasDesktopWindowChrome && "pl-[76px]",
+    isMac && hasDesktopWindowChrome && "pl-[92px]",
     isWindows && hasDesktopWindowChrome && "pr-[138px]"
   )
 
