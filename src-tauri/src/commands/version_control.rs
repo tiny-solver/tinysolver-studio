@@ -76,12 +76,10 @@ async fn detect_git_path() -> Option<String> {
     }
 }
 
-#[tauri::command]
-pub async fn detect_git(
-    db: State<'_, AppDatabase>,
+pub(crate) async fn detect_git_core(
+    conn: &sea_orm::DatabaseConnection,
 ) -> Result<GitDetectResult, AppCommandError> {
-    // Check if there's a custom path configured
-    let settings = load_git_settings(&db.conn).await?;
+    let settings = load_git_settings(conn).await?;
 
     if let Some(custom) = &settings.custom_path {
         let trimmed = custom.trim();
@@ -90,12 +88,10 @@ pub async fn detect_git(
         }
     }
 
-    // Auto-detect
     if let Some(path) = detect_git_path().await {
         return run_git_version(&path).await;
     }
 
-    // Fallback: try "git" directly (might be in PATH but `which` failed)
     match run_git_version("git").await {
         Ok(result) if result.installed => Ok(result),
         _ => Ok(GitDetectResult {
@@ -104,6 +100,13 @@ pub async fn detect_git(
             path: None,
         }),
     }
+}
+
+#[tauri::command]
+pub async fn detect_git(
+    db: State<'_, AppDatabase>,
+) -> Result<GitDetectResult, AppCommandError> {
+    detect_git_core(&db.conn).await
 }
 
 #[tauri::command]

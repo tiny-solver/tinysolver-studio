@@ -175,95 +175,6 @@ pub async fn open_settings_window(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GitStatusParams {
-    pub path: String,
-    pub show_all_untracked: Option<bool>,
-}
-
-pub async fn git_status(
-    Json(params): Json<GitStatusParams>,
-) -> Result<Json<Vec<folder_commands::GitStatusEntry>>, AppCommandError> {
-    let result =
-        folder_commands::git_status(params.path, params.show_all_untracked).await?;
-    Ok(Json(result))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadFilePreviewParams {
-    pub root_path: String,
-    pub path: String,
-}
-
-pub async fn read_file_preview(
-    Json(params): Json<ReadFilePreviewParams>,
-) -> Result<Json<folder_commands::FilePreviewContent>, AppCommandError> {
-    let result =
-        folder_commands::read_file_preview(params.root_path, params.path).await?;
-    Ok(Json(result))
-}
-
-pub async fn git_list_all_branches(
-    Json(params): Json<PathParams>,
-) -> Result<Json<folder_commands::GitBranchList>, AppCommandError> {
-    let result = folder_commands::git_list_all_branches(params.path).await?;
-    Ok(Json(result))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitCommitBranchesParams {
-    pub path: String,
-    pub commit: String,
-}
-
-pub async fn git_commit_branches(
-    Json(params): Json<GitCommitBranchesParams>,
-) -> Result<Json<Vec<String>>, AppCommandError> {
-    let result =
-        folder_commands::git_commit_branches(params.path, params.commit).await?;
-    Ok(Json(result))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitShowFileParams {
-    pub path: String,
-    pub file: String,
-    pub ref_name: Option<String>,
-}
-
-pub async fn git_show_file(
-    Json(params): Json<GitShowFileParams>,
-) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::git_show_file(params.path, params.file, params.ref_name).await?;
-    Ok(Json(result))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitDiffParams {
-    pub path: String,
-    pub file: Option<String>,
-}
-
-pub async fn git_diff(
-    Json(params): Json<GitDiffParams>,
-) -> Result<Json<String>, AppCommandError> {
-    let result = folder_commands::git_diff(params.path, params.file).await?;
-    Ok(Json(result))
-}
-
-pub async fn git_list_remotes(
-    Json(params): Json<PathParams>,
-) -> Result<Json<Vec<folder_commands::GitRemote>>, AppCommandError> {
-    let result = folder_commands::git_list_remotes(params.path).await?;
-    Ok(Json(result))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct OpenCommitWindowParams {
     pub folder_id: i32,
 }
@@ -275,4 +186,87 @@ pub async fn open_commit_window(
     Ok(Json(SettingsNavigationResult {
         path: format!("/commit?folderId={}", params.folder_id),
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenMergeWindowParams {
+    pub folder_id: i32,
+    pub operation: Option<String>,
+    pub upstream_commit: Option<String>,
+}
+
+pub async fn open_merge_window(
+    Json(params): Json<OpenMergeWindowParams>,
+) -> Result<Json<SettingsNavigationResult>, AppCommandError> {
+    let mut path = format!("/merge?folderId={}", params.folder_id);
+    if let Some(op) = &params.operation {
+        path.push_str(&format!("&operation={op}"));
+    }
+    if let Some(uc) = &params.upstream_commit {
+        path.push_str(&format!("&upstreamCommit={uc}"));
+    }
+    Ok(Json(SettingsNavigationResult { path }))
+}
+
+pub async fn open_stash_window(
+    Json(params): Json<OpenCommitWindowParams>,
+) -> Result<Json<SettingsNavigationResult>, AppCommandError> {
+    Ok(Json(SettingsNavigationResult {
+        path: format!("/stash?folderId={}", params.folder_id),
+    }))
+}
+
+pub async fn open_push_window(
+    Json(params): Json<OpenCommitWindowParams>,
+) -> Result<Json<SettingsNavigationResult>, AppCommandError> {
+    Ok(Json(SettingsNavigationResult {
+        path: format!("/push?folderId={}", params.folder_id),
+    }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetFolderParentBranchParams {
+    pub path: String,
+    pub parent_branch: Option<String>,
+}
+
+pub async fn add_folder_to_history(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(params): Json<AddFolderParams>,
+) -> Result<Json<FolderHistoryEntry>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let result = folder_service::add_folder(&db.conn, &params.path)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}
+
+pub async fn set_folder_parent_branch(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(params): Json<SetFolderParentBranchParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    folder_commands::set_folder_parent_branch_core(&db.conn, &params.path, params.parent_branch)
+        .await?;
+    Ok(Json(()))
+}
+
+pub async fn remove_folder_from_history(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(params): Json<AddFolderParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    folder_service::remove_folder(&db.conn, &params.path)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(()))
+}
+
+pub async fn create_folder_directory(
+    Json(params): Json<AddFolderParams>,
+) -> Result<Json<()>, AppCommandError> {
+    folder_commands::create_folder_directory(params.path).await?;
+    Ok(Json(()))
 }

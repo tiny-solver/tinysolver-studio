@@ -489,30 +489,37 @@ pub async fn add_folder_to_history(
     folder_service::add_folder(&db.conn, &path).await
 }
 
-#[tauri::command]
-pub async fn set_folder_parent_branch(
-    db: tauri::State<'_, AppDatabase>,
-    path: String,
+pub(crate) async fn set_folder_parent_branch_core(
+    conn: &sea_orm::DatabaseConnection,
+    path: &str,
     parent_branch: Option<String>,
 ) -> Result<(), AppCommandError> {
-    // Find folder by path first
     use crate::db::entities::folder;
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
     let row = folder::Entity::find()
-        .filter(folder::Column::Path.eq(&path))
+        .filter(folder::Column::Path.eq(path))
         .filter(folder::Column::DeletedAt.is_null())
-        .one(&db.conn)
+        .one(conn)
         .await
         .map_err(|e| {
             AppCommandError::database_error("Failed to query folder").with_detail(e.to_string())
         })?;
 
     if let Some(folder_model) = row {
-        folder_service::set_folder_parent_branch(&db.conn, folder_model.id, parent_branch)
+        folder_service::set_folder_parent_branch(conn, folder_model.id, parent_branch)
             .await
             .map_err(AppCommandError::from)?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn set_folder_parent_branch(
+    db: tauri::State<'_, AppDatabase>,
+    path: String,
+    parent_branch: Option<String>,
+) -> Result<(), AppCommandError> {
+    set_folder_parent_branch_core(&db.conn, &path, parent_branch).await
 }
 
 #[tauri::command]
@@ -539,13 +546,12 @@ pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError
     std::fs::create_dir_all(&path).map_err(AppCommandError::io)
 }
 
-#[tauri::command]
-pub async fn clone_repository(
-    url: String,
-    target_dir: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
+pub(crate) async fn clone_repository_core(
+    url: &str,
+    target_dir: &str,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
 ) -> Result<(), AppCommandError> {
     if url.trim().is_empty() || target_dir.trim().is_empty() {
         return Err(AppCommandError::invalid_input(
@@ -554,8 +560,8 @@ pub async fn clone_repository(
     }
 
     let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["clone", &url, &target_dir]);
-    prepare_remote_git_cmd_for_url(&mut cmd, &url, credentials.as_ref(), &db, &app_handle).await;
+    cmd.args(["clone", url, target_dir]);
+    prepare_remote_git_cmd_for_url(&mut cmd, url, credentials, db, app_handle).await;
 
     let output = cmd
         .output()
@@ -576,6 +582,17 @@ pub async fn clone_repository(
         return Err(classify_git_clone_error(stderr.trim()));
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn clone_repository(
+    url: String,
+    target_dir: String,
+    credentials: Option<GitCredentials>,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppCommandError> {
+    clone_repository_core(&url, &target_dir, credentials.as_ref(), &db, &app_handle).await
 }
 
 fn classify_git_clone_error(stderr: &str) -> AppCommandError {
@@ -677,19 +694,18 @@ pub async fn git_init(path: String) -> Result<(), AppCommandError> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn git_pull(
-    path: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
+pub(crate) async fn git_pull_core(
+    path: &str,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
 ) -> Result<GitPullResult, AppCommandError> {
-    let head_before = get_head_hash(&path).await?;
+    let head_before = get_head_hash(path).await?;
 
     // Step 1: fetch from remote
     let mut fetch_cmd = crate::process::tokio_command("git");
-    fetch_cmd.args(["fetch"]).current_dir(&path);
-    prepare_remote_git_cmd(&mut fetch_cmd, &path, credentials.as_ref(), &db, &app_handle).await;
+    fetch_cmd.args(["fetch"]).current_dir(path);
+    prepare_remote_git_cmd(&mut fetch_cmd, path, credentials, db, app_handle).await;
 
     let fetch_output = fetch_cmd
         .output()
@@ -703,13 +719,12 @@ pub async fn git_pull(
     // Step 2: check if upstream exists
     let upstream_check = crate::process::tokio_command("git")
         .args(["rev-parse", "@{u}"])
-        .current_dir(&path)
+        .current_dir(path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
 
     if !upstream_check.status.success() {
-        // No upstream configured, nothing to merge
         return Ok(GitPullResult {
             updated_files: 0,
             conflict: None,
@@ -722,13 +737,13 @@ pub async fn git_pull(
     // Step 3: check if we can fast-forward
     let merge_base = crate::process::tokio_command("git")
         .args(["merge-base", "HEAD", "@{u}"])
-        .current_dir(&path)
+        .current_dir(path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
     let head_hash = crate::process::tokio_command("git")
         .args(["rev-parse", "HEAD"])
-        .current_dir(&path)
+        .current_dir(path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
@@ -737,10 +752,9 @@ pub async fn git_pull(
     let current_head = String::from_utf8_lossy(&head_hash.stdout).trim().to_string();
 
     if base_hash == current_head {
-        // Can fast-forward — just do it
         let ff_output = crate::process::tokio_command("git")
             .args(["merge", "--ff-only", "@{u}"])
-            .current_dir(&path)
+            .current_dir(path)
             .output()
             .await
             .map_err(AppCommandError::io)?;
@@ -749,22 +763,19 @@ pub async fn git_pull(
             return Err(git_command_error("merge --ff-only", &ff_output.stderr));
         }
     } else {
-        // Non-fast-forward: try merge with --no-commit to detect conflicts
         let merge_output = crate::process::tokio_command("git")
             .args(["merge", "--no-commit", "@{u}"])
-            .current_dir(&path)
+            .current_dir(path)
             .output()
             .await
             .map_err(AppCommandError::io)?;
 
         if !merge_output.status.success() {
-            // Check for conflicts
-            let conflicted_files = detect_conflicts(&path).await?;
+            let conflicted_files = detect_conflicts(path).await?;
             if !conflicted_files.is_empty() {
-                // Abort merge to restore working tree
                 let _ = crate::process::tokio_command("git")
                     .args(["merge", "--abort"])
-                    .current_dir(&path)
+                    .current_dir(path)
                     .output()
                     .await;
 
@@ -781,10 +792,9 @@ pub async fn git_pull(
             return Err(git_command_error("merge", &merge_output.stderr));
         }
 
-        // Merge succeeded without conflicts — commit
         let commit_output = crate::process::tokio_command("git")
             .args(["commit", "--no-edit"])
-            .current_dir(&path)
+            .current_dir(path)
             .output()
             .await
             .map_err(AppCommandError::io)?;
@@ -798,12 +808,12 @@ pub async fn git_pull(
         }
     }
 
-    let head_after = get_head_hash(&path).await?;
+    let head_after = get_head_hash(path).await?;
     let updated_files = match (head_before.as_deref(), head_after.as_deref()) {
         (Some(before), Some(after)) if before != after => {
-            count_changed_files_between(&path, before, after).await?
+            count_changed_files_between(path, before, after).await?
         }
-        (None, Some(after)) => count_files_in_commit(&path, after).await?,
+        (None, Some(after)) => count_files_in_commit(path, after).await?,
         _ => 0,
     };
 
@@ -811,6 +821,16 @@ pub async fn git_pull(
         updated_files,
         conflict: None,
     })
+}
+
+#[tauri::command]
+pub async fn git_pull(
+    path: String,
+    credentials: Option<GitCredentials>,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<GitPullResult, AppCommandError> {
+    git_pull_core(&path, credentials.as_ref(), &db, &app_handle).await
 }
 
 /// Start a merge with the upstream branch (used by merge workspace after pull conflict detection).
@@ -853,16 +873,15 @@ pub async fn git_has_merge_head(path: String) -> Result<bool, AppCommandError> {
     Ok(output.status.success())
 }
 
-#[tauri::command]
-pub async fn git_fetch(
-    path: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
+pub(crate) async fn git_fetch_core(
+    path: &str,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["fetch", "--all"]).current_dir(&path);
-    prepare_remote_git_cmd(&mut cmd, &path, credentials.as_ref(), &db, &app_handle).await;
+    cmd.args(["fetch", "--all"]).current_dir(path);
+    prepare_remote_git_cmd(&mut cmd, path, credentials, db, app_handle).await;
 
     let output = cmd
         .output()
@@ -873,6 +892,16 @@ pub async fn git_fetch(
         return Err(classify_remote_git_error("fetch --all", &output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn git_fetch(
+    path: String,
+    credentials: Option<GitCredentials>,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, AppCommandError> {
+    git_fetch_core(&path, credentials.as_ref(), &db, &app_handle).await
 }
 
 #[tauri::command]
@@ -911,24 +940,23 @@ pub async fn git_push_info(path: String) -> Result<GitPushInfo, AppCommandError>
     })
 }
 
-#[tauri::command]
-pub async fn git_push(
-    app: tauri::AppHandle,
-    window: tauri::WebviewWindow,
-    path: String,
-    remote: Option<String>,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
+pub(crate) async fn git_push_core(
+    app: &tauri::AppHandle,
+    folder_id: Option<i32>,
+    path: &str,
+    remote: Option<&str>,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
 ) -> Result<GitPushResult, AppCommandError> {
-    let pushed_commits = estimate_push_commit_count(&path).await;
+    let pushed_commits = estimate_push_commit_count(path).await;
 
-    // Determine the target remote (use provided or fall back to tracking remote)
-    let target_remote = remote.unwrap_or_else(|| "origin".to_string());
+    let target_remote = remote
+        .filter(|s| !s.is_empty())
+        .unwrap_or("origin");
 
-    // Check if the current branch has an upstream configured for this remote
     let branch_output = crate::process::tokio_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(&path)
+        .current_dir(path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
@@ -936,10 +964,9 @@ pub async fn git_push(
         .trim()
         .to_string();
 
-    // Check if upstream is set and points to the target remote
     let upstream_check = crate::process::tokio_command("git")
         .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-        .current_dir(&path)
+        .current_dir(path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
@@ -954,7 +981,6 @@ pub async fn git_push(
         None
     };
 
-    // Need to set upstream if: no upstream at all, or upstream points to a different remote
     let needs_set_upstream = match &current_upstream {
         None => true,
         Some(upstream) => !upstream.starts_with(&format!("{}/", target_remote)),
@@ -962,15 +988,15 @@ pub async fn git_push(
 
     let output = if needs_set_upstream {
         let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push", "--set-upstream", &target_remote, &branch])
-            .current_dir(&path);
-        prepare_remote_git_cmd_with_remote(&mut cmd, &path, Some(&target_remote), credentials.as_ref(), &db, &app).await;
+        cmd.args(["push", "--set-upstream", target_remote, &branch])
+            .current_dir(path);
+        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push", &target_remote, &branch])
-            .current_dir(&path);
-        prepare_remote_git_cmd_with_remote(&mut cmd, &path, Some(&target_remote), credentials.as_ref(), &db, &app).await;
+        cmd.args(["push", target_remote, &branch])
+            .current_dir(path);
+        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, app).await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
 
@@ -980,13 +1006,9 @@ pub async fn git_push(
 
     let upstream_set = needs_set_upstream;
 
-    if let Some(folder_id) = window
-        .label()
-        .strip_prefix("push-")
-        .and_then(|value| value.parse::<i32>().ok())
-    {
+    if let Some(folder_id) = folder_id {
         crate::web::event_bridge::emit_event(
-            &app,
+            app,
             "folder://git-push-succeeded",
             GitPushSucceededEvent {
                 folder_id,
@@ -1000,6 +1022,22 @@ pub async fn git_push(
         pushed_commits,
         upstream_set,
     })
+}
+
+#[tauri::command]
+pub async fn git_push(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    path: String,
+    remote: Option<String>,
+    credentials: Option<GitCredentials>,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<GitPushResult, AppCommandError> {
+    let folder_id = window
+        .label()
+        .strip_prefix("push-")
+        .and_then(|value| value.parse::<i32>().ok());
+    git_push_core(&app, folder_id, &path, remote.as_deref(), credentials.as_ref(), &db).await
 }
 
 #[tauri::command]
@@ -1495,14 +1533,13 @@ pub async fn git_show_file(
     Ok(String::from_utf8_lossy(bytes).to_string())
 }
 
-#[tauri::command]
-pub async fn git_commit(
-    app: tauri::AppHandle,
-    window: tauri::WebviewWindow,
-    db: tauri::State<'_, AppDatabase>,
-    path: String,
-    message: String,
-    files: Vec<String>,
+pub(crate) async fn git_commit_core(
+    app: &tauri::AppHandle,
+    folder_id: Option<i32>,
+    conn: &sea_orm::DatabaseConnection,
+    path: &str,
+    message: &str,
+    files: &[String],
 ) -> Result<GitCommitResult, AppCommandError> {
     // Stage selected files
     let mut add_args = vec!["add".to_string(), "--".to_string()];
@@ -1510,7 +1547,7 @@ pub async fn git_commit(
 
     let add_output = crate::process::tokio_command("git")
         .args(&add_args)
-        .current_dir(&path)
+        .current_dir(path)
         .output()
         .await
         .map_err(AppCommandError::io)?;
@@ -1521,7 +1558,7 @@ pub async fn git_commit(
 
     // Resolve commit author from matching account (e.g. GitHub username)
     let author_override =
-        crate::git_credential::resolve_commit_author(&path, &db.conn).await;
+        crate::git_credential::resolve_commit_author(path, conn).await;
 
     // Commit
     let mut commit_cmd = crate::process::tokio_command("git");
@@ -1533,7 +1570,7 @@ pub async fn git_commit(
             &format!("user.email={email}"),
         ]);
     }
-    commit_cmd.args(["commit", "-m", &message]).current_dir(&path);
+    commit_cmd.args(["commit", "-m", message]).current_dir(path);
 
     let commit_output = commit_cmd
         .output()
@@ -1544,17 +1581,13 @@ pub async fn git_commit(
         return Err(git_command_error("commit", &commit_output.stderr));
     }
 
-    let committed_files = count_files_in_commit(&path, "HEAD")
+    let committed_files = count_files_in_commit(path, "HEAD")
         .await
         .unwrap_or(files.len());
 
-    if let Some(folder_id) = window
-        .label()
-        .strip_prefix("commit-")
-        .and_then(|value| value.parse::<i32>().ok())
-    {
+    if let Some(folder_id) = folder_id {
         crate::web::event_bridge::emit_event(
-            &app,
+            app,
             "folder://git-commit-succeeded",
             GitCommitSucceededEvent {
                 folder_id,
@@ -1564,6 +1597,22 @@ pub async fn git_commit(
     }
 
     Ok(GitCommitResult { committed_files })
+}
+
+#[tauri::command]
+pub async fn git_commit(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    db: tauri::State<'_, AppDatabase>,
+    path: String,
+    message: String,
+    files: Vec<String>,
+) -> Result<GitCommitResult, AppCommandError> {
+    let folder_id = window
+        .label()
+        .strip_prefix("commit-")
+        .and_then(|value| value.parse::<i32>().ok());
+    git_commit_core(&app, folder_id, &db.conn, &path, &message, &files).await
 }
 
 #[tauri::command]
@@ -1761,17 +1810,16 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommand
     Ok(remotes)
 }
 
-#[tauri::command]
-pub async fn git_fetch_remote(
-    path: String,
-    name: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
+pub(crate) async fn git_fetch_remote_core(
+    path: &str,
+    name: &str,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
+    app_handle: &tauri::AppHandle,
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["fetch", &name]).current_dir(&path);
-    prepare_remote_git_cmd_with_remote(&mut cmd, &path, Some(&name), credentials.as_ref(), &db, &app_handle).await;
+    cmd.args(["fetch", name]).current_dir(path);
+    prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(name), credentials, db, app_handle).await;
 
     let output = cmd
         .output()
@@ -1782,6 +1830,17 @@ pub async fn git_fetch_remote(
         return Err(classify_remote_git_error("fetch", &output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn git_fetch_remote(
+    path: String,
+    name: String,
+    credentials: Option<GitCredentials>,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, AppCommandError> {
+    git_fetch_remote_core(&path, &name, credentials.as_ref(), &db, &app_handle).await
 }
 
 #[tauri::command]

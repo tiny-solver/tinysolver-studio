@@ -1,22 +1,178 @@
-use axum::Json;
+use axum::{extract::Extension, Json};
 use serde::Deserialize;
+use tauri::Manager;
 
 use crate::app_error::AppCommandError;
-use crate::commands::folders as folder_commands;
+use crate::commands::version_control as vc_commands;
+use crate::db::service::app_metadata_service;
+use crate::db::AppDatabase;
+use crate::models::*;
+
+const GIT_SETTINGS_KEY: &str = "git_settings";
+const GITHUB_ACCOUNTS_KEY: &str = "github_accounts";
+
+// ---------------------------------------------------------------------------
+// Param structs
+// ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GitLogParams {
+pub struct TestGitPathParams {
     pub path: String,
-    pub limit: Option<u32>,
-    pub branch: Option<String>,
-    pub remote: Option<String>,
 }
 
-pub async fn git_log(
-    Json(params): Json<GitLogParams>,
-) -> Result<Json<folder_commands::GitLogResult>, AppCommandError> {
-    let result =
-        folder_commands::git_log(params.path, params.limit, params.branch, params.remote).await?;
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateGitHubTokenParams {
+    pub server_url: String,
+    pub token: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountIdParams {
+    pub account_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveAccountTokenParams {
+    pub account_id: String,
+    pub token: String,
+}
+
+// ---------------------------------------------------------------------------
+// Git detection
+// ---------------------------------------------------------------------------
+
+pub async fn detect_git(
+    Extension(app): Extension<tauri::AppHandle>,
+) -> Result<Json<GitDetectResult>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let result = vc_commands::detect_git_core(&db.conn).await?;
     Ok(Json(result))
+}
+
+pub async fn test_git_path(
+    Json(params): Json<TestGitPathParams>,
+) -> Result<Json<GitDetectResult>, AppCommandError> {
+    let result = vc_commands::test_git_path(params.path).await?;
+    Ok(Json(result))
+}
+
+// ---------------------------------------------------------------------------
+// Git settings
+// ---------------------------------------------------------------------------
+
+pub async fn get_git_settings(
+    Extension(app): Extension<tauri::AppHandle>,
+) -> Result<Json<GitSettings>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let raw = app_metadata_service::get_value(&db.conn, GIT_SETTINGS_KEY)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let settings = match raw {
+        Some(raw) => serde_json::from_str::<GitSettings>(&raw).map_err(|e| {
+            AppCommandError::configuration_invalid("Failed to parse stored git settings")
+                .with_detail(e.to_string())
+        })?,
+        None => GitSettings::default(),
+    };
+    Ok(Json(settings))
+}
+
+pub async fn update_git_settings(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(settings): Json<GitSettings>,
+) -> Result<Json<GitSettings>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let serialized = serde_json::to_string(&settings).map_err(|e| {
+        AppCommandError::invalid_input("Failed to serialize git settings")
+            .with_detail(e.to_string())
+    })?;
+
+    app_metadata_service::upsert_value(&db.conn, GIT_SETTINGS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    Ok(Json(settings))
+}
+
+// ---------------------------------------------------------------------------
+// GitHub accounts
+// ---------------------------------------------------------------------------
+
+pub async fn get_github_accounts(
+    Extension(app): Extension<tauri::AppHandle>,
+) -> Result<Json<GitHubAccountsSettings>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let raw = app_metadata_service::get_value(&db.conn, GITHUB_ACCOUNTS_KEY)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let settings = match raw {
+        Some(raw) => serde_json::from_str::<GitHubAccountsSettings>(&raw).map_err(|e| {
+            AppCommandError::configuration_invalid(
+                "Failed to parse stored GitHub accounts",
+            )
+            .with_detail(e.to_string())
+        })?,
+        None => GitHubAccountsSettings::default(),
+    };
+    Ok(Json(settings))
+}
+
+pub async fn update_github_accounts(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(settings): Json<GitHubAccountsSettings>,
+) -> Result<Json<GitHubAccountsSettings>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let serialized = serde_json::to_string(&settings).map_err(|e| {
+        AppCommandError::invalid_input("Failed to serialize GitHub accounts")
+            .with_detail(e.to_string())
+    })?;
+
+    app_metadata_service::upsert_value(&db.conn, GITHUB_ACCOUNTS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    Ok(Json(settings))
+}
+
+// ---------------------------------------------------------------------------
+// GitHub token validation
+// ---------------------------------------------------------------------------
+
+pub async fn validate_github_token(
+    Json(params): Json<ValidateGitHubTokenParams>,
+) -> Result<Json<GitHubTokenValidation>, AppCommandError> {
+    let result =
+        vc_commands::validate_github_token(params.server_url, params.token).await?;
+    Ok(Json(result))
+}
+
+// ---------------------------------------------------------------------------
+// Keyring token management
+// ---------------------------------------------------------------------------
+
+pub async fn save_account_token(
+    Json(params): Json<SaveAccountTokenParams>,
+) -> Result<Json<()>, AppCommandError> {
+    vc_commands::save_account_token(params.account_id, params.token).await?;
+    Ok(Json(()))
+}
+
+pub async fn get_account_token(
+    Json(params): Json<AccountIdParams>,
+) -> Result<Json<Option<String>>, AppCommandError> {
+    let result = vc_commands::get_account_token(params.account_id).await?;
+    Ok(Json(result))
+}
+
+pub async fn delete_account_token(
+    Json(params): Json<AccountIdParams>,
+) -> Result<Json<()>, AppCommandError> {
+    vc_commands::delete_account_token(params.account_id).await?;
+    Ok(Json(()))
 }

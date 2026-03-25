@@ -1339,9 +1339,8 @@ pub async fn acp_clear_binary_cache(agent_type: AgentType) -> Result<(), AcpErro
     Ok(())
 }
 
-#[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn acp_update_agent_preferences(
+pub(crate) async fn acp_update_agent_preferences_core(
     agent_type: AgentType,
     enabled: bool,
     env: BTreeMap<String, String>,
@@ -1349,8 +1348,8 @@ pub async fn acp_update_agent_preferences(
     opencode_auth_json: Option<String>,
     codex_auth_json: Option<String>,
     codex_config_toml: Option<String>,
-    db: State<'_, AppDatabase>,
-    app: tauri::AppHandle,
+    db: &AppDatabase,
+    app: &tauri::AppHandle,
 ) -> Result<(), AcpError> {
     let default = agent_setting_service::AgentDefaultInput {
         agent_type,
@@ -1405,7 +1404,7 @@ pub async fn acp_update_agent_preferences(
                 codex_config_toml.as_deref(),
             )?;
         }
-        emit_acp_agents_updated(&app, "preferences_updated", Some(agent_type));
+        emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
         return Ok(());
     }
 
@@ -1416,7 +1415,7 @@ pub async fn acp_update_agent_preferences(
         if let Some(raw) = config_json.as_deref() {
             persist_agent_local_config_json(agent_type, Some(raw))?;
         }
-        emit_acp_agents_updated(&app, "preferences_updated", Some(agent_type));
+        emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
         return Ok(());
     }
 
@@ -1435,14 +1434,32 @@ pub async fn acp_update_agent_preferences(
     let local_patch_json = serde_json::to_string(&local_patch_value)
         .map_err(|e| AcpError::protocol(format!("serialize local patch failed: {e}")))?;
     persist_agent_local_config_json(agent_type, Some(local_patch_json.as_str()))?;
-    emit_acp_agents_updated(&app, "preferences_updated", Some(agent_type));
+    emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
     Ok(())
 }
 
 #[tauri::command]
-pub async fn acp_download_agent_binary(
+#[allow(clippy::too_many_arguments)]
+pub async fn acp_update_agent_preferences(
     agent_type: AgentType,
+    enabled: bool,
+    env: BTreeMap<String, String>,
+    config_json: Option<String>,
+    opencode_auth_json: Option<String>,
+    codex_auth_json: Option<String>,
+    codex_config_toml: Option<String>,
+    db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    acp_update_agent_preferences_core(
+        agent_type, enabled, env, config_json, opencode_auth_json,
+        codex_auth_json, codex_config_toml, &db, &app,
+    ).await
+}
+
+pub(crate) async fn acp_download_agent_binary_core(
+    agent_type: AgentType,
+    app: &tauri::AppHandle,
 ) -> Result<(), AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
@@ -1465,7 +1482,7 @@ pub async fn acp_download_agent_binary(
 
             let _ = binary_cache::ensure_binary_for_agent(agent_type, version, fallback.url, cmd)
                 .await?;
-            emit_acp_agents_updated(&app, "binary_downloaded", Some(agent_type));
+            emit_acp_agents_updated(app, "binary_downloaded", Some(agent_type));
             Ok(())
         }
         registry::AgentDistribution::Npx { .. } => Err(
@@ -1475,14 +1492,21 @@ pub async fn acp_download_agent_binary(
 }
 
 #[tauri::command]
-pub async fn acp_detect_agent_local_version(
+pub async fn acp_download_agent_binary(
     agent_type: AgentType,
-    db: State<'_, AppDatabase>,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    acp_download_agent_binary_core(agent_type, &app).await
+}
+
+pub(crate) async fn acp_detect_agent_local_version_core(
+    agent_type: AgentType,
+    conn: &sea_orm::DatabaseConnection,
 ) -> Result<Option<String>, AcpError> {
     let detected = detect_local_version(agent_type).await;
     if let Some(version) = detected.clone() {
         let _ = agent_setting_service::set_installed_version(
-            &db.conn,
+            conn,
             agent_type,
             Some(version.clone()),
         )
@@ -1490,9 +1514,7 @@ pub async fn acp_detect_agent_local_version(
         return Ok(Some(version));
     }
 
-    // For package-based agents, probing can miss cached availability.
-    // Fall back to last known installed version persisted in DB.
-    let fallback = agent_setting_service::get_by_agent_type(&db.conn, agent_type)
+    let fallback = agent_setting_service::get_by_agent_type(conn, agent_type)
         .await
         .ok()
         .flatten()
@@ -1501,11 +1523,18 @@ pub async fn acp_detect_agent_local_version(
 }
 
 #[tauri::command]
-pub async fn acp_prepare_npx_agent(
+pub async fn acp_detect_agent_local_version(
+    agent_type: AgentType,
+    db: State<'_, AppDatabase>,
+) -> Result<Option<String>, AcpError> {
+    acp_detect_agent_local_version_core(agent_type, &db.conn).await
+}
+
+pub(crate) async fn acp_prepare_npx_agent_core(
     agent_type: AgentType,
     registry_version: Option<String>,
-    db: State<'_, AppDatabase>,
-    app: tauri::AppHandle,
+    db: &AppDatabase,
+    app: &tauri::AppHandle,
 ) -> Result<String, AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
@@ -1548,7 +1577,7 @@ pub async fn acp_prepare_npx_agent(
             )
             .await
             .map_err(|e| AcpError::protocol(e.to_string()))?;
-            emit_acp_agents_updated(&app, "npx_prepared", Some(agent_type));
+            emit_acp_agents_updated(app, "npx_prepared", Some(agent_type));
             Ok(resolved)
         }
         registry::AgentDistribution::Binary { .. } => Err(AcpError::protocol(
@@ -1558,10 +1587,19 @@ pub async fn acp_prepare_npx_agent(
 }
 
 #[tauri::command]
-pub async fn acp_uninstall_agent(
+pub async fn acp_prepare_npx_agent(
     agent_type: AgentType,
+    registry_version: Option<String>,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
+) -> Result<String, AcpError> {
+    acp_prepare_npx_agent_core(agent_type, registry_version, &db, &app).await
+}
+
+pub(crate) async fn acp_uninstall_agent_core(
+    agent_type: AgentType,
+    db: &AppDatabase,
+    app: &tauri::AppHandle,
 ) -> Result<(), AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
@@ -1576,20 +1614,28 @@ pub async fn acp_uninstall_agent(
     agent_setting_service::set_installed_version(&db.conn, agent_type, None)
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
-    emit_acp_agents_updated(&app, "agent_uninstalled", Some(agent_type));
+    emit_acp_agents_updated(app, "agent_uninstalled", Some(agent_type));
     Ok(())
 }
 
 #[tauri::command]
-pub async fn acp_reorder_agents(
-    agent_types: Vec<AgentType>,
+pub async fn acp_uninstall_agent(
+    agent_type: AgentType,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    acp_uninstall_agent_core(agent_type, &db, &app).await
+}
+
+pub(crate) async fn acp_reorder_agents_core(
+    agent_types: &[AgentType],
+    db: &AppDatabase,
+    app: &tauri::AppHandle,
 ) -> Result<(), AcpError> {
     if agent_types.is_empty() {
         return Ok(());
     }
-    agent_setting_service::reorder(&db.conn, &agent_types)
+    agent_setting_service::reorder(&db.conn, agent_types)
         .await
         .map_err(|e| {
             let message = e.to_string();
@@ -1599,8 +1645,17 @@ pub async fn acp_reorder_agents(
                 AcpError::protocol(message)
             }
         })?;
-    emit_acp_agents_updated(&app, "agent_reordered", None);
+    emit_acp_agents_updated(app, "agent_reordered", None);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn acp_reorder_agents(
+    agent_types: Vec<AgentType>,
+    db: State<'_, AppDatabase>,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    acp_reorder_agents_core(&agent_types, &db, &app).await
 }
 
 #[tauri::command]
