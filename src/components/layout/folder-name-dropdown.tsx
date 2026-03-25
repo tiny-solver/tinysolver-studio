@@ -54,13 +54,14 @@ export function FolderNameDropdown() {
     if (selected) {
       await openFolderWindow(
         Array.isArray(selected) ? selected[0] : selected,
+        { newWindow: true },
       )
     }
   }
 
   async function handleSelect(path: string) {
     try {
-      await openFolderWindow(path)
+      await openFolderWindow(path, { newWindow: true })
     } catch {
       // ignore
     }

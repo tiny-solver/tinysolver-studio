@@ -117,6 +117,45 @@ pub async fn reorder_folder_commands(
     Ok(Json(()))
 }
 
-// TODO: bootstrap_folder_commands_from_package_json — requires access to
-// `load_package_scripts_as_commands` which is private in commands/folder_commands.rs.
-// Make it pub(crate) first, then add the web handler here.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BootstrapFolderCommandsParams {
+    pub folder_id: i32,
+    pub folder_path: String,
+}
+
+pub async fn bootstrap_folder_commands_from_package_json(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(params): Json<BootstrapFolderCommandsParams>,
+) -> Result<Json<Vec<FolderCommandInfo>>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+
+    let existing = folder_command_service::list_by_folder(&db.conn, params.folder_id)
+        .await
+        .map_err(AppCommandError::from)?;
+    if !existing.is_empty() {
+        return Ok(Json(existing));
+    }
+
+    let commands_to_create = tokio::task::spawn_blocking(move || {
+        crate::commands::folder_commands::load_package_scripts_as_commands(&params.folder_path)
+    })
+    .await
+    .map_err(|e| AppCommandError::new(
+        crate::app_error::AppErrorCode::TaskExecutionFailed,
+        format!("bootstrap task failed: {e}"),
+    ))?;
+
+    if commands_to_create.is_empty() {
+        return Ok(Json(existing));
+    }
+
+    folder_command_service::create_many(&db.conn, params.folder_id, &commands_to_create)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let result = folder_command_service::list_by_folder(&db.conn, params.folder_id)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}

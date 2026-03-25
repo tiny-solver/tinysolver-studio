@@ -839,16 +839,23 @@ export async function gitAddFiles(
 
 // Window management commands
 
-export async function openFolderWindow(path: string): Promise<void> {
+export async function openFolderWindow(
+  path: string,
+  options?: { newWindow?: boolean },
+): Promise<void> {
   if (getTransport().isDesktop()) {
     return getTransport().call("open_folder_window", { path })
   }
-  // Web mode: add folder to DB and navigate to folder page
   const entry = await getTransport().call<{ id: number }>(
     "open_folder_window",
-    { path }
+    { path },
   )
-  window.location.href = `/folder?id=${entry.id}`
+  const url = `/folder?id=${entry.id}`
+  if (options?.newWindow) {
+    window.open(url, `folder-${entry.id}`)
+  } else {
+    window.location.href = url
+  }
 }
 
 export async function openCommitWindow(folderId: number): Promise<void> {
@@ -900,7 +907,25 @@ export async function listOpenFolders(): Promise<FolderHistoryEntry[]> {
 }
 
 export async function focusFolderWindow(folderId: number): Promise<void> {
-  return getTransport().call("focus_folder_window", { folderId })
+  if (getTransport().isDesktop()) {
+    return getTransport().call("focus_folder_window", { folderId })
+  }
+  // Web mode: use named window — reuses existing tab if still open,
+  // otherwise opens a new one.
+  window.open(`/folder?id=${folderId}`, `folder-${folderId}`)
+}
+
+/**
+ * Notify the backend that a folder tab has been closed.
+ * Uses sendBeacon for reliability during page unload.
+ */
+export function closeFolderWindow(folderId: number): void {
+  if (getTransport().isDesktop()) return
+  const token = localStorage.getItem("codeg_token") ?? ""
+  navigator.sendBeacon(
+    `/api/close_folder_window?token=${encodeURIComponent(token)}`,
+    JSON.stringify({ folderId }),
+  )
 }
 
 // Conversation CRUD commands

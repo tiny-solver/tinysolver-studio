@@ -82,7 +82,7 @@ export function FolderTitleBar() {
       const result = await openFileDialog({ directory: true, multiple: false })
       if (!result) return
       const selected = Array.isArray(result) ? result[0] : result
-      await openFolderWindow(selected)
+      await openFolderWindow(selected, { newWindow: true })
     } catch (err) {
       console.error("[FolderTitleBar] failed to open folder:", err)
     }

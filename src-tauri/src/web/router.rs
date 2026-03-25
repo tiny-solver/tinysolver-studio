@@ -37,6 +37,8 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         .route("/update_conversation_external_id", post(handlers::conversations::update_conversation_external_id))
         // ─── Folders ───
         .route("/load_folder_history", post(handlers::folders::load_folder_history))
+        .route("/list_open_folders", post(handlers::folders::list_open_folders))
+        .route("/close_folder_window", post(handlers::folders::close_folder_window))
         .route("/get_folder", post(handlers::folders::get_folder))
         .route("/open_folder_window", post(handlers::folders::open_folder_window))
         .route("/add_folder_to_history", post(handlers::folders::add_folder_to_history))
@@ -115,6 +117,7 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         .route("/update_folder_command", post(handlers::folder_commands::update_folder_command))
         .route("/delete_folder_command", post(handlers::folder_commands::delete_folder_command))
         .route("/reorder_folder_commands", post(handlers::folder_commands::reorder_folder_commands))
+        .route("/bootstrap_folder_commands_from_package_json", post(handlers::folder_commands::bootstrap_folder_commands_from_package_json))
         // ─── MCP ───
         .route("/mcp_scan_local", post(handlers::mcp::mcp_scan_local))
         .route("/mcp_list_marketplaces", post(handlers::mcp::mcp_list_marketplaces))

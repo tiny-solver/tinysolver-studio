@@ -24,6 +24,16 @@ pub async fn load_folder_history(
     Ok(Json(result))
 }
 
+pub async fn list_open_folders(
+    Extension(app): Extension<tauri::AppHandle>,
+) -> Result<Json<Vec<FolderHistoryEntry>>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    let result = folder_service::list_open_folders(&db.conn)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}
+
 pub async fn get_folder(
     Extension(app): Extension<tauri::AppHandle>,
     Json(params): Json<FolderIdParams>,
@@ -53,6 +63,17 @@ pub async fn open_folder_window(
         .await
         .map_err(AppCommandError::from)?;
     Ok(Json(entry))
+}
+
+pub async fn close_folder_window(
+    Extension(app): Extension<tauri::AppHandle>,
+    Json(params): Json<FolderIdParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = app.state::<AppDatabase>();
+    folder_service::set_folder_open(&db.conn, params.folder_id, false)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(()))
 }
 
 // --- New handlers below ---

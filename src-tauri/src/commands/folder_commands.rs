@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 static BOOTSTRAP_FOLDER_COMMANDS_LOCK: Mutex<()> = Mutex::const_new(());
 
-fn load_package_scripts_as_commands(folder_path: &str) -> Vec<(String, String)> {
+pub(crate) fn load_package_scripts_as_commands(folder_path: &str) -> Vec<(String, String)> {
     let mut has_package_json = false;
     let mut has_pnpm_lock = false;
     let mut has_yarn_lock = false;
