@@ -242,11 +242,18 @@ export function AgentSelector({
             />
             <span
               className={cn(
-                "overflow-hidden whitespace-nowrap transition-all duration-300",
-                isSelected ? "max-w-[80px] opacity-100" : "max-w-0 opacity-0"
+                "grid transition-[grid-template-columns] duration-300",
+                isSelected ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
               )}
             >
-              {AGENT_LABELS[agent.agent_type]}
+              <span
+                className={cn(
+                  "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-300",
+                  isSelected ? "opacity-100" : "opacity-0"
+                )}
+              >
+                {AGENT_LABELS[agent.agent_type]}
+              </span>
             </span>
           </button>
         )

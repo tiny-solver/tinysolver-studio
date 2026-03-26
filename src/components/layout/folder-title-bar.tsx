@@ -301,13 +301,20 @@ export function FolderTitleBar() {
                   />
                   <span
                     className={cn(
-                      "overflow-hidden whitespace-nowrap transition-all duration-300",
+                      "grid transition-[grid-template-columns] duration-300",
                       isActive
-                        ? "max-w-[60px] opacity-100"
-                        : "max-w-0 opacity-0"
+                        ? "grid-cols-[1fr]"
+                        : "grid-cols-[0fr]"
                     )}
                   >
-                    {title}
+                    <span
+                      className={cn(
+                        "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-300",
+                        isActive ? "opacity-100" : "opacity-0"
+                      )}
+                    >
+                      {title}
+                    </span>
                   </span>
                 </div>
               )
