@@ -120,11 +120,7 @@ async fn detect_local_version(agent_type: AgentType) -> Option<String> {
             }
             // Try `npm list -g <package_name> --json` to get the real installed version.
             let pkg_name = package_name_from_spec(package);
-            if let Some(v) = detect_npm_global_version(&pkg_name).await {
-                return Some(v);
-            }
-            // Fallback: parse version from registry package spec
-            version_from_package_spec(package)
+            detect_npm_global_version(&pkg_name).await
         }
         registry::AgentDistribution::Binary { cmd, .. } => {
             binary_cache::detect_installed_version(agent_type, cmd)
@@ -134,17 +130,48 @@ async fn detect_local_version(agent_type: AgentType) -> Option<String> {
     }
 }
 
+/// Official npm registry URL – used to bypass local mirror configurations that
+/// may not have synced niche packages like `@agentclientprotocol/*`.
+const NPM_OFFICIAL_REGISTRY: &str = "https://registry.npmjs.org";
+
 async fn install_npm_global_package(package: &str) -> Result<(), AcpError> {
+    let registry_arg = format!("--registry={NPM_OFFICIAL_REGISTRY}");
+
     let output = crate::process::tokio_command("npm")
         .arg("install")
         .arg("-g")
+        .arg(&registry_arg)
         .arg(package)
         .output()
         .await
         .map_err(|e| AcpError::protocol(format!("failed to run npm install -g: {e}")))?;
 
     if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // EEXIST: file conflict — retry with --force to overwrite
+        if stderr.contains("EEXIST") {
+            let retry = crate::process::tokio_command("npm")
+                .arg("install")
+                .arg("-g")
+                .arg("--force")
+                .arg(&registry_arg)
+                .arg(package)
+                .output()
+                .await
+                .map_err(|e| AcpError::protocol(format!("failed to run npm install -g --force: {e}")))?;
+            if !retry.status.success() {
+                let err = String::from_utf8_lossy(&retry.stderr).trim().to_string();
+                let msg = if err.is_empty() {
+                    "failed to install npm package globally (with --force)".to_string()
+                } else {
+                    format!("failed to install npm package globally (with --force): {err}")
+                };
+                return Err(AcpError::protocol(msg));
+            }
+            return Ok(());
+        }
+
+        let err = stderr.trim().to_string();
         let msg = if err.is_empty() {
             "failed to install npm package globally".to_string()
         } else {
@@ -1228,11 +1255,13 @@ pub async fn acp_list_agents(
         let setting = settings_map.get(&agent_type);
         let meta = registry::get_agent_meta(agent_type);
         let (available, dist_type, local_installed_version) = match &meta.distribution {
-            registry::AgentDistribution::Npx { .. } => (
-                true,
-                "npx",
-                setting.and_then(|m| m.installed_version.clone()),
-            ),
+            registry::AgentDistribution::Npx { .. } => {
+                // Detect NPX agent version dynamically, fall back to DB value
+                let detected = detect_local_version(agent_type).await.or_else(|| {
+                    setting.and_then(|m| m.installed_version.clone())
+                });
+                (true, "npx", detected)
+            }
             registry::AgentDistribution::Binary { platforms, cmd, .. } => {
                 let detected = binary_cache::detect_installed_version(agent_type, cmd)
                     .ok()
@@ -1274,14 +1303,13 @@ pub async fn acp_list_agents(
             }
         }
         let sort_order = setting.map(|m| m.sort_order).unwrap_or(idx as i32);
-        if dist_type == "binary" {
-            let _ = agent_setting_service::set_installed_version(
-                &db.conn,
-                agent_type,
-                local_installed_version.clone(),
-            )
-            .await;
-        }
+        // Persist detected version to DB for both binary and npx agents
+        let _ = agent_setting_service::set_installed_version(
+            &db.conn,
+            agent_type,
+            local_installed_version.clone(),
+        )
+        .await;
         let codex_auth_json = if agent_type == AgentType::Codex {
             load_codex_auth_json_raw()
         } else {
