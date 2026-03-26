@@ -3,7 +3,10 @@
 import { Suspense, useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-const getCurrentWindow = async () => { const m = await import("@tauri-apps/api/window"); return m.getCurrentWindow() }
+const getCurrentWindow = async () => {
+  const m = await import("@tauri-apps/api/window")
+  return m.getCurrentWindow()
+}
 import { Loader2 } from "lucide-react"
 import { MergeWorkspace } from "@/components/merge/merge-workspace"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
@@ -76,9 +79,7 @@ function MergePageInner() {
     }
   }, [hasValidFolderId, normalizedFolderId])
 
-  const pageTitle = folder
-    ? `${t("title")} · ${folder.name}`
-    : t("title")
+  const pageTitle = folder ? `${t("title")} · ${folder.name}` : t("title")
 
   useEffect(() => {
     document.title = `${pageTitle} - codeg`

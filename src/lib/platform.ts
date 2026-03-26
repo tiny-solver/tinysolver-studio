@@ -24,9 +24,7 @@ export async function subscribe<T>(
  */
 export async function openUrl(url: string): Promise<void> {
   if (isDesktop()) {
-    const { openUrl: tauriOpenUrl } = await import(
-      "@tauri-apps/plugin-opener"
-    )
+    const { openUrl: tauriOpenUrl } = await import("@tauri-apps/plugin-opener")
     await tauriOpenUrl(url)
   } else {
     window.open(url, "_blank")
@@ -39,9 +37,8 @@ export async function openUrl(url: string): Promise<void> {
  */
 export async function openPath(path: string): Promise<void> {
   if (isDesktop()) {
-    const { openPath: tauriOpenPath } = await import(
-      "@tauri-apps/plugin-opener"
-    )
+    const { openPath: tauriOpenPath } =
+      await import("@tauri-apps/plugin-opener")
     await tauriOpenPath(path)
   }
 }
@@ -52,9 +49,8 @@ export async function openPath(path: string): Promise<void> {
  */
 export async function revealItemInDir(path: string): Promise<void> {
   if (isDesktop()) {
-    const { revealItemInDir: tauriReveal } = await import(
-      "@tauri-apps/plugin-opener"
-    )
+    const { revealItemInDir: tauriReveal } =
+      await import("@tauri-apps/plugin-opener")
     await tauriReveal(path)
   }
 }
@@ -101,9 +97,8 @@ export async function openFileDialog(options?: {
  */
 export async function getCurrentWindow() {
   if (isDesktop()) {
-    const { getCurrentWindow: tauriGetCurrentWindow } = await import(
-      "@tauri-apps/api/window"
-    )
+    const { getCurrentWindow: tauriGetCurrentWindow } =
+      await import("@tauri-apps/api/window")
     return tauriGetCurrentWindow()
   }
   return null

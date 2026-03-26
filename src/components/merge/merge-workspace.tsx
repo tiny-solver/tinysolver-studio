@@ -5,7 +5,9 @@ async function emitEvent(event: string, payload?: unknown) {
   try {
     const { emit } = await import("@tauri-apps/api/event")
     await emit(event, payload)
-  } catch { /* not in Tauri */ }
+  } catch {
+    /* not in Tauri */
+  }
 }
 import { Check, FileWarning, Loader2, X, CheckCheck } from "lucide-react"
 import { useTranslations } from "next-intl"

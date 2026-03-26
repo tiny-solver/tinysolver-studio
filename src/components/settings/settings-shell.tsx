@@ -1,6 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, type ComponentType, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  type ComponentType,
+  type ReactNode,
+} from "react"
 import {
   Bot,
   BookOpenText,

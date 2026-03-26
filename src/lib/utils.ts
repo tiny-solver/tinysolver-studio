@@ -10,7 +10,10 @@ export function cn(...inputs: ClassValue[]) {
  * contexts), otherwise falls back to `crypto.getRandomValues()`.
  */
 export function randomUUID(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID()
   }
   // Fallback for non-secure contexts (HTTP over LAN)

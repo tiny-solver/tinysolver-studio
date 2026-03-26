@@ -64,9 +64,7 @@ function StashPageInner() {
     }
   }, [hasValidFolderId, normalizedFolderId])
 
-  const pageTitle = folder
-    ? `${t("title")} · ${folder.name}`
-    : t("title")
+  const pageTitle = folder ? `${t("title")} · ${folder.name}` : t("title")
 
   useEffect(() => {
     document.title = `${pageTitle} - codeg`

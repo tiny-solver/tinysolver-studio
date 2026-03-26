@@ -192,26 +192,18 @@ export function WebServiceSettings() {
                 isRunning ? "bg-green-500" : "bg-muted-foreground/30"
               }`}
             />
-            <span className="text-sm">
-              {isRunning ? "运行中" : "已停止"}
-            </span>
+            <span className="text-sm">{isRunning ? "运行中" : "已停止"}</span>
             <button
               onClick={isRunning ? handleStop : handleStart}
               disabled={loading}
               className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
             >
-              {loading
-                ? "处理中..."
-                : isRunning
-                  ? "停止"
-                  : "启动"}
+              {loading ? "处理中..." : isRunning ? "停止" : "启动"}
             </button>
           </div>
         </div>
 
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         {/* Connection info */}
         {isRunning && (

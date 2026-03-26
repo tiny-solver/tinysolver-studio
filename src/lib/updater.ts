@@ -23,7 +23,8 @@ export interface AppUpdateErrorInfo {
 
 export async function getCurrentAppVersion(): Promise<string> {
   if (!isDesktop()) {
-    const result = await getTransport().call<AppUpdateCheckResult>("check_app_update")
+    const result =
+      await getTransport().call<AppUpdateCheckResult>("check_app_update")
     return result.currentVersion
   }
   try {
@@ -44,7 +45,9 @@ export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
   return { currentVersion, update }
 }
 
-export async function installAppUpdate(update: NonNullable<Update>): Promise<void> {
+export async function installAppUpdate(
+  update: NonNullable<Update>
+): Promise<void> {
   await update.downloadAndInstall()
 }
 
@@ -53,7 +56,9 @@ export async function relaunchApp(): Promise<void> {
   await relaunch()
 }
 
-export async function closeAppUpdate(update: NonNullable<Update>): Promise<void> {
+export async function closeAppUpdate(
+  update: NonNullable<Update>
+): Promise<void> {
   await update.close()
 }
 

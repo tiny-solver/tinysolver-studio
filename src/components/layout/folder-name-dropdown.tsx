@@ -52,10 +52,9 @@ export function FolderNameDropdown() {
   async function handleOpenFolder() {
     const selected = await openFileDialog({ directory: true, multiple: false })
     if (selected) {
-      await openFolderWindow(
-        Array.isArray(selected) ? selected[0] : selected,
-        { newWindow: true },
-      )
+      await openFolderWindow(Array.isArray(selected) ? selected[0] : selected, {
+        newWindow: true,
+      })
     }
   }
 

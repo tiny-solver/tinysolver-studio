@@ -20,7 +20,7 @@ pub async fn require_token(
     // Check Authorization header
     if let Some(auth_header) = request.headers().get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.strip_prefix("Bearer ").map_or(false, |t| t == token) {
+            if auth_str.strip_prefix("Bearer ").is_some_and(|t| t == token) {
                 return next.run(request).await;
             }
         }

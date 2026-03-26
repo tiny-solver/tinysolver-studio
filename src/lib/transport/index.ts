@@ -10,17 +10,16 @@ export function getTransport(): Transport {
     const env = detectEnvironment()
     if (env === "tauri") {
       // Use dynamic require to avoid bundling tauri deps in web mode.
-      // TauriTransport uses dynamic imports internally.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { TauriTransport } = require("./tauri-transport") as {
         TauriTransport: new () => Transport
       }
       _transport = new TauriTransport()
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { WebTransport } = require("./web-transport") as {
         WebTransport: new (baseUrl: string) => Transport
       }
-      // In web mode, the API is served from the same origin.
-      // Token is read from localStorage on each request.
       const baseUrl = window.location.origin
       _transport = new WebTransport(baseUrl)
     }

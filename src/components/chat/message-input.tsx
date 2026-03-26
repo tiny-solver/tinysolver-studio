@@ -753,6 +753,7 @@ export function MessageInput({
       const selected = await openFileDialog({
         multiple: true,
         directory: false,
+        defaultPath,
       })
       if (!selected) return
       const picked = Array.isArray(selected) ? selected : [selected]

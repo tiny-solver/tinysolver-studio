@@ -20,10 +20,7 @@ export class WebTransport implements Transport {
     this.baseUrl = baseUrl
   }
 
-  async call<T>(
-    command: string,
-    args?: Record<string, unknown>
-  ): Promise<T> {
+  async call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     const token = getToken()
     const res = await fetch(`${this.baseUrl}/api/${command}`, {
       method: "POST",

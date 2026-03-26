@@ -120,7 +120,11 @@ export async function acpSetConfigOption(
   configId: string,
   valueId: string
 ): Promise<void> {
-  return getTransport().call("acp_set_config_option", { connectionId, configId, valueId })
+  return getTransport().call("acp_set_config_option", {
+    connectionId,
+    configId,
+    valueId,
+  })
 }
 
 export async function acpCancel(connectionId: string): Promise<void> {
@@ -483,7 +487,10 @@ export async function saveFolderOpenedConversations(
   folderId: number,
   items: OpenedConversation[]
 ): Promise<void> {
-  return getTransport().call("save_folder_opened_conversations", { folderId, items })
+  return getTransport().call("save_folder_opened_conversations", {
+    folderId,
+    items,
+  })
 }
 
 export async function setFolderParentBranch(
@@ -528,7 +535,10 @@ export async function gitPull(
   path: string,
   credentials?: GitCredentials | null
 ): Promise<GitPullResult> {
-  return getTransport().call("git_pull", { path, credentials: credentials ?? null })
+  return getTransport().call("git_pull", {
+    path,
+    credentials: credentials ?? null,
+  })
 }
 
 export async function gitStartPullMerge(
@@ -546,7 +556,10 @@ export async function gitFetch(
   path: string,
   credentials?: GitCredentials | null
 ): Promise<string> {
-  return getTransport().call("git_fetch", { path, credentials: credentials ?? null })
+  return getTransport().call("git_fetch", {
+    path,
+    credentials: credentials ?? null,
+  })
 }
 
 export async function gitPushInfo(path: string): Promise<GitPushInfo> {
@@ -582,7 +595,11 @@ export async function gitWorktreeAdd(
   branchName: string,
   worktreePath: string
 ): Promise<void> {
-  return getTransport().call("git_worktree_add", { path, branchName, worktreePath })
+  return getTransport().call("git_worktree_add", {
+    path,
+    branchName,
+    worktreePath,
+  })
 }
 
 export async function gitCheckout(
@@ -673,7 +690,7 @@ export async function openMergeWindow(
       folderId,
       operation,
       upstreamCommit: upstreamCommit ?? null,
-    },
+    }
   )
   window.open(result.path, `merge-${folderId}`)
 }
@@ -684,7 +701,7 @@ export async function openStashWindow(folderId: number): Promise<void> {
   }
   const result = await getTransport().call<{ path: string }>(
     "open_stash_window",
-    { folderId },
+    { folderId }
   )
   window.open(result.path, `stash-${folderId}`)
 }
@@ -695,7 +712,7 @@ export async function openPushWindow(folderId: number): Promise<void> {
   }
   const result = await getTransport().call<{ path: string }>(
     "open_push_window",
-    { folderId },
+    { folderId }
   )
   window.open(result.path, `push-${folderId}`)
 }
@@ -716,7 +733,10 @@ export async function gitStashPop(
   path: string,
   stashRef?: string
 ): Promise<string> {
-  return getTransport().call("git_stash_pop", { path, stashRef: stashRef ?? null })
+  return getTransport().call("git_stash_pop", {
+    path,
+    stashRef: stashRef ?? null,
+  })
 }
 
 export async function gitStashList(path: string): Promise<GitStashEntry[]> {
@@ -818,7 +838,11 @@ export async function gitShowDiff(
   commit: string,
   file?: string
 ): Promise<string> {
-  return getTransport().call("git_show_diff", { path, commit, file: file ?? null })
+  return getTransport().call("git_show_diff", {
+    path,
+    commit,
+    file: file ?? null,
+  })
 }
 
 export async function gitShowFile(
@@ -866,14 +890,14 @@ export async function gitAddFiles(
 
 export async function openFolderWindow(
   path: string,
-  options?: { newWindow?: boolean },
+  options?: { newWindow?: boolean }
 ): Promise<void> {
   if (getTransport().isDesktop()) {
     return getTransport().call("open_folder_window", { path })
   }
   const entry = await getTransport().call<{ id: number }>(
     "open_folder_window",
-    { path },
+    { path }
   )
   const url = `/folder?id=${entry.id}`
   if (options?.newWindow) {
@@ -889,7 +913,7 @@ export async function openCommitWindow(folderId: number): Promise<void> {
   }
   const result = await getTransport().call<{ path: string }>(
     "open_commit_window",
-    { folderId },
+    { folderId }
   )
   window.open(result.path, `commit-${folderId}`)
 }
@@ -922,7 +946,7 @@ export async function openSettingsWindow(
     {
       section: section ?? null,
       agentType: options?.agentType ?? null,
-    },
+    }
   )
   window.open(result.path, `settings-${section ?? "general"}`)
 }
@@ -938,7 +962,12 @@ export async function focusFolderWindow(folderId: number): Promise<void> {
   // Web mode: open empty string to focus existing named window without reload.
   // If the window doesn't exist (was closed), open the folder page.
   const win = window.open("", `folder-${folderId}`)
-  if (!win || win.closed || !win.location.href || win.location.href === "about:blank") {
+  if (
+    !win ||
+    win.closed ||
+    !win.location.href ||
+    win.location.href === "about:blank"
+  ) {
     window.open(`/folder?id=${folderId}`, `folder-${folderId}`)
   }
 }
@@ -961,14 +990,20 @@ export async function updateConversationStatus(
   conversationId: number,
   status: string
 ): Promise<void> {
-  return getTransport().call("update_conversation_status", { conversationId, status })
+  return getTransport().call("update_conversation_status", {
+    conversationId,
+    status,
+  })
 }
 
 export async function updateConversationTitle(
   conversationId: number,
   title: string
 ): Promise<void> {
-  return getTransport().call("update_conversation_title", { conversationId, title })
+  return getTransport().call("update_conversation_title", {
+    conversationId,
+    title,
+  })
 }
 
 export async function updateConversationExternalId(
@@ -1000,7 +1035,11 @@ export async function createFolderCommand(
   name: string,
   command: string
 ): Promise<FolderCommand> {
-  return getTransport().call("create_folder_command", { folderId, name, command })
+  return getTransport().call("create_folder_command", {
+    folderId,
+    name,
+    command,
+  })
 }
 
 export async function updateFolderCommand(
@@ -1044,7 +1083,10 @@ export async function getFileTree(
   path: string,
   maxDepth?: number
 ): Promise<FileTreeNode[]> {
-  return getTransport().call("get_file_tree", { path, maxDepth: maxDepth ?? null })
+  return getTransport().call("get_file_tree", {
+    path,
+    maxDepth: maxDepth ?? null,
+  })
 }
 
 export async function startFileTreeWatch(rootPath: string): Promise<void> {
@@ -1059,7 +1101,10 @@ export async function readFileBase64(
   path: string,
   maxBytes?: number
 ): Promise<string> {
-  return getTransport().call("read_file_base64", { path, maxBytes: maxBytes ?? null })
+  return getTransport().call("read_file_base64", {
+    path,
+    maxBytes: maxBytes ?? null,
+  })
 }
 
 export async function readFilePreview(
@@ -1107,7 +1152,11 @@ export async function renameFileTreeEntry(
   path: string,
   newName: string
 ): Promise<string> {
-  return getTransport().call("rename_file_tree_entry", { rootPath, path, newName })
+  return getTransport().call("rename_file_tree_entry", {
+    rootPath,
+    path,
+    newName,
+  })
 }
 
 export async function deleteFileTreeEntry(
@@ -1123,7 +1172,12 @@ export async function createFileTreeEntry(
   name: string,
   kind: "file" | "dir"
 ): Promise<string> {
-  return getTransport().call("create_file_tree_entry", { rootPath, path, name, kind })
+  return getTransport().call("create_file_tree_entry", {
+    rootPath,
+    path,
+    name,
+    kind,
+  })
 }
 
 export async function gitLog(

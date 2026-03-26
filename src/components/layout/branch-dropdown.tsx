@@ -5,7 +5,9 @@ const emitEvent = async (event: string, payload?: unknown) => {
   try {
     const { emit } = await import("@tauri-apps/api/event")
     await emit(event, payload)
-  } catch { /* not in Tauri */ }
+  } catch {
+    /* not in Tauri */
+  }
 }
 import { openFileDialog, subscribe } from "@/lib/platform"
 import {
@@ -332,9 +334,7 @@ export function BranchDropdown({
   async function handleBrowseWorktreePath() {
     const selected = await openFileDialog({ directory: true, multiple: false })
     if (selected) {
-      setWorktreePath(
-        Array.isArray(selected) ? selected[0] : selected,
-      )
+      setWorktreePath(Array.isArray(selected) ? selected[0] : selected)
     }
   }
 
