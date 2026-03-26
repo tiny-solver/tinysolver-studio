@@ -188,6 +188,12 @@ type Action =
     }
   | { type: "MODE_CHANGED"; contextKey: string; modeId: string }
   | {
+      type: "CONFIG_OPTION_CHANGED"
+      contextKey: string
+      configId: string
+      valueId: string
+    }
+  | {
       type: "PLAN_UPDATE"
       contextKey: string
       entries: PlanEntryInfo[]
@@ -212,6 +218,21 @@ type ConnectionsMap = Map<string, ConnectionState>
 const MAX_LIVE_TOOL_RAW_OUTPUT_CHARS = 200_000
 const MAX_BUFFERED_UNMAPPED_EVENTS_PER_CONNECTION = 64
 const MAX_BUFFERED_UNMAPPED_CONNECTIONS = 128
+
+// Per-agentType cache for selectors (modes / configOptions).
+// Populated when real data arrives from the backend.
+// Used as UI-layer fallback when the connection hasn't received real data yet.
+const selectorsCache = new Map<
+  string,
+  {
+    modes: SessionModeStateInfo | null
+    configOptions: SessionConfigOptionInfo[] | null
+  }
+>()
+
+export function getCachedSelectors(agentType: string) {
+  return selectorsCache.get(agentType) ?? null
+}
 
 function clampLiveRawOutput(output: string | null): string | null {
   if (typeof output !== "string") return output
@@ -923,6 +944,33 @@ function connectionsReducer(
       return next
     }
 
+    case "CONFIG_OPTION_CHANGED": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      const options =
+        conn.configOptions ??
+        selectorsCache.get(conn.agentType)?.configOptions ??
+        null
+      if (!options) return state
+      const idx = options.findIndex((o) => o.id === action.configId)
+      if (idx === -1) return state
+      const opt = options[idx]
+      if (
+        opt.kind.type !== "select" ||
+        opt.kind.current_value === action.valueId
+      ) {
+        return state
+      }
+      const updated = [...options]
+      updated[idx] = {
+        ...opt,
+        kind: { ...opt.kind, current_value: action.valueId },
+      }
+      const next = new Map(state)
+      next.set(action.contextKey, { ...conn, configOptions: updated })
+      return next
+    }
+
     case "PLAN_UPDATE": {
       const conn = state.get(action.contextKey)
       if (!conn?.liveMessage) return state
@@ -1472,29 +1520,59 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             sessionId: e.session_id,
           })
           break
-        case "session_modes":
+        case "session_modes": {
           flushStreamingQueue()
+          const modeConn = storeRef.current.connections.get(contextKey)
           dispatch({
             type: "SESSION_MODES",
             contextKey,
             modes: e.modes,
           })
+          if (modeConn) {
+            const entry = selectorsCache.get(modeConn.agentType) ?? {
+              modes: null,
+              configOptions: null,
+            }
+            entry.modes = e.modes
+            selectorsCache.set(modeConn.agentType, entry)
+          }
           break
-        case "session_config_options":
+        }
+        case "session_config_options": {
           flushStreamingQueue()
+          const cfgConn = storeRef.current.connections.get(contextKey)
           dispatch({
             type: "SESSION_CONFIG_OPTIONS",
             contextKey,
             configOptions: e.config_options,
           })
+          if (cfgConn) {
+            const entry = selectorsCache.get(cfgConn.agentType) ?? {
+              modes: null,
+              configOptions: null,
+            }
+            entry.configOptions = e.config_options
+            selectorsCache.set(cfgConn.agentType, entry)
+          }
           break
-        case "selectors_ready":
+        }
+        case "selectors_ready": {
           flushStreamingQueue()
           dispatch({
             type: "SELECTORS_READY",
             contextKey,
           })
+          // Cache for agent types that may not emit session_modes /
+          // session_config_options at all (no selectors).
+          const rdyConn = storeRef.current.connections.get(contextKey)
+          if (rdyConn && !selectorsCache.has(rdyConn.agentType)) {
+            selectorsCache.set(rdyConn.agentType, {
+              modes: rdyConn.modes,
+              configOptions: rdyConn.configOptions,
+            })
+          }
           break
+        }
         case "prompt_capabilities":
           flushStreamingQueue()
           dispatch({
@@ -1886,10 +1964,16 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     async (contextKey: string, configId: string, valueId: string) => {
       const conn = storeRef.current.connections.get(contextKey)
       if (!conn) return
+      dispatch({
+        type: "CONFIG_OPTION_CHANGED",
+        contextKey,
+        configId,
+        valueId,
+      })
       lastActivityRef.current.set(contextKey, Date.now())
       await acpSetConfigOption(conn.connectionId, configId, valueId)
     },
-    []
+    [dispatch]
   )
 
   const cancel = useCallback(async (contextKey: string) => {

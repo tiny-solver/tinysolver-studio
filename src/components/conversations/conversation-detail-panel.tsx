@@ -258,6 +258,7 @@ const ConversationTabView = memo(function ConversationTabView({
     conn,
     modeLoading,
     configOptionsLoading,
+    selectorsLoading,
     autoConnectError,
     handleFocus,
     handleSend: lifecycleSend,
@@ -850,6 +851,7 @@ const ConversationTabView = memo(function ConversationTabView({
       configOptions={connectionConfigOptions}
       modeLoading={modeLoading}
       configOptionsLoading={configOptionsLoading}
+      selectorsLoading={selectorsLoading}
       selectedModeId={selectedModeId}
       onModeChange={setModeId}
       onConfigOptionChange={handleSetConfigOption}
@@ -920,6 +922,7 @@ const ConversationTabView = memo(function ConversationTabView({
               configOptions={connectionConfigOptions}
               modeLoading={modeLoading}
               configOptionsLoading={configOptionsLoading}
+              selectorsLoading={selectorsLoading}
               selectedModeId={selectedModeId}
               onModeChange={setModeId}
               onConfigOptionChange={handleSetConfigOption}

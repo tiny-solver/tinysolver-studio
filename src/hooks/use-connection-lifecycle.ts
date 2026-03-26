@@ -19,6 +19,7 @@ export interface UseConnectionLifecycleReturn {
   conn: UseConnectionReturn
   modeLoading: boolean
   configOptionsLoading: boolean
+  selectorsLoading: boolean
   autoConnectError: string | null
   handleFocus: () => void
   handleSend: (draft: PromptDraft, modeId?: string | null) => void
@@ -65,13 +66,14 @@ export function useConnectionLifecycle({
     configOptions,
   } = conn
   const isInteractiveStatus = status === "connected" || status === "prompting"
-  const effectiveSelectorsReady =
-    selectorsReady || modes !== null || configOptions !== null
+  const hasSelectorsData = modes !== null || configOptions !== null
+  const effectiveSelectorsReady = selectorsReady || hasSelectorsData
   const selectorTaskIdRef = useRef<string | null>(null)
   const selectorTaskTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
   const selectorTaskSuppressedRef = useRef(false)
+  // Visual-only loading indicators for selector chips
   const modeLoading =
     status === "connecting" ||
     status === "downloading" ||
@@ -80,6 +82,9 @@ export function useConnectionLifecycle({
     status === "connecting" ||
     status === "downloading" ||
     (isInteractiveStatus && !effectiveSelectorsReady)
+  // Gate for send button: block until the backend session is fully
+  // initialized (selectorsReady from the real backend event, not cache).
+  const selectorsLoading = isInteractiveStatus && !selectorsReady
   const [lastAutoConnectError, setLastAutoConnectError] = useState<{
     contextKey: string
     agentType: AgentType
@@ -220,20 +225,22 @@ export function useConnectionLifecycle({
       return
     }
 
-    const hasSelectorLoading = !effectiveSelectorsReady
-    if (!hasSelectorLoading) {
+    // Use the real backend selectorsReady (not effectiveSelectorsReady
+    // which includes cache) so the task shows during session creation
+    // even when cached selectors are available.
+    if (selectorsReady) {
       clearSelectorTask()
       return
     }
 
     if (!selectorTaskIdRef.current) {
-      const id = `acp-selectors-${Date.now()}`
+      const id = `acp-session-init-${Date.now()}`
       selectorTaskIdRef.current = id
       const agent = AGENT_LABELS[agentType]
       addTask(
         id,
-        t("tasks.loadingSelectorsTitle", { agent }),
-        t("tasks.loadingSelectorsDescription")
+        t("tasks.initSessionTitle", { agent }),
+        t("tasks.initSessionDescription")
       )
       updateTask(id, { status: "running" })
     }
@@ -247,9 +254,7 @@ export function useConnectionLifecycle({
     }
   }, [
     status,
-    effectiveSelectorsReady,
-    modes,
-    configOptions,
+    selectorsReady,
     agentType,
     addTask,
     updateTask,
@@ -363,6 +368,7 @@ export function useConnectionLifecycle({
     conn,
     modeLoading,
     configOptionsLoading,
+    selectorsLoading,
     autoConnectError,
     handleFocus,
     handleSend,

@@ -1347,7 +1347,9 @@
           "connectingTitle": "Conectando con {agent}",
           "connectingDescription": "Estableciendo conexión",
           "loadingSelectorsTitle": "Cargando selectores de {agent}",
-          "loadingSelectorsDescription": "Obteniendo opciones de modo y configuración de sesión"
+          "loadingSelectorsDescription": "Obteniendo opciones de modo y configuración de sesión",
+          "initSessionTitle": "Initializing {agent} session",
+          "initSessionDescription": "Creating session and loading configuration"
         },
         "errors": {
           "connectionFailed": "Conexión fallida"

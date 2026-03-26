@@ -1347,7 +1347,9 @@
           "connectingTitle": "{agent} に接続中",
           "connectingDescription": "接続を確立しています",
           "loadingSelectorsTitle": "{agent} のセレクターを読み込み中",
-          "loadingSelectorsDescription": "モードとセッション設定オプションを取得しています"
+          "loadingSelectorsDescription": "モードとセッション設定オプションを取得しています",
+          "initSessionTitle": "{agent} セッションを初期化中",
+          "initSessionDescription": "セッションを作成し設定を読み込んでいます"
         },
         "errors": {
           "connectionFailed": "接続に失敗しました"

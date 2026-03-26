@@ -1347,7 +1347,9 @@
           "connectingTitle": "正在連線 {agent}",
           "connectingDescription": "正在建立連線",
           "loadingSelectorsTitle": "正在載入 {agent} 選擇項",
-          "loadingSelectorsDescription": "正在取得模式與會話設定選項"
+          "loadingSelectorsDescription": "正在取得模式與會話設定選項",
+          "initSessionTitle": "正在初始化 {agent} 會話",
+          "initSessionDescription": "正在建立會話並載入設定"
         },
         "errors": {
           "connectionFailed": "連線失敗"

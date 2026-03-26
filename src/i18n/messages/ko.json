@@ -1347,7 +1347,9 @@
           "connectingTitle": "{agent}에 연결 중",
           "connectingDescription": "연결을 설정하는 중",
           "loadingSelectorsTitle": "{agent} 선택자 불러오는 중",
-          "loadingSelectorsDescription": "모드 및 세션 구성 옵션을 가져오는 중"
+          "loadingSelectorsDescription": "모드 및 세션 구성 옵션을 가져오는 중",
+          "initSessionTitle": "{agent} 세션 초기화 중",
+          "initSessionDescription": "세션 생성 및 설정 불러오는 중"
         },
         "errors": {
           "connectionFailed": "연결 실패"

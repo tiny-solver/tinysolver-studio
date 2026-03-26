@@ -25,6 +25,7 @@ interface ChatInputProps {
   configOptions?: SessionConfigOptionInfo[]
   modeLoading?: boolean
   configOptionsLoading?: boolean
+  selectorsLoading?: boolean
   selectedModeId?: string | null
   onModeChange?: (modeId: string) => void
   onConfigOptionChange?: (configId: string, valueId: string) => void
@@ -57,6 +58,7 @@ export function ChatInput({
   configOptions,
   modeLoading = false,
   configOptionsLoading = false,
+  selectorsLoading = false,
   selectedModeId,
   onModeChange,
   onConfigOptionChange,
@@ -101,7 +103,7 @@ export function ChatInput({
         promptCapabilities={promptCapabilities}
         onFocus={onFocus}
         defaultPath={defaultPath}
-        disabled={!isConnected && !isPrompting}
+        disabled={(!isConnected && !isPrompting) || selectorsLoading}
         isPrompting={isPrompting}
         onCancel={onCancel}
         modes={modes}

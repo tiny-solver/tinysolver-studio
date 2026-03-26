@@ -643,7 +643,10 @@ async fn run_connection(
                 },
             );
 
-            // Emit connected status
+            // Emit connected status early so the frontend can show cached
+            // selectors and enable sending while the session initialises.
+            // Prompts sent before run_conversation_loop are buffered in
+            // the cmd_rx channel and processed as soon as the loop starts.
             crate::web::event_bridge::emit_event(
                 &handle,
                 "acp://event",

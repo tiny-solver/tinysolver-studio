@@ -4,6 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react"
 import {
   useAcpActions,
   useConnectionStore,
+  getCachedSelectors,
   type ConnectionState,
   type ConnectOptions,
   type LiveMessage,
@@ -80,8 +81,12 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const supportsFork = connection?.supportsFork ?? false
   const selectorsReady = connection?.selectorsReady ?? false
   const sessionId = connection?.sessionId ?? null
-  const modes = connection?.modes ?? null
-  const configOptions = connection?.configOptions ?? null
+  const cached = connection?.agentType
+    ? getCachedSelectors(connection.agentType)
+    : null
+  const modes = connection?.modes ?? cached?.modes ?? null
+  const configOptions =
+    connection?.configOptions ?? cached?.configOptions ?? null
   const availableCommands = connection?.availableCommands ?? null
   const liveMessage = connection?.liveMessage ?? null
   const pendingPermission = connection?.pendingPermission ?? null

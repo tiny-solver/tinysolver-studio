@@ -1347,7 +1347,9 @@
           "connectingTitle": "جارٍ الاتصال بـ {agent}",
           "connectingDescription": "جارٍ إنشاء الاتصال",
           "loadingSelectorsTitle": "جارٍ تحميل محددات {agent}",
-          "loadingSelectorsDescription": "جارٍ جلب خيارات الوضع وإعدادات الجلسة"
+          "loadingSelectorsDescription": "جارٍ جلب خيارات الوضع وإعدادات الجلسة",
+          "initSessionTitle": "جارٍ تهيئة جلسة {agent}",
+          "initSessionDescription": "جارٍ إنشاء الجلسة وتحميل الإعدادات"
         },
         "errors": {
           "connectionFailed": "فشل الاتصال"
