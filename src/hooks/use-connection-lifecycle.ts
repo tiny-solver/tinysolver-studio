@@ -64,6 +64,7 @@ export function useConnectionLifecycle({
     respondPermission: connRespondPermission,
     modes,
     configOptions,
+    hasCachedSelectors,
   } = conn
   const isInteractiveStatus = status === "connected" || status === "prompting"
   const hasSelectorsData = modes !== null || configOptions !== null
@@ -73,15 +74,20 @@ export function useConnectionLifecycle({
     null
   )
   const selectorTaskSuppressedRef = useRef(false)
-  // Visual-only loading indicators for selector chips
+  // Visual-only loading indicators for selector chips.
+  // Skip loading indicators when we have cached selectors — even if the
+  // cache contains no modes/configOptions (the agent simply doesn't have
+  // them), we already know what to show and don't need a loading state.
   const modeLoading =
-    status === "connecting" ||
-    status === "downloading" ||
-    (isInteractiveStatus && !effectiveSelectorsReady)
+    !hasCachedSelectors &&
+    (status === "connecting" ||
+      status === "downloading" ||
+      (isInteractiveStatus && !effectiveSelectorsReady))
   const configOptionsLoading =
-    status === "connecting" ||
-    status === "downloading" ||
-    (isInteractiveStatus && !effectiveSelectorsReady)
+    !hasCachedSelectors &&
+    (status === "connecting" ||
+      status === "downloading" ||
+      (isInteractiveStatus && !effectiveSelectorsReady))
   // Gate for send button: block until the backend session is fully
   // initialized (selectorsReady from the real backend event, not cache).
   const selectorsLoading = isInteractiveStatus && !selectorsReady

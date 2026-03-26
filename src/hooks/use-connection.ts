@@ -33,6 +33,7 @@ export interface UseConnectionReturn {
   promptCapabilities: PromptCapabilitiesInfo
   supportsFork: boolean
   selectorsReady: boolean
+  hasCachedSelectors: boolean
   sessionId: string | null
   modes: SessionModeStateInfo | null
   configOptions: SessionConfigOptionInfo[] | null
@@ -84,6 +85,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const cached = connection?.agentType
     ? getCachedSelectors(connection.agentType)
     : null
+  const hasCachedSelectors = cached !== null
   const modes = connection?.modes ?? cached?.modes ?? null
   const configOptions =
     connection?.configOptions ?? cached?.configOptions ?? null
@@ -142,6 +144,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       promptCapabilities,
       supportsFork,
       selectorsReady,
+      hasCachedSelectors,
       sessionId,
       modes,
       configOptions,
@@ -164,6 +167,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       promptCapabilities,
       supportsFork,
       selectorsReady,
+      hasCachedSelectors,
       sessionId,
       modes,
       configOptions,
