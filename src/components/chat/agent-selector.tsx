@@ -204,12 +204,12 @@ export function AgentSelector({
   return (
     <div
       ref={containerRef}
-      className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-1 border border-border/50"
+      className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
     >
       {/* Sliding droplet indicator */}
       {indicator && (
         <div
-          className="absolute top-1 bottom-1 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+          className="absolute top-0.5 bottom-0.5 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
           style={{
             left: indicator.left,
             width: indicator.width,
