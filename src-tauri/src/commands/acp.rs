@@ -1256,11 +1256,9 @@ pub async fn acp_list_agents(
         let meta = registry::get_agent_meta(agent_type);
         let (available, dist_type, local_installed_version) = match &meta.distribution {
             registry::AgentDistribution::Npx { .. } => {
-                // Detect NPX agent version dynamically, fall back to DB value
-                let detected = detect_local_version(agent_type).await.or_else(|| {
-                    setting.and_then(|m| m.installed_version.clone())
-                });
-                (true, "npx", detected)
+                // Use DB cached version for fast loading; updated during install/upgrade
+                let cached = setting.and_then(|m| m.installed_version.clone());
+                (true, "npx", cached)
             }
             registry::AgentDistribution::Binary { platforms, cmd, .. } => {
                 let detected = binary_cache::detect_installed_version(agent_type, cmd)
@@ -1303,13 +1301,15 @@ pub async fn acp_list_agents(
             }
         }
         let sort_order = setting.map(|m| m.sort_order).unwrap_or(idx as i32);
-        // Persist detected version to DB for both binary and npx agents
-        let _ = agent_setting_service::set_installed_version(
-            &db.conn,
-            agent_type,
-            local_installed_version.clone(),
-        )
-        .await;
+        // Persist detected version to DB for binary agents (npx written during install/upgrade)
+        if dist_type == "binary" {
+            let _ = agent_setting_service::set_installed_version(
+                &db.conn,
+                agent_type,
+                local_installed_version.clone(),
+            )
+            .await;
+        }
         let codex_auth_json = if agent_type == AgentType::Codex {
             load_codex_auth_json_raw()
         } else {
