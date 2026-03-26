@@ -11,24 +11,14 @@ import {
 import { openUrl } from "@/lib/platform"
 
 function AddressCard({ label, value }: { label: string; value: string }) {
-  const [hovered, setHovered] = useState(false)
-
   return (
     <div className="space-y-1.5">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div
-        className="group relative flex items-center rounded-md border bg-muted/40 px-3 py-2"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
+      <div className="group relative flex items-center rounded-md border bg-muted/40 px-3 py-2">
         <code className="min-w-0 flex-1 truncate text-sm select-all">
           {value}
         </code>
-        <div
-          className={`ml-2 flex shrink-0 items-center gap-1 transition-opacity ${
-            hovered ? "opacity-100" : "opacity-0"
-          }`}
-        >
+        <div className="ml-2 flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => openUrl(value)}
@@ -44,7 +34,6 @@ function AddressCard({ label, value }: { label: string; value: string }) {
 }
 
 function TokenCard({ label, value }: { label: string; value: string }) {
-  const [hovered, setHovered] = useState(false)
   const [copied, setCopied] = useState(false)
   const [revealed, setRevealed] = useState(false)
 
@@ -61,19 +50,11 @@ function TokenCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1.5">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div
-        className="group relative flex items-center rounded-md border bg-muted/40 px-3 py-2"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
+      <div className="group relative flex items-center rounded-md border bg-muted/40 px-3 py-2">
         <code className="min-w-0 flex-1 truncate text-sm select-all">
           {displayValue}
         </code>
-        <div
-          className={`ml-2 flex shrink-0 items-center gap-1 transition-opacity ${
-            hovered ? "opacity-100" : "opacity-0"
-          }`}
-        >
+        <div className="ml-2 flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => setRevealed((v) => !v)}
