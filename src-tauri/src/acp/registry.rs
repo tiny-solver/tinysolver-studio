@@ -211,6 +211,10 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                         url: "https://github.com/anomalyco/opencode/releases/download/v1.3.2/opencode-linux-x64.tar.gz",
                     },
                     PlatformBinary {
+                        platform: "windows-aarch64",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.3.2/opencode-windows-arm64.zip",
+                    },
+                    PlatformBinary {
                         platform: "windows-x86_64",
                         url: "https://github.com/anomalyco/opencode/releases/download/v1.3.2/opencode-windows-x64.zip",
                     },
