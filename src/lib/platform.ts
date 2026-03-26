@@ -62,6 +62,7 @@ export async function openFileDialog(options?: {
   directory?: boolean
   multiple?: boolean
   title?: string
+  defaultPath?: string
 }): Promise<string | string[] | null> {
   if (isDesktop()) {
     const { open } = await import("@tauri-apps/plugin-dialog")
