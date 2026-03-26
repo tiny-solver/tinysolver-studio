@@ -31,7 +31,10 @@ parallèle via `git worktree`, gestion MCP/Skills et workflows intégrés Git/fi
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> Statut actuel : `v0.2.x` (itération rapide, adapté aux utilisateurs précoces)
+## Paramètres
+| Agents | MCP | Skills | Contrôle de version | Service web |
+| :---: | :---: | :---: | :---: | :---: |
+| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
 
 ## Points forts
 

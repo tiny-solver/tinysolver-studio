@@ -31,7 +31,10 @@ Git/ファイル/ターミナル連携ワークフローを提供します。
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> 現在のステータス: `v0.2.x`（高速イテレーション中、アーリーアダプター向け）
+## 設定
+| エージェント | MCP | Skills | バージョン管理 | Web サービス |
+| :---: | :---: | :---: | :---: | :---: |
+| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
 
 ## ハイライト
 

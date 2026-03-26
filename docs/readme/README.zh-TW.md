@@ -31,7 +31,10 @@ OpenClaw 等）整合到桌面應用與 Web 服務中——透過瀏覽器即可
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> 目前狀態：`v0.2.x`（快速迭代中，適合早期使用者）
+## 設定
+| 代理 | MCP | Skills | 版本控制 | Web 服務 |
+| :---: | :---: | :---: | :---: | :---: |
+| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
 
 ## 核心亮點
 

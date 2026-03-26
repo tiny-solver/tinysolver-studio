@@ -31,7 +31,10 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 ![Codeg Light](../images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
-> 현재 상태: `v0.2.x` (빠른 반복 개발 중, 얼리 어답터에 적합)
+## 설정
+| 에이전트 | MCP | Skills | 버전 관리 | 웹 서비스 |
+| :---: | :---: | :---: | :---: | :---: |
+| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
 
 ## 하이라이트
 

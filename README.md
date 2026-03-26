@@ -32,7 +32,10 @@ MCP/Skills management, and integrated Git/file/terminal workflows.
 ![Codeg Light](./docs/images/main2-light.png#gh-light-mode-only)
 ![Codeg Dark](./docs/images/main2-dark.png#gh-dark-mode-only)
 
-> Current status: `v0.2.x` (fast iteration, suitable for early adopters)
+## Settings
+| Agents | MCP | Skills | Version Control | Web Service |
+| :---: | :---: | :---: | :---: | :---: |
+| ![Agents](./docs/images/1-light.png#gh-light-mode-only) ![Agents](./docs/images/1-dark.png#gh-dark-mode-only) | ![MCP](./docs/images/2-light.png#gh-light-mode-only) ![MCP](./docs/images/2-dark.png#gh-dark-mode-only) | ![Skills](./docs/images/3-light.png#gh-light-mode-only) ![Skills](./docs/images/3-dark.png#gh-dark-mode-only) | ![Version Control](./docs/images/4-light.png#gh-light-mode-only) ![Version Control](./docs/images/4-dark.png#gh-dark-mode-only) | ![Web Service](./docs/images/5-light.png#gh-light-mode-only) ![Web Service](./docs/images/5-dark.png#gh-dark-mode-only) |
 
 ## Highlights
 
