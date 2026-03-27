@@ -207,6 +207,9 @@ pub async fn open_folder_window(
         if let Some(w) = app.get_webview_window("welcome") {
             let _ = w.close();
         }
+        if let Some(w) = app.get_webview_window("project-boot") {
+            let _ = w.close();
+        }
         return Ok(());
     }
 
@@ -220,11 +223,12 @@ pub async fn open_folder_window(
         .map_err(|e| AppCommandError::window("Failed to open folder window", e.to_string()))?;
     ensure_windows_undecorated(&folder_window);
 
-    // Close welcome window
+    // Close welcome and project-boot windows
     if let Some(w) = app.get_webview_window("welcome") {
-        w.close().map_err(|e| {
-            AppCommandError::window("Failed to close welcome window", e.to_string())
-        })?;
+        let _ = w.close();
+    }
+    if let Some(w) = app.get_webview_window("project-boot") {
+        let _ = w.close();
     }
     Ok(())
 }

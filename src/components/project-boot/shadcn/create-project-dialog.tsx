@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { openFileDialog } from "@/lib/platform"
 import { createShadcnProject, openFolderWindow } from "@/lib/api"
+import { toErrorMessage } from "@/lib/app-error"
 import { FRAMEWORK_OPTIONS, PACKAGE_MANAGER_OPTIONS } from "./constants"
 
 interface CreateProjectDialogProps {
@@ -67,10 +68,7 @@ export function CreateProjectDialog({
       resetForm()
       await openFolderWindow(projectPath)
     } catch (err) {
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? (err as { message: string }).message
-          : String(err)
+      const message = toErrorMessage(err)
       setError(message)
       toast.error(t("toasts.createFailed"), { description: message })
     } finally {

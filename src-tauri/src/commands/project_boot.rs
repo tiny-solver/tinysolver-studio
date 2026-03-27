@@ -65,7 +65,20 @@ pub async fn create_shadcn_project(
     ]);
     cmd.current_dir(&target_dir);
 
+    // Log the full command for debugging
+    let cmd_display = format!(
+        "{} {} shadcn@latest init -n {} -t {} -p {} -y (cwd={})",
+        program,
+        prefix_args.join(" "),
+        project_name,
+        template,
+        preset_code,
+        target_dir
+    );
+    eprintln!("[ProjectBoot] executing: {cmd_display}");
+
     let output = cmd.output().await.map_err(|e| {
+        eprintln!("[ProjectBoot] spawn error: {e}");
         if e.kind() == std::io::ErrorKind::NotFound {
             AppCommandError::dependency_missing(format!(
                 "{program} is not installed. Please install Node.js first."
@@ -78,10 +91,36 @@ pub async fn create_shadcn_project(
         }
     })?;
 
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    eprintln!(
+        "[ProjectBoot] exit={} stdout_len={} stderr_len={}",
+        output.status,
+        stdout.len(),
+        stderr.len()
+    );
+    if !stdout.is_empty() {
+        eprintln!("[ProjectBoot] stdout: {stdout}");
+    }
+    if !stderr.is_empty() {
+        eprintln!("[ProjectBoot] stderr: {stderr}");
+    }
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let detail = if stderr.is_empty() { stdout } else { stderr };
+        let mut detail = String::new();
+        if !stderr.is_empty() {
+            detail.push_str(&stderr);
+        }
+        if !stdout.is_empty() {
+            if !detail.is_empty() {
+                detail.push('\n');
+            }
+            detail.push_str(&stdout);
+        }
+        if detail.is_empty() {
+            detail = format!("Command exited with status: {}", output.status);
+        }
         return Err(AppCommandError::external_command(
             "Project creation command failed",
             detail,
