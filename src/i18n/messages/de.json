@@ -1593,7 +1593,11 @@
       "menuColor": "Menü-Farbe",
       "radius": "Radius",
       "template": "Vorlage",
-      "createProject": "Projekt erstellen"
+      "createProject": "Projekt erstellen",
+      "sectionStyle": "Stil",
+      "sectionColors": "Farben",
+      "sectionTypography": "Typografie",
+      "sectionInterface": "Oberfläche"
     },
     "preview": {
       "loading": "Vorschau wird geladen..."

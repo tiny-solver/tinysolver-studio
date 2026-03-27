@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 import {
   STYLE_OPTIONS,
   BASE_COLOR_OPTIONS,
@@ -33,56 +34,43 @@ interface ShadcnConfigPanelProps {
   presetCode: string
 }
 
-type ConfigI18nKey =
-  | "config.style"
-  | "config.baseColor"
-  | "config.theme"
-  | "config.chartColor"
-  | "config.iconLibrary"
-  | "config.font"
-  | "config.fontHeading"
-  | "config.menuAccent"
-  | "config.menuColor"
-  | "config.radius"
-  | "config.template"
-
-const CONFIG_FIELDS: {
-  key: keyof ShadcnPresetConfig
-  i18nKey: ConfigI18nKey
+function ConfigField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
   options: { value: string; label: string }[]
-}[] = [
-  { key: "style", i18nKey: "config.style", options: STYLE_OPTIONS },
-  {
-    key: "baseColor",
-    i18nKey: "config.baseColor",
-    options: BASE_COLOR_OPTIONS,
-  },
-  { key: "theme", i18nKey: "config.theme", options: THEME_OPTIONS },
-  { key: "chartColor", i18nKey: "config.chartColor", options: THEME_OPTIONS },
-  {
-    key: "iconLibrary",
-    i18nKey: "config.iconLibrary",
-    options: ICON_LIBRARY_OPTIONS,
-  },
-  { key: "font", i18nKey: "config.font", options: FONT_OPTIONS },
-  {
-    key: "fontHeading",
-    i18nKey: "config.fontHeading",
-    options: FONT_HEADING_OPTIONS,
-  },
-  {
-    key: "menuAccent",
-    i18nKey: "config.menuAccent",
-    options: MENU_ACCENT_OPTIONS,
-  },
-  {
-    key: "menuColor",
-    i18nKey: "config.menuColor",
-    options: MENU_COLOR_OPTIONS,
-  },
-  { key: "radius", i18nKey: "config.radius", options: RADIUS_OPTIONS },
-  { key: "template", i18nKey: "config.template", options: TEMPLATE_OPTIONS },
-]
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h4 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+      {children}
+    </h4>
+  )
+}
 
 export function ShadcnConfigPanel({
   config,
@@ -92,32 +80,69 @@ export function ShadcnConfigPanel({
   const t = useTranslations("ProjectBoot")
   const [createOpen, setCreateOpen] = useState(false)
 
+  const field = (
+    key: keyof ShadcnPresetConfig,
+    i18nKey: string,
+    options: { value: string; label: string }[]
+  ) => (
+    <ConfigField
+      label={t(i18nKey as Parameters<typeof t>[0])}
+      value={config[key]}
+      options={options}
+      onChange={(v) => onConfigChange(key, v)}
+    />
+  )
+
   return (
     <div className="flex h-full flex-col">
       <ScrollArea className="min-h-0 flex-1 px-4 py-3">
-        <div className="space-y-3">
-          {CONFIG_FIELDS.map((field) => (
-            <div key={field.key} className="space-y-1">
-              <Label className="text-xs text-muted-foreground">
-                {t(field.i18nKey)}
-              </Label>
-              <Select
-                value={config[field.key]}
-                onValueChange={(v) => onConfigChange(field.key, v)}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {field.options.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="space-y-4">
+          {/* Style & Template */}
+          <div className="space-y-2">
+            <SectionHeader>{t("config.sectionStyle")}</SectionHeader>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {field("style", "config.style", STYLE_OPTIONS)}
+              {field("template", "config.template", TEMPLATE_OPTIONS)}
             </div>
-          ))}
+          </div>
+
+          <Separator />
+
+          {/* Colors */}
+          <div className="space-y-2">
+            <SectionHeader>{t("config.sectionColors")}</SectionHeader>
+            <div className="space-y-2">
+              {field("baseColor", "config.baseColor", BASE_COLOR_OPTIONS)}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                {field("theme", "config.theme", THEME_OPTIONS)}
+                {field("chartColor", "config.chartColor", THEME_OPTIONS)}
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Typography */}
+          <div className="space-y-2">
+            <SectionHeader>{t("config.sectionTypography")}</SectionHeader>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {field("font", "config.font", FONT_OPTIONS)}
+              {field("fontHeading", "config.fontHeading", FONT_HEADING_OPTIONS)}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Interface */}
+          <div className="space-y-2">
+            <SectionHeader>{t("config.sectionInterface")}</SectionHeader>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {field("iconLibrary", "config.iconLibrary", ICON_LIBRARY_OPTIONS)}
+              {field("radius", "config.radius", RADIUS_OPTIONS)}
+              {field("menuAccent", "config.menuAccent", MENU_ACCENT_OPTIONS)}
+              {field("menuColor", "config.menuColor", MENU_COLOR_OPTIONS)}
+            </div>
+          </div>
         </div>
       </ScrollArea>
 

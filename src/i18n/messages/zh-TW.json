@@ -1593,7 +1593,11 @@
       "menuColor": "選單顏色",
       "radius": "圓角",
       "template": "模板",
-      "createProject": "建立專案"
+      "createProject": "建立專案",
+      "sectionStyle": "風格",
+      "sectionColors": "配色",
+      "sectionTypography": "排版",
+      "sectionInterface": "介面"
     },
     "preview": {
       "loading": "載入預覽..."

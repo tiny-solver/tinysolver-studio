@@ -1593,7 +1593,11 @@
       "menuColor": "メニューカラー",
       "radius": "角丸",
       "template": "テンプレート",
-      "createProject": "プロジェクトを作成"
+      "createProject": "プロジェクトを作成",
+      "sectionStyle": "スタイル",
+      "sectionColors": "カラー",
+      "sectionTypography": "タイポグラフィ",
+      "sectionInterface": "インターフェース"
     },
     "preview": {
       "loading": "プレビューを読み込み中..."

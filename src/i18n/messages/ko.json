@@ -1593,7 +1593,11 @@
       "menuColor": "메뉴 색상",
       "radius": "둥글기",
       "template": "템플릿",
-      "createProject": "프로젝트 만들기"
+      "createProject": "프로젝트 만들기",
+      "sectionStyle": "스타일",
+      "sectionColors": "색상",
+      "sectionTypography": "타이포그래피",
+      "sectionInterface": "인터페이스"
     },
     "preview": {
       "loading": "미리보기 로딩 중..."

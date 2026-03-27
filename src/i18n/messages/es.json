@@ -1593,7 +1593,11 @@
       "menuColor": "Color del menú",
       "radius": "Radio",
       "template": "Plantilla",
-      "createProject": "Crear proyecto"
+      "createProject": "Crear proyecto",
+      "sectionStyle": "Estilo",
+      "sectionColors": "Colores",
+      "sectionTypography": "Tipografía",
+      "sectionInterface": "Interfaz"
     },
     "preview": {
       "loading": "Cargando vista previa..."

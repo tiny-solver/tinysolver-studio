@@ -1593,7 +1593,11 @@
       "menuColor": "菜单颜色",
       "radius": "圆角",
       "template": "模板",
-      "createProject": "创建项目"
+      "createProject": "创建项目",
+      "sectionStyle": "风格",
+      "sectionColors": "配色",
+      "sectionTypography": "排版",
+      "sectionInterface": "界面"
     },
     "preview": {
       "loading": "加载预览..."

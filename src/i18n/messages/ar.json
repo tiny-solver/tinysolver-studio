@@ -1593,7 +1593,11 @@
       "menuColor": "لون القائمة",
       "radius": "نصف القطر",
       "template": "القالب",
-      "createProject": "إنشاء مشروع"
+      "createProject": "إنشاء مشروع",
+      "sectionStyle": "النمط",
+      "sectionColors": "الألوان",
+      "sectionTypography": "الخطوط",
+      "sectionInterface": "الواجهة"
     },
     "preview": {
       "loading": "جاري تحميل المعاينة..."

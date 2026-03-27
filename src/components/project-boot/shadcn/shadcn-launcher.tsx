@@ -11,9 +11,9 @@ import {
   type ShadcnPresetConfig,
 } from "./constants"
 
-const MIN_WIDTH = 280
-const MAX_WIDTH = 480
-const DEFAULT_WIDTH = 360
+const MIN_WIDTH = 260
+const MAX_WIDTH = 420
+const DEFAULT_WIDTH = 320
 
 export function ShadcnLauncher() {
   const [config, setConfig] = useState<ShadcnPresetConfig>(
