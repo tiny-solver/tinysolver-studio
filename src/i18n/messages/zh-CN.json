@@ -21,13 +21,15 @@
     "removeFromHistory": "从历史中移除",
     "openFolder": "打开文件夹",
     "cloneRepository": "克隆仓库",
+    "projectBoot": "项目启动器",
     "softwareVersion": "版本 {version}",
     "toasts": {
       "loadFolderHistoryFailed": "加载文件夹历史失败",
       "openFolderFailed": "打开文件夹失败",
       "removeFromHistoryFailed": "移除历史记录失败",
       "openSettingsFailed": "打开设置失败",
-      "cloneFailed": "克隆仓库失败"
+      "cloneFailed": "克隆仓库失败",
+      "openProjectBootFailed": "打开项目启动器失败"
     },
     "errors": {
       "unknown": "发生未知错误",
@@ -1570,6 +1572,51 @@
       "hunkLabel": "代码块 {index}",
       "loadingHunk": "正在加载代码块...",
       "noDiffData": "无差异数据"
+    }
+  },
+  "ProjectBoot": {
+    "title": "项目启动器",
+    "tabs": {
+      "shadcn": "shadcn"
+    },
+    "config": {
+      "base": "基础库",
+      "style": "风格",
+      "baseColor": "基础颜色",
+      "theme": "主题",
+      "chartColor": "图表颜色",
+      "iconLibrary": "图标库",
+      "font": "字体",
+      "fontHeading": "标题字体",
+      "menuAccent": "菜单强调",
+      "menuColor": "菜单颜色",
+      "radius": "圆角",
+      "template": "模板",
+      "createProject": "创建项目"
+    },
+    "preview": {
+      "loading": "加载预览..."
+    },
+    "createDialog": {
+      "title": "创建项目",
+      "projectName": "项目名称",
+      "projectNamePlaceholder": "my-app",
+      "frameworkTemplate": "框架模板",
+      "packageManager": "包管理器",
+      "saveDirectory": "保存目录",
+      "saveDirectoryPlaceholder": "选择目录...",
+      "browseDirectory": "浏览",
+      "cancel": "取消",
+      "create": "创建",
+      "creating": "正在创建项目..."
+    },
+    "toasts": {
+      "createFailed": "创建项目失败",
+      "createSuccess": "项目创建成功"
+    },
+    "errors": {
+      "directoryExists": "目录已存在且不为空。",
+      "commandFailed": "项目创建命令执行失败。"
     }
   }
 }

@@ -21,13 +21,15 @@
     "removeFromHistory": "기록에서 제거",
     "openFolder": "폴더 열기",
     "cloneRepository": "저장소 클론",
+    "projectBoot": "프로젝트 부트",
     "softwareVersion": "버전 {version}",
     "toasts": {
       "loadFolderHistoryFailed": "폴더 기록을 불러오지 못했습니다",
       "openFolderFailed": "폴더를 열지 못했습니다",
       "removeFromHistoryFailed": "기록에서 제거하지 못했습니다",
       "openSettingsFailed": "설정을 열지 못했습니다",
-      "cloneFailed": "저장소 클론에 실패했습니다"
+      "cloneFailed": "저장소 클론에 실패했습니다",
+      "openProjectBootFailed": "프로젝트 부트를 열지 못했습니다"
     },
     "errors": {
       "unknown": "예기치 않은 오류가 발생했습니다",
@@ -1570,6 +1572,51 @@
       "hunkLabel": "청크 {index}",
       "loadingHunk": "Hunk 로딩 중...",
       "noDiffData": "Diff 데이터 없음"
+    }
+  },
+  "ProjectBoot": {
+    "title": "프로젝트 부트",
+    "tabs": {
+      "shadcn": "shadcn"
+    },
+    "config": {
+      "base": "베이스",
+      "style": "스타일",
+      "baseColor": "베이스 색상",
+      "theme": "테마",
+      "chartColor": "차트 색상",
+      "iconLibrary": "아이콘 라이브러리",
+      "font": "글꼴",
+      "fontHeading": "제목 글꼴",
+      "menuAccent": "메뉴 강조",
+      "menuColor": "메뉴 색상",
+      "radius": "둥글기",
+      "template": "템플릿",
+      "createProject": "프로젝트 만들기"
+    },
+    "preview": {
+      "loading": "미리보기 로딩 중..."
+    },
+    "createDialog": {
+      "title": "프로젝트 만들기",
+      "projectName": "프로젝트 이름",
+      "projectNamePlaceholder": "my-app",
+      "frameworkTemplate": "프레임워크 템플릿",
+      "packageManager": "패키지 매니저",
+      "saveDirectory": "저장 디렉토리",
+      "saveDirectoryPlaceholder": "디렉토리 선택...",
+      "browseDirectory": "찾아보기",
+      "cancel": "취소",
+      "create": "만들기",
+      "creating": "프로젝트 생성 중..."
+    },
+    "toasts": {
+      "createFailed": "프로젝트 생성에 실패했습니다",
+      "createSuccess": "프로젝트가 성공적으로 생성되었습니다"
+    },
+    "errors": {
+      "directoryExists": "디렉토리가 이미 존재하며 비어 있지 않습니다.",
+      "commandFailed": "프로젝트 생성 명령이 실패했습니다."
     }
   }
 }

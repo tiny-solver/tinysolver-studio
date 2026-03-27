@@ -21,13 +21,15 @@
     "removeFromHistory": "從歷史中移除",
     "openFolder": "打開資料夾",
     "cloneRepository": "複製倉庫",
+    "projectBoot": "專案啟動器",
     "softwareVersion": "版本 {version}",
     "toasts": {
       "loadFolderHistoryFailed": "載入資料夾歷史失敗",
       "openFolderFailed": "打開資料夾失敗",
       "removeFromHistoryFailed": "移除歷史記錄失敗",
       "openSettingsFailed": "打開設定失敗",
-      "cloneFailed": "複製倉庫失敗"
+      "cloneFailed": "複製倉庫失敗",
+      "openProjectBootFailed": "開啟專案啟動器失敗"
     },
     "errors": {
       "unknown": "發生未知錯誤",
@@ -1570,6 +1572,51 @@
       "hunkLabel": "區塊 {index}",
       "loadingHunk": "正在載入區塊...",
       "noDiffData": "無差異資料"
+    }
+  },
+  "ProjectBoot": {
+    "title": "專案啟動器",
+    "tabs": {
+      "shadcn": "shadcn"
+    },
+    "config": {
+      "base": "基礎庫",
+      "style": "風格",
+      "baseColor": "基礎顏色",
+      "theme": "主題",
+      "chartColor": "圖表顏色",
+      "iconLibrary": "圖示庫",
+      "font": "字體",
+      "fontHeading": "標題字體",
+      "menuAccent": "選單強調",
+      "menuColor": "選單顏色",
+      "radius": "圓角",
+      "template": "模板",
+      "createProject": "建立專案"
+    },
+    "preview": {
+      "loading": "載入預覽..."
+    },
+    "createDialog": {
+      "title": "建立專案",
+      "projectName": "專案名稱",
+      "projectNamePlaceholder": "my-app",
+      "frameworkTemplate": "框架模板",
+      "packageManager": "套件管理器",
+      "saveDirectory": "儲存目錄",
+      "saveDirectoryPlaceholder": "選擇目錄...",
+      "browseDirectory": "瀏覽",
+      "cancel": "取消",
+      "create": "建立",
+      "creating": "正在建立專案..."
+    },
+    "toasts": {
+      "createFailed": "建立專案失敗",
+      "createSuccess": "專案建立成功"
+    },
+    "errors": {
+      "directoryExists": "目錄已存在且不為空。",
+      "commandFailed": "專案建立命令執行失敗。"
     }
   }
 }

@@ -21,13 +21,15 @@
     "removeFromHistory": "Quitar del historial",
     "openFolder": "Abrir carpeta",
     "cloneRepository": "Clonar repositorio",
+    "projectBoot": "Inicio de Proyecto",
     "softwareVersion": "versión {version}",
     "toasts": {
       "loadFolderHistoryFailed": "No se pudo cargar el historial de carpetas",
       "openFolderFailed": "No se pudo abrir la carpeta",
       "removeFromHistoryFailed": "No se pudo quitar la carpeta",
       "openSettingsFailed": "No se pudo abrir la configuración",
-      "cloneFailed": "No se pudo clonar el repositorio"
+      "cloneFailed": "No se pudo clonar el repositorio",
+      "openProjectBootFailed": "Error al abrir el inicio de proyecto"
     },
     "errors": {
       "unknown": "Error inesperado",
@@ -1570,6 +1572,51 @@
       "hunkLabel": "Bloque {index}",
       "loadingHunk": "Cargando hunk...",
       "noDiffData": "Sin datos de diff"
+    }
+  },
+  "ProjectBoot": {
+    "title": "Inicio de Proyecto",
+    "tabs": {
+      "shadcn": "shadcn"
+    },
+    "config": {
+      "base": "Base",
+      "style": "Estilo",
+      "baseColor": "Color base",
+      "theme": "Tema",
+      "chartColor": "Color del gráfico",
+      "iconLibrary": "Biblioteca de iconos",
+      "font": "Fuente",
+      "fontHeading": "Fuente de título",
+      "menuAccent": "Acento del menú",
+      "menuColor": "Color del menú",
+      "radius": "Radio",
+      "template": "Plantilla",
+      "createProject": "Crear proyecto"
+    },
+    "preview": {
+      "loading": "Cargando vista previa..."
+    },
+    "createDialog": {
+      "title": "Crear proyecto",
+      "projectName": "Nombre del proyecto",
+      "projectNamePlaceholder": "my-app",
+      "frameworkTemplate": "Plantilla del framework",
+      "packageManager": "Gestor de paquetes",
+      "saveDirectory": "Directorio de guardado",
+      "saveDirectoryPlaceholder": "Seleccionar directorio...",
+      "browseDirectory": "Explorar",
+      "cancel": "Cancelar",
+      "create": "Crear",
+      "creating": "Creando proyecto..."
+    },
+    "toasts": {
+      "createFailed": "Error al crear el proyecto",
+      "createSuccess": "Proyecto creado exitosamente"
+    },
+    "errors": {
+      "directoryExists": "El directorio ya existe y no está vacío.",
+      "commandFailed": "El comando de creación del proyecto falló."
     }
   }
 }

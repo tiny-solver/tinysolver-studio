@@ -16,7 +16,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use acp::manager::ConnectionManager;
 use commands::{
     acp as acp_commands, conversations, folder_commands, folders, mcp as mcp_commands,
-    notification, system_settings, terminal as terminal_commands, version_control, windows,
+    notification, project_boot, system_settings, terminal as terminal_commands, version_control,
+    windows,
 };
 use tauri::Manager;
 use terminal::manager::TerminalManager;
@@ -268,6 +269,8 @@ pub fn run() {
             windows::open_merge_window,
             windows::open_stash_window,
             windows::open_push_window,
+            windows::open_project_boot_window,
+            project_boot::create_shadcn_project,
             system_settings::get_system_proxy_settings,
             system_settings::update_system_proxy_settings,
             system_settings::get_system_language_settings,

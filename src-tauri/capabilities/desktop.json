@@ -9,7 +9,8 @@
     "welcome",
     "folder-*",
     "commit-*",
-    "settings"
+    "settings",
+    "project-boot"
   ],
   "permissions": [
     "window-state:default"

@@ -3,6 +3,7 @@ pub mod conversations;
 pub mod folder_commands;
 pub mod folders;
 pub mod mcp;
+pub mod project_boot;
 pub mod system_settings;
 pub mod terminal;
 pub mod version_control;

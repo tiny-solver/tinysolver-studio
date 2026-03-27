@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { FolderOpen, GitBranch } from "lucide-react"
+import { FolderOpen, GitBranch, Rocket } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { openFolderWindow } from "@/lib/api"
+import { openFolderWindow, openProjectBootWindow } from "@/lib/api"
 import { openFileDialog } from "@/lib/platform"
 import { Button } from "@/components/ui/button"
 import { CloneDialog } from "./clone-dialog"
@@ -49,6 +49,23 @@ export function FolderActions() {
       >
         <GitBranch className="h-4 w-4" />
         {t("cloneRepository")}
+      </Button>
+
+      <Button
+        variant="ghost"
+        className="justify-start gap-2 h-9"
+        onClick={async () => {
+          try {
+            await openProjectBootWindow()
+          } catch (err) {
+            console.error("[FolderActions] failed to open project boot:", err)
+            toast.error(t("toasts.openProjectBootFailed"))
+          }
+        }}
+        type="button"
+      >
+        <Rocket className="h-4 w-4" />
+        {t("projectBoot")}
       </Button>
 
       <CloneDialog open={cloneOpen} onOpenChange={setCloneOpen} />

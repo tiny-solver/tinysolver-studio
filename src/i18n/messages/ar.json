@@ -21,13 +21,15 @@
     "removeFromHistory": "إزالة من السجل",
     "openFolder": "فتح مجلد",
     "cloneRepository": "استنساخ المستودع",
+    "projectBoot": "مُنشئ المشروع",
     "softwareVersion": "الإصدار {version}",
     "toasts": {
       "loadFolderHistoryFailed": "فشل تحميل سجل المجلدات",
       "openFolderFailed": "فشل فتح المجلد",
       "removeFromHistoryFailed": "فشل إزالة المجلد من السجل",
       "openSettingsFailed": "فشل فتح الإعدادات",
-      "cloneFailed": "فشل استنساخ المستودع"
+      "cloneFailed": "فشل استنساخ المستودع",
+      "openProjectBootFailed": "فشل فتح مُنشئ المشروع"
     },
     "errors": {
       "unknown": "حدث خطأ غير متوقع",
@@ -1570,6 +1572,51 @@
       "hunkLabel": "مقطع {index}",
       "loadingHunk": "جارٍ تحميل hunk...",
       "noDiffData": "لا توجد بيانات diff"
+    }
+  },
+  "ProjectBoot": {
+    "title": "مُنشئ المشروع",
+    "tabs": {
+      "shadcn": "shadcn"
+    },
+    "config": {
+      "base": "الأساس",
+      "style": "النمط",
+      "baseColor": "اللون الأساسي",
+      "theme": "السمة",
+      "chartColor": "لون المخطط",
+      "iconLibrary": "مكتبة الأيقونات",
+      "font": "الخط",
+      "fontHeading": "خط العنوان",
+      "menuAccent": "تمييز القائمة",
+      "menuColor": "لون القائمة",
+      "radius": "نصف القطر",
+      "template": "القالب",
+      "createProject": "إنشاء مشروع"
+    },
+    "preview": {
+      "loading": "جاري تحميل المعاينة..."
+    },
+    "createDialog": {
+      "title": "إنشاء مشروع",
+      "projectName": "اسم المشروع",
+      "projectNamePlaceholder": "my-app",
+      "frameworkTemplate": "قالب الإطار",
+      "packageManager": "مدير الحزم",
+      "saveDirectory": "دليل الحفظ",
+      "saveDirectoryPlaceholder": "اختر الدليل...",
+      "browseDirectory": "تصفح",
+      "cancel": "إلغاء",
+      "create": "إنشاء",
+      "creating": "جاري إنشاء المشروع..."
+    },
+    "toasts": {
+      "createFailed": "فشل إنشاء المشروع",
+      "createSuccess": "تم إنشاء المشروع بنجاح"
+    },
+    "errors": {
+      "directoryExists": "الدليل موجود بالفعل وليس فارغاً.",
+      "commandFailed": "فشل أمر إنشاء المشروع."
     }
   }
 }

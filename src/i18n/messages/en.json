@@ -21,13 +21,15 @@
     "removeFromHistory": "Remove from history",
     "openFolder": "Open Folder",
     "cloneRepository": "Clone Repository",
+    "projectBoot": "Project Boot",
     "softwareVersion": "version {version}",
     "toasts": {
       "loadFolderHistoryFailed": "Failed to load folder history",
       "openFolderFailed": "Failed to open folder",
       "removeFromHistoryFailed": "Failed to remove folder",
       "openSettingsFailed": "Failed to open settings",
-      "cloneFailed": "Failed to clone repository"
+      "cloneFailed": "Failed to clone repository",
+      "openProjectBootFailed": "Failed to open Project Boot"
     },
     "errors": {
       "unknown": "Unexpected error",
@@ -1570,6 +1572,51 @@
       "hunkLabel": "Hunk {index}",
       "loadingHunk": "Loading hunk...",
       "noDiffData": "No diff data"
+    }
+  },
+  "ProjectBoot": {
+    "title": "Project Boot",
+    "tabs": {
+      "shadcn": "shadcn"
+    },
+    "config": {
+      "base": "Base",
+      "style": "Style",
+      "baseColor": "Base Color",
+      "theme": "Theme",
+      "chartColor": "Chart Color",
+      "iconLibrary": "Icon Library",
+      "font": "Font",
+      "fontHeading": "Heading Font",
+      "menuAccent": "Menu Accent",
+      "menuColor": "Menu Color",
+      "radius": "Radius",
+      "template": "Template",
+      "createProject": "Create Project"
+    },
+    "preview": {
+      "loading": "Loading preview..."
+    },
+    "createDialog": {
+      "title": "Create Project",
+      "projectName": "Project Name",
+      "projectNamePlaceholder": "my-app",
+      "frameworkTemplate": "Framework Template",
+      "packageManager": "Package Manager",
+      "saveDirectory": "Save Directory",
+      "saveDirectoryPlaceholder": "Select directory...",
+      "browseDirectory": "Browse",
+      "cancel": "Cancel",
+      "create": "Create",
+      "creating": "Creating project..."
+    },
+    "toasts": {
+      "createFailed": "Failed to create project",
+      "createSuccess": "Project created successfully"
+    },
+    "errors": {
+      "directoryExists": "Directory already exists and is not empty.",
+      "commandFailed": "Project creation command failed."
     }
   }
 }

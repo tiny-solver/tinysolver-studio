@@ -951,6 +951,29 @@ export async function openSettingsWindow(
   window.open(result.path, `settings-${section ?? "general"}`)
 }
 
+export async function openProjectBootWindow(): Promise<void> {
+  if (getTransport().isDesktop()) {
+    return getTransport().call("open_project_boot_window")
+  }
+  window.open("/project-boot", "project-boot")
+}
+
+export async function createShadcnProject(params: {
+  projectName: string
+  template: string
+  presetCode: string
+  packageManager: string
+  targetDir: string
+}): Promise<string> {
+  return getTransport().call("create_shadcn_project", {
+    projectName: params.projectName,
+    template: params.template,
+    presetCode: params.presetCode,
+    packageManager: params.packageManager,
+    targetDir: params.targetDir,
+  })
+}
+
 export async function listOpenFolders(): Promise<FolderHistoryEntry[]> {
   return getTransport().call("list_open_folders")
 }

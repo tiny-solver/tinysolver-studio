@@ -604,3 +604,30 @@ pub async fn open_push_window(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_project_boot_window(app: AppHandle) -> Result<(), AppCommandError> {
+    if let Some(existing) = app.get_webview_window("project-boot") {
+        ensure_windows_undecorated(&existing);
+        let _ = existing.unminimize();
+        existing.set_focus().map_err(|e| {
+            AppCommandError::window("Failed to focus project boot window", e.to_string())
+        })?;
+        return Ok(());
+    }
+
+    let url = WebviewUrl::App("project-boot".into());
+    let builder = WebviewWindowBuilder::new(&app, "project-boot", url)
+        .title("Project Boot")
+        .inner_size(1400.0, 900.0)
+        .min_inner_size(1100.0, 700.0)
+        .center();
+    let window = apply_platform_window_style(builder)
+        .build()
+        .map_err(|e| {
+            AppCommandError::window("Failed to open project boot window", e.to_string())
+        })?;
+    ensure_windows_undecorated(&window);
+
+    Ok(())
+}
