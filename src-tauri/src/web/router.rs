@@ -167,6 +167,9 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         .route("/acp_read_agent_skill", post(handlers::acp::acp_read_agent_skill))
         .route("/acp_save_agent_skill", post(handlers::acp::acp_save_agent_skill))
         .route("/acp_delete_agent_skill", post(handlers::acp::acp_delete_agent_skill))
+        // ─── Project boot ───
+        .route("/detect_package_manager", post(handlers::project_boot::detect_package_manager))
+        .route("/create_shadcn_project", post(handlers::project_boot::create_shadcn_project))
         // ─── Web Server ───
         .route("/get_web_server_status", post(handlers::web_server::get_web_server_status))
         .route("/start_web_server", post(handlers::web_server::start_web_server))
