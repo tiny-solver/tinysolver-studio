@@ -1606,6 +1606,12 @@
       "saveDirectory": "저장 디렉토리",
       "saveDirectoryPlaceholder": "디렉토리 선택...",
       "browseDirectory": "찾아보기",
+      "advancedOptions": "고급 옵션",
+      "base": "기본 라이브러리",
+      "enableRtl": "RTL 지원 활성화",
+      "enableRtlDescription": "오른쪽에서 왼쪽으로 쓰는 언어(예: 아랍어, 히브리어)의 레이아웃 지원 활성화",
+      "pmChecking": "확인 중...",
+      "pmNotInstalled": "설치되지 않음",
       "cancel": "취소",
       "create": "만들기",
       "creating": "프로젝트 생성 중..."

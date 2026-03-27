@@ -1606,6 +1606,12 @@
       "saveDirectory": "دليل الحفظ",
       "saveDirectoryPlaceholder": "اختر الدليل...",
       "browseDirectory": "تصفح",
+      "advancedOptions": "خيارات متقدمة",
+      "base": "المكتبة الأساسية",
+      "enableRtl": "تفعيل دعم RTL",
+      "enableRtlDescription": "تفعيل دعم التخطيط للغات التي تُكتب من اليمين إلى اليسار (مثل العربية والعبرية)",
+      "pmChecking": "جارٍ التحقق...",
+      "pmNotInstalled": "غير مثبت",
       "cancel": "إلغاء",
       "create": "إنشاء",
       "creating": "جاري إنشاء المشروع..."

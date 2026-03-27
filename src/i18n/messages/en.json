@@ -1606,6 +1606,12 @@
       "saveDirectory": "Save Directory",
       "saveDirectoryPlaceholder": "Select directory...",
       "browseDirectory": "Browse",
+      "advancedOptions": "Advanced Options",
+      "base": "Base Library",
+      "enableRtl": "Enable RTL Support",
+      "enableRtlDescription": "Enable layout support for right-to-left languages (e.g. Arabic, Hebrew)",
+      "pmChecking": "Checking...",
+      "pmNotInstalled": "Not installed",
       "cancel": "Cancel",
       "create": "Create",
       "creating": "Creating project..."

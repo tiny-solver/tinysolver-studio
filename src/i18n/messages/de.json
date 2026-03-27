@@ -1606,6 +1606,12 @@
       "saveDirectory": "Speicherverzeichnis",
       "saveDirectoryPlaceholder": "Verzeichnis auswählen...",
       "browseDirectory": "Durchsuchen",
+      "advancedOptions": "Erweiterte Optionen",
+      "base": "Basisbibliothek",
+      "enableRtl": "RTL-Unterstützung aktivieren",
+      "enableRtlDescription": "Layout-Unterstützung für Rechts-nach-links-Sprachen (z.B. Arabisch, Hebräisch) aktivieren",
+      "pmChecking": "Wird überprüft...",
+      "pmNotInstalled": "Nicht installiert",
       "cancel": "Abbrechen",
       "create": "Erstellen",
       "creating": "Projekt wird erstellt..."

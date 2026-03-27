@@ -1,6 +1,59 @@
+use serde::Serialize;
 use std::path::PathBuf;
 
 use crate::app_error::AppCommandError;
+
+// ---------------------------------------------------------------------------
+// Package manager detection
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PackageManagerInfo {
+    pub name: String,
+    pub installed: bool,
+    pub version: Option<String>,
+}
+
+async fn detect_one(name: &str) -> PackageManagerInfo {
+    let program = match name {
+        "bun" => "bun",
+        "pnpm" => "pnpm",
+        "yarn" => "yarn",
+        _ => "npm",
+    };
+
+    let result = crate::process::tokio_command(program)
+        .arg("--version")
+        .output()
+        .await;
+
+    match result {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .to_string();
+            PackageManagerInfo {
+                name: name.to_string(),
+                installed: true,
+                version: Some(version),
+            }
+        }
+        _ => PackageManagerInfo {
+            name: name.to_string(),
+            installed: false,
+            version: None,
+        },
+    }
+}
+
+#[tauri::command]
+pub async fn detect_package_manager(name: String) -> PackageManagerInfo {
+    detect_one(&name).await
+}
+
+// ---------------------------------------------------------------------------
+// Project creation
+// ---------------------------------------------------------------------------
 
 #[tauri::command]
 pub async fn create_shadcn_project(

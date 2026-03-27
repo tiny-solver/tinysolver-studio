@@ -1606,6 +1606,12 @@
       "saveDirectory": "保存目录",
       "saveDirectoryPlaceholder": "选择目录...",
       "browseDirectory": "浏览",
+      "advancedOptions": "高级选项",
+      "base": "基础库",
+      "enableRtl": "启用 RTL 支持",
+      "enableRtlDescription": "为从右到左书写的语言（如阿拉伯语、希伯来语）启用布局支持",
+      "pmChecking": "正在检测...",
+      "pmNotInstalled": "未安装",
       "cancel": "取消",
       "create": "创建",
       "creating": "正在创建项目..."

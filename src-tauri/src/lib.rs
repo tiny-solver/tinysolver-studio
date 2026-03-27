@@ -270,6 +270,7 @@ pub fn run() {
             windows::open_stash_window,
             windows::open_push_window,
             windows::open_project_boot_window,
+            project_boot::detect_package_manager,
             project_boot::create_shadcn_project,
             system_settings::get_system_proxy_settings,
             system_settings::update_system_proxy_settings,

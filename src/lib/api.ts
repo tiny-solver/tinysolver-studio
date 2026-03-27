@@ -44,6 +44,7 @@ import type {
   SystemProxySettings,
   GitCredentials,
   GitDetectResult,
+  PackageManagerInfo,
   GitSettings,
   GitHubAccountsSettings,
   GitHubTokenValidation,
@@ -956,6 +957,12 @@ export async function openProjectBootWindow(): Promise<void> {
     return getTransport().call("open_project_boot_window")
   }
   window.open("/project-boot", "project-boot")
+}
+
+export async function detectPackageManager(
+  name: string
+): Promise<PackageManagerInfo> {
+  return getTransport().call("detect_package_manager", { name })
 }
 
 export async function createShadcnProject(params: {

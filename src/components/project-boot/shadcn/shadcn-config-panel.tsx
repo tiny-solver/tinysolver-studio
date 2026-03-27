@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  BASE_OPTIONS,
   STYLE_OPTIONS,
   BASE_COLOR_OPTIONS,
   THEME_OPTIONS,
@@ -35,7 +34,6 @@ interface ShadcnConfigPanelProps {
 }
 
 type ConfigI18nKey =
-  | "config.base"
   | "config.style"
   | "config.baseColor"
   | "config.theme"
@@ -53,7 +51,6 @@ const CONFIG_FIELDS: {
   i18nKey: ConfigI18nKey
   options: { value: string; label: string }[]
 }[] = [
-  { key: "base", i18nKey: "config.base", options: BASE_OPTIONS },
   { key: "style", i18nKey: "config.style", options: STYLE_OPTIONS },
   { key: "baseColor", i18nKey: "config.baseColor", options: BASE_COLOR_OPTIONS },
   { key: "theme", i18nKey: "config.theme", options: THEME_OPTIONS },

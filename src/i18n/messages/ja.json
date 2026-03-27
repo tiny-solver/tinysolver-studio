@@ -1606,6 +1606,12 @@
       "saveDirectory": "保存先ディレクトリ",
       "saveDirectoryPlaceholder": "ディレクトリを選択...",
       "browseDirectory": "参照",
+      "advancedOptions": "詳細オプション",
+      "base": "基盤ライブラリ",
+      "enableRtl": "RTL サポートを有効にする",
+      "enableRtlDescription": "右から左に書く言語（アラビア語、ヘブライ語など）のレイアウトサポートを有効にする",
+      "pmChecking": "確認中...",
+      "pmNotInstalled": "未インストール",
       "cancel": "キャンセル",
       "create": "作成",
       "creating": "プロジェクトを作成中..."

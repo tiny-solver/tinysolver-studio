@@ -536,6 +536,12 @@ export interface GitDetectResult {
   path: string | null
 }
 
+export interface PackageManagerInfo {
+  name: string
+  installed: boolean
+  version: string | null
+}
+
 export interface GitSettings {
   custom_path: string | null
 }

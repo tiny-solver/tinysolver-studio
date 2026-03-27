@@ -1606,6 +1606,12 @@
       "saveDirectory": "Diretório de salvamento",
       "saveDirectoryPlaceholder": "Selecionar diretório...",
       "browseDirectory": "Procurar",
+      "advancedOptions": "Opções Avançadas",
+      "base": "Biblioteca Base",
+      "enableRtl": "Ativar Suporte RTL",
+      "enableRtlDescription": "Ativar suporte de layout para idiomas da direita para a esquerda (ex.: árabe, hebraico)",
+      "pmChecking": "Verificando...",
+      "pmNotInstalled": "Não instalado",
       "cancel": "Cancelar",
       "create": "Criar",
       "creating": "Criando projeto..."
