@@ -196,11 +196,7 @@ export function WebServiceSettings() {
         {isRunning && (
           <div className="space-y-3">
             {status.addresses.map((addr) => (
-              <AddressCard
-                key={addr}
-                label={t("addressLabel")}
-                value={addr}
-              />
+              <AddressCard key={addr} label={t("addressLabel")} value={addr} />
             ))}
             <TokenCard label={t("tokenLabel")} value={status.token} />
             <p className="text-xs text-muted-foreground">{t("tokenHint")}</p>
