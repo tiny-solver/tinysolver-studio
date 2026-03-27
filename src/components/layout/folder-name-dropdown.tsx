@@ -1,7 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, Folder, FolderOpen, GitBranch } from "lucide-react"
+import {
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  GitBranch,
+  Rocket,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import {
   DropdownMenu,
@@ -16,6 +22,7 @@ import {
   listOpenFolders,
   loadFolderHistory,
   openFolderWindow,
+  openProjectBootWindow,
 } from "@/lib/api"
 import { openFileDialog } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
@@ -86,6 +93,10 @@ export function FolderNameDropdown() {
           <DropdownMenuItem onSelect={() => setCloneOpen(true)}>
             <GitBranch className="h-3.5 w-3.5 shrink-0" />
             {t("cloneRepository")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openProjectBootWindow()}>
+            <Rocket className="h-3.5 w-3.5 shrink-0" />
+            {t("projectBoot")}
           </DropdownMenuItem>
           {openFolders.length > 0 && (
             <>

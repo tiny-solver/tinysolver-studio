@@ -856,6 +856,7 @@
       "fallbackFolderName": "폴더",
       "openFolder": "폴더 열기",
       "cloneRepository": "리포지토리 클론",
+      "projectBoot": "프로젝트 부트",
       "opened": "열린 항목",
       "recentOpen": "최근 연 항목"
     },

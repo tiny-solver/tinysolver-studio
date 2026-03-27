@@ -856,6 +856,7 @@
       "fallbackFolderName": "Carpeta",
       "openFolder": "Abrir carpeta",
       "cloneRepository": "Clonar repositorio",
+      "projectBoot": "Inicializador de proyecto",
       "opened": "Abierto",
       "recentOpen": "Abiertos recientemente"
     },

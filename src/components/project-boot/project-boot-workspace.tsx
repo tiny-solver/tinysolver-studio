@@ -1,12 +1,7 @@
 "use client"
 
 import { useTranslations } from "next-intl"
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ShadcnLauncher } from "./shadcn/shadcn-launcher"
 
 export function ProjectBootWorkspace() {

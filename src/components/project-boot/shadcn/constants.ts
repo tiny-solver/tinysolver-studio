@@ -1,12 +1,6 @@
 // ── Preset encoding/decoding (matches shadcn v2 format) ─────────────
 
-const PRESET_STYLES = [
-  "nova",
-  "vega",
-  "maia",
-  "lyra",
-  "mira",
-] as const
+const PRESET_STYLES = ["nova", "vega", "maia", "lyra", "mira"] as const
 
 const PRESET_BASE_COLORS = [
   "neutral",
@@ -84,13 +78,7 @@ const PRESET_FONTS = [
 
 const PRESET_FONT_HEADINGS = ["inherit", ...PRESET_FONTS] as const
 
-const PRESET_RADII = [
-  "default",
-  "none",
-  "small",
-  "medium",
-  "large",
-] as const
+const PRESET_RADII = ["default", "none", "small", "medium", "large"] as const
 
 const PRESET_MENU_ACCENTS = ["subtle", "bold"] as const
 
@@ -115,8 +103,7 @@ const PRESET_FIELDS_V2 = [
   { key: "fontHeading", values: PRESET_FONT_HEADINGS, bits: 5 },
 ] as const
 
-const BASE62 =
-  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 function toBase62(num: number): string {
   if (num === 0) return "0"

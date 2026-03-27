@@ -856,6 +856,7 @@
       "fallbackFolderName": "Ordner",
       "openFolder": "Ordner öffnen",
       "cloneRepository": "Repository klonen",
+      "projectBoot": "Projekt-Boot",
       "opened": "Geöffnet",
       "recentOpen": "Zuletzt geöffnet"
     },

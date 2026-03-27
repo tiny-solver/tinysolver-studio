@@ -952,9 +952,9 @@ export async function openSettingsWindow(
   window.open(result.path, `settings-${section ?? "general"}`)
 }
 
-export async function openProjectBootWindow(): Promise<void> {
+export async function openProjectBootWindow(source?: string): Promise<void> {
   if (getTransport().isDesktop()) {
-    return getTransport().call("open_project_boot_window")
+    return getTransport().call("open_project_boot_window", { source })
   }
   window.open("/project-boot", "project-boot")
 }

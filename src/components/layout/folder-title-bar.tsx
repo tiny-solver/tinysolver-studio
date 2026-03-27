@@ -302,9 +302,7 @@ export function FolderTitleBar() {
                   <span
                     className={cn(
                       "grid transition-[grid-template-columns] duration-300",
-                      isActive
-                        ? "grid-cols-[1fr]"
-                        : "grid-cols-[0fr]"
+                      isActive ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
                     )}
                   >
                     <span

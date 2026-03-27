@@ -856,6 +856,7 @@
       "fallbackFolderName": "Pasta",
       "openFolder": "Abrir pasta",
       "cloneRepository": "Clonar repositório",
+      "projectBoot": "Inicializador de projeto",
       "opened": "Aberto",
       "recentOpen": "Abertos recentemente"
     },

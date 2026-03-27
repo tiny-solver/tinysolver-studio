@@ -856,6 +856,7 @@
       "fallbackFolderName": "資料夾",
       "openFolder": "打開資料夾",
       "cloneRepository": "複製倉庫",
+      "projectBoot": "專案啟動器",
       "opened": "已打開",
       "recentOpen": "最近打開"
     },

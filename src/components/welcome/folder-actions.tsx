@@ -56,7 +56,7 @@ export function FolderActions() {
         className="justify-start gap-2 h-9"
         onClick={async () => {
           try {
-            await openProjectBootWindow()
+            await openProjectBootWindow("welcome")
           } catch (err) {
             console.error("[FolderActions] failed to open project boot:", err)
             toast.error(t("toasts.openProjectBootFailed"))

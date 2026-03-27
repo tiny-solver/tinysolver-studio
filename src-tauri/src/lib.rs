@@ -140,6 +140,24 @@ pub fn run() {
                 });
             }
 
+            if label == "project-boot"
+                && matches!(
+                    event,
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+                )
+            {
+                let app = window.app_handle();
+                if !APP_QUITTING.load(Ordering::Relaxed) {
+                    let has_other = app
+                        .webview_windows()
+                        .keys()
+                        .any(|l| *l != label && *l != "settings");
+                    if !has_other {
+                        let _ = windows::open_welcome_window(app);
+                    }
+                }
+            }
+
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if label.starts_with("folder-") {
                     let app = window.app_handle();

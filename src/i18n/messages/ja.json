@@ -856,6 +856,7 @@
       "fallbackFolderName": "フォルダ",
       "openFolder": "フォルダを開く",
       "cloneRepository": "リポジトリをクローン",
+      "projectBoot": "プロジェクトブート",
       "opened": "開いているフォルダ",
       "recentOpen": "最近開いたフォルダ"
     },

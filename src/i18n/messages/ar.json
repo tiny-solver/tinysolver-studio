@@ -856,6 +856,7 @@
       "fallbackFolderName": "مجلد",
       "openFolder": "فتح مجلد",
       "cloneRepository": "استنساخ المستودع",
+      "projectBoot": "مُنشئ المشروع",
       "opened": "مفتوح",
       "recentOpen": "المفتوح مؤخرًا"
     },

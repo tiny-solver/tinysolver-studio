@@ -52,7 +52,11 @@ const CONFIG_FIELDS: {
   options: { value: string; label: string }[]
 }[] = [
   { key: "style", i18nKey: "config.style", options: STYLE_OPTIONS },
-  { key: "baseColor", i18nKey: "config.baseColor", options: BASE_COLOR_OPTIONS },
+  {
+    key: "baseColor",
+    i18nKey: "config.baseColor",
+    options: BASE_COLOR_OPTIONS,
+  },
   { key: "theme", i18nKey: "config.theme", options: THEME_OPTIONS },
   { key: "chartColor", i18nKey: "config.chartColor", options: THEME_OPTIONS },
   {
@@ -66,8 +70,16 @@ const CONFIG_FIELDS: {
     i18nKey: "config.fontHeading",
     options: FONT_HEADING_OPTIONS,
   },
-  { key: "menuAccent", i18nKey: "config.menuAccent", options: MENU_ACCENT_OPTIONS },
-  { key: "menuColor", i18nKey: "config.menuColor", options: MENU_COLOR_OPTIONS },
+  {
+    key: "menuAccent",
+    i18nKey: "config.menuAccent",
+    options: MENU_ACCENT_OPTIONS,
+  },
+  {
+    key: "menuColor",
+    i18nKey: "config.menuColor",
+    options: MENU_COLOR_OPTIONS,
+  },
   { key: "radius", i18nKey: "config.radius", options: RADIUS_OPTIONS },
   { key: "template", i18nKey: "config.template", options: TEMPLATE_OPTIONS },
 ]
