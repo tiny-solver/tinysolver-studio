@@ -1607,6 +1607,7 @@
       "saveDirectory": "Speicherverzeichnis",
       "saveDirectoryPlaceholder": "Verzeichnis auswählen...",
       "browseDirectory": "Durchsuchen",
+      "projectPath": "Projekt wird erstellt in: {path}",
       "advancedOptions": "Erweiterte Optionen",
       "base": "Basisbibliothek",
       "enableRtl": "RTL-Unterstützung aktivieren",
@@ -1622,7 +1623,7 @@
       "createSuccess": "Projekt erfolgreich erstellt"
     },
     "errors": {
-      "directoryExists": "Verzeichnis existiert bereits und ist nicht leer.",
+      "directoryExists": "Zielverzeichnis existiert bereits",
       "commandFailed": "Projekterstellungsbefehl fehlgeschlagen."
     }
   }

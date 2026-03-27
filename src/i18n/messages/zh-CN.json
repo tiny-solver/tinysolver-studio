@@ -1607,6 +1607,7 @@
       "saveDirectory": "保存目录",
       "saveDirectoryPlaceholder": "选择目录...",
       "browseDirectory": "浏览",
+      "projectPath": "项目将创建在：{path}",
       "advancedOptions": "高级选项",
       "base": "基础库",
       "enableRtl": "启用 RTL 支持",
@@ -1622,7 +1623,7 @@
       "createSuccess": "项目创建成功"
     },
     "errors": {
-      "directoryExists": "目录已存在且不为空。",
+      "directoryExists": "目标目录已存在",
       "commandFailed": "项目创建命令执行失败。"
     }
   }

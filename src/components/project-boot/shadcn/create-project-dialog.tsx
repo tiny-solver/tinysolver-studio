@@ -40,7 +40,7 @@ import {
   openFolderWindow,
   detectPackageManager,
 } from "@/lib/api"
-import { toErrorMessage } from "@/lib/app-error"
+import { extractAppCommandError, toErrorMessage } from "@/lib/app-error"
 import {
   BASE_OPTIONS,
   FRAMEWORK_OPTIONS,
@@ -118,7 +118,13 @@ export function CreateProjectDialog({
       resetForm()
       await openFolderWindow(projectPath)
     } catch (err) {
-      const message = toErrorMessage(err)
+      const appErr = extractAppCommandError(err)
+      const message =
+        appErr?.code === "already_exists"
+          ? t("errors.directoryExists")
+          : appErr?.code === "external_command_failed"
+            ? t("errors.commandFailed")
+            : toErrorMessage(err)
       setError(message)
       toast.error(t("toasts.createFailed"), { description: message })
     } finally {
@@ -188,6 +194,13 @@ export function CreateProjectDialog({
                 <FolderOpen className="h-4 w-4" />
               </Button>
             </div>
+            {saveDirectory && projectName.trim() && (
+              <p className="text-xs text-muted-foreground">
+                {t("createDialog.projectPath", {
+                  path: `${saveDirectory}/${projectName.trim()}`,
+                })}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">

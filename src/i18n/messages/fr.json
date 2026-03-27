@@ -1607,6 +1607,7 @@
       "saveDirectory": "Répertoire de sauvegarde",
       "saveDirectoryPlaceholder": "Sélectionner un répertoire...",
       "browseDirectory": "Parcourir",
+      "projectPath": "Le projet sera créé dans : {path}",
       "advancedOptions": "Options avancées",
       "base": "Bibliothèque de base",
       "enableRtl": "Activer le support RTL",
@@ -1622,7 +1623,7 @@
       "createSuccess": "Projet créé avec succès"
     },
     "errors": {
-      "directoryExists": "Le répertoire existe déjà et n'est pas vide.",
+      "directoryExists": "Le répertoire cible existe déjà",
       "commandFailed": "La commande de création du projet a échoué."
     }
   }

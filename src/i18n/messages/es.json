@@ -1607,6 +1607,7 @@
       "saveDirectory": "Directorio de guardado",
       "saveDirectoryPlaceholder": "Seleccionar directorio...",
       "browseDirectory": "Explorar",
+      "projectPath": "El proyecto se creará en: {path}",
       "advancedOptions": "Opciones Avanzadas",
       "base": "Biblioteca Base",
       "enableRtl": "Habilitar Soporte RTL",
@@ -1622,7 +1623,7 @@
       "createSuccess": "Proyecto creado exitosamente"
     },
     "errors": {
-      "directoryExists": "El directorio ya existe y no está vacío.",
+      "directoryExists": "El directorio de destino ya existe",
       "commandFailed": "El comando de creación del proyecto falló."
     }
   }

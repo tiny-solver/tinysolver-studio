@@ -1607,6 +1607,7 @@
       "saveDirectory": "Save Directory",
       "saveDirectoryPlaceholder": "Select directory...",
       "browseDirectory": "Browse",
+      "projectPath": "Project will be created at: {path}",
       "advancedOptions": "Advanced Options",
       "base": "Base Library",
       "enableRtl": "Enable RTL Support",
@@ -1622,7 +1623,7 @@
       "createSuccess": "Project created successfully"
     },
     "errors": {
-      "directoryExists": "Directory already exists and is not empty.",
+      "directoryExists": "Target directory already exists",
       "commandFailed": "Project creation command failed."
     }
   }

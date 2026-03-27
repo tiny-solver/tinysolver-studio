@@ -1607,6 +1607,7 @@
       "saveDirectory": "儲存目錄",
       "saveDirectoryPlaceholder": "選擇目錄...",
       "browseDirectory": "瀏覽",
+      "projectPath": "專案將建立在：{path}",
       "advancedOptions": "進階選項",
       "base": "基礎庫",
       "enableRtl": "啟用 RTL 支援",
@@ -1622,7 +1623,7 @@
       "createSuccess": "專案建立成功"
     },
     "errors": {
-      "directoryExists": "目錄已存在且不為空。",
+      "directoryExists": "目標目錄已存在",
       "commandFailed": "專案建立命令執行失敗。"
     }
   }

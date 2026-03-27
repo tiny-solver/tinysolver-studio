@@ -1607,6 +1607,7 @@
       "saveDirectory": "저장 디렉토리",
       "saveDirectoryPlaceholder": "디렉토리 선택...",
       "browseDirectory": "찾아보기",
+      "projectPath": "프로젝트 생성 위치: {path}",
       "advancedOptions": "고급 옵션",
       "base": "기본 라이브러리",
       "enableRtl": "RTL 지원 활성화",
@@ -1622,7 +1623,7 @@
       "createSuccess": "프로젝트가 성공적으로 생성되었습니다"
     },
     "errors": {
-      "directoryExists": "디렉토리가 이미 존재하며 비어 있지 않습니다.",
+      "directoryExists": "대상 디렉터리가 이미 존재합니다",
       "commandFailed": "프로젝트 생성 명령이 실패했습니다."
     }
   }

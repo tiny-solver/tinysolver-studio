@@ -1607,6 +1607,7 @@
       "saveDirectory": "دليل الحفظ",
       "saveDirectoryPlaceholder": "اختر الدليل...",
       "browseDirectory": "تصفح",
+      "projectPath": "سيتم إنشاء المشروع في: {path}",
       "advancedOptions": "خيارات متقدمة",
       "base": "المكتبة الأساسية",
       "enableRtl": "تفعيل دعم RTL",
@@ -1622,7 +1623,7 @@
       "createSuccess": "تم إنشاء المشروع بنجاح"
     },
     "errors": {
-      "directoryExists": "الدليل موجود بالفعل وليس فارغاً.",
+      "directoryExists": "الدليل الهدف موجود بالفعل",
       "commandFailed": "فشل أمر إنشاء المشروع."
     }
   }
