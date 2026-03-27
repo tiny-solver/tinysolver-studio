@@ -85,7 +85,7 @@ export function ShadcnConfigPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <ScrollArea className="flex-1 px-4 py-3">
+      <ScrollArea className="min-h-0 flex-1 px-4 py-3">
         <div className="space-y-3">
           {CONFIG_FIELDS.map((field) => (
             <div key={field.key} className="space-y-1">

@@ -1,11 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable"
+import { useMemo, useState, useCallback, useRef, useEffect } from "react"
+import { cn } from "@/lib/utils"
 import { ShadcnConfigPanel } from "./shadcn-config-panel"
 import { ShadcnPreview } from "./shadcn-preview"
 import {
@@ -15,10 +11,18 @@ import {
   type ShadcnPresetConfig,
 } from "./constants"
 
+const MIN_WIDTH = 280
+const MAX_WIDTH = 480
+const DEFAULT_WIDTH = 360
+
 export function ShadcnLauncher() {
   const [config, setConfig] = useState<ShadcnPresetConfig>(
     DEFAULT_PRESET_CONFIG
   )
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH)
+  const [isDragging, setIsDragging] = useState(false)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
 
   const presetCode = useMemo(() => encodePreset(config), [config])
   const previewUrl = useMemo(
@@ -30,21 +34,70 @@ export function ShadcnLauncher() {
     setConfig((prev) => ({ ...prev, [key]: value }))
   }
 
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      setIsDragging(true)
+      startXRef.current = e.clientX
+      startWidthRef.current = sidebarWidth
+    },
+    [sidebarWidth]
+  )
+
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(
+        MAX_WIDTH,
+        Math.max(
+          MIN_WIDTH,
+          startWidthRef.current + (e.clientX - startXRef.current)
+        )
+      )
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDragging])
+
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-full">
-      <ResizablePanel defaultSize={40} minSize={30} maxSize={50}>
+    <div className="flex h-full">
+      <div style={{ width: sidebarWidth }} className="shrink-0">
         <ShadcnConfigPanel
           config={config}
           onConfigChange={updateConfig}
           presetCode={presetCode}
         />
-      </ResizablePanel>
+      </div>
 
-      <ResizableHandle />
+      <div
+        className={cn(
+          "relative z-20 flex w-px cursor-col-resize items-center justify-center",
+          "before:pointer-events-none before:absolute before:inset-y-0 before:left-1/2 before:h-full before:w-[var(--resize-handle-thickness)] before:-translate-x-1/2 before:bg-border before:transition-[width,background-color] before:duration-150 before:ease-out",
+          "after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2",
+          isDragging
+            ? "[--resize-handle-thickness:5px] before:bg-foreground/60"
+            : "[--resize-handle-thickness:1px] hover:[--resize-handle-thickness:5px] hover:before:bg-foreground/40"
+        )}
+        onMouseDown={handleMouseDown}
+      />
 
-      <ResizablePanel defaultSize={60} minSize={40}>
+      <div
+        className={cn("min-w-0 flex-1", isDragging && "pointer-events-none")}
+      >
         <ShadcnPreview previewUrl={previewUrl} />
-      </ResizablePanel>
-    </ResizablePanelGroup>
+      </div>
+    </div>
   )
 }
