@@ -42,11 +42,29 @@ MCP/Skills management, and integrated Git/file/terminal workflows.
 - Unified multi-agent workspace in the same project
 - Local session ingestion with structured rendering
 - Parallel development with built-in `git worktree` flows
+- **Project Boot** — visually scaffold new projects with live preview
 - MCP management (local scan + registry search/install)
 - Skills management (global and project scope)
 - Git remote account management (GitHub and other Git servers)
 - Web service mode — access Codeg from any browser for remote work
 - Integrated engineering loop (file tree, diff, git changes, commit, terminal)
+
+## Project Boot
+
+Create new projects visually with a split-pane interface: configure on the left, preview in real time on the right.
+
+![Project Boot Light](./docs/images/project-boot-light.png#gh-light-mode-only)
+![Project Boot Dark](./docs/images/project-boot-dark.png#gh-dark-mode-only)
+
+### What it does
+
+- **Visual Configuration** — pick style, color theme, icon library, font, border radius, and more from dropdowns; the preview iframe updates instantly
+- **Live Preview** — see your chosen look & feel rendered in real time before creating anything
+- **One-Click Scaffolding** — hit "Create Project" and the launcher runs `shadcn init` with your preset, framework template (Next.js / Vite / React Router / Astro / Laravel), and package manager of choice (pnpm / npm / yarn / bun)
+- **Package Manager Detection** — automatically checks which package managers are installed and shows their versions
+- **Seamless Integration** — the newly created project opens in Codeg's workspace right away
+
+Currently supports **shadcn/ui** project scaffolding, with a tab-based design ready for more project types in the future.
 
 ## Supported Scope
 

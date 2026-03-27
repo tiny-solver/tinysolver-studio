@@ -43,11 +43,29 @@ Git/Datei/Terminal-Workflows.
 - Einheitlicher Multi-Agent-Workspace im selben Projekt
 - Lokale Sitzungserfassung mit strukturierter Darstellung
 - Parallele Entwicklung mit integrierten `git worktree`-Abläufen
+- **Projekt-Starter** — neue Projekte visuell erstellen mit Live-Vorschau
 - MCP-Verwaltung (lokaler Scan + Registry-Suche/Installation)
 - Skills-Verwaltung (global und projektbezogen)
 - Git-Remote-Kontoverwaltung (GitHub und andere Git-Server)
 - Webdienst-Modus — Zugriff auf Codeg über jeden Browser für Remote-Arbeit
 - Integrierter Engineering-Kreislauf (Dateibaum, Diff, Git-Änderungen, Commit, Terminal)
+
+## Projekt-Starter
+
+Erstellen Sie neue Projekte visuell mit einer geteilten Oberfläche: links konfigurieren, rechts in Echtzeit Vorschau anzeigen.
+
+![Project Boot Light](../images/project-boot-light.png#gh-light-mode-only)
+![Project Boot Dark](../images/project-boot-dark.png#gh-dark-mode-only)
+
+### Funktionen
+
+- **Visuelle Konfiguration** — Stil, Farbthema, Icon-Bibliothek, Schrift, Rahmenradius und mehr über Dropdowns auswählen; die Vorschau aktualisiert sich sofort
+- **Live-Vorschau** — das gewählte Look & Feel wird in Echtzeit gerendert, bevor etwas erstellt wird
+- **Ein-Klick-Erstellung** — klicken Sie auf „Projekt erstellen" und der Launcher führt `shadcn init` mit Ihrem Preset, Framework-Template (Next.js / Vite / React Router / Astro / Laravel) und Paketmanager (pnpm / npm / yarn / bun) aus
+- **Paketmanager-Erkennung** — prüft automatisch, welche Paketmanager installiert sind und zeigt ihre Versionen an
+- **Nahtlose Integration** — das neu erstellte Projekt wird sofort im Codeg-Workspace geöffnet
+
+Unterstützt derzeit **shadcn/ui**-Projekt-Scaffolding, mit einem Tab-basierten Design für zukünftige Projekttypen.
 
 ## Unterstützter Umfang
 

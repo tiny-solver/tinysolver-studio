@@ -41,11 +41,29 @@ parallèle via `git worktree`, gestion MCP/Skills et workflows intégrés Git/fi
 - Workspace multi-agents unifié dans le même projet
 - Ingestion locale des sessions avec rendu structuré
 - Développement parallèle avec flux `git worktree` intégré
+- **Lanceur de projet** — créez visuellement de nouveaux projets avec aperçu en temps réel
 - Gestion MCP (scan local + recherche/installation depuis le registre)
 - Gestion des Skills (portée globale et projet)
 - Gestion des comptes distants Git (GitHub et autres serveurs Git)
 - Mode service web — accédez à Codeg depuis n'importe quel navigateur pour le travail à distance
 - Boucle d'ingénierie intégrée (arborescence de fichiers, diff, changements git, commit, terminal)
+
+## Lanceur de projet
+
+Créez visuellement de nouveaux projets avec une interface à panneaux divisés : configuration à gauche, aperçu en temps réel à droite.
+
+![Project Boot Light](../images/project-boot-light.png#gh-light-mode-only)
+![Project Boot Dark](../images/project-boot-dark.png#gh-dark-mode-only)
+
+### Fonctionnalités
+
+- **Configuration visuelle** — sélectionnez le style, le thème de couleur, la bibliothèque d'icônes, la police, le rayon de bordure et plus dans les menus déroulants ; l'aperçu se met à jour instantanément
+- **Aperçu en direct** — visualisez le rendu de votre configuration en temps réel avant de créer quoi que ce soit
+- **Création en un clic** — cliquez sur « Créer un projet » et le launcher exécute `shadcn init` avec votre preset, le template de framework (Next.js / Vite / React Router / Astro / Laravel) et le gestionnaire de paquets (pnpm / npm / yarn / bun)
+- **Détection des gestionnaires de paquets** — vérifie automatiquement quels gestionnaires sont installés et affiche leurs versions
+- **Intégration transparente** — le projet nouvellement créé s'ouvre directement dans l'espace de travail Codeg
+
+Prend actuellement en charge le scaffolding de projets **shadcn/ui**, avec un design à onglets prêt pour d'autres types de projets à l'avenir.
 
 ## Périmètre pris en charge
 

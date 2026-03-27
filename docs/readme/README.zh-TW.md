@@ -41,11 +41,29 @@ OpenClaw 等）整合到桌面應用與 Web 服務中——透過瀏覽器即可
 - 同一專案中的多 Agent 統一工作台
 - 本地會話解析與結構化渲染
 - 內建 `git worktree` 並行開發流程
+- **專案啟動器** — 視覺化建立新專案，即時預覽效果
 - MCP 管理（本地掃描 + 市場搜尋/安裝）
 - Skills 管理（全域與專案級）
 - Git 遠端帳號管理（支援 GitHub 及其他 Git 伺服器）
 - Web 服務模式 — 開啟後可在瀏覽器中存取 Codeg，支援遠端工作
 - 整合工程閉環（檔案樹、Diff、Git 變更、提交、終端）
+
+## 專案啟動器
+
+視覺化建立新專案：左側設定面板，右側即時預覽。
+
+![Project Boot Light](../images/project-boot-light.png#gh-light-mode-only)
+![Project Boot Dark](../images/project-boot-dark.png#gh-dark-mode-only)
+
+### 功能特色
+
+- **視覺化設定** — 從下拉選單中選擇樣式、色彩主題、圖示庫、字型、圓角等，預覽面板即時更新
+- **即時預覽** — 在建立專案前，即時檢視所選樣式的渲染效果
+- **一鍵建立** — 點擊「建立專案」，啟動器將使用您的預設設定、框架範本（Next.js / Vite / React Router / Astro / Laravel）和套件管理器（pnpm / npm / yarn / bun）執行 `shadcn init`
+- **套件管理器偵測** — 自動偵測已安裝的套件管理器並顯示版本號
+- **無縫整合** — 新建立的專案會立即在 Codeg 工作台中開啟
+
+目前支援 **shadcn/ui** 專案腳手架，分頁式設計為未來支援更多專案類型做好了準備。
 
 ## 支援範圍
 

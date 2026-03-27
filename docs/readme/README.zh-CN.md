@@ -41,11 +41,29 @@ OpenClaw 等）统一到桌面应用与 Web 服务中——通过浏览器即可
 - 同一项目中的多 Agent 统一工作台
 - 本地会话解析与结构化渲染
 - 内置 `git worktree` 并行开发流程
+- **项目启动器** — 可视化创建新项目，实时预览效果
 - MCP 管理（本地扫描 + 市场搜索/安装）
 - Skills 管理（全局与项目级）
 - Git 远程账号管理（支持 GitHub 及其它 Git 服务器）
 - Web 服务模式 — 开启后可在浏览器中访问 Codeg，支持远程工作
 - 集成工程闭环（文件树、Diff、Git 变更、提交、终端）
+
+## 项目启动器
+
+可视化创建新项目：左侧配置面板，右侧实时预览。
+
+![Project Boot Light](../images/project-boot-light.png#gh-light-mode-only)
+![Project Boot Dark](../images/project-boot-dark.png#gh-dark-mode-only)
+
+### 功能特性
+
+- **可视化配置** — 从下拉菜单中选择样式、颜色主题、图标库、字体、圆角等，预览面板即时更新
+- **实时预览** — 在创建项目前，实时查看所选样式的渲染效果
+- **一键创建** — 点击"创建项目"，启动器将使用您的预设配置、框架模板（Next.js / Vite / React Router / Astro / Laravel）和包管理器（pnpm / npm / yarn / bun）执行 `shadcn init`
+- **包管理器检测** — 自动检测已安装的包管理器并显示版本号
+- **无缝集成** — 新创建的项目会立即在 Codeg 工作台中打开
+
+目前支持 **shadcn/ui** 项目脚手架，选项卡式设计为未来支持更多项目类型做好了准备。
 
 ## 支持范围
 

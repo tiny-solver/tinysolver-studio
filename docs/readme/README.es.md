@@ -43,11 +43,29 @@ flujos integrados de Git/archivos/terminal.
 - Espacio de trabajo unificado para múltiples agentes en el mismo proyecto
 - Ingesta local de sesiones con renderizado estructurado
 - Desarrollo paralelo con flujos integrados de `git worktree`
+- **Inicio de Proyecto** — crea nuevos proyectos visualmente con vista previa en tiempo real
 - Gestión de MCP (escaneo local + búsqueda/instalación desde registro)
 - Gestión de Skills (ámbito global y por proyecto)
 - Gestión de cuentas remotas de Git (GitHub y otros servidores Git)
 - Modo de servicio web — accede a Codeg desde cualquier navegador para trabajo remoto
 - Ciclo de ingeniería integrado (árbol de archivos, diff, cambios git, commit, terminal)
+
+## Inicio de Proyecto
+
+Crea nuevos proyectos visualmente con una interfaz de panel dividido: configura a la izquierda, vista previa en tiempo real a la derecha.
+
+![Project Boot Light](../images/project-boot-light.png#gh-light-mode-only)
+![Project Boot Dark](../images/project-boot-dark.png#gh-dark-mode-only)
+
+### Qué ofrece
+
+- **Configuración visual** — selecciona estilo, tema de color, biblioteca de iconos, fuente, radio de borde y más desde menús desplegables; la vista previa se actualiza instantáneamente
+- **Vista previa en vivo** — visualiza el aspecto elegido renderizado en tiempo real antes de crear nada
+- **Creación con un clic** — presiona "Crear proyecto" y el launcher ejecuta `shadcn init` con tu preset, plantilla de framework (Next.js / Vite / React Router / Astro / Laravel) y gestor de paquetes (pnpm / npm / yarn / bun)
+- **Detección de gestores de paquetes** — verifica automáticamente qué gestores están instalados y muestra sus versiones
+- **Integración fluida** — el proyecto recién creado se abre directamente en el workspace de Codeg
+
+Actualmente soporta scaffolding de proyectos **shadcn/ui**, con un diseño basado en pestañas preparado para más tipos de proyectos en el futuro.
 
 ## Alcance soportado
 
