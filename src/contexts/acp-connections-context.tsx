@@ -43,6 +43,13 @@ import {
   IDLE_SWEEP_INTERVAL_MS,
 } from "@/lib/constants"
 import { notifyTurnComplete } from "@/lib/notification"
+import {
+  applySavedModePreference,
+  applySavedConfigPreferences,
+  saveModePreference,
+  saveConfigPreference,
+  clearStalePrefs,
+} from "@/lib/selector-prefs-storage"
 import { useAlertContext, type AlertAction } from "@/contexts/alert-context"
 import { useFolderContext } from "@/contexts/folder-context"
 
@@ -1523,17 +1530,20 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         case "session_modes": {
           flushStreamingQueue()
           const modeConn = storeRef.current.connections.get(contextKey)
+          const resolvedModes = modeConn
+            ? applySavedModePreference(modeConn.agentType, e.modes)
+            : e.modes
           dispatch({
             type: "SESSION_MODES",
             contextKey,
-            modes: e.modes,
+            modes: resolvedModes,
           })
           if (modeConn) {
             const entry = selectorsCache.get(modeConn.agentType) ?? {
               modes: null,
               configOptions: null,
             }
-            entry.modes = e.modes
+            entry.modes = resolvedModes
             selectorsCache.set(modeConn.agentType, entry)
           }
           break
@@ -1541,17 +1551,20 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         case "session_config_options": {
           flushStreamingQueue()
           const cfgConn = storeRef.current.connections.get(contextKey)
+          const resolvedConfigOptions = cfgConn
+            ? applySavedConfigPreferences(cfgConn.agentType, e.config_options)
+            : e.config_options
           dispatch({
             type: "SESSION_CONFIG_OPTIONS",
             contextKey,
-            configOptions: e.config_options,
+            configOptions: resolvedConfigOptions,
           })
           if (cfgConn) {
             const entry = selectorsCache.get(cfgConn.agentType) ?? {
               modes: null,
               configOptions: null,
             }
-            entry.configOptions = e.config_options
+            entry.configOptions = resolvedConfigOptions
             selectorsCache.set(cfgConn.agentType, entry)
           }
           break
@@ -1570,6 +1583,13 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
               modes: rdyConn.modes,
               configOptions: rdyConn.configOptions,
             })
+          }
+          // Clean up stale localStorage prefs for agents that genuinely
+          // no longer provide modes or config options.
+          if (rdyConn) {
+            const hasModes = (rdyConn.modes?.available_modes.length ?? 0) > 0
+            const hasConfig = (rdyConn.configOptions?.length ?? 0) > 0
+            clearStalePrefs(rdyConn.agentType, hasModes, hasConfig)
           }
           break
         }
@@ -1956,6 +1976,15 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const setMode = useCallback(async (contextKey: string, modeId: string) => {
     const conn = storeRef.current.connections.get(contextKey)
     if (!conn) return
+    // Persist user's mode selection to localStorage
+    const modes =
+      conn.modes ?? selectorsCache.get(conn.agentType)?.modes ?? null
+    if (modes) {
+      saveModePreference(conn.agentType, {
+        ...modes,
+        current_mode_id: modeId,
+      })
+    }
     lastActivityRef.current.set(contextKey, Date.now())
     await acpSetMode(conn.connectionId, modeId)
   }, [])
@@ -1970,6 +1999,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         configId,
         valueId,
       })
+      // Persist user selection to localStorage
+      const updatedConn = storeRef.current.connections.get(contextKey)
+      const allOptions =
+        updatedConn?.configOptions ??
+        selectorsCache.get(conn.agentType)?.configOptions
+      if (allOptions) {
+        saveConfigPreference(conn.agentType, configId, valueId, allOptions)
+      }
       lastActivityRef.current.set(contextKey, Date.now())
       await acpSetConfigOption(conn.connectionId, configId, valueId)
     },

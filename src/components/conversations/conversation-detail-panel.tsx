@@ -48,6 +48,10 @@ import {
   type PromptDraft,
 } from "@/lib/types"
 import {
+  getSavedModeId,
+  saveModePreference,
+} from "@/lib/selector-prefs-storage"
+import {
   buildConversationDraftStorageKey,
   buildNewConversationDraftStorageKey,
   moveMessageInputDraft,
@@ -724,7 +728,7 @@ const ConversationTabView = memo(function ConversationTabView({
       if (dbConvIdRef.current) return
 
       setDraftAgentType(nextAgentType)
-      setModeId(null)
+      setModeId(getSavedModeId(nextAgentType))
       setAgentConnectError(null)
 
       const s = connStatusRef.current
@@ -757,6 +761,20 @@ const ConversationTabView = memo(function ConversationTabView({
         .finally(doConnect)
     },
     [connConnect, connDisconnect, workingDirForConnection]
+  )
+
+  const handleModeChange = useCallback(
+    (newModeId: string) => {
+      setModeId(newModeId)
+      // Persist mode selection to localStorage immediately
+      if (conn.modes) {
+        saveModePreference(selectedAgent, {
+          ...conn.modes,
+          current_mode_id: newModeId,
+        })
+      }
+    },
+    [conn.modes, selectedAgent]
   )
 
   const handleAnswerQuestion = useCallback(
@@ -853,7 +871,7 @@ const ConversationTabView = memo(function ConversationTabView({
       configOptionsLoading={configOptionsLoading}
       selectorsLoading={selectorsLoading}
       selectedModeId={selectedModeId}
-      onModeChange={setModeId}
+      onModeChange={handleModeChange}
       onConfigOptionChange={handleSetConfigOption}
       availableCommands={connectionCommands}
       attachmentTabId={tabId}
@@ -924,7 +942,7 @@ const ConversationTabView = memo(function ConversationTabView({
               configOptionsLoading={configOptionsLoading}
               selectorsLoading={selectorsLoading}
               selectedModeId={selectedModeId}
-              onModeChange={setModeId}
+              onModeChange={handleModeChange}
               onConfigOptionChange={handleSetConfigOption}
               availableCommands={connectionCommands}
               attachmentTabId={tabId}
