@@ -1630,5 +1630,25 @@
       "directoryExists": "目标目录已存在",
       "commandFailed": "项目创建命令执行失败。"
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "Web 服务",
+    "sectionDescription": "启用后可通过浏览器远程访问 Codeg",
+    "port": "端口",
+    "status": "状态",
+    "running": "运行中",
+    "stopped": "已停止",
+    "processing": "处理中...",
+    "start": "启动",
+    "stop": "停止",
+    "startFailed": "启动失败",
+    "stopFailed": "停止失败",
+    "open": "打开",
+    "hide": "隐藏",
+    "show": "显示",
+    "copy": "复制",
+    "addressLabel": "访问地址",
+    "tokenLabel": "访问 Token",
+    "tokenHint": "Web 客户端首次访问时需输入此 Token"
   }
 }

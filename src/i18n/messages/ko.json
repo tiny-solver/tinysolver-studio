@@ -1630,5 +1630,25 @@
       "directoryExists": "대상 디렉터리가 이미 존재합니다",
       "commandFailed": "프로젝트 생성 명령이 실패했습니다."
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "웹 서비스",
+    "sectionDescription": "활성화하면 브라우저를 통해 Codeg에 원격으로 접속할 수 있습니다",
+    "port": "포트",
+    "status": "상태",
+    "running": "실행 중",
+    "stopped": "중지됨",
+    "processing": "처리 중...",
+    "start": "시작",
+    "stop": "중지",
+    "startFailed": "시작 실패",
+    "stopFailed": "중지 실패",
+    "open": "열기",
+    "hide": "숨기기",
+    "show": "표시",
+    "copy": "복사",
+    "addressLabel": "접속 주소",
+    "tokenLabel": "접속 토큰",
+    "tokenHint": "웹 클라이언트 첫 접속 시 이 토큰을 입력하세요"
   }
 }

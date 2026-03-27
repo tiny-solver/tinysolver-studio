@@ -1630,5 +1630,25 @@
       "directoryExists": "O diretório de destino já existe",
       "commandFailed": "O comando de criação do projeto falhou."
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "Serviço Web",
+    "sectionDescription": "Ativar para acessar o Codeg remotamente pelo navegador",
+    "port": "Porta",
+    "status": "Status",
+    "running": "Em execução",
+    "stopped": "Parado",
+    "processing": "Processando...",
+    "start": "Iniciar",
+    "stop": "Parar",
+    "startFailed": "Falha ao iniciar",
+    "stopFailed": "Falha ao parar",
+    "open": "Abrir",
+    "hide": "Ocultar",
+    "show": "Mostrar",
+    "copy": "Copiar",
+    "addressLabel": "Endereço de acesso",
+    "tokenLabel": "Token de acesso",
+    "tokenHint": "Insira este token ao acessar o cliente Web pela primeira vez"
   }
 }

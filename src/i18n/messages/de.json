@@ -1630,5 +1630,25 @@
       "directoryExists": "Zielverzeichnis existiert bereits",
       "commandFailed": "Projekterstellungsbefehl fehlgeschlagen."
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "Webdienst",
+    "sectionDescription": "Aktivieren Sie den Fernzugriff auf Codeg über den Browser",
+    "port": "Port",
+    "status": "Status",
+    "running": "Läuft",
+    "stopped": "Gestoppt",
+    "processing": "Verarbeitung...",
+    "start": "Starten",
+    "stop": "Stoppen",
+    "startFailed": "Start fehlgeschlagen",
+    "stopFailed": "Stopp fehlgeschlagen",
+    "open": "Öffnen",
+    "hide": "Ausblenden",
+    "show": "Einblenden",
+    "copy": "Kopieren",
+    "addressLabel": "Zugriffsadresse",
+    "tokenLabel": "Zugriffstoken",
+    "tokenHint": "Geben Sie dieses Token beim ersten Zugriff auf den Web-Client ein"
   }
 }

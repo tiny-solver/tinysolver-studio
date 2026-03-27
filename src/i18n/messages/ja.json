@@ -1630,5 +1630,25 @@
       "directoryExists": "対象ディレクトリは既に存在します",
       "commandFailed": "プロジェクト作成コマンドが失敗しました。"
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "Webサービス",
+    "sectionDescription": "有効にするとブラウザからCodegにリモートアクセスできます",
+    "port": "ポート",
+    "status": "ステータス",
+    "running": "実行中",
+    "stopped": "停止中",
+    "processing": "処理中...",
+    "start": "開始",
+    "stop": "停止",
+    "startFailed": "開始に失敗しました",
+    "stopFailed": "停止に失敗しました",
+    "open": "開く",
+    "hide": "非表示",
+    "show": "表示",
+    "copy": "コピー",
+    "addressLabel": "アクセスアドレス",
+    "tokenLabel": "アクセストークン",
+    "tokenHint": "Webクライアントの初回アクセス時にこのトークンを入力してください"
   }
 }

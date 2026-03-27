@@ -1630,5 +1630,25 @@
       "directoryExists": "目標目錄已存在",
       "commandFailed": "專案建立命令執行失敗。"
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "Web 服務",
+    "sectionDescription": "啟用後可透過瀏覽器遠端存取 Codeg",
+    "port": "連接埠",
+    "status": "狀態",
+    "running": "執行中",
+    "stopped": "已停止",
+    "processing": "處理中...",
+    "start": "啟動",
+    "stop": "停止",
+    "startFailed": "啟動失敗",
+    "stopFailed": "停止失敗",
+    "open": "開啟",
+    "hide": "隱藏",
+    "show": "顯示",
+    "copy": "複製",
+    "addressLabel": "存取位址",
+    "tokenLabel": "存取 Token",
+    "tokenHint": "Web 用戶端首次存取時需輸入此 Token"
   }
 }

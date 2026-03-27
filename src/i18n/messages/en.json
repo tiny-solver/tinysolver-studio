@@ -1630,5 +1630,25 @@
       "directoryExists": "Target directory already exists",
       "commandFailed": "Project creation command failed."
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "Web Service",
+    "sectionDescription": "Enable to access Codeg remotely via browser",
+    "port": "Port",
+    "status": "Status",
+    "running": "Running",
+    "stopped": "Stopped",
+    "processing": "Processing...",
+    "start": "Start",
+    "stop": "Stop",
+    "startFailed": "Failed to start",
+    "stopFailed": "Failed to stop",
+    "open": "Open",
+    "hide": "Hide",
+    "show": "Show",
+    "copy": "Copy",
+    "addressLabel": "Access Address",
+    "tokenLabel": "Access Token",
+    "tokenHint": "Enter this token when accessing the Web client for the first time"
   }
 }

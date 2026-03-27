@@ -1630,5 +1630,25 @@
       "directoryExists": "الدليل الهدف موجود بالفعل",
       "commandFailed": "فشل أمر إنشاء المشروع."
     }
+  },
+  "WebServiceSettings": {
+    "sectionTitle": "خدمة الويب",
+    "sectionDescription": "تفعيل للوصول إلى Codeg عن بُعد عبر المتصفح",
+    "port": "المنفذ",
+    "status": "الحالة",
+    "running": "قيد التشغيل",
+    "stopped": "متوقف",
+    "processing": "جارٍ المعالجة...",
+    "start": "تشغيل",
+    "stop": "إيقاف",
+    "startFailed": "فشل التشغيل",
+    "stopFailed": "فشل الإيقاف",
+    "open": "فتح",
+    "hide": "إخفاء",
+    "show": "إظهار",
+    "copy": "نسخ",
+    "addressLabel": "عنوان الوصول",
+    "tokenLabel": "رمز الوصول",
+    "tokenHint": "أدخل هذا الرمز عند الوصول إلى عميل الويب لأول مرة"
   }
 }
