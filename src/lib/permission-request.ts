@@ -12,6 +12,7 @@ export interface PermissionFileChange {
   oldText: string
   newText: string
   unifiedDiff?: string
+  startLine?: number
 }
 
 export interface PermissionPlanEntry {
@@ -111,7 +112,8 @@ function buildCompactDiffFromTexts(
   path: string,
   oldText: string,
   newText: string,
-  contextLines: number = 2
+  contextLines: number = 2,
+  startLine: number = 1
 ): string | null {
   const oldLines = splitNormalizedLines(oldText)
   const newLines = splitNormalizedLines(newText)
@@ -145,7 +147,7 @@ function buildCompactDiffFromTexts(
     Math.min(oldLines.length, oldLines.length - suffix + contextLines)
   )
 
-  const oldStart = Math.max(1, prefix - before.length + 1)
+  const oldStart = Math.max(1, startLine + prefix - before.length)
   const oldCount = before.length + removed.length + after.length
   const newCount = before.length + added.length + after.length
 
@@ -197,7 +199,13 @@ function buildDiffPreviewFromChanges(
       typeof change.unifiedDiff === "string" &&
       change.unifiedDiff.trim().length > 0
         ? change.unifiedDiff.trim()
-        : buildCompactDiffFromTexts(change.path, change.oldText, change.newText)
+        : buildCompactDiffFromTexts(
+            change.path,
+            change.oldText,
+            change.newText,
+            2,
+            change.startLine ?? 1
+          )
     if (!block) continue
 
     for (const line of block.split("\n")) {
@@ -358,11 +366,18 @@ function parseChangeRecord(
     pickString(record, ["unifiedDiff", "unified_diff", "diff", "patch"]) ??
     undefined
 
+  const rawStartLine = record._start_line ?? record.start_line
+  const startLine =
+    typeof rawStartLine === "number" && rawStartLine > 0
+      ? rawStartLine
+      : undefined
+
   return {
     path: normalizedPath,
     oldText,
     newText,
     unifiedDiff,
+    startLine,
   }
 }
 
@@ -410,11 +425,13 @@ function extractRawInputFileChanges(
       ]) ?? ""
 
     if (oldText || newText || changes.length === 0) {
+      const rawSl = rawInputObj._start_line ?? rawInputObj.start_line
       changes.push({
         path: directPath,
         oldText,
         newText,
         unifiedDiff: undefined,
+        startLine: typeof rawSl === "number" && rawSl > 0 ? rawSl : undefined,
       })
     }
   }
@@ -503,7 +520,8 @@ function mergeFileChanges(
     const oldText = prev.oldText || change.oldText
     const newText = prev.newText || change.newText
     const unifiedDiff = prev.unifiedDiff || change.unifiedDiff
-    merged.set(path, { path, oldText, newText, unifiedDiff })
+    const startLine = prev.startLine ?? change.startLine
+    merged.set(path, { path, oldText, newText, unifiedDiff, startLine })
   }
   return Array.from(merged.values())
 }

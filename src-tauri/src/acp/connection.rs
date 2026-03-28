@@ -886,29 +886,62 @@ async fn handle_permission_request(
 
     let mut tool_call_value = serde_json::to_value(&req.tool_call).unwrap_or_default();
 
-    // Resolve line numbers in rawInput for edit tool permission requests
+    // Inject _start_line into rawInput object for edit tool permission requests
     if let Some(obj) = tool_call_value.as_object_mut() {
-        let raw_input_key = if obj.contains_key("rawInput") {
-            Some("rawInput")
-        } else if obj.contains_key("raw_input") {
-            Some("raw_input")
-        } else {
-            None
-        };
-        if let Some(key) = raw_input_key {
-            if let Some(input_val) = obj.get(key).cloned() {
-                let input_text = match &input_val {
-                    serde_json::Value::String(s) => Some(s.clone()),
-                    v if !v.is_null() => Some(v.to_string()),
-                    _ => None,
-                };
-                if let Some(text) = input_text {
-                    let resolved = resolve_live_tool_input(&text, Some(cwd));
-                    if resolved != text {
-                        obj.insert(
-                            key.to_string(),
-                            serde_json::Value::String(resolved),
+        let key = ["rawInput", "raw_input"]
+            .into_iter()
+            .find(|k| obj.contains_key(*k));
+        if let Some(key) = key {
+            // If rawInput is an object with file_path + old_string, inject _start_line directly
+            if let Some(input_obj) = obj.get_mut(key).and_then(|v| v.as_object_mut()) {
+                let file_path = input_obj
+                    .get("file_path")
+                    .or_else(|| input_obj.get("path"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let old_string = input_obj
+                    .get("old_string")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                if let (Some(fp), Some(old_str)) = (file_path, old_string) {
+                    if let Some(sl) = find_string_start_line(&fp, &old_str, Some(cwd)) {
+                        input_obj.insert(
+                            "_start_line".to_string(),
+                            serde_json::json!(sl),
                         );
+                    }
+                }
+            }
+            // If rawInput is a string, parse it and try to inject _start_line or resolve @@
+            else if let Some(serde_json::Value::String(text)) = obj.get(key).cloned() {
+                // Try canonical edit JSON: parse, inject _start_line, write back as object
+                if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(input_obj) = parsed.as_object_mut() {
+                        let fp = input_obj
+                            .get("file_path")
+                            .or_else(|| input_obj.get("path"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        let old_str = input_obj
+                            .get("old_string")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        if let (Some(fp), Some(old_str)) = (fp, old_str) {
+                            if let Some(sl) = find_string_start_line(&fp, &old_str, Some(cwd)) {
+                                input_obj.insert(
+                                    "_start_line".to_string(),
+                                    serde_json::json!(sl),
+                                );
+                                // Write back as object so frontend asObject() works directly
+                                obj.insert(key.to_string(), parsed);
+                            }
+                        }
+                    }
+                }
+                // Apply_patch format: resolve bare @@
+                else if text.contains("@@\n") || text.contains("@@\r\n") {
+                    if let Some(resolved) = crate::parsers::resolve_patch_text(&text, Some(cwd)) {
+                        obj.insert(key.to_string(), serde_json::Value::String(resolved));
                     }
                 }
             }
