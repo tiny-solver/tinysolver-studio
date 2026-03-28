@@ -362,7 +362,7 @@ fn split_line_number(line: &str) -> Option<(u64, &str)> {
 
 /// If most lines have a recognized line-number prefix, strip them all
 /// and return `{"start_line":N,"content":"clean text"}`.
-fn strip_numbered_lines(text: &str) -> Option<String> {
+pub fn strip_numbered_lines(text: &str) -> Option<String> {
     let raw_lines: Vec<&str> = text.lines().collect();
     if raw_lines.len() < 2 {
         return None;

@@ -1887,6 +1887,15 @@ fn serialize_tool_call_content(content: &[ToolCallContent]) -> Option<String> {
     }
 }
 
+/// If the output looks like numbered lines (`   115→content`), strip them
+/// and return `{"start_line":N,"content":"..."}` — same as the historical path.
+fn structurize_live_output(text: &str) -> String {
+    if let Some(json) = crate::parsers::strip_numbered_lines(text) {
+        return json;
+    }
+    text.to_string()
+}
+
 /// Resolve line numbers for live tool call input.
 ///
 /// - For apply_patch with bare `@@`: resolve line numbers in place.
@@ -2025,7 +2034,8 @@ fn emit_conversation_update(
             let content = serialize_tool_call_content(&tc.content);
             let raw_input = json_value_to_text(&tc.raw_input)
                 .map(|text| resolve_live_tool_input(&text, cwd));
-            let raw_output = json_value_to_text(&tc.raw_output);
+            let raw_output = json_value_to_text(&tc.raw_output)
+                .map(|text| structurize_live_output(&text));
             crate::web::event_bridge::emit_event(
                 app_handle,
                 "acp://event",
@@ -2049,7 +2059,8 @@ fn emit_conversation_update(
                 .and_then(serialize_tool_call_content);
             let raw_input = json_value_to_text(&tcu.fields.raw_input)
                 .map(|text| resolve_live_tool_input(&text, cwd));
-            let raw_output = json_value_to_text(&tcu.fields.raw_output);
+            let raw_output = json_value_to_text(&tcu.fields.raw_output)
+                .map(|text| structurize_live_output(&text));
             crate::web::event_bridge::emit_event(
                 app_handle,
                 "acp://event",
