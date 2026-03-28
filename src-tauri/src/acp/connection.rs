@@ -886,64 +886,33 @@ async fn handle_permission_request(
 
     let mut tool_call_value = serde_json::to_value(&req.tool_call).unwrap_or_default();
 
-    // Inject _start_line into rawInput object for edit tool permission requests
+    // Resolve line numbers in rawInput for edit tool permission requests
     if let Some(obj) = tool_call_value.as_object_mut() {
         let key = ["rawInput", "raw_input"]
             .into_iter()
             .find(|k| obj.contains_key(*k));
         if let Some(key) = key {
-            // If rawInput is an object with file_path + old_string, inject _start_line directly
-            if let Some(input_obj) = obj.get_mut(key).and_then(|v| v.as_object_mut()) {
-                let file_path = input_obj
-                    .get("file_path")
-                    .or_else(|| input_obj.get("path"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let old_string = input_obj
-                    .get("old_string")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                if let (Some(fp), Some(old_str)) = (file_path, old_string) {
-                    if let Some(sl) = find_string_start_line(&fp, &old_str, Some(cwd)) {
-                        input_obj.insert(
-                            "_start_line".to_string(),
-                            serde_json::json!(sl),
-                        );
-                    }
+            match obj.get_mut(key) {
+                // rawInput is a JSON object: inject _start_line in place
+                Some(v) if v.is_object() => {
+                    inject_start_line(v, Some(cwd));
                 }
-            }
-            // If rawInput is a string, parse it and try to inject _start_line or resolve @@
-            else if let Some(serde_json::Value::String(text)) = obj.get(key).cloned() {
-                // Try canonical edit JSON: parse, inject _start_line, write back as object
-                if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if let Some(input_obj) = parsed.as_object_mut() {
-                        let fp = input_obj
-                            .get("file_path")
-                            .or_else(|| input_obj.get("path"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        let old_str = input_obj
-                            .get("old_string")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        if let (Some(fp), Some(old_str)) = (fp, old_str) {
-                            if let Some(sl) = find_string_start_line(&fp, &old_str, Some(cwd)) {
-                                input_obj.insert(
-                                    "_start_line".to_string(),
-                                    serde_json::json!(sl),
-                                );
-                                // Write back as object so frontend asObject() works directly
-                                obj.insert(key.to_string(), parsed);
-                            }
+                // rawInput is a JSON string: parse, inject, write back as object
+                Some(serde_json::Value::String(text)) => {
+                    let text = text.clone();
+                    if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if inject_start_line(&mut parsed, Some(cwd)) {
+                            obj.insert(key.to_string(), parsed);
+                        }
+                    } else if text.contains("@@\n") || text.contains("@@\r\n") {
+                        if let Some(resolved) =
+                            crate::parsers::resolve_patch_text(&text, Some(cwd))
+                        {
+                            obj.insert(key.to_string(), serde_json::Value::String(resolved));
                         }
                     }
                 }
-                // Apply_patch format: resolve bare @@
-                else if text.contains("@@\n") || text.contains("@@\r\n") {
-                    if let Some(resolved) = crate::parsers::resolve_patch_text(&text, Some(cwd)) {
-                        obj.insert(key.to_string(), serde_json::Value::String(resolved));
-                    }
-                }
+                _ => {}
             }
         }
     }
@@ -1962,42 +1931,47 @@ fn structurize_live_output(text: &str) -> String {
 
 /// Resolve line numbers for live tool call input.
 ///
+/// Resolve line numbers for live tool call input (string form).
+///
 /// - For apply_patch with bare `@@`: resolve line numbers in place.
-/// - For canonical edit JSON (file_path + old_string + new_string):
-///   read the file, find where old_string starts, and inject `_start_line`
-///   into the JSON so the frontend can generate a diff with real line numbers.
+/// - For canonical edit JSON: inject `_start_line`.
 fn resolve_live_tool_input(text: &str, cwd: Option<&str>) -> String {
-    // Apply-patch format: resolve bare @@ in input
     if text.contains("@@\n") || text.contains("@@\r\n") {
         if let Some(resolved) = crate::parsers::resolve_patch_text(text, cwd) {
             return resolved;
         }
     }
-
-    // Canonical edit JSON: inject _start_line
     if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(text) {
-        let file_path = parsed
-            .get("file_path")
-            .or_else(|| parsed.get("path"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let old_string = parsed
-            .get("old_string")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        if let (Some(fp), Some(old_str)) = (file_path, old_string) {
-            if let Some(start_line) = find_string_start_line(&fp, &old_str, cwd) {
-                parsed
-                    .as_object_mut()
-                    .unwrap()
-                    .insert("_start_line".to_string(), serde_json::json!(start_line));
-                return parsed.to_string();
-            }
+        if inject_start_line(&mut parsed, cwd) {
+            return parsed.to_string();
         }
     }
-
     text.to_string()
+}
+
+/// Try to inject `_start_line` into a JSON object with `file_path` + `old_string`.
+/// Returns true if injected.
+fn inject_start_line(value: &mut serde_json::Value, cwd: Option<&str>) -> bool {
+    let obj = match value.as_object_mut() {
+        Some(o) => o,
+        None => return false,
+    };
+    let fp = obj
+        .get("file_path")
+        .or_else(|| obj.get("path"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let old_str = obj
+        .get("old_string")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    if let (Some(fp), Some(old_str)) = (fp, old_str) {
+        if let Some(sl) = find_string_start_line(&fp, &old_str, cwd) {
+            obj.insert("_start_line".to_string(), serde_json::json!(sl));
+            return true;
+        }
+    }
+    false
 }
 
 /// Find the 1-based start line of `needle` in the file at `path`.
