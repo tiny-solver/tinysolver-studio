@@ -633,42 +633,71 @@ impl ClaudeParser {
                         })
                         .map(|s| s.to_string());
 
-                    // For read tools, structurize with start_line from tool_input.offset
-                    let output_preview =
-                        if tool_name == "read" || tool_name == "Read" {
-                            let start_line = value
-                                .get("tool_input")
-                                .and_then(|i| i.get("offset"))
-                                .and_then(|o| o.as_u64())
-                                .map(|o| o + 1)
-                                .unwrap_or(1);
-                            output_text.map(|text| {
-                                serde_json::json!({
-                                    "start_line": start_line,
-                                    "content": text
-                                })
-                                .to_string()
-                            })
-                        } else {
-                            output_text
-                        };
+                    // Don't structurize here — `structurize_read_tool_output`
+                    // will handle Read tool output uniformly after grouping.
+                    let output_preview = output_text;
 
-                    // Find matching ToolUse in the last assistant message and use its ID
+                    // Find the matching ToolUse by tool_name (reverse scan so the
+                    // most recent match wins), then fall back to the last ToolUse
+                    // without a paired ToolResult yet.
+                    let existing_result_ids: std::collections::HashSet<String> = messages
+                        .iter()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                        .map(|m| {
+                            m.content
+                                .iter()
+                                .filter_map(|b| {
+                                    if let ContentBlock::ToolResult {
+                                        tool_use_id: Some(ref id),
+                                        ..
+                                    } = b
+                                    {
+                                        Some(id.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
                     let matching_id = messages
                         .iter()
                         .rev()
                         .find(|m| matches!(m.role, MessageRole::Assistant))
                         .and_then(|m| {
+                            // First: try to find an unpaired ToolUse with the same tool_name
+                            let by_name = m.content.iter().rev().find_map(|b| {
+                                if let ContentBlock::ToolUse {
+                                    tool_use_id: Some(ref id),
+                                    tool_name: ref tn,
+                                    ..
+                                } = b
+                                {
+                                    if tn == tool_name
+                                        && !existing_result_ids.contains(id)
+                                    {
+                                        return Some(id.clone());
+                                    }
+                                }
+                                None
+                            });
+                            if by_name.is_some() {
+                                return by_name;
+                            }
+                            // Fallback: last unpaired ToolUse regardless of name
                             m.content.iter().rev().find_map(|b| {
                                 if let ContentBlock::ToolUse {
                                     tool_use_id: Some(ref id),
                                     ..
                                 } = b
                                 {
-                                    Some(id.clone())
-                                } else {
-                                    None
+                                    if !existing_result_ids.contains(id) {
+                                        return Some(id.clone());
+                                    }
                                 }
+                                None
                             })
                         });
 

@@ -517,7 +517,7 @@ export function UnifiedDiffPreview({
         {files.map((file) => (
           <section
             key={file.key}
-            className="flex max-h-[480px] flex-col rounded-lg border border-border bg-background"
+            className="flex max-h-[420px] flex-col rounded-lg border border-border bg-background"
           >
             <header className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px]">
               <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">

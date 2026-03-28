@@ -1485,7 +1485,7 @@
         "showingTailOutput": "Mostrando la salida final durante el streaming para mejorar el rendimiento.",
         "result": "Resultado",
         "unknown": "desconocido",
-        "inputTruncated": "Input was truncated — diff may be incomplete.",
+        "inputTruncated": "La entrada fue truncada — el diff puede estar incompleto.",
         "replaceAll": "REEMPLAZAR TODO",
         "filesCount": "Archivos: {count}",
         "update": "actualizar",
