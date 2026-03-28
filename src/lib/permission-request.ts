@@ -145,7 +145,15 @@ function buildCompactDiffFromTexts(
     Math.min(oldLines.length, oldLines.length - suffix + contextLines)
   )
 
-  const parts: string[] = [`--- ${path}`, `+++ ${path}`]
+  const oldStart = Math.max(1, prefix - before.length + 1)
+  const oldCount = before.length + removed.length + after.length
+  const newCount = before.length + added.length + after.length
+
+  const parts: string[] = [
+    `--- ${path}`,
+    `+++ ${path}`,
+    `@@ -${oldStart},${oldCount} +${oldStart},${newCount} @@`,
+  ]
   for (const line of before) parts.push(` ${line}`)
   for (const line of removed) parts.push(`-${line}`)
   for (const line of added) parts.push(`+${line}`)

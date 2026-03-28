@@ -514,10 +514,11 @@ async fn run_connection(
                 let conn_id = conn_id.clone();
                 let handle = handle.clone();
                 let perms = perms.clone();
+                let perm_cwd = cwd_string.clone();
                 async move |req: RequestPermissionRequest,
                             responder: Responder<RequestPermissionResponse>,
                             _cx: ConnectionTo<Agent>| {
-                    handle_permission_request(&conn_id, &handle, &perms, req, responder).await;
+                    handle_permission_request(&conn_id, &handle, &perms, &perm_cwd, req, responder).await;
                     Ok(())
                 }
             },
@@ -861,6 +862,7 @@ async fn handle_permission_request(
     conn_id: &str,
     handle: &tauri::AppHandle,
     perms: &PendingPermissions,
+    cwd: &str,
     req: RequestPermissionRequest,
     responder: Responder<RequestPermissionResponse>,
 ) {
@@ -882,7 +884,36 @@ async fn handle_permission_request(
         })
         .collect();
 
-    let tool_call_value = serde_json::to_value(&req.tool_call).unwrap_or_default();
+    let mut tool_call_value = serde_json::to_value(&req.tool_call).unwrap_or_default();
+
+    // Resolve line numbers in rawInput for edit tool permission requests
+    if let Some(obj) = tool_call_value.as_object_mut() {
+        let raw_input_key = if obj.contains_key("rawInput") {
+            Some("rawInput")
+        } else if obj.contains_key("raw_input") {
+            Some("raw_input")
+        } else {
+            None
+        };
+        if let Some(key) = raw_input_key {
+            if let Some(input_val) = obj.get(key).cloned() {
+                let input_text = match &input_val {
+                    serde_json::Value::String(s) => Some(s.clone()),
+                    v if !v.is_null() => Some(v.to_string()),
+                    _ => None,
+                };
+                if let Some(text) = input_text {
+                    let resolved = resolve_live_tool_input(&text, Some(cwd));
+                    if resolved != text {
+                        obj.insert(
+                            key.to_string(),
+                            serde_json::Value::String(resolved),
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     perms.lock().await.insert(request_id.clone(), responder);
 
