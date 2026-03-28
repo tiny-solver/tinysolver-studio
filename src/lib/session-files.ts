@@ -1,5 +1,6 @@
 import type { MessageTurn } from "./types"
 import { normalizeToolName } from "./tool-call-normalization"
+import { estimateChangedLineStats } from "./line-change-stats"
 import { generateUnifiedDiff } from "./unified-diff-generator"
 
 export type FileOperation = "read" | "edit" | "write" | "apply_patch"
@@ -626,8 +627,12 @@ function computeLineDiff(
             continue
           }
 
-          additions += countLines(change.newText)
-          deletions += countLines(change.oldText)
+          const estimated = estimateChangedLineStats(
+            change.oldText,
+            change.newText
+          )
+          additions += estimated.additions
+          deletions += estimated.deletions
         }
 
         return { additions, deletions }
@@ -643,10 +648,7 @@ function computeLineDiff(
 
     if (!oldStr && !newStr) return null
 
-    return {
-      additions: countLines(newStr),
-      deletions: countLines(oldStr),
-    }
+    return estimateChangedLineStats(oldStr, newStr)
   }
 
   if (op === "write") {
