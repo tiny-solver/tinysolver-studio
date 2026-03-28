@@ -564,7 +564,7 @@ fn find_hunk_position(
         .map(|l| &l[1..])
         .collect();
     if let Some(pos) = find_contiguous(file_lines, &new_view) {
-        return Some((pos + 1, new_count, new_count));
+        return Some((pos + 1, old_count, new_count));
     }
 
     // Strategy 2: contiguous match of context+deleted (pre-patch)
