@@ -1545,6 +1545,21 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             }
             entry.modes = resolvedModes
             selectorsCache.set(modeConn.agentType, entry)
+            // Sync cached mode to backend if it differs from server default
+            if (
+              resolvedModes.current_mode_id &&
+              resolvedModes.current_mode_id !== e.modes.current_mode_id
+            ) {
+              acpSetMode(
+                modeConn.connectionId,
+                resolvedModes.current_mode_id
+              ).catch((err: unknown) =>
+                console.error(
+                  "[ACP] Failed to sync saved mode to backend:",
+                  err
+                )
+              )
+            }
           }
           break
         }
@@ -1566,6 +1581,28 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             }
             entry.configOptions = resolvedConfigOptions
             selectorsCache.set(cfgConn.agentType, entry)
+            // Sync cached config options to backend if they differ
+            for (let i = 0; i < resolvedConfigOptions.length; i++) {
+              const resolved = resolvedConfigOptions[i]
+              const original = e.config_options[i]
+              if (
+                resolved.kind.type === "select" &&
+                original.kind.type === "select" &&
+                resolved.kind.current_value !== original.kind.current_value &&
+                resolved.kind.current_value
+              ) {
+                acpSetConfigOption(
+                  cfgConn.connectionId,
+                  resolved.id,
+                  resolved.kind.current_value
+                ).catch((err: unknown) =>
+                  console.error(
+                    "[ACP] Failed to sync saved config option to backend:",
+                    err
+                  )
+                )
+              }
+            }
           }
           break
         }
