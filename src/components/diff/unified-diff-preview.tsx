@@ -446,9 +446,21 @@ function rowMarker(row: ParsedDiffRow): RowMarker {
   return "none"
 }
 
+function HunkSeparator({ hunk }: { hunk: ParsedDiffHunk }) {
+  const label =
+    hunk.oldStart != null && hunk.oldCount != null
+      ? `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart ?? hunk.oldStart},${hunk.newCount ?? hunk.oldCount} @@`
+      : "···"
+  return (
+    <div className="flex items-center gap-2 border-y border-border/50 bg-muted/30 px-3 py-0.5 font-mono text-[11px] text-muted-foreground/60">
+      <span className="select-none">{label}</span>
+    </div>
+  )
+}
+
 function HunkLines({ rows }: { rows: ParsedDiffRow[] }) {
   return (
-    <div className="inline-block min-w-full font-mono text-[12px] leading-[20px]">
+    <div className="font-mono text-[12px] leading-[20px]">
       {rows.map((row, i) => {
         const marker = rowMarker(row)
         return (
@@ -540,9 +552,14 @@ export function UnifiedDiffPreview({
             </header>
 
             <div className="overflow-auto">
-              {file.hunks.map((hunk) => (
-                <HunkLines key={hunk.key} rows={hunk.rows} />
-              ))}
+              <div className="inline-block min-w-full">
+                {file.hunks.map((hunk, hunkIdx) => (
+                  <div key={hunk.key}>
+                    {hunkIdx > 0 && <HunkSeparator hunk={hunk} />}
+                    <HunkLines rows={hunk.rows} />
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         ))}
