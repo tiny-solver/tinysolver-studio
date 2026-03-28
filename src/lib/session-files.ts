@@ -1,5 +1,6 @@
 import type { MessageTurn } from "./types"
 import { normalizeToolName } from "./tool-call-normalization"
+import { generateUnifiedDiff } from "./unified-diff-generator"
 
 export type FileOperation = "read" | "edit" | "write" | "apply_patch"
 
@@ -266,32 +267,12 @@ function countDiffLines(text: string): DiffStat {
   return { additions, deletions }
 }
 
-function createHunkHeader(oldLineCount: number, newLineCount: number): string {
-  const oldStart = oldLineCount === 0 ? 0 : 1
-  const newStart = newLineCount === 0 ? 0 : 1
-  return `@@ -${oldStart},${oldLineCount} +${newStart},${newLineCount} @@`
-}
-
 function buildUnifiedDiff(
   filePath: string,
   oldText: string,
   newText: string
 ): string | null {
-  if (!oldText && !newText) return null
-
-  const oldLines = oldText ? oldText.split("\n") : []
-  const newLines = newText ? newText.split("\n") : []
-
-  const lines: string[] = [
-    `--- a/${filePath}`,
-    `+++ b/${filePath}`,
-    createHunkHeader(oldLines.length, newLines.length),
-  ]
-
-  for (const line of oldLines) lines.push(`-${line}`)
-  for (const line of newLines) lines.push(`+${line}`)
-
-  return lines.join("\n")
+  return generateUnifiedDiff(oldText, newText, filePath)
 }
 
 function parseEditChangeValue(value: unknown): EditChangePreview | null {

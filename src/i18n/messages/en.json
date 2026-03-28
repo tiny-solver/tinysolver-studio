@@ -1485,6 +1485,7 @@
         "showingTailOutput": "Showing tail output while streaming for performance.",
         "result": "Result",
         "unknown": "unknown",
+        "inputTruncated": "Input was truncated — diff may be incomplete.",
         "replaceAll": "REPLACE ALL",
         "filesCount": "Files: {count}",
         "update": "update",

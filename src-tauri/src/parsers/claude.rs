@@ -574,6 +574,131 @@ impl ClaudeParser {
                         }
                     }
                 }
+                "tool_use" => {
+                    // Top-level tool_use record (Claude Code JSONL format)
+                    let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                    let tool_name = value
+                        .get("tool_name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let input_preview = value.get("tool_input").map(|i| i.to_string());
+                    let synthetic_id = format!("tl-tool-{}", messages.len());
+
+                    // Attach to last assistant message, or create a synthetic one
+                    if let Some(last) = messages
+                        .iter_mut()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                    {
+                        last.content.push(ContentBlock::ToolUse {
+                            tool_use_id: Some(synthetic_id),
+                            tool_name,
+                            input_preview,
+                        });
+                    } else {
+                        messages.push(UnifiedMessage {
+                            id: format!("synth-assistant-{}", messages.len()),
+                            role: MessageRole::Assistant,
+                            content: vec![ContentBlock::ToolUse {
+                                tool_use_id: Some(synthetic_id),
+                                tool_name,
+                                input_preview,
+                            }],
+                            timestamp,
+                            usage: None,
+                            duration_ms: None,
+                            model: None,
+                        });
+                    }
+                }
+                "tool_result" => {
+                    // Top-level tool_result record (Claude Code JSONL format)
+                    let tool_output = value.get("tool_output");
+                    let tool_name = value
+                        .get("tool_name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("");
+                    let is_error = tool_output
+                        .and_then(|o| o.get("exit"))
+                        .and_then(|e| e.as_i64())
+                        .is_some_and(|code| code != 0);
+
+                    // Extract output text: prefer "preview" (read), then "output" (bash)
+                    let output_text = tool_output
+                        .and_then(|o| {
+                            o.get("preview")
+                                .or_else(|| o.get("output"))
+                                .and_then(|v| v.as_str())
+                        })
+                        .map(|s| s.to_string());
+
+                    // For read tools, structurize with start_line from tool_input.offset
+                    let output_preview =
+                        if tool_name == "read" || tool_name == "Read" {
+                            let start_line = value
+                                .get("tool_input")
+                                .and_then(|i| i.get("offset"))
+                                .and_then(|o| o.as_u64())
+                                .map(|o| o + 1)
+                                .unwrap_or(1);
+                            output_text.map(|text| {
+                                serde_json::json!({
+                                    "start_line": start_line,
+                                    "content": text
+                                })
+                                .to_string()
+                            })
+                        } else {
+                            output_text
+                        };
+
+                    // Find matching ToolUse in the last assistant message and use its ID
+                    let matching_id = messages
+                        .iter()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                        .and_then(|m| {
+                            m.content.iter().rev().find_map(|b| {
+                                if let ContentBlock::ToolUse {
+                                    tool_use_id: Some(ref id),
+                                    ..
+                                } = b
+                                {
+                                    Some(id.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+
+                    // Append ToolResult to the same assistant message so they stay in the same turn
+                    if let Some(last) = messages
+                        .iter_mut()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                    {
+                        last.content.push(ContentBlock::ToolResult {
+                            tool_use_id: matching_id,
+                            output_preview,
+                            is_error,
+                        });
+                    } else {
+                        messages.push(UnifiedMessage {
+                            id: format!("synth-result-{}", messages.len()),
+                            role: MessageRole::Assistant,
+                            content: vec![ContentBlock::ToolResult {
+                                tool_use_id: matching_id,
+                                output_preview,
+                                is_error,
+                            }],
+                            timestamp: parse_timestamp(&value).unwrap_or_else(Utc::now),
+                            usage: None,
+                            duration_ms: None,
+                            model: None,
+                        });
+                    }
+                }
                 _ => {}
             }
         }
@@ -583,6 +708,7 @@ impl ClaudeParser {
 
         let mut turns = group_into_turns(messages);
         super::relocate_orphaned_tool_results(&mut turns);
+        super::structurize_read_tool_output(&mut turns);
         let context_window_used_tokens = latest_claude_context_window_used_tokens(&turns);
         let context_window_max_tokens =
             claude_context_window_max_tokens_for_model(model.as_deref());

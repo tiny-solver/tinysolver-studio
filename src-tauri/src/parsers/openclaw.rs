@@ -652,6 +652,7 @@ impl OpenClawParser {
         let folder_name = folder_path.as_ref().map(|p| folder_name_from_path(p));
         let mut turns = group_into_turns(messages);
         super::relocate_orphaned_tool_results(&mut turns);
+        super::structurize_read_tool_output(&mut turns);
 
         let context_window_used_tokens = latest_turn_total_usage_tokens(&turns);
         let context_window_max_tokens = session_meta
@@ -983,9 +984,15 @@ fn extract_assistant_content(value: &serde_json::Value) -> Vec<ContentBlock> {
                         .and_then(|n| n.as_str())
                         .unwrap_or("unknown")
                         .to_string();
+                    let is_edit_tool = matches!(
+                        tool_name.to_lowercase().as_str(),
+                        "edit" | "write" | "apply_patch" | "patch" | "applypatch"
+                            | "edit_file" | "editfile"
+                    );
+                    let max_len = if is_edit_tool { 50000 } else { 500 };
                     let input_preview = item.get("arguments").map(|a| {
                         let s = a.to_string();
-                        truncate_str(&s, 500)
+                        truncate_str(&s, max_len)
                     });
                     blocks.push(ContentBlock::ToolUse {
                         tool_use_id,

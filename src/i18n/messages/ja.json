@@ -1485,6 +1485,7 @@
         "showingTailOutput": "パフォーマンスのため、ストリーミング中は末尾出力を表示しています。",
         "result": "結果",
         "unknown": "不明",
+        "inputTruncated": "Input was truncated — diff may be incomplete.",
         "replaceAll": "すべて置換",
         "filesCount": "ファイル: {count}",
         "update": "更新",

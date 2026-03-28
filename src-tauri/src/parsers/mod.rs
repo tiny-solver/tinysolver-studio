@@ -4,7 +4,7 @@ pub mod gemini;
 pub mod openclaw;
 pub mod opencode;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use regex::Regex;
@@ -290,6 +290,117 @@ pub fn relocate_orphaned_tool_results(turns: &mut Vec<MessageTurn>) {
 
     // Remove turns that became empty after relocation
     turns.retain(|turn| !turn.blocks.is_empty());
+}
+
+/// Convert Read tool output from numbered-line format to `{"start_line":N,"content":"..."}`.
+///
+/// Claude Code embeds line numbers in Read output like `   115→content`.
+/// This splits on the `→` delimiter (or tab for older `cat -n` format),
+/// extracts the starting line number, and returns clean content.
+pub fn structurize_read_tool_output(turns: &mut [MessageTurn]) {
+    let mut read_tool_ids: HashSet<String> = HashSet::new();
+    for turn in turns.iter() {
+        for block in &turn.blocks {
+            if let ContentBlock::ToolUse {
+                tool_use_id: Some(ref id),
+                ref tool_name,
+                ..
+            } = block
+            {
+                let name = tool_name.to_lowercase();
+                if matches!(
+                    name.as_str(),
+                    "read" | "read_file" | "readfile" | "read file" | "cat" | "view"
+                ) {
+                    read_tool_ids.insert(id.clone());
+                }
+            }
+        }
+    }
+
+    for turn in turns.iter_mut() {
+        for block in turn.blocks.iter_mut() {
+            let is_read_result = matches!(
+                block,
+                ContentBlock::ToolResult { tool_use_id: Some(ref id), .. }
+                if read_tool_ids.contains(id)
+            );
+            if !is_read_result {
+                continue;
+            }
+            if let ContentBlock::ToolResult {
+                ref mut output_preview,
+                ..
+            } = block
+            {
+                if let Some(ref text) = output_preview {
+                    if let Some(json) = strip_numbered_lines(text) {
+                        *output_preview = Some(json);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Known delimiters between line number and content.
+const LINE_NUM_DELIMITERS: &[&str] = &["→", "\t"];
+
+/// Try to split a line at a known delimiter, returning (line_number, content).
+fn split_line_number(line: &str) -> Option<(u64, &str)> {
+    for delim in LINE_NUM_DELIMITERS {
+        if let Some(pos) = line.find(delim) {
+            let prefix = line[..pos].trim();
+            if let Ok(num) = prefix.parse::<u64>() {
+                let content_start = pos + delim.len();
+                return Some((num, &line[content_start..]));
+            }
+        }
+    }
+    None
+}
+
+/// If most lines have a recognized line-number prefix, strip them all
+/// and return `{"start_line":N,"content":"clean text"}`.
+fn strip_numbered_lines(text: &str) -> Option<String> {
+    let raw_lines: Vec<&str> = text.lines().collect();
+    if raw_lines.len() < 2 {
+        return None;
+    }
+
+    let matched = raw_lines
+        .iter()
+        .filter(|l| l.is_empty() || split_line_number(l).is_some())
+        .count();
+    if matched < raw_lines.len() * 4 / 5 {
+        return None;
+    }
+
+    let mut start_line: u64 = 1;
+    let mut first = true;
+    let stripped: Vec<&str> = raw_lines
+        .iter()
+        .map(|line| {
+            if let Some((num, content)) = split_line_number(line) {
+                if first {
+                    start_line = num;
+                    first = false;
+                }
+                content
+            } else {
+                first = false;
+                *line
+            }
+        })
+        .collect();
+
+    Some(
+        serde_json::json!({
+            "start_line": start_line,
+            "content": stripped.join("\n")
+        })
+        .to_string(),
+    )
 }
 
 /// Extract the last path component as the folder name.

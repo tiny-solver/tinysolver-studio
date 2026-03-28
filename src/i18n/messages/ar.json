@@ -1485,6 +1485,7 @@
         "showingTailOutput": "يتم عرض نهاية المخرجات أثناء البث لتحسين الأداء.",
         "result": "النتيجة",
         "unknown": "غير معروف",
+        "inputTruncated": "Input was truncated — diff may be incomplete.",
         "replaceAll": "استبدال الكل",
         "filesCount": "الملفات: {count}",
         "update": "تحديث",

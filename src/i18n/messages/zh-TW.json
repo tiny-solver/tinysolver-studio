@@ -1485,6 +1485,7 @@
         "showingTailOutput": "為確保效能，串流輸出時僅顯示尾端內容。",
         "result": "結果",
         "unknown": "未知",
+        "inputTruncated": "Input was truncated — diff may be incomplete.",
         "replaceAll": "全部替換",
         "filesCount": "檔案：{count}",
         "update": "更新",
