@@ -1491,6 +1491,7 @@
         "showingTailOutput": "Zur besseren Performance wird während des Streamings nur die Endausgabe angezeigt.",
         "result": "Ergebnis",
         "unknown": "unbekannt",
+        "inputTruncated": "Eingabe wurde gekürzt — Diff ist möglicherweise unvollständig.",
         "replaceAll": "ALLES ERSETZEN",
         "filesCount": "Dateien: {count}",
         "update": "aktualisieren",

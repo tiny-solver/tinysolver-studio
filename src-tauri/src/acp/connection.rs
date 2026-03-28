@@ -514,10 +514,11 @@ async fn run_connection(
                 let conn_id = conn_id.clone();
                 let handle = handle.clone();
                 let perms = perms.clone();
+                let perm_cwd = cwd_string.clone();
                 async move |req: RequestPermissionRequest,
                             responder: Responder<RequestPermissionResponse>,
                             _cx: ConnectionTo<Agent>| {
-                    handle_permission_request(&conn_id, &handle, &perms, req, responder).await;
+                    handle_permission_request(&conn_id, &handle, &perms, &perm_cwd, req, responder).await;
                     Ok(())
                 }
             },
@@ -689,7 +690,7 @@ async fn run_connection(
                                             notif.update,
                                             SessionUpdate::AvailableCommandsUpdate(_)
                                         ) {
-                                            emit_conversation_update(&cid, &h, notif.update);
+                                            emit_conversation_update(&cid, &h, notif.update, None);
                                         }
                                         Ok(())
                                     })
@@ -870,6 +871,7 @@ async fn handle_permission_request(
     conn_id: &str,
     handle: &tauri::AppHandle,
     perms: &PendingPermissions,
+    cwd: &str,
     req: RequestPermissionRequest,
     responder: Responder<RequestPermissionResponse>,
 ) {
@@ -891,7 +893,38 @@ async fn handle_permission_request(
         })
         .collect();
 
-    let tool_call_value = serde_json::to_value(&req.tool_call).unwrap_or_default();
+    let mut tool_call_value = serde_json::to_value(&req.tool_call).unwrap_or_default();
+
+    // Resolve line numbers in rawInput for edit tool permission requests
+    if let Some(obj) = tool_call_value.as_object_mut() {
+        let key = ["rawInput", "raw_input"]
+            .into_iter()
+            .find(|k| obj.contains_key(*k));
+        if let Some(key) = key {
+            match obj.get_mut(key) {
+                // rawInput is a JSON object: inject _start_line in place
+                Some(v) if v.is_object() => {
+                    inject_start_line(v, Some(cwd));
+                }
+                // rawInput is a JSON string: parse, inject, write back as object
+                Some(serde_json::Value::String(text)) => {
+                    let text = text.clone();
+                    if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if inject_start_line(&mut parsed, Some(cwd)) {
+                            obj.insert(key.to_string(), parsed);
+                        }
+                    } else if text.contains("@@\n") || text.contains("@@\r\n") {
+                        if let Some(resolved) =
+                            crate::parsers::resolve_patch_text(&text, Some(cwd))
+                        {
+                            obj.insert(key.to_string(), serde_json::Value::String(resolved));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 
     perms.lock().await.insert(request_id.clone(), responder);
 
@@ -1437,10 +1470,11 @@ async fn run_conversation_loop<'a>(
                         Ok(SessionMessage::SessionMessage(dispatch)) => {
                             let cid = conn_id.to_string();
                             let h = handle.clone();
+                            let cwd_opt = Some(cwd);
                             let _ = MatchDispatch::new(dispatch)
                                 .if_notification(
                                     async |notif: SessionNotification| {
-                                        emit_conversation_update(&cid, &h, notif.update);
+                                        emit_conversation_update(&cid, &h, notif.update, cwd_opt);
                                         Ok(())
                                     },
                                 )
@@ -1520,6 +1554,7 @@ async fn run_conversation_loop<'a>(
                                     let h = handle.clone();
                                     let runtime = terminal_runtime.clone();
                                     let session_id = sid.clone();
+                                    let cwd_opt = Some(cwd);
                                     if let Err(e) = MatchDispatch::new(dispatch)
                                         .if_notification(
                                             async |notif: SessionNotification| {
@@ -1527,7 +1562,7 @@ async fn run_conversation_loop<'a>(
                                                     &notif.update,
                                                     &mut tracked_terminal_tool_calls,
                                                 );
-                                                emit_conversation_update(&cid, &h, notif.update);
+                                                emit_conversation_update(&cid, &h, notif.update, cwd_opt);
                                                 if should_poll_now {
                                                     poll_tracked_terminal_tool_calls(
                                                         runtime.as_ref(),
@@ -1894,6 +1929,71 @@ fn serialize_tool_call_content(content: &[ToolCallContent]) -> Option<String> {
     }
 }
 
+/// If the output looks like numbered lines (`   115→content`), strip them
+/// and return `{"start_line":N,"content":"..."}` — same as the historical path.
+fn structurize_live_output(text: &str) -> String {
+    if let Some(json) = crate::parsers::strip_numbered_lines(text) {
+        return json;
+    }
+    text.to_string()
+}
+
+/// Resolve line numbers for live tool call input.
+///
+/// Resolve line numbers for live tool call input (string form).
+///
+/// - For apply_patch with bare `@@`: resolve line numbers in place.
+/// - For canonical edit JSON: inject `_start_line`.
+fn resolve_live_tool_input(text: &str, cwd: Option<&str>) -> String {
+    if text.contains("@@\n") || text.contains("@@\r\n") {
+        if let Some(resolved) = crate::parsers::resolve_patch_text(text, cwd) {
+            return resolved;
+        }
+    }
+    if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(text) {
+        if inject_start_line(&mut parsed, cwd) {
+            return parsed.to_string();
+        }
+    }
+    text.to_string()
+}
+
+/// Try to inject `_start_line` into a JSON object with `file_path` + `old_string`.
+/// Returns true if injected.
+fn inject_start_line(value: &mut serde_json::Value, cwd: Option<&str>) -> bool {
+    let obj = match value.as_object_mut() {
+        Some(o) => o,
+        None => return false,
+    };
+    let fp = obj
+        .get("file_path")
+        .or_else(|| obj.get("path"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let old_str = obj
+        .get("old_string")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    if let (Some(fp), Some(old_str)) = (fp, old_str) {
+        if let Some(sl) = find_string_start_line(&fp, &old_str, cwd) {
+            obj.insert("_start_line".to_string(), serde_json::json!(sl));
+            return true;
+        }
+    }
+    false
+}
+
+/// Find the 1-based start line of `needle` in the file at `path`.
+fn find_string_start_line(path: &str, needle: &str, cwd: Option<&str>) -> Option<u64> {
+    if needle.is_empty() {
+        return None;
+    }
+    let file_lines = crate::parsers::load_file_lines(path, cwd)?;
+    let file_content = file_lines.join("\n");
+    let byte_offset = file_content.find(needle)?;
+    Some(file_content[..byte_offset].matches('\n').count() as u64 + 1)
+}
+
 fn json_value_to_text(val: &Option<serde_json::Value>) -> Option<String> {
     match val {
         Some(serde_json::Value::String(text)) => Some(text.clone()),
@@ -1938,6 +2038,7 @@ fn emit_conversation_update(
     connection_id: &str,
     app_handle: &tauri::AppHandle,
     update: SessionUpdate,
+    cwd: Option<&str>,
 ) {
     match update {
         SessionUpdate::UserMessageChunk(_) => {
@@ -1978,8 +2079,10 @@ fn emit_conversation_update(
         }
         SessionUpdate::ToolCall(tc) => {
             let content = serialize_tool_call_content(&tc.content);
-            let raw_input = json_value_to_text(&tc.raw_input);
-            let raw_output = json_value_to_text(&tc.raw_output);
+            let raw_input = json_value_to_text(&tc.raw_input)
+                .map(|text| resolve_live_tool_input(&text, cwd));
+            let raw_output = json_value_to_text(&tc.raw_output)
+                .map(|text| structurize_live_output(&text));
             crate::web::event_bridge::emit_event(
                 app_handle,
                 "acp://event",
@@ -2001,8 +2104,10 @@ fn emit_conversation_update(
                 .content
                 .as_deref()
                 .and_then(serialize_tool_call_content);
-            let raw_input = json_value_to_text(&tcu.fields.raw_input);
-            let raw_output = json_value_to_text(&tcu.fields.raw_output);
+            let raw_input = json_value_to_text(&tcu.fields.raw_input)
+                .map(|text| resolve_live_tool_input(&text, cwd));
+            let raw_output = json_value_to_text(&tcu.fields.raw_output)
+                .map(|text| structurize_live_output(&text));
             crate::web::event_bridge::emit_event(
                 app_handle,
                 "acp://event",

@@ -1491,6 +1491,7 @@
         "showingTailOutput": "为保证性能，流式输出时仅显示尾部内容。",
         "result": "结果",
         "unknown": "未知",
+        "inputTruncated": "输入已截断，diff 可能不完整。",
         "replaceAll": "全部替换",
         "filesCount": "文件：{count}",
         "update": "更新",

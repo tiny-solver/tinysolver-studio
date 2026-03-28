@@ -11,11 +11,11 @@ import {
   Columns2,
   FileCode2,
   MessageSquare,
-  PanelBottom,
   PanelLeft,
   PanelRight,
   Search,
   Settings,
+  SquareTerminal,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { getGitBranch, openFolderWindow, openSettingsWindow } from "@/lib/api"
@@ -343,21 +343,6 @@ export function FolderTitleBar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-6 w-6 hover:text-foreground/80 ${terminalOpen ? "bg-accent" : ""}`}
-                onClick={() => toggleTerminal()}
-                title={tTitleBar("withShortcut", {
-                  label: tTitleBar("toggleTerminal"),
-                  shortcut: formatShortcutLabel(
-                    shortcuts.toggle_terminal,
-                    isMac
-                  ),
-                })}
-              >
-                <PanelBottom className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
                 className={`h-6 w-6 hover:text-foreground/80 ${auxPanelOpen ? "bg-accent" : ""}`}
                 onClick={toggleAuxPanel}
                 title={tTitleBar("withShortcut", {
@@ -369,6 +354,21 @@ export function FolderTitleBar() {
                 })}
               >
                 <PanelRight className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-6 w-6 hover:text-foreground/80 ${terminalOpen ? "bg-accent" : ""}`}
+                onClick={() => toggleTerminal()}
+                title={tTitleBar("withShortcut", {
+                  label: tTitleBar("toggleTerminal"),
+                  shortcut: formatShortcutLabel(
+                    shortcuts.toggle_terminal,
+                    isMac
+                  ),
+                })}
+              >
+                <SquareTerminal className="h-3.5 w-3.5" />
               </Button>
               <Button
                 variant="ghost"

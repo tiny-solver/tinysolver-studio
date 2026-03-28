@@ -1,5 +1,4 @@
 import { memo, useMemo, useState, type ReactNode } from "react"
-import type { BundledLanguage } from "shiki"
 import type { AdaptedContentPart } from "@/lib/adapters/ai-elements-adapter"
 import type { MessageRole } from "@/lib/types"
 import { normalizeToolName } from "@/lib/tool-call-normalization"
@@ -17,6 +16,8 @@ import {
 } from "@/components/ai-elements/tool"
 import { Terminal } from "@/components/ai-elements/terminal"
 import { CodeBlock } from "@/components/ai-elements/code-block"
+import { UnifiedDiffPreview } from "@/components/diff/unified-diff-preview"
+import { generateUnifiedDiff } from "@/lib/unified-diff-generator"
 import {
   Reasoning,
   ReasoningTrigger,
@@ -372,62 +373,6 @@ function str(obj: Record<string, unknown>, key: string): string | undefined {
 function num(obj: Record<string, unknown>, key: string): number | undefined {
   const v = obj[key]
   return typeof v === "number" ? v : undefined
-}
-
-/** Guess shiki language from file path extension. */
-const EXT_LANG_MAP: Record<string, BundledLanguage> = {
-  ts: "typescript",
-  tsx: "tsx",
-  js: "javascript",
-  jsx: "jsx",
-  mjs: "javascript",
-  cjs: "javascript",
-  py: "python",
-  rs: "rust",
-  go: "go",
-  java: "java",
-  css: "css",
-  scss: "scss",
-  less: "less",
-  html: "html",
-  json: "json",
-  jsonl: "json",
-  yaml: "yaml",
-  yml: "yaml",
-  md: "markdown",
-  mdx: "mdx",
-  sql: "sql",
-  sh: "bash",
-  bash: "bash",
-  zsh: "bash",
-  toml: "toml",
-  xml: "xml",
-  svg: "xml",
-  vue: "vue",
-  svelte: "svelte",
-  rb: "ruby",
-  php: "php",
-  swift: "swift",
-  kt: "kotlin",
-  c: "c",
-  cpp: "cpp",
-  h: "c",
-  hpp: "cpp",
-  cs: "csharp",
-  dart: "dart",
-  lua: "lua",
-  r: "r",
-  dockerfile: "dockerfile",
-  graphql: "graphql",
-  prisma: "prisma",
-}
-
-function guessLangFromPath(filePath: string): BundledLanguage {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? ""
-  // Handle dotfiles like "Dockerfile"
-  const basename = filePath.split("/").pop()?.toLowerCase() ?? ""
-  if (basename === "dockerfile") return "dockerfile"
-  return EXT_LANG_MAP[ext] ?? ("log" as BundledLanguage)
 }
 
 type ApplyPatchOp = "add" | "update" | "delete" | "move"
@@ -1227,115 +1172,55 @@ function localizeDerivedToolTitle(
 
 /** Edit tool: file path + unified diff view */
 function EditToolInput({ input }: { input: Record<string, unknown> }) {
-  const t = useTranslations("Folder.chat.contentParts")
   const filePath = str(input, "file_path")
   const oldString = str(input, "old_string") ?? ""
   const newString = str(input, "new_string") ?? ""
-  const replaceAll = input.replace_all === true
+  const startLine = num(input, "_start_line")
 
   const diffCode = useMemo(() => {
-    const parts: string[] = []
-    if (oldString) {
-      for (const line of oldString.split("\n")) {
-        parts.push(`- ${line}`)
-      }
-    }
-    if (newString) {
-      for (const line of newString.split("\n")) {
-        parts.push(`+ ${line}`)
-      }
-    }
-    return parts.join("\n")
-  }, [oldString, newString])
+    const diff = generateUnifiedDiff(
+      oldString,
+      newString,
+      filePath ?? undefined
+    )
+    if (!diff || !startLine || startLine <= 1) return diff ?? ""
+    // Replace line numbers in hunk headers with real start line
+    return diff.replace(
+      /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@/gm,
+      (_, _o, oc, _n, nc) => `@@ -${startLine},${oc} +${startLine},${nc} @@`
+    )
+  }, [oldString, newString, filePath, startLine])
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs">
-        <FilePenLineIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="break-all font-mono text-foreground">
-          {filePath ?? t("unknown")}
-        </span>
-        {replaceAll && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {t("replaceAll")}
-          </span>
-        )}
-      </div>
-      {diffCode && <CodeBlock code={diffCode} language="diff" />}
-    </div>
-  )
+  return diffCode ? <UnifiedDiffPreview diffText={diffCode} /> : null
 }
 
-/** Edit tool (changes payload): file list + summary + combined diff view */
+/** Edit tool (changes payload): combined diff view */
 function EditChangesToolInput({ changes }: { changes: EditChangePreview[] }) {
-  const t = useTranslations("Folder.chat.contentParts")
-  const { additions, deletions, diffCode } = useMemo(() => {
-    let additions = 0
-    let deletions = 0
+  const diffCode = useMemo(() => {
     const diffParts: string[] = []
 
     for (const change of changes) {
       if (change.unifiedDiff && change.unifiedDiff.trim().length > 0) {
         diffParts.push(change.unifiedDiff.trim())
         diffParts.push("")
-        for (const line of change.unifiedDiff.split("\n")) {
-          if (line.startsWith("+") && !line.startsWith("+++")) additions += 1
-          if (line.startsWith("-") && !line.startsWith("---")) deletions += 1
-        }
         continue
       }
 
-      const oldLines = change.oldText ? change.oldText.split("\n") : []
-      const newLines = change.newText ? change.newText.split("\n") : []
-
-      deletions += oldLines.length
-      additions += newLines.length
-
-      diffParts.push(`--- ${change.path}`)
-      diffParts.push(`+++ ${change.path}`)
-      for (const line of oldLines) {
-        diffParts.push(`-${line}`)
+      const generated = generateUnifiedDiff(
+        change.oldText,
+        change.newText,
+        change.path
+      )
+      if (generated) {
+        diffParts.push(generated)
+        diffParts.push("")
       }
-      for (const line of newLines) {
-        diffParts.push(`+${line}`)
-      }
-      diffParts.push("")
     }
 
-    return {
-      additions,
-      deletions,
-      diffCode: diffParts.join("\n").trim(),
-    }
+    return diffParts.join("\n").trim()
   }, [changes])
 
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        <span>{t("filesCount", { count: changes.length })}</span>
-        {additions > 0 && <span>+{additions}</span>}
-        {deletions > 0 && <span>-{deletions}</span>}
-      </div>
-      <div className="space-y-1 rounded-md bg-muted/40 p-2">
-        {changes.slice(0, 8).map((change, index) => (
-          <div key={`${change.path}-${index}`} className="flex gap-2 text-xs">
-            <span className="shrink-0 rounded bg-blue-500/15 px-1.5 py-0.5 font-medium uppercase text-blue-600">
-              {t("update")}
-            </span>
-            <span className="break-all font-mono text-foreground">
-              {change.path}
-            </span>
-          </div>
-        ))}
-        {changes.length > 8 && (
-          <div className="text-xs text-muted-foreground">
-            {t("moreFiles", { count: changes.length - 8 })}
-          </div>
-        )}
-      </div>
-      {diffCode && <CodeBlock code={diffCode} language="diff" />}
-    </div>
-  )
+  return diffCode ? <UnifiedDiffPreview diffText={diffCode} /> : null
 }
 
 /** Bash / exec_command: terminal-style command display */
@@ -1370,13 +1255,60 @@ function BashToolInput({ input }: { input: Record<string, unknown> }) {
   )
 }
 
+/**
+ * Parse structured read output from backend: `{"start_line":N,"content":"..."}`.
+ * Falls back to raw text with startLine=1 if not structured.
+ */
+function parseReadOutput(raw: string): { startLine: number; content: string } {
+  try {
+    const parsed = JSON.parse(raw)
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof parsed.start_line === "number" &&
+      typeof parsed.content === "string"
+    ) {
+      return { startLine: parsed.start_line, content: parsed.content }
+    }
+  } catch {
+    // not JSON
+  }
+  return { startLine: 1, content: raw }
+}
+
+/** Lightweight file content viewer with line numbers */
+function FileContentLines({
+  content,
+  startLine = 1,
+}: {
+  content: string
+  startLine?: number
+}) {
+  const lines = useMemo(() => content.split("\n"), [content])
+
+  return (
+    <div className="inline-block min-w-full font-mono text-[12px] leading-[20px]">
+      {lines.map((line, i) => (
+        <div key={i} className="flex">
+          <span className="w-[3.5rem] shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+            {startLine + i}
+          </span>
+          <span className="flex-1 whitespace-pre pr-3">{line}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** Read / Write / NotebookEdit: file-focused display */
 function FileToolInput({
   toolName,
   input,
+  output,
 }: {
   toolName: string
   input: Record<string, unknown>
+  output?: string | null
 }) {
   const t = useTranslations("Folder.chat.contentParts")
   const name = toolName.toLowerCase()
@@ -1389,48 +1321,52 @@ function FileToolInput({
   const pages = str(input, "pages")
   const cellType = str(input, "cell_type")
   const editMode = str(input, "edit_mode")
+  const isRead = name === "read" || name === "read file"
 
-  const lang = filePath
-    ? guessLangFromPath(filePath)
-    : ("log" as BundledLanguage)
+  const badges: string[] = []
+  if (offset != null) badges.push(t("offset", { offset }))
+  if (limit != null) badges.push(t("limit", { limit }))
+  if (pages) badges.push(t("pages", { pages }))
+  if (editMode) badges.push(t("mode", { mode: editMode }))
+  if (cellType) badges.push(t("cell", { cell: cellType }))
+
+  const { displayContent, startLine } = useMemo(() => {
+    if (isRead && output) {
+      const parsed = parseReadOutput(output)
+      return { displayContent: parsed.content, startLine: parsed.startLine }
+    }
+    return {
+      displayContent: content ?? newSource ?? null,
+      startLine: 1,
+    }
+  }, [isRead, output, content, newSource])
 
   return (
-    <div className="space-y-2">
-      {filePath && (
-        <div className="flex items-center gap-2 text-xs">
-          {name === "read" || name === "read file" ? (
-            <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <FilePlusIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          <span className="break-all font-mono text-foreground">
-            {filePath}
+    <section className="flex max-h-[420px] flex-col rounded-lg border border-border bg-background">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px]">
+        <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {isRead ? "READ" : "WRITE"}
+        </span>
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-foreground"
+          title={filePath ?? undefined}
+        >
+          {filePath ?? t("unknown")}
+        </span>
+        {badges.length > 0 && (
+          <span className="ml-auto inline-flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
+            {badges.map((b) => (
+              <span key={b}>{b}</span>
+            ))}
           </span>
+        )}
+      </header>
+      {displayContent && (
+        <div className="overflow-auto">
+          <FileContentLines content={displayContent} startLine={startLine} />
         </div>
       )}
-      {(offset != null || limit != null || pages) && (
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          {offset != null && <span>{t("offset", { offset })}</span>}
-          {limit != null && <span>{t("limit", { limit })}</span>}
-          {pages && <span>{t("pages", { pages })}</span>}
-        </div>
-      )}
-      {(cellType || editMode) && (
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          {editMode && <span>{t("mode", { mode: editMode })}</span>}
-          {cellType && <span>{t("cell", { cell: cellType })}</span>}
-        </div>
-      )}
-      {(name === "write" || name === "notebookedit") &&
-        (content || newSource) &&
-        (lang === "markdown" || lang === "mdx" ? (
-          <div className="rounded-md border p-3 text-sm prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside">
-            <MessageResponse>{content ?? newSource ?? ""}</MessageResponse>
-          </div>
-        ) : (
-          <CodeBlock code={content ?? newSource ?? ""} language={lang} />
-        ))}
-    </div>
+    </section>
   )
 }
 
@@ -1641,49 +1577,7 @@ function TodoWriteToolInput({ input }: { input: Record<string, unknown> }) {
 }
 
 function ApplyPatchToolInput({ input }: { input: string }) {
-  const t = useTranslations("Folder.chat.contentParts")
-  const { files, additions, deletions } = useMemo(
-    () => parseApplyPatchInput(input),
-    [input]
-  )
-  const opClass: Record<ApplyPatchOp, string> = {
-    add: "bg-green-500/15 text-green-600",
-    update: "bg-blue-500/15 text-blue-600",
-    delete: "bg-red-500/15 text-red-600",
-    move: "bg-purple-500/15 text-purple-600",
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        <span>{t("filesCount", { count: files.length })}</span>
-        {additions > 0 && <span>+{additions}</span>}
-        {deletions > 0 && <span>-{deletions}</span>}
-      </div>
-      {files.length > 0 && (
-        <div className="space-y-1 rounded-md bg-muted/40 p-2">
-          {files.slice(0, 8).map((file, index) => (
-            <div key={`${file.path}-${index}`} className="flex gap-2 text-xs">
-              <span
-                className={`shrink-0 rounded px-1.5 py-0.5 font-medium uppercase ${opClass[file.op]}`}
-              >
-                {file.op}
-              </span>
-              <span className="break-all font-mono text-foreground">
-                {file.path}
-              </span>
-            </div>
-          ))}
-          {files.length > 8 && (
-            <div className="text-xs text-muted-foreground">
-              {t("moreFiles", { count: files.length - 8 })}
-            </div>
-          )}
-        </div>
-      )}
-      <CodeBlock code={input} language="diff" />
-    </div>
-  )
+  return <UnifiedDiffPreview diffText={input} />
 }
 
 // ── Switch mode (plan) input ──────────────────────────────────────────
@@ -1806,20 +1700,41 @@ function GenericToolInput({ input }: { input: string }) {
 
 // ── Dispatcher ───────────────────────────────────────────────────────
 
+function isTruncatedInput(input: string): boolean {
+  return input.endsWith('..."') || input.endsWith("...")
+}
+
 function StructuredToolInput({
   toolName,
   input,
+  output,
 }: {
   toolName: string
   input: string
+  output?: string | null
 }) {
+  const t = useTranslations("Folder.chat.contentParts")
   const name = toolName.toLowerCase()
   const parsed = tryParseJson(input)
+  const truncated =
+    (name === "edit" || name === "write" || name === "apply_patch") &&
+    isTruncatedInput(input)
+
+  const truncationBanner = truncated ? (
+    <div className="rounded-md bg-yellow-500/10 px-2.5 py-1.5 text-[11px] text-yellow-700 dark:text-yellow-400">
+      {t("inputTruncated")}
+    </div>
+  ) : null
 
   if (name === "apply_patch") {
     const patchInput =
       extractApplyPatchTextFromUnknownInput(input, parsed) ?? input
-    return <ApplyPatchToolInput input={patchInput} />
+    return (
+      <>
+        {truncationBanner}
+        <ApplyPatchToolInput input={patchInput} />
+      </>
+    )
   }
 
   if (name === "bash" || name === "exec_command") {
@@ -1843,16 +1758,41 @@ function StructuredToolInput({
   if (name === "edit") {
     const patchInput = extractApplyPatchTextFromUnknownInput(input, parsed)
     if (patchInput) {
-      return <ApplyPatchToolInput input={patchInput} />
+      return (
+        <>
+          {truncationBanner}
+          <ApplyPatchToolInput input={patchInput} />
+        </>
+      )
     }
     if (parsed) {
       const changesPayload = extractEditChangesPayload(parsed)
       if (changesPayload.length > 0) {
-        return <EditChangesToolInput changes={changesPayload} />
+        return (
+          <>
+            {truncationBanner}
+            <EditChangesToolInput changes={changesPayload} />
+          </>
+        )
       }
     }
+    // Prefer tool output if it contains a structured diff with real line numbers
+    // (injected by backend from toolUseResult.structuredPatch)
+    if (output && typeof output === "string" && /^@@ /m.test(output)) {
+      return (
+        <>
+          {truncationBanner}
+          <UnifiedDiffPreview diffText={output} />
+        </>
+      )
+    }
     if (isCanonicalEditPayload(parsed)) {
-      return <EditToolInput input={parsed} />
+      return (
+        <>
+          {truncationBanner}
+          <EditToolInput input={parsed} />
+        </>
+      )
     }
     return <GenericToolInput input={input} />
   }
@@ -1864,7 +1804,7 @@ function StructuredToolInput({
     name === "write" ||
     name === "notebookedit"
   )
-    return <FileToolInput toolName={toolName} input={parsed} />
+    return <FileToolInput toolName={toolName} input={parsed} output={output} />
   if (name === "glob" || name === "grep")
     return <SearchToolInput toolName={toolName} input={parsed} />
   if (name === "webfetch" || name === "websearch")
@@ -2287,12 +2227,18 @@ const ToolCallPart = memo(function ToolCallPart({
     displayCommand,
     isRunning,
   ])
+  const isFileTool =
+    toolNameLower === "read" ||
+    toolNameLower === "read file" ||
+    toolNameLower === "write" ||
+    toolNameLower === "notebookedit"
   const shouldHideDuplicateResult =
     (toolNameLower === "edit" ||
       toolNameLower === "apply_patch" ||
       toolNameLower === "switch_mode" ||
       toolNameLower === "enterplanmode" ||
-      toolNameLower === "exitplanmode") &&
+      toolNameLower === "exitplanmode" ||
+      isFileTool) &&
     !part.errorText
   // Cline: attempt_completion — render as an expanded card with result + progress
   if (toolNameLower === "attempt_completion") {
@@ -2348,6 +2294,7 @@ const ToolCallPart = memo(function ToolCallPart({
           <StructuredToolInput
             toolName={normalizedToolName}
             input={part.input}
+            output={part.output}
           />
         )}
         {(toolNameLower === "task" || toolNameLower === "agent") &&

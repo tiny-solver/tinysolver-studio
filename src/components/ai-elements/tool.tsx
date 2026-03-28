@@ -22,6 +22,7 @@ import { useTranslations } from "next-intl"
 import { isValidElement } from "react"
 
 import { CodeBlock } from "./code-block"
+import { UnifiedDiffPreview } from "@/components/diff/unified-diff-preview"
 import { MessageResponse } from "./message"
 
 export type ToolProps = ComponentProps<typeof Collapsible>
@@ -380,9 +381,10 @@ export const ToolOutput = ({
           <MessageResponse>{output}</MessageResponse>
         </div>
       )
+    } else if (lang === "diff") {
+      Output = <UnifiedDiffPreview diffText={output} />
     } else {
-      const language = detectOutputLanguage(output)
-      Output = <CodeBlock code={output} language={language} />
+      Output = <CodeBlock code={output} language={lang} />
     }
   }
 

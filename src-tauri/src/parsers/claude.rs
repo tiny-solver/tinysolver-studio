@@ -53,6 +53,46 @@ fn strip_system_tags(text: &str) -> Option<String> {
 }
 
 /// Check if a JSONL entry is a system meta message (isMeta: true).
+/// Rebuild a standard unified diff from `toolUseResult.structuredPatch`.
+///
+/// Each hunk in `structuredPatch` has `oldStart`, `oldLines`, `newStart`,
+/// `newLines`, and `lines` (prefixed with ` `, `+`, or `-`).
+fn rebuild_diff_from_structured_patch(
+    file_path: &str,
+    structured_patch: &serde_json::Value,
+) -> Option<String> {
+    let hunks = structured_patch.as_array()?;
+    if hunks.is_empty() {
+        return None;
+    }
+
+    let mut output = String::new();
+    output.push_str(&format!("--- a/{}\n+++ b/{}\n", file_path, file_path));
+
+    for hunk in hunks {
+        let old_start = hunk.get("oldStart").and_then(|v| v.as_u64()).unwrap_or(1);
+        let old_lines = hunk.get("oldLines").and_then(|v| v.as_u64()).unwrap_or(0);
+        let new_start = hunk.get("newStart").and_then(|v| v.as_u64()).unwrap_or(1);
+        let new_lines = hunk.get("newLines").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        output.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            old_start, old_lines, new_start, new_lines
+        ));
+
+        if let Some(lines) = hunk.get("lines").and_then(|v| v.as_array()) {
+            for line in lines {
+                if let Some(text) = line.as_str() {
+                    output.push_str(text);
+                    output.push('\n');
+                }
+            }
+        }
+    }
+
+    Some(output)
+}
+
 fn is_meta_message(value: &serde_json::Value) -> bool {
     value
         .get("isMeta")
@@ -489,7 +529,7 @@ impl ClaudeParser {
                     continue;
                 }
                 "user" => {
-                    let content = extract_user_content(&value);
+                    let mut content = extract_user_content(&value);
 
                     // Skip user messages that are empty after system tag stripping
                     if content.is_empty() {
@@ -517,6 +557,31 @@ impl ClaudeParser {
                         }
                         MessageRole::User
                     };
+
+                    // Check toolUseResult.structuredPatch for real line numbers
+                    if let Some(tur) = value.get("toolUseResult") {
+                        if let Some(sp) = tur.get("structuredPatch") {
+                            let fp = tur
+                                .get("filePath")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("file");
+                            if let Some(diff) = rebuild_diff_from_structured_patch(fp, sp) {
+                                // Find the matching ToolResult in this user message's content
+                                // and replace its output_preview with the real diff
+                                for block in content.iter_mut() {
+                                    if let ContentBlock::ToolResult {
+                                        ref mut output_preview,
+                                        is_error: false,
+                                        ..
+                                    } = block
+                                    {
+                                        *output_preview = Some(diff.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     messages.push(UnifiedMessage {
                         id: uuid,
@@ -574,6 +639,160 @@ impl ClaudeParser {
                         }
                     }
                 }
+                "tool_use" => {
+                    // Top-level tool_use record (Claude Code JSONL format)
+                    let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                    let tool_name = value
+                        .get("tool_name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let input_preview = value.get("tool_input").map(|i| i.to_string());
+                    let synthetic_id = format!("tl-tool-{}", messages.len());
+
+                    // Attach to last assistant message, or create a synthetic one
+                    if let Some(last) = messages
+                        .iter_mut()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                    {
+                        last.content.push(ContentBlock::ToolUse {
+                            tool_use_id: Some(synthetic_id),
+                            tool_name,
+                            input_preview,
+                        });
+                    } else {
+                        messages.push(UnifiedMessage {
+                            id: format!("synth-assistant-{}", messages.len()),
+                            role: MessageRole::Assistant,
+                            content: vec![ContentBlock::ToolUse {
+                                tool_use_id: Some(synthetic_id),
+                                tool_name,
+                                input_preview,
+                            }],
+                            timestamp,
+                            usage: None,
+                            duration_ms: None,
+                            model: None,
+                        });
+                    }
+                }
+                "tool_result" => {
+                    // Top-level tool_result record (Claude Code JSONL format)
+                    let tool_output = value.get("tool_output");
+                    let tool_name = value
+                        .get("tool_name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("");
+                    let is_error = tool_output
+                        .and_then(|o| o.get("exit"))
+                        .and_then(|e| e.as_i64())
+                        .is_some_and(|code| code != 0);
+
+                    // Extract output text: prefer "preview" (read), then "output" (bash)
+                    let output_text = tool_output
+                        .and_then(|o| {
+                            o.get("preview")
+                                .or_else(|| o.get("output"))
+                                .and_then(|v| v.as_str())
+                        })
+                        .map(|s| s.to_string());
+
+                    // Don't structurize here — `structurize_read_tool_output`
+                    // will handle Read tool output uniformly after grouping.
+                    let output_preview = output_text;
+
+                    // Find the matching ToolUse by tool_name (reverse scan so the
+                    // most recent match wins), then fall back to the last ToolUse
+                    // without a paired ToolResult yet.
+                    let existing_result_ids: std::collections::HashSet<String> = messages
+                        .iter()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                        .map(|m| {
+                            m.content
+                                .iter()
+                                .filter_map(|b| {
+                                    if let ContentBlock::ToolResult {
+                                        tool_use_id: Some(ref id),
+                                        ..
+                                    } = b
+                                    {
+                                        Some(id.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    let matching_id = messages
+                        .iter()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                        .and_then(|m| {
+                            // First: try to find an unpaired ToolUse with the same tool_name
+                            let by_name = m.content.iter().rev().find_map(|b| {
+                                if let ContentBlock::ToolUse {
+                                    tool_use_id: Some(ref id),
+                                    tool_name: ref tn,
+                                    ..
+                                } = b
+                                {
+                                    if tn == tool_name
+                                        && !existing_result_ids.contains(id)
+                                    {
+                                        return Some(id.clone());
+                                    }
+                                }
+                                None
+                            });
+                            if by_name.is_some() {
+                                return by_name;
+                            }
+                            // Fallback: last unpaired ToolUse regardless of name
+                            m.content.iter().rev().find_map(|b| {
+                                if let ContentBlock::ToolUse {
+                                    tool_use_id: Some(ref id),
+                                    ..
+                                } = b
+                                {
+                                    if !existing_result_ids.contains(id) {
+                                        return Some(id.clone());
+                                    }
+                                }
+                                None
+                            })
+                        });
+
+                    // Append ToolResult to the same assistant message so they stay in the same turn
+                    if let Some(last) = messages
+                        .iter_mut()
+                        .rev()
+                        .find(|m| matches!(m.role, MessageRole::Assistant))
+                    {
+                        last.content.push(ContentBlock::ToolResult {
+                            tool_use_id: matching_id,
+                            output_preview,
+                            is_error,
+                        });
+                    } else {
+                        messages.push(UnifiedMessage {
+                            id: format!("synth-result-{}", messages.len()),
+                            role: MessageRole::Assistant,
+                            content: vec![ContentBlock::ToolResult {
+                                tool_use_id: matching_id,
+                                output_preview,
+                                is_error,
+                            }],
+                            timestamp: parse_timestamp(&value).unwrap_or_else(Utc::now),
+                            usage: None,
+                            duration_ms: None,
+                            model: None,
+                        });
+                    }
+                }
                 _ => {}
             }
         }
@@ -583,6 +802,8 @@ impl ClaudeParser {
 
         let mut turns = group_into_turns(messages);
         super::relocate_orphaned_tool_results(&mut turns);
+        super::structurize_read_tool_output(&mut turns);
+        super::resolve_patch_line_numbers(&mut turns, cwd.as_deref());
         let context_window_used_tokens = latest_claude_context_window_used_tokens(&turns);
         let context_window_max_tokens =
             claude_context_window_max_tokens_for_model(model.as_deref());

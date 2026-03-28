@@ -1,5 +1,7 @@
-import type { MessageTurn } from "./types"
+import type { ContentBlock, MessageTurn } from "./types"
 import { normalizeToolName } from "./tool-call-normalization"
+import { estimateChangedLineStats } from "./line-change-stats"
+import { generateUnifiedDiff } from "./unified-diff-generator"
 
 export type FileOperation = "read" | "edit" | "write" | "apply_patch"
 
@@ -266,32 +268,12 @@ function countDiffLines(text: string): DiffStat {
   return { additions, deletions }
 }
 
-function createHunkHeader(oldLineCount: number, newLineCount: number): string {
-  const oldStart = oldLineCount === 0 ? 0 : 1
-  const newStart = newLineCount === 0 ? 0 : 1
-  return `@@ -${oldStart},${oldLineCount} +${newStart},${newLineCount} @@`
-}
-
 function buildUnifiedDiff(
   filePath: string,
   oldText: string,
   newText: string
 ): string | null {
-  if (!oldText && !newText) return null
-
-  const oldLines = oldText ? oldText.split("\n") : []
-  const newLines = newText ? newText.split("\n") : []
-
-  const lines: string[] = [
-    `--- a/${filePath}`,
-    `+++ b/${filePath}`,
-    createHunkHeader(oldLines.length, newLines.length),
-  ]
-
-  for (const line of oldLines) lines.push(`-${line}`)
-  for (const line of newLines) lines.push(`+${line}`)
-
-  return lines.join("\n")
+  return generateUnifiedDiff(oldText, newText, filePath)
 }
 
 function parseEditChangeValue(value: unknown): EditChangePreview | null {
@@ -645,8 +627,12 @@ function computeLineDiff(
             continue
           }
 
-          additions += countLines(change.newText)
-          deletions += countLines(change.oldText)
+          const estimated = estimateChangedLineStats(
+            change.oldText,
+            change.newText
+          )
+          additions += estimated.additions
+          deletions += estimated.deletions
         }
 
         return { additions, deletions }
@@ -662,10 +648,7 @@ function computeLineDiff(
 
     if (!oldStr && !newStr) return null
 
-    return {
-      additions: countLines(newStr),
-      deletions: countLines(oldStr),
-    }
+    return estimateChangedLineStats(oldStr, newStr)
   }
 
   if (op === "write") {
@@ -774,10 +757,12 @@ export function extractSessionFilesGrouped(
           block.input_preview,
           normalizedPath
         )
+        const toolOutput = findToolResultOutput(turn.blocks, block.tool_use_id)
         const diffChunk = buildDiffChunk(
           normalized,
           block.input_preview,
-          normalizedPath
+          normalizedPath,
+          toolOutput
         )
 
         currentFiles.push({
@@ -836,10 +821,12 @@ export function buildSessionFileDiff(
       )
       if (!blockPaths.includes(normalizedTargetPath)) continue
 
+      const toolOutput = findToolResultOutput(turn.blocks, block.tool_use_id)
       const chunk = buildDiffChunk(
         normalized,
         block.input_preview,
-        normalizedTargetPath
+        normalizedTargetPath,
+        toolOutput
       )
       if (chunk && chunk.trim().length > 0) chunks.push(chunk.trim())
     }
@@ -852,10 +839,30 @@ export function buildSessionFileDiff(
   return chunks.join("\n\n")
 }
 
+/** Find the tool_result output matching a tool_use_id within the same turn. */
+function findToolResultOutput(
+  blocks: ContentBlock[],
+  toolUseId: string | null
+): string | null {
+  if (!toolUseId) return null
+  for (const block of blocks) {
+    if (
+      block.type === "tool_result" &&
+      block.tool_use_id === toolUseId &&
+      block.output_preview &&
+      !block.is_error
+    ) {
+      return block.output_preview
+    }
+  }
+  return null
+}
+
 function buildDiffChunk(
   op: string,
   inputPreview: string | null,
-  filePath: string
+  filePath: string,
+  toolOutput?: string | null
 ): string | null {
   if (!inputPreview) return null
 
@@ -877,6 +884,11 @@ function buildDiffChunk(
       }
     }
 
+    // Prefer tool output if backend injected a real diff with line numbers
+    if (toolOutput && /^@@ /m.test(toolOutput)) {
+      return toolOutput.trim()
+    }
+
     if (!parsed) return null
 
     const oldStr =
@@ -884,7 +896,15 @@ function buildDiffChunk(
     const newStr =
       typeof parsed.new_string === "string" ? parsed.new_string : ""
 
-    return buildUnifiedDiff(filePath, oldStr, newStr)
+    const diff = buildUnifiedDiff(filePath, oldStr, newStr)
+    if (!diff) return null
+    const startLine =
+      typeof parsed._start_line === "number" ? parsed._start_line : 0
+    if (startLine <= 1) return diff
+    return diff.replace(
+      /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@/gm,
+      (_, _o, oc, _n, nc) => `@@ -${startLine},${oc} +${startLine},${nc} @@`
+    )
   }
 
   if (op === "write") {

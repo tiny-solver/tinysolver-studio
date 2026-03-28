@@ -1,13 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef } from "react"
-import dynamic from "next/dynamic"
-import type { editor as MonacoEditorNs } from "monaco-editor"
+import { useMemo } from "react"
 import { useTranslations } from "next-intl"
 import { useFolderContext } from "@/contexts/folder-context"
-import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
 import { cn } from "@/lib/utils"
-import "@/lib/monaco-local"
 
 type RowMarker = "none" | "added" | "deleted" | "modified"
 type DiffFileMode = "modified" | "added" | "deleted" | "renamed"
@@ -67,14 +63,18 @@ interface WorkingFile {
   hunks: WorkingHunk[]
 }
 
-interface HunkPreviewLine {
-  text: string
-  marker: RowMarker
+const ROW_CLASS: Record<RowMarker, string> = {
+  none: "",
+  added: "bg-green-500/10 text-green-900 dark:text-green-300",
+  deleted: "bg-red-500/10 text-red-900 dark:text-red-300",
+  modified: "bg-blue-500/10 text-blue-900 dark:text-blue-300",
 }
 
-const MonacoEditor = dynamic(async () => import("@monaco-editor/react"), {
-  ssr: false,
-})
+const SIGN_CLASS: Record<string, string> = {
+  "+": "text-green-700 dark:text-green-400",
+  "-": "text-red-700 dark:text-red-400",
+  " ": "text-muted-foreground/50",
+}
 
 function normalizePath(raw: string): string | null {
   const trimmed = raw.trim().replace(/^"|"$/g, "")
@@ -190,13 +190,11 @@ function classifyRows(rows: RawDiffRow[]): ParsedDiffRow[] {
       addEnd += 1
     }
 
-    const delRows = rows.slice(index, delEnd)
-    const addRows = rows.slice(delEnd, addEnd)
-    const modifiedPairs = Math.min(delRows.length, addRows.length)
-
-    for (const [delta, row] of delRows.entries()) {
+    for (let d = index; d < delEnd; d++) {
+      const row = rows[d]
+      if (!row) continue
       parsed.push({
-        type: delta < modifiedPairs ? "modified" : "deleted",
+        type: "deleted",
         text: row.text,
         sign: "-",
         oldLine: row.oldLine,
@@ -204,9 +202,11 @@ function classifyRows(rows: RawDiffRow[]): ParsedDiffRow[] {
       })
     }
 
-    for (const [delta, row] of addRows.entries()) {
+    for (let a = delEnd; a < addEnd; a++) {
+      const row = rows[a]
+      if (!row) continue
       parsed.push({
-        type: delta < modifiedPairs ? "modified" : "added",
+        type: "added",
         text: row.text,
         sign: "+",
         oldLine: row.oldLine,
@@ -440,171 +440,65 @@ function toDisplayPath(filePath: string, folderPath: string | null): string {
   return normalizedPath
 }
 
-function countHunkChanges(hunk: ParsedDiffHunk): {
-  additions: number
-  deletions: number
-} {
-  let additions = 0
-  let deletions = 0
-
-  for (const row of hunk.rows) {
-    if (row.sign === "+") additions += 1
-    if (row.sign === "-") deletions += 1
-  }
-
-  return { additions, deletions }
+function rowMarker(row: ParsedDiffRow): RowMarker {
+  if (row.type === "added") return "added"
+  if (row.type === "deleted") return "deleted"
+  return "none"
 }
 
-function buildHunkPreviewLines(rows: ParsedDiffRow[]): {
-  lines: HunkPreviewLine[]
-} {
-  const lines: HunkPreviewLine[] = rows.map((row) => {
-    let marker: RowMarker = "none"
-    if (row.type === "added") marker = "added"
-    else if (row.type === "deleted") marker = "deleted"
-    else if (row.type === "modified") marker = "modified"
-
-    return {
-      text: `${row.sign}${row.text}`,
-      marker,
-    }
-  })
-
-  return {
-    lines,
-  }
-}
-
-function HunkMonacoPreview({
-  hunk,
-  modelId,
-  theme,
-}: {
-  hunk: ParsedDiffHunk
-  modelId: string
-  theme: string
-}) {
-  const t = useTranslations("Folder.diffPreview")
-  const editorRef = useRef<MonacoEditorNs.IStandaloneCodeEditor | null>(null)
-  const decorationsRef = useRef<string[]>([])
-
-  const { lines } = useMemo(() => buildHunkPreviewLines(hunk.rows), [hunk.rows])
-
-  const renderedContent = useMemo(
-    () => lines.map((line) => line.text).join("\n"),
-    [lines]
-  )
-
-  const applyDecorations = useCallback(() => {
-    const editor = editorRef.current
-    if (!editor) return
-
-    const model = editor.getModel()
-    if (!model) return
-
-    const maxLine = model.getLineCount()
-    const decorations: MonacoEditorNs.IModelDeltaDecoration[] = []
-
-    for (const [index, line] of lines.entries()) {
-      const lineNumber = index + 1
-      if (lineNumber > maxLine) continue
-
-      let cls: string | null = null
-      if (line.marker === "added") {
-        cls = "codeg-session-diff-line-added"
-      } else if (line.marker === "modified") {
-        cls = "codeg-session-diff-line-modified"
-      } else if (line.marker === "deleted") {
-        cls = "codeg-session-diff-line-deleted"
-      }
-
-      if (!cls) continue
-
-      decorations.push({
-        range: {
-          startLineNumber: lineNumber,
-          startColumn: 1,
-          endLineNumber: lineNumber,
-          endColumn: 1,
-        },
-        options: {
-          isWholeLine: true,
-          className: cls,
-        },
-      })
-    }
-
-    decorationsRef.current = editor.deltaDecorations(
-      decorationsRef.current,
-      decorations
-    )
-  }, [lines])
-
-  useEffect(() => {
-    applyDecorations()
-  }, [applyDecorations])
-
-  useEffect(
-    () => () => {
-      const editor = editorRef.current
-      if (!editor) return
-      editor.deltaDecorations(decorationsRef.current, [])
-      decorationsRef.current = []
-    },
-    []
-  )
-
+function HunkSeparator({ hunk }: { hunk: ParsedDiffHunk }) {
+  const label =
+    hunk.oldStart != null && hunk.oldCount != null
+      ? `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart ?? hunk.oldStart},${hunk.newCount ?? hunk.oldCount} @@`
+      : "···"
   return (
-    <MonacoEditor
-      beforeMount={defineMonacoThemes}
-      onMount={(editor) => {
-        editorRef.current = editor
-        applyDecorations()
-      }}
-      path={`inmemory://session-hunk/${encodeURIComponent(modelId)}`}
-      value={renderedContent}
-      language="plaintext"
-      theme={theme}
-      loading={
-        <div className="h-28 flex items-center justify-center text-xs text-muted-foreground">
-          {t("loadingHunk")}
-        </div>
-      }
-      options={{
-        readOnly: true,
-        minimap: { enabled: false },
-        automaticLayout: true,
-        fontSize: 12,
-        lineNumbers: "off",
-        lineDecorationsWidth: 10,
-        glyphMargin: false,
-        wordWrap: "off",
-        scrollBeyondLastLine: false,
-        renderLineHighlight: "none",
-        contextmenu: false,
-        folding: false,
-        scrollbar: {
-          alwaysConsumeMouseWheel: false,
-        },
-        padding: { top: 6, bottom: 6 },
-      }}
-    />
+    <div className="flex items-center gap-2 border-y border-border/50 bg-muted/30 px-3 py-0.5 font-mono text-[11px] text-muted-foreground/60">
+      <span className="select-none">{label}</span>
+    </div>
+  )
+}
+
+function HunkLines({ rows }: { rows: ParsedDiffRow[] }) {
+  return (
+    <div className="font-mono text-[12px] leading-[20px]">
+      {rows.map((row, i) => {
+        const marker = rowMarker(row)
+        return (
+          <div key={i} className={cn("flex", ROW_CLASS[marker])}>
+            <span className="w-[3.5rem] shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+              {row.oldLine ?? ""}
+            </span>
+            <span className="w-[3.5rem] shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+              {row.newLine ?? ""}
+            </span>
+            <span
+              className={cn(
+                "w-4 shrink-0 select-none text-center",
+                SIGN_CLASS[row.sign] ?? ""
+              )}
+            >
+              {row.sign === " " ? "" : row.sign}
+            </span>
+            <span className="flex-1 whitespace-pre pr-3">{row.text}</span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
 export function UnifiedDiffPreview({
   diffText,
-  modelId,
   className,
 }: {
   diffText: string
+  /** @deprecated No longer used — kept for API compat */
   modelId?: string
   className?: string
 }) {
   const t = useTranslations("Folder.diffPreview")
   const { folder } = useFolderContext()
   const files = useMemo(() => parseUnifiedDiff(diffText), [diffText])
-  const theme = useMonacoThemeSync()
 
   if (!diffText.trim()) {
     return (
@@ -621,8 +515,8 @@ export function UnifiedDiffPreview({
 
   if (files.length === 0) {
     return (
-      <div className={cn("h-full overflow-auto p-3", className)}>
-        <pre className="font-mono text-[11px] leading-5 whitespace-pre-wrap text-muted-foreground">
+      <div className={cn("h-full overflow-auto", className)}>
+        <pre className="font-mono text-[11px] leading-5 whitespace-pre-wrap text-muted-foreground p-3">
           {diffText}
         </pre>
       </div>
@@ -630,14 +524,14 @@ export function UnifiedDiffPreview({
   }
 
   return (
-    <div className={cn("h-full overflow-auto p-3", className)}>
+    <div className={cn("h-full overflow-auto", className)}>
       <div className="space-y-3">
         {files.map((file) => (
           <section
             key={file.key}
-            className="overflow-hidden rounded-lg border border-border bg-background"
+            className="flex max-h-[420px] flex-col rounded-lg border border-border bg-background"
           >
-            <header className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px]">
+            <header className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px]">
               <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 {t(modeKey(file.mode))}
               </span>
@@ -657,41 +551,15 @@ export function UnifiedDiffPreview({
               </span>
             </header>
 
-            <div className="space-y-2 p-2">
-              {file.hunks.map((hunk, index) => {
-                const hunkStats = countHunkChanges(hunk)
-
-                return (
-                  <div
-                    key={hunk.key}
-                    className="rounded-md border border-border"
-                  >
-                    <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-2 py-1 text-[10px] font-mono text-muted-foreground">
-                      <span>{t("hunkLabel", { index: index + 1 })}</span>
-                      <span className="ml-auto inline-flex items-center gap-2">
-                        <span className="text-green-700 dark:text-green-400">
-                          +{hunkStats.additions}
-                        </span>
-                        <span className="text-red-700 dark:text-red-400">
-                          -{hunkStats.deletions}
-                        </span>
-                      </span>
-                    </div>
-                    <div
-                      className="min-h-[7rem]"
-                      style={{
-                        height: `${Math.max(120, hunk.rows.length * 20 + 18)}px`,
-                      }}
-                    >
-                      <HunkMonacoPreview
-                        hunk={hunk}
-                        modelId={`${modelId ?? "session"}:${file.key}:${hunk.key}`}
-                        theme={theme}
-                      />
-                    </div>
+            <div className="overflow-auto">
+              <div className="inline-block min-w-full">
+                {file.hunks.map((hunk, hunkIdx) => (
+                  <div key={hunk.key}>
+                    {hunkIdx > 0 && <HunkSeparator hunk={hunk} />}
+                    <HunkLines rows={hunk.rows} />
                   </div>
-                )
-              })}
+                ))}
+              </div>
             </div>
           </section>
         ))}

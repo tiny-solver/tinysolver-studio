@@ -1270,8 +1270,7 @@ export function FileWorkspacePanel() {
         )}
         <UnifiedDiffPreview
           diffText={activeFileTab.content}
-          modelId={activeFileTab.id}
-          className="h-full"
+          className="h-full p-3"
         />
       </div>
     )

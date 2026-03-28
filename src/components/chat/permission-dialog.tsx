@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl"
 import {
   ShieldAlert,
   Terminal,
-  FilePenLine,
   ListTodo,
   Compass,
   FileText,
@@ -15,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CodeBlock } from "@/components/ai-elements/code-block"
+import { UnifiedDiffPreview } from "@/components/diff/unified-diff-preview"
 import { MessageResponse } from "@/components/ai-elements/message"
 import type { PendingPermission } from "@/contexts/acp-connections-context"
 import { parsePermissionToolCall } from "@/lib/permission-request"
@@ -86,38 +86,8 @@ export function PermissionDialog({
           </div>
         )}
 
-        {hasFileChanges && (
-          <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <FilePenLine className="h-3.5 w-3.5" />
-              <span>
-                {t("filesSummary", { count: parsed.fileChanges.length })}
-              </span>
-              {(parsed.additions > 0 || parsed.deletions > 0) && (
-                <span>
-                  +{parsed.additions} / -{parsed.deletions}
-                </span>
-              )}
-            </div>
-            <div className="space-y-1 rounded-md bg-muted/40 p-2">
-              {parsed.fileChanges.slice(0, 8).map((change, index) => (
-                <div
-                  key={`${change.path}-${index}`}
-                  className="break-all font-mono text-xs text-foreground/90"
-                >
-                  {change.path}
-                </div>
-              ))}
-              {parsed.fileChanges.length > 8 && (
-                <div className="text-xs text-muted-foreground">
-                  {t("moreFiles", { count: parsed.fileChanges.length - 8 })}
-                </div>
-              )}
-            </div>
-            {parsed.diffPreview && (
-              <CodeBlock code={parsed.diffPreview} language="diff" />
-            )}
-          </div>
+        {hasFileChanges && parsed.diffPreview && (
+          <UnifiedDiffPreview diffText={parsed.diffPreview} />
         )}
 
         {hasPlan && (
