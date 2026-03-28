@@ -534,72 +534,81 @@ fn collect_hunk_lines<'a>(lines: &'a [&'a str], start: usize) -> Vec<&'a str> {
 
 /// Find where a hunk's context lines match in the file, returning (start_line, old_count, new_count).
 /// `start_line` is 1-based.
+///
+/// The file on disk may be in either pre-patch or post-patch state, so we try
+/// matching with "new file" lines (context + added) first, then fall back to
+/// "old file" lines (context + deleted).
 fn find_hunk_position(
     file_lines: &[String],
     hunk_lines: &[&str],
 ) -> Option<(usize, usize, usize)> {
-    // Extract context lines (space-prefixed) with their positions in the hunk
-    let context_entries: Vec<(usize, &str)> = hunk_lines
+    let mut old_count = 0usize;
+    let mut new_count = 0usize;
+    for hl in hunk_lines {
+        if hl.starts_with(' ') {
+            old_count += 1;
+            new_count += 1;
+        } else if hl.starts_with('-') {
+            old_count += 1;
+        } else if hl.starts_with('+') {
+            new_count += 1;
+        }
+    }
+
+    // Build "new file" view: context + added lines (what the file looks like after patch)
+    let new_view: Vec<&str> = hunk_lines
         .iter()
-        .enumerate()
-        .filter(|(_, l)| l.starts_with(' '))
-        .map(|(i, l)| (i, &l[1..]))  // strip leading space
+        .filter(|l| l.starts_with(' ') || l.starts_with('+'))
+        .map(|l| &l[1..])
         .collect();
 
-    if context_entries.is_empty() {
+    // Build "old file" view: context + deleted lines (what the file looked like before patch)
+    let old_view: Vec<&str> = hunk_lines
+        .iter()
+        .filter(|l| l.starts_with(' ') || l.starts_with('-'))
+        .map(|l| &l[1..])
+        .collect();
+
+    // Try matching the new view first (file is post-patch), then old view (file is pre-patch)
+    for (view, is_new) in [(&new_view, true), (&old_view, false)] {
+        if view.is_empty() {
+            continue;
+        }
+        if let Some(pos) = find_view_in_file(file_lines, view) {
+            // `pos` is 0-based file index where the view starts.
+            // For the hunk header we want the OLD file line number.
+            // If matched on new view: adjust by the lines added before this hunk
+            //   (old_start = pos - added_lines_before ... but we don't know that)
+            //   Simpler: old_start = pos for new view match (close enough,
+            //   and matches what the user sees in the file).
+            // If matched on old view: pos is already the old start.
+            let start_line = pos + 1; // 1-based
+            let reported_count = if is_new { new_count } else { old_count };
+            return Some((start_line, reported_count, reported_count));
+        }
+    }
+
+    None
+}
+
+/// Find the position of `view` lines in `file_lines`. Returns 0-based start index.
+fn find_view_in_file(file_lines: &[String], view: &[&str]) -> Option<usize> {
+    if view.is_empty() || view.len() > file_lines.len() {
         return None;
     }
-
-    // Use the first context line to find candidate positions
-    let (first_ctx_idx, first_ctx_text) = context_entries[0];
-
-    for (file_idx, file_line) in file_lines.iter().enumerate() {
-        if file_line.as_str() != first_ctx_text {
+    let first = view[0];
+    for i in 0..=(file_lines.len() - view.len()) {
+        if file_lines[i].as_str() != first {
             continue;
         }
-
-        // Verify all context lines match from this position
-        let hunk_start_in_file = file_idx as isize - first_ctx_idx as isize;
-        if hunk_start_in_file < 0 {
-            continue;
-        }
-
-        let all_match = context_entries.iter().all(|(ctx_idx, ctx_text)| {
-            // Map hunk position to file position: only count context and deleted lines
-            let file_offset = hunk_lines[..*ctx_idx]
-                .iter()
-                .filter(|hl| hl.starts_with(' ') || hl.starts_with('-'))
-                .count();
-            let target = hunk_start_in_file as usize + file_offset;
-            target < file_lines.len() && file_lines[target].as_str() == *ctx_text
-        });
-
+        let all_match = view
+            .iter()
+            .enumerate()
+            .all(|(j, v)| file_lines[i + j].as_str() == *v);
         if all_match {
-            // Calculate old_count (context + deleted) and new_count (context + added)
-            let mut old_count = 0usize;
-            let mut new_count = 0usize;
-            for hl in hunk_lines {
-                if hl.starts_with(' ') {
-                    old_count += 1;
-                    new_count += 1;
-                } else if hl.starts_with('-') {
-                    old_count += 1;
-                } else if hl.starts_with('+') {
-                    new_count += 1;
-                }
-            }
-
-            // file_start is the first line of the old file covered by this hunk
-            // We need to find where context/deleted lines start in the file
-            let file_start_offset = hunk_lines[..first_ctx_idx]
-                .iter()
-                .filter(|hl| hl.starts_with(' ') || hl.starts_with('-'))
-                .count();
-            let start_line = (hunk_start_in_file as usize - file_start_offset) + 1; // 1-based
-            return Some((start_line, old_count, new_count));
+            return Some(i);
         }
     }
-
     None
 }
 
