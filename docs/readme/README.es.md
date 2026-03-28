@@ -21,7 +21,7 @@
 Codeg (Code Generation) es un espacio de trabajo empresarial para codificación
 con múltiples agentes.
 Integra agentes locales de codificación con IA (Claude Code, Codex CLI, OpenCode,
-Gemini CLI, OpenClaw, etc.) en una aplicación de escritorio y un servicio web — permitiendo el desarrollo remoto desde cualquier navegador — con agregación
+Gemini CLI, OpenClaw, Cline, etc.) en una aplicación de escritorio y un servicio web — permitiendo el desarrollo remoto desde cualquier navegador — con agregación
 de sesiones, desarrollo paralelo con `git worktree`, gestión de MCP/Skills y
 flujos integrados de Git/archivos/terminal.
 
@@ -78,16 +78,17 @@ Actualmente soporta scaffolding de proyectos **shadcn/ui**, con un diseño basad
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
 | OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > Nota: las variables de entorno tienen prioridad sobre las rutas de respaldo.
 
 ### 2) Sesiones en tiempo real con ACP
 
-Actualmente soporta 5 agentes: Claude Code, Codex CLI, Gemini CLI, OpenCode y OpenClaw.
+Actualmente soporta 6 agentes: Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw y Cline.
 
 ### 3) Configuración de Skills
 
-- Soportados: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- Soportados: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
 - Se añadirán más adaptadores progresivamente
 
 ### 4) Aplicaciones destino de MCP

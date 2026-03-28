@@ -76,6 +76,7 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
 | OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > 참고: 환경 변수가 기본 경로보다 우선합니다.
 
@@ -85,7 +86,7 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 
 ### 3) Skills 설정 지원
 
-- 지원: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- 지원: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
 - 추가 어댑터는 순차적으로 추가 예정
 
 ### 4) MCP 대상 앱

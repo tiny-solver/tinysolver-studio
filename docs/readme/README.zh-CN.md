@@ -20,7 +20,7 @@
 
 Codeg（Code Generation）是一个企业级多 Agent 编码工作台。
 它将本地 AI 编码代理（Claude Code、Codex CLI、OpenCode、Gemini CLI、
-OpenClaw 等）统一到桌面应用与 Web 服务中——通过浏览器即可远程开发——支持会话聚合、
+OpenClaw、Cline 等）统一到桌面应用与 Web 服务中——通过浏览器即可远程开发——支持会话聚合、
 并行 `git worktree` 开发、MCP/Skills 管理，以及集成的 Git/文件/终端工作流。
 
 ## 主界面
@@ -76,16 +76,17 @@ OpenClaw 等）统一到桌面应用与 Web 服务中——通过浏览器即可
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
 | OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > 注意：环境变量的优先级高于默认路径。
 
 ### 2) ACP 实时会话
 
-目前支持 5 种代理：Claude Code、Codex CLI、Gemini CLI、OpenCode 和 OpenClaw。
+目前支持 6 种代理：Claude Code、Codex CLI、Gemini CLI、OpenCode、OpenClaw 和 Cline。
 
 ### 3) Skills 设置支持
 
-- 已支持：`Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- 已支持：`Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
 - 更多适配器将持续补齐
 
 ### 4) MCP 目标应用

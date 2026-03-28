@@ -20,7 +20,7 @@
 
 Codeg (Code Generation) est un workspace de codage multi-agents de niveau entreprise.
 Il unifie les agents de codage IA locaux (Claude Code, Codex CLI, OpenCode, Gemini CLI,
-OpenClaw, etc.) dans une application de bureau et un service web — permettant le développement à distance depuis n'importe quel navigateur — avec agrégation de sessions, développement
+OpenClaw, Cline, etc.) dans une application de bureau et un service web — permettant le développement à distance depuis n'importe quel navigateur — avec agrégation de sessions, développement
 parallèle via `git worktree`, gestion MCP/Skills et workflows intégrés Git/fichiers/terminal.
 
 ## Interface principale
@@ -76,16 +76,17 @@ Prend actuellement en charge le scaffolding de projets **shadcn/ui**, avec un de
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
 | OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > Remarque : les variables d'environnement ont priorité sur les chemins par défaut.
 
 ### 2) Sessions temps réel ACP
 
-Prend actuellement en charge 5 agents : Claude Code, Codex CLI, Gemini CLI, OpenCode et OpenClaw.
+Prend actuellement en charge 6 agents : Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw et Cline.
 
 ### 3) Prise en charge des paramètres Skills
 
-- Pris en charge : `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- Pris en charge : `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
 - D'autres adaptateurs seront ajoutés progressivement
 
 ### 4) Applications cibles MCP

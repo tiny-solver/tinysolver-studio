@@ -76,16 +76,17 @@ Git/ファイル/ターミナル連携ワークフローを提供します。
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
 | OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > 注: 環境変数はフォールバックパスより優先されます。
 
 ### 2) ACP リアルタイムセッション
 
-現在、Claude Code、Codex CLI、Gemini CLI、OpenCode、OpenClaw の 5 つのエージェントをサポートしています。
+現在、Claude Code、Codex CLI、Gemini CLI、OpenCode、OpenClaw、Cline の 6 つのエージェントをサポートしています。
 
 ### 3) Skills 設定サポート
 
-- 対応済み: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- 対応済み: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
 - 他のアダプターは順次追加予定
 
 ### 4) MCP ターゲットアプリ

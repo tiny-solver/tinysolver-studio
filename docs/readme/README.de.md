@@ -78,16 +78,17 @@ Unterstützt derzeit **shadcn/ui**-Projekt-Scaffolding, mit einem Tab-basierten 
 | OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
 | Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
 | OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
+| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > Hinweis: Umgebungsvariablen haben Vorrang vor Fallback-Pfaden.
 
 ### 2) ACP-Echtzeitsitzungen
 
-Unterstützt derzeit 5 Agenten: Claude Code, Codex CLI, Gemini CLI, OpenCode und OpenClaw.
+Unterstützt derzeit 6 Agenten: Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw und Cline.
 
 ### 3) Skills-Einstellungen
 
-- Unterstützt: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw`
+- Unterstützt: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
 - Weitere Adapter werden schrittweise hinzugefügt
 
 ### 4) MCP-Zielanwendungen
