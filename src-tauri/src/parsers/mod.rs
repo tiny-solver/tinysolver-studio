@@ -535,9 +535,11 @@ fn collect_hunk_lines<'a>(lines: &'a [&'a str], start: usize) -> Vec<&'a str> {
 /// Find where a hunk's context lines match in the file, returning (start_line, old_count, new_count).
 /// `start_line` is 1-based.
 ///
-/// The file on disk may be in either pre-patch or post-patch state, so we try
-/// matching with "new file" lines (context + added) first, then fall back to
-/// "old file" lines (context + deleted).
+/// The file on disk may be in either pre-patch or post-patch state, and may
+/// have been further modified. We try three strategies in order:
+/// 1. Contiguous match of context+added lines (post-patch file, no further edits)
+/// 2. Contiguous match of context+deleted lines (pre-patch file)
+/// 3. Subsequence match of context-only lines (file has been further modified)
 fn find_hunk_position(
     file_lines: &[String],
     hunk_lines: &[&str],
@@ -555,44 +557,41 @@ fn find_hunk_position(
         }
     }
 
-    // Build "new file" view: context + added lines (what the file looks like after patch)
+    // Strategy 1: contiguous match of context+added (post-patch)
     let new_view: Vec<&str> = hunk_lines
         .iter()
         .filter(|l| l.starts_with(' ') || l.starts_with('+'))
         .map(|l| &l[1..])
         .collect();
+    if let Some(pos) = find_contiguous(file_lines, &new_view) {
+        return Some((pos + 1, new_count, new_count));
+    }
 
-    // Build "old file" view: context + deleted lines (what the file looked like before patch)
+    // Strategy 2: contiguous match of context+deleted (pre-patch)
     let old_view: Vec<&str> = hunk_lines
         .iter()
         .filter(|l| l.starts_with(' ') || l.starts_with('-'))
         .map(|l| &l[1..])
         .collect();
+    if let Some(pos) = find_contiguous(file_lines, &old_view) {
+        return Some((pos + 1, old_count, new_count));
+    }
 
-    // Try matching the new view first (file is post-patch), then old view (file is pre-patch)
-    for (view, is_new) in [(&new_view, true), (&old_view, false)] {
-        if view.is_empty() {
-            continue;
-        }
-        if let Some(pos) = find_view_in_file(file_lines, view) {
-            // `pos` is 0-based file index where the view starts.
-            // For the hunk header we want the OLD file line number.
-            // If matched on new view: adjust by the lines added before this hunk
-            //   (old_start = pos - added_lines_before ... but we don't know that)
-            //   Simpler: old_start = pos for new view match (close enough,
-            //   and matches what the user sees in the file).
-            // If matched on old view: pos is already the old start.
-            let start_line = pos + 1; // 1-based
-            let reported_count = if is_new { new_count } else { old_count };
-            return Some((start_line, reported_count, reported_count));
-        }
+    // Strategy 3: subsequence match of context-only lines (file further modified)
+    let ctx_only: Vec<&str> = hunk_lines
+        .iter()
+        .filter(|l| l.starts_with(' '))
+        .map(|l| &l[1..])
+        .collect();
+    if let Some(pos) = find_subsequence(file_lines, &ctx_only) {
+        return Some((pos + 1, old_count, new_count));
     }
 
     None
 }
 
-/// Find the position of `view` lines in `file_lines`. Returns 0-based start index.
-fn find_view_in_file(file_lines: &[String], view: &[&str]) -> Option<usize> {
+/// Find contiguous `view` lines in `file_lines`. Returns 0-based start index.
+fn find_contiguous(file_lines: &[String], view: &[&str]) -> Option<usize> {
     if view.is_empty() || view.len() > file_lines.len() {
         return None;
     }
@@ -601,12 +600,42 @@ fn find_view_in_file(file_lines: &[String], view: &[&str]) -> Option<usize> {
         if file_lines[i].as_str() != first {
             continue;
         }
-        let all_match = view
-            .iter()
-            .enumerate()
-            .all(|(j, v)| file_lines[i + j].as_str() == *v);
-        if all_match {
+        if view.iter().enumerate().all(|(j, v)| file_lines[i + j].as_str() == *v) {
             return Some(i);
+        }
+    }
+    None
+}
+
+/// Find `needles` as an ordered subsequence in `file_lines` within a small window.
+/// Returns 0-based index of the first needle's position.
+fn find_subsequence(file_lines: &[String], needles: &[&str]) -> Option<usize> {
+    if needles.is_empty() {
+        return None;
+    }
+    let first = needles[0];
+    for start in 0..file_lines.len() {
+        if file_lines[start].as_str() != first {
+            continue;
+        }
+        let mut cursor = start + 1;
+        let mut all_found = true;
+        for &needle in &needles[1..] {
+            // Allow up to 10 lines gap between consecutive context lines
+            let limit = std::cmp::min(cursor + 10, file_lines.len());
+            match file_lines[cursor..limit]
+                .iter()
+                .position(|fl| fl.as_str() == needle)
+            {
+                Some(offset) => cursor = cursor + offset + 1,
+                None => {
+                    all_found = false;
+                    break;
+                }
+            }
+        }
+        if all_found {
+            return Some(start);
         }
     }
     None
