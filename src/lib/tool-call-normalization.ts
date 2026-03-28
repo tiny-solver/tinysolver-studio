@@ -38,6 +38,17 @@ const EXACT_TOOL_NAME_ALIASES: Record<string, string> = {
   search_text: "grep",
   writefile: "write",
   editfile: "edit",
+  // Cline
+  attempt_completion: "attempt_completion",
+  ask_followup_question: "question",
+  write_to_file: "write",
+  replace_in_file: "edit",
+  execute_command: "bash",
+  list_files: "glob",
+  search_files: "grep",
+  list_code_definition_names: "grep",
+  browser_action: "webfetch",
+  use_mcp_tool: "tool",
   // Codex
   update_plan: "task",
   request_user_input: "question",

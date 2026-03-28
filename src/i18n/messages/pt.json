@@ -486,7 +486,8 @@
       "delete": "Excluir",
       "deleting": "Excluindo...",
       "confirmDelete": "Confirmar exclusão",
-      "confirmUninstall": "Confirmar desinstalação"
+      "confirmUninstall": "Confirmar desinstalação",
+      "saveClineConfig": "Salvar configuração do Cline"
     },
     "status": {
       "enabled": "Habilitado",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "Falha ao salvar configuração do OpenClaw",
       "configSaved": "Configuração salva",
       "configSavedHint": "Sessões existentes precisam ser reabertas para que as alterações tenham efeito",
-      "saveConfigManagementFailed": "Falha ao salvar o gerenciamento de configuração"
+      "saveConfigManagementFailed": "Falha ao salvar o gerenciamento de configuração",
+      "clineSaved": "Configuração do Cline salva",
+      "saveClineFailed": "Falha ao salvar a configuração do Cline"
     },
     "version": {
       "statusLabel": "Status da versão",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}. Atualização disponível.",
       "remoteUnavailable": "{versionText}. A versão remota está indisponível no momento.",
       "latest": "{versionText}. Já está na versão mais recente."
+    },
+    "cline": {
+      "configDescription": "Configure o provedor de API e as credenciais do Cline. As configurações são salvas em ~/.cline/data/."
     }
   },
   "SettingsPages": {

@@ -78,6 +78,7 @@ pub fn all_acp_agents() -> Vec<AgentType> {
         AgentType::Gemini,
         AgentType::OpenClaw,
         AgentType::OpenCode,
+        AgentType::Cline,
     ]
 }
 
@@ -88,6 +89,7 @@ pub fn registry_id_for(agent_type: AgentType) -> &'static str {
         AgentType::Gemini => "gemini",
         AgentType::OpenClaw => "openclaw-acp",
         AgentType::OpenCode => "opencode",
+        AgentType::Cline => "cline",
     }
 }
 
@@ -98,6 +100,7 @@ pub fn from_registry_id(id: &str) -> Option<AgentType> {
         "gemini" => Some(AgentType::Gemini),
         "openclaw-acp" => Some(AgentType::OpenClaw),
         "opencode" => Some(AgentType::OpenCode),
+        "cline" => Some(AgentType::Cline),
         _ => None,
     }
 }
@@ -182,6 +185,19 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 args: &["acp"],
                 env: &[],
                 node_required: Some("22.12.0"),
+            },
+        },
+        AgentType::Cline => AcpAgentMeta {
+            agent_type,
+            name: "Cline",
+            description: "Autonomous coding agent CLI",
+            distribution: AgentDistribution::Npx {
+                version: "2.11.0",
+                package: "cline@2.11.0",
+                cmd: "cline",
+                args: &["--acp"],
+                env: &[],
+                node_required: None,
             },
         },
         AgentType::OpenCode => AcpAgentMeta {

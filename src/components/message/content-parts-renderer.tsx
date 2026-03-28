@@ -878,6 +878,8 @@ function getToolIcon(
     name === "switch_mode"
   )
     return <ListTodoIcon className={ICON_CLASS} />
+  if (name === "attempt_completion")
+    return <CircleCheckIcon className={ICON_CLASS} />
   return undefined
 }
 
@@ -907,6 +909,16 @@ function deriveToolTitle(
       if (fromOutput) return fromOutput
     }
     return null
+  }
+
+  // Cline: attempt_completion — show result summary as title
+  if (name === "attempt_completion") {
+    const result = getField("result")
+    if (result) {
+      const firstLine = result.split("\n")[0].trim()
+      return `${ellipsis(firstLine, 80)}`
+    }
+    return "Completion"
   }
 
   // File-based tools
@@ -2282,6 +2294,43 @@ const ToolCallPart = memo(function ToolCallPart({
       toolNameLower === "enterplanmode" ||
       toolNameLower === "exitplanmode") &&
     !part.errorText
+  // Cline: attempt_completion — render as an expanded card with result + progress
+  if (toolNameLower === "attempt_completion") {
+    const parsedCompletion = tryParseJson(part.input ?? "")
+    const completionResult =
+      (parsedCompletion?.result as string | undefined)?.trim() ?? null
+    const taskProgress =
+      (parsedCompletion?.task_progress as string | undefined)?.trim() ?? null
+    return (
+      <Tool open onOpenChange={setManualOpen}>
+        <ToolHeader
+          type="dynamic-tool"
+          state={part.state}
+          toolName={normalizedToolName}
+          title={title ?? "Completion"}
+          icon={icon}
+        />
+        <ToolContent>
+          {completionResult && (
+            <div className="text-sm prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside">
+              <MessageResponse>{completionResult}</MessageResponse>
+            </div>
+          )}
+          {taskProgress && (
+            <div className="mt-2 rounded-md border bg-muted/30 px-3 py-2">
+              <div className="text-[11px] font-medium text-muted-foreground mb-1">
+                Progress
+              </div>
+              <div className="text-xs prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside">
+                <MessageResponse>{taskProgress}</MessageResponse>
+              </div>
+            </div>
+          )}
+        </ToolContent>
+      </Tool>
+    )
+  }
+
   const open = (isRunning && (isCommandTool || hasLiveOutput)) || manualOpen
 
   return (

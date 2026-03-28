@@ -274,7 +274,10 @@ const ConversationTabView = memo(function ConversationTabView({
     agentType: selectedAgent,
     isActive: isActive && canAutoConnect,
     workingDir: workingDirForConnection,
-    sessionId: dbConversationId != null ? externalId : undefined,
+    sessionId:
+      dbConversationId != null && selectedAgent !== "cline"
+        ? externalId
+        : undefined,
   })
   const {
     status: connStatus,

@@ -1,4 +1,5 @@
 pub mod claude;
+pub mod cline;
 pub mod codex;
 pub mod gemini;
 pub mod openclaw;

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import ClaudeColor from "@lobehub/icons/es/Claude/components/Color"
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color"
 import OpenClawColor from "@lobehub/icons/es/OpenClaw/components/Color"
+import ClineMono from "@lobehub/icons/es/Cline/components/Mono"
 import { OpenAI, OpenCode } from "@lobehub/icons"
 
 interface AgentIconProps {
@@ -24,6 +25,7 @@ const COLOR_ICONS: Partial<Record<AgentType, AnyIcon>> = {
 const MONO_ICONS: Partial<Record<AgentType, AnyIcon>> = {
   codex: OpenAI,
   open_code: OpenCode,
+  cline: ClineMono,
 }
 
 // Text-color versions for Mono icons

@@ -6,6 +6,7 @@ use crate::db::service::{conversation_service, folder_service, import_service};
 use crate::db::AppDatabase;
 use crate::models::*;
 use crate::parsers::claude::ClaudeParser;
+use crate::parsers::cline::ClineParser;
 use crate::parsers::codex::CodexParser;
 use crate::parsers::gemini::GeminiParser;
 use crate::parsers::openclaw::OpenClawParser;
@@ -42,6 +43,7 @@ fn list_conversations_sync(
         (AgentType::OpenCode, Box::new(OpenCodeParser::new())),
         (AgentType::Gemini, Box::new(GeminiParser::new())),
         (AgentType::OpenClaw, Box::new(OpenClawParser::new())),
+        (AgentType::Cline, Box::new(ClineParser::new())),
     ];
 
     for (at, parser) in &parsers {
@@ -142,6 +144,7 @@ pub async fn get_conversation(
             AgentType::OpenCode => Box::new(OpenCodeParser::new()),
             AgentType::Gemini => Box::new(GeminiParser::new()),
             AgentType::OpenClaw => Box::new(OpenClawParser::new()),
+            AgentType::Cline => Box::new(ClineParser::new()),
         };
 
         parser
@@ -275,14 +278,16 @@ pub async fn get_folder_conversation_core(
                 AgentType::OpenCode => Box::new(OpenCodeParser::new()),
                 AgentType::Gemini => Box::new(GeminiParser::new()),
                 AgentType::OpenClaw => Box::new(OpenClawParser::new()),
+                AgentType::Cline => Box::new(ClineParser::new()),
             };
             match parser.get_conversation(&eid) {
                 Ok(d) => Ok((d.turns, d.session_stats, None)),
                 Err(crate::parsers::ParseError::ConversationNotFound(_)) => {
-                    // For OpenClaw, the external_id may be an ACP session UUID that
-                    // doesn't correspond to any JSONL file.  Fall back to matching
-                    // by title and folder_path from the parsed conversation list.
-                    if at == AgentType::OpenClaw {
+                    // For agents like OpenClaw and Cline, the external_id is an
+                    // ACP session UUID that doesn't correspond to any local file.
+                    // Fall back to matching by folder_path and started_at from
+                    // the parsed conversation list.
+                    if at == AgentType::OpenClaw || at == AgentType::Cline {
                         if let Ok(all) = parser.list_conversations() {
                             // Filter by folder_path first, then find the closest
                             // started_at match within 300 seconds of db_created_at.

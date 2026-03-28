@@ -107,6 +107,10 @@ interface AgentDraft {
   openClawGatewayUrl: string
   openClawGatewayToken: string
   openClawSessionKey: string
+  clineProvider: ClineProvider
+  clineApiKey: string
+  clineModel: string
+  clineBaseUrl: string
 }
 
 type RunningActionKind =
@@ -249,6 +253,20 @@ const OPENCLAW_ENV_KEYS = {
   gatewayToken: "OPENCLAW_GATEWAY_TOKEN",
   sessionKey: "OPENCLAW_SESSION_KEY",
 } as const
+
+const CLINE_PROVIDERS = [
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openai-native", label: "OpenAI" },
+  { value: "openai", label: "OpenAI Compatible" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "gemini", label: "Gemini" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "bedrock", label: "AWS Bedrock" },
+  { value: "vertex", label: "GCP Vertex" },
+  { value: "ollama", label: "Ollama" },
+] as const
+
+type ClineProvider = (typeof CLINE_PROVIDERS)[number]["value"]
 
 type ClaudeModelKey = keyof typeof CLAUDE_MODEL_ENV_KEYS
 type ImportantConfigKey = "apiBaseUrl" | "apiKey" | "model" | ClaudeModelKey
@@ -562,6 +580,26 @@ interface OpenClawImportantValues {
   gatewayUrl: string
   gatewayToken: string
   sessionKey: string
+}
+
+interface ClineImportantValues {
+  provider: ClineProvider
+  apiKey: string
+  model: string
+  baseUrl: string
+}
+
+function extractClineImportantValues(configText: string): ClineImportantValues {
+  const parseResult = parseConfigJsonText(configText)
+  const config = parseResult.config
+  return {
+    provider: (typeof config.apiProvider === "string" && config.apiProvider
+      ? config.apiProvider
+      : "anthropic") as ClineProvider,
+    apiKey: typeof config.apiKey === "string" ? config.apiKey : "",
+    model: typeof config.model === "string" ? config.model : "",
+    baseUrl: typeof config.apiBaseUrl === "string" ? config.apiBaseUrl : "",
+  }
 }
 
 function extractOpenClawImportantValues(
@@ -1965,6 +2003,7 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     configText,
     openCodeAuthJsonText
   )
+  const clineImportant = extractClineImportantValues(configText)
   return {
     enabled: agent.enabled,
     envText: envMapToText(agent.env),
@@ -2014,6 +2053,10 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     openClawGatewayUrl: openClawImportant.gatewayUrl,
     openClawGatewayToken: openClawImportant.gatewayToken,
     openClawSessionKey: openClawImportant.sessionKey,
+    clineProvider: clineImportant.provider,
+    clineApiKey: clineImportant.apiKey,
+    clineModel: clineImportant.model,
+    clineBaseUrl: clineImportant.baseUrl,
   }
 }
 
@@ -3059,6 +3102,19 @@ export function AcpAgentSettings() {
         return
       }
 
+      if (selectedAgent.agent_type === "cline") {
+        const cline = extractClineImportantValues(nextText)
+        updateSelectedDraft((current) => ({
+          ...current,
+          configText: nextText,
+          clineProvider: cline.provider,
+          clineApiKey: cline.apiKey,
+          clineModel: cline.model,
+          clineBaseUrl: cline.baseUrl,
+        }))
+        return
+      }
+
       const important = extractImportantConfigValues(
         selectedAgent.agent_type,
         parseEnvText(selectedDraft.envText),
@@ -3317,6 +3373,37 @@ export function AcpAgentSettings() {
           [envKeyMap[key]]: value,
         }),
       }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleClineFieldChange = useCallback(
+    (
+      key: "clineProvider" | "clineApiKey" | "clineModel" | "clineBaseUrl",
+      value: string
+    ) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "cline"
+      )
+        return
+
+      updateSelectedDraft((current) => {
+        const next = { ...current, [key]: value }
+        // Rebuild config_json from Cline draft fields
+        const config: Record<string, unknown> = {}
+        config.apiProvider =
+          key === "clineProvider" ? value : next.clineProvider
+        const apiKey = key === "clineApiKey" ? value : next.clineApiKey
+        if (apiKey.trim()) config.apiKey = apiKey.trim()
+        const model = key === "clineModel" ? value : next.clineModel
+        if (model.trim()) config.model = model.trim()
+        const baseUrl = key === "clineBaseUrl" ? value : next.clineBaseUrl
+        if (baseUrl.trim()) config.apiBaseUrl = baseUrl.trim()
+        next.configText = JSON.stringify(config, null, 2)
+        return next
+      })
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
@@ -5689,6 +5776,188 @@ supports_websockets = true`}
                           <>
                             <Save className="h-3.5 w-3.5" />
                             {t("actions.saveOpenCodeConfig")}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : selectedAgent.agent_type === "cline" ? (
+                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                    <div>
+                      <label className="text-xs font-medium">Cline</label>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {t("cline.configDescription")}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        Provider
+                      </label>
+                      <Select
+                        value={selectedDraft.clineProvider}
+                        onValueChange={(value) => {
+                          handleClineFieldChange("clineProvider", value)
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CLINE_PROVIDERS.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>
+                              {p.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        API Key
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type={
+                            showApiKeys[selectedAgent.agent_type]
+                              ? "text"
+                              : "password"
+                          }
+                          value={selectedDraft.clineApiKey}
+                          onChange={(event) => {
+                            handleClineFieldChange(
+                              "clineApiKey",
+                              event.target.value
+                            )
+                          }}
+                          placeholder="sk-..."
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowApiKeys((prev) => ({
+                              ...prev,
+                              [selectedAgent.agent_type]:
+                                !prev[selectedAgent.agent_type],
+                            }))
+                          }}
+                          title={
+                            showApiKeys[selectedAgent.agent_type]
+                              ? t("actions.hideApiKey")
+                              : t("actions.showApiKey")
+                          }
+                        >
+                          {showApiKeys[selectedAgent.agent_type] ? (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        Model
+                      </label>
+                      <Input
+                        value={selectedDraft.clineModel}
+                        onChange={(event) => {
+                          handleClineFieldChange(
+                            "clineModel",
+                            event.target.value
+                          )
+                        }}
+                        placeholder="claude-sonnet-4-5-20250514"
+                      />
+                    </div>
+
+                    {(selectedDraft.clineProvider === "anthropic" ||
+                      selectedDraft.clineProvider === "openai-native" ||
+                      selectedDraft.clineProvider === "openai" ||
+                      selectedDraft.clineProvider === "openrouter" ||
+                      selectedDraft.clineProvider === "ollama") && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          API URL
+                        </label>
+                        <Input
+                          value={selectedDraft.clineBaseUrl}
+                          onChange={(event) => {
+                            handleClineFieldChange(
+                              "clineBaseUrl",
+                              event.target.value
+                            )
+                          }}
+                          placeholder="https://api.openai.com"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("nativeJsonConfig")} (config)
+                      </label>
+                      <Textarea
+                        value={selectedDraft.configText}
+                        onChange={(event) => {
+                          handleConfigTextChange(event.target.value)
+                        }}
+                        className="min-h-24 font-mono text-xs"
+                        placeholder={`{
+  "apiProvider": "anthropic",
+  "apiKey": "sk-...",
+  "model": "claude-sonnet-4-5-20250514"
+}`}
+                      />
+                      {selectedConfigError && (
+                        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
+                          {selectedConfigError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          persistPreferences(
+                            selectedAgent.agent_type,
+                            selectedDraft.enabled,
+                            selectedDraft.envText,
+                            selectedDraft.configText
+                          )
+                            .then(() => {
+                              toast.success(t("toasts.clineSaved"), {
+                                description: t("toasts.configSavedHint"),
+                              })
+                            })
+                            .catch((err) => {
+                              console.error(
+                                "[Settings] save cline config failed:",
+                                err
+                              )
+                              const message =
+                                err instanceof Error ? err.message : String(err)
+                              toast.error(t("toasts.saveClineFailed"), {
+                                description: message,
+                              })
+                            })
+                        }}
+                        disabled={selectedIsSaving}
+                      >
+                        {selectedIsSaving ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {t("actions.saving")}
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-3.5 w-3.5" />
+                            {t("actions.saveClineConfig")}
                           </>
                         )}
                       </Button>

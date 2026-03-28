@@ -486,7 +486,8 @@
       "delete": "刪除",
       "deleting": "刪除中...",
       "confirmDelete": "確認刪除",
-      "confirmUninstall": "確認卸載"
+      "confirmUninstall": "確認卸載",
+      "saveClineConfig": "儲存 Cline 配置"
     },
     "status": {
       "enabled": "啟用",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "儲存 OpenClaw 配置失敗",
       "configSaved": "配置已儲存",
       "configSavedHint": "已有會話需要重新打開才能生效",
-      "saveConfigManagementFailed": "儲存配置管理失敗"
+      "saveConfigManagementFailed": "儲存配置管理失敗",
+      "clineSaved": "Cline 配置已儲存",
+      "saveClineFailed": "儲存 Cline 配置失敗"
     },
     "version": {
       "statusLabel": "版本狀態",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}。發現可升級版本。",
       "remoteUnavailable": "{versionText}。遠端版本暫不可用。",
       "latest": "{versionText}。已是最新版本。"
+    },
+    "cline": {
+      "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。"
     }
   },
   "SettingsPages": {

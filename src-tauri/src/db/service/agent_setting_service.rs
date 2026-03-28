@@ -32,6 +32,7 @@ fn default_enabled(agent_type: AgentType) -> bool {
             | AgentType::Gemini
             | AgentType::OpenCode
             | AgentType::OpenClaw
+            | AgentType::Cline
     )
 }
 

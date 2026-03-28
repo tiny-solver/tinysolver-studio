@@ -486,7 +486,8 @@
       "delete": "削除",
       "deleting": "削除中...",
       "confirmDelete": "削除を確認",
-      "confirmUninstall": "アンインストールを確認"
+      "confirmUninstall": "アンインストールを確認",
+      "saveClineConfig": "Cline設定を保存"
     },
     "status": {
       "enabled": "有効",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "OpenClaw設定の保存に失敗しました",
       "configSaved": "設定を保存しました",
       "configSavedHint": "既存のセッションは再度開く必要があります",
-      "saveConfigManagementFailed": "設定管理の保存に失敗しました"
+      "saveConfigManagementFailed": "設定管理の保存に失敗しました",
+      "clineSaved": "Cline設定を保存しました",
+      "saveClineFailed": "Cline設定の保存に失敗しました"
     },
     "version": {
       "statusLabel": "バージョン状態",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}。アップグレード可能です。",
       "remoteUnavailable": "{versionText}。現在リモートバージョンは取得できません。",
       "latest": "{versionText}。すでに最新です。"
+    },
+    "cline": {
+      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。"
     }
   },
   "SettingsPages": {

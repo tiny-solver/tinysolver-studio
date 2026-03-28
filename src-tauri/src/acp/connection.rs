@@ -739,20 +739,29 @@ async fn run_connection(
                         .await
                     }
                     Err(e) => {
-                        // session/load failed (e.g. ephemeral forked session).
+                        // session/load failed (e.g. agent doesn't support resume,
+                        // or ephemeral forked session).
                         // Fall back to session/new so the tab still works.
+                        let err_str = e.to_string();
                         eprintln!(
                             "[ACP] session/load failed ({}), falling back to session/new",
-                            e
+                            err_str
                         );
-                        crate::web::event_bridge::emit_event(
-                            &handle,
-                            "acp://event",
-                            AcpEvent::Error {
-                                connection_id: conn_id.clone(),
-                                message: format!("Failed to load session, starting new: {e}"),
-                            },
-                        );
+                        // Only emit a visible error for unexpected failures;
+                        // "Method not found" is expected for agents that don't
+                        // support session resume (e.g. Cline).
+                        if !err_str.contains("Method not found") {
+                            crate::web::event_bridge::emit_event(
+                                &handle,
+                                "acp://event",
+                                AcpEvent::Error {
+                                    connection_id: conn_id.clone(),
+                                    message: format!(
+                                        "Failed to load session, starting new: {e}"
+                                    ),
+                                },
+                            );
+                        }
                         let new_resp = cx
                             .send_request_to(Agent, NewSessionRequest::new(cwd.clone()))
                             .block_task()

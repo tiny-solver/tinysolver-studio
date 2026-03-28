@@ -486,7 +486,8 @@
       "delete": "حذف",
       "deleting": "جارٍ الحذف...",
       "confirmDelete": "تأكيد الحذف",
-      "confirmUninstall": "تأكيد إزالة التثبيت"
+      "confirmUninstall": "تأكيد إزالة التثبيت",
+      "saveClineConfig": "حفظ تكوين Cline"
     },
     "status": {
       "enabled": "مفعّل",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "فشل حفظ إعداد OpenClaw",
       "configSaved": "تم حفظ الإعداد",
       "configSavedHint": "يجب إعادة فتح الجلسات الحالية لتطبيق التغييرات",
-      "saveConfigManagementFailed": "فشل حفظ إدارة الإعدادات"
+      "saveConfigManagementFailed": "فشل حفظ إدارة الإعدادات",
+      "clineSaved": "تم حفظ تكوين Cline",
+      "saveClineFailed": "فشل في حفظ تكوين Cline"
     },
     "version": {
       "statusLabel": "حالة الإصدار",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}. تتوفر ترقية.",
       "remoteUnavailable": "{versionText}. الإصدار البعيد غير متاح حاليًا.",
       "latest": "{versionText}. أنت على أحدث إصدار."
+    },
+    "cline": {
+      "configDescription": "تكوين مزود واجهة برمجة التطبيقات وبيانات اعتماد Cline. يتم حفظ الإعدادات في ~/.cline/data/."
     }
   },
   "SettingsPages": {

@@ -486,7 +486,8 @@
       "delete": "삭제",
       "deleting": "삭제 중...",
       "confirmDelete": "삭제 확인",
-      "confirmUninstall": "제거 확인"
+      "confirmUninstall": "제거 확인",
+      "saveClineConfig": "Cline 설정 저장"
     },
     "status": {
       "enabled": "활성화됨",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "OpenClaw 설정 저장 실패",
       "configSaved": "구성이 저장되었습니다",
       "configSavedHint": "기존 세션은 다시 열어야 적용됩니다",
-      "saveConfigManagementFailed": "구성 관리 저장 실패"
+      "saveConfigManagementFailed": "구성 관리 저장 실패",
+      "clineSaved": "Cline 설정 저장됨",
+      "saveClineFailed": "Cline 설정 저장 실패"
     },
     "version": {
       "statusLabel": "버전 상태",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}. 업그레이드가 가능합니다.",
       "remoteUnavailable": "{versionText}. 현재 원격 버전을 사용할 수 없습니다.",
       "latest": "{versionText}. 이미 최신입니다."
+    },
+    "cline": {
+      "configDescription": "Cline API 제공자와 자격 증명을 구성합니다. 설정은 ~/.cline/data/에 저장됩니다."
     }
   },
   "SettingsPages": {

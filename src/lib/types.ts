@@ -4,6 +4,7 @@ export type AgentType =
   | "open_code"
   | "gemini"
   | "open_claw"
+  | "cline"
 
 export type AppErrorCode =
   | "invalid_input"
@@ -206,6 +207,7 @@ export const AGENT_DISPLAY_ORDER: AgentType[] = [
   "open_code",
   "gemini",
   "open_claw",
+  "cline",
 ]
 
 const AGENT_DISPLAY_ORDER_INDEX = new Map(
@@ -224,6 +226,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   open_code: "OpenCode",
   gemini: "Gemini CLI",
   open_claw: "OpenClaw",
+  cline: "Cline",
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
@@ -232,6 +235,7 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   open_code: "bg-blue-500",
   gemini: "bg-blue-400",
   open_claw: "bg-emerald-600",
+  cline: "bg-purple-500",
 }
 
 // ACP connection status (matches Rust ConnectionStatus)
@@ -461,6 +465,7 @@ export interface AcpAgentInfo {
   opencode_auth_json: string | null
   codex_auth_json: string | null
   codex_config_toml: string | null
+  cline_secrets_json: string | null
 }
 
 // Lightweight agent status returned by acp_get_agent_status

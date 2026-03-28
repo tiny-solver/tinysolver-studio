@@ -486,7 +486,8 @@
       "delete": "Supprimer",
       "deleting": "Suppression...",
       "confirmDelete": "Confirmer la suppression",
-      "confirmUninstall": "Confirmer la désinstallation"
+      "confirmUninstall": "Confirmer la désinstallation",
+      "saveClineConfig": "Enregistrer la configuration Cline"
     },
     "status": {
       "enabled": "Activé",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "Échec de l’enregistrement de la configuration OpenClaw",
       "configSaved": "Configuration enregistrée",
       "configSavedHint": "Les sessions existantes doivent être rouvertes pour prendre effet",
-      "saveConfigManagementFailed": "Échec de l’enregistrement de la gestion de configuration"
+      "saveConfigManagementFailed": "Échec de l’enregistrement de la gestion de configuration",
+      "clineSaved": "Configuration Cline enregistrée",
+      "saveClineFailed": "Échec de l'enregistrement de la configuration Cline"
     },
     "version": {
       "statusLabel": "Statut de version",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}. Mise à niveau disponible.",
       "remoteUnavailable": "{versionText}. La version distante est actuellement indisponible.",
       "latest": "{versionText}. Déjà à jour."
+    },
+    "cline": {
+      "configDescription": "Configurez le fournisseur API et les identifiants Cline. Les paramètres sont enregistrés dans ~/.cline/data/."
     }
   },
   "SettingsPages": {

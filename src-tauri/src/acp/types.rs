@@ -242,6 +242,7 @@ pub struct AcpAgentInfo {
     pub opencode_auth_json: Option<String>,
     pub codex_auth_json: Option<String>,
     pub codex_config_toml: Option<String>,
+    pub cline_secrets_json: Option<String>,
 }
 
 /// Lightweight status info for a single agent, used by connect() pre-check.

@@ -486,7 +486,8 @@
       "delete": "Delete",
       "deleting": "Deleting...",
       "confirmDelete": "Confirm Delete",
-      "confirmUninstall": "Confirm Uninstall"
+      "confirmUninstall": "Confirm Uninstall",
+      "saveClineConfig": "Save Cline Config"
     },
     "status": {
       "enabled": "Enabled",
@@ -618,7 +619,9 @@
       "saveOpenClawFailed": "Failed to save OpenClaw config",
       "configSaved": "Config saved",
       "configSavedHint": "Existing sessions need to be reopened to take effect",
-      "saveConfigManagementFailed": "Failed to save config management"
+      "saveConfigManagementFailed": "Failed to save config management",
+      "clineSaved": "Cline config saved",
+      "saveClineFailed": "Failed to save Cline config"
     },
     "version": {
       "statusLabel": "Version Status",
@@ -630,6 +633,9 @@
       "upgradeAvailable": "{versionText}. Upgrade available.",
       "remoteUnavailable": "{versionText}. Remote version is currently unavailable.",
       "latest": "{versionText}. Already latest."
+    },
+    "cline": {
+      "configDescription": "Configure Cline API provider and credentials. Settings are saved to ~/.cline/data/."
     }
   },
   "SettingsPages": {
