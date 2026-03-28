@@ -5,6 +5,8 @@ import { Settings } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { loadFolderHistory, openSettingsWindow } from "@/lib/api"
+import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
+import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import type { FolderHistoryEntry } from "@/lib/types"
 import { FolderList } from "@/components/welcome/folder-list"
 import { FolderActions } from "@/components/welcome/folder-actions"
@@ -18,6 +20,28 @@ export function WelcomeScreen() {
   const t = useTranslations("WelcomePage")
   const [history, setHistory] = useState<FolderHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const { shortcuts } = useShortcutSettings()
+
+  const handleOpenSettings = useCallback(() => {
+    openSettingsWindow().catch((err) => {
+      console.error("[WelcomeScreen] failed to open settings:", err)
+      const resolvedError = resolveWelcomeError(err)
+      toast.error(t("toasts.openSettingsFailed"), {
+        description: resolvedError.detail ?? t(resolvedError.key),
+      })
+    })
+  }, [t])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (matchShortcutEvent(e, shortcuts.open_settings)) {
+        e.preventDefault()
+        handleOpenSettings()
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [shortcuts, handleOpenSettings])
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -49,15 +73,7 @@ export function WelcomeScreen() {
             variant="ghost"
             size="icon"
             className="h-6 w-6 hover:text-foreground/80"
-            onClick={() => {
-              openSettingsWindow().catch((err) => {
-                console.error("[WelcomeScreen] failed to open settings:", err)
-                const resolvedError = resolveWelcomeError(err)
-                toast.error(t("toasts.openSettingsFailed"), {
-                  description: resolvedError.detail ?? t(resolvedError.key),
-                })
-              })
-            }}
+            onClick={handleOpenSettings}
             title={t("openSettings")}
             aria-label={t("openSettings")}
             type="button"
