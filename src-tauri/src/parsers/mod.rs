@@ -437,7 +437,7 @@ pub fn resolve_patch_line_numbers(turns: &mut [MessageTurn], cwd: Option<&str>) 
 }
 
 /// Resolve a single patch text, replacing bare `@@` with `@@ -N,M +N,M @@`.
-fn resolve_patch_text(patch: &str, cwd: Option<&str>) -> Option<String> {
+pub fn resolve_patch_text(patch: &str, cwd: Option<&str>) -> Option<String> {
     let mut output = String::with_capacity(patch.len() + 256);
     let mut current_file_path: Option<String> = None;
     let mut file_lines: Option<Vec<String>> = None;
@@ -499,7 +499,7 @@ fn resolve_patch_text(patch: &str, cwd: Option<&str>) -> Option<String> {
 }
 
 /// Load file lines from disk, trying both absolute path and cwd-relative.
-fn load_file_lines(path: &str, cwd: Option<&str>) -> Option<Vec<String>> {
+pub fn load_file_lines(path: &str, cwd: Option<&str>) -> Option<Vec<String>> {
     use std::fs;
     use std::path::Path;
 

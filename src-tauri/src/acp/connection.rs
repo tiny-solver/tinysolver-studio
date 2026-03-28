@@ -689,7 +689,7 @@ async fn run_connection(
                                             notif.update,
                                             SessionUpdate::AvailableCommandsUpdate(_)
                                         ) {
-                                            emit_conversation_update(&cid, &h, notif.update);
+                                            emit_conversation_update(&cid, &h, notif.update, None);
                                         }
                                         Ok(())
                                     })
@@ -1428,10 +1428,11 @@ async fn run_conversation_loop<'a>(
                         Ok(SessionMessage::SessionMessage(dispatch)) => {
                             let cid = conn_id.to_string();
                             let h = handle.clone();
+                            let cwd_opt = Some(cwd);
                             let _ = MatchDispatch::new(dispatch)
                                 .if_notification(
                                     async |notif: SessionNotification| {
-                                        emit_conversation_update(&cid, &h, notif.update);
+                                        emit_conversation_update(&cid, &h, notif.update, cwd_opt);
                                         Ok(())
                                     },
                                 )
@@ -1511,6 +1512,7 @@ async fn run_conversation_loop<'a>(
                                     let h = handle.clone();
                                     let runtime = terminal_runtime.clone();
                                     let session_id = sid.clone();
+                                    let cwd_opt = Some(cwd);
                                     if let Err(e) = MatchDispatch::new(dispatch)
                                         .if_notification(
                                             async |notif: SessionNotification| {
@@ -1518,7 +1520,7 @@ async fn run_conversation_loop<'a>(
                                                     &notif.update,
                                                     &mut tracked_terminal_tool_calls,
                                                 );
-                                                emit_conversation_update(&cid, &h, notif.update);
+                                                emit_conversation_update(&cid, &h, notif.update, cwd_opt);
                                                 if should_poll_now {
                                                     poll_tracked_terminal_tool_calls(
                                                         runtime.as_ref(),
@@ -1885,6 +1887,57 @@ fn serialize_tool_call_content(content: &[ToolCallContent]) -> Option<String> {
     }
 }
 
+/// Resolve line numbers for live tool call input.
+///
+/// - For apply_patch with bare `@@`: resolve line numbers in place.
+/// - For canonical edit JSON (file_path + old_string + new_string):
+///   read the file, find where old_string starts, and inject `_start_line`
+///   into the JSON so the frontend can generate a diff with real line numbers.
+fn resolve_live_tool_input(text: &str, cwd: Option<&str>) -> String {
+    // Apply-patch format: resolve bare @@ in input
+    if text.contains("@@\n") || text.contains("@@\r\n") {
+        if let Some(resolved) = crate::parsers::resolve_patch_text(text, cwd) {
+            return resolved;
+        }
+    }
+
+    // Canonical edit JSON: inject _start_line
+    if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(text) {
+        let file_path = parsed
+            .get("file_path")
+            .or_else(|| parsed.get("path"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let old_string = parsed
+            .get("old_string")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if let (Some(fp), Some(old_str)) = (file_path, old_string) {
+            if let Some(start_line) = find_string_start_line(&fp, &old_str, cwd) {
+                parsed
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("_start_line".to_string(), serde_json::json!(start_line));
+                return parsed.to_string();
+            }
+        }
+    }
+
+    text.to_string()
+}
+
+/// Find the 1-based start line of `needle` in the file at `path`.
+fn find_string_start_line(path: &str, needle: &str, cwd: Option<&str>) -> Option<u64> {
+    if needle.is_empty() {
+        return None;
+    }
+    let file_lines = crate::parsers::load_file_lines(path, cwd)?;
+    let file_content = file_lines.join("\n");
+    let byte_offset = file_content.find(needle)?;
+    Some(file_content[..byte_offset].matches('\n').count() as u64 + 1)
+}
+
 fn json_value_to_text(val: &Option<serde_json::Value>) -> Option<String> {
     match val {
         Some(serde_json::Value::String(text)) => Some(text.clone()),
@@ -1929,6 +1982,7 @@ fn emit_conversation_update(
     connection_id: &str,
     app_handle: &tauri::AppHandle,
     update: SessionUpdate,
+    cwd: Option<&str>,
 ) {
     match update {
         SessionUpdate::UserMessageChunk(_) => {
@@ -1969,7 +2023,8 @@ fn emit_conversation_update(
         }
         SessionUpdate::ToolCall(tc) => {
             let content = serialize_tool_call_content(&tc.content);
-            let raw_input = json_value_to_text(&tc.raw_input);
+            let raw_input = json_value_to_text(&tc.raw_input)
+                .map(|text| resolve_live_tool_input(&text, cwd));
             let raw_output = json_value_to_text(&tc.raw_output);
             crate::web::event_bridge::emit_event(
                 app_handle,
@@ -1992,7 +2047,8 @@ fn emit_conversation_update(
                 .content
                 .as_deref()
                 .and_then(serialize_tool_call_content);
-            let raw_input = json_value_to_text(&tcu.fields.raw_input);
+            let raw_input = json_value_to_text(&tcu.fields.raw_input)
+                .map(|text| resolve_live_tool_input(&text, cwd));
             let raw_output = json_value_to_text(&tcu.fields.raw_output);
             crate::web::event_bridge::emit_event(
                 app_handle,

@@ -1163,12 +1163,21 @@ function EditToolInput({ input }: { input: Record<string, unknown> }) {
   const filePath = str(input, "file_path")
   const oldString = str(input, "old_string") ?? ""
   const newString = str(input, "new_string") ?? ""
+  const startLine = num(input, "_start_line")
 
   const diffCode = useMemo(() => {
-    return (
-      generateUnifiedDiff(oldString, newString, filePath ?? undefined) ?? ""
+    const diff = generateUnifiedDiff(
+      oldString,
+      newString,
+      filePath ?? undefined
     )
-  }, [oldString, newString, filePath])
+    if (!diff || !startLine || startLine <= 1) return diff ?? ""
+    // Replace line numbers in hunk headers with real start line
+    return diff.replace(
+      /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@/gm,
+      (_, _o, oc, _n, nc) => `@@ -${startLine},${oc} +${startLine},${nc} @@`
+    )
+  }, [oldString, newString, filePath, startLine])
 
   return diffCode ? <UnifiedDiffPreview diffText={diffCode} /> : null
 }

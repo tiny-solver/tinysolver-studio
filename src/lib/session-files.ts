@@ -896,7 +896,15 @@ function buildDiffChunk(
     const newStr =
       typeof parsed.new_string === "string" ? parsed.new_string : ""
 
-    return buildUnifiedDiff(filePath, oldStr, newStr)
+    const diff = buildUnifiedDiff(filePath, oldStr, newStr)
+    if (!diff) return null
+    const startLine =
+      typeof parsed._start_line === "number" ? parsed._start_line : 0
+    if (startLine <= 1) return diff
+    return diff.replace(
+      /^@@ -(\d+),(\d+) \+(\d+),(\d+) @@/gm,
+      (_, _o, oc, _n, nc) => `@@ -${startLine},${oc} +${startLine},${nc} @@`
+    )
   }
 
   if (op === "write") {
