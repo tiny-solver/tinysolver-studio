@@ -1755,6 +1755,16 @@ function StructuredToolInput({
         )
       }
     }
+    // Prefer tool output if it contains a structured diff with real line numbers
+    // (injected by backend from toolUseResult.structuredPatch)
+    if (output && typeof output === "string" && /^@@ /m.test(output)) {
+      return (
+        <>
+          {truncationBanner}
+          <UnifiedDiffPreview diffText={output} />
+        </>
+      )
+    }
     if (isCanonicalEditPayload(parsed)) {
       return (
         <>

@@ -53,6 +53,46 @@ fn strip_system_tags(text: &str) -> Option<String> {
 }
 
 /// Check if a JSONL entry is a system meta message (isMeta: true).
+/// Rebuild a standard unified diff from `toolUseResult.structuredPatch`.
+///
+/// Each hunk in `structuredPatch` has `oldStart`, `oldLines`, `newStart`,
+/// `newLines`, and `lines` (prefixed with ` `, `+`, or `-`).
+fn rebuild_diff_from_structured_patch(
+    file_path: &str,
+    structured_patch: &serde_json::Value,
+) -> Option<String> {
+    let hunks = structured_patch.as_array()?;
+    if hunks.is_empty() {
+        return None;
+    }
+
+    let mut output = String::new();
+    output.push_str(&format!("--- a/{}\n+++ b/{}\n", file_path, file_path));
+
+    for hunk in hunks {
+        let old_start = hunk.get("oldStart").and_then(|v| v.as_u64()).unwrap_or(1);
+        let old_lines = hunk.get("oldLines").and_then(|v| v.as_u64()).unwrap_or(0);
+        let new_start = hunk.get("newStart").and_then(|v| v.as_u64()).unwrap_or(1);
+        let new_lines = hunk.get("newLines").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        output.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            old_start, old_lines, new_start, new_lines
+        ));
+
+        if let Some(lines) = hunk.get("lines").and_then(|v| v.as_array()) {
+            for line in lines {
+                if let Some(text) = line.as_str() {
+                    output.push_str(text);
+                    output.push('\n');
+                }
+            }
+        }
+    }
+
+    Some(output)
+}
+
 fn is_meta_message(value: &serde_json::Value) -> bool {
     value
         .get("isMeta")
@@ -489,7 +529,7 @@ impl ClaudeParser {
                     continue;
                 }
                 "user" => {
-                    let content = extract_user_content(&value);
+                    let mut content = extract_user_content(&value);
 
                     // Skip user messages that are empty after system tag stripping
                     if content.is_empty() {
@@ -517,6 +557,31 @@ impl ClaudeParser {
                         }
                         MessageRole::User
                     };
+
+                    // Check toolUseResult.structuredPatch for real line numbers
+                    if let Some(tur) = value.get("toolUseResult") {
+                        if let Some(sp) = tur.get("structuredPatch") {
+                            let fp = tur
+                                .get("filePath")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("file");
+                            if let Some(diff) = rebuild_diff_from_structured_patch(fp, sp) {
+                                // Find the matching ToolResult in this user message's content
+                                // and replace its output_preview with the real diff
+                                for block in content.iter_mut() {
+                                    if let ContentBlock::ToolResult {
+                                        ref mut output_preview,
+                                        is_error: false,
+                                        ..
+                                    } = block
+                                    {
+                                        *output_preview = Some(diff.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     messages.push(UnifiedMessage {
                         id: uuid,
@@ -738,6 +803,7 @@ impl ClaudeParser {
         let mut turns = group_into_turns(messages);
         super::relocate_orphaned_tool_results(&mut turns);
         super::structurize_read_tool_output(&mut turns);
+        super::resolve_patch_line_numbers(&mut turns, cwd.as_deref());
         let context_window_used_tokens = latest_claude_context_window_used_tokens(&turns);
         let context_window_max_tokens =
             claude_context_window_max_tokens_for_model(model.as_deref());

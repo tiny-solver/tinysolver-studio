@@ -190,6 +190,7 @@ impl OpenCodeParser {
         let mut turns = group_into_turns(messages);
         super::relocate_orphaned_tool_results(&mut turns);
         super::structurize_read_tool_output(&mut turns);
+        super::resolve_patch_line_numbers(&mut turns, summary.folder_path.as_deref());
         let context_window_used_tokens = super::latest_turn_total_usage_tokens(&turns);
         let context_window_max_tokens =
             super::infer_context_window_max_tokens(summary.model.as_deref());

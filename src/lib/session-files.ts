@@ -1,4 +1,4 @@
-import type { MessageTurn } from "./types"
+import type { ContentBlock, MessageTurn } from "./types"
 import { normalizeToolName } from "./tool-call-normalization"
 import { estimateChangedLineStats } from "./line-change-stats"
 import { generateUnifiedDiff } from "./unified-diff-generator"
@@ -757,10 +757,12 @@ export function extractSessionFilesGrouped(
           block.input_preview,
           normalizedPath
         )
+        const toolOutput = findToolResultOutput(turn.blocks, block.tool_use_id)
         const diffChunk = buildDiffChunk(
           normalized,
           block.input_preview,
-          normalizedPath
+          normalizedPath,
+          toolOutput
         )
 
         currentFiles.push({
@@ -819,10 +821,12 @@ export function buildSessionFileDiff(
       )
       if (!blockPaths.includes(normalizedTargetPath)) continue
 
+      const toolOutput = findToolResultOutput(turn.blocks, block.tool_use_id)
       const chunk = buildDiffChunk(
         normalized,
         block.input_preview,
-        normalizedTargetPath
+        normalizedTargetPath,
+        toolOutput
       )
       if (chunk && chunk.trim().length > 0) chunks.push(chunk.trim())
     }
@@ -835,10 +839,30 @@ export function buildSessionFileDiff(
   return chunks.join("\n\n")
 }
 
+/** Find the tool_result output matching a tool_use_id within the same turn. */
+function findToolResultOutput(
+  blocks: ContentBlock[],
+  toolUseId: string | null
+): string | null {
+  if (!toolUseId) return null
+  for (const block of blocks) {
+    if (
+      block.type === "tool_result" &&
+      block.tool_use_id === toolUseId &&
+      block.output_preview &&
+      !block.is_error
+    ) {
+      return block.output_preview
+    }
+  }
+  return null
+}
+
 function buildDiffChunk(
   op: string,
   inputPreview: string | null,
-  filePath: string
+  filePath: string,
+  toolOutput?: string | null
 ): string | null {
   if (!inputPreview) return null
 
@@ -858,6 +882,11 @@ function buildDiffChunk(
           .filter((chunk): chunk is string => Boolean(chunk?.trim()))
         if (chunks.length > 0) return chunks.join("\n\n")
       }
+    }
+
+    // Prefer tool output if backend injected a real diff with line numbers
+    if (toolOutput && /^@@ /m.test(toolOutput)) {
+      return toolOutput.trim()
     }
 
     if (!parsed) return null

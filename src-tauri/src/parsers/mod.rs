@@ -403,6 +403,206 @@ fn strip_numbered_lines(text: &str) -> Option<String> {
     )
 }
 
+/// Resolve line numbers for `*** Update File` / `*** Add File` style patches.
+///
+/// When a hunk header is just `@@` without `-N,M +N,M`, this reads the actual
+/// file from disk and matches the context lines to calculate real line numbers.
+/// Falls back gracefully if the file doesn't exist or context doesn't match.
+pub fn resolve_patch_line_numbers(turns: &mut [MessageTurn], cwd: Option<&str>) {
+    for turn in turns.iter_mut() {
+        for block in turn.blocks.iter_mut() {
+            if let ContentBlock::ToolUse {
+                ref tool_name,
+                ref mut input_preview,
+                ..
+            } = block
+            {
+                let name = tool_name.to_lowercase();
+                if !matches!(
+                    name.as_str(),
+                    "apply_patch" | "edit" | "patch" | "applypatch"
+                ) {
+                    continue;
+                }
+                if let Some(ref text) = input_preview {
+                    if text.contains("@@\n") || text.contains("@@\r\n") {
+                        if let Some(resolved) = resolve_patch_text(text, cwd) {
+                            *input_preview = Some(resolved);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Resolve a single patch text, replacing bare `@@` with `@@ -N,M +N,M @@`.
+fn resolve_patch_text(patch: &str, cwd: Option<&str>) -> Option<String> {
+    let mut output = String::with_capacity(patch.len() + 256);
+    let mut current_file_path: Option<String> = None;
+    let mut file_lines: Option<Vec<String>> = None;
+    let mut any_resolved = false;
+
+    let lines: Vec<&str> = patch.lines().collect();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+
+        // Detect file markers
+        if line.starts_with("*** Update File: ") || line.starts_with("*** Add File: ") {
+            let marker_end = if line.starts_with("*** Update File: ") {
+                17
+            } else {
+                14
+            };
+            let path = line[marker_end..].trim();
+            current_file_path = Some(path.to_string());
+            file_lines = load_file_lines(path, cwd);
+            output.push_str(line);
+            output.push('\n');
+            i += 1;
+            continue;
+        }
+
+        // Detect bare @@ hunk header (no line numbers)
+        if line == "@@" {
+            if let (Some(ref fl), true) = (&file_lines, current_file_path.is_some()) {
+                // Collect context lines from this hunk to find match position
+                let hunk_lines = collect_hunk_lines(&lines, i + 1);
+                if let Some((old_start, old_count, new_count)) =
+                    find_hunk_position(fl, &hunk_lines)
+                {
+                    let new_start = old_start; // same start for context-based patches
+                    output.push_str(&format!(
+                        "@@ -{},{} +{},{} @@\n",
+                        old_start, old_count, new_start, new_count
+                    ));
+                    any_resolved = true;
+                    i += 1;
+                    continue;
+                }
+            }
+            // Fallback: keep bare @@
+            output.push_str(line);
+            output.push('\n');
+            i += 1;
+            continue;
+        }
+
+        output.push_str(line);
+        output.push('\n');
+        i += 1;
+    }
+
+    if any_resolved { Some(output) } else { None }
+}
+
+/// Load file lines from disk, trying both absolute path and cwd-relative.
+fn load_file_lines(path: &str, cwd: Option<&str>) -> Option<Vec<String>> {
+    use std::fs;
+    use std::path::Path;
+
+    let p = Path::new(path);
+    if p.is_absolute() {
+        if let Ok(content) = fs::read_to_string(p) {
+            return Some(content.lines().map(|l| l.to_string()).collect());
+        }
+    }
+    if let Some(base) = cwd {
+        let full = Path::new(base).join(path);
+        if let Ok(content) = fs::read_to_string(&full) {
+            return Some(content.lines().map(|l| l.to_string()).collect());
+        }
+    }
+    None
+}
+
+/// Collect lines belonging to a hunk (until next `@@` or `*** ` marker or end).
+fn collect_hunk_lines<'a>(lines: &'a [&'a str], start: usize) -> Vec<&'a str> {
+    let mut result = Vec::new();
+    for &line in &lines[start..] {
+        if line == "@@"
+            || line.starts_with("*** ")
+        {
+            break;
+        }
+        result.push(line);
+    }
+    result
+}
+
+/// Find where a hunk's context lines match in the file, returning (start_line, old_count, new_count).
+/// `start_line` is 1-based.
+fn find_hunk_position(
+    file_lines: &[String],
+    hunk_lines: &[&str],
+) -> Option<(usize, usize, usize)> {
+    // Extract context lines (space-prefixed) with their positions in the hunk
+    let context_entries: Vec<(usize, &str)> = hunk_lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.starts_with(' '))
+        .map(|(i, l)| (i, &l[1..]))  // strip leading space
+        .collect();
+
+    if context_entries.is_empty() {
+        return None;
+    }
+
+    // Use the first context line to find candidate positions
+    let (first_ctx_idx, first_ctx_text) = context_entries[0];
+
+    for (file_idx, file_line) in file_lines.iter().enumerate() {
+        if file_line.as_str() != first_ctx_text {
+            continue;
+        }
+
+        // Verify all context lines match from this position
+        let hunk_start_in_file = file_idx as isize - first_ctx_idx as isize;
+        if hunk_start_in_file < 0 {
+            continue;
+        }
+
+        let all_match = context_entries.iter().all(|(ctx_idx, ctx_text)| {
+            // Map hunk position to file position: only count context and deleted lines
+            let file_offset = hunk_lines[..*ctx_idx]
+                .iter()
+                .filter(|hl| hl.starts_with(' ') || hl.starts_with('-'))
+                .count();
+            let target = hunk_start_in_file as usize + file_offset;
+            target < file_lines.len() && file_lines[target].as_str() == *ctx_text
+        });
+
+        if all_match {
+            // Calculate old_count (context + deleted) and new_count (context + added)
+            let mut old_count = 0usize;
+            let mut new_count = 0usize;
+            for hl in hunk_lines {
+                if hl.starts_with(' ') {
+                    old_count += 1;
+                    new_count += 1;
+                } else if hl.starts_with('-') {
+                    old_count += 1;
+                } else if hl.starts_with('+') {
+                    new_count += 1;
+                }
+            }
+
+            // file_start is the first line of the old file covered by this hunk
+            // We need to find where context/deleted lines start in the file
+            let file_start_offset = hunk_lines[..first_ctx_idx]
+                .iter()
+                .filter(|hl| hl.starts_with(' ') || hl.starts_with('-'))
+                .count();
+            let start_line = (hunk_start_in_file as usize - file_start_offset) + 1; // 1-based
+            return Some((start_line, old_count, new_count));
+        }
+    }
+
+    None
+}
+
 /// Extract the last path component as the folder name.
 pub fn folder_name_from_path(path: &str) -> String {
     path.rsplit(['/', '\\']).next().unwrap_or(path).to_string()
