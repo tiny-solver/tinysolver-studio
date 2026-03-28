@@ -34,7 +34,10 @@ fn get_folder_id_from_url(window: &tauri::Window) -> Option<i32> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let _ = fix_path_env::fix();
+    if let Err(err) = fix_path_env::fix() {
+        eprintln!("[PATH] fix_path_env failed: {err}");
+    }
+    process::ensure_node_in_path();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_window_state::Builder::new().build())
