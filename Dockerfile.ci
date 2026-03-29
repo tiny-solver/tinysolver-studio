@@ -1,0 +1,25 @@
+# CI-only Dockerfile: uses pre-built binaries from build-server job
+# For local builds, use the standard Dockerfile instead
+FROM debian:bookworm-slim
+
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y \
+    libsqlite3-0 \
+    git \
+    openssh-client \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY dist/${TARGETARCH}/codeg-server /usr/local/bin/codeg-server
+COPY dist/web /app/web
+
+ENV CODEG_STATIC_DIR=/app/web
+ENV CODEG_DATA_DIR=/data
+ENV CODEG_PORT=3080
+ENV CODEG_HOST=0.0.0.0
+
+EXPOSE 3080
+VOLUME /data
+
+CMD ["codeg-server"]

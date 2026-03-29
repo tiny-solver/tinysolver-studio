@@ -448,6 +448,14 @@ jobs:
           Copy-Item -Recurse out dist/${{ matrix.artifact }}/web
           Compress-Archive -Path dist/${{ matrix.artifact }} -DestinationPath dist/${{ matrix.artifact }}.zip
 
+      - name: Upload artifact for Docker build (Linux only)
+        if: startsWith(matrix.target, 'x86_64-unknown-linux') || startsWith(matrix.target, 'aarch64-unknown-linux')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          retention-days: 1
+
       - name: Upload to release (Unix)
         if: runner.os != 'Windows'
         uses: actions/upload-release-asset@v1
@@ -471,7 +479,9 @@ jobs:
           asset_content_type: application/zip
 
   build-docker:
-    needs: create-draft-release
+    needs:
+      - create-draft-release
+      - build-server
     name: Build Docker image
     runs-on: ubuntu-22.04
     permissions:
@@ -480,7 +490,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU (for multi-arch builds)
+      - name: Download Linux x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: codeg-server-linux-x64
+          path: artifacts/linux-x64
+
+      - name: Download Linux arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: codeg-server-linux-arm64
+          path: artifacts/linux-arm64
+
+      - name: Prepare Docker build context
+        run: |
+          mkdir -p dist/amd64 dist/arm64
+          cp artifacts/linux-x64/codeg-server dist/amd64/codeg-server
+          cp artifacts/linux-arm64/codeg-server dist/arm64/codeg-server
+          cp -r artifacts/linux-x64/web dist/web
+          chmod +x dist/amd64/codeg-server dist/arm64/codeg-server
+
+      - name: Set up QEMU (for multi-arch manifest)
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -507,6 +537,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile.ci
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -514,8 +545,6 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/codeg:${{ steps.version.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/codeg:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   publish-release:
     needs:
