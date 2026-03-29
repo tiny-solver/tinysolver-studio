@@ -8,13 +8,16 @@ use tauri::State;
 
 use crate::acp::binary_cache;
 use crate::acp::error::AcpError;
+#[cfg(feature = "tauri-runtime")]
 use crate::acp::manager::ConnectionManager;
 use crate::acp::preflight::{self, PreflightResult};
 use crate::acp::registry;
 use crate::acp::types::{
     AcpAgentInfo, AgentSkillContent, AgentSkillItem, AgentSkillLayout, AgentSkillLocation,
-    AgentSkillScope, AgentSkillsListResult, ConnectionInfo, ForkResultInfo, PromptInputBlock,
+    AgentSkillScope, AgentSkillsListResult,
 };
+#[cfg(feature = "tauri-runtime")]
+use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
 use crate::db::service::agent_setting_service;
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;

@@ -1,8 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::app_error::AppCommandError;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::entities::conversation;
-use crate::db::service::{conversation_service, folder_service, import_service};
+use crate::db::service::{conversation_service, folder_service};
+#[cfg(feature = "tauri-runtime")]
+use crate::db::service::import_service;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::*;
 use crate::parsers::claude::ClaudeParser;

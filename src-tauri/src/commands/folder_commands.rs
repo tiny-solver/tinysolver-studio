@@ -1,10 +1,16 @@
+#[cfg(feature = "tauri-runtime")]
 use crate::db::error::DbError;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::service::folder_command_service;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
+#[cfg(feature = "tauri-runtime")]
 use crate::models::FolderCommandInfo;
 use std::path::Path;
+#[cfg(feature = "tauri-runtime")]
 use tokio::sync::Mutex;
 
+#[cfg(feature = "tauri-runtime")]
 static BOOTSTRAP_FOLDER_COMMANDS_LOCK: Mutex<()> = Mutex::const_new(());
 
 pub(crate) fn load_package_scripts_as_commands(folder_path: &str) -> Vec<(String, String)> {

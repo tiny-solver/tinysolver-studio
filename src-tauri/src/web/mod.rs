@@ -122,6 +122,7 @@ pub fn get_local_addresses(port: u16) -> Vec<String> {
 
 // ── Core logic (shared by Tauri commands and web handlers) ──
 
+#[allow(dead_code)]
 pub(crate) async fn do_start_web_server_with_state(
     app_state: Arc<AppState>,
     static_dir: PathBuf,

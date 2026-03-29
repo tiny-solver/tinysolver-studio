@@ -1,4 +1,5 @@
 use std::ffi::{OsStr, OsString};
+#[cfg(feature = "tauri-runtime")]
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -88,6 +89,7 @@ where
 /// child processes) can find node/npm/npx without any special handling.
 ///
 /// Call once at startup, after `fix_path_env::fix()`.
+#[cfg(feature = "tauri-runtime")]
 pub fn ensure_node_in_path() {
     // Already reachable — nothing to do.
     if which::which("node").is_ok() {
@@ -107,6 +109,7 @@ pub fn ensure_node_in_path() {
 
 /// Search common Node.js version manager directories for a `node` binary and
 /// return the containing bin directory.
+#[cfg(feature = "tauri-runtime")]
 fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
@@ -175,6 +178,7 @@ fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
 }
 
 /// Prepend a directory to the process `PATH` environment variable.
+#[cfg(feature = "tauri-runtime")]
 fn prepend_to_path(dir: &std::path::Path) {
     let sep = if cfg!(windows) { ";" } else { ":" };
     let current = std::env::var_os("PATH").unwrap_or_default();

@@ -6,9 +6,13 @@ use tauri::Manager;
 use tauri::State;
 
 use crate::git_credential;
+#[cfg(feature = "tauri-runtime")]
 use crate::terminal::error::TerminalError;
+#[cfg(feature = "tauri-runtime")]
 use crate::terminal::manager::{SpawnOptions, TerminalManager};
+#[cfg(feature = "tauri-runtime")]
 use crate::terminal::types::TerminalInfo;
+#[cfg(feature = "tauri-runtime")]
 use crate::web::event_bridge::EventEmitter;
 
 /// Build extra env vars for the terminal session.

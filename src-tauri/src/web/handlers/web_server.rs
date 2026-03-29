@@ -22,7 +22,7 @@ pub struct StartWebServerParams {
 
 pub async fn start_web_server(
     Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<StartWebServerParams>,
+    Json(_params): Json<StartWebServerParams>,
 ) -> Result<Json<WebServerInfo>, AppCommandError> {
     // In web mode, the server is already running (this handler itself is served by it).
     // This endpoint is mainly useful in Tauri mode. Return current status as a noop.

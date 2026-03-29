@@ -18,10 +18,13 @@ use walkdir::WalkDir;
 use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::error::DbError;
 use crate::db::service::folder_service;
 use crate::db::AppDatabase;
-use crate::models::{FolderDetail, FolderHistoryEntry, GitCredentials, OpenedConversation};
+use crate::models::GitCredentials;
+#[cfg(feature = "tauri-runtime")]
+use crate::models::{FolderDetail, FolderHistoryEntry, OpenedConversation};
 use crate::web::event_bridge::EventEmitter;
 
 /// Configure a git command for remote operations:

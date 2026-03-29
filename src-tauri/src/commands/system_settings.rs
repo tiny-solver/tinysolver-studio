@@ -4,12 +4,15 @@ use tauri::State;
 
 use crate::app_error::AppCommandError;
 use crate::db::service::app_metadata_service;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::{SystemLanguageSettings, SystemProxySettings};
+#[cfg(feature = "tauri-runtime")]
 use crate::network::proxy;
 
 const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
 const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
+#[cfg(feature = "tauri-runtime")]
 const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
 
 fn normalize_proxy_settings(

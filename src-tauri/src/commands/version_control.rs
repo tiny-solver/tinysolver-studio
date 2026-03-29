@@ -4,12 +4,15 @@ use tauri::State;
 
 use crate::app_error::AppCommandError;
 use crate::db::service::app_metadata_service;
+#[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
-use crate::models::{
-    GitDetectResult, GitHubAccountsSettings, GitHubTokenValidation, GitSettings,
-};
+use crate::models::GitDetectResult;
+#[cfg(feature = "tauri-runtime")]
+use crate::models::GitHubAccountsSettings;
+use crate::models::{GitHubTokenValidation, GitSettings};
 
 const GIT_SETTINGS_KEY: &str = "git_settings";
+#[cfg(feature = "tauri-runtime")]
 const GITHUB_ACCOUNTS_KEY: &str = "github_accounts";
 
 // ---------------------------------------------------------------------------
@@ -170,6 +173,7 @@ pub async fn update_git_settings(
 // GitHub accounts
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "tauri-runtime")]
 async fn load_github_accounts(
     conn: &sea_orm::DatabaseConnection,
 ) -> Result<GitHubAccountsSettings, AppCommandError> {
