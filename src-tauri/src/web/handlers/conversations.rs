@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::conversations as conv_commands;
 use crate::db::service::{conversation_service, folder_service, import_service};
-use crate::db::AppDatabase;
 use crate::models::*;
 
 #[derive(Deserialize)]
@@ -19,10 +20,10 @@ pub struct ListFolderConversationsParams {
 }
 
 pub async fn list_folder_conversations(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<ListFolderConversationsParams>,
 ) -> Result<Json<Vec<DbConversationSummary>>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = conversation_service::list_by_folder(
         &db.conn,
         params.folder_id,
@@ -80,10 +81,10 @@ pub struct GetFolderConversationParams {
 }
 
 pub async fn get_folder_conversation(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<GetFolderConversationParams>,
 ) -> Result<Json<DbConversationDetail>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result =
         conv_commands::get_folder_conversation_core(&db.conn, params.conversation_id).await?;
     Ok(Json(result))
@@ -111,10 +112,10 @@ pub struct ImportLocalConversationsParams {
 }
 
 pub async fn import_local_conversations(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<ImportLocalConversationsParams>,
 ) -> Result<Json<ImportResult>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let folder = folder_service::get_folder_by_id(&db.conn, params.folder_id)
         .await
         .map_err(AppCommandError::from)?
@@ -134,10 +135,10 @@ pub struct CreateConversationParams {
 }
 
 pub async fn create_conversation(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<CreateConversationParams>,
 ) -> Result<Json<i32>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = conv_commands::create_conversation_core(
         &db.conn,
         params.folder_id,
@@ -156,10 +157,10 @@ pub struct UpdateConversationStatusParams {
 }
 
 pub async fn update_conversation_status(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateConversationStatusParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let status_enum: crate::db::entities::conversation::ConversationStatus =
         serde_json::from_value(serde_json::Value::String(params.status)).map_err(|e| {
             AppCommandError::invalid_input("Invalid conversation status").with_detail(e.to_string())
@@ -178,10 +179,10 @@ pub struct UpdateConversationTitleParams {
 }
 
 pub async fn update_conversation_title(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateConversationTitleParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     conversation_service::update_title(&db.conn, params.conversation_id, params.title)
         .await
         .map_err(AppCommandError::from)?;
@@ -195,10 +196,10 @@ pub struct DeleteConversationParams {
 }
 
 pub async fn delete_conversation(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<DeleteConversationParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     conversation_service::soft_delete(&db.conn, params.conversation_id)
         .await
         .map_err(AppCommandError::from)?;
@@ -213,10 +214,10 @@ pub struct UpdateConversationExternalIdParams {
 }
 
 pub async fn update_conversation_external_id(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateConversationExternalIdParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     conversation_service::update_external_id(&db.conn, params.conversation_id, params.external_id)
         .await
         .map_err(AppCommandError::from)?;

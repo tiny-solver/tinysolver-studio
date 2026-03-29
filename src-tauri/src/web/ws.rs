@@ -1,22 +1,22 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Extension, WebSocketUpgrade},
     response::IntoResponse,
 };
 use axum::extract::ws::{Message, WebSocket};
-use tauri::Manager;
 
-use super::event_bridge::WebEventBroadcaster;
+use crate::app_state::AppState;
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_ws_connection(socket, app))
+    ws.on_upgrade(|socket| handle_ws_connection(socket, state))
 }
 
-async fn handle_ws_connection(mut socket: WebSocket, app: tauri::AppHandle) {
-    let broadcaster = app.state::<WebEventBroadcaster>();
-    let mut rx = broadcaster.subscribe();
+async fn handle_ws_connection(mut socket: WebSocket, state: Arc<AppState>) {
+    let mut rx = state.event_broadcaster.subscribe();
 
     loop {
         tokio::select! {

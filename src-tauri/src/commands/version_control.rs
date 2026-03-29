@@ -1,4 +1,5 @@
 use serde::Deserialize;
+#[cfg(feature = "tauri-runtime")]
 use tauri::State;
 
 use crate::app_error::AppCommandError;
@@ -102,14 +103,15 @@ pub(crate) async fn detect_git_core(
     }
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn detect_git(
     db: State<'_, AppDatabase>,
 ) -> Result<GitDetectResult, AppCommandError> {
     detect_git_core(&db.conn).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn test_git_path(path: String) -> Result<GitDetectResult, AppCommandError> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
@@ -138,14 +140,16 @@ async fn load_git_settings(
     }
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_git_settings(
     db: State<'_, AppDatabase>,
 ) -> Result<GitSettings, AppCommandError> {
     load_git_settings(&db.conn).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_git_settings(
     settings: GitSettings,
     db: State<'_, AppDatabase>,
@@ -182,14 +186,16 @@ async fn load_github_accounts(
     }
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_github_accounts(
     db: State<'_, AppDatabase>,
 ) -> Result<GitHubAccountsSettings, AppCommandError> {
     load_github_accounts(&db.conn).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_github_accounts(
     settings: GitHubAccountsSettings,
     db: State<'_, AppDatabase>,
@@ -210,7 +216,7 @@ pub async fn update_github_accounts(
 // Keyring token management
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn save_account_token(
     account_id: String,
     token: String,
@@ -219,14 +225,14 @@ pub async fn save_account_token(
         .map_err(|e| AppCommandError::io_error("Failed to save token to keyring").with_detail(e))
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_account_token(
     account_id: String,
 ) -> Result<Option<String>, AppCommandError> {
     Ok(crate::keyring_store::get_token(&account_id))
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn delete_account_token(
     account_id: String,
 ) -> Result<(), AppCommandError> {
@@ -244,7 +250,7 @@ struct GitHubUserResponse {
     avatar_url: Option<String>,
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn validate_github_token(
     server_url: String,
     token: String,

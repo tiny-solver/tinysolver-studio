@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 use tokio::sync::broadcast;
 
@@ -34,15 +36,33 @@ impl WebEventBroadcaster {
     }
 }
 
-/// Unified event emission: sends to both Tauri webview and Web clients.
+/// Abstraction over event emission targets.
+/// In Tauri mode, events go to both webview and WebSocket clients.
+/// In standalone server mode, events only go to WebSocket clients.
+#[derive(Clone)]
+pub enum EventEmitter {
+    #[cfg(feature = "tauri-runtime")]
+    Tauri(tauri::AppHandle),
+    WebOnly(Arc<WebEventBroadcaster>),
+}
+
+/// Unified event emission: sends to both Tauri webview and Web clients (if applicable).
 pub fn emit_event(
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
     event: &str,
     payload: impl Serialize + Clone,
 ) {
-    use tauri::{Emitter, Manager};
-    let _ = app.emit(event, payload.clone());
-    if let Some(web) = app.try_state::<WebEventBroadcaster>() {
-        web.send(event, &payload);
+    match emitter {
+        #[cfg(feature = "tauri-runtime")]
+        EventEmitter::Tauri(app) => {
+            use tauri::{Emitter, Manager};
+            let _ = app.emit(event, payload.clone());
+            if let Some(web) = app.try_state::<Arc<WebEventBroadcaster>>() {
+                web.send(event, &payload);
+            }
+        }
+        EventEmitter::WebOnly(broadcaster) => {
+            broadcaster.send(event, &payload);
+        }
     }
 }

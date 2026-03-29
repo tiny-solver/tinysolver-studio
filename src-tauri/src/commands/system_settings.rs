@@ -1,4 +1,5 @@
 use sea_orm::DatabaseConnection;
+#[cfg(feature = "tauri-runtime")]
 use tauri::State;
 
 use crate::app_error::AppCommandError;
@@ -82,14 +83,16 @@ pub(crate) async fn load_system_language_settings(
     })
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_system_proxy_settings(
     db: State<'_, AppDatabase>,
 ) -> Result<SystemProxySettings, AppCommandError> {
     load_system_proxy_settings(&db.conn).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_system_proxy_settings(
     settings: SystemProxySettings,
     db: State<'_, AppDatabase>,
@@ -108,14 +111,16 @@ pub async fn update_system_proxy_settings(
     Ok(normalized)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_system_language_settings(
     db: State<'_, AppDatabase>,
 ) -> Result<SystemLanguageSettings, AppCommandError> {
     load_system_language_settings(&db.conn).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_system_language_settings(
     settings: SystemLanguageSettings,
     db: State<'_, AppDatabase>,
@@ -130,7 +135,8 @@ pub async fn update_system_language_settings(
         .await
         .map_err(AppCommandError::from)?;
 
-    crate::web::event_bridge::emit_event(&app, LANGUAGE_SETTINGS_UPDATED_EVENT, settings.clone());
+    let emitter = crate::web::event_bridge::EventEmitter::Tauri(app);
+    crate::web::event_bridge::emit_event(&emitter, LANGUAGE_SETTINGS_UPDATED_EVENT, settings.clone());
 
     Ok(settings)
 }

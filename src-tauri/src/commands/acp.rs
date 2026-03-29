@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "tauri-runtime")]
 use tauri::State;
 
 use crate::acp::binary_cache;
@@ -17,6 +18,7 @@ use crate::acp::types::{
 use crate::db::service::agent_setting_service;
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
+use crate::web::event_bridge::EventEmitter;
 
 const ACP_AGENTS_UPDATED_EVENT: &str = "app://acp-agents-updated";
 
@@ -28,12 +30,12 @@ struct AcpAgentsUpdatedEventPayload {
 }
 
 fn emit_acp_agents_updated(
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
     reason: &'static str,
     agent_type: Option<AgentType>,
 ) {
     crate::web::event_bridge::emit_event(
-        app,
+        emitter,
         ACP_AGENTS_UPDATED_EVENT,
         AcpAgentsUpdatedEventPayload { reason, agent_type },
     );
@@ -1346,7 +1348,7 @@ pub(crate) fn build_runtime_env_from_setting(
     merged
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_preflight(
     agent_type: AgentType,
     force_refresh: Option<bool>,
@@ -1357,7 +1359,8 @@ pub async fn acp_preflight(
     Ok(preflight::run_preflight(agent_type).await)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_connect(
     agent_type: AgentType,
     working_dir: Option<String>,
@@ -1400,6 +1403,7 @@ pub async fn acp_connect(
         }
     }
 
+    let emitter = EventEmitter::Tauri(app_handle);
     manager
         .spawn_agent(
             agent_type,
@@ -1407,12 +1411,13 @@ pub async fn acp_connect(
             session_id,
             runtime_env,
             window.label().to_string(),
-            app_handle,
+            emitter,
         )
         .await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_prompt(
     connection_id: String,
     blocks: Vec<PromptInputBlock>,
@@ -1421,7 +1426,8 @@ pub async fn acp_prompt(
     manager.send_prompt(&connection_id, blocks).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_set_mode(
     connection_id: String,
     mode_id: String,
@@ -1430,7 +1436,8 @@ pub async fn acp_set_mode(
     manager.set_mode(&connection_id, mode_id).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_set_config_option(
     connection_id: String,
     config_id: String,
@@ -1442,7 +1449,8 @@ pub async fn acp_set_config_option(
         .await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_cancel(
     connection_id: String,
     manager: State<'_, ConnectionManager>,
@@ -1450,7 +1458,8 @@ pub async fn acp_cancel(
     manager.cancel(&connection_id).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_fork(
     connection_id: String,
     manager: State<'_, ConnectionManager>,
@@ -1458,7 +1467,8 @@ pub async fn acp_fork(
     manager.fork_session(&connection_id).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_respond_permission(
     connection_id: String,
     request_id: String,
@@ -1470,7 +1480,8 @@ pub async fn acp_respond_permission(
         .await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_disconnect(
     connection_id: String,
     manager: State<'_, ConnectionManager>,
@@ -1478,17 +1489,17 @@ pub async fn acp_disconnect(
     manager.disconnect(&connection_id).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_list_connections(
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<ConnectionInfo>, AcpError> {
     Ok(manager.list_connections().await)
 }
 
-#[tauri::command]
-pub async fn acp_get_agent_status(
+pub(crate) async fn acp_get_agent_status_core(
     agent_type: AgentType,
-    db: tauri::State<'_, AppDatabase>,
+    db: &AppDatabase,
 ) -> Result<crate::acp::types::AcpAgentStatus, AcpError> {
     let platform = registry::current_platform();
     let meta = registry::get_agent_meta(agent_type);
@@ -1523,9 +1534,17 @@ pub async fn acp_get_agent_status(
     })
 }
 
-#[tauri::command]
-pub async fn acp_list_agents(
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_get_agent_status(
+    agent_type: AgentType,
     db: tauri::State<'_, AppDatabase>,
+) -> Result<crate::acp::types::AcpAgentStatus, AcpError> {
+    acp_get_agent_status_core(agent_type, &db).await
+}
+
+pub(crate) async fn acp_list_agents_core(
+    db: &AppDatabase,
 ) -> Result<Vec<AcpAgentInfo>, AcpError> {
     let platform = registry::current_platform();
     let agent_types = registry::all_acp_agents();
@@ -1660,7 +1679,15 @@ pub async fn acp_list_agents(
     Ok(agents)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_list_agents(
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<Vec<AcpAgentInfo>, AcpError> {
+    acp_list_agents_core(&db).await
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_clear_binary_cache(agent_type: AgentType) -> Result<(), AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     if matches!(
@@ -1682,7 +1709,7 @@ pub(crate) async fn acp_update_agent_preferences_core(
     codex_auth_json: Option<String>,
     codex_config_toml: Option<String>,
     db: &AppDatabase,
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     let default = agent_setting_service::AgentDefaultInput {
         agent_type,
@@ -1737,7 +1764,7 @@ pub(crate) async fn acp_update_agent_preferences_core(
                 codex_config_toml.as_deref(),
             )?;
         }
-        emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
+        emit_acp_agents_updated(emitter, "preferences_updated", Some(agent_type));
         return Ok(());
     }
 
@@ -1748,7 +1775,7 @@ pub(crate) async fn acp_update_agent_preferences_core(
         if let Some(raw) = config_json.as_deref() {
             persist_agent_local_config_json(agent_type, Some(raw))?;
         }
-        emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
+        emit_acp_agents_updated(emitter, "preferences_updated", Some(agent_type));
         return Ok(());
     }
 
@@ -1756,7 +1783,7 @@ pub(crate) async fn acp_update_agent_preferences_core(
         if let Some(raw) = config_json.as_deref() {
             persist_cline_local_config(Some(raw))?;
         }
-        emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
+        emit_acp_agents_updated(emitter, "preferences_updated", Some(agent_type));
         return Ok(());
     }
 
@@ -1775,11 +1802,12 @@ pub(crate) async fn acp_update_agent_preferences_core(
     let local_patch_json = serde_json::to_string(&local_patch_value)
         .map_err(|e| AcpError::protocol(format!("serialize local patch failed: {e}")))?;
     persist_agent_local_config_json(agent_type, Some(local_patch_json.as_str()))?;
-    emit_acp_agents_updated(app, "preferences_updated", Some(agent_type));
+    emit_acp_agents_updated(emitter, "preferences_updated", Some(agent_type));
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 #[allow(clippy::too_many_arguments)]
 pub async fn acp_update_agent_preferences(
     agent_type: AgentType,
@@ -1792,15 +1820,16 @@ pub async fn acp_update_agent_preferences(
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<(), AcpError> {
+    let emitter = EventEmitter::Tauri(app);
     acp_update_agent_preferences_core(
         agent_type, enabled, env, config_json, opencode_auth_json,
-        codex_auth_json, codex_config_toml, &db, &app,
+        codex_auth_json, codex_config_toml, &db, &emitter,
     ).await
 }
 
 pub(crate) async fn acp_download_agent_binary_core(
     agent_type: AgentType,
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
@@ -1823,7 +1852,7 @@ pub(crate) async fn acp_download_agent_binary_core(
 
             let _ = binary_cache::ensure_binary_for_agent(agent_type, version, fallback.url, cmd)
                 .await?;
-            emit_acp_agents_updated(app, "binary_downloaded", Some(agent_type));
+            emit_acp_agents_updated(emitter, "binary_downloaded", Some(agent_type));
             Ok(())
         }
         registry::AgentDistribution::Npx { .. } => Err(
@@ -1832,12 +1861,14 @@ pub(crate) async fn acp_download_agent_binary_core(
     }
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_download_agent_binary(
     agent_type: AgentType,
     app: tauri::AppHandle,
 ) -> Result<(), AcpError> {
-    acp_download_agent_binary_core(agent_type, &app).await
+    let emitter = EventEmitter::Tauri(app);
+    acp_download_agent_binary_core(agent_type, &emitter).await
 }
 
 pub(crate) async fn acp_detect_agent_local_version_core(
@@ -1863,7 +1894,8 @@ pub(crate) async fn acp_detect_agent_local_version_core(
     Ok(fallback)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_detect_agent_local_version(
     agent_type: AgentType,
     db: State<'_, AppDatabase>,
@@ -1875,7 +1907,7 @@ pub(crate) async fn acp_prepare_npx_agent_core(
     agent_type: AgentType,
     registry_version: Option<String>,
     db: &AppDatabase,
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
 ) -> Result<String, AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
@@ -1918,7 +1950,7 @@ pub(crate) async fn acp_prepare_npx_agent_core(
             )
             .await
             .map_err(|e| AcpError::protocol(e.to_string()))?;
-            emit_acp_agents_updated(app, "npx_prepared", Some(agent_type));
+            emit_acp_agents_updated(emitter, "npx_prepared", Some(agent_type));
             Ok(resolved)
         }
         registry::AgentDistribution::Binary { .. } => Err(AcpError::protocol(
@@ -1927,20 +1959,22 @@ pub(crate) async fn acp_prepare_npx_agent_core(
     }
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_prepare_npx_agent(
     agent_type: AgentType,
     registry_version: Option<String>,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<String, AcpError> {
-    acp_prepare_npx_agent_core(agent_type, registry_version, &db, &app).await
+    let emitter = EventEmitter::Tauri(app);
+    acp_prepare_npx_agent_core(agent_type, registry_version, &db, &emitter).await
 }
 
 pub(crate) async fn acp_uninstall_agent_core(
     agent_type: AgentType,
     db: &AppDatabase,
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     let meta = registry::get_agent_meta(agent_type);
     match meta.distribution {
@@ -1955,23 +1989,25 @@ pub(crate) async fn acp_uninstall_agent_core(
     agent_setting_service::set_installed_version(&db.conn, agent_type, None)
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
-    emit_acp_agents_updated(app, "agent_uninstalled", Some(agent_type));
+    emit_acp_agents_updated(emitter, "agent_uninstalled", Some(agent_type));
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_uninstall_agent(
     agent_type: AgentType,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<(), AcpError> {
-    acp_uninstall_agent_core(agent_type, &db, &app).await
+    let emitter = EventEmitter::Tauri(app);
+    acp_uninstall_agent_core(agent_type, &db, &emitter).await
 }
 
 pub(crate) async fn acp_reorder_agents_core(
     agent_types: &[AgentType],
     db: &AppDatabase,
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     if agent_types.is_empty() {
         return Ok(());
@@ -1986,20 +2022,22 @@ pub(crate) async fn acp_reorder_agents_core(
                 AcpError::protocol(message)
             }
         })?;
-    emit_acp_agents_updated(app, "agent_reordered", None);
+    emit_acp_agents_updated(emitter, "agent_reordered", None);
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_reorder_agents(
     agent_types: Vec<AgentType>,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<(), AcpError> {
-    acp_reorder_agents_core(&agent_types, &db, &app).await
+    let emitter = EventEmitter::Tauri(app);
+    acp_reorder_agents_core(&agent_types, &db, &emitter).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_list_agent_skills(
     agent_type: AgentType,
     workspace_path: Option<String>,
@@ -2065,7 +2103,7 @@ pub async fn acp_list_agent_skills(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_read_agent_skill(
     agent_type: AgentType,
     scope: AgentSkillScope,
@@ -2088,7 +2126,7 @@ pub async fn acp_read_agent_skill(
     Ok(AgentSkillContent { skill, content })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_save_agent_skill(
     agent_type: AgentType,
     scope: AgentSkillScope,
@@ -2148,7 +2186,7 @@ pub async fn acp_save_agent_skill(
     Ok(skill)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_delete_agent_skill(
     agent_type: AgentType,
     scope: AgentSkillScope,

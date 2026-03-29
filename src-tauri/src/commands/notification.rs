@@ -1,8 +1,10 @@
+#[cfg(feature = "tauri-runtime")]
 use tauri::AppHandle;
 
 use crate::app_error::AppCommandError;
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn send_notification(
     #[allow(unused_variables)] app: AppHandle,
     title: String,

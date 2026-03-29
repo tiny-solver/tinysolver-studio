@@ -137,7 +137,8 @@ fn resolve_settings_target(section: Option<&str>, agent_type: Option<&str>) -> S
     route.to_string()
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn list_open_folders(
     app: AppHandle,
     db: tauri::State<'_, AppDatabase>,
@@ -165,7 +166,8 @@ pub async fn list_open_folders(
     Ok(open_folders)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn focus_folder_window(app: AppHandle, folder_id: i32) -> Result<(), AppCommandError> {
     let windows = app.webview_windows();
     for (label, window) in &windows {
@@ -186,7 +188,8 @@ pub async fn focus_folder_window(app: AppHandle, folder_id: i32) -> Result<(), A
     )
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_folder_window(
     app: AppHandle,
     db: tauri::State<'_, AppDatabase>,
@@ -233,7 +236,8 @@ pub async fn open_folder_window(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_commit_window(
     app: AppHandle,
     window: tauri::WebviewWindow,
@@ -294,7 +298,8 @@ pub async fn open_commit_window(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_settings_window(
     app: AppHandle,
     window: tauri::WebviewWindow,
@@ -387,7 +392,8 @@ impl MergeWindowState {
     }
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_merge_window(
     app: AppHandle,
     window: tauri::WebviewWindow,
@@ -505,8 +511,9 @@ pub async fn cleanup_dangling_merge(app: &AppHandle, merge_window_label: &str) {
             .output()
             .await;
 
+        let emitter = crate::web::event_bridge::EventEmitter::Tauri(app.clone());
         crate::web::event_bridge::emit_event(
-            app,
+            &emitter,
             "folder://merge-aborted",
             serde_json::json!({ "folder_id": folder_id }),
         );
@@ -531,7 +538,8 @@ pub fn open_welcome_window(app: &AppHandle) -> Result<(), AppCommandError> {
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_stash_window(
     app: AppHandle,
     db: tauri::State<'_, AppDatabase>,
@@ -570,7 +578,8 @@ pub async fn open_stash_window(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_push_window(
     app: AppHandle,
     db: tauri::State<'_, AppDatabase>,
@@ -609,7 +618,8 @@ pub async fn open_push_window(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_project_boot_window(
     app: AppHandle,
     source: Option<String>,

@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
-use crate::acp::manager::ConnectionManager;
 use crate::acp::preflight::PreflightResult;
 use crate::acp::registry;
 use crate::acp::types::{
@@ -12,9 +11,9 @@ use crate::acp::types::{
     AgentSkillsListResult, ConnectionInfo, ForkResultInfo,
 };
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::acp as acp_commands;
 use crate::db::service::agent_setting_service;
-use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 
 #[derive(Deserialize)]
@@ -24,21 +23,21 @@ pub struct AgentTypeParams {
 }
 
 pub async fn acp_get_agent_status(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AgentTypeParams>,
 ) -> Result<Json<AcpAgentStatus>, AppCommandError> {
-    let db = app.state::<crate::db::AppDatabase>();
-    let result = acp_commands::acp_get_agent_status(params.agent_type, db)
+    let db = &state.db;
+    let result = acp_commands::acp_get_agent_status_core(params.agent_type, db)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
 }
 
 pub async fn acp_list_agents(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<AcpAgentInfo>>, AppCommandError> {
-    let db = app.state::<crate::db::AppDatabase>();
-    let result = acp_commands::acp_list_agents(db)
+    let db = &state.db;
+    let result = acp_commands::acp_list_agents_core(db)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
@@ -53,11 +52,11 @@ pub struct AcpConnectParams {
 }
 
 pub async fn acp_connect(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpConnectParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
-    let manager = app.state::<ConnectionManager>();
+    let db = &state.db;
+    let manager = &state.connection_manager;
     let meta = registry::get_agent_meta(params.agent_type);
 
     let setting = agent_setting_service::get_by_agent_type(&db.conn, params.agent_type)
@@ -94,6 +93,7 @@ pub async fn acp_connect(
         }
     }
 
+    let emitter = state.emitter.clone();
     let connection_id = manager
         .spawn_agent(
             params.agent_type,
@@ -101,7 +101,7 @@ pub async fn acp_connect(
             params.session_id,
             runtime_env,
             "web".to_string(),
-            app.clone(),
+            emitter,
         )
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
@@ -116,10 +116,10 @@ pub struct AcpDisconnectParams {
 }
 
 pub async fn acp_disconnect(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpDisconnectParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     manager
         .disconnect(&params.connection_id)
         .await
@@ -135,10 +135,10 @@ pub struct AcpPromptParams {
 }
 
 pub async fn acp_prompt(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpPromptParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     manager
         .send_prompt(&params.connection_id, params.blocks)
         .await
@@ -279,10 +279,10 @@ pub struct AcpSetModeParams {
 }
 
 pub async fn acp_set_mode(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpSetModeParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     manager
         .set_mode(&params.connection_id, params.mode_id)
         .await
@@ -299,10 +299,10 @@ pub struct AcpSetConfigOptionParams {
 }
 
 pub async fn acp_set_config_option(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpSetConfigOptionParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     manager
         .set_config_option(&params.connection_id, params.config_id, params.value_id)
         .await
@@ -311,10 +311,10 @@ pub async fn acp_set_config_option(
 }
 
 pub async fn acp_cancel(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpConnectionIdParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     manager
         .cancel(&params.connection_id)
         .await
@@ -323,10 +323,10 @@ pub async fn acp_cancel(
 }
 
 pub async fn acp_fork(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpConnectionIdParams>,
 ) -> Result<Json<ForkResultInfo>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     let result = manager
         .fork_session(&params.connection_id)
         .await
@@ -343,10 +343,10 @@ pub struct AcpRespondPermissionParams {
 }
 
 pub async fn acp_respond_permission(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpRespondPermissionParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     manager
         .respond_permission(&params.connection_id, &params.request_id, &params.option_id)
         .await
@@ -355,9 +355,9 @@ pub async fn acp_respond_permission(
 }
 
 pub async fn acp_list_connections(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<ConnectionInfo>>, AppCommandError> {
-    let manager = app.state::<ConnectionManager>();
+    let manager = &state.connection_manager;
     let result = manager.list_connections().await;
     Ok(Json(result))
 }
@@ -377,10 +377,11 @@ pub struct AcpUpdateAgentPreferencesParams {
 }
 
 pub async fn acp_update_agent_preferences(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpUpdateAgentPreferencesParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
+    let emitter = state.emitter.clone();
     acp_commands::acp_update_agent_preferences_core(
         params.agent_type,
         params.enabled,
@@ -390,7 +391,7 @@ pub async fn acp_update_agent_preferences(
         params.codex_auth_json,
         params.codex_config_toml,
         &db,
-        &app,
+        &emitter,
     )
     .await
     .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
@@ -398,20 +399,21 @@ pub async fn acp_update_agent_preferences(
 }
 
 pub async fn acp_download_agent_binary(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AgentTypeParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    acp_commands::acp_download_agent_binary_core(params.agent_type, &app)
+    let emitter = state.emitter.clone();
+    acp_commands::acp_download_agent_binary_core(params.agent_type, &emitter)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))
 }
 
 pub async fn acp_detect_agent_local_version(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AgentTypeParams>,
 ) -> Result<Json<Option<String>>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result =
         acp_commands::acp_detect_agent_local_version_core(params.agent_type, &db.conn)
             .await
@@ -427,15 +429,16 @@ pub struct AcpPrepareNpxAgentParams {
 }
 
 pub async fn acp_prepare_npx_agent(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpPrepareNpxAgentParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
+    let emitter = state.emitter.clone();
     let result = acp_commands::acp_prepare_npx_agent_core(
         params.agent_type,
         params.registry_version,
         &db,
-        &app,
+        &emitter,
     )
     .await
     .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
@@ -443,11 +446,12 @@ pub async fn acp_prepare_npx_agent(
 }
 
 pub async fn acp_uninstall_agent(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AgentTypeParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
-    acp_commands::acp_uninstall_agent_core(params.agent_type, &db, &app)
+    let db = &state.db;
+    let emitter = state.emitter.clone();
+    acp_commands::acp_uninstall_agent_core(params.agent_type, &db, &emitter)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))
@@ -460,11 +464,12 @@ pub struct AcpReorderAgentsParams {
 }
 
 pub async fn acp_reorder_agents(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpReorderAgentsParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
-    acp_commands::acp_reorder_agents_core(&params.agent_types, &db, &app)
+    let db = &state.db;
+    let emitter = state.emitter.clone();
+    acp_commands::acp_reorder_agents_core(&params.agent_types, &db, &emitter)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))

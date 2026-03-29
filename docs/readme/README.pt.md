@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/github/license/xintaofei/codeg)](../../LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](../../Dockerfile)
 
 <p>
   <a href="../../README.md">English</a> |
@@ -46,6 +47,8 @@ paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de 
 - Gerenciamento de Skills (escopo global e por projeto)
 - Gerenciamento de contas remotas Git (GitHub e outros servidores Git)
 - Modo de serviço web — acesse o Codeg de qualquer navegador para trabalho remoto
+- **Implantação de servidor standalone** — execute `codeg-server` em qualquer servidor Linux/macOS, acesse via navegador
+- **Suporte a Docker** — implante com `docker compose up` para configuração zero do servidor
 - Ciclo de engenharia integrado (árvore de arquivos, diff, alterações git, commit, terminal)
 
 ## Inicializador de Projeto
@@ -104,7 +107,7 @@ Alvos de escrita atuais:
 - Node.js `>=22` (recomendado)
 - pnpm `>=10`
 - Rust stable (2021 edition)
-- Dependências de build do Tauri 2
+- Dependências de build do Tauri 2 (somente modo desktop)
 
 Exemplo Linux (Debian/Ubuntu):
 
@@ -122,17 +125,23 @@ sudo apt-get install -y \
 ```bash
 pnpm install
 
+# Exportação estática do frontend para out/
+pnpm build
+
 # Aplicativo desktop completo (Tauri + Next.js)
 pnpm tauri dev
 
 # Apenas frontend
 pnpm dev
 
-# Exportação estática do frontend para out/
-pnpm build
-
 # Build do aplicativo desktop
 pnpm tauri build
+
+# Servidor standalone (sem Tauri/GUI necessário)
+pnpm server:dev
+
+# Build do binário do servidor
+pnpm server:build
 
 # Lint
 pnpm eslint .
@@ -143,22 +152,71 @@ cargo clippy
 cargo build
 ```
 
+### Implantação do servidor
+
+O Codeg pode ser executado como um servidor web standalone sem ambiente desktop.
+
+#### Opção 1: Binário direto
+
+```bash
+# Build do binário do servidor
+cd src-tauri
+cargo build --release --bin codeg-server --no-default-features
+
+# Executar
+CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+```
+
+Variáveis de ambiente:
+
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
+| `CODEG_PORT` | `3080` | Porta HTTP |
+| `CODEG_HOST` | `0.0.0.0` | Endereço de bind |
+| `CODEG_TOKEN` | *(aleatório)* | Token de autenticação (impresso no stderr ao iniciar) |
+| `CODEG_DATA_DIR` | `~/.local/share/codeg` | Diretório do banco de dados SQLite |
+| `CODEG_STATIC_DIR` | `./web` ou `./out` | Diretório de exportação estática do Next.js |
+
+#### Opção 2: Docker
+
+```bash
+# Build e execução
+docker compose up -d
+
+# Ou build manual
+docker build -t codeg .
+docker run -p 3080:3080 -v codeg-data:/data codeg
+```
+
 ## Arquitetura
 
 ```text
 Next.js 16 (Static Export) + React 19
         |
-        | invoke()
+        | invoke() (desktop) / fetch() + WebSocket (web)
         v
-Tauri 2 Commands (Rust)
-  |- ACP Manager
-  |- Parsers (local session ingestion)
-  |- Git / File Tree / Terminal runtime
-  |- MCP marketplace + local config writer
-  |- SeaORM + SQLite
+  ┌─────────────────────────┐
+  │   Transport Abstraction  │
+  │  (Tauri IPC or HTTP/WS) │
+  └─────────────────────────┘
         |
         v
-Local Filesystem / Local Agent Data / Git Repos
+┌─── Tauri Desktop ───┐    ┌─── codeg-server ───┐
+│  Tauri 2 Commands    │    │  Axum HTTP + WS    │
+│  (window management) │    │  (standalone mode)  │
+└──────────┬───────────┘    └──────────┬──────────┘
+           └──────────┬───────────────┘
+                      v
+            Shared Rust Core
+              |- AppState
+              |- ACP Manager
+              |- Parsers (session ingestion)
+              |- Git / File Tree / Terminal
+              |- MCP marketplace + config
+              |- SeaORM + SQLite
+                      |
+                      v
+        Local Filesystem / Git Repos
 ```
 
 ## Restrições
@@ -173,6 +231,7 @@ Local Filesystem / Local Agent Data / Git Repos
 - Local-first por padrão para análise, armazenamento e operações do projeto
 - O acesso à rede ocorre apenas em ações iniciadas pelo usuário
 - Suporte a proxy do sistema para ambientes corporativos
+- O modo de serviço web usa autenticação baseada em token
 
 ## Licença
 

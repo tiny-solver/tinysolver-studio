@@ -9,6 +9,7 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 
 use super::error::TerminalError;
 use super::types::{TerminalEvent, TerminalInfo};
+use crate::web::event_bridge::EventEmitter;
 
 struct TerminalInstance {
     write_tx: mpsc::Sender<Vec<u8>>,
@@ -148,11 +149,18 @@ impl TerminalManager {
         }
     }
 
+    /// Returns a shallow clone sharing the same underlying terminal map.
+    pub fn clone_ref(&self) -> Self {
+        Self {
+            terminals: self.terminals.clone(),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_with_id(
         &self,
         opts: SpawnOptions,
-        app_handle: tauri::AppHandle,
+        emitter: EventEmitter,
     ) -> Result<String, TerminalError> {
         let pty_system = native_pty_system();
 
@@ -227,7 +235,7 @@ impl TerminalManager {
         std::thread::Builder::new()
             .name(format!("pty-reader-{}", &id_for_writer[..8]))
             .spawn(move || {
-                read_loop(reader, id_for_reader, &app_handle, &terminals_ref);
+                read_loop(reader, id_for_reader, &emitter, &terminals_ref);
             })
             .map_err(|e| TerminalError::SpawnFailed(e.to_string()))?;
 
@@ -274,7 +282,7 @@ impl TerminalManager {
         Ok(())
     }
 
-    pub fn list_with_exit_check(&self, app_handle: Option<&tauri::AppHandle>) -> Vec<TerminalInfo> {
+    pub fn list_with_exit_check(&self, emitter: Option<&EventEmitter>) -> Vec<TerminalInfo> {
         let mut terminals = self.terminals.lock().unwrap();
         let mut exited_terminal_ids: Vec<String> = Vec::new();
 
@@ -308,9 +316,9 @@ impl TerminalManager {
 
         drop(terminals);
 
-        if let Some(handle) = app_handle {
+        if let Some(emitter) = emitter {
             for terminal_id in exited_terminal_ids {
-                emit_terminal_exit_event(handle, &terminal_id);
+                emit_terminal_exit_event(emitter, &terminal_id);
             }
         }
 
@@ -392,7 +400,7 @@ fn write_loop(mut writer: Box<dyn Write + Send>, rx: mpsc::Receiver<Vec<u8>>) {
 fn read_loop(
     mut reader: Box<dyn Read + Send>,
     terminal_id: String,
-    app_handle: &tauri::AppHandle,
+    emitter: &EventEmitter,
     terminals: &Arc<Mutex<HashMap<String, TerminalInstance>>>,
 ) {
     let output_event = format!("terminal://output/{}", terminal_id);
@@ -407,7 +415,7 @@ fn read_loop(
                     terminal_id: terminal_id.clone(),
                     data,
                 };
-                crate::web::event_bridge::emit_event(app_handle, &output_event, event.clone());
+                crate::web::event_bridge::emit_event(emitter, &output_event, event.clone());
             }
             Err(_) => break,
         }
@@ -418,14 +426,14 @@ fn read_loop(
         cleanup_temp_files(&mut instance.temp_files);
     }
 
-    emit_terminal_exit_event(app_handle, &terminal_id);
+    emit_terminal_exit_event(emitter, &terminal_id);
 }
 
-fn emit_terminal_exit_event(app_handle: &tauri::AppHandle, terminal_id: &str) {
+fn emit_terminal_exit_event(emitter: &EventEmitter, terminal_id: &str) {
     let exit_event = format!("terminal://exit/{}", terminal_id);
     let event = TerminalEvent {
         terminal_id: terminal_id.to_string(),
         data: String::new(),
     };
-    crate::web::event_bridge::emit_event(app_handle, &exit_event, event.clone());
+    crate::web::event_bridge::emit_event(emitter, &exit_event, event.clone());
 }

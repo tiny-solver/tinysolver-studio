@@ -46,7 +46,7 @@ async fn detect_one(name: &str) -> PackageManagerInfo {
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn detect_package_manager(name: String) -> PackageManagerInfo {
     detect_one(&name).await
 }
@@ -55,7 +55,7 @@ pub async fn detect_package_manager(name: String) -> PackageManagerInfo {
 // Project creation
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_shadcn_project(
     project_name: String,
     template: String,

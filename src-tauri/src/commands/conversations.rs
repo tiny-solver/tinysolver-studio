@@ -13,7 +13,8 @@ use crate::parsers::openclaw::OpenClawParser;
 use crate::parsers::opencode::OpenCodeParser;
 use crate::parsers::{path_eq_for_matching, AgentParser, ParseError};
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn list_folder_conversations(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -115,7 +116,7 @@ fn list_conversations_sync(
     all_conversations
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn list_conversations(
     agent_type: Option<AgentType>,
     search: Option<String>,
@@ -132,7 +133,7 @@ pub async fn list_conversations(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_conversation(
     agent_type: AgentType,
     conversation_id: String,
@@ -158,7 +159,7 @@ pub async fn get_conversation(
     })?
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn list_folders() -> Result<Vec<FolderInfo>, AppCommandError> {
     tokio::task::spawn_blocking(move || -> Result<Vec<FolderInfo>, AppCommandError> {
         let all_conversations = list_conversations_sync(None, None, None, None);
@@ -170,7 +171,7 @@ pub async fn list_folders() -> Result<Vec<FolderInfo>, AppCommandError> {
     })?
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_stats() -> Result<AgentStats, AppCommandError> {
     tokio::task::spawn_blocking(move || -> Result<AgentStats, AppCommandError> {
         let all_conversations = list_conversations_sync(None, None, None, None);
@@ -183,7 +184,7 @@ pub async fn get_stats() -> Result<AgentStats, AppCommandError> {
     })?
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_sidebar_data() -> Result<SidebarData, AppCommandError> {
     tokio::task::spawn_blocking(move || -> Result<SidebarData, AppCommandError> {
         let all_conversations = list_conversations_sync(None, None, None, None);
@@ -231,7 +232,8 @@ fn compute_folders(all_conversations: &[ConversationSummary]) -> Vec<FolderInfo>
     folders
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn import_local_conversations(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -351,7 +353,8 @@ pub async fn get_folder_conversation_core(
     })
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_folder_conversation(
     db: tauri::State<'_, AppDatabase>,
     conversation_id: i32,
@@ -382,7 +385,8 @@ pub async fn create_conversation_core(
     Ok(model.id)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_conversation(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -411,7 +415,8 @@ async fn detect_git_branch(path: &str) -> Option<String> {
     Some(branch)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_conversation_status(
     db: tauri::State<'_, AppDatabase>,
     conversation_id: i32,
@@ -426,7 +431,8 @@ pub async fn update_conversation_status(
         .map_err(AppCommandError::from)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_conversation_title(
     db: tauri::State<'_, AppDatabase>,
     conversation_id: i32,
@@ -437,7 +443,8 @@ pub async fn update_conversation_title(
         .map_err(AppCommandError::from)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_conversation_external_id(
     db: tauri::State<'_, AppDatabase>,
     conversation_id: i32,
@@ -448,7 +455,8 @@ pub async fn update_conversation_external_id(
         .map_err(AppCommandError::from)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn delete_conversation(
     db: tauri::State<'_, AppDatabase>,
     conversation_id: i32,

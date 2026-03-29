@@ -7,6 +7,7 @@ use crate::acp::connection::{spawn_agent_connection, AgentConnection, Connection
 use crate::acp::error::AcpError;
 use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
 use crate::models::agent::AgentType;
+use crate::web::event_bridge::EventEmitter;
 
 pub struct ConnectionManager {
     connections: Arc<Mutex<HashMap<String, AgentConnection>>>,
@@ -19,6 +20,13 @@ impl ConnectionManager {
         }
     }
 
+    /// Returns a shallow clone sharing the same underlying connection map.
+    pub fn clone_ref(&self) -> Self {
+        Self {
+            connections: self.connections.clone(),
+        }
+    }
+
     pub async fn spawn_agent(
         &self,
         agent_type: AgentType,
@@ -26,7 +34,7 @@ impl ConnectionManager {
         session_id: Option<String>,
         runtime_env: BTreeMap<String, String>,
         owner_window_label: String,
-        app_handle: tauri::AppHandle,
+        emitter: EventEmitter,
     ) -> Result<String, AcpError> {
         let connection_id = uuid::Uuid::new_v4().to_string();
         eprintln!(
@@ -41,7 +49,7 @@ impl ConnectionManager {
             session_id,
             runtime_env,
             owner_window_label,
-            app_handle,
+            emitter,
         )
         .await?;
 

@@ -14,6 +14,7 @@ use serde::Serialize;
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
 
+#[cfg(feature = "tauri-runtime")]
 use tauri::Manager;
 
 use crate::app_error::AppCommandError;
@@ -21,6 +22,7 @@ use crate::db::error::DbError;
 use crate::db::service::folder_service;
 use crate::db::AppDatabase;
 use crate::models::{FolderDetail, FolderHistoryEntry, GitCredentials, OpenedConversation};
+use crate::web::event_bridge::EventEmitter;
 
 /// Configure a git command for remote operations:
 /// - Always disable interactive prompts (prevent hanging in a GUI app)
@@ -31,9 +33,9 @@ async fn prepare_remote_git_cmd(
     repo_path: &str,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) {
-    prepare_remote_git_cmd_with_remote(cmd, repo_path, None, credentials, db, app_handle).await;
+    prepare_remote_git_cmd_with_remote(cmd, repo_path, None, credentials, db, data_dir).await;
 }
 
 /// Same as `prepare_remote_git_cmd` but allows specifying a remote name
@@ -44,29 +46,27 @@ async fn prepare_remote_git_cmd_with_remote(
     remote_name: Option<&str>,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) {
     cmd.env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::null());
 
-    if let Ok(data_dir) = app_handle.path().app_data_dir() {
-        if let Some(creds) = credentials {
-            // Explicit credentials provided (e.g. from credential dialog)
-            if let Ok(askpass) = crate::git_credential::ensure_askpass_script(&data_dir) {
-                crate::git_credential::inject_credentials(
-                    cmd,
-                    &creds.username,
-                    &creds.password,
-                    &askpass,
-                );
-            }
-        } else {
-            // Fall back to stored accounts, matching against the specified remote
-            crate::git_credential::try_inject_for_repo_remote(
-                cmd, repo_path, remote_name, &db.conn, &data_dir,
-            )
-            .await;
+    if let Some(creds) = credentials {
+        // Explicit credentials provided (e.g. from credential dialog)
+        if let Ok(askpass) = crate::git_credential::ensure_askpass_script(data_dir) {
+            crate::git_credential::inject_credentials(
+                cmd,
+                &creds.username,
+                &creds.password,
+                &askpass,
+            );
         }
+    } else {
+        // Fall back to stored accounts, matching against the specified remote
+        crate::git_credential::try_inject_for_repo_remote(
+            cmd, repo_path, remote_name, &db.conn, data_dir,
+        )
+        .await;
     }
 }
 
@@ -76,24 +76,22 @@ async fn prepare_remote_git_cmd_for_url(
     clone_url: &str,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) {
     cmd.env("GIT_TERMINAL_PROMPT", "0")
         .stdin(Stdio::null());
 
-    if let Ok(data_dir) = app_handle.path().app_data_dir() {
-        if let Some(creds) = credentials {
-            if let Ok(askpass) = crate::git_credential::ensure_askpass_script(&data_dir) {
-                crate::git_credential::inject_credentials(
-                    cmd,
-                    &creds.username,
-                    &creds.password,
-                    &askpass,
-                );
-            }
-        } else {
-            crate::git_credential::try_inject_for_url(cmd, clone_url, &db.conn, &data_dir).await;
+    if let Some(creds) = credentials {
+        if let Ok(askpass) = crate::git_credential::ensure_askpass_script(data_dir) {
+            crate::git_credential::inject_credentials(
+                cmd,
+                &creds.username,
+                &creds.password,
+                &askpass,
+            );
         }
+    } else {
+        crate::git_credential::try_inject_for_url(cmd, clone_url, &db.conn, data_dir).await;
     }
 }
 
@@ -462,7 +460,8 @@ async fn estimate_push_commit_count(path: &str) -> usize {
     parse_count_from_output(&output.stdout).unwrap_or(0)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_folder(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -472,7 +471,8 @@ pub async fn get_folder(
         .ok_or_else(|| DbError::Migration(format!("Folder {} not found", folder_id)))
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn load_folder_history(
     db: tauri::State<'_, AppDatabase>,
 ) -> Result<Vec<FolderHistoryEntry>, AppCommandError> {
@@ -481,7 +481,8 @@ pub async fn load_folder_history(
         .map_err(AppCommandError::from)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn add_folder_to_history(
     db: tauri::State<'_, AppDatabase>,
     path: String,
@@ -513,7 +514,8 @@ pub(crate) async fn set_folder_parent_branch_core(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn set_folder_parent_branch(
     db: tauri::State<'_, AppDatabase>,
     path: String,
@@ -522,7 +524,8 @@ pub async fn set_folder_parent_branch(
     set_folder_parent_branch_core(&db.conn, &path, parent_branch).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn remove_folder_from_history(
     db: tauri::State<'_, AppDatabase>,
     path: String,
@@ -532,7 +535,8 @@ pub async fn remove_folder_from_history(
         .map_err(AppCommandError::from)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn save_folder_opened_conversations(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -541,7 +545,7 @@ pub async fn save_folder_opened_conversations(
     folder_service::save_opened_conversations(&db.conn, folder_id, items).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError> {
     std::fs::create_dir_all(&path).map_err(AppCommandError::io)
 }
@@ -551,7 +555,7 @@ pub(crate) async fn clone_repository_core(
     target_dir: &str,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) -> Result<(), AppCommandError> {
     if url.trim().is_empty() || target_dir.trim().is_empty() {
         return Err(AppCommandError::invalid_input(
@@ -561,7 +565,7 @@ pub(crate) async fn clone_repository_core(
 
     let mut cmd = crate::process::tokio_command("git");
     cmd.args(["clone", url, target_dir]);
-    prepare_remote_git_cmd_for_url(&mut cmd, url, credentials, db, app_handle).await;
+    prepare_remote_git_cmd_for_url(&mut cmd, url, credentials, db, data_dir).await;
 
     let output = cmd
         .output()
@@ -584,7 +588,8 @@ pub(crate) async fn clone_repository_core(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn clone_repository(
     url: String,
     target_dir: String,
@@ -592,7 +597,10 @@ pub async fn clone_repository(
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppCommandError> {
-    clone_repository_core(&url, &target_dir, credentials.as_ref(), &db, &app_handle).await
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
+        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
+    })?;
+    clone_repository_core(&url, &target_dir, credentials.as_ref(), &db, &data_dir).await
 }
 
 fn classify_git_clone_error(stderr: &str) -> AppCommandError {
@@ -643,7 +651,7 @@ fn classify_git_clone_error(stderr: &str) -> AppCommandError {
     AppCommandError::external_command("Git clone failed", stderr.to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_git_branch(path: String) -> Result<Option<String>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -679,7 +687,7 @@ pub async fn get_git_branch(path: String) -> Result<Option<String>, AppCommandEr
     Ok(None)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_init(path: String) -> Result<(), AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["init"])
@@ -698,14 +706,14 @@ pub(crate) async fn git_pull_core(
     path: &str,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) -> Result<GitPullResult, AppCommandError> {
     let head_before = get_head_hash(path).await?;
 
     // Step 1: fetch from remote
     let mut fetch_cmd = crate::process::tokio_command("git");
     fetch_cmd.args(["fetch"]).current_dir(path);
-    prepare_remote_git_cmd(&mut fetch_cmd, path, credentials, db, app_handle).await;
+    prepare_remote_git_cmd(&mut fetch_cmd, path, credentials, db, data_dir).await;
 
     let fetch_output = fetch_cmd
         .output()
@@ -823,20 +831,24 @@ pub(crate) async fn git_pull_core(
     })
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_pull(
     path: String,
     credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<GitPullResult, AppCommandError> {
-    git_pull_core(&path, credentials.as_ref(), &db, &app_handle).await
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
+        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
+    })?;
+    git_pull_core(&path, credentials.as_ref(), &db, &data_dir).await
 }
 
 /// Start a merge with the upstream branch (used by merge workspace after pull conflict detection).
 /// This recreates the conflict state so that :1:, :2:, :3: stage entries are available.
 /// If `upstream_commit` is provided, merge against that specific commit instead of `@{u}`.
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_start_pull_merge(
     path: String,
     upstream_commit: Option<String>,
@@ -862,7 +874,7 @@ pub async fn git_start_pull_merge(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_has_merge_head(path: String) -> Result<bool, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["rev-parse", "--verify", "MERGE_HEAD"])
@@ -877,11 +889,11 @@ pub(crate) async fn git_fetch_core(
     path: &str,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
     cmd.args(["fetch", "--all"]).current_dir(path);
-    prepare_remote_git_cmd(&mut cmd, path, credentials, db, app_handle).await;
+    prepare_remote_git_cmd(&mut cmd, path, credentials, db, data_dir).await;
 
     let output = cmd
         .output()
@@ -894,17 +906,21 @@ pub(crate) async fn git_fetch_core(
     Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_fetch(
     path: String,
     credentials: Option<GitCredentials>,
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppCommandError> {
-    git_fetch_core(&path, credentials.as_ref(), &db, &app_handle).await
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
+        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
+    })?;
+    git_fetch_core(&path, credentials.as_ref(), &db, &data_dir).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_push_info(path: String) -> Result<GitPushInfo, AppCommandError> {
     // Get current branch name
     let branch_output = crate::process::tokio_command("git")
@@ -941,7 +957,8 @@ pub async fn git_push_info(path: String) -> Result<GitPushInfo, AppCommandError>
 }
 
 pub(crate) async fn git_push_core(
-    app: &tauri::AppHandle,
+    data_dir: &std::path::Path,
+    emitter: &EventEmitter,
     folder_id: Option<i32>,
     path: &str,
     remote: Option<&str>,
@@ -990,13 +1007,13 @@ pub(crate) async fn git_push_core(
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", "--set-upstream", target_remote, &branch])
             .current_dir(path);
-        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, app).await;
+        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, data_dir).await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", target_remote, &branch])
             .current_dir(path);
-        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, app).await;
+        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, data_dir).await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
 
@@ -1008,7 +1025,7 @@ pub(crate) async fn git_push_core(
 
     if let Some(folder_id) = folder_id {
         crate::web::event_bridge::emit_event(
-            app,
+            emitter,
             "folder://git-push-succeeded",
             GitPushSucceededEvent {
                 folder_id,
@@ -1024,7 +1041,8 @@ pub(crate) async fn git_push_core(
     })
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_push(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
@@ -1037,10 +1055,14 @@ pub async fn git_push(
         .label()
         .strip_prefix("push-")
         .and_then(|value| value.parse::<i32>().ok());
-    git_push_core(&app, folder_id, &path, remote.as_deref(), credentials.as_ref(), &db).await
+    let data_dir = app.path().app_data_dir().map_err(|e| {
+        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
+    })?;
+    let emitter = EventEmitter::Tauri(app.clone());
+    git_push_core(&data_dir, &emitter, folder_id, &path, remote.as_deref(), credentials.as_ref(), &db).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_new_branch(
     path: String,
     branch_name: String,
@@ -1067,7 +1089,7 @@ pub async fn git_new_branch(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_worktree_add(
     path: String,
     branch_name: String,
@@ -1112,7 +1134,7 @@ pub async fn git_worktree_add(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_checkout(path: String, branch_name: String) -> Result<(), AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["checkout", &branch_name])
@@ -1127,7 +1149,7 @@ pub async fn git_checkout(path: String, branch_name: String) -> Result<(), AppCo
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_branches(path: String) -> Result<Vec<String>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["branch", "--format=%(refname:short)"])
@@ -1148,7 +1170,7 @@ pub async fn git_list_branches(path: String) -> Result<Vec<String>, AppCommandEr
     Ok(branches)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_push(
     path: String,
     message: Option<String>,
@@ -1177,7 +1199,7 @@ pub async fn git_stash_push(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_pop(
     path: String,
     stash_ref: Option<String>,
@@ -1201,7 +1223,7 @@ pub async fn git_stash_pop(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_list(path: String) -> Result<Vec<GitStashEntry>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["stash", "list", "--format=%gd||%gs||%ci"])
@@ -1262,7 +1284,7 @@ pub async fn git_stash_list(path: String) -> Result<Vec<GitStashEntry>, AppComma
     Ok(entries)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_apply(
     path: String,
     stash_ref: String,
@@ -1280,7 +1302,7 @@ pub async fn git_stash_apply(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_drop(
     path: String,
     stash_ref: String,
@@ -1298,7 +1320,7 @@ pub async fn git_stash_drop(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_clear(path: String) -> Result<String, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["stash", "clear"])
@@ -1313,7 +1335,7 @@ pub async fn git_stash_clear(path: String) -> Result<String, AppCommandError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_stash_show(
     path: String,
     stash_ref: String,
@@ -1345,7 +1367,7 @@ pub async fn git_stash_show(
     Ok(entries)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_status(
     path: String,
     show_all_untracked: Option<bool>,
@@ -1379,7 +1401,7 @@ pub async fn git_status(
     Ok(entries)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_is_tracked(path: String, file: String) -> Result<bool, AppCommandError> {
     let literal_file = to_git_literal_pathspec(&file);
     let output = crate::process::tokio_command("git")
@@ -1393,7 +1415,7 @@ pub async fn git_is_tracked(path: String, file: String) -> Result<bool, AppComma
     Ok(output.status.success())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_diff(path: String, file: Option<String>) -> Result<String, AppCommandError> {
     let literal_file = file.as_deref().map(to_git_literal_pathspec);
     let mut args = vec!["diff".to_string(), "HEAD".to_string()];
@@ -1428,7 +1450,7 @@ pub async fn git_diff(path: String, file: Option<String>) -> Result<String, AppC
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_diff_with_branch(
     path: String,
     branch: String,
@@ -1470,7 +1492,7 @@ pub async fn git_diff_with_branch(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_show_diff(
     path: String,
     commit: String,
@@ -1502,7 +1524,7 @@ pub async fn git_show_diff(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_show_file(
     path: String,
     file: String,
@@ -1534,7 +1556,7 @@ pub async fn git_show_file(
 }
 
 pub(crate) async fn git_commit_core(
-    app: &tauri::AppHandle,
+    emitter: &EventEmitter,
     folder_id: Option<i32>,
     conn: &sea_orm::DatabaseConnection,
     path: &str,
@@ -1587,7 +1609,7 @@ pub(crate) async fn git_commit_core(
 
     if let Some(folder_id) = folder_id {
         crate::web::event_bridge::emit_event(
-            app,
+            emitter,
             "folder://git-commit-succeeded",
             GitCommitSucceededEvent {
                 folder_id,
@@ -1599,7 +1621,8 @@ pub(crate) async fn git_commit_core(
     Ok(GitCommitResult { committed_files })
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_commit(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
@@ -1612,10 +1635,11 @@ pub async fn git_commit(
         .label()
         .strip_prefix("commit-")
         .and_then(|value| value.parse::<i32>().ok());
-    git_commit_core(&app, folder_id, &db.conn, &path, &message, &files).await
+    let emitter = EventEmitter::Tauri(app.clone());
+    git_commit_core(&emitter, folder_id, &db.conn, &path, &message, &files).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_rollback_file(path: String, file: String) -> Result<(), AppCommandError> {
     let target = file.trim();
     if target.is_empty() {
@@ -1678,7 +1702,7 @@ pub async fn git_rollback_file(path: String, file: String) -> Result<(), AppComm
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_add_files(path: String, files: Vec<String>) -> Result<(), AppCommandError> {
     if files.is_empty() {
         return Ok(());
@@ -1701,7 +1725,7 @@ pub async fn git_add_files(path: String, files: Vec<String>) -> Result<(), AppCo
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCommandError> {
     let local_fut = crate::process::tokio_command("git")
         .args(["branch", "--format=%(refname:short)"])
@@ -1775,7 +1799,7 @@ pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCom
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["remote", "-v"])
@@ -1815,11 +1839,11 @@ pub(crate) async fn git_fetch_remote_core(
     name: &str,
     credentials: Option<&GitCredentials>,
     db: &AppDatabase,
-    app_handle: &tauri::AppHandle,
+    data_dir: &std::path::Path,
 ) -> Result<String, AppCommandError> {
     let mut cmd = crate::process::tokio_command("git");
     cmd.args(["fetch", name]).current_dir(path);
-    prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(name), credentials, db, app_handle).await;
+    prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(name), credentials, db, data_dir).await;
 
     let output = cmd
         .output()
@@ -1832,7 +1856,8 @@ pub(crate) async fn git_fetch_remote_core(
     Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_fetch_remote(
     path: String,
     name: String,
@@ -1840,10 +1865,13 @@ pub async fn git_fetch_remote(
     db: tauri::State<'_, AppDatabase>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppCommandError> {
-    git_fetch_remote_core(&path, &name, credentials.as_ref(), &db, &app_handle).await
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
+        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
+    })?;
+    git_fetch_remote_core(&path, &name, credentials.as_ref(), &db, &data_dir).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_add_remote(
     path: String,
     name: String,
@@ -1862,7 +1890,7 @@ pub async fn git_add_remote(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_remove_remote(path: String, name: String) -> Result<(), AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["remote", "remove", &name])
@@ -1877,7 +1905,7 @@ pub async fn git_remove_remote(path: String, name: String) -> Result<(), AppComm
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_set_remote_url(
     path: String,
     name: String,
@@ -1896,7 +1924,7 @@ pub async fn git_set_remote_url(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_merge(
     path: String,
     branch_name: String,
@@ -1946,7 +1974,7 @@ pub async fn git_merge(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_rebase(
     path: String,
     branch_name: String,
@@ -1979,7 +2007,7 @@ pub async fn git_rebase(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_delete_branch(
     path: String,
     branch_name: String,
@@ -1999,12 +2027,12 @@ pub async fn git_delete_branch(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_conflicts(path: String) -> Result<Vec<String>, AppCommandError> {
     detect_conflicts(&path).await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_conflict_file_versions(
     path: String,
     file: String,
@@ -2047,7 +2075,7 @@ pub async fn git_conflict_file_versions(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_resolve_conflict(
     path: String,
     file: String,
@@ -2075,7 +2103,7 @@ pub async fn git_resolve_conflict(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_abort_operation(
     path: String,
     operation: String,
@@ -2106,7 +2134,7 @@ pub async fn git_abort_operation(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_continue_operation(
     path: String,
     operation: String,
@@ -2420,7 +2448,7 @@ impl WatchEventBatch {
         }
     }
 
-    fn emit(&self, app: &tauri::AppHandle, root_display: &str) {
+    fn emit(&self, emitter: &EventEmitter, root_display: &str) {
         if self.is_empty() {
             return;
         }
@@ -2445,13 +2473,13 @@ impl WatchEventBatch {
             full_reload: self.overflowed,
         };
 
-        crate::web::event_bridge::emit_event(app, "folder://file-tree-changed", payload);
+        crate::web::event_bridge::emit_event(emitter, "folder://file-tree-changed", payload);
     }
 }
 
 fn run_file_watch_event_loop(
     event_rx: mpsc::Receiver<notify::Event>,
-    app: tauri::AppHandle,
+    emitter: EventEmitter,
     root_display: String,
     root_canonical: PathBuf,
 ) {
@@ -2484,21 +2512,21 @@ fn run_file_watch_event_loop(
                 };
 
                 if should_flush {
-                    batch.emit(&app, &root_display);
+                    batch.emit(&emitter, &root_display);
                     batch.clear();
                     batch_started_at = None;
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 if !batch.is_empty() {
-                    batch.emit(&app, &root_display);
+                    batch.emit(&emitter, &root_display);
                     batch.clear();
                     batch_started_at = None;
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 if !batch.is_empty() {
-                    batch.emit(&app, &root_display);
+                    batch.emit(&emitter, &root_display);
                 }
                 break;
             }
@@ -2543,9 +2571,8 @@ fn validate_new_name(new_name: &str) -> Result<&str, AppCommandError> {
     Ok(trimmed)
 }
 
-#[tauri::command]
-pub async fn start_file_tree_watch(
-    app: tauri::AppHandle,
+pub(crate) async fn start_file_tree_watch_core(
+    emitter: EventEmitter,
     root_path: String,
 ) -> Result<(), AppCommandError> {
     let root = PathBuf::from(&root_path);
@@ -2568,12 +2595,12 @@ pub async fn start_file_tree_watch(
     let root_display_for_worker = root_path.clone();
     let root_display_for_error = root_path.clone();
     let root_canonical_for_worker = root_canonical.clone();
-    let app_for_worker = app.clone();
+    let emitter_for_worker = emitter;
     let (event_tx, event_rx) = mpsc::channel::<notify::Event>();
     let mut worker = Some(std::thread::spawn(move || {
         run_file_watch_event_loop(
             event_rx,
-            app_for_worker,
+            emitter_for_worker,
             root_display_for_worker,
             root_canonical_for_worker,
         )
@@ -2644,7 +2671,17 @@ pub async fn start_file_tree_watch(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn start_file_tree_watch(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<(), AppCommandError> {
+    let emitter = EventEmitter::Tauri(app);
+    start_file_tree_watch_core(emitter, root_path).await
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn stop_file_tree_watch(root_path: String) -> Result<(), AppCommandError> {
     let root = PathBuf::from(&root_path);
     let key = canonicalize_watch_root(&root)
@@ -2894,7 +2931,7 @@ where
     })?
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_file_tree(
     path: String,
     max_depth: Option<usize>,
@@ -3030,7 +3067,7 @@ pub async fn get_file_tree(
     Ok(dir_children.remove(&root).unwrap_or_default())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn read_file_base64(
     path: String,
     max_bytes: Option<usize>,
@@ -3071,7 +3108,7 @@ pub async fn read_file_base64(
     .await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn read_file_preview(
     root_path: String,
     path: String,
@@ -3101,7 +3138,7 @@ pub async fn read_file_preview(
     .await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn read_file_for_edit(
     root_path: String,
     path: String,
@@ -3142,7 +3179,7 @@ pub async fn read_file_for_edit(
     .await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn save_file_content(
     root_path: String,
     path: String,
@@ -3242,7 +3279,7 @@ fn build_local_copy_file_name(original_name: &str, attempt: usize) -> String {
     }
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn save_file_copy(
     root_path: String,
     path: String,
@@ -3333,7 +3370,7 @@ pub async fn save_file_copy(
     .await
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn rename_file_tree_entry(
     root_path: String,
     path: String,
@@ -3382,7 +3419,7 @@ pub async fn rename_file_tree_entry(
     Ok(rel)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn delete_file_tree_entry(
     root_path: String,
     path: String,
@@ -3412,7 +3449,7 @@ pub async fn delete_file_tree_entry(
     Ok(())
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_file_tree_entry(
     root_path: String,
     path: String,
@@ -3475,7 +3512,7 @@ pub async fn create_file_tree_entry(
     Ok(rel)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_log(
     path: String,
     limit: Option<u32>,
@@ -3594,7 +3631,7 @@ pub async fn git_log(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_commit_branches(
     path: String,
     commit: String,

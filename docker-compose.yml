@@ -1,0 +1,14 @@
+services:
+  codeg:
+    build: .
+    ports:
+      - "3080:3080"
+    volumes:
+      - codeg-data:/data
+    environment:
+      - CODEG_TOKEN=${CODEG_TOKEN:-}
+      - CODEG_PORT=3080
+      - CODEG_HOST=0.0.0.0
+
+volumes:
+  codeg-data:

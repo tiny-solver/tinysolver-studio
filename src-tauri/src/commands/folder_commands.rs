@@ -72,7 +72,8 @@ pub(crate) fn load_package_scripts_as_commands(folder_path: &str) -> Vec<(String
     commands
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn list_folder_commands(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -80,7 +81,8 @@ pub async fn list_folder_commands(
     folder_command_service::list_by_folder(&db.conn, folder_id).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_folder_command(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -90,7 +92,8 @@ pub async fn create_folder_command(
     folder_command_service::create(&db.conn, folder_id, &name, &command).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_folder_command(
     db: tauri::State<'_, AppDatabase>,
     id: i32,
@@ -101,7 +104,8 @@ pub async fn update_folder_command(
     folder_command_service::update(&db.conn, id, name, command, sort_order).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn delete_folder_command(
     db: tauri::State<'_, AppDatabase>,
     id: i32,
@@ -109,7 +113,8 @@ pub async fn delete_folder_command(
     folder_command_service::delete(&db.conn, id).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn reorder_folder_commands(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
@@ -118,7 +123,8 @@ pub async fn reorder_folder_commands(
     folder_command_service::reorder(&db.conn, folder_id, ids).await
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn bootstrap_folder_commands_from_package_json(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::Extension,
     http::{StatusCode, Uri},
@@ -10,8 +12,9 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 
 use super::{auth, handlers, ws};
+use crate::app_state::AppState;
 
-pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path::PathBuf) -> Router {
+pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::PathBuf) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -234,7 +237,7 @@ pub fn build_router(app: tauri::AppHandle, token: String, static_dir: std::path:
         .fallback_service(fallback)
         .layer(html_rewrite)
         .layer(cors)
-        .layer(Extension(app))
+        .layer(Extension(state))
 }
 
 async fn health_check() -> impl IntoResponse {

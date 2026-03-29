@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::terminal::prepare_credential_env;
-use crate::terminal::manager::{SpawnOptions, TerminalManager};
+use crate::terminal::manager::SpawnOptions;
 use crate::terminal::types::TerminalInfo;
 
 // ---------------------------------------------------------------------------
@@ -44,18 +46,13 @@ pub struct TerminalResizeParams {
 // ---------------------------------------------------------------------------
 
 pub async fn terminal_spawn(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<TerminalSpawnParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let manager = app.state::<TerminalManager>();
+    let manager = &state.terminal_manager;
     let terminal_id = uuid::Uuid::new_v4().to_string();
 
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
-
-    let extra_env = prepare_credential_env(&app_data_dir);
+    let extra_env = prepare_credential_env(&state.data_dir);
 
     let id = manager
         .spawn_with_id(
@@ -67,7 +64,7 @@ pub async fn terminal_spawn(
                 extra_env,
                 temp_files: vec![],
             },
-            app.clone(),
+            state.emitter.clone(),
         )
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
 
@@ -75,10 +72,10 @@ pub async fn terminal_spawn(
 }
 
 pub async fn terminal_write(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<TerminalWriteParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<TerminalManager>();
+    let manager = &state.terminal_manager;
     manager
         .write(&params.terminal_id, params.data.as_bytes())
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
@@ -86,10 +83,10 @@ pub async fn terminal_write(
 }
 
 pub async fn terminal_resize(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<TerminalResizeParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<TerminalManager>();
+    let manager = &state.terminal_manager;
     manager
         .resize(&params.terminal_id, params.cols, params.rows)
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
@@ -97,10 +94,10 @@ pub async fn terminal_resize(
 }
 
 pub async fn terminal_kill(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<TerminalIdParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = app.state::<TerminalManager>();
+    let manager = &state.terminal_manager;
     manager
         .kill(&params.terminal_id)
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
@@ -108,9 +105,9 @@ pub async fn terminal_kill(
 }
 
 pub async fn terminal_list(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<TerminalInfo>>, AppCommandError> {
-    let manager = app.state::<TerminalManager>();
-    let result = manager.list_with_exit_check(Some(&app));
+    let manager = &state.terminal_manager;
+    let result = manager.list_with_exit_check(Some(&state.emitter));
     Ok(Json(result))
 }

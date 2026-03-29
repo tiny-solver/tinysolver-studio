@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::version_control as vc_commands;
 use crate::db::service::app_metadata_service;
-use crate::db::AppDatabase;
 use crate::models::*;
 
 const GIT_SETTINGS_KEY: &str = "git_settings";
@@ -56,9 +57,9 @@ pub struct UpdateGitHubAccountsParams {
 // ---------------------------------------------------------------------------
 
 pub async fn detect_git(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<GitDetectResult>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = vc_commands::detect_git_core(&db.conn).await?;
     Ok(Json(result))
 }
@@ -75,9 +76,9 @@ pub async fn test_git_path(
 // ---------------------------------------------------------------------------
 
 pub async fn get_git_settings(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<GitSettings>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let raw = app_metadata_service::get_value(&db.conn, GIT_SETTINGS_KEY)
         .await
         .map_err(AppCommandError::from)?;
@@ -93,11 +94,11 @@ pub async fn get_git_settings(
 }
 
 pub async fn update_git_settings(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateGitSettingsParams>,
 ) -> Result<Json<GitSettings>, AppCommandError> {
     let settings = params.settings;
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let serialized = serde_json::to_string(&settings).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize git settings")
             .with_detail(e.to_string())
@@ -115,9 +116,9 @@ pub async fn update_git_settings(
 // ---------------------------------------------------------------------------
 
 pub async fn get_github_accounts(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<GitHubAccountsSettings>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let raw = app_metadata_service::get_value(&db.conn, GITHUB_ACCOUNTS_KEY)
         .await
         .map_err(AppCommandError::from)?;
@@ -135,11 +136,11 @@ pub async fn get_github_accounts(
 }
 
 pub async fn update_github_accounts(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateGitHubAccountsParams>,
 ) -> Result<Json<GitHubAccountsSettings>, AppCommandError> {
     let settings = params.settings;
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let serialized = serde_json::to_string(&settings).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize GitHub accounts")
             .with_detail(e.to_string())

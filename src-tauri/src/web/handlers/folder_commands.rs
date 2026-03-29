@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::db::service::folder_command_service;
-use crate::db::AppDatabase;
 use crate::models::*;
 
 // ---------------------------------------------------------------------------
@@ -52,10 +53,10 @@ pub struct ReorderFolderCommandsParams {
 // ---------------------------------------------------------------------------
 
 pub async fn list_folder_commands(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<FolderIdParams>,
 ) -> Result<Json<Vec<FolderCommandInfo>>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_command_service::list_by_folder(&db.conn, params.folder_id)
         .await
         .map_err(AppCommandError::from)?;
@@ -63,10 +64,10 @@ pub async fn list_folder_commands(
 }
 
 pub async fn create_folder_command(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<CreateFolderCommandParams>,
 ) -> Result<Json<FolderCommandInfo>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_command_service::create(
         &db.conn,
         params.folder_id,
@@ -79,10 +80,10 @@ pub async fn create_folder_command(
 }
 
 pub async fn update_folder_command(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateFolderCommandParams>,
 ) -> Result<Json<FolderCommandInfo>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_command_service::update(
         &db.conn,
         params.id,
@@ -96,10 +97,10 @@ pub async fn update_folder_command(
 }
 
 pub async fn delete_folder_command(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<DeleteFolderCommandParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_command_service::delete(&db.conn, params.id)
         .await
         .map_err(AppCommandError::from)?;
@@ -107,10 +108,10 @@ pub async fn delete_folder_command(
 }
 
 pub async fn reorder_folder_commands(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<ReorderFolderCommandsParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_command_service::reorder(&db.conn, params.folder_id, params.ids)
         .await
         .map_err(AppCommandError::from)?;
@@ -125,10 +126,10 @@ pub struct BootstrapFolderCommandsParams {
 }
 
 pub async fn bootstrap_folder_commands_from_package_json(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<BootstrapFolderCommandsParams>,
 ) -> Result<Json<Vec<FolderCommandInfo>>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
 
     let existing = folder_command_service::list_by_folder(&db.conn, params.folder_id)
         .await

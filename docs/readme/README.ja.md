@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/github/license/xintaofei/codeg)](../../LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](../../Dockerfile)
 
 <p>
   <a href="../../README.md">English</a> |
@@ -46,6 +47,8 @@ Git/ファイル/ターミナル連携ワークフローを提供します。
 - Skills 管理（グローバルおよびプロジェクトスコープ）
 - Git リモートアカウント管理（GitHub およびその他の Git サーバー）
 - Web サービスモード — ブラウザから Codeg にアクセスでき、リモートワークに対応
+- **スタンドアロンサーバーデプロイ** — 任意の Linux/macOS サーバーで `codeg-server` を実行し、ブラウザからアクセス
+- **Docker サポート** — `docker compose up` でゼロ設定のサーバーセットアップが可能
 - 統合エンジニアリングループ（ファイルツリー、Diff、Git 変更、コミット、ターミナル）
 
 ## プロジェクトブート
@@ -104,7 +107,7 @@ Git/ファイル/ターミナル連携ワークフローを提供します。
 - Node.js `>=22`（推奨）
 - pnpm `>=10`
 - Rust stable（2021 edition）
-- Tauri 2 ビルド依存パッケージ
+- Tauri 2 ビルド依存パッケージ（デスクトップモードのみ）
 
 Linux（Debian/Ubuntu）の例:
 
@@ -122,17 +125,23 @@ sudo apt-get install -y \
 ```bash
 pnpm install
 
+# フロントエンド静的エクスポート（out/ へ）
+pnpm build
+
 # デスクトップアプリ全体（Tauri + Next.js）
 pnpm tauri dev
 
 # フロントエンドのみ
 pnpm dev
 
-# フロントエンド静的エクスポート（out/ へ）
-pnpm build
-
 # デスクトップビルド
 pnpm tauri build
+
+# スタンドアロンサーバー（Tauri/GUI 不要）
+pnpm server:dev
+
+# サーバーリリースバイナリのビルド
+pnpm server:build
 
 # Lint
 pnpm eslint .
@@ -143,22 +152,71 @@ cargo clippy
 cargo build
 ```
 
+### サーバーデプロイ
+
+Codeg はデスクトップ環境なしでスタンドアロン Web サーバーとして実行できます。
+
+#### オプション 1: バイナリ直接実行
+
+```bash
+# サーバーバイナリのビルド
+cd src-tauri
+cargo build --release --bin codeg-server --no-default-features
+
+# 実行
+CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+```
+
+環境変数:
+
+| 変数 | デフォルト | 説明 |
+| --- | --- | --- |
+| `CODEG_PORT` | `3080` | HTTP ポート |
+| `CODEG_HOST` | `0.0.0.0` | バインドアドレス |
+| `CODEG_TOKEN` | *(ランダム)* | 認証トークン（起動時に stderr に出力） |
+| `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite データベースディレクトリ |
+| `CODEG_STATIC_DIR` | `./web` or `./out` | Next.js 静的エクスポートディレクトリ |
+
+#### オプション 2: Docker
+
+```bash
+# ビルドして実行
+docker compose up -d
+
+# または手動でビルド
+docker build -t codeg .
+docker run -p 3080:3080 -v codeg-data:/data codeg
+```
+
 ## アーキテクチャ
 
 ```text
 Next.js 16 (Static Export) + React 19
         |
-        | invoke()
+        | invoke() (desktop) / fetch() + WebSocket (web)
         v
-Tauri 2 Commands (Rust)
-  |- ACP Manager
-  |- Parsers (local session ingestion)
-  |- Git / File Tree / Terminal runtime
-  |- MCP marketplace + local config writer
-  |- SeaORM + SQLite
+  ┌─────────────────────────┐
+  │   Transport Abstraction  │
+  │  (Tauri IPC or HTTP/WS) │
+  └─────────────────────────┘
         |
         v
-Local Filesystem / Local Agent Data / Git Repos
+┌─── Tauri Desktop ───┐    ┌─── codeg-server ───┐
+│  Tauri 2 Commands    │    │  Axum HTTP + WS    │
+│  (window management) │    │  (standalone mode)  │
+└──────────┬───────────┘    └──────────┬──────────┘
+           └──────────┬───────────────┘
+                      v
+            Shared Rust Core
+              |- AppState
+              |- ACP Manager
+              |- Parsers (session ingestion)
+              |- Git / File Tree / Terminal
+              |- MCP marketplace + config
+              |- SeaORM + SQLite
+                      |
+                      v
+        Local Filesystem / Git Repos
 ```
 
 ## 制約事項
@@ -173,6 +231,7 @@ Local Filesystem / Local Agent Data / Git Repos
 - 解析、ストレージ、プロジェクト操作はデフォルトでローカルファースト
 - ネットワークアクセスはユーザーが明示的に操作した場合のみ発生
 - エンタープライズ環境向けのシステムプロキシサポート
+- Web サービスモードではトークンベースの認証を使用
 
 ## ライセンス
 

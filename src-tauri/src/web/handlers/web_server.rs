@@ -1,16 +1,16 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
-use crate::web::{do_get_web_server_status, do_start_web_server, do_stop_web_server};
-use crate::web::{WebServerInfo, WebServerState};
+use crate::app_state::AppState;
+use crate::web::{do_get_web_server_status, do_stop_web_server, WebServerInfo};
 
 pub async fn get_web_server_status(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Option<WebServerInfo>>, AppCommandError> {
-    let state = app.state::<WebServerState>();
-    Ok(Json(do_get_web_server_status(&state)))
+    Ok(Json(do_get_web_server_status(&state.web_server_state)))
 }
 
 #[derive(Deserialize)]
@@ -21,19 +21,27 @@ pub struct StartWebServerParams {
 }
 
 pub async fn start_web_server(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<StartWebServerParams>,
 ) -> Result<Json<WebServerInfo>, AppCommandError> {
-    let state = app.state::<WebServerState>();
-    let info = do_start_web_server(&app, &state, params.port, params.host).await?;
-    Ok(Json(info))
+    // In web mode, the server is already running (this handler itself is served by it).
+    // This endpoint is mainly useful in Tauri mode. Return current status as a noop.
+    let ws = &state.web_server_state;
+    if ws.running.load(std::sync::atomic::Ordering::Relaxed) {
+        if let Some(info) = do_get_web_server_status(ws) {
+            return Ok(Json(info));
+        }
+    }
+    Err(AppCommandError::new(
+        crate::app_error::AppErrorCode::InvalidInput,
+        "Cannot start web server from within web mode",
+    ))
 }
 
 pub async fn stop_web_server(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<()>, AppCommandError> {
-    let state = app.state::<WebServerState>();
-    do_stop_web_server(&state);
+    do_stop_web_server(&state.web_server_state);
     Ok(Json(()))
 }
 

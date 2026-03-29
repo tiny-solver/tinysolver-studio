@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::folders as folder_commands;
-use crate::db::AppDatabase;
 use crate::models::GitCredentials;
 
 use super::folders::PathParams;
@@ -499,15 +500,15 @@ pub struct GitPullParams {
 }
 
 pub async fn git_pull(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<GitPullParams>,
 ) -> Result<Json<folder_commands::GitPullResult>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_commands::git_pull_core(
         &params.path,
         params.credentials.as_ref(),
-        &db,
-        &app,
+        db,
+        &state.data_dir,
     )
     .await?;
     Ok(Json(result))
@@ -521,15 +522,15 @@ pub struct GitFetchParams {
 }
 
 pub async fn git_fetch(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<GitFetchParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_commands::git_fetch_core(
         &params.path,
         params.credentials.as_ref(),
-        &db,
-        &app,
+        db,
+        &state.data_dir,
     )
     .await?;
     Ok(Json(result))
@@ -545,17 +546,19 @@ pub struct GitPushParams {
 }
 
 pub async fn git_push(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<GitPushParams>,
 ) -> Result<Json<folder_commands::GitPushResult>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
+    let emitter = state.emitter.clone();
     let result = folder_commands::git_push_core(
-        &app,
+        &state.data_dir,
+        &emitter,
         params.folder_id,
         &params.path,
         params.remote.as_deref(),
         params.credentials.as_ref(),
-        &db,
+        db,
     )
     .await?;
     Ok(Json(result))
@@ -571,12 +574,13 @@ pub struct GitCommitParams {
 }
 
 pub async fn git_commit(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<GitCommitParams>,
 ) -> Result<Json<folder_commands::GitCommitResult>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
+    let emitter = state.emitter.clone();
     let result = folder_commands::git_commit_core(
-        &app,
+        &emitter,
         params.folder_id,
         &db.conn,
         &params.path,
@@ -596,16 +600,16 @@ pub struct GitFetchRemoteParams {
 }
 
 pub async fn git_fetch_remote(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<GitFetchRemoteParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_commands::git_fetch_remote_core(
         &params.path,
         &params.name,
         params.credentials.as_ref(),
-        &db,
-        &app,
+        db,
+        &state.data_dir,
     )
     .await?;
     Ok(Json(result))
@@ -620,16 +624,16 @@ pub struct CloneRepositoryParams {
 }
 
 pub async fn clone_repository(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<CloneRepositoryParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_commands::clone_repository_core(
         &params.url,
         &params.target_dir,
         params.credentials.as_ref(),
-        &db,
-        &app,
+        db,
+        &state.data_dir,
     )
     .await?;
     Ok(Json(()))

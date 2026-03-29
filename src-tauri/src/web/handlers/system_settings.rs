@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::system_settings as settings_commands;
 use crate::db::service::app_metadata_service;
-use crate::db::AppDatabase;
 use crate::models::*;
 use crate::network::proxy;
 
@@ -32,17 +33,17 @@ pub struct UpdateLanguageSettingsParams {
 // ---------------------------------------------------------------------------
 
 pub async fn get_system_proxy_settings(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<SystemProxySettings>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let settings = settings_commands::load_system_proxy_settings(&db.conn).await?;
     Ok(Json(settings))
 }
 
 pub async fn get_system_language_settings(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<SystemLanguageSettings>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let settings =
         settings_commands::load_system_language_settings(&db.conn).await?;
     Ok(Json(settings))
@@ -53,11 +54,11 @@ pub async fn get_system_language_settings(
 // ---------------------------------------------------------------------------
 
 pub async fn update_system_proxy_settings(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateProxySettingsParams>,
 ) -> Result<Json<SystemProxySettings>, AppCommandError> {
     let settings = params.settings;
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
 
     // TODO: call normalize_proxy_settings once it is made pub(crate) in
     // commands/system_settings.rs. For now the frontend validates the URL.
@@ -79,11 +80,11 @@ pub async fn update_system_proxy_settings(
 }
 
 pub async fn update_system_language_settings(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<UpdateLanguageSettingsParams>,
 ) -> Result<Json<SystemLanguageSettings>, AppCommandError> {
     let settings = params.settings;
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
 
     let serialized = serde_json::to_string(&settings).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize language settings")
@@ -99,7 +100,7 @@ pub async fn update_system_language_settings(
     .map_err(AppCommandError::from)?;
 
     crate::web::event_bridge::emit_event(
-        &app,
+        &state.emitter,
         LANGUAGE_SETTINGS_UPDATED_EVENT,
         settings.clone(),
     );

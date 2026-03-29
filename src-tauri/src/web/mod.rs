@@ -7,15 +7,15 @@ pub mod ws;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::Manager;
 
 use crate::app_error::{AppCommandError, AppErrorCode};
+use crate::app_state::AppState;
 
 pub struct WebServerState {
-    handle: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     port: AtomicU16,
     token: Mutex<String>,
     running: std::sync::atomic::AtomicBool,
@@ -40,11 +40,13 @@ pub struct WebServerInfo {
     pub addresses: Vec<String>,
 }
 
-pub(crate) fn generate_random_token() -> String {
+pub fn generate_random_token() -> String {
     uuid::Uuid::new_v4().to_string().replace('-', "")
 }
 
-pub(crate) fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
+#[cfg(feature = "tauri-runtime")]
+pub(crate) fn find_static_dir_tauri(app: &tauri::AppHandle) -> PathBuf {
+    use tauri::Manager;
     // 1. Production: bundle.resources copies out/ → web/ inside the resource directory.
     let resource = app.path().resource_dir().ok();
     if let Some(ref dir) = resource {
@@ -60,8 +62,11 @@ pub(crate) fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
         }
     }
 
-    // 2. Dev mode: "out/" is at the project root, which is one level above src-tauri/.
-    //    The Cargo manifest dir at compile time gives us the src-tauri/ path.
+    find_static_dir_fallback()
+}
+
+pub(crate) fn find_static_dir_fallback() -> PathBuf {
+    // Dev mode: "out/" is at the project root, which is one level above src-tauri/.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let project_out = manifest_dir.parent().map(|p| p.join("out"));
     if let Some(ref out) = project_out {
@@ -71,7 +76,7 @@ pub(crate) fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
         }
     }
 
-    // 3. Fallback: current working directory / out
+    // Fallback: current working directory / out
     let cwd_out = std::env::current_dir()
         .map(|d| d.join("out"))
         .unwrap_or_else(|_| PathBuf::from("out"));
@@ -82,7 +87,26 @@ pub(crate) fn find_static_dir(app: &tauri::AppHandle) -> PathBuf {
     cwd_out
 }
 
-pub(crate) fn get_local_addresses(port: u16) -> Vec<String> {
+pub fn find_static_dir_standalone(explicit: Option<&str>) -> PathBuf {
+    if let Some(dir) = explicit {
+        let p = PathBuf::from(dir);
+        if p.join("index.html").exists() {
+            eprintln!("[WEB] Serving static files from CODEG_STATIC_DIR: {}", p.display());
+            return p;
+        }
+    }
+
+    // Try ./web/
+    let web = PathBuf::from("web");
+    if web.join("index.html").exists() {
+        eprintln!("[WEB] Serving static files from ./web/: {}", web.display());
+        return web;
+    }
+
+    find_static_dir_fallback()
+}
+
+pub fn get_local_addresses(port: u16) -> Vec<String> {
     let mut addrs = vec![format!("http://127.0.0.1:{}", port)];
     // Try to get LAN IPs
     if let Ok(interfaces) = std::net::UdpSocket::bind("0.0.0.0:0") {
@@ -98,13 +122,14 @@ pub(crate) fn get_local_addresses(port: u16) -> Vec<String> {
 
 // ── Core logic (shared by Tauri commands and web handlers) ──
 
-pub(crate) async fn do_start_web_server(
-    app: &tauri::AppHandle,
-    state: &WebServerState,
+pub(crate) async fn do_start_web_server_with_state(
+    app_state: Arc<AppState>,
+    static_dir: PathBuf,
     port: Option<u16>,
     host: Option<String>,
 ) -> Result<WebServerInfo, AppCommandError> {
-    if state.running.load(Ordering::Relaxed) {
+    let ws = &app_state.web_server_state;
+    if ws.running.load(Ordering::Relaxed) {
         return Err(AppCommandError::new(
             AppErrorCode::AlreadyExists,
             "Web server is already running",
@@ -115,8 +140,7 @@ pub(crate) async fn do_start_web_server(
     let host = host.unwrap_or_else(|| "0.0.0.0".to_string());
     let token = generate_random_token();
 
-    let static_dir = find_static_dir(app);
-    let router = router::build_router(app.clone(), token.clone(), static_dir);
+    let router = router::build_router(app_state.clone(), token.clone(), static_dir);
 
     let addr: SocketAddr = format!("{}:{}", host, port)
         .parse()
@@ -131,16 +155,16 @@ pub(crate) async fn do_start_web_server(
     let actual_port = listener.local_addr().map(|a| a.port()).unwrap_or(port);
     eprintln!("[WEB] Starting web server on {}", addr);
 
-    let handle = tauri::async_runtime::spawn(async move {
+    let handle = tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, router).await {
             eprintln!("[WEB] Server error: {}", e);
         }
     });
 
-    *state.handle.lock().unwrap() = Some(handle);
-    state.port.store(actual_port, Ordering::Relaxed);
-    *state.token.lock().unwrap() = token.clone();
-    state.running.store(true, Ordering::Relaxed);
+    *ws.handle.lock().unwrap() = Some(handle);
+    ws.port.store(actual_port, Ordering::Relaxed);
+    *ws.token.lock().unwrap() = token.clone();
+    ws.running.store(true, Ordering::Relaxed);
 
     let addresses = get_local_addresses(actual_port);
     Ok(WebServerInfo {
@@ -176,6 +200,7 @@ pub(crate) fn do_get_web_server_status(state: &WebServerState) -> Option<WebServ
 
 // ── Tauri commands (thin wrappers) ──
 
+#[cfg(feature = "tauri-runtime")]
 #[tauri::command]
 pub async fn start_web_server(
     app: tauri::AppHandle,
@@ -183,9 +208,73 @@ pub async fn start_web_server(
     port: Option<u16>,
     host: Option<String>,
 ) -> Result<WebServerInfo, AppCommandError> {
-    do_start_web_server(&app, &state, port, host).await
+    // In Tauri mode, we still need to start via the legacy path because
+    // the full AppState isn't easily available from tauri::State here.
+    // The embedded web server uses Tauri's resource directory for static files.
+    use tauri::Manager;
+
+    let ws = &*state;
+    if ws.running.load(Ordering::Relaxed) {
+        return Err(AppCommandError::new(
+            AppErrorCode::AlreadyExists,
+            "Web server is already running",
+        ));
+    }
+
+    let port_val = port.unwrap_or(3080);
+    let host_val = host.unwrap_or_else(|| "0.0.0.0".to_string());
+    let token = generate_random_token();
+
+    let static_dir = find_static_dir_tauri(&app);
+
+    // Build AppState for the router
+    let app_state = Arc::new(AppState {
+        db: crate::db::AppDatabase {
+            conn: app.state::<crate::db::AppDatabase>().conn.clone(),
+        },
+        connection_manager: (*app.state::<crate::acp::manager::ConnectionManager>()).clone_ref(),
+        terminal_manager: (*app.state::<crate::terminal::manager::TerminalManager>()).clone_ref(),
+        event_broadcaster: app.state::<Arc<crate::web::event_bridge::WebEventBroadcaster>>().inner().clone(),
+        emitter: crate::web::event_bridge::EventEmitter::Tauri(app.clone()),
+        data_dir: app.path().app_data_dir().unwrap_or_default(),
+        web_server_state: WebServerState::new(), // placeholder; not used by handlers
+    });
+
+    let router = router::build_router(app_state, token.clone(), static_dir);
+
+    let addr: SocketAddr = format!("{}:{}", host_val, port_val)
+        .parse()
+        .map_err(|e: std::net::AddrParseError| {
+            AppCommandError::invalid_input("Invalid host/port").with_detail(e.to_string())
+        })?;
+
+    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+        AppCommandError::io_error("Failed to bind address").with_detail(e.to_string())
+    })?;
+
+    let actual_port = listener.local_addr().map(|a| a.port()).unwrap_or(port_val);
+    eprintln!("[WEB] Starting web server on {}", addr);
+
+    let handle = tokio::spawn(async move {
+        if let Err(e) = axum::serve(listener, router).await {
+            eprintln!("[WEB] Server error: {}", e);
+        }
+    });
+
+    *ws.handle.lock().unwrap() = Some(handle);
+    ws.port.store(actual_port, Ordering::Relaxed);
+    *ws.token.lock().unwrap() = token.clone();
+    ws.running.store(true, Ordering::Relaxed);
+
+    let addresses = get_local_addresses(actual_port);
+    Ok(WebServerInfo {
+        port: actual_port,
+        token,
+        addresses,
+    })
 }
 
+#[cfg(feature = "tauri-runtime")]
 #[tauri::command]
 pub async fn stop_web_server(
     state: tauri::State<'_, WebServerState>,
@@ -194,6 +283,7 @@ pub async fn stop_web_server(
     Ok(())
 }
 
+#[cfg(feature = "tauri-runtime")]
 #[tauri::command]
 pub async fn get_web_server_status(
     state: tauri::State<'_, WebServerState>,

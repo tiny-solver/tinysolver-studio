@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
+#[cfg(feature = "tauri-runtime")]
 use tauri::Manager;
+#[cfg(feature = "tauri-runtime")]
 use tauri::State;
 
 use crate::git_credential;
 use crate::terminal::error::TerminalError;
 use crate::terminal::manager::{SpawnOptions, TerminalManager};
 use crate::terminal::types::TerminalInfo;
+use crate::web::event_bridge::EventEmitter;
 
 /// Build extra env vars for the terminal session.
 ///
@@ -57,7 +60,8 @@ pub(crate) fn prepare_credential_env(
     Some(env)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn terminal_spawn(
     working_dir: String,
     initial_command: Option<String>,
@@ -83,11 +87,12 @@ pub async fn terminal_spawn(
             extra_env,
             temp_files: vec![],
         },
-        app_handle,
+        EventEmitter::Tauri(app_handle),
     )
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn terminal_write(
     terminal_id: String,
     data: String,
@@ -96,7 +101,8 @@ pub fn terminal_write(
     manager.write(&terminal_id, data.as_bytes())
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn terminal_resize(
     terminal_id: String,
     cols: u16,
@@ -106,7 +112,8 @@ pub fn terminal_resize(
     manager.resize(&terminal_id, cols, rows)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn terminal_kill(
     terminal_id: String,
     manager: State<'_, TerminalManager>,
@@ -114,10 +121,12 @@ pub fn terminal_kill(
     manager.kill(&terminal_id)
 }
 
-#[tauri::command]
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn terminal_list(
     manager: State<'_, TerminalManager>,
     app_handle: tauri::AppHandle,
 ) -> Result<Vec<TerminalInfo>, TerminalError> {
-    Ok(manager.list_with_exit_check(Some(&app_handle)))
+    let emitter = EventEmitter::Tauri(app_handle);
+    Ok(manager.list_with_exit_check(Some(&emitter)))
 }

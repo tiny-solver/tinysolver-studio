@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/github/license/xintaofei/codeg)](../../LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](../../Dockerfile)
 
 <p>
   <a href="../../README.md">English</a> |
@@ -46,6 +47,8 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 - Skills 관리 (글로벌 및 프로젝트 범위)
 - Git 원격 계정 관리 (GitHub 및 기타 Git 서버)
 - Web 서비스 모드 — 브라우저에서 Codeg에 접속하여 원격 작업 가능
+- **독립형 서버 배포** — 모든 Linux/macOS 서버에서 `codeg-server`를 실행하고 브라우저로 접속
+- **Docker 지원** — `docker compose up`으로 설정 없이 서버 구축 가능
 - 통합 엔지니어링 루프 (파일 트리, Diff, Git 변경사항, 커밋, 터미널)
 
 ## 프로젝트 부트
@@ -104,7 +107,7 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 - Node.js `>=22` (권장)
 - pnpm `>=10`
 - Rust stable (2021 edition)
-- Tauri 2 빌드 의존성
+- Tauri 2 빌드 의존성 (데스크톱 모드만 해당)
 
 Linux (Debian/Ubuntu) 예시:
 
@@ -122,17 +125,23 @@ sudo apt-get install -y \
 ```bash
 pnpm install
 
+# 프론트엔드 정적 내보내기 (out/)
+pnpm build
+
 # 전체 데스크톱 앱 (Tauri + Next.js)
 pnpm tauri dev
 
 # 프론트엔드만
 pnpm dev
 
-# 프론트엔드 정적 내보내기 (out/)
-pnpm build
-
 # 데스크톱 빌드
 pnpm tauri build
+
+# 독립형 서버 (Tauri/GUI 불필요)
+pnpm server:dev
+
+# 서버 릴리스 바이너리 빌드
+pnpm server:build
 
 # Lint
 pnpm eslint .
@@ -143,22 +152,71 @@ cargo clippy
 cargo build
 ```
 
+### 서버 배포
+
+Codeg는 데스크톱 환경 없이 독립형 웹 서버로 실행할 수 있습니다.
+
+#### 옵션 1: 바이너리 직접 실행
+
+```bash
+# 서버 바이너리 빌드
+cd src-tauri
+cargo build --release --bin codeg-server --no-default-features
+
+# 실행
+CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+```
+
+환경 변수:
+
+| 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `CODEG_PORT` | `3080` | HTTP 포트 |
+| `CODEG_HOST` | `0.0.0.0` | 바인드 주소 |
+| `CODEG_TOKEN` | *(랜덤)* | 인증 토큰 (시작 시 stderr에 출력) |
+| `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite 데이터베이스 디렉토리 |
+| `CODEG_STATIC_DIR` | `./web` or `./out` | Next.js 정적 내보내기 디렉토리 |
+
+#### 옵션 2: Docker
+
+```bash
+# 빌드 및 실행
+docker compose up -d
+
+# 또는 수동으로 빌드
+docker build -t codeg .
+docker run -p 3080:3080 -v codeg-data:/data codeg
+```
+
 ## 아키텍처
 
 ```text
 Next.js 16 (Static Export) + React 19
         |
-        | invoke()
+        | invoke() (desktop) / fetch() + WebSocket (web)
         v
-Tauri 2 Commands (Rust)
-  |- ACP Manager
-  |- Parsers (local session ingestion)
-  |- Git / File Tree / Terminal runtime
-  |- MCP marketplace + local config writer
-  |- SeaORM + SQLite
+  ┌─────────────────────────┐
+  │   Transport Abstraction  │
+  │  (Tauri IPC or HTTP/WS) │
+  └─────────────────────────┘
         |
         v
-Local Filesystem / Local Agent Data / Git Repos
+┌─── Tauri Desktop ───┐    ┌─── codeg-server ───┐
+│  Tauri 2 Commands    │    │  Axum HTTP + WS    │
+│  (window management) │    │  (standalone mode)  │
+└──────────┬───────────┘    └──────────┬──────────┘
+           └──────────┬───────────────┘
+                      v
+            Shared Rust Core
+              |- AppState
+              |- ACP Manager
+              |- Parsers (session ingestion)
+              |- Git / File Tree / Terminal
+              |- MCP marketplace + config
+              |- SeaORM + SQLite
+                      |
+                      v
+        Local Filesystem / Git Repos
 ```
 
 ## 제약 사항
@@ -173,6 +231,7 @@ Local Filesystem / Local Agent Data / Git Repos
 - 파싱, 저장, 프로젝트 작업은 기본적으로 로컬 우선
 - 네트워크 접근은 사용자가 명시적으로 작업을 실행할 때만 발생
 - 엔터프라이즈 환경을 위한 시스템 프록시 지원
+- 웹 서비스 모드에서는 토큰 기반 인증 사용
 
 ## 라이선스
 

@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/github/license/xintaofei/codeg)](./LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](./Dockerfile)
 
 <p>
   <strong>English</strong> |
@@ -47,6 +48,8 @@ MCP/Skills management, and integrated Git/file/terminal workflows.
 - Skills management (global and project scope)
 - Git remote account management (GitHub and other Git servers)
 - Web service mode — access Codeg from any browser for remote work
+- **Standalone server deployment** — run `codeg-server` on any Linux/macOS server, access via browser
+- **Docker support** — deploy with `docker compose up` for zero-config server setup
 - Integrated engineering loop (file tree, diff, git changes, commit, terminal)
 
 ## Project Boot
@@ -105,7 +108,7 @@ Current writable targets:
 - Node.js `>=22` (recommended)
 - pnpm `>=10`
 - Rust stable (2021 edition)
-- Tauri 2 build dependencies
+- Tauri 2 build dependencies (desktop mode only)
 
 Linux (Debian/Ubuntu) example:
 
@@ -123,17 +126,23 @@ sudo apt-get install -y \
 ```bash
 pnpm install
 
+# Frontend static export to out/
+pnpm build
+
 # Full desktop app (Tauri + Next.js)
 pnpm tauri dev
 
 # Frontend only
 pnpm dev
 
-# Frontend static export to out/
-pnpm build
-
 # Desktop build
 pnpm tauri build
+
+# Standalone server (no Tauri/GUI required)
+pnpm server:dev
+
+# Build server release binary
+pnpm server:build
 
 # Lint
 pnpm eslint .
@@ -144,22 +153,71 @@ cargo clippy
 cargo build
 ```
 
+### Server Deployment
+
+Codeg can run as a standalone web server without a desktop environment.
+
+#### Option 1: Direct binary
+
+```bash
+# Build the server binary
+cd src-tauri
+cargo build --release --bin codeg-server --no-default-features
+
+# Run it
+CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+```
+
+Environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CODEG_PORT` | `3080` | HTTP port |
+| `CODEG_HOST` | `0.0.0.0` | Bind address |
+| `CODEG_TOKEN` | *(random)* | Auth token (printed to stderr on start) |
+| `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite database directory |
+| `CODEG_STATIC_DIR` | `./web` or `./out` | Next.js static export directory |
+
+#### Option 2: Docker
+
+```bash
+# Build and run
+docker compose up -d
+
+# Or build manually
+docker build -t codeg .
+docker run -p 3080:3080 -v codeg-data:/data codeg
+```
+
 ## Architecture
 
 ```text
 Next.js 16 (Static Export) + React 19
         |
-        | invoke()
+        | invoke() (desktop) / fetch() + WebSocket (web)
         v
-Tauri 2 Commands (Rust)
-  |- ACP Manager
-  |- Parsers (local session ingestion)
-  |- Git / File Tree / Terminal runtime
-  |- MCP marketplace + local config writer
-  |- SeaORM + SQLite
+  ┌─────────────────────────┐
+  │   Transport Abstraction  │
+  │  (Tauri IPC or HTTP/WS) │
+  └─────────────────────────┘
         |
         v
-Local Filesystem / Local Agent Data / Git Repos
+┌─── Tauri Desktop ───┐    ┌─── codeg-server ───┐
+│  Tauri 2 Commands    │    │  Axum HTTP + WS    │
+│  (window management) │    │  (standalone mode)  │
+└──────────┬───────────┘    └──────────┬──────────┘
+           └──────────┬───────────────┘
+                      v
+            Shared Rust Core
+              |- AppState
+              |- ACP Manager
+              |- Parsers (session ingestion)
+              |- Git / File Tree / Terminal
+              |- MCP marketplace + config
+              |- SeaORM + SQLite
+                      |
+                      v
+        Local Filesystem / Git Repos
 ```
 
 ## Constraints
@@ -174,6 +232,7 @@ Local Filesystem / Local Agent Data / Git Repos
 - Local-first by default for parsing, storage, and project operations
 - Network access happens only on user-triggered actions
 - System proxy support for enterprise environments
+- Web service mode uses token-based authentication
 
 ## License
 

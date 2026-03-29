@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
 use axum::{extract::Extension, Json};
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
 use crate::commands::folders as folder_commands;
 use crate::db::service::folder_service;
-use crate::db::AppDatabase;
 use crate::models::*;
 
 #[derive(Deserialize)]
@@ -15,9 +16,9 @@ pub struct FolderIdParams {
 }
 
 pub async fn load_folder_history(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<FolderHistoryEntry>>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_service::list_folders(&db.conn)
         .await
         .map_err(AppCommandError::from)?;
@@ -25,9 +26,9 @@ pub async fn load_folder_history(
 }
 
 pub async fn list_open_folders(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<FolderHistoryEntry>>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_service::list_open_folders(&db.conn)
         .await
         .map_err(AppCommandError::from)?;
@@ -35,10 +36,10 @@ pub async fn list_open_folders(
 }
 
 pub async fn get_folder(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<FolderIdParams>,
 ) -> Result<Json<FolderDetail>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let folder = folder_service::get_folder_by_id(&db.conn, params.folder_id)
         .await
         .map_err(AppCommandError::from)?
@@ -55,10 +56,10 @@ pub struct AddFolderParams {
 /// Web equivalent of `open_folder_window`: adds the folder to DB and returns its ID.
 /// The web client then navigates to `/folder?id=N` itself.
 pub async fn open_folder_window(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AddFolderParams>,
 ) -> Result<Json<FolderHistoryEntry>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let entry = folder_service::add_folder(&db.conn, &params.path)
         .await
         .map_err(AppCommandError::from)?;
@@ -66,10 +67,10 @@ pub async fn open_folder_window(
 }
 
 pub async fn close_folder_window(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<FolderIdParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_service::set_folder_open(&db.conn, params.folder_id, false)
         .await
         .map_err(AppCommandError::from)?;
@@ -86,10 +87,10 @@ pub struct SaveFolderOpenedConversationsParams {
 }
 
 pub async fn save_folder_opened_conversations(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<SaveFolderOpenedConversationsParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_service::save_opened_conversations(&db.conn, params.folder_id, params.items)
         .await
         .map_err(AppCommandError::from)?;
@@ -130,10 +131,10 @@ pub struct RootPathParams {
 }
 
 pub async fn start_file_tree_watch(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<RootPathParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    folder_commands::start_file_tree_watch(app, params.root_path).await?;
+    folder_commands::start_file_tree_watch_core(state.emitter.clone(), params.root_path).await?;
     Ok(Json(()))
 }
 
@@ -254,10 +255,10 @@ pub struct SetFolderParentBranchParams {
 }
 
 pub async fn add_folder_to_history(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AddFolderParams>,
 ) -> Result<Json<FolderHistoryEntry>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     let result = folder_service::add_folder(&db.conn, &params.path)
         .await
         .map_err(AppCommandError::from)?;
@@ -265,20 +266,20 @@ pub async fn add_folder_to_history(
 }
 
 pub async fn set_folder_parent_branch(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<SetFolderParentBranchParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_commands::set_folder_parent_branch_core(&db.conn, &params.path, params.parent_branch)
         .await?;
     Ok(Json(()))
 }
 
 pub async fn remove_folder_from_history(
-    Extension(app): Extension<tauri::AppHandle>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AddFolderParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let db = app.state::<AppDatabase>();
+    let db = &state.db;
     folder_service::remove_folder(&db.conn, &params.path)
         .await
         .map_err(AppCommandError::from)?;
