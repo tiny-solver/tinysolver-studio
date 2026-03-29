@@ -203,6 +203,17 @@ function inferFromInput(
 
   const hasPath = hasAnyKey(parsed, ["file_path", "notebook_path", "path"])
   if (hasPath) {
+    // Check write-specific input keys first — they take priority over
+    // kind/title because ACP ToolKind::Edit ("edit") is a category that
+    // covers both Edit and Write tools. Without this, a Write tool call
+    // (with {content, file_path}) would be classified as "edit" due to
+    // its kind, then rendered with EditToolInput which expects
+    // old_string/new_string and produces blank output for new files.
+    if (
+      hasAnyKey(parsed, ["content", "new_source", "cell_type", "edit_mode"])
+    ) {
+      return "write"
+    }
     if (
       normalizedKind === "read" ||
       normalizedKind === "edit" ||
@@ -218,11 +229,6 @@ function inferFromInput(
       normalizedTitle === "write"
     ) {
       return normalizedTitle
-    }
-    if (
-      hasAnyKey(parsed, ["content", "new_source", "cell_type", "edit_mode"])
-    ) {
-      return "write"
     }
     return "read"
   }

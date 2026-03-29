@@ -351,7 +351,18 @@ function parseUnifiedDiff(diffText: string): ParsedDiffFile[] {
       continue
     }
 
-    const hunk = getActiveHunk()
+    let hunk = getActiveHunk()
+    // Auto-create an implicit hunk for patch formats (e.g. *** Add File)
+    // that emit +/- lines without a preceding @@ header.
+    if (
+      !hunk &&
+      (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))
+    ) {
+      if (getActiveFile()) {
+        startHunk("@@")
+        hunk = getActiveHunk()
+      }
+    }
     if (!hunk) continue
 
     if (line.startsWith("+") && !line.startsWith("+++")) {
@@ -487,6 +498,26 @@ function HunkLines({ rows }: { rows: ParsedDiffRow[] }) {
   )
 }
 
+/** Clean file content view for new files (no diff signs or green highlight) */
+function NewFileLines({ rows }: { rows: ParsedDiffRow[] }) {
+  return (
+    <div className="font-mono text-[12px] leading-[20px]">
+      {rows.map((row, i) => (
+        <div key={i} className="flex">
+          <span className="w-[3.5rem] shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+            {row.newLine ?? i + 1}
+          </span>
+          <span className="flex-1 whitespace-pre pr-3">{row.text}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function isNewFileOnly(file: ParsedDiffFile): boolean {
+  return file.mode === "added" && file.deletions === 0
+}
+
 export function UnifiedDiffPreview({
   diffText,
   className,
@@ -526,43 +557,52 @@ export function UnifiedDiffPreview({
   return (
     <div className={cn("h-full overflow-auto", className)}>
       <div className="space-y-3">
-        {files.map((file) => (
-          <section
-            key={file.key}
-            className="flex max-h-[420px] flex-col rounded-lg border border-border bg-background"
-          >
-            <header className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px]">
-              <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {t(modeKey(file.mode))}
-              </span>
-              <span
-                className="min-w-0 flex-1 truncate font-mono text-foreground"
-                title={file.path}
-              >
-                {toDisplayPath(file.path, folder?.path ?? null)}
-              </span>
-              <span className="ml-auto inline-flex shrink-0 items-center gap-2 font-mono">
-                <span className="text-green-700 dark:text-green-400">
-                  +{file.additions}
+        {files.map((file) => {
+          const newFile = isNewFileOnly(file)
+          return (
+            <section
+              key={file.key}
+              className="flex max-h-[420px] flex-col rounded-lg border border-border bg-background"
+            >
+              <header className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px]">
+                <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {newFile ? "WRITE" : t(modeKey(file.mode))}
                 </span>
-                <span className="text-red-700 dark:text-red-400">
-                  -{file.deletions}
+                <span
+                  className="min-w-0 flex-1 truncate font-mono text-foreground"
+                  title={file.path}
+                >
+                  {toDisplayPath(file.path, folder?.path ?? null)}
                 </span>
-              </span>
-            </header>
+                {!newFile && (
+                  <span className="ml-auto inline-flex shrink-0 items-center gap-2 font-mono">
+                    <span className="text-green-700 dark:text-green-400">
+                      +{file.additions}
+                    </span>
+                    <span className="text-red-700 dark:text-red-400">
+                      -{file.deletions}
+                    </span>
+                  </span>
+                )}
+              </header>
 
-            <div className="overflow-auto">
-              <div className="inline-block min-w-full">
-                {file.hunks.map((hunk, hunkIdx) => (
-                  <div key={hunk.key}>
-                    {hunkIdx > 0 && <HunkSeparator hunk={hunk} />}
-                    <HunkLines rows={hunk.rows} />
-                  </div>
-                ))}
+              <div className="overflow-auto">
+                <div className="inline-block min-w-full">
+                  {newFile
+                    ? file.hunks.map((hunk) => (
+                        <NewFileLines key={hunk.key} rows={hunk.rows} />
+                      ))
+                    : file.hunks.map((hunk, hunkIdx) => (
+                        <div key={hunk.key}>
+                          {hunkIdx > 0 && <HunkSeparator hunk={hunk} />}
+                          <HunkLines rows={hunk.rows} />
+                        </div>
+                      ))}
+                </div>
               </div>
-            </div>
-          </section>
-        ))}
+            </section>
+          )
+        })}
       </div>
     </div>
   )
