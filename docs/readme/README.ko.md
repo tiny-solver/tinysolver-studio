@@ -156,16 +156,74 @@ cargo build
 
 Codeg는 데스크톱 환경 없이 독립형 웹 서버로 실행할 수 있습니다.
 
-#### 옵션 1: 바이너리 직접 실행
+#### 옵션 1: 원라인 설치 (Linux / macOS)
 
 ```bash
-# 서버 바이너리 빌드
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+```
+
+특정 버전 또는 사용자 지정 디렉토리에 설치:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+실행:
+
+```bash
+codeg-server
+```
+
+#### 옵션 2: 원라인 설치 (Windows PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+또는 특정 버전 설치:
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### 옵션 3: GitHub Releases에서 다운로드
+
+사전 빌드된 바이너리(웹 에셋 포함)는 [Releases](https://github.com/xintaofei/codeg/releases) 페이지에서 다운로드할 수 있습니다:
+
+| 플랫폼 | 파일 |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# 예시: 다운로드, 압축 해제, 실행
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### 옵션 4: Docker
+
+```bash
+docker compose up -d
+
+# 또는 직접 실행
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### 옵션 5: 소스에서 빌드
+
+```bash
+pnpm install && pnpm build          # 프론트엔드 빌드
 cd src-tauri
 cargo build --release --bin codeg-server --no-default-features
-
-# 실행
-CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
 ```
+
+#### 구성
 
 환경 변수:
 
@@ -175,18 +233,7 @@ CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
 | `CODEG_HOST` | `0.0.0.0` | 바인드 주소 |
 | `CODEG_TOKEN` | *(랜덤)* | 인증 토큰 (시작 시 stderr에 출력) |
 | `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite 데이터베이스 디렉토리 |
-| `CODEG_STATIC_DIR` | `./web` or `./out` | Next.js 정적 내보내기 디렉토리 |
-
-#### 옵션 2: Docker
-
-```bash
-# 빌드 및 실행
-docker compose up -d
-
-# 또는 수동으로 빌드
-docker build -t codeg .
-docker run -p 3080:3080 -v codeg-data:/data codeg
-```
+| `CODEG_STATIC_DIR` | `./web` 또는 `./out` | Next.js 정적 내보내기 디렉토리 |
 
 ## 아키텍처
 

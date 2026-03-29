@@ -152,30 +152,88 @@ cargo clippy
 cargo build
 ```
 
-## Déploiement du serveur
+### Déploiement du serveur
 
-Codeg peut fonctionner comme un serveur web autonome sans dépendances Tauri ni interface graphique.
+Codeg peut fonctionner comme un serveur web autonome sans environnement de bureau.
 
-### Option 1 : Binaire direct
+#### Option 1 : Installation en une ligne (Linux / macOS)
 
 ```bash
-pnpm server:build
-./target/release/codeg-server
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
 ```
+
+Installer une version spécifique ou dans un répertoire personnalisé :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+Puis exécuter :
+
+```bash
+codeg-server
+```
+
+#### Option 2 : Installation en une ligne (Windows PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+Ou installer une version spécifique :
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### Option 3 : Télécharger depuis GitHub Releases
+
+Les binaires pré-compilés (avec les ressources web incluses) sont disponibles sur la page [Releases](https://github.com/xintaofei/codeg/releases) :
+
+| Plateforme | Fichier |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# Exemple : télécharger, extraire et exécuter
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### Option 4 : Docker
+
+```bash
+docker compose up -d
+
+# Ou exécuter directement
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### Option 5 : Compiler depuis les sources
+
+```bash
+pnpm install && pnpm build          # compiler le frontend
+cd src-tauri
+cargo build --release --bin codeg-server --no-default-features
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
+```
+
+#### Configuration
+
+Variables d'environnement :
 
 | Variable | Valeur par défaut | Description |
 | --- | --- | --- |
-| CODEG_PORT | 3080 | Port HTTP |
-| CODEG_HOST | 0.0.0.0 | Adresse de liaison |
-| CODEG_TOKEN | (aléatoire) | Jeton d'authentification |
-| CODEG_DATA_DIR | ~/.local/share/codeg | Répertoire de base de données SQLite |
-| CODEG_STATIC_DIR | ./web ou ./out | Répertoire d'export statique Next.js |
-
-### Option 2 : Docker
-
-```bash
-docker compose up
-```
+| `CODEG_PORT` | `3080` | Port HTTP |
+| `CODEG_HOST` | `0.0.0.0` | Adresse de liaison |
+| `CODEG_TOKEN` | *(aléatoire)* | Jeton d'authentification (affiché sur stderr au démarrage) |
+| `CODEG_DATA_DIR` | `~/.local/share/codeg` | Répertoire de base de données SQLite |
+| `CODEG_STATIC_DIR` | `./web` ou `./out` | Répertoire d'export statique Next.js |
 
 ## Architecture
 

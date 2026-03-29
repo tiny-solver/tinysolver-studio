@@ -156,16 +156,74 @@ cargo build
 
 Codeg はデスクトップ環境なしでスタンドアロン Web サーバーとして実行できます。
 
-#### オプション 1: バイナリ直接実行
+#### オプション 1: ワンラインインストール（Linux / macOS）
 
 ```bash
-# サーバーバイナリのビルド
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+```
+
+特定のバージョンまたはカスタムディレクトリにインストール:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+実行:
+
+```bash
+codeg-server
+```
+
+#### オプション 2: ワンラインインストール（Windows PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+または特定のバージョンをインストール:
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### オプション 3: GitHub Releases からダウンロード
+
+ビルド済みバイナリ（Web アセットをバンドル済み）は [Releases](https://github.com/xintaofei/codeg/releases) ページからダウンロードできます:
+
+| プラットフォーム | ファイル |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# 例: ダウンロード、解凍、実行
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### オプション 4: Docker
+
+```bash
+docker compose up -d
+
+# または直接実行
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### オプション 5: ソースからビルド
+
+```bash
+pnpm install && pnpm build          # フロントエンドをビルド
 cd src-tauri
 cargo build --release --bin codeg-server --no-default-features
-
-# 実行
-CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
 ```
+
+#### 設定
 
 環境変数:
 
@@ -175,18 +233,7 @@ CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
 | `CODEG_HOST` | `0.0.0.0` | バインドアドレス |
 | `CODEG_TOKEN` | *(ランダム)* | 認証トークン（起動時に stderr に出力） |
 | `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite データベースディレクトリ |
-| `CODEG_STATIC_DIR` | `./web` or `./out` | Next.js 静的エクスポートディレクトリ |
-
-#### オプション 2: Docker
-
-```bash
-# ビルドして実行
-docker compose up -d
-
-# または手動でビルド
-docker build -t codeg .
-docker run -p 3080:3080 -v codeg-data:/data codeg
-```
+| `CODEG_STATIC_DIR` | `./web` または `./out` | Next.js 静的エクスポートディレクトリ |
 
 ## アーキテクチャ
 

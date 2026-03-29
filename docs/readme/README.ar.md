@@ -156,16 +156,74 @@ cargo build
 
 يمكن تشغيل Codeg كخادم ويب مستقل بدون بيئة سطح مكتب.
 
-#### الخيار 1: الملف التنفيذي المباشر
+#### الخيار 1: التثبيت بسطر واحد (Linux / macOS)
 
 ```bash
-# بناء الملف التنفيذي للخادم
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+```
+
+تثبيت إصدار محدد أو في دليل مخصص:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+ثم التشغيل:
+
+```bash
+codeg-server
+```
+
+#### الخيار 2: التثبيت بسطر واحد (Windows PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+أو تثبيت إصدار محدد:
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### الخيار 3: التنزيل من GitHub Releases
+
+الملفات التنفيذية المُعدّة مسبقًا (مع موارد الويب المضمّنة) متاحة في صفحة [Releases](https://github.com/xintaofei/codeg/releases):
+
+| المنصة | الملف |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# مثال: التنزيل والاستخراج والتشغيل
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### الخيار 4: Docker
+
+```bash
+docker compose up -d
+
+# أو التشغيل مباشرة
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### الخيار 5: البناء من المصدر
+
+```bash
+pnpm install && pnpm build          # بناء الواجهة الأمامية
 cd src-tauri
 cargo build --release --bin codeg-server --no-default-features
-
-# التشغيل
-CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
 ```
+
+#### التكوين
 
 متغيرات البيئة:
 
@@ -176,17 +234,6 @@ CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
 | `CODEG_TOKEN` | *(عشوائي)* | رمز المصادقة (يُطبع في stderr عند البدء) |
 | `CODEG_DATA_DIR` | `~/.local/share/codeg` | دليل قاعدة بيانات SQLite |
 | `CODEG_STATIC_DIR` | `./web` أو `./out` | دليل التصدير الثابت لـ Next.js |
-
-#### الخيار 2: Docker
-
-```bash
-# البناء والتشغيل
-docker compose up -d
-
-# أو البناء يدويًا
-docker build -t codeg .
-docker run -p 3080:3080 -v codeg-data:/data codeg
-```
 
 ## الهندسة المعمارية
 

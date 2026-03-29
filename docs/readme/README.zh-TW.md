@@ -156,16 +156,74 @@ cargo build
 
 Codeg 可以作為獨立 Web 伺服器執行，無需桌面環境。
 
-#### 方式一：直接執行二進位檔
+#### 方式一：一鍵安裝（Linux / macOS）
 
 ```bash
-# 建置伺服器二進位檔
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+```
+
+安裝指定版本或到自訂目錄：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+然後執行：
+
+```bash
+codeg-server
+```
+
+#### 方式二：一鍵安裝（Windows PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+或安裝指定版本：
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### 方式三：從 GitHub Releases 下載
+
+預建置二進位檔（已打包 Web 前端資源）可在 [Releases](https://github.com/xintaofei/codeg/releases) 頁面下載：
+
+| 平台 | 檔案 |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# 範例：下載、解壓縮、執行
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### 方式四：Docker
+
+```bash
+docker compose up -d
+
+# 或直接執行
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### 方式五：從原始碼建置
+
+```bash
+pnpm install && pnpm build          # 建置前端
 cd src-tauri
 cargo build --release --bin codeg-server --no-default-features
-
-# 執行
-CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
 ```
+
+#### 設定
 
 環境變數：
 
@@ -176,17 +234,6 @@ CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
 | `CODEG_TOKEN` | *（隨機）* | 認證令牌（啟動時輸出到 stderr） |
 | `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite 資料庫目錄 |
 | `CODEG_STATIC_DIR` | `./web` 或 `./out` | Next.js 靜態匯出目錄 |
-
-#### 方式二：Docker
-
-```bash
-# 建置並執行
-docker compose up -d
-
-# 或手動建置
-docker build -t codeg .
-docker run -p 3080:3080 -v codeg-data:/data codeg
-```
 
 ## 架構
 

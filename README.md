@@ -157,16 +157,74 @@ cargo build
 
 Codeg can run as a standalone web server without a desktop environment.
 
-#### Option 1: Direct binary
+#### Option 1: One-line install (Linux / macOS)
 
 ```bash
-# Build the server binary
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+```
+
+Install a specific version or to a custom directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+Then run:
+
+```bash
+codeg-server
+```
+
+#### Option 2: One-line install (Windows PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+Or install a specific version:
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### Option 3: Download from GitHub Releases
+
+Pre-built binaries (with bundled web assets) are available on the [Releases](https://github.com/xintaofei/codeg/releases) page:
+
+| Platform | File |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# Example: download, extract, and run
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### Option 4: Docker
+
+```bash
+docker compose up -d
+
+# Or run directly
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### Option 5: Build from source
+
+```bash
+pnpm install && pnpm build          # build frontend
 cd src-tauri
 cargo build --release --bin codeg-server --no-default-features
-
-# Run it
-CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
 ```
+
+#### Configuration
 
 Environment variables:
 
@@ -177,17 +235,6 @@ Environment variables:
 | `CODEG_TOKEN` | *(random)* | Auth token (printed to stderr on start) |
 | `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite database directory |
 | `CODEG_STATIC_DIR` | `./web` or `./out` | Next.js static export directory |
-
-#### Option 2: Docker
-
-```bash
-# Build and run
-docker compose up -d
-
-# Or build manually
-docker build -t codeg .
-docker run -p 3080:3080 -v codeg-data:/data codeg
-```
 
 ## Architecture
 

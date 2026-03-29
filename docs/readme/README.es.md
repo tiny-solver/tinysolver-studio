@@ -154,30 +154,88 @@ cargo clippy
 cargo build
 ```
 
-## Despliegue del servidor
+### Despliegue del servidor
 
-Codeg puede ejecutarse como un servidor web independiente sin dependencias de Tauri ni GUI.
+Codeg puede ejecutarse como un servidor web independiente sin entorno de escritorio.
 
-### Opción 1: Binario directo
+#### Opción 1: Instalación en una línea (Linux / macOS)
 
 ```bash
-pnpm server:build
-./target/release/codeg-server
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
 ```
+
+Instalar una versión específica o en un directorio personalizado:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+Luego ejecutar:
+
+```bash
+codeg-server
+```
+
+#### Opción 2: Instalación en una línea (Windows PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+O instalar una versión específica:
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### Opción 3: Descargar desde GitHub Releases
+
+Los binarios precompilados (con recursos web incluidos) están disponibles en la página de [Releases](https://github.com/xintaofei/codeg/releases):
+
+| Plataforma | Archivo |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# Ejemplo: descargar, extraer y ejecutar
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### Opción 4: Docker
+
+```bash
+docker compose up -d
+
+# O ejecutar directamente
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### Opción 5: Compilar desde el código fuente
+
+```bash
+pnpm install && pnpm build          # compilar frontend
+cd src-tauri
+cargo build --release --bin codeg-server --no-default-features
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
+```
+
+#### Configuración
+
+Variables de entorno:
 
 | Variable | Valor por defecto | Descripción |
 | --- | --- | --- |
-| CODEG_PORT | 3080 | Puerto HTTP |
-| CODEG_HOST | 0.0.0.0 | Dirección de enlace |
-| CODEG_TOKEN | (aleatorio) | Token de autenticación |
-| CODEG_DATA_DIR | ~/.local/share/codeg | Directorio de base de datos SQLite |
-| CODEG_STATIC_DIR | ./web o ./out | Directorio de exportación estática de Next.js |
-
-### Opción 2: Docker
-
-```bash
-docker compose up
-```
+| `CODEG_PORT` | `3080` | Puerto HTTP |
+| `CODEG_HOST` | `0.0.0.0` | Dirección de enlace |
+| `CODEG_TOKEN` | *(aleatorio)* | Token de autenticación (se imprime en stderr al iniciar) |
+| `CODEG_DATA_DIR` | `~/.local/share/codeg` | Directorio de base de datos SQLite |
+| `CODEG_STATIC_DIR` | `./web` o `./out` | Directorio de exportación estática de Next.js |
 
 ## Arquitectura
 

@@ -156,16 +156,74 @@ cargo build
 
 Codeg 可以作为独立 Web 服务器运行，无需桌面环境。
 
-#### 方式一：直接运行二进制
+#### 方式一：一键安装（Linux / macOS）
 
 ```bash
-# 构建服务器二进制
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+```
+
+安装指定版本或到自定义目录：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+```
+
+然后运行：
+
+```bash
+codeg-server
+```
+
+#### 方式二：一键安装（Windows PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+```
+
+或安装指定版本：
+
+```powershell
+.\install.ps1 -Version v0.5.0
+```
+
+#### 方式三：从 GitHub Releases 下载
+
+预构建二进制文件（已打包 Web 前端资源）可在 [Releases](https://github.com/xintaofei/codeg/releases) 页面下载：
+
+| 平台 | 文件 |
+| --- | --- |
+| Linux x64 | `codeg-server-linux-x64.tar.gz` |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
+| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64 | `codeg-server-windows-x64.zip` |
+
+```bash
+# 示例：下载、解压、运行
+tar xzf codeg-server-linux-x64.tar.gz
+cd codeg-server-linux-x64
+CODEG_STATIC_DIR=./web ./codeg-server
+```
+
+#### 方式四：Docker
+
+```bash
+docker compose up -d
+
+# 或直接运行
+docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+```
+
+#### 方式五：从源码构建
+
+```bash
+pnpm install && pnpm build          # 构建前端
 cd src-tauri
 cargo build --release --bin codeg-server --no-default-features
-
-# 运行
-CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
+CODEG_STATIC_DIR=../out ./target/release/codeg-server
 ```
+
+#### 配置
 
 环境变量：
 
@@ -176,17 +234,6 @@ CODEG_PORT=3080 CODEG_STATIC_DIR=../out ./target/release/codeg-server
 | `CODEG_TOKEN` | *（随机）* | 认证令牌（启动时输出到 stderr） |
 | `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite 数据库目录 |
 | `CODEG_STATIC_DIR` | `./web` 或 `./out` | Next.js 静态导出目录 |
-
-#### 方式二：Docker
-
-```bash
-# 构建并运行
-docker compose up -d
-
-# 或手动构建
-docker build -t codeg .
-docker run -p 3080:3080 -v codeg-data:/data codeg
-```
 
 ## 架构
 
