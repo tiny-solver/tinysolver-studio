@@ -497,7 +497,8 @@ jobs:
       - create-draft-release
       - build-tauri
       - build-server
-    if: ${{ needs.build-tauri.result == 'success' && needs.build-server.result == 'success' }}
+      - build-docker
+    if: ${{ needs.build-tauri.result == 'success' && needs.build-server.result == 'success' && needs.build-docker.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
