@@ -27,6 +27,7 @@ tauri-runtime = [
     "dep:tauri-plugin-updater",
     "dep:tauri-plugin-process",
     "dep:tauri-plugin-notification",
+    "dep:keyring",
 ]
 
 [[bin]]
@@ -73,7 +74,7 @@ base64 = "0.22"
 agent-client-protocol-schema = { version = "0.10", features = ["unstable_session_usage", "unstable_session_fork"] }
 kill_tree = { version = "0.2", features = ["tokio"] }
 which = "7"
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"], optional = true }
 axum = { version = "0.8", features = ["ws"] }
 tower-http = { version = "0.6", features = ["fs", "cors"] }
 
