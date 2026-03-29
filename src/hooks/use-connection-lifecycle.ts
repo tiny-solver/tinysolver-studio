@@ -70,10 +70,6 @@ export function useConnectionLifecycle({
   const hasSelectorsData = modes !== null || configOptions !== null
   const effectiveSelectorsReady = selectorsReady || hasSelectorsData
   const selectorTaskIdRef = useRef<string | null>(null)
-  const selectorTaskTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  )
-  const selectorTaskSuppressedRef = useRef(false)
   // Visual-only loading indicators for selector chips.
   // Skip loading indicators when we have cached selectors — even if the
   // cache contains no modes/configOptions (the agent simply doesn't have
@@ -208,10 +204,6 @@ export function useConnectionLifecycle({
   }, [status, addTask, updateTask, removeTask, agentType, t])
 
   const clearSelectorTask = useCallback(() => {
-    if (selectorTaskTimeoutRef.current) {
-      clearTimeout(selectorTaskTimeoutRef.current)
-      selectorTaskTimeoutRef.current = null
-    }
     if (selectorTaskIdRef.current) {
       removeTask(selectorTaskIdRef.current)
       selectorTaskIdRef.current = null
@@ -221,19 +213,10 @@ export function useConnectionLifecycle({
   useEffect(() => {
     const isInteractive = status === "connected" || status === "prompting"
     if (!isInteractive) {
-      selectorTaskSuppressedRef.current = false
       clearSelectorTask()
       return
     }
 
-    if (selectorTaskSuppressedRef.current) {
-      clearSelectorTask()
-      return
-    }
-
-    // Use the real backend selectorsReady (not effectiveSelectorsReady
-    // which includes cache) so the task shows during session creation
-    // even when cached selectors are available.
     if (selectorsReady) {
       clearSelectorTask()
       return
@@ -249,14 +232,6 @@ export function useConnectionLifecycle({
         t("tasks.initSessionDescription")
       )
       updateTask(id, { status: "running" })
-    }
-
-    if (!selectorTaskTimeoutRef.current) {
-      selectorTaskTimeoutRef.current = setTimeout(() => {
-        selectorTaskTimeoutRef.current = null
-        selectorTaskSuppressedRef.current = true
-        clearSelectorTask()
-      }, 5000)
     }
   }, [
     status,
@@ -288,7 +263,6 @@ export function useConnectionLifecycle({
       if (taskIdRef.current) {
         removeTask(taskIdRef.current)
       }
-      selectorTaskSuppressedRef.current = false
       clearSelectorTask()
     }
   }, [removeTask, clearSelectorTask])
