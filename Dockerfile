@@ -4,14 +4,16 @@ RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY . .
+COPY src/ ./src/
+COPY public/ ./public/
+COPY next.config.ts tsconfig.json postcss.config.mjs components.json ./
 RUN pnpm build
 
 # Stage 2: Build Rust server binary
-FROM rust:1.82-bookworm AS backend
-WORKDIR /app
-COPY src-tauri/ ./src-tauri/
+FROM rust:slim-bookworm AS backend
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/src-tauri
+COPY src-tauri/ ./
 RUN cargo build --release --bin codeg-server --no-default-features
 
 # Stage 3: Runtime
