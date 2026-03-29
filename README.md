@@ -21,17 +21,13 @@
 
 Codeg (Code Generation) is an enterprise-grade multi-agent coding workspace.
 It unifies local AI coding agents (Claude Code, Codex CLI, OpenCode, Gemini CLI,
-OpenClaw, Cline, etc.) in a desktop app and web service — enabling remote development from
-any browser — with session aggregation, parallel `git worktree` development,
-MCP/Skills management, and integrated Git/file/terminal workflows.
+OpenClaw, Cline, etc.) in a desktop app, standalone server, or Docker container — enabling
+remote development from any browser — with session aggregation, parallel `git worktree`
+development, MCP/Skills management, and integrated Git/file/terminal workflows.
 
 ## Main Interface
 ![Codeg Light](./docs/images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](./docs/images/main-dark.png#gh-dark-mode-only)
-
-## Session tile display
-![Codeg Light](./docs/images/main2-light.png#gh-light-mode-only)
-![Codeg Dark](./docs/images/main2-dark.png#gh-dark-mode-only)
 
 ## Settings
 | Agents | MCP | Skills | Version Control | Web Service |
@@ -49,7 +45,7 @@ MCP/Skills management, and integrated Git/file/terminal workflows.
 - Git remote account management (GitHub and other Git servers)
 - Web service mode — access Codeg from any browser for remote work
 - **Standalone server deployment** — run `codeg-server` on any Linux/macOS server, access via browser
-- **Docker support** — deploy with `docker compose up` for zero-config server setup
+- **Docker support** — multi-stage build image with `docker compose up` or `docker run`, supports custom token, port, volume mounts for data persistence and project directories
 - Integrated engineering loop (file tree, diff, git changes, commit, terminal)
 
 ## Project Boot
@@ -209,11 +205,21 @@ CODEG_STATIC_DIR=./web ./codeg-server
 #### Option 4: Docker
 
 ```bash
+# Using Docker Compose (recommended)
 docker compose up -d
 
-# Or run directly
-docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+# Or run directly with Docker
+docker run -d -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+
+# With custom token and project directory mounted
+docker run -d -p 3080:3080 \
+  -v codeg-data:/data \
+  -v /path/to/projects:/projects \
+  -e CODEG_TOKEN=your-secret-token \
+  ghcr.io/xintaofei/codeg:latest
 ```
+
+The Docker image uses a multi-stage build (Node.js + Rust → slim Debian runtime) and includes `git` and `ssh` for repository operations. Data is persisted in the `/data` volume. You can optionally mount project directories to access local repos from within the container.
 
 #### Option 5: Build from source
 

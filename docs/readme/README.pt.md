@@ -21,16 +21,13 @@
 
 Codeg (Code Generation) é um workspace de codificação multi-agentes de nível empresarial.
 Ele unifica agentes de codificação IA locais (Claude Code, Codex CLI, OpenCode, Gemini CLI,
-OpenClaw, Cline, etc.) em um aplicativo desktop e um serviço web — possibilitando o desenvolvimento remoto a partir de qualquer navegador — com agregação de sessões, desenvolvimento
+OpenClaw, Cline, etc.) em um aplicativo desktop, servidor standalone ou contêiner
+Docker — possibilitando o desenvolvimento remoto a partir de qualquer navegador — com agregação de sessões, desenvolvimento
 paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de Git/arquivos/terminal.
 
 ## Interface principal
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
-
-## Exibição em mosaico das sessões
-![Codeg Light](../images/main2-light.png#gh-light-mode-only)
-![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
 ## Configurações
 | Agentes | MCP | Skills | Controle de versão | Serviço web |
@@ -48,7 +45,7 @@ paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de 
 - Gerenciamento de contas remotas Git (GitHub e outros servidores Git)
 - Modo de serviço web — acesse o Codeg de qualquer navegador para trabalho remoto
 - **Implantação de servidor standalone** — execute `codeg-server` em qualquer servidor Linux/macOS, acesse via navegador
-- **Suporte a Docker** — implante com `docker compose up` para configuração zero do servidor
+- **Suporte a Docker** — imagem com build multi-stage, compatível com `docker compose up` ou `docker run`, token/porta personalizáveis, persistência de dados e montagem de diretórios de projetos
 - Ciclo de engenharia integrado (árvore de arquivos, diff, alterações git, commit, terminal)
 
 ## Inicializador de Projeto
@@ -208,11 +205,21 @@ CODEG_STATIC_DIR=./web ./codeg-server
 #### Opção 4: Docker
 
 ```bash
+# Usando Docker Compose (recomendado)
 docker compose up -d
 
-# Ou executar diretamente
-docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+# Ou executar diretamente com Docker
+docker run -d -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+
+# Com token personalizado e diretório de projeto montado
+docker run -d -p 3080:3080 \
+  -v codeg-data:/data \
+  -v /path/to/projects:/projects \
+  -e CODEG_TOKEN=your-secret-token \
+  ghcr.io/xintaofei/codeg:latest
 ```
+
+A imagem Docker usa um build multi-stage (Node.js + Rust → runtime Debian slim) e inclui `git` e `ssh` para operações com repositórios. Os dados são persistidos no volume `/data`. Opcionalmente, você pode montar diretórios de projetos para acessar repositórios locais de dentro do contêiner.
 
 #### Opção 5: Compilar a partir do código-fonte
 

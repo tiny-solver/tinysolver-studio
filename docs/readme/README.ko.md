@@ -21,16 +21,12 @@
 
 Codeg(Code Generation)는 엔터프라이즈급 멀티 Agent 코딩 워크스페이스입니다.
 Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agent를
-데스크톱 앱과 웹 서비스로 통합하여 — 브라우저만으로 어디서든 원격 개발이 가능하며 — 세션 집계, 병렬 `git worktree` 개발, MCP/Skills 관리,
+데스크톱 앱, 독립형 서버 또는 Docker 컨테이너로 통합하여 — 브라우저만으로 어디서든 원격 개발이 가능하며 — 세션 집계, 병렬 `git worktree` 개발, MCP/Skills 관리,
 Git/파일/터미널 통합 워크플로를 제공합니다.
 
 ## 메인 인터페이스
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
-
-## 세션 타일 표시
-![Codeg Light](../images/main2-light.png#gh-light-mode-only)
-![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
 ## 설정
 | 에이전트 | MCP | Skills | 버전 관리 | 웹 서비스 |
@@ -48,7 +44,7 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 - Git 원격 계정 관리 (GitHub 및 기타 Git 서버)
 - Web 서비스 모드 — 브라우저에서 Codeg에 접속하여 원격 작업 가능
 - **독립형 서버 배포** — 모든 Linux/macOS 서버에서 `codeg-server`를 실행하고 브라우저로 접속
-- **Docker 지원** — `docker compose up`으로 설정 없이 서버 구축 가능
+- **Docker 지원** — 멀티 스테이지 빌드 이미지, `docker compose up` 또는 `docker run` 지원, 사용자 정의 토큰/포트, 데이터 영속화 및 프로젝트 디렉토리 마운트 지원
 - 통합 엔지니어링 루프 (파일 트리, Diff, Git 변경사항, 커밋, 터미널)
 
 ## 프로젝트 부트
@@ -208,11 +204,21 @@ CODEG_STATIC_DIR=./web ./codeg-server
 #### 옵션 4: Docker
 
 ```bash
+# Docker Compose 사용 (권장)
 docker compose up -d
 
-# 또는 직접 실행
-docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+# 또는 Docker로 직접 실행
+docker run -d -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+
+# 사용자 정의 토큰 및 프로젝트 디렉토리 마운트
+docker run -d -p 3080:3080 \
+  -v codeg-data:/data \
+  -v /path/to/projects:/projects \
+  -e CODEG_TOKEN=your-secret-token \
+  ghcr.io/xintaofei/codeg:latest
 ```
+
+Docker 이미지는 멀티 스테이지 빌드(Node.js + Rust → 경량 Debian 런타임)를 사용하며, 저장소 작업을 위한 `git`과 `ssh`가 포함되어 있습니다. 데이터는 `/data` 볼륨에 영속적으로 저장됩니다. 선택적으로 프로젝트 디렉토리를 마운트하여 컨테이너 내에서 로컬 저장소에 접근할 수 있습니다.
 
 #### 옵션 5: 소스에서 빌드
 

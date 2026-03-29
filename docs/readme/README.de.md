@@ -22,17 +22,14 @@
 Codeg (Code Generation) ist ein unternehmenstauglicher Multi-Agent-Workspace
 für die Programmierung.
 Es vereint lokale KI-Coding-Agenten (Claude Code, Codex CLI, OpenCode,
-Gemini CLI, OpenClaw usw.) in einer Desktop-App und einem Webservice — Remote-Entwicklung von jedem Browser aus — mit Sitzungsaggregation,
+Gemini CLI, OpenClaw usw.) in einer Desktop-App, einem Standalone-Server oder
+Docker-Container — Remote-Entwicklung von jedem Browser aus — mit Sitzungsaggregation,
 paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung und integrierten
 Git/Datei/Terminal-Workflows.
 
 ## Hauptoberfläche
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
-
-## Sitzungskachelansicht
-![Codeg Light](../images/main2-light.png#gh-light-mode-only)
-![Codeg Dark](../images/main2-dark.png#gh-dark-mode-only)
 
 ## Einstellungen
 | Agenten | MCP | Skills | Versionskontrolle | Webdienst |
@@ -50,7 +47,7 @@ Git/Datei/Terminal-Workflows.
 - Git-Remote-Kontoverwaltung (GitHub und andere Git-Server)
 - Webdienst-Modus — Zugriff auf Codeg über jeden Browser für Remote-Arbeit
 - Standalone-Server-Bereitstellung — codeg-server auf jedem Linux/macOS-Server ausführen, Zugriff über den Browser
-- Docker-Unterstützung — Bereitstellung mit docker compose up für konfigurationsfreien Serverbetrieb
+- **Docker-Unterstützung** — Multi-Stage-Build-Image, unterstützt `docker compose up` oder `docker run`, benutzerdefinierter Token/Port, Datenpersistenz und Projektverzeichnis-Mounts
 - Integrierter Engineering-Kreislauf (Dateibaum, Diff, Git-Änderungen, Commit, Terminal)
 
 ## Projekt-Starter
@@ -210,11 +207,21 @@ CODEG_STATIC_DIR=./web ./codeg-server
 #### Option 4: Docker
 
 ```bash
+# Mit Docker Compose (empfohlen)
 docker compose up -d
 
-# Oder direkt ausführen
-docker run -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+# Oder direkt mit Docker ausführen
+docker run -d -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+
+# Mit benutzerdefiniertem Token und Projektverzeichnis-Mount
+docker run -d -p 3080:3080 \
+  -v codeg-data:/data \
+  -v /path/to/projects:/projects \
+  -e CODEG_TOKEN=your-secret-token \
+  ghcr.io/xintaofei/codeg:latest
 ```
+
+Das Docker-Image verwendet einen Multi-Stage-Build (Node.js + Rust → schlanke Debian-Laufzeitumgebung) und enthält `git` und `ssh` für Repository-Operationen. Daten werden im `/data`-Volume persistent gespeichert. Optional können Projektverzeichnisse gemountet werden, um aus dem Container auf lokale Repositories zuzugreifen.
 
 #### Option 5: Aus Quellcode kompilieren
 
