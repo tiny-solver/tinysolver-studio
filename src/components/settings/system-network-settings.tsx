@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Wifi,
 } from "lucide-react"
+import { Github } from "@lobehub/icons"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Update = any
 import { useLocale, useTranslations } from "next-intl"
@@ -28,6 +29,7 @@ import {
   updateSystemLanguageSettings,
   updateSystemProxySettings,
 } from "@/lib/api"
+import { openUrl } from "@/lib/platform"
 import type { AppLocale } from "@/lib/types"
 import {
   checkAppUpdate,
@@ -299,7 +301,16 @@ export function SystemNetworkSettings() {
     <div className="h-full overflow-auto">
       <div className="w-full space-y-4">
         <section className="space-y-1">
-          <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
+            <Button
+              variant="ghost"
+              className="size-5 rounded-full"
+              onClick={() => openUrl("https://github.com/xintaofei/codeg")}
+            >
+              <Github className="size-5" />
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
             {t("sectionDescription")}
           </p>
