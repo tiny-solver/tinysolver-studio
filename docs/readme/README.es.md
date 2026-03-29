@@ -164,7 +164,7 @@ curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | b
 Instalar una versión específica o en un directorio personalizado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 Luego ejecutar:
@@ -182,7 +182,7 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 O instalar una versión específica:
 
 ```powershell
-.\install.ps1 -Version v0.5.0
+.\install.ps1 -Version v0.5.2
 ```
 
 #### Opción 3: Descargar desde GitHub Releases

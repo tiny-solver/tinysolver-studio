@@ -161,7 +161,7 @@ curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | b
 특정 버전 또는 사용자 지정 디렉토리에 설치:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 실행:
@@ -179,7 +179,7 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 또는 특정 버전 설치:
 
 ```powershell
-.\install.ps1 -Version v0.5.0
+.\install.ps1 -Version v0.5.2
 ```
 
 #### 옵션 3: GitHub Releases에서 다운로드

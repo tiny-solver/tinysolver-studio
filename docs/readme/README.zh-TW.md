@@ -161,7 +161,7 @@ curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | b
 安裝指定版本或到自訂目錄：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 然後執行：
@@ -179,7 +179,7 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 或安裝指定版本：
 
 ```powershell
-.\install.ps1 -Version v0.5.0
+.\install.ps1 -Version v0.5.2
 ```
 
 #### 方式三：從 GitHub Releases 下載

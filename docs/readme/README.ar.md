@@ -161,7 +161,7 @@ curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | b
 تثبيت إصدار محدد أو في دليل مخصص:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.0 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 ثم التشغيل:
@@ -179,7 +179,7 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 أو تثبيت إصدار محدد:
 
 ```powershell
-.\install.ps1 -Version v0.5.0
+.\install.ps1 -Version v0.5.2
 ```
 
 #### الخيار 3: التنزيل من GitHub Releases
