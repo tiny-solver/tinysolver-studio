@@ -34,6 +34,49 @@ impl TelegramBackend {
             self.bot_token, method
         )
     }
+
+    async fn send_text(
+        &self,
+        text: &str,
+        parse_mode: Option<&str>,
+    ) -> Result<SentMessageId, ChatChannelError> {
+        let mut body = serde_json::json!({
+            "chat_id": self.chat_id,
+            "text": text,
+        });
+        if let Some(mode) = parse_mode {
+            body["parse_mode"] = serde_json::Value::String(mode.to_string());
+        }
+
+        let resp = self
+            .client
+            .post(&self.api_url("sendMessage"))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+
+        let result: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+
+        if result.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let desc = result
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error");
+            return Err(ChatChannelError::SendFailed(desc.to_string()));
+        }
+
+        let message_id = result
+            .pointer("/result/message_id")
+            .and_then(|v| v.as_i64())
+            .map(|id| id.to_string())
+            .unwrap_or_default();
+
+        Ok(SentMessageId(message_id))
+    }
 }
 
 #[async_trait]
@@ -150,40 +193,25 @@ impl ChatChannelBackend for TelegramBackend {
     }
 
     async fn send_message(&self, text: &str) -> Result<SentMessageId, ChatChannelError> {
-        let body = serde_json::json!({
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": "Markdown",
-        });
-
-        let resp = self
-            .client
-            .post(&self.api_url("sendMessage"))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
-
-        let result: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
-
-        let message_id = result
-            .pointer("/result/message_id")
-            .and_then(|v| v.as_i64())
-            .map(|id| id.to_string())
-            .unwrap_or_default();
-
-        Ok(SentMessageId(message_id))
+        self.send_text(text, None).await
     }
 
     async fn send_rich_message(
         &self,
         message: &RichMessage,
     ) -> Result<SentMessageId, ChatChannelError> {
-        let text = format_telegram_markdown(message);
-        self.send_message(&text).await
+        let markdown_text = format_telegram_markdown(message);
+        let result = self.send_text(&markdown_text, Some("MarkdownV2")).await;
+
+        match result {
+            Ok(id) => Ok(id),
+            Err(e) => {
+                // MarkdownV2 failed — fall back to plain text
+                eprintln!("[Telegram] MarkdownV2 send failed: {e}, retrying as plain text");
+                let plain_text = message.to_plain_text();
+                self.send_text(&plain_text, None).await
+            }
+        }
     }
 
     async fn test_connection(&self) -> Result<(), ChatChannelError> {
@@ -234,7 +262,9 @@ fn format_telegram_markdown(msg: &RichMessage) -> String {
 }
 
 fn escape_markdown(text: &str) -> String {
-    text.replace('_', "\\_")
+    // Backslash must be escaped first to avoid double-escaping
+    text.replace('\\', "\\\\")
+        .replace('_', "\\_")
         .replace('*', "\\*")
         .replace('[', "\\[")
         .replace(']', "\\]")

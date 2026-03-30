@@ -34,7 +34,13 @@ pub fn spawn_command_dispatcher(
             let send_result = manager.send_to_channel(cmd.channel_id, &response).await;
             let (status, error_detail) = match &send_result {
                 Ok(_) => ("sent", None),
-                Err(e) => ("failed", Some(e.to_string())),
+                Err(e) => {
+                    eprintln!(
+                        "[ChatChannel] failed to send response for {:?} to channel {}: {e}",
+                        text, cmd.channel_id
+                    );
+                    ("failed", Some(e.to_string()))
+                }
             };
 
             let _ = chat_channel_message_log_service::create_log(
