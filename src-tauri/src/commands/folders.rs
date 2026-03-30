@@ -2934,6 +2934,98 @@ where
     })?
 }
 
+// ─── Directory browser helpers (for web/server mode) ───
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn get_home_directory() -> Result<String, AppCommandError> {
+    dirs::home_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .ok_or_else(|| AppCommandError::io_error("Could not determine home directory"))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryEntry {
+    pub name: String,
+    pub path: String,
+    pub has_children: bool,
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn list_directory_entries(
+    path: String,
+) -> Result<Vec<DirectoryEntry>, AppCommandError> {
+    let root = PathBuf::from(&path);
+    if !root.is_dir() {
+        return Err(AppCommandError::io_error("Path is not a directory")
+            .with_detail(path));
+    }
+
+    let mut entries: Vec<DirectoryEntry> = Vec::new();
+    let read_dir = std::fs::read_dir(&root).map_err(|e| {
+        AppCommandError::io_error("Failed to read directory").with_detail(e.to_string())
+    })?;
+
+    for entry in read_dir {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        // Follow symlinks: check if the resolved path is a directory
+        let is_dir = if file_type.is_symlink() {
+            entry.path().is_dir()
+        } else {
+            file_type.is_dir()
+        };
+        if !is_dir {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        // Skip hidden directories (starting with '.')
+        if name.starts_with('.') {
+            continue;
+        }
+        let abs_path = entry.path().to_string_lossy().to_string();
+
+        // Peek into subdirectory to check if it has child directories
+        let has_children = match std::fs::read_dir(entry.path()) {
+            Ok(sub) => sub
+                .filter_map(|e| e.ok())
+                .any(|e| {
+                    let ft = e.file_type().ok();
+                    let is_sub_dir = ft.map_or(false, |ft| {
+                        if ft.is_symlink() {
+                            e.path().is_dir()
+                        } else {
+                            ft.is_dir()
+                        }
+                    });
+                    if !is_sub_dir {
+                        return false;
+                    }
+                    let sub_name = e.file_name().to_string_lossy().to_string();
+                    !sub_name.starts_with('.')
+                }),
+            Err(_) => false,
+        };
+
+        entries.push(DirectoryEntry {
+            name,
+            path: abs_path,
+            has_children,
+        });
+    }
+
+    // Sort by name, case-insensitive
+    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    Ok(entries)
+}
+
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_file_tree(
     path: String,

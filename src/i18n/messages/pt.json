@@ -56,7 +56,8 @@
       "directoryPlaceholder": "Selecione o diretório de destino...",
       "browseDirectory": "Procurar diretório",
       "cancel": "Cancelar",
-      "clone": "Clonar"
+      "clone": "Clonar",
+      "clonePath": "Caminho de clonagem: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "Endereço de acesso",
     "tokenLabel": "Token de acesso",
     "tokenHint": "Insira este token ao acessar o cliente Web pela primeira vez"
+  },
+  "DirectoryBrowser": {
+    "title": "Explorar diretório",
+    "pathPlaceholder": "Digite o caminho do diretório...",
+    "goHome": "Ir para o diretório inicial",
+    "navigateUp": "Ir para o diretório superior",
+    "select": "Selecionar",
+    "cancel": "Cancelar",
+    "loading": "Carregando...",
+    "emptyDirectory": "Este diretório está vazio",
+    "errorLoadingDir": "Falha ao carregar o diretório",
+    "permissionDenied": "Permissão negada"
   }
 }

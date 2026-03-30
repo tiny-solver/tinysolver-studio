@@ -110,6 +110,24 @@ pub async fn get_git_branch(
     Ok(Json(result))
 }
 
+pub async fn get_home_directory() -> Result<Json<String>, AppCommandError> {
+    let result = folder_commands::get_home_directory().await?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListDirectoryEntriesParams {
+    pub path: String,
+}
+
+pub async fn list_directory_entries(
+    Json(params): Json<ListDirectoryEntriesParams>,
+) -> Result<Json<Vec<folder_commands::DirectoryEntry>>, AppCommandError> {
+    let result = folder_commands::list_directory_entries(params.path).await?;
+    Ok(Json(result))
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetFileTreeParams {

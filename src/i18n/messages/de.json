@@ -56,7 +56,8 @@
       "directoryPlaceholder": "Zielverzeichnis auswählen...",
       "browseDirectory": "Verzeichnis durchsuchen",
       "cancel": "Abbrechen",
-      "clone": "Klonen"
+      "clone": "Klonen",
+      "clonePath": "Klonpfad: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "Zugriffsadresse",
     "tokenLabel": "Zugriffstoken",
     "tokenHint": "Geben Sie dieses Token beim ersten Zugriff auf den Web-Client ein"
+  },
+  "DirectoryBrowser": {
+    "title": "Verzeichnis durchsuchen",
+    "pathPlaceholder": "Verzeichnispfad eingeben...",
+    "goHome": "Zum Heimverzeichnis",
+    "navigateUp": "Zum übergeordneten Verzeichnis",
+    "select": "Auswählen",
+    "cancel": "Abbrechen",
+    "loading": "Wird geladen...",
+    "emptyDirectory": "Dieses Verzeichnis ist leer",
+    "errorLoadingDir": "Verzeichnis konnte nicht geladen werden",
+    "permissionDenied": "Zugriff verweigert"
   }
 }

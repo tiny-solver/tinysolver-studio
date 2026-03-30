@@ -56,7 +56,8 @@
       "directoryPlaceholder": "Select target directory...",
       "browseDirectory": "Browse directory",
       "cancel": "Cancel",
-      "clone": "Clone"
+      "clone": "Clone",
+      "clonePath": "Clone path: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "Access Address",
     "tokenLabel": "Access Token",
     "tokenHint": "Enter this token when accessing the Web client for the first time"
+  },
+  "DirectoryBrowser": {
+    "title": "Browse Directory",
+    "pathPlaceholder": "Enter directory path...",
+    "goHome": "Go to home directory",
+    "navigateUp": "Go to parent directory",
+    "select": "Select",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "emptyDirectory": "This directory is empty",
+    "errorLoadingDir": "Failed to load directory",
+    "permissionDenied": "Permission denied"
   }
 }

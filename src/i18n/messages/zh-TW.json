@@ -56,7 +56,8 @@
       "directoryPlaceholder": "選擇目標目錄...",
       "browseDirectory": "瀏覽目錄",
       "cancel": "取消",
-      "clone": "複製"
+      "clone": "複製",
+      "clonePath": "克隆路徑: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "存取位址",
     "tokenLabel": "存取 Token",
     "tokenHint": "Web 用戶端首次存取時需輸入此 Token"
+  },
+  "DirectoryBrowser": {
+    "title": "瀏覽目錄",
+    "pathPlaceholder": "輸入目錄路徑...",
+    "goHome": "回到主目錄",
+    "navigateUp": "返回上層目錄",
+    "select": "選擇",
+    "cancel": "取消",
+    "loading": "載入中...",
+    "emptyDirectory": "此目錄為空",
+    "errorLoadingDir": "載入目錄失敗",
+    "permissionDenied": "權限不足"
   }
 }

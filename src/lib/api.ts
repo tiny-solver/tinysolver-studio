@@ -36,6 +36,7 @@ import type {
   TerminalInfo,
   PromptInputBlock,
   FileTreeNode,
+  DirectoryEntry,
   FilePreviewContent,
   FileEditContent,
   FileSaveResult,
@@ -1105,6 +1106,18 @@ export async function bootstrapFolderCommandsFromPackageJson(
     folderId,
     folderPath,
   })
+}
+
+// Directory browser (for web/server mode)
+
+export async function getHomeDirectory(): Promise<string> {
+  return getTransport().call("get_home_directory")
+}
+
+export async function listDirectoryEntries(
+  path: string
+): Promise<DirectoryEntry[]> {
+  return getTransport().call("list_directory_entries", { path })
 }
 
 // File tree and git log commands

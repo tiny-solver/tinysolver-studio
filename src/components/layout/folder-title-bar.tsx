@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { getGitBranch, openFolderWindow, openSettingsWindow } from "@/lib/api"
-import { openFileDialog } from "@/lib/platform"
+import { isDesktop, openFileDialog } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
 import { Button } from "@/components/ui/button"
 import { useSidebarContext } from "@/contexts/sidebar-context"
@@ -38,6 +38,7 @@ import { FolderNameDropdown } from "./folder-name-dropdown"
 import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
+import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { cn } from "@/lib/utils"
 
 const MODE_TABS = [
@@ -71,6 +72,7 @@ export function FolderTitleBar() {
   const { shortcuts } = useShortcutSettings()
   const [branch, setBranch] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [browserOpen, setBrowserOpen] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   )
@@ -78,13 +80,20 @@ export function FolderTitleBar() {
   const folderPath = folder?.path ?? ""
 
   const handleOpenFolder = useCallback(async () => {
-    try {
-      const result = await openFileDialog({ directory: true, multiple: false })
-      if (!result) return
-      const selected = Array.isArray(result) ? result[0] : result
-      await openFolderWindow(selected, { newWindow: true })
-    } catch (err) {
-      console.error("[FolderTitleBar] failed to open folder:", err)
+    if (isDesktop()) {
+      try {
+        const result = await openFileDialog({
+          directory: true,
+          multiple: false,
+        })
+        if (!result) return
+        const selected = Array.isArray(result) ? result[0] : result
+        await openFolderWindow(selected, { newWindow: true })
+      } catch (err) {
+        console.error("[FolderTitleBar] failed to open folder:", err)
+      }
+    } else {
+      setBrowserOpen(true)
     }
   }, [])
 
@@ -399,6 +408,15 @@ export function FolderTitleBar() {
         }
       />
       <SearchCommandDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <DirectoryBrowserDialog
+        open={browserOpen}
+        onOpenChange={setBrowserOpen}
+        onSelect={(path) => {
+          openFolderWindow(path, { newWindow: true }).catch((err) => {
+            console.error("[FolderTitleBar] failed to open folder:", err)
+          })
+        }}
+      />
     </>
   )
 }

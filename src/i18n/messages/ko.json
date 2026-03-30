@@ -56,7 +56,8 @@
       "directoryPlaceholder": "대상 디렉터리 선택...",
       "browseDirectory": "디렉터리 찾아보기",
       "cancel": "취소",
-      "clone": "클론"
+      "clone": "클론",
+      "clonePath": "클론 경로: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "접속 주소",
     "tokenLabel": "접속 토큰",
     "tokenHint": "웹 클라이언트 첫 접속 시 이 토큰을 입력하세요"
+  },
+  "DirectoryBrowser": {
+    "title": "디렉토리 찾아보기",
+    "pathPlaceholder": "디렉토리 경로 입력...",
+    "goHome": "홈 디렉토리로 이동",
+    "navigateUp": "상위 디렉토리로 이동",
+    "select": "선택",
+    "cancel": "취소",
+    "loading": "로딩 중...",
+    "emptyDirectory": "이 디렉토리는 비어 있습니다",
+    "errorLoadingDir": "디렉토리 로딩 실패",
+    "permissionDenied": "권한이 없습니다"
   }
 }

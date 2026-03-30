@@ -50,6 +50,8 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/create_folder_directory", post(handlers::folders::create_folder_directory))
         .route("/save_folder_opened_conversations", post(handlers::folders::save_folder_opened_conversations))
         .route("/get_git_branch", post(handlers::folders::get_git_branch))
+        .route("/get_home_directory", post(handlers::folders::get_home_directory))
+        .route("/list_directory_entries", post(handlers::folders::list_directory_entries))
         .route("/get_file_tree", post(handlers::folders::get_file_tree))
         .route("/start_file_tree_watch", post(handlers::folders::start_file_tree_watch))
         .route("/stop_file_tree_watch", post(handlers::folders::stop_file_tree_watch))

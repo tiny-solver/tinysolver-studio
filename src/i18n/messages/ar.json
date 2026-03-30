@@ -56,7 +56,8 @@
       "directoryPlaceholder": "اختر مجلد الهدف...",
       "browseDirectory": "تصفح المجلد",
       "cancel": "إلغاء",
-      "clone": "استنساخ"
+      "clone": "استنساخ",
+      "clonePath": "مسار الاستنساخ: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "عنوان الوصول",
     "tokenLabel": "رمز الوصول",
     "tokenHint": "أدخل هذا الرمز عند الوصول إلى عميل الويب لأول مرة"
+  },
+  "DirectoryBrowser": {
+    "title": "تصفح المجلد",
+    "pathPlaceholder": "أدخل مسار المجلد...",
+    "goHome": "الذهاب إلى المجلد الرئيسي",
+    "navigateUp": "الذهاب إلى المجلد الأعلى",
+    "select": "اختيار",
+    "cancel": "إلغاء",
+    "loading": "جاري التحميل...",
+    "emptyDirectory": "هذا المجلد فارغ",
+    "errorLoadingDir": "فشل في تحميل المجلد",
+    "permissionDenied": "تم رفض الإذن"
   }
 }

@@ -270,6 +270,8 @@ mod tauri_app {
                 folders::save_folder_opened_conversations,
                 folders::start_file_tree_watch,
                 folders::stop_file_tree_watch,
+                folders::get_home_directory,
+                folders::list_directory_entries,
                 folders::get_file_tree,
                 folders::read_file_base64,
                 folders::read_file_preview,

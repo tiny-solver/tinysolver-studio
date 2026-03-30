@@ -730,6 +730,12 @@ export type FileTreeNode =
   | { kind: "file"; name: string; path: string }
   | { kind: "dir"; name: string; path: string; children: FileTreeNode[] }
 
+export interface DirectoryEntry {
+  name: string
+  path: string
+  hasChildren: boolean
+}
+
 export interface FilePreviewContent {
   path: string
   content: string

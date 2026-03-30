@@ -56,7 +56,8 @@
       "directoryPlaceholder": "保存先ディレクトリを選択...",
       "browseDirectory": "ディレクトリを参照",
       "cancel": "キャンセル",
-      "clone": "クローン"
+      "clone": "クローン",
+      "clonePath": "クローンパス: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "アクセスアドレス",
     "tokenLabel": "アクセストークン",
     "tokenHint": "Webクライアントの初回アクセス時にこのトークンを入力してください"
+  },
+  "DirectoryBrowser": {
+    "title": "ディレクトリを参照",
+    "pathPlaceholder": "ディレクトリパスを入力...",
+    "goHome": "ホームディレクトリへ",
+    "navigateUp": "親ディレクトリへ",
+    "select": "選択",
+    "cancel": "キャンセル",
+    "loading": "読み込み中...",
+    "emptyDirectory": "このディレクトリは空です",
+    "errorLoadingDir": "ディレクトリの読み込みに失敗しました",
+    "permissionDenied": "アクセス権がありません"
   }
 }

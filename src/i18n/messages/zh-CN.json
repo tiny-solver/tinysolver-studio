@@ -56,7 +56,8 @@
       "directoryPlaceholder": "选择目标目录...",
       "browseDirectory": "浏览目录",
       "cancel": "取消",
-      "clone": "克隆"
+      "clone": "克隆",
+      "clonePath": "克隆路径: {path}"
     }
   },
   "GitCredentialDialog": {
@@ -1657,5 +1658,17 @@
     "addressLabel": "访问地址",
     "tokenLabel": "访问 Token",
     "tokenHint": "Web 客户端首次访问时需输入此 Token"
+  },
+  "DirectoryBrowser": {
+    "title": "浏览目录",
+    "pathPlaceholder": "输入目录路径...",
+    "goHome": "回到主目录",
+    "navigateUp": "返回上级目录",
+    "select": "选择",
+    "cancel": "取消",
+    "loading": "加载中...",
+    "emptyDirectory": "此目录为空",
+    "errorLoadingDir": "加载目录失败",
+    "permissionDenied": "权限不足"
   }
 }

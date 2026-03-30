@@ -24,9 +24,10 @@ import {
   openFolderWindow,
   openProjectBootWindow,
 } from "@/lib/api"
-import { openFileDialog } from "@/lib/platform"
+import { isDesktop, openFileDialog } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
 import { CloneDialog } from "@/components/welcome/clone-dialog"
+import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import type { FolderHistoryEntry } from "@/lib/types"
 
 export function FolderNameDropdown() {
@@ -35,6 +36,7 @@ export function FolderNameDropdown() {
   const [openFolders, setOpenFolders] = useState<FolderHistoryEntry[]>([])
   const [history, setHistory] = useState<FolderHistoryEntry[]>([])
   const [cloneOpen, setCloneOpen] = useState(false)
+  const [browserOpen, setBrowserOpen] = useState(false)
 
   const folderPath = folder?.path ?? ""
   const folderName = folder?.name ?? t("fallbackFolderName")
@@ -57,11 +59,19 @@ export function FolderNameDropdown() {
   }
 
   async function handleOpenFolder() {
-    const selected = await openFileDialog({ directory: true, multiple: false })
-    if (selected) {
-      await openFolderWindow(Array.isArray(selected) ? selected[0] : selected, {
-        newWindow: true,
+    if (isDesktop()) {
+      const selected = await openFileDialog({
+        directory: true,
+        multiple: false,
       })
+      if (selected) {
+        await openFolderWindow(
+          Array.isArray(selected) ? selected[0] : selected,
+          { newWindow: true }
+        )
+      }
+    } else {
+      setBrowserOpen(true)
     }
   }
 
@@ -149,6 +159,15 @@ export function FolderNameDropdown() {
         </DropdownMenuContent>
       </DropdownMenu>
       <CloneDialog open={cloneOpen} onOpenChange={setCloneOpen} />
+      <DirectoryBrowserDialog
+        open={browserOpen}
+        onOpenChange={setBrowserOpen}
+        onSelect={(path) => {
+          openFolderWindow(path, { newWindow: true }).catch((err) => {
+            console.error("[FolderNameDropdown] failed to open folder:", err)
+          })
+        }}
+      />
     </>
   )
 }
