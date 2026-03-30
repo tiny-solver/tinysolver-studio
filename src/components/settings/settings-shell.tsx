@@ -12,6 +12,7 @@ import {
   GitBranch,
   Globe,
   Keyboard,
+  MessageCircle,
   Palette,
   PlugZap,
   Settings,
@@ -33,6 +34,7 @@ interface SettingsNavItem {
     | "skills"
     | "shortcuts"
     | "version_control"
+    | "chat_channels"
     | "system"
     | "web_service"
   icon: ComponentType<{ className?: string }>
@@ -68,6 +70,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/version-control",
     labelKey: "version_control",
     icon: GitBranch,
+  },
+  {
+    href: "/settings/chat-channels",
+    labelKey: "chat_channels",
+    icon: MessageCircle,
   },
   {
     href: "/settings/web-service",

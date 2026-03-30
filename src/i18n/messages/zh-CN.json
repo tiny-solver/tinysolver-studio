@@ -92,6 +92,7 @@
       "shortcuts": "快捷键",
       "version_control": "版本控制",
       "system": "系统",
+      "chat_channels": "消息渠道",
       "web_service": "Web 服务"
     }
   },
@@ -1670,5 +1671,36 @@
     "emptyDirectory": "此目录为空",
     "errorLoadingDir": "加载目录失败",
     "permissionDenied": "权限不足"
+  },
+  "ChatChannelSettings": {
+    "loading": "加载中...",
+    "sectionTitle": "消息渠道",
+    "sectionDescription": "配置 IM 机器人，接收事件通知和查询编码活动。",
+    "addChannel": "添加渠道",
+    "noChannels": "尚未配置任何消息渠道。",
+    "channelName": "名称",
+    "channelNamePlaceholder": "我的 Telegram 机器人",
+    "channelType": "渠道类型",
+    "lark": "飞书",
+    "dailyReport": "每日报告",
+    "dailyReportTime": "推送时间",
+    "nameRequired": "请输入渠道名称。",
+    "tokenRequired": "请输入 Token。",
+    "chatIdRequired": "请输入 Chat ID。",
+    "loadFailed": "加载渠道失败。",
+    "saveFailed": "保存失败。",
+    "connectSuccess": "渠道已连接。",
+    "connectFailed": "连接失败",
+    "disconnectSuccess": "渠道已断开。",
+    "disconnectFailed": "断开连接失败。",
+    "testSuccess": "连接测试通过。",
+    "testFailed": "连接测试失败",
+    "deleteSuccess": "渠道已删除。",
+    "deleteFailed": "删除渠道失败。",
+    "deleteConfirmTitle": "删除渠道",
+    "deleteConfirmMessage": "将永久删除该渠道及其消息日志，确定吗？",
+    "cancel": "取消",
+    "delete": "删除",
+    "create": "创建"
   }
 }

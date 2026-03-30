@@ -245,6 +245,7 @@ pub async fn start_web_server(
         emitter: crate::web::event_bridge::EventEmitter::Tauri(app.clone()),
         data_dir: app.path().app_data_dir().unwrap_or_default(),
         web_server_state: WebServerState::new(), // placeholder; not used by handlers
+        chat_channel_manager: crate::app_state::default_chat_channel_manager(),
     });
 
     let router = router::build_router(app_state, token.clone(), static_dir);

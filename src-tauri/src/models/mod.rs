@@ -1,10 +1,13 @@
 pub mod agent;
+pub mod chat_channel;
 pub mod conversation;
 pub mod folder;
 pub mod message;
 pub mod system;
 
 pub use agent::AgentType;
+#[allow(unused_imports)]
+pub use chat_channel::{ChannelStatusInfo, ChatChannelInfo, ChatChannelMessageLogInfo};
 pub use conversation::{
     AgentConversationCount, AgentStats, ConversationDetail, ConversationSummary,
     DbConversationDetail, DbConversationSummary, FolderInfo, ImportResult, SessionStats,

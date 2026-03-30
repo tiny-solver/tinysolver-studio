@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::acp::manager::ConnectionManager;
+use crate::chat_channel::manager::ChatChannelManager;
 use crate::db::AppDatabase;
 use crate::terminal::manager::TerminalManager;
 use crate::web::event_bridge::{EventEmitter, WebEventBroadcaster};
@@ -15,6 +16,7 @@ pub struct AppState {
     pub emitter: EventEmitter,
     pub data_dir: PathBuf,
     pub web_server_state: WebServerState,
+    pub chat_channel_manager: ChatChannelManager,
 }
 
 pub fn default_connection_manager() -> ConnectionManager {
@@ -23,4 +25,8 @@ pub fn default_connection_manager() -> ConnectionManager {
 
 pub fn default_terminal_manager() -> TerminalManager {
     TerminalManager::new()
+}
+
+pub fn default_chat_channel_manager() -> ChatChannelManager {
+    ChatChannelManager::new()
 }

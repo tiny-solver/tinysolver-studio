@@ -54,6 +54,9 @@ import type {
   McpMarketplaceProvider,
   McpMarketplaceItem,
   McpMarketplaceServerDetail,
+  ChatChannelInfo,
+  ChannelStatusInfo,
+  ChatChannelMessageLog,
 } from "./types"
 
 export async function listConversations(params?: {
@@ -1303,4 +1306,99 @@ export async function stopWebServer(): Promise<void> {
 
 export async function getWebServerStatus(): Promise<WebServerInfo | null> {
   return getTransport().call("get_web_server_status")
+}
+
+// ─── Chat Channels ───
+
+export async function listChatChannels(): Promise<ChatChannelInfo[]> {
+  return getTransport().call("list_chat_channels")
+}
+
+export async function createChatChannel(params: {
+  name: string
+  channelType: string
+  configJson: string
+  enabled: boolean
+  dailyReportEnabled: boolean
+  dailyReportTime?: string | null
+}): Promise<ChatChannelInfo> {
+  return getTransport().call("create_chat_channel", {
+    name: params.name,
+    channelType: params.channelType,
+    configJson: params.configJson,
+    enabled: params.enabled,
+    dailyReportEnabled: params.dailyReportEnabled,
+    dailyReportTime: params.dailyReportTime ?? null,
+  })
+}
+
+export async function updateChatChannel(params: {
+  id: number
+  name?: string | null
+  enabled?: boolean | null
+  configJson?: string | null
+  eventFilterJson?: string | null
+  dailyReportEnabled?: boolean | null
+  dailyReportTime?: string | null
+}): Promise<ChatChannelInfo> {
+  return getTransport().call("update_chat_channel", {
+    id: params.id,
+    name: params.name ?? null,
+    enabled: params.enabled ?? null,
+    configJson: params.configJson ?? null,
+    eventFilterJson: params.eventFilterJson ?? null,
+    dailyReportEnabled: params.dailyReportEnabled ?? null,
+    dailyReportTime: params.dailyReportTime ?? null,
+  })
+}
+
+export async function deleteChatChannel(id: number): Promise<void> {
+  return getTransport().call("delete_chat_channel", { id })
+}
+
+export async function saveChatChannelToken(
+  channelId: number,
+  token: string,
+): Promise<void> {
+  return getTransport().call("save_chat_channel_token", { channelId, token })
+}
+
+export async function getChatChannelHasToken(
+  channelId: number,
+): Promise<boolean> {
+  return getTransport().call("get_chat_channel_has_token", { channelId })
+}
+
+export async function deleteChatChannelToken(
+  channelId: number,
+): Promise<void> {
+  return getTransport().call("delete_chat_channel_token", { channelId })
+}
+
+export async function connectChatChannel(id: number): Promise<void> {
+  return getTransport().call("connect_chat_channel", { id })
+}
+
+export async function disconnectChatChannel(id: number): Promise<void> {
+  return getTransport().call("disconnect_chat_channel", { id })
+}
+
+export async function testChatChannel(id: number): Promise<void> {
+  return getTransport().call("test_chat_channel", { id })
+}
+
+export async function getChatChannelStatus(): Promise<ChannelStatusInfo[]> {
+  return getTransport().call("get_chat_channel_status")
+}
+
+export async function listChatChannelMessages(params: {
+  channelId: number
+  limit?: number
+  offset?: number
+}): Promise<ChatChannelMessageLog[]> {
+  return getTransport().call("list_chat_channel_messages", {
+    channelId: params.channelId,
+    limit: params.limit ?? null,
+    offset: params.offset ?? null,
+  })
 }

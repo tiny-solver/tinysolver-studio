@@ -1,6 +1,7 @@
 mod acp;
 mod app_error;
 pub mod app_state;
+pub mod chat_channel;
 mod commands;
 pub mod db;
 pub mod git_credential;
@@ -17,10 +18,11 @@ mod tauri_app {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use crate::acp::manager::ConnectionManager;
+    use crate::chat_channel::manager::ChatChannelManager;
     use crate::commands::{
-        acp as acp_commands, conversations, folder_commands, folders, mcp as mcp_commands,
-        notification, project_boot, system_settings, terminal as terminal_commands, version_control,
-        windows,
+        acp as acp_commands, chat_channel as chat_channel_commands, conversations, folder_commands,
+        folders, mcp as mcp_commands, notification, project_boot, system_settings,
+        terminal as terminal_commands, version_control, windows,
     };
     use crate::terminal::manager::TerminalManager;
     use crate::{db, network, process, web};
@@ -52,6 +54,7 @@ mod tauri_app {
             .plugin(tauri_plugin_notification::init())
             .manage(ConnectionManager::new())
             .manage(TerminalManager::new())
+            .manage(ChatChannelManager::new())
             .manage(windows::SettingsWindowState::new())
             .manage(windows::CommitWindowState::new())
             .manage(windows::MergeWindowState::new())
@@ -76,6 +79,19 @@ mod tauri_app {
                     Err(err) => {
                         eprintln!("[Settings] failed to load system proxy settings: {err}");
                     }
+                }
+
+                // Start chat channel background tasks
+                {
+                    let ccm = app.state::<ChatChannelManager>();
+                    let broadcaster = app
+                        .state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>();
+                    let db_conn = app.state::<db::AppDatabase>().conn.clone();
+                    let ccm_ref = ccm.clone_ref();
+                    let br = broadcaster.inner().clone();
+                    tauri::async_runtime::spawn(async move {
+                        ccm_ref.start_background(br, db_conn).await;
+                    });
                 }
 
                 // Restore previously open folders or show welcome
@@ -351,6 +367,18 @@ mod tauri_app {
                 mcp_commands::mcp_set_server_apps,
                 mcp_commands::mcp_remove_server,
                 notification::send_notification,
+                chat_channel_commands::list_chat_channels,
+                chat_channel_commands::create_chat_channel,
+                chat_channel_commands::update_chat_channel,
+                chat_channel_commands::delete_chat_channel,
+                chat_channel_commands::save_chat_channel_token,
+                chat_channel_commands::get_chat_channel_has_token,
+                chat_channel_commands::delete_chat_channel_token,
+                chat_channel_commands::connect_chat_channel,
+                chat_channel_commands::disconnect_chat_channel,
+                chat_channel_commands::test_chat_channel,
+                chat_channel_commands::get_chat_channel_status,
+                chat_channel_commands::list_chat_channel_messages,
                 web::start_web_server,
                 web::stop_web_server,
                 web::get_web_server_status,

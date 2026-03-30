@@ -92,6 +92,7 @@
       "shortcuts": "Shortcuts",
       "version_control": "Version Control",
       "system": "System",
+      "chat_channels": "Chat Channels",
       "web_service": "Web Service"
     }
   },
@@ -1670,5 +1671,36 @@
     "emptyDirectory": "This directory is empty",
     "errorLoadingDir": "Failed to load directory",
     "permissionDenied": "Permission denied"
+  },
+  "ChatChannelSettings": {
+    "loading": "Loading...",
+    "sectionTitle": "Chat Channels",
+    "sectionDescription": "Configure IM bots to receive event notifications and query coding activity.",
+    "addChannel": "Add Channel",
+    "noChannels": "No chat channels configured yet.",
+    "channelName": "Name",
+    "channelNamePlaceholder": "My Telegram Bot",
+    "channelType": "Channel Type",
+    "lark": "Lark (Feishu)",
+    "dailyReport": "Daily Report",
+    "dailyReportTime": "Report Time",
+    "nameRequired": "Channel name is required.",
+    "tokenRequired": "Token is required.",
+    "chatIdRequired": "Chat ID is required.",
+    "loadFailed": "Failed to load channels.",
+    "saveFailed": "Failed to save changes.",
+    "connectSuccess": "Channel connected.",
+    "connectFailed": "Failed to connect",
+    "disconnectSuccess": "Channel disconnected.",
+    "disconnectFailed": "Failed to disconnect.",
+    "testSuccess": "Connection test passed.",
+    "testFailed": "Connection test failed",
+    "deleteSuccess": "Channel deleted.",
+    "deleteFailed": "Failed to delete channel.",
+    "deleteConfirmTitle": "Delete Channel",
+    "deleteConfirmMessage": "This will permanently delete the channel and its message logs. Are you sure?",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create"
   }
 }

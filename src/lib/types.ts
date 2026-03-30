@@ -841,3 +841,44 @@ export interface PreflightResult {
   passed: boolean
   checks: CheckItem[]
 }
+
+// ─── Chat Channels ───
+
+export type ChannelType = "lark" | "telegram"
+
+export type ChannelConnectionStatus =
+  | "connected"
+  | "connecting"
+  | "disconnected"
+  | "error"
+
+export interface ChatChannelInfo {
+  id: number
+  name: string
+  channel_type: ChannelType
+  enabled: boolean
+  config_json: string
+  event_filter_json: string | null
+  daily_report_enabled: boolean
+  daily_report_time: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ChannelStatusInfo {
+  channel_id: number
+  name: string
+  channel_type: ChannelType
+  status: ChannelConnectionStatus
+}
+
+export interface ChatChannelMessageLog {
+  id: number
+  channel_id: number
+  direction: "outbound" | "inbound"
+  message_type: string
+  content_preview: string
+  status: "sent" | "failed"
+  error_detail: string | null
+  created_at: string
+}

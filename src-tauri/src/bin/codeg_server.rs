@@ -45,7 +45,14 @@ async fn main() {
         emitter,
         data_dir,
         web_server_state: WebServerState::new(),
+        chat_channel_manager: codeg_lib::app_state::default_chat_channel_manager(),
     });
+
+    // Start chat channel background tasks (event subscriber, command dispatcher, scheduler, auto-connect)
+    state
+        .chat_channel_manager
+        .start_background(state.event_broadcaster.clone(), state.db.conn.clone())
+        .await;
 
     // Build router
     let router = codeg_lib::web::router::build_router(state, token.clone(), static_dir);
