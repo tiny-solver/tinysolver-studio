@@ -169,7 +169,16 @@ async fn build_agent(
                 }
             }
             let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
-            AcpAgent::from_args(&refs).map_err(|e| AcpError::SpawnFailed(e.to_string()))
+            let agent_name = meta.name.to_string();
+            AcpAgent::from_args(&refs)
+                .map(|a| {
+                    a.with_debug(move |line, dir| {
+                        if dir == sacp_tokio::LineDirection::Stderr {
+                            eprintln!("[ACP][{agent_name}][stderr] {line}");
+                        }
+                    })
+                })
+                .map_err(|e| AcpError::SpawnFailed(e.to_string()))
         }
         AgentDistribution::Binary {
             version,
@@ -223,7 +232,14 @@ async fn build_agent(
                     .collect();
                 server = server.env(env_vars);
             }
-            Ok(AcpAgent::new(sacp::schema::McpServer::Stdio(server)))
+            let agent_name = meta.name.to_string();
+            Ok(AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
+                move |line, dir| {
+                    if dir == sacp_tokio::LineDirection::Stderr {
+                        eprintln!("[ACP][{agent_name}][stderr] {line}");
+                    }
+                },
+            ))
         }
     }
 }
@@ -257,6 +273,7 @@ pub async fn spawn_agent_connection(
         let result = run_connection(
             agent,
             conn_id.clone(),
+            agent_type,
             working_dir,
             session_id,
             cmd_rx,
@@ -415,12 +432,59 @@ fn map_session_config_options(
         .collect()
 }
 
+/// Codex-acp sometimes omits the "mode" (approval preset) config option when
+/// the loaded sandbox policy does not exactly match one of the three built-in
+/// presets (commonly because `writable_roots` was injected during config
+/// loading).  When that happens, synthesize the option so the user can still
+/// pick a preset.  codex-acp's `set_config_option` handler always accepts
+/// `config_id = "mode"` regardless of whether it was advertised.
+fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
+    if options.iter().any(|o| o.id == "mode") {
+        return;
+    }
+    options.insert(0, SessionConfigOptionInfo {
+        id: "mode".to_string(),
+        name: "Approval Preset".to_string(),
+        description: Some(
+            "Choose an approval and sandboxing preset for your session".to_string(),
+        ),
+        category: Some("mode".to_string()),
+        kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
+            current_value: "auto".to_string(),
+            options: vec![
+                SessionConfigSelectOptionInfo {
+                    value: "read-only".to_string(),
+                    name: "Read Only".to_string(),
+                    description: Some("Codex can only read files".to_string()),
+                },
+                SessionConfigSelectOptionInfo {
+                    value: "auto".to_string(),
+                    name: "Default".to_string(),
+                    description: Some(
+                        "Codex can edit files, but asks before running commands".to_string(),
+                    ),
+                },
+                SessionConfigSelectOptionInfo {
+                    value: "full-access".to_string(),
+                    name: "Full Access".to_string(),
+                    description: Some("Codex runs without asking for approval".to_string()),
+                },
+            ],
+            groups: vec![],
+        }),
+    });
+}
+
 fn emit_session_config_options_values(
     connection_id: &str,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     config_options: Vec<SessionConfigOption>,
 ) {
-    let mapped = map_session_config_options(&config_options);
+    let mut mapped = map_session_config_options(&config_options);
+    if agent_type == AgentType::Codex {
+        ensure_codex_mode_option(&mut mapped);
+    }
     crate::web::event_bridge::emit_event(
         emitter,
         "acp://event",
@@ -434,6 +498,7 @@ fn emit_session_config_options_values(
 fn emit_session_config_options(
     connection_id: &str,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     config_options: &Option<Vec<SessionConfigOption>>,
 ) {
     // Always emit one config-options snapshot after session attach.
@@ -441,7 +506,7 @@ fn emit_session_config_options(
     // and return `None`; emitting an empty list lets the frontend settle
     // loading state instead of waiting forever.
     let options = config_options.clone().unwrap_or_default();
-    emit_session_config_options_values(connection_id, emitter, options);
+    emit_session_config_options_values(connection_id, emitter, agent_type, options);
 }
 
 fn emit_selectors_ready(connection_id: &str, emitter: &EventEmitter) {
@@ -492,6 +557,7 @@ fn resolve_working_dir(working_dir: Option<&str>) -> PathBuf {
 async fn run_connection(
     agent: AcpAgent,
     connection_id: String,
+    agent_type: AgentType,
     working_dir: Option<String>,
     session_id: Option<String>,
     mut cmd_rx: mpsc::Receiver<ConnectionCommand>,
@@ -691,7 +757,7 @@ async fn run_connection(
                                             notif.update,
                                             SessionUpdate::AvailableCommandsUpdate(_)
                                         ) {
-                                            emit_conversation_update(&cid, &h, notif.update, None);
+                                            emit_conversation_update(&cid, &h, agent_type, notif.update, None);
                                         }
                                         Ok(())
                                     })
@@ -712,13 +778,14 @@ async fn run_connection(
                             },
                         );
                         emit_session_modes(&conn_id, &emitter_clone, session.modes());
-                        emit_session_config_options(&conn_id, &emitter_clone, &initial_config_options);
+                        emit_session_config_options(&conn_id, &emitter_clone, agent_type, &initial_config_options);
                         emit_selectors_ready(&conn_id, &emitter_clone);
 
                         let loop_result = run_conversation_loop(
                             &mut session,
                             &conn_id,
                             &emitter_clone,
+                            agent_type,
                             &perms,
                             &mut cmd_rx,
                             terminal_runtime.clone(),
@@ -732,6 +799,7 @@ async fn run_connection(
                             loop_result,
                             &conn_id,
                             &emitter_clone,
+                            agent_type,
                             &perms,
                             &mut cmd_rx,
                             terminal_runtime.clone(),
@@ -784,6 +852,7 @@ async fn run_connection(
                         emit_session_config_options(
                             &conn_id,
                             &emitter_clone,
+                            agent_type,
                             &initial_config_options,
                         );
                         emit_selectors_ready(&conn_id, &emitter_clone);
@@ -792,6 +861,7 @@ async fn run_connection(
                             &mut session,
                             &conn_id,
                             &emitter_clone,
+                            agent_type,
                             &perms,
                             &mut cmd_rx,
                             terminal_runtime.clone(),
@@ -807,6 +877,7 @@ async fn run_connection(
                             loop_result,
                             &conn_id,
                             &emitter_clone,
+                            agent_type,
                             &perms,
                             &mut cmd_rx,
                             terminal_runtime.clone(),
@@ -834,13 +905,14 @@ async fn run_connection(
                     },
                 );
                 emit_session_modes(&conn_id, &emitter_clone, session.modes());
-                emit_session_config_options(&conn_id, &emitter_clone, &initial_config_options);
+                emit_session_config_options(&conn_id, &emitter_clone, agent_type, &initial_config_options);
                 emit_selectors_ready(&conn_id, &emitter_clone);
 
                 let loop_result = run_conversation_loop(
                     &mut session,
                     &conn_id,
                     &emitter_clone,
+                    agent_type,
                     &perms,
                     &mut cmd_rx,
                     terminal_runtime.clone(),
@@ -854,6 +926,7 @@ async fn run_connection(
                     loop_result,
                     &conn_id,
                     &emitter_clone,
+                    agent_type,
                     &perms,
                     &mut cmd_rx,
                     terminal_runtime.clone(),
@@ -991,6 +1064,7 @@ async fn set_session_config_option(
     session_id: &SessionId,
     conn_id: &str,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     config_id: String,
     value_id: String,
 ) -> Result<(), sacp::Error> {
@@ -1005,7 +1079,7 @@ async fn set_session_config_option(
             sacp::util::internal_error(format!("Failed to parse config option response: {e}"))
         })?;
 
-    emit_session_config_options_values(conn_id, emitter, response.config_options);
+    emit_session_config_options_values(conn_id, emitter, agent_type, response.config_options);
     Ok(())
 }
 
@@ -1376,6 +1450,7 @@ async fn handle_fork_or_exit(
     loop_result: Result<Option<ForkExitInfo>, sacp::Error>,
     conn_id: &str,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     perms: &PendingPermissions,
     cmd_rx: &mut mpsc::Receiver<ConnectionCommand>,
     terminal_runtime: Arc<TerminalRuntime>,
@@ -1421,13 +1496,14 @@ async fn handle_fork_or_exit(
         },
     );
     emit_session_modes(conn_id, emitter, session.modes());
-    emit_session_config_options(conn_id, emitter, &initial_config_options);
+    emit_session_config_options(conn_id, emitter, agent_type, &initial_config_options);
     emit_selectors_ready(conn_id, emitter);
 
     let loop_result = run_conversation_loop(
         &mut session,
         conn_id,
         emitter,
+        agent_type,
         perms,
         cmd_rx,
         terminal_runtime.clone(),
@@ -1440,7 +1516,8 @@ async fn handle_fork_or_exit(
 
     // Recursively handle nested forks
     Box::pin(handle_fork_or_exit(
-        loop_result, conn_id, emitter, perms, cmd_rx, terminal_runtime, _cwd, cwd_string,
+        loop_result, conn_id, emitter, agent_type, perms, cmd_rx, terminal_runtime, _cwd,
+        cwd_string,
     ))
     .await
 }
@@ -1454,6 +1531,7 @@ async fn run_conversation_loop<'a>(
     session: &mut sacp::ActiveSession<'a, Agent>,
     conn_id: &str,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     perms: &PendingPermissions,
     cmd_rx: &mut mpsc::Receiver<ConnectionCommand>,
     terminal_runtime: Arc<TerminalRuntime>,
@@ -1475,7 +1553,7 @@ async fn run_conversation_loop<'a>(
                             let _ = MatchDispatch::new(dispatch)
                                 .if_notification(
                                     async |notif: SessionNotification| {
-                                        emit_conversation_update(&cid, &h, notif.update, cwd_opt);
+                                        emit_conversation_update(&cid, &h, agent_type, notif.update, cwd_opt);
                                         Ok(())
                                     },
                                 )
@@ -1563,7 +1641,7 @@ async fn run_conversation_loop<'a>(
                                                     &notif.update,
                                                     &mut tracked_terminal_tool_calls,
                                                 );
-                                                emit_conversation_update(&cid, &h, notif.update, cwd_opt);
+                                                emit_conversation_update(&cid, &h, agent_type, notif.update, cwd_opt);
                                                 if should_poll_now {
                                                     poll_tracked_terminal_tool_calls(
                                                         runtime.as_ref(),
@@ -1698,6 +1776,7 @@ async fn run_conversation_loop<'a>(
                                         &sid,
                                         conn_id,
                                         emitter,
+                                        agent_type,
                                         config_id,
                                         value_id,
                                     )
@@ -1827,7 +1906,7 @@ async fn run_conversation_loop<'a>(
                 let cx = session.connection();
                 let sid = session.session_id().clone();
                 if let Err(e) =
-                    set_session_config_option(&cx, &sid, conn_id, emitter, config_id, value_id).await
+                    set_session_config_option(&cx, &sid, conn_id, emitter, agent_type, config_id, value_id).await
                 {
                     crate::web::event_bridge::emit_event(
                         emitter,
@@ -2038,6 +2117,7 @@ fn map_plan_entries(plan: &Plan) -> Vec<PlanEntryInfo> {
 fn emit_conversation_update(
     connection_id: &str,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     update: SessionUpdate,
     cwd: Option<&str>,
 ) {
@@ -2145,7 +2225,7 @@ fn emit_conversation_update(
             );
         }
         SessionUpdate::ConfigOptionUpdate(update) => {
-            emit_session_config_options_values(connection_id, emitter, update.config_options);
+            emit_session_config_options_values(connection_id, emitter, agent_type, update.config_options);
         }
         SessionUpdate::AvailableCommandsUpdate(update) => {
             let commands: Vec<AvailableCommandInfo> = update
