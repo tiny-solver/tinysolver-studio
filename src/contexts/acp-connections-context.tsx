@@ -42,7 +42,7 @@ import {
   CONNECTION_IDLE_TIMEOUT_MS,
   IDLE_SWEEP_INTERVAL_MS,
 } from "@/lib/constants"
-import { notifyTurnComplete } from "@/lib/notification"
+import { sendSystemNotification } from "@/lib/notification"
 import {
   applySavedModePreference,
   applySavedConfigPreferences,
@@ -1704,7 +1704,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
               const agentLabel = AGENT_LABELS[nc.agentType]
               const fn = folderNameRef.current
               const title = fn ? `${fn} - Codeg` : "Codeg"
-              notifyTurnComplete(
+              sendSystemNotification(
                 title,
                 t("notificationTurnComplete", { agent: agentLabel })
               ).catch(() => {})
@@ -1712,11 +1712,28 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           }
           break
         }
-        case "error":
+        case "error": {
           flushStreamingQueue()
           dispatch({ type: "ERROR", contextKey, message: e.message })
           pushAlertRef.current("error", t("eventErrorTitle"), e.message)
+          // Send OS notification for agent errors
+          {
+            const nc = storeRef.current.connections.get(contextKey)
+            if (nc) {
+              const agentLabel = AGENT_LABELS[nc.agentType]
+              const fn = folderNameRef.current
+              const title = fn ? `${fn} - Codeg` : "Codeg"
+              sendSystemNotification(
+                title,
+                t("notificationError", {
+                  agent: agentLabel,
+                  message: e.message,
+                })
+              ).catch(() => {})
+            }
+          }
           break
+        }
         case "available_commands":
           flushStreamingQueue()
           dispatch({

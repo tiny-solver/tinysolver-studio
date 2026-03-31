@@ -1,7 +1,7 @@
 import { getTransport } from "./transport"
 import { isDesktop } from "./transport"
 
-export async function notifyTurnComplete(
+export async function sendSystemNotification(
   title: string,
   body: string
 ): Promise<void> {

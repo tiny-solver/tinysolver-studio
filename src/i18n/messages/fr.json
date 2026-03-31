@@ -1350,7 +1350,8 @@
         "connectFailedTitle": "Échec de la connexion de {agent}",
         "toolFallbackTitle": "Outil",
         "eventErrorTitle": "Erreur de l'agent",
-        "notificationTurnComplete": "{agent} a terminé de répondre"
+        "notificationTurnComplete": "{agent} a terminé de répondre",
+        "notificationError": "{agent} erreur : {message}"
       },
       "connectionLifecycle": {
         "tasks": {
