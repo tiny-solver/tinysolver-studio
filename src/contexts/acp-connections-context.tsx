@@ -1778,7 +1778,11 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     })
       .then((fn) => {
         if (cancelled) {
-          fn()
+          try {
+            fn()
+          } catch {
+            // Tauri listener may not be fully registered yet
+          }
         } else {
           unlisten = fn
           listenerReadyRef.current = true
@@ -1798,7 +1802,11 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         clearTimeout(flushTimerRef.current)
         flushTimerRef.current = null
       }
-      unlisten?.()
+      try {
+        unlisten?.()
+      } catch {
+        // Tauri listener may not be fully registered yet
+      }
     }
   }, [bufferUnmappedEvent, handleMappedEvent, resolveListenerReadyWaiters])
 
