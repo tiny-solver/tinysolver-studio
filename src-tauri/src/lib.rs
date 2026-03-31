@@ -9,7 +9,7 @@ pub mod keyring_store;
 mod models;
 mod network;
 mod parsers;
-mod process;
+pub mod process;
 mod terminal;
 pub mod web;
 
@@ -44,6 +44,7 @@ mod tauri_app {
             eprintln!("[PATH] fix_path_env failed: {err}");
         }
         process::ensure_node_in_path();
+        process::ensure_user_npm_prefix_in_path();
 
         tauri::Builder::default()
             .plugin(tauri_plugin_window_state::Builder::new().build())

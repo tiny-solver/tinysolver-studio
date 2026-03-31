@@ -93,19 +93,41 @@ pub(crate) fn is_cmd_available(cmd: &str) -> bool {
 
 /// Detect the actual installed version of an npm global package by running
 /// `npm list -g <package_name> --json` and parsing the JSON output.
+///
+/// Checks both the system global prefix and the user-local prefix
+/// (`~/.codeg/npm-global/`) so packages installed via the EACCES fallback are
+/// found as well.
 async fn detect_npm_global_version(package_name: &str) -> Option<String> {
     let npm_path = which::which("npm").ok()?;
-    let output = crate::process::tokio_command(npm_path)
-        .arg("list")
-        .arg("-g")
-        .arg(package_name)
-        .arg("--json")
-        .arg("--depth=0")
-        .output()
-        .await
-        .ok()?;
-    // npm list --json may exit non-zero when package is missing, but still
-    // outputs valid JSON with an empty dependencies object.
+
+    // Try the default global prefix first.
+    if let Some(v) = npm_list_version(&npm_path, package_name, None).await {
+        return Some(v);
+    }
+
+    // Fallback: check the user-local prefix.
+    if let Some(prefix) = crate::process::user_npm_prefix() {
+        if prefix.exists() {
+            return npm_list_version(&npm_path, package_name, Some(&prefix)).await;
+        }
+    }
+
+    None
+}
+
+/// Run `npm list -g <package_name> --json [--prefix=<p>]` and extract the
+/// installed version string.
+async fn npm_list_version(
+    npm_path: &std::path::Path,
+    package_name: &str,
+    prefix: Option<&std::path::Path>,
+) -> Option<String> {
+    let mut cmd = crate::process::tokio_command(npm_path);
+    cmd.arg("list").arg("-g").arg(package_name).arg("--json").arg("--depth=0");
+    if let Some(p) = prefix {
+        cmd.arg(format!("--prefix={}", p.display()));
+    }
+    let output = cmd.output().await.ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).ok()?;
     let version = json
@@ -153,6 +175,15 @@ async fn install_npm_global_package(package: &str) -> Result<(), AcpError> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        // EACCES: permission denied — retry with a user-local --prefix so
+        // we don't require root/sudo on macOS / Linux.
+        // Check EACCES first: an EEXIST error message may also contain EACCES
+        // context, and the --force retry would fail again without the prefix
+        // fallback.
+        if stderr.contains("EACCES") {
+            return install_npm_to_user_prefix(package, &registry_arg).await;
+        }
+
         // EEXIST: file conflict — retry with --force to overwrite
         if stderr.contains("EEXIST") {
             let retry = crate::process::tokio_command("npm")
@@ -165,7 +196,13 @@ async fn install_npm_global_package(package: &str) -> Result<(), AcpError> {
                 .await
                 .map_err(|e| AcpError::protocol(format!("failed to run npm install -g --force: {e}")))?;
             if !retry.status.success() {
-                let err = String::from_utf8_lossy(&retry.stderr).trim().to_string();
+                let retry_stderr = String::from_utf8_lossy(&retry.stderr);
+                // The --force retry itself may fail with EACCES on systems
+                // where the global prefix is not writable.
+                if retry_stderr.contains("EACCES") {
+                    return install_npm_to_user_prefix(package, &registry_arg).await;
+                }
+                let err = retry_stderr.trim().to_string();
                 let msg = if err.is_empty() {
                     "failed to install npm package globally (with --force)".to_string()
                 } else {
@@ -188,10 +225,102 @@ async fn install_npm_global_package(package: &str) -> Result<(), AcpError> {
     Ok(())
 }
 
+/// Fallback: install an npm package into a user-local prefix (`~/.codeg/npm-global/`)
+/// when the system global prefix is not writable (EACCES).
+async fn install_npm_to_user_prefix(package: &str, registry_arg: &str) -> Result<(), AcpError> {
+    let prefix = crate::process::user_npm_prefix().ok_or_else(|| {
+        AcpError::protocol(
+            "npm install -g failed with EACCES and could not determine home directory for fallback"
+                .to_string(),
+        )
+    })?;
+
+    // Ensure the prefix directory exists.
+    tokio::fs::create_dir_all(&prefix).await.map_err(|e| {
+        AcpError::protocol(format!(
+            "failed to create user npm prefix {}: {e}",
+            prefix.display()
+        ))
+    })?;
+
+    let prefix_arg = format!("--prefix={}", prefix.display());
+    let output = crate::process::tokio_command("npm")
+        .arg("install")
+        .arg("-g")
+        .arg(&prefix_arg)
+        .arg(registry_arg)
+        .arg(package)
+        .output()
+        .await
+        .map_err(|e| {
+            AcpError::protocol(format!("failed to run npm install -g with user prefix: {e}"))
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // EEXIST in the user prefix: retry with --force to overwrite stale files
+        // from a previous installation.
+        if stderr.contains("EEXIST") {
+            let force_retry = crate::process::tokio_command("npm")
+                .arg("install")
+                .arg("-g")
+                .arg("--force")
+                .arg(&prefix_arg)
+                .arg(registry_arg)
+                .arg(package)
+                .output()
+                .await
+                .map_err(|e| {
+                    AcpError::protocol(format!(
+                        "failed to run npm install -g --force with user prefix: {e}"
+                    ))
+                })?;
+            if !force_retry.status.success() {
+                let err = String::from_utf8_lossy(&force_retry.stderr)
+                    .trim()
+                    .to_string();
+                let msg = if err.is_empty() {
+                    format!(
+                        "failed to install npm package (user prefix {}, --force)",
+                        prefix.display()
+                    )
+                } else {
+                    format!(
+                        "failed to install npm package (user prefix {}, --force): {err}",
+                        prefix.display()
+                    )
+                };
+                return Err(AcpError::protocol(msg));
+            }
+            // --force succeeded, fall through to PATH setup below.
+        } else {
+            let err = stderr.trim().to_string();
+            let msg = if err.is_empty() {
+                format!(
+                    "failed to install npm package globally (user prefix {})",
+                    prefix.display()
+                )
+            } else {
+                format!(
+                    "failed to install npm package globally (user prefix {}): {err}",
+                    prefix.display()
+                )
+            };
+            return Err(AcpError::protocol(msg));
+        }
+    }
+
+    // Make sure the user prefix bin dir is in PATH for subsequent `which` lookups.
+    crate::process::ensure_user_npm_prefix_in_path();
+
+    Ok(())
+}
+
 async fn uninstall_npm_global_package(package: &str) -> Result<(), AcpError> {
     let package_name = package_name_from_spec(package);
 
     if !package_name.is_empty() {
+        // Try uninstalling from the default global prefix.
         let output = crate::process::tokio_command("npm")
             .arg("uninstall")
             .arg("-g")
@@ -201,7 +330,13 @@ async fn uninstall_npm_global_package(package: &str) -> Result<(), AcpError> {
             .map_err(|e| AcpError::protocol(format!("failed to run npm uninstall -g: {e}")))?;
 
         if !output.status.success() {
-            let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // EACCES: the package may have been installed to the user-local
+            // prefix via the EACCES fallback — try uninstalling from there.
+            if stderr.contains("EACCES") {
+                return uninstall_npm_from_user_prefix(&package_name).await;
+            }
+            let err = stderr.trim().to_string();
             let msg = if err.is_empty() {
                 "failed to uninstall npm package globally".to_string()
             } else {
@@ -209,6 +344,47 @@ async fn uninstall_npm_global_package(package: &str) -> Result<(), AcpError> {
             };
             return Err(AcpError::protocol(msg));
         }
+
+        // Also try removing from the user prefix (best-effort) in case the
+        // package was installed in both locations.
+        let _ = uninstall_npm_from_user_prefix(&package_name).await;
+    }
+
+    Ok(())
+}
+
+/// Uninstall an npm package from the user-local prefix (`~/.codeg/npm-global/`).
+async fn uninstall_npm_from_user_prefix(package_name: &str) -> Result<(), AcpError> {
+    let prefix = match crate::process::user_npm_prefix() {
+        Some(p) if p.exists() => p,
+        _ => return Ok(()),
+    };
+
+    let prefix_arg = format!("--prefix={}", prefix.display());
+    let output = crate::process::tokio_command("npm")
+        .arg("uninstall")
+        .arg("-g")
+        .arg(&prefix_arg)
+        .arg(package_name)
+        .output()
+        .await
+        .map_err(|e| {
+            AcpError::protocol(format!(
+                "failed to run npm uninstall -g with user prefix: {e}"
+            ))
+        })?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let msg = if err.is_empty() {
+            format!(
+                "failed to uninstall npm package from user prefix (exit code {})",
+                output.status.code().unwrap_or(-1)
+            )
+        } else {
+            format!("failed to uninstall npm package from user prefix: {err}")
+        };
+        return Err(AcpError::protocol(msg));
     }
 
     Ok(())

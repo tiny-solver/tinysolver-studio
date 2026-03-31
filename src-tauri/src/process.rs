@@ -1,5 +1,4 @@
 use std::ffi::{OsStr, OsString};
-#[cfg(feature = "tauri-runtime")]
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -178,12 +177,46 @@ fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
 }
 
 /// Prepend a directory to the process `PATH` environment variable.
-#[cfg(feature = "tauri-runtime")]
-fn prepend_to_path(dir: &std::path::Path) {
+pub(crate) fn prepend_to_path(dir: &std::path::Path) {
     let sep = if cfg!(windows) { ";" } else { ":" };
     let current = std::env::var_os("PATH").unwrap_or_default();
     let mut new_path = OsString::from(dir);
     new_path.push(sep);
     new_path.push(current);
     std::env::set_var("PATH", new_path);
+}
+
+/// Return the user-local npm prefix directory (`~/.codeg/npm-global/`).
+///
+/// Used as a fallback when `npm install -g` fails with EACCES because the
+/// system global prefix (e.g. `/usr/local/lib/node_modules/`) is not writable.
+pub(crate) fn user_npm_prefix() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".codeg").join("npm-global"))
+}
+
+/// Ensure the user-local npm prefix `bin/` directory is in `PATH` so that
+/// binaries installed via the EACCES fallback can be found by `which` and
+/// child processes.  Safe to call even if the directory does not exist yet.
+///
+/// On Unix, `npm install -g --prefix=<p>` places binaries in `<p>/bin/`.
+/// On Windows, binaries are placed directly in `<p>/`.
+pub fn ensure_user_npm_prefix_in_path() {
+    if let Some(prefix) = user_npm_prefix() {
+        let bin_dir = if cfg!(windows) {
+            prefix
+        } else {
+            prefix.join("bin")
+        };
+        // Avoid adding duplicates.
+        let current = std::env::var_os("PATH").unwrap_or_default();
+        let bin_str = bin_dir.to_string_lossy();
+        let sep = if cfg!(windows) { ";" } else { ":" };
+        if !current
+            .to_string_lossy()
+            .split(sep)
+            .any(|p| p == bin_str.as_ref())
+        {
+            prepend_to_path(&bin_dir);
+        }
+    }
 }

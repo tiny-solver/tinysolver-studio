@@ -9,6 +9,8 @@ use codeg_lib::web::{
 
 #[tokio::main]
 async fn main() {
+    codeg_lib::process::ensure_user_npm_prefix_in_path();
+
     let port: u16 = std::env::var("CODEG_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
