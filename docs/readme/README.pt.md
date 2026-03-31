@@ -96,9 +96,7 @@ Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e ma
 3. Configure filtros de eventos e programação opcional do relatório diário
 4. Conecte — as mensagens começam a fluir assim que os agentes emitem eventos
 
-## Escopo suportado
-
-### 1) Ingestão de conversas (conversas históricas)
+## Agentes suportados
 
 | Agente | Caminho por variável de ambiente | Padrão macOS / Linux | Padrão Windows |
 | --- | --- | --- | --- |
@@ -110,23 +108,6 @@ Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e ma
 | Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > Nota: as variáveis de ambiente têm prioridade sobre os caminhos padrão.
-
-### 2) Sessões em tempo real ACP
-
-Atualmente suporta 6 agentes: Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw e Cline.
-
-### 3) Suporte a configurações de Skills
-
-- Suportado: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
-- Mais adaptadores serão adicionados progressivamente
-
-### 4) Aplicativos alvo MCP
-
-Alvos de escrita atuais:
-
-- Claude Code
-- Codex
-- OpenCode
 
 ## Início rápido
 

@@ -97,9 +97,7 @@ Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und me
 3. Konfigurieren Sie Ereignisfilter und optionalen Tagesberichtsplan
 4. Verbinden — Nachrichten beginnen zu fließen, sobald Agenten Ereignisse aussenden
 
-## Unterstützter Umfang
-
-### 1) Konversationserfassung (historische Konversationen)
+## Unterstützte Agenten
 
 | Agent | Umgebungsvariablen-Pfad | macOS / Linux Standard | Windows Standard |
 | --- | --- | --- | --- |
@@ -111,23 +109,6 @@ Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und me
 | Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > Hinweis: Umgebungsvariablen haben Vorrang vor Fallback-Pfaden.
-
-### 2) ACP-Echtzeitsitzungen
-
-Unterstützt derzeit 6 Agenten: Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw und Cline.
-
-### 3) Skills-Einstellungen
-
-- Unterstützt: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
-- Weitere Adapter werden schrittweise hinzugefügt
-
-### 4) MCP-Zielanwendungen
-
-Aktuelle beschreibbare Ziele:
-
-- Claude Code
-- Codex
-- OpenCode
 
 ## Schnellstart
 

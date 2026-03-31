@@ -94,9 +94,7 @@ Claude Code、Codex CLI、OpenCode、Gemini CLI、OpenClaw などのローカル
 3. イベントフィルターとオプションの日次レポートスケジュールを設定
 4. 接続 — Agent がイベントを発行するとメッセージが流れ始めます
 
-## 対応範囲
-
-### 1) 会話取り込み（履歴会話）
+## 対応エージェント
 
 | Agent | 環境変数パス | macOS / Linux デフォルト | Windows デフォルト |
 | --- | --- | --- | --- |
@@ -108,23 +106,6 @@ Claude Code、Codex CLI、OpenCode、Gemini CLI、OpenClaw などのローカル
 | Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > 注: 環境変数はフォールバックパスより優先されます。
-
-### 2) ACP リアルタイムセッション
-
-現在、Claude Code、Codex CLI、Gemini CLI、OpenCode、OpenClaw、Cline の 6 つのエージェントをサポートしています。
-
-### 3) Skills 設定サポート
-
-- 対応済み: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
-- 他のアダプターは順次追加予定
-
-### 4) MCP ターゲットアプリ
-
-現在の書き込み対象:
-
-- Claude Code
-- Codex
-- OpenCode
 
 ## クイックスタート
 

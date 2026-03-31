@@ -94,9 +94,7 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 3. 이벤트 필터 및 선택적 일일 리포트 일정 설정
 4. 연결 — 에이전트가 이벤트를 발생시키면 메시지가 흐르기 시작
 
-## 지원 범위
-
-### 1) 대화 수집 (히스토리 대화)
+## 지원 에이전트
 
 | Agent | 환경 변수 경로 | macOS / Linux 기본값 | Windows 기본값 |
 | --- | --- | --- | --- |
@@ -108,23 +106,6 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 | Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
 
 > 참고: 환경 변수가 기본 경로보다 우선합니다.
-
-### 2) ACP 실시간 세션
-
-현재 Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw 5가지 에이전트를 지원합니다.
-
-### 3) Skills 설정 지원
-
-- 지원: `Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw / Cline`
-- 추가 어댑터는 순차적으로 추가 예정
-
-### 4) MCP 대상 앱
-
-현재 쓰기 가능한 대상:
-
-- Claude Code
-- Codex
-- OpenCode
 
 ## 빠른 시작
 
