@@ -3711,9 +3711,10 @@ pub async fn git_log(
     }
 
     let log_limit = limit.unwrap_or(100);
-    let (unpushed_hashes, has_upstream) = get_unpushed_hashes(&path, log_limit, remote.as_deref())
-        .await
-        .unwrap_or((None, false));
+    let (unpushed_hashes, has_upstream) =
+        get_unpushed_hashes(&path, log_limit, remote.as_deref(), branch.as_deref())
+            .await
+            .unwrap_or((None, false));
     for entry in entries.iter_mut() {
         entry.pushed = unpushed_hashes
             .as_ref()
@@ -3866,15 +3867,44 @@ async fn get_unpushed_hashes(
     path: &str,
     limit: u32,
     remote_override: Option<&str>,
+    branch: Option<&str>,
 ) -> Result<(Option<HashSet<String>>, bool), AppCommandError> {
     let limit_arg = format!("-{}", limit);
+
+    // If viewing a remote branch (e.g. "origin/main"), all commits are pushed
+    if let Some(b) = branch {
+        let is_remote = crate::process::tokio_command("git")
+            .args([
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/remotes/{}", b),
+            ])
+            .current_dir(path)
+            .output()
+            .await
+            .is_ok_and(|o| o.status.success());
+        if is_remote {
+            return Ok((Some(HashSet::new()), true));
+        }
+    }
+
+    // The local ref to compare: specified branch or HEAD
+    let local_ref = branch.unwrap_or("HEAD");
+
+    // Check upstream for the target branch
+    let upstream_arg = if branch.is_some() {
+        format!("{}@{{upstream}}", local_ref)
+    } else {
+        "@{upstream}".to_string()
+    };
 
     let upstream_output = crate::process::tokio_command("git")
         .args([
             "rev-parse",
             "--abbrev-ref",
             "--symbolic-full-name",
-            "@{upstream}",
+            &upstream_arg,
         ])
         .current_dir(path)
         .output()
@@ -3894,7 +3924,7 @@ async fn get_unpushed_hashes(
         let upstream = String::from_utf8_lossy(&upstream_output.stdout)
             .trim()
             .to_string();
-        let range = format!("{upstream}..HEAD");
+        let range = format!("{upstream}..{local_ref}");
         crate::process::tokio_command("git")
             .args(["rev-list", &limit_arg, &range])
             .current_dir(path)
@@ -3903,27 +3933,32 @@ async fn get_unpushed_hashes(
             .map_err(AppCommandError::io)?
     } else {
         // Either remote_override is specified or no upstream exists.
-        // Resolve the current branch and the target remote.
-        let branch_output = crate::process::tokio_command("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .current_dir(path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-        if !branch_output.status.success() {
-            return Ok((None, has_upstream));
-        }
-        let branch = String::from_utf8_lossy(&branch_output.stdout)
-            .trim()
-            .to_string();
-        if branch.is_empty() || branch == "HEAD" {
-            return Ok((None, has_upstream));
-        }
+        // Resolve the branch name and the target remote.
+        let branch_name = if let Some(b) = branch {
+            b.to_string()
+        } else {
+            let branch_output = crate::process::tokio_command("git")
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .current_dir(path)
+                .output()
+                .await
+                .map_err(AppCommandError::io)?;
+            if !branch_output.status.success() {
+                return Ok((None, has_upstream));
+            }
+            let name = String::from_utf8_lossy(&branch_output.stdout)
+                .trim()
+                .to_string();
+            if name.is_empty() || name == "HEAD" {
+                return Ok((None, has_upstream));
+            }
+            name
+        };
 
         let remote = if let Some(r) = remote_override {
             r.to_string()
         } else {
-            let remote_key = format!("branch.{}.remote", branch);
+            let remote_key = format!("branch.{}.remote", branch_name);
             let remote_output = crate::process::tokio_command("git")
                 .args(["config", "--get", &remote_key])
                 .current_dir(path)
@@ -3938,7 +3973,7 @@ async fn get_unpushed_hashes(
         };
 
         // Try comparing against <remote>/<branch> directly
-        let remote_branch_ref = format!("refs/remotes/{}/{}", remote, branch);
+        let remote_branch_ref = format!("refs/remotes/{}/{}", remote, branch_name);
         let verify_output = crate::process::tokio_command("git")
             .args(["rev-parse", "--verify", "--quiet", &remote_branch_ref])
             .current_dir(path)
@@ -3948,7 +3983,7 @@ async fn get_unpushed_hashes(
             .is_ok_and(|o| o.status.success());
 
         if remote_branch_exists {
-            let range = format!("{}/{}..HEAD", remote, branch);
+            let range = format!("{}/{}..{}", remote, branch_name, local_ref);
             crate::process::tokio_command("git")
                 .args(["rev-list", &limit_arg, &range])
                 .current_dir(path)
@@ -3961,7 +3996,7 @@ async fn get_unpushed_hashes(
             // the meaningful divergence point.
             let remote_head = format!("{}/HEAD", remote);
             let mb_output = crate::process::tokio_command("git")
-                .args(["merge-base", "HEAD", &remote_head])
+                .args(["merge-base", local_ref, &remote_head])
                 .current_dir(path)
                 .output()
                 .await;
@@ -3972,7 +4007,7 @@ async fn get_unpushed_hashes(
                 .filter(|s| !s.is_empty());
 
             if let Some(base) = merge_base {
-                let range = format!("{}..HEAD", base);
+                let range = format!("{}..{}", base, local_ref);
                 crate::process::tokio_command("git")
                     .args(["rev-list", &limit_arg, &range])
                     .current_dir(path)
@@ -3983,7 +4018,7 @@ async fn get_unpushed_hashes(
                 // Last resort: compare against all branches on the remote
                 let remote_arg = format!("--remotes={}", remote);
                 crate::process::tokio_command("git")
-                    .args(["rev-list", &limit_arg, "HEAD", "--not", &remote_arg])
+                    .args(["rev-list", &limit_arg, local_ref, "--not", &remote_arg])
                     .current_dir(path)
                     .output()
                     .await
