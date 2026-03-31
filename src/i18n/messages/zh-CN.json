@@ -1734,20 +1734,11 @@
     },
     "events": {
       "title": "事件通知",
-      "description": "配置每个渠道推送哪些事件。",
-      "allEnabled": "所有事件已启用（默认）",
-      "sessionStarted": "会话开始",
-      "sessionStartedDesc": "AI 代理开始新会话时",
+      "description": "启用事件后，事件被触发时将推送到渠道。",
       "turnComplete": "对话完成",
       "turnCompleteDesc": "代理回合结束时",
       "error": "代理错误",
       "errorDesc": "代理遇到错误时",
-      "statusDisconnected": "代理断开",
-      "statusDisconnectedDesc": "代理连接断开时",
-      "gitPush": "Git 推送",
-      "gitPushDesc": "Git Push 成功时",
-      "gitCommit": "Git 提交",
-      "gitCommitDesc": "Git Commit 成功时",
       "saved": "事件过滤已更新。",
       "saveFailed": "保存事件过滤失败。"
     }

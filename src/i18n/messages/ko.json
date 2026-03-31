@@ -1733,20 +1733,11 @@
     },
     "events": {
       "title": "이벤트 알림",
-      "description": "각 채널에 전송할 이벤트를 설정합니다.",
-      "allEnabled": "모든 이벤트 활성화 (기본값)",
-      "sessionStarted": "세션 시작",
-      "sessionStartedDesc": "AI 에이전트가 새 세션을 시작할 때",
+      "description": "이벤트를 활성화하면, 트리거 시 채널로 푸시됩니다.",
       "turnComplete": "턴 완료",
       "turnCompleteDesc": "에이전트 턴이 종료될 때",
       "error": "에이전트 오류",
       "errorDesc": "에이전트에 오류가 발생했을 때",
-      "statusDisconnected": "에이전트 연결 해제",
-      "statusDisconnectedDesc": "에이전트 연결이 끊어졌을 때",
-      "gitPush": "Git 푸시",
-      "gitPushDesc": "Git Push 성공 시",
-      "gitCommit": "Git 커밋",
-      "gitCommitDesc": "Git Commit 성공 시",
       "saved": "이벤트 필터가 업데이트되었습니다.",
       "saveFailed": "이벤트 필터 저장에 실패했습니다."
     }

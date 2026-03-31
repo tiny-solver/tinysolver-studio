@@ -103,34 +103,14 @@ pub fn spawn_event_subscriber(
 fn parse_event(channel: &str, payload: &serde_json::Value) -> Option<(String, RichMessage)> {
     match channel {
         "acp://event" => parse_acp_event(payload),
-        "folder://git-push-succeeded" => parse_git_push(payload),
-        "folder://git-commit-succeeded" => parse_git_commit(payload),
         _ => None,
     }
 }
 
 fn parse_acp_event(payload: &serde_json::Value) -> Option<(String, RichMessage)> {
     let event_type = payload.get("type")?.as_str()?;
-    let connection_id = payload
-        .get("connection_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
 
     match event_type {
-        "session_started" => {
-            let agent_type = payload
-                .pointer("/data/agent_type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown Agent");
-            let folder = payload
-                .pointer("/data/folder_name")
-                .and_then(|v| v.as_str())
-                .unwrap_or(connection_id);
-            Some((
-                "session_started".to_string(),
-                message_formatter::format_session_started(agent_type, folder),
-            ))
-        }
         "turn_complete" => {
             let stop_reason = payload
                 .pointer("/data/stop_reason")
@@ -163,57 +143,7 @@ fn parse_acp_event(payload: &serde_json::Value) -> Option<(String, RichMessage)>
                 message_formatter::format_agent_error(agent_type, message),
             ))
         }
-        "status_changed" => {
-            let status = payload
-                .pointer("/data/status")
-                .and_then(|v| v.as_str())?;
-            if status != "disconnected" {
-                return None;
-            }
-            let agent_type = payload
-                .pointer("/data/agent_type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown Agent");
-            Some((
-                "status_disconnected".to_string(),
-                message_formatter::format_agent_disconnected(agent_type),
-            ))
-        }
-        // Phase 2: "permission_request" will be handled here
         _ => None,
     }
 }
 
-fn parse_git_push(payload: &serde_json::Value) -> Option<(String, RichMessage)> {
-    let folder_name = payload
-        .get("folder_name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-    let branch = payload
-        .get("branch")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-    let commits = payload
-        .get("pushed_commits")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
-    Some((
-        "git_push".to_string(),
-        message_formatter::format_git_push(folder_name, branch, commits),
-    ))
-}
-
-fn parse_git_commit(payload: &serde_json::Value) -> Option<(String, RichMessage)> {
-    let folder_name = payload
-        .get("folder_name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-    let files = payload
-        .get("committed_files")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
-    Some((
-        "git_commit".to_string(),
-        message_formatter::format_git_commit(folder_name, files),
-    ))
-}

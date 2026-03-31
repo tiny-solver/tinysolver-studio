@@ -1733,20 +1733,11 @@
     },
     "events": {
       "title": "Notificações de eventos",
-      "description": "Configure quais eventos são enviados para cada canal.",
-      "allEnabled": "Todos os eventos habilitados (padrão)",
-      "sessionStarted": "Sessão iniciada",
-      "sessionStartedDesc": "Quando um agente IA inicia uma nova sessão",
+      "description": "Ao habilitar eventos, eles serão enviados ao canal quando acionados.",
       "turnComplete": "Turno concluído",
       "turnCompleteDesc": "Quando um turno do agente termina",
       "error": "Erro do agente",
       "errorDesc": "Quando um agente encontra um erro",
-      "statusDisconnected": "Agente desconectado",
-      "statusDisconnectedDesc": "Quando a conexão do agente é perdida",
-      "gitPush": "Git Push",
-      "gitPushDesc": "Quando um git push é bem-sucedido",
-      "gitCommit": "Git Commit",
-      "gitCommitDesc": "Quando um git commit é bem-sucedido",
       "saved": "Filtro de eventos atualizado.",
       "saveFailed": "Falha ao salvar o filtro de eventos."
     }

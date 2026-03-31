@@ -1733,20 +1733,11 @@
     },
     "events": {
       "title": "事件通知",
-      "description": "設定每個頻道推送哪些事件。",
-      "allEnabled": "所有事件已啟用（預設）",
-      "sessionStarted": "工作階段開始",
-      "sessionStartedDesc": "AI 代理開始新工作階段時",
+      "description": "啟用事件後，事件被觸發時將推送到頻道。",
       "turnComplete": "對話完成",
       "turnCompleteDesc": "代理回合結束時",
       "error": "代理錯誤",
       "errorDesc": "代理遇到錯誤時",
-      "statusDisconnected": "代理斷線",
-      "statusDisconnectedDesc": "代理連線中斷時",
-      "gitPush": "Git 推送",
-      "gitPushDesc": "Git Push 成功時",
-      "gitCommit": "Git 提交",
-      "gitCommitDesc": "Git Commit 成功時",
       "saved": "事件篩選已更新。",
       "saveFailed": "儲存事件篩選失敗。"
     }

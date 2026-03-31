@@ -10,23 +10,11 @@ import { getChatEventFilter, setChatEventFilter } from "@/lib/api"
 
 const ALL_EVENT_TYPES = [
   {
-    id: "session_started",
-    labelKey: "sessionStarted",
-    descKey: "sessionStartedDesc",
-  },
-  {
     id: "turn_complete",
     labelKey: "turnComplete",
     descKey: "turnCompleteDesc",
   },
   { id: "error", labelKey: "error", descKey: "errorDesc" },
-  {
-    id: "status_disconnected",
-    labelKey: "statusDisconnected",
-    descKey: "statusDisconnectedDesc",
-  },
-  { id: "git_push", labelKey: "gitPush", descKey: "gitPushDesc" },
-  { id: "git_commit", labelKey: "gitCommit", descKey: "gitCommitDesc" },
 ] as const
 
 const ALL_IDS = ALL_EVENT_TYPES.map((e) => e.id)
@@ -50,8 +38,6 @@ export function ChannelEventsTab() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
-
-  const allEnabled = enabledEvents.size === ALL_EVENT_TYPES.length
 
   const handleToggle = useCallback(
     async (eventId: string, checked: boolean) => {
@@ -86,9 +72,7 @@ export function ChannelEventsTab() {
 
   return (
     <div className="space-y-4">
-      {allEnabled && (
-        <p className="text-xs text-muted-foreground">{t("allEnabled")}</p>
-      )}
+      <p className="text-xs text-muted-foreground">{t("description")}</p>
 
       <section className="space-y-1">
         {ALL_EVENT_TYPES.map((evt) => (

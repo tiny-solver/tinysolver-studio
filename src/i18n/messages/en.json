@@ -1734,20 +1734,11 @@
     },
     "events": {
       "title": "Event Notifications",
-      "description": "Configure which events are pushed to each channel.",
-      "allEnabled": "All events enabled (default)",
-      "sessionStarted": "Session Started",
-      "sessionStartedDesc": "When an AI agent session begins",
+      "description": "When enabled, triggered events will be pushed to the channel.",
       "turnComplete": "Turn Complete",
       "turnCompleteDesc": "When an agent turn ends",
       "error": "Agent Error",
       "errorDesc": "When an agent encounters an error",
-      "statusDisconnected": "Agent Disconnected",
-      "statusDisconnectedDesc": "When agent connection is lost",
-      "gitPush": "Git Push",
-      "gitPushDesc": "When a git push succeeds",
-      "gitCommit": "Git Commit",
-      "gitCommitDesc": "When a git commit succeeds",
       "saved": "Event filter updated.",
       "saveFailed": "Failed to save event filter."
     }

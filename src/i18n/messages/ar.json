@@ -1733,20 +1733,11 @@
     },
     "events": {
       "title": "إشعارات الأحداث",
-      "description": "تكوين الأحداث التي يتم إرسالها لكل قناة.",
-      "allEnabled": "جميع الأحداث مفعلة (الافتراضي)",
-      "sessionStarted": "بدء الجلسة",
-      "sessionStartedDesc": "عندما يبدأ وكيل الذكاء الاصطناعي جلسة جديدة",
+      "description": "عند تفعيل الأحداث، سيتم إرسالها إلى القناة عند تشغيلها.",
       "turnComplete": "اكتمال الدور",
       "turnCompleteDesc": "عند انتهاء دور الوكيل",
       "error": "خطأ الوكيل",
       "errorDesc": "عندما يواجه الوكيل خطأ",
-      "statusDisconnected": "انقطاع الوكيل",
-      "statusDisconnectedDesc": "عند فقدان اتصال الوكيل",
-      "gitPush": "Git Push",
-      "gitPushDesc": "عند نجاح عملية Git Push",
-      "gitCommit": "Git Commit",
-      "gitCommitDesc": "عند نجاح عملية Git Commit",
       "saved": "تم تحديث فلتر الأحداث.",
       "saveFailed": "فشل حفظ فلتر الأحداث."
     }

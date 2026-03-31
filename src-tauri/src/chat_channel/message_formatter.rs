@@ -1,10 +1,5 @@
 use super::types::{MessageLevel, RichMessage};
 
-pub fn format_session_started(agent_type: &str, folder_name: &str) -> RichMessage {
-    RichMessage::info(format!("{agent_type} 在 {folder_name} 开始了新会话"))
-        .with_title("新会话")
-}
-
 pub fn format_turn_complete(agent_type: &str, stop_reason: &str) -> RichMessage {
     let reason = match stop_reason {
         "end_turn" => "正常结束",
@@ -23,29 +18,6 @@ pub fn format_agent_error(agent_type: &str, message: &str) -> RichMessage {
         fields: vec![("错误信息".to_string(), message.to_string())],
         level: MessageLevel::Error,
     }
-}
-
-pub fn format_agent_disconnected(agent_type: &str) -> RichMessage {
-    RichMessage {
-        title: Some("代理断开".to_string()),
-        body: format!("{agent_type} 已断开连接"),
-        fields: Vec::new(),
-        level: MessageLevel::Warning,
-    }
-}
-
-pub fn format_git_push(folder_name: &str, branch: &str, commits: u32) -> RichMessage {
-    RichMessage::info(format!(
-        "Git Push 成功: {commits} 个提交推送到 {branch}"
-    ))
-    .with_title("Git Push")
-    .with_field("项目", folder_name)
-}
-
-pub fn format_git_commit(folder_name: &str, files: u32) -> RichMessage {
-    RichMessage::info(format!("Git Commit: {files} 个文件已提交"))
-        .with_title("Git Commit")
-        .with_field("项目", folder_name)
 }
 
 pub struct DailyReportData {

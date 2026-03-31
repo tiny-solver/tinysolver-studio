@@ -1733,20 +1733,11 @@
     },
     "events": {
       "title": "イベント通知",
-      "description": "各チャンネルにプッシュするイベントを設定します。",
-      "allEnabled": "すべてのイベントが有効（デフォルト）",
-      "sessionStarted": "セッション開始",
-      "sessionStartedDesc": "AI エージェントが新しいセッションを開始した時",
+      "description": "イベントを有効にすると、トリガーされた際にチャンネルにプッシュされます。",
       "turnComplete": "ターン完了",
       "turnCompleteDesc": "エージェントのターンが終了した時",
       "error": "エージェントエラー",
       "errorDesc": "エージェントがエラーに遭遇した時",
-      "statusDisconnected": "エージェント切断",
-      "statusDisconnectedDesc": "エージェントの接続が切断された時",
-      "gitPush": "Git プッシュ",
-      "gitPushDesc": "Git Push が成功した時",
-      "gitCommit": "Git コミット",
-      "gitCommitDesc": "Git Commit が成功した時",
       "saved": "イベントフィルターを更新しました。",
       "saveFailed": "イベントフィルターの保存に失敗しました。"
     }
