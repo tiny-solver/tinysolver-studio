@@ -21,7 +21,8 @@ use sacp::schema::{
 };
 use sacp::util::MatchDispatch;
 use sacp::{
-    on_receive_request, Agent, Client, ConnectionTo, Responder, SessionMessage, UntypedMessage,
+    on_receive_request, Agent, Client, ConnectionTo, Dispatch, Responder, SessionMessage,
+    UntypedMessage,
 };
 use sacp_tokio::AcpAgent;
 use tokio::sync::mpsc;
@@ -752,6 +753,7 @@ async fn run_connection(
                             if let SessionMessage::SessionMessage(dispatch) = msg {
                                 let cid = conn_id.clone();
                                 let h = emitter_clone.clone();
+                                let dispatch = fix_usage_update_nulls(dispatch);
                                 let _ = MatchDispatch::new(dispatch)
                                     .if_notification(async |notif: SessionNotification| {
                                         if matches!(
@@ -1552,6 +1554,7 @@ async fn run_conversation_loop<'a>(
                             let cid = conn_id.to_string();
                             let h = emitter.clone();
                             let cwd_opt = Some(cwd);
+                            let dispatch = fix_usage_update_nulls(dispatch);
                             let _ = MatchDispatch::new(dispatch)
                                 .if_notification(
                                     async |notif: SessionNotification| {
@@ -1637,6 +1640,7 @@ async fn run_conversation_loop<'a>(
                                     let runtime = terminal_runtime.clone();
                                     let session_id = sid.clone();
                                     let cwd_opt = Some(cwd);
+                                    let dispatch = fix_usage_update_nulls(dispatch);
                                     if let Err(e) = MatchDispatch::new(dispatch)
                                         .if_notification(
                                             async |notif: SessionNotification| {
@@ -2121,6 +2125,27 @@ fn map_plan_entries(plan: &Plan) -> Vec<PlanEntryInfo> {
             status: map_plan_status(&entry.status),
         })
         .collect()
+}
+
+/// Fix null fields in `usage_update` notifications that would otherwise fail deserialization.
+///
+/// Some ACP agents send `"used": null` in usage_update notifications, but the
+/// upstream schema expects `u64`. This function patches the raw JSON params
+/// so that `null` numeric fields default to `0`.
+fn fix_usage_update_nulls(mut dispatch: Dispatch) -> Dispatch {
+    if let Dispatch::Notification(ref mut msg) = dispatch {
+        if let Some(update) = msg.params.get_mut("update") {
+            if update.get("sessionUpdate").and_then(|v| v.as_str()) == Some("usage_update") {
+                if update.get("used").map(|v| v.is_null()).unwrap_or(false) {
+                    update["used"] = serde_json::Value::from(0u64);
+                }
+                if update.get("size").map(|v| v.is_null()).unwrap_or(false) {
+                    update["size"] = serde_json::Value::from(0u64);
+                }
+            }
+        }
+    }
+    dispatch
 }
 
 /// Convert a SessionUpdate into AcpEvent(s) and emit to frontend.
