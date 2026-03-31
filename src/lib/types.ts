@@ -573,7 +573,13 @@ export interface GitHubTokenValidation {
   message: string | null
 }
 
-export type McpAppType = "claude_code" | "codex" | "open_code"
+export type McpAppType =
+  | "claude_code"
+  | "codex"
+  | "gemini"
+  | "open_claw"
+  | "open_code"
+  | "cline"
 
 export interface LocalMcpServer {
   id: string

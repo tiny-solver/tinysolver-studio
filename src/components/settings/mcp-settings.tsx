@@ -69,9 +69,12 @@ type McpTranslator = (
 ) => string
 
 const APP_OPTIONS: { value: McpAppType; label: string }[] = [
-  { value: "claude_code", label: "Claude" },
-  { value: "codex", label: "Codex" },
+  { value: "claude_code", label: "Claude Code" },
+  { value: "codex", label: "Codex CLI" },
+  { value: "gemini", label: "Gemini CLI" },
+  { value: "open_claw", label: "OpenClaw" },
   { value: "open_code", label: "OpenCode" },
+  { value: "cline", label: "Cline" },
 ]
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -228,7 +231,10 @@ function appsToDraft(apps: McpAppType[]): Record<McpAppType, boolean> {
   return {
     claude_code: appSet.has("claude_code"),
     codex: appSet.has("codex"),
+    gemini: appSet.has("gemini"),
+    open_claw: appSet.has("open_claw"),
     open_code: appSet.has("open_code"),
+    cline: appSet.has("cline"),
   }
 }
 

@@ -42,7 +42,10 @@ fn mcp_network(message: impl Into<String>) -> AppCommandError {
 pub enum McpAppType {
     ClaudeCode,
     Codex,
+    Gemini,
+    OpenClaw,
     OpenCode,
+    Cline,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -350,7 +353,10 @@ pub async fn mcp_upsert_local_server(
     let all_apps = [
         McpAppType::ClaudeCode,
         McpAppType::Codex,
+        McpAppType::Gemini,
+        McpAppType::OpenClaw,
         McpAppType::OpenCode,
+        McpAppType::Cline,
     ];
 
     for app in all_apps {
@@ -401,7 +407,10 @@ pub async fn mcp_remove_server(
         None => vec![
             McpAppType::ClaudeCode,
             McpAppType::Codex,
+            McpAppType::Gemini,
+            McpAppType::OpenClaw,
             McpAppType::OpenCode,
+            McpAppType::Cline,
         ],
     };
 
@@ -535,6 +544,24 @@ fn opencode_config_path() -> PathBuf {
         .join(".config")
         .join("opencode")
         .join("config.json")
+}
+
+fn gemini_config_path() -> PathBuf {
+    home_dir_or_default().join(".gemini").join("settings.json")
+}
+
+fn openclaw_config_path() -> PathBuf {
+    home_dir_or_default()
+        .join(".openclaw")
+        .join("openclaw.json")
+}
+
+fn cline_config_path() -> PathBuf {
+    home_dir_or_default()
+        .join(".cline")
+        .join("data")
+        .join("settings")
+        .join("cline_mcp_settings.json")
 }
 
 fn read_json_file(path: &Path) -> Result<Value, AppCommandError> {
@@ -1584,6 +1611,253 @@ fn remove_opencode_server(id: &str) -> Result<bool, AppCommandError> {
     Ok(removed)
 }
 
+// ---------------------------------------------------------------------------
+// Gemini CLI  (~/.gemini/settings.json  →  mcpServers)
+// ---------------------------------------------------------------------------
+
+fn read_gemini_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+    let path = gemini_config_path();
+    let root = read_json_file(&path)?;
+    let mut out = BTreeMap::new();
+
+    let Some(servers) = root.get("mcpServers").and_then(Value::as_object) else {
+        return Ok(out);
+    };
+
+    for (id, spec) in servers {
+        match canonicalize_spec(spec, "Gemini config") {
+            Ok(normalized) => {
+                out.insert(id.to_string(), normalized);
+            }
+            Err(err) => {
+                eprintln!("[MCP] skip invalid Gemini MCP entry id={id}: {err}");
+            }
+        }
+    }
+
+    Ok(out)
+}
+
+fn upsert_gemini_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+    let path = gemini_config_path();
+    let mut root = read_json_file(&path)?;
+    if !root.is_object() {
+        root = json!({});
+    }
+
+    let canonical = canonicalize_spec(spec, "Gemini write")?;
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        mcp_configuration_invalid(format!("invalid JSON root in {}", path.display()))
+    })?;
+    if !obj.get("mcpServers").map(Value::is_object).unwrap_or(false) {
+        obj.insert("mcpServers".to_string(), Value::Object(Map::new()));
+    }
+
+    let map = obj
+        .get_mut("mcpServers")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            mcp_configuration_invalid(format!("invalid mcpServers in {}", path.display()))
+        })?;
+    map.insert(id.to_string(), canonical);
+
+    write_json_file(&path, &root)
+}
+
+fn remove_gemini_server(id: &str) -> Result<bool, AppCommandError> {
+    let path = gemini_config_path();
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let mut root = read_json_file(&path)?;
+    let Some(obj) = root.as_object_mut() else {
+        return Ok(false);
+    };
+    let Some(servers) = obj.get_mut("mcpServers").and_then(Value::as_object_mut) else {
+        return Ok(false);
+    };
+
+    let removed = servers.remove(id).is_some();
+    if removed {
+        write_json_file(&path, &root)?;
+    }
+    Ok(removed)
+}
+
+// ---------------------------------------------------------------------------
+// OpenClaw  (~/.openclaw/openclaw.json  →  mcp.servers)
+// ---------------------------------------------------------------------------
+
+fn read_openclaw_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+    let path = openclaw_config_path();
+    let root = read_json_file(&path)?;
+    let mut out = BTreeMap::new();
+
+    let Some(mcp) = root.get("mcp").and_then(Value::as_object) else {
+        return Ok(out);
+    };
+    let Some(servers) = mcp.get("servers").and_then(Value::as_object) else {
+        return Ok(out);
+    };
+
+    for (id, spec) in servers {
+        match canonicalize_spec(spec, "OpenClaw config") {
+            Ok(normalized) => {
+                out.insert(id.to_string(), normalized);
+            }
+            Err(err) => {
+                eprintln!("[MCP] skip invalid OpenClaw MCP entry id={id}: {err}");
+            }
+        }
+    }
+
+    Ok(out)
+}
+
+fn upsert_openclaw_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+    let path = openclaw_config_path();
+    let mut root = read_json_file(&path)?;
+    if !root.is_object() {
+        root = json!({});
+    }
+
+    let canonical = canonicalize_spec(spec, "OpenClaw write")?;
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        mcp_configuration_invalid(format!("invalid JSON root in {}", path.display()))
+    })?;
+
+    if !obj.get("mcp").map(Value::is_object).unwrap_or(false) {
+        obj.insert("mcp".to_string(), json!({}));
+    }
+    let mcp = obj
+        .get_mut("mcp")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            mcp_configuration_invalid(format!("invalid mcp in {}", path.display()))
+        })?;
+
+    if !mcp.get("servers").map(Value::is_object).unwrap_or(false) {
+        mcp.insert("servers".to_string(), Value::Object(Map::new()));
+    }
+    let servers = mcp
+        .get_mut("servers")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            mcp_configuration_invalid(format!("invalid mcp.servers in {}", path.display()))
+        })?;
+    servers.insert(id.to_string(), canonical);
+
+    write_json_file(&path, &root)
+}
+
+fn remove_openclaw_server(id: &str) -> Result<bool, AppCommandError> {
+    let path = openclaw_config_path();
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let mut root = read_json_file(&path)?;
+    let Some(obj) = root.as_object_mut() else {
+        return Ok(false);
+    };
+    let Some(mcp) = obj.get_mut("mcp").and_then(Value::as_object_mut) else {
+        return Ok(false);
+    };
+    let Some(servers) = mcp.get_mut("servers").and_then(Value::as_object_mut) else {
+        return Ok(false);
+    };
+
+    let removed = servers.remove(id).is_some();
+    if removed {
+        if servers.is_empty() {
+            mcp.remove("servers");
+        }
+        if mcp.is_empty() {
+            obj.remove("mcp");
+        }
+        write_json_file(&path, &root)?;
+    }
+    Ok(removed)
+}
+
+// ---------------------------------------------------------------------------
+// Cline  (~/.cline/data/settings/cline_mcp_settings.json  →  mcpServers)
+// ---------------------------------------------------------------------------
+
+fn read_cline_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+    let path = cline_config_path();
+    let root = read_json_file(&path)?;
+    let mut out = BTreeMap::new();
+
+    let Some(servers) = root.get("mcpServers").and_then(Value::as_object) else {
+        return Ok(out);
+    };
+
+    for (id, spec) in servers {
+        match canonicalize_spec(spec, "Cline config") {
+            Ok(normalized) => {
+                out.insert(id.to_string(), normalized);
+            }
+            Err(err) => {
+                eprintln!("[MCP] skip invalid Cline MCP entry id={id}: {err}");
+            }
+        }
+    }
+
+    Ok(out)
+}
+
+fn upsert_cline_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+    let path = cline_config_path();
+    let mut root = read_json_file(&path)?;
+    if !root.is_object() {
+        root = json!({});
+    }
+
+    let canonical = canonicalize_spec(spec, "Cline write")?;
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        mcp_configuration_invalid(format!("invalid JSON root in {}", path.display()))
+    })?;
+    if !obj.get("mcpServers").map(Value::is_object).unwrap_or(false) {
+        obj.insert("mcpServers".to_string(), Value::Object(Map::new()));
+    }
+
+    let map = obj
+        .get_mut("mcpServers")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            mcp_configuration_invalid(format!("invalid mcpServers in {}", path.display()))
+        })?;
+    map.insert(id.to_string(), canonical);
+
+    write_json_file(&path, &root)
+}
+
+fn remove_cline_server(id: &str) -> Result<bool, AppCommandError> {
+    let path = cline_config_path();
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let mut root = read_json_file(&path)?;
+    let Some(obj) = root.as_object_mut() else {
+        return Ok(false);
+    };
+    let Some(servers) = obj.get_mut("mcpServers").and_then(Value::as_object_mut) else {
+        return Ok(false);
+    };
+
+    let removed = servers.remove(id).is_some();
+    if removed {
+        write_json_file(&path, &root)?;
+    }
+    Ok(removed)
+}
+
 fn scan_local_servers() -> Result<Vec<LocalMcpServer>, AppCommandError> {
     let mut merged: BTreeMap<String, (Value, BTreeSet<McpAppType>)> = BTreeMap::new();
 
@@ -1608,6 +1882,27 @@ fn scan_local_servers() -> Result<Vec<LocalMcpServer>, AppCommandError> {
         entry.1.insert(McpAppType::OpenCode);
     }
 
+    for (id, spec) in read_gemini_servers()? {
+        let entry = merged
+            .entry(id)
+            .or_insert_with(|| (spec.clone(), BTreeSet::new()));
+        entry.1.insert(McpAppType::Gemini);
+    }
+
+    for (id, spec) in read_openclaw_servers()? {
+        let entry = merged
+            .entry(id)
+            .or_insert_with(|| (spec.clone(), BTreeSet::new()));
+        entry.1.insert(McpAppType::OpenClaw);
+    }
+
+    for (id, spec) in read_cline_servers()? {
+        let entry = merged
+            .entry(id)
+            .or_insert_with(|| (spec.clone(), BTreeSet::new()));
+        entry.1.insert(McpAppType::Cline);
+    }
+
     Ok(merged
         .into_iter()
         .map(|(id, (spec, apps))| LocalMcpServer {
@@ -1628,6 +1923,9 @@ fn upsert_server_for_app(app: McpAppType, id: &str, spec: &Value) -> Result<(), 
         McpAppType::ClaudeCode => upsert_claude_server(id, spec),
         McpAppType::Codex => upsert_codex_server(id, spec),
         McpAppType::OpenCode => upsert_opencode_server(id, spec),
+        McpAppType::Gemini => upsert_gemini_server(id, spec),
+        McpAppType::OpenClaw => upsert_openclaw_server(id, spec),
+        McpAppType::Cline => upsert_cline_server(id, spec),
     }
 }
 
@@ -1636,6 +1934,9 @@ fn remove_server_for_app(app: McpAppType, id: &str) -> Result<bool, AppCommandEr
         McpAppType::ClaudeCode => remove_claude_server(id),
         McpAppType::Codex => remove_codex_server(id),
         McpAppType::OpenCode => remove_opencode_server(id),
+        McpAppType::Gemini => remove_gemini_server(id),
+        McpAppType::OpenClaw => remove_openclaw_server(id),
+        McpAppType::Cline => remove_cline_server(id),
     }
 }
 
