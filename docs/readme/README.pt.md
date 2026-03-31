@@ -22,8 +22,9 @@
 Codeg (Code Generation) é um workspace de codificação multi-agentes de nível empresarial.
 Ele unifica agentes de codificação IA locais (Claude Code, Codex CLI, OpenCode, Gemini CLI,
 OpenClaw, Cline, etc.) em um aplicativo desktop, servidor standalone ou contêiner
-Docker — possibilitando o desenvolvimento remoto a partir de qualquer navegador — com agregação de sessões, desenvolvimento
-paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de Git/arquivos/terminal.
+Docker — possibilitando o desenvolvimento remoto a partir de qualquer navegador — com agregação de conversas, desenvolvimento
+paralelo via `git worktree`, gerenciamento de MCP/Skills, interação com canais de chat (Telegram, Lark, etc.)
+e fluxos integrados de Git/arquivos/terminal.
 
 ## Interface principal
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -37,15 +38,16 @@ paralelo via `git worktree`, gerenciamento de MCP/Skills e fluxos integrados de 
 ## Destaques
 
 - Workspace multi-agentes unificado no mesmo projeto
-- Ingestão local de sessões com renderização estruturada
+- Ingestão local de conversas com renderização estruturada
 - Desenvolvimento paralelo com fluxos `git worktree` integrados
 - **Inicializador de Projeto** — crie novos projetos visualmente com pré-visualização em tempo real
+- **Canais de Chat** — conecte Telegram, Lark (Feishu) e mais aos seus agentes de codificação para notificações em tempo real e comandos interativos
 - Gerenciamento de MCP (varredura local + busca/instalação no registro)
 - Gerenciamento de Skills (escopo global e por projeto)
 - Gerenciamento de contas remotas Git (GitHub e outros servidores Git)
 - Modo de serviço web — acesse o Codeg de qualquer navegador para trabalho remoto
 - **Implantação de servidor standalone** — execute `codeg-server` em qualquer servidor Linux/macOS, acesse via navegador
-- **Suporte a Docker** — imagem com build multi-stage, compatível com `docker compose up` ou `docker run`, token/porta personalizáveis, persistência de dados e montagem de diretórios de projetos
+- **Suporte a Docker** — `docker compose up` ou `docker run`, com token/porta personalizáveis, persistência de dados e montagem de diretórios de projetos
 - Ciclo de engenharia integrado (árvore de arquivos, diff, alterações git, commit, terminal)
 
 ## Inicializador de Projeto
@@ -65,9 +67,38 @@ Crie novos projetos visualmente com uma interface de painel dividido: configure 
 
 Atualmente suporta scaffolding de projetos **shadcn/ui**, com um design baseado em abas preparado para mais tipos de projetos no futuro.
 
+## Canais de Chat
+
+Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e mais — aos seus agentes de codificação IA. Receba notificações em tempo real quando os agentes concluírem tarefas ou encontrarem erros, consulte o histórico de conversas pelo celular e receba relatórios diários automatizados — tudo sem sair do seu app de chat.
+
+### Canais suportados
+
+| Canal | Protocolo | Status |
+| --- | --- | --- |
+| Telegram | Bot API (HTTP long-polling) | Integrado |
+| Lark (Feishu) | WebSocket + REST API | Integrado |
+
+> Mais canais (Discord, Slack, WeChat, DingTalk, etc.) estão planejados para versões futuras.
+
+### Recursos principais
+
+- **Notificações de eventos** — conclusões de turno e erros dos agentes são enviados a todos os canais habilitados em tempo real
+- **Comandos interativos** — envie comandos (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) do seu app de chat e receba respostas instantâneas; prefixo de comando configurável. Comandos relacionados a conversas (iniciar, parar, aprovar) estão planejados para próximas versões
+- **Relatórios diários** — resumo diário automatizado em um horário programado, incluindo contagem de conversas, divisão por tipo de agente e atividade do projeto
+- **Multi-idioma** — templates de mensagens em 10 idiomas (inglês, chinês simplificado/tradicional, japonês, coreano, espanhol, alemão, francês, português, árabe)
+- **Credenciais seguras** — tokens armazenados no chaveiro do SO, nunca expostos em arquivos de configuração ou logs
+- **Mensagens ricas** — formatação Markdown para Telegram, layout baseado em cartões para Lark; fallback em texto simples para todas as plataformas
+
+### Configuração
+
+1. Crie um canal em **Configurações → Canais de Chat** (escolha Telegram ou Lark)
+2. Insira seu token de bot (Telegram) ou credenciais do app (Lark) — armazenados com segurança no chaveiro do SO
+3. Configure filtros de eventos e programação opcional do relatório diário
+4. Conecte — as mensagens começam a fluir assim que os agentes emitem eventos
+
 ## Escopo suportado
 
-### 1) Ingestão de sessões (sessões históricas)
+### 1) Ingestão de conversas (conversas históricas)
 
 | Agente | Caminho por variável de ambiente | Padrão macOS / Linux | Padrão Windows |
 | --- | --- | --- | --- |
@@ -264,13 +295,16 @@ Next.js 16 (Static Export) + React 19
             Shared Rust Core
               |- AppState
               |- ACP Manager
-              |- Parsers (session ingestion)
+              |- Parsers (conversation ingestion)
+              |- Chat Channels
               |- Git / File Tree / Terminal
               |- MCP marketplace + config
               |- SeaORM + SQLite
                       |
-                      v
-        Local Filesystem / Git Repos
+              ┌───────┼───────┐
+              v       v       v
+  Local Filesystem  Git   Chat Channels
+    / Git Repos    Repos  (Telegram, Lark)
 ```
 
 ## Restrições

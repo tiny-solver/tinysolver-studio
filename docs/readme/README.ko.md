@@ -21,8 +21,8 @@
 
 Codeg(Code Generation)는 엔터프라이즈급 멀티 Agent 코딩 워크스페이스입니다.
 Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agent를
-데스크톱 앱, 독립형 서버 또는 Docker 컨테이너로 통합하여 — 브라우저만으로 어디서든 원격 개발이 가능하며 — 세션 집계, 병렬 `git worktree` 개발, MCP/Skills 관리,
-Git/파일/터미널 통합 워크플로를 제공합니다.
+데스크톱 앱, 독립형 서버 또는 Docker 컨테이너로 통합하여 — 브라우저만으로 어디서든 원격 개발이 가능하며 — 대화 집계, 병렬 `git worktree` 개발, MCP/Skills 관리,
+채팅 채널 연동(Telegram, Lark 등), Git/파일/터미널 통합 워크플로를 제공합니다.
 
 ## 메인 인터페이스
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -36,15 +36,16 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 ## 하이라이트
 
 - 동일 프로젝트에서 멀티 Agent 통합 워크스페이스
-- 로컬 세션 수집 및 구조화 렌더링
+- 로컬 대화 수집 및 구조화 렌더링
 - 내장 `git worktree` 플로를 통한 병렬 개발
 - **프로젝트 부트** — 시각적 설정과 실시간 미리보기로 새 프로젝트 생성
+- **채팅 채널** — Telegram, Lark(Feishu) 등을 코딩 에이전트에 연결하여 실시간 알림 및 대화형 명령 사용
 - MCP 관리 (로컬 스캔 + 레지스트리 검색/설치)
 - Skills 관리 (글로벌 및 프로젝트 범위)
 - Git 원격 계정 관리 (GitHub 및 기타 Git 서버)
 - Web 서비스 모드 — 브라우저에서 Codeg에 접속하여 원격 작업 가능
 - **독립형 서버 배포** — 모든 Linux/macOS 서버에서 `codeg-server`를 실행하고 브라우저로 접속
-- **Docker 지원** — 멀티 스테이지 빌드 이미지, `docker compose up` 또는 `docker run` 지원, 사용자 정의 토큰/포트, 데이터 영속화 및 프로젝트 디렉토리 마운트 지원
+- **Docker 지원** — `docker compose up` 또는 `docker run` 지원, 사용자 정의 토큰/포트, 데이터 영속화 및 프로젝트 디렉토리 마운트 지원
 - 통합 엔지니어링 루프 (파일 트리, Diff, Git 변경사항, 커밋, 터미널)
 
 ## 프로젝트 부트
@@ -64,9 +65,38 @@ Git/파일/터미널 통합 워크플로를 제공합니다.
 
 현재 **shadcn/ui** 프로젝트 스캐폴딩을 지원하며, 탭 기반 디자인으로 향후 더 많은 프로젝트 유형을 지원할 준비가 되어 있습니다.
 
+## 채팅 채널
+
+즐겨 사용하는 메신저 앱 — Telegram, Lark(Feishu) 등 — 을 AI 코딩 에이전트에 연결하세요. 에이전트가 작업을 완료하거나 오류가 발생하면 실시간 알림을 받고, 스마트폰에서 대화 기록을 조회하고, 자동화된 일일 리포트를 받을 수 있습니다 — 채팅 앱을 떠나지 않고도 모든 것이 가능합니다.
+
+### 지원 채널
+
+| 채널 | 프로토콜 | 상태 |
+| --- | --- | --- |
+| Telegram | Bot API (HTTP 롱폴링) | 내장 |
+| Lark (Feishu) | WebSocket + REST API | 내장 |
+
+> 추가 채널(Discord, Slack, WeChat, DingTalk 등)은 향후 릴리스에서 지원 예정입니다.
+
+### 주요 기능
+
+- **이벤트 알림** — 에이전트의 턴 완료 및 오류가 활성화된 모든 채널에 실시간으로 푸시
+- **대화형 명령** — 채팅 앱에서 명령(`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`)을 보내고 즉시 응답을 받을 수 있으며, 명령 접두사 설정 가능. 대화 관련 명령(시작, 중지, 승인 등)은 향후 릴리스에서 지원 예정
+- **일일 리포트** — 예약된 시간에 자동 일일 요약 생성(대화 수, 에이전트 유형별 분석, 프로젝트 활동 포함)
+- **다국어 지원** — 10개 언어의 메시지 템플릿(영어, 간체/번체 중국어, 일본어, 한국어, 스페인어, 독일어, 프랑스어, 포르투갈어, 아랍어)
+- **보안 자격증명** — 토큰은 OS 키링에 저장되며 설정 파일이나 로그에 노출되지 않음
+- **리치 메시지** — Telegram은 Markdown 포맷, Lark은 카드 기반 레이아웃; 모든 플랫폼에서 일반 텍스트 폴백 지원
+
+### 설정
+
+1. **설정 → 채팅 채널**에서 채널 생성(Telegram 또는 Lark 선택)
+2. 봇 토큰(Telegram) 또는 앱 자격증명(Lark) 입력 — OS 키링에 안전하게 저장
+3. 이벤트 필터 및 선택적 일일 리포트 일정 설정
+4. 연결 — 에이전트가 이벤트를 발생시키면 메시지가 흐르기 시작
+
 ## 지원 범위
 
-### 1) 세션 수집 (히스토리 세션)
+### 1) 대화 수집 (히스토리 대화)
 
 | Agent | 환경 변수 경로 | macOS / Linux 기본값 | Windows 기본값 |
 | --- | --- | --- | --- |
@@ -263,13 +293,16 @@ Next.js 16 (Static Export) + React 19
             Shared Rust Core
               |- AppState
               |- ACP Manager
-              |- Parsers (session ingestion)
+              |- Parsers (conversation ingestion)
+              |- Chat Channels
               |- Git / File Tree / Terminal
               |- MCP marketplace + config
               |- SeaORM + SQLite
                       |
-                      v
-        Local Filesystem / Git Repos
+              ┌───────┼───────┐
+              v       v       v
+  Local Filesystem  Git   Chat Channels
+    / Git Repos    Repos  (Telegram, Lark)
 ```
 
 ## 제약 사항

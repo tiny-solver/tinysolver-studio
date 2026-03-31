@@ -23,9 +23,9 @@ Codeg (Code Generation) ist ein unternehmenstauglicher Multi-Agent-Workspace
 für die Programmierung.
 Es vereint lokale KI-Coding-Agenten (Claude Code, Codex CLI, OpenCode,
 Gemini CLI, OpenClaw usw.) in einer Desktop-App, einem Standalone-Server oder
-Docker-Container — Remote-Entwicklung von jedem Browser aus — mit Sitzungsaggregation,
-paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung und integrierten
-Git/Datei/Terminal-Workflows.
+Docker-Container — Remote-Entwicklung von jedem Browser aus — mit Konversationsaggregation,
+paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integration
+(Telegram, Lark usw.) und integrierten Git/Datei/Terminal-Workflows.
 
 ## Hauptoberfläche
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -39,15 +39,16 @@ Git/Datei/Terminal-Workflows.
 ## Highlights
 
 - Einheitlicher Multi-Agent-Workspace im selben Projekt
-- Lokale Sitzungserfassung mit strukturierter Darstellung
+- Lokale Konversationserfassung mit strukturierter Darstellung
 - Parallele Entwicklung mit integrierten `git worktree`-Abläufen
 - **Projekt-Starter** — neue Projekte visuell erstellen mit Live-Vorschau
+- **Chat-Kanäle** — Telegram, Lark (Feishu) und mehr mit Ihren Coding-Agenten verbinden für Echtzeit-Benachrichtigungen und interaktive Befehle
 - MCP-Verwaltung (lokaler Scan + Registry-Suche/Installation)
 - Skills-Verwaltung (global und projektbezogen)
 - Git-Remote-Kontoverwaltung (GitHub und andere Git-Server)
 - Webdienst-Modus — Zugriff auf Codeg über jeden Browser für Remote-Arbeit
 - Standalone-Server-Bereitstellung — codeg-server auf jedem Linux/macOS-Server ausführen, Zugriff über den Browser
-- **Docker-Unterstützung** — Multi-Stage-Build-Image, unterstützt `docker compose up` oder `docker run`, benutzerdefinierter Token/Port, Datenpersistenz und Projektverzeichnis-Mounts
+- **Docker-Unterstützung** — `docker compose up` oder `docker run`, mit benutzerdefiniertem Token/Port, Datenpersistenz und Projektverzeichnis-Mounts
 - Integrierter Engineering-Kreislauf (Dateibaum, Diff, Git-Änderungen, Commit, Terminal)
 
 ## Projekt-Starter
@@ -67,9 +68,38 @@ Erstellen Sie neue Projekte visuell mit einer geteilten Oberfläche: links konfi
 
 Unterstützt derzeit **shadcn/ui**-Projekt-Scaffolding, mit einem Tab-basierten Design für zukünftige Projekttypen.
 
+## Chat-Kanäle
+
+Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und mehr — mit Ihren KI-Coding-Agenten. Erhalten Sie Echtzeit-Benachrichtigungen, wenn Agenten Aufgaben abschließen oder auf Fehler stoßen, fragen Sie den Konversationsverlauf von Ihrem Smartphone ab und erhalten Sie automatisierte Tagesberichte — alles ohne Ihre Chat-App zu verlassen.
+
+### Unterstützte Kanäle
+
+| Kanal | Protokoll | Status |
+| --- | --- | --- |
+| Telegram | Bot API (HTTP Long-Polling) | Integriert |
+| Lark (Feishu) | WebSocket + REST API | Integriert |
+
+> Weitere Kanäle (Discord, Slack, WeChat, DingTalk usw.) sind für zukünftige Releases geplant.
+
+### Hauptfunktionen
+
+- **Ereignisbenachrichtigungen** — Agenten-Rundenvervollständigungen und Fehler werden in Echtzeit an alle aktivierten Kanäle gepusht
+- **Interaktive Befehle** — senden Sie Befehle (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) aus Ihrer Chat-App und erhalten Sie sofortige Antworten; konfigurierbarer Befehlspräfix. Konversationsbezogene Befehle (Start, Stopp, Genehmigung) sind für kommende Releases geplant
+- **Tagesberichte** — automatisierte tägliche Zusammenfassung zu einer geplanten Zeit, einschließlich Konversationszählung, Aufschlüsselung nach Agent-Typ und Projektaktivität
+- **Mehrsprachig** — Nachrichtenvorlagen in 10 Sprachen (Englisch, vereinfachtes/traditionelles Chinesisch, Japanisch, Koreanisch, Spanisch, Deutsch, Französisch, Portugiesisch, Arabisch)
+- **Sichere Anmeldedaten** — Token werden im OS-Schlüsselbund gespeichert, nie in Konfigurationsdateien oder Logs exponiert
+- **Rich-Nachrichten** — Markdown-Formatierung für Telegram, kartenbasiertes Layout für Lark; Klartext-Fallback für alle Plattformen
+
+### Einrichtung
+
+1. Erstellen Sie einen Kanal unter **Einstellungen → Chat-Kanäle** (wählen Sie Telegram oder Lark)
+2. Geben Sie Ihren Bot-Token (Telegram) oder App-Anmeldedaten (Lark) ein — sicher im OS-Schlüsselbund gespeichert
+3. Konfigurieren Sie Ereignisfilter und optionalen Tagesberichtsplan
+4. Verbinden — Nachrichten beginnen zu fließen, sobald Agenten Ereignisse aussenden
+
 ## Unterstützter Umfang
 
-### 1) Sitzungserfassung (historische Sitzungen)
+### 1) Konversationserfassung (historische Konversationen)
 
 | Agent | Umgebungsvariablen-Pfad | macOS / Linux Standard | Windows Standard |
 | --- | --- | --- | --- |
@@ -266,13 +296,16 @@ Next.js 16 (Static Export) + React 19
             Shared Rust Core
               |- AppState
               |- ACP Manager
-              |- Parsers (session ingestion)
+              |- Parsers (conversation ingestion)
+              |- Chat Channels
               |- Git / File Tree / Terminal
               |- MCP marketplace + config
               |- SeaORM + SQLite
                       |
-                      v
-        Local Filesystem / Git Repos
+              ┌───────┼───────┐
+              v       v       v
+  Local Filesystem  Git   Chat Channels
+    / Git Repos    Repos  (Telegram, Lark)
 ```
 
 ## Einschränkungen

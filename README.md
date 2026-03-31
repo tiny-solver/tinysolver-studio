@@ -22,8 +22,9 @@
 Codeg (Code Generation) is an enterprise-grade multi-agent coding workspace.
 It unifies local AI coding agents (Claude Code, Codex CLI, OpenCode, Gemini CLI,
 OpenClaw, Cline, etc.) in a desktop app, standalone server, or Docker container — enabling
-remote development from any browser — with session aggregation, parallel `git worktree`
-development, MCP/Skills management, and integrated Git/file/terminal workflows.
+remote development from any browser — with conversation aggregation, parallel `git worktree`
+development, MCP/Skills management, chat channel interactions (Telegram, Lark, etc.),
+and integrated Git/file/terminal workflows.
 
 ## Main Interface
 ![Codeg Light](./docs/images/main-light.png#gh-light-mode-only)
@@ -37,15 +38,16 @@ development, MCP/Skills management, and integrated Git/file/terminal workflows.
 ## Highlights
 
 - Unified multi-agent workspace in the same project
-- Local session ingestion with structured rendering
+- Local conversation ingestion with structured rendering
 - Parallel development with built-in `git worktree` flows
 - **Project Boot** — visually scaffold new projects with live preview
+- **Chat Channels** — connect Telegram, Lark (Feishu) and more to your coding agents for real-time notifications and interactive commands
 - MCP management (local scan + registry search/install)
 - Skills management (global and project scope)
 - Git remote account management (GitHub and other Git servers)
 - Web service mode — access Codeg from any browser for remote work
 - **Standalone server deployment** — run `codeg-server` on any Linux/macOS server, access via browser
-- **Docker support** — multi-stage build image with `docker compose up` or `docker run`, supports custom token, port, volume mounts for data persistence and project directories
+- **Docker support** — `docker compose up` or `docker run`, with custom token, port, and volume mounts for data persistence and project directories
 - Integrated engineering loop (file tree, diff, git changes, commit, terminal)
 
 ## Project Boot
@@ -65,9 +67,38 @@ Create new projects visually with a split-pane interface: configure on the left,
 
 Currently supports **shadcn/ui** project scaffolding, with a tab-based design ready for more project types in the future.
 
+## Chat Channels
+
+Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — to your AI coding agents. Receive real-time notifications when agents complete tasks or encounter errors, query conversation history from your phone, and get automated daily reports — all without leaving your chat app.
+
+### Supported Channels
+
+| Channel | Protocol | Status |
+| --- | --- | --- |
+| Telegram | Bot API (HTTP long-polling) | Built-in |
+| Lark (Feishu) | WebSocket + REST API | Built-in |
+
+> More channels (Discord, Slack, WeChat, DingTalk, etc.) are planned for future releases.
+
+### Key Features
+
+- **Event Notifications** — agent turn completions and errors are pushed to all enabled channels in real time
+- **Interactive Commands** — send commands (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) from your chat app and get instant responses; configurable command prefix. Conversation-related commands (e.g. start, stop, approve) are planned for upcoming releases
+- **Daily Reports** — automated daily summary at a scheduled time, including conversation counts, agent-type breakdown, and project activity
+- **Multi-Language** — message templates in 10 languages (English, Simplified/Traditional Chinese, Japanese, Korean, Spanish, German, French, Portuguese, Arabic)
+- **Secure Credentials** — tokens stored in the OS keyring, never exposed in config files or logs
+- **Rich Messages** — Markdown formatting for Telegram, card-based layout for Lark; plain-text fallback for all platforms
+
+### Setup
+
+1. Create a channel in **Settings → Chat Channels** (choose Telegram or Lark)
+2. Enter your bot token (Telegram) or app credentials (Lark) — stored securely in the OS keyring
+3. Configure event filters and optional daily report schedule
+4. Connect — messages start flowing as agents emit events
+
 ## Supported Scope
 
-### 1) Session Ingestion (historical sessions)
+### 1) Conversation Ingestion (historical conversations)
 
 | Agent | Environment Variable Path | macOS / Linux Default | Windows Default |
 | --- | --- | --- | --- |
@@ -264,13 +295,16 @@ Next.js 16 (Static Export) + React 19
             Shared Rust Core
               |- AppState
               |- ACP Manager
-              |- Parsers (session ingestion)
+              |- Parsers (conversation ingestion)
+              |- Chat Channels
               |- Git / File Tree / Terminal
               |- MCP marketplace + config
               |- SeaORM + SQLite
                       |
-                      v
-        Local Filesystem / Git Repos
+              ┌───────┼───────┐
+              v       v       v
+  Local Filesystem  Git   Chat Channels
+    / Git Repos    Repos  (Telegram, Lark)
 ```
 
 ## Constraints
