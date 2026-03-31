@@ -82,6 +82,7 @@ pub enum AcpEvent {
         connection_id: String,
         session_id: String,
         stop_reason: String,
+        agent_type: String,
     },
     /// Session established with agent-assigned session ID
     SessionStarted {
@@ -129,6 +130,7 @@ pub enum AcpEvent {
     Error {
         connection_id: String,
         message: String,
+        agent_type: String,
     },
     /// Available slash commands updated
     AvailableCommands {

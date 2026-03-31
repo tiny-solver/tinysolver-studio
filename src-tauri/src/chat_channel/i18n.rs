@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Lang {
+    #[default]
     En,
     ZhCn,
     ZhTw,
@@ -13,12 +14,6 @@ pub enum Lang {
     Fr,
     Pt,
     Ar,
-}
-
-impl Default for Lang {
-    fn default() -> Self {
-        Lang::En
-    }
 }
 
 impl Lang {

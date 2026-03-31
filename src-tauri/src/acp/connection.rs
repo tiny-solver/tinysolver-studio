@@ -288,6 +288,7 @@ pub async fn spawn_agent_connection(
                 AcpEvent::Error {
                     connection_id: conn_id.clone(),
                     message: e.to_string(),
+                    agent_type: agent_type.to_string(),
                 },
             );
         }
@@ -829,6 +830,7 @@ async fn run_connection(
                                     message: format!(
                                         "Failed to load session, starting new: {e}"
                                     ),
+                                    agent_type: agent_type.to_string(),
                                 },
                             );
                         }
@@ -1578,6 +1580,7 @@ async fn run_conversation_loop<'a>(
                         AcpEvent::Error {
                             connection_id: conn_id.into(),
                             message: "Prompt must contain at least one content block".into(),
+                            agent_type: agent_type.to_string(),
                         },
                     );
                     continue;
@@ -1684,6 +1687,7 @@ async fn run_conversation_loop<'a>(
                                             connection_id: conn_id.into(),
                                             session_id: sid.0.to_string(),
                                             stop_reason: reason_str.into(),
+                                            agent_type: agent_type.to_string(),
                                         },
                                     );
                                     break;
@@ -1715,6 +1719,7 @@ async fn run_conversation_loop<'a>(
                                     connection_id: conn_id.into(),
                                     session_id: sid.0.to_string(),
                                     stop_reason: reason_str.into(),
+                                    agent_type: agent_type.to_string(),
                                 },
                             );
                             break;
@@ -1762,6 +1767,7 @@ async fn run_conversation_loop<'a>(
                                                 AcpEvent::Error {
                                                     connection_id: conn_id.into(),
                                                     message: format!("Failed to set mode: {e}"),
+                                                    agent_type: agent_type.to_string(),
                                                 },
                                             );
                                         }
@@ -1788,6 +1794,7 @@ async fn run_conversation_loop<'a>(
                                             AcpEvent::Error {
                                                 connection_id: conn_id.into(),
                                                 message: format!("Failed to set config option: {e}"),
+                                                agent_type: agent_type.to_string(),
                                             },
                                         );
                                     }
@@ -1823,6 +1830,7 @@ async fn run_conversation_loop<'a>(
                                             connection_id: conn_id.into(),
                                             session_id: sid.0.to_string(),
                                             stop_reason: "cancelled".into(),
+                                            agent_type: agent_type.to_string(),
                                         },
                                     );
                                     // Drain the prompt response in the background so
@@ -1895,6 +1903,7 @@ async fn run_conversation_loop<'a>(
                         AcpEvent::Error {
                             connection_id: conn_id.into(),
                             message: format!("Failed to set mode: {e}"),
+                            agent_type: agent_type.to_string(),
                         },
                     );
                 }
@@ -1914,6 +1923,7 @@ async fn run_conversation_loop<'a>(
                         AcpEvent::Error {
                             connection_id: conn_id.into(),
                             message: format!("Failed to set config option: {e}"),
+                            agent_type: agent_type.to_string(),
                         },
                     );
                 }

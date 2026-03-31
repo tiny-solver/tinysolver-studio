@@ -126,7 +126,7 @@ fn parse_acp_event(payload: &serde_json::Value, lang: Lang) -> Option<(String, R
     match event_type {
         "turn_complete" => {
             let stop_reason = payload
-                .pointer("/data/stop_reason")
+                .get("stop_reason")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
             // Only push for end_turn, not for intermediate completions
@@ -134,7 +134,7 @@ fn parse_acp_event(payload: &serde_json::Value, lang: Lang) -> Option<(String, R
                 return None;
             }
             let agent_type = payload
-                .pointer("/data/agent_type")
+                .get("agent_type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown Agent");
             Some((
@@ -144,11 +144,11 @@ fn parse_acp_event(payload: &serde_json::Value, lang: Lang) -> Option<(String, R
         }
         "error" => {
             let agent_type = payload
-                .pointer("/data/agent_type")
+                .get("agent_type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown Agent");
             let message = payload
-                .pointer("/data/message")
+                .get("message")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown error");
             Some((
