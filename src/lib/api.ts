@@ -1358,20 +1358,18 @@ export async function deleteChatChannel(id: number): Promise<void> {
 
 export async function saveChatChannelToken(
   channelId: number,
-  token: string,
+  token: string
 ): Promise<void> {
   return getTransport().call("save_chat_channel_token", { channelId, token })
 }
 
 export async function getChatChannelHasToken(
-  channelId: number,
+  channelId: number
 ): Promise<boolean> {
   return getTransport().call("get_chat_channel_has_token", { channelId })
 }
 
-export async function deleteChatChannelToken(
-  channelId: number,
-): Promise<void> {
+export async function deleteChatChannelToken(channelId: number): Promise<void> {
   return getTransport().call("delete_chat_channel_token", { channelId })
 }
 
@@ -1416,7 +1414,7 @@ export async function getChatEventFilter(): Promise<string[] | null> {
 }
 
 export async function setChatEventFilter(
-  filter: string[] | null,
+  filter: string[] | null
 ): Promise<void> {
   return getTransport().call("set_chat_event_filter", { filter })
 }

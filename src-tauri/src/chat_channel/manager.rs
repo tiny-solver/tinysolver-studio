@@ -27,6 +27,12 @@ pub struct ChatChannelManager {
     inner: Arc<Inner>,
 }
 
+impl Default for ChatChannelManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChatChannelManager {
     pub fn new() -> Self {
         let (command_tx, command_rx) = mpsc::channel(256);

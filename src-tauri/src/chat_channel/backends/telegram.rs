@@ -50,7 +50,7 @@ impl TelegramBackend {
 
         let resp = self
             .client
-            .post(&self.api_url("sendMessage"))
+            .post(self.api_url("sendMessage"))
             .json(&body)
             .send()
             .await
@@ -94,7 +94,7 @@ impl ChatChannelBackend for TelegramBackend {
         // Verify bot token by calling getMe
         let resp = self
             .client
-            .get(&self.api_url("getMe"))
+            .get(self.api_url("getMe"))
             .send()
             .await
             .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
@@ -217,7 +217,7 @@ impl ChatChannelBackend for TelegramBackend {
     async fn test_connection(&self) -> Result<(), ChatChannelError> {
         let resp = self
             .client
-            .get(&self.api_url("getMe"))
+            .get(self.api_url("getMe"))
             .send()
             .await
             .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;

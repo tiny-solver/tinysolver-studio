@@ -88,7 +88,7 @@ pub async fn handle_search(db: &DatabaseConnection, keyword: &str) -> RichMessag
     }
 
     RichMessage::info(body.trim_end())
-        .with_title(&format!("搜索 \"{}\" - {} 条结果", keyword, matched.len()))
+        .with_title(format!("搜索 \"{}\" - {} 条结果", keyword, matched.len()))
 }
 
 pub async fn handle_detail(db: &DatabaseConnection, conversation_id: i32) -> RichMessage {
@@ -114,11 +114,11 @@ pub async fn handle_detail(db: &DatabaseConnection, conversation_id: i32) -> Ric
 
     let title = conv.title.as_deref().unwrap_or("(无标题)");
     RichMessage::info(title)
-        .with_title(&format!("会话详情 #{}", conv.id))
+        .with_title(format!("会话详情 #{}", conv.id))
         .with_field("代理", &conv.agent_type)
         .with_field("状态", format!("{:?}", conv.status))
-        .with_field("消息数", &conv.message_count.to_string())
-        .with_field("创建时间", &conv.created_at.format("%Y-%m-%d %H:%M").to_string())
+        .with_field("消息数", conv.message_count.to_string())
+        .with_field("创建时间", conv.created_at.format("%Y-%m-%d %H:%M").to_string())
 }
 
 pub async fn handle_today(db: &DatabaseConnection) -> RichMessage {
@@ -176,7 +176,7 @@ pub async fn handle_today(db: &DatabaseConnection) -> RichMessage {
         }
     }
 
-    RichMessage::info(body).with_title(&format!(
+    RichMessage::info(body).with_title(format!(
         "今日活动 ({})",
         now.format("%Y-%m-%d")
     ))

@@ -21,10 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import {
-  createChatChannel,
-  saveChatChannelToken,
-} from "@/lib/api"
+import { createChatChannel, saveChatChannelToken } from "@/lib/api"
 import type { ChannelType } from "@/lib/types"
 
 interface AddChatChannelDialogProps {
@@ -66,7 +63,7 @@ export function AddChatChannelDialog({
       if (!nextOpen) resetForm()
       onOpenChange(nextOpen)
     },
-    [onOpenChange, resetForm],
+    [onOpenChange, resetForm]
   )
 
   const handleSubmit = useCallback(async () => {
@@ -151,9 +148,7 @@ export function AddChatChannelDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="telegram">Telegram</SelectItem>
-                <SelectItem value="lark">
-                  {t("lark")}
-                </SelectItem>
+                <SelectItem value="lark">{t("lark")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -178,9 +173,7 @@ export function AddChatChannelDialog({
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder={
-                channelType === "telegram"
-                  ? "123456:ABC-DEF..."
-                  : "xxxxx"
+                channelType === "telegram" ? "123456:ABC-DEF..." : "xxxxx"
               }
             />
           </div>
@@ -197,9 +190,7 @@ export function AddChatChannelDialog({
           </div>
 
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium">
-              {t("dailyReport")}
-            </label>
+            <label className="text-xs font-medium">{t("dailyReport")}</label>
             <Switch
               checked={dailyReportEnabled}
               onCheckedChange={setDailyReportEnabled}

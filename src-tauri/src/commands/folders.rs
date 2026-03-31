@@ -2997,7 +2997,7 @@ pub async fn list_directory_entries(
                 .filter_map(|e| e.ok())
                 .any(|e| {
                     let ft = e.file_type().ok();
-                    let is_sub_dir = ft.map_or(false, |ft| {
+                    let is_sub_dir = ft.is_some_and(|ft| {
                         if ft.is_symlink() {
                             e.path().is_dir()
                         } else {

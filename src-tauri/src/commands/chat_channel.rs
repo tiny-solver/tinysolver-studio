@@ -50,6 +50,7 @@ pub async fn create_chat_channel_core(
     Ok(ChatChannelInfo::from(model))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_chat_channel_core(
     db: &AppDatabase,
     id: i32,
@@ -369,6 +370,7 @@ pub async fn create_chat_channel(
     create_chat_channel_core(&db, name, channel_type, config_json, enabled, daily_report_enabled, daily_report_time).await
 }
 
+#[allow(clippy::too_many_arguments)]
 #[cfg(feature = "tauri-runtime")]
 #[tauri::command]
 pub async fn update_chat_channel(
