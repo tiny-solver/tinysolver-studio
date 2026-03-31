@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "コードをプッシュ",
       "noUnpushedCommits": "未プッシュのコミットはありません",
+      "noRemoteConfigured": "Git リモートが設定されていません\n「リモート管理」からリモートを追加してください",
       "newBranchNoPushedCommits": "新しいブランチ — プッシュしてリモート追跡ブランチを作成",
       "unpushed": "未プッシュ",
       "selectFileToViewDiff": "ファイルを選択して差分を表示",

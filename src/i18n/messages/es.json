@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "Enviar código",
       "noUnpushedCommits": "No hay commits sin enviar",
+      "noRemoteConfigured": "No hay remoto Git configurado\nAñade uno en «Gestionar remotos»",
       "newBranchNoPushedCommits": "Nueva rama — enviar para crear rama de seguimiento remota",
       "unpushed": "Sin enviar",
       "selectFileToViewDiff": "Selecciona un archivo para ver las diferencias",

@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "دفع الكود",
       "noUnpushedCommits": "لا توجد التزامات غير مدفوعة",
+      "noRemoteConfigured": "لم يتم تكوين مستودع Git بعيد\nأضف واحدًا في «إدارة المستودعات البعيدة»",
       "newBranchNoPushedCommits": "فرع جديد — ادفع لإنشاء فرع تتبع عن بُعد",
       "unpushed": "غير مدفوع",
       "selectFileToViewDiff": "اختر ملفًا لعرض الفرق",

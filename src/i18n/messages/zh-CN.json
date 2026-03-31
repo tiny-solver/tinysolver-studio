@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "推送代码",
       "noUnpushedCommits": "没有未推送的提交",
+      "noRemoteConfigured": "未配置 Git 远程仓库\n请在「管理远程」中添加远程地址",
       "newBranchNoPushedCommits": "新分支 — 推送以创建远程跟踪分支",
       "unpushed": "未推送",
       "selectFileToViewDiff": "选择文件查看差异",

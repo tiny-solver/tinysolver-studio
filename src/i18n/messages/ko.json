@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "코드 푸시",
       "noUnpushedCommits": "푸시되지 않은 커밋이 없습니다",
+      "noRemoteConfigured": "Git 원격이 구성되지 않았습니다\n「원격 관리」에서 원격을 추가하세요",
       "newBranchNoPushedCommits": "새 브랜치 — 푸시하여 원격 추적 브랜치 생성",
       "unpushed": "미푸시",
       "selectFileToViewDiff": "파일을 선택하여 차이 보기",

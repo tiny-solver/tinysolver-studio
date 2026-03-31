@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "Pousser le code",
       "noUnpushedCommits": "Aucun commit non poussé",
+      "noRemoteConfigured": "Aucun dépôt distant Git configuré\nAjoutez-en un dans « Gérer les dépôts distants »",
       "newBranchNoPushedCommits": "Nouvelle branche — pousser pour créer la branche de suivi distante",
       "unpushed": "Non poussé",
       "selectFileToViewDiff": "Sélectionnez un fichier pour voir les différences",

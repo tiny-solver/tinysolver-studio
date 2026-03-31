@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "Push Code",
       "noUnpushedCommits": "No unpushed commits",
+      "noRemoteConfigured": "No Git remote configured\nAdd a remote in Manage Remotes",
       "newBranchNoPushedCommits": "New branch — push to create remote tracking branch",
       "unpushed": "Unpushed",
       "selectFileToViewDiff": "Select a file to view diff",

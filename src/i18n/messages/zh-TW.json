@@ -1055,6 +1055,7 @@
     "pushWindow": {
       "title": "推送程式碼",
       "noUnpushedCommits": "沒有未推送的提交",
+      "noRemoteConfigured": "未設定 Git 遠端儲存庫\n請在「管理遠端」中新增遠端地址",
       "newBranchNoPushedCommits": "新分支 — 推送以建立遠端追蹤分支",
       "unpushed": "未推送",
       "selectFileToViewDiff": "選擇檔案查看差異",

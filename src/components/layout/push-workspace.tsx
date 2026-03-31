@@ -414,8 +414,10 @@ export function PushWorkspace({
           <span className="truncate text-sm font-medium">
             {pushInfoData.branch}
           </span>
-          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          {uniqueRemotes.length <= 1 ? (
+          {uniqueRemotes.length > 0 && (
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          {uniqueRemotes.length === 0 ? null : uniqueRemotes.length <= 1 ? (
             <span className="truncate text-sm text-muted-foreground">
               {selectedRemote ?? "origin"}/{pushInfoData.branch}
             </span>
@@ -452,6 +454,10 @@ export function PushWorkspace({
               {listLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : uniqueRemotes.length === 0 ? (
+                <div className="flex items-center justify-center px-4 py-12 text-center text-sm text-muted-foreground whitespace-pre-line">
+                  {t("noRemoteConfigured")}
                 </div>
               ) : unpushedCommits.length === 0 ? (
                 <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -533,7 +539,9 @@ export function PushWorkspace({
               <Button
                 className="w-full"
                 disabled={
-                  pushing || (hasUpstream && unpushedCommits.length === 0)
+                  pushing ||
+                  uniqueRemotes.length === 0 ||
+                  (hasUpstream && unpushedCommits.length === 0)
                 }
                 onClick={handlePush}
               >
