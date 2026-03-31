@@ -17,12 +17,18 @@ COPY src-tauri/ ./
 RUN cargo build --release --bin codeg-server --no-default-features
 
 # Stage 3: Runtime
-FROM debian:bookworm-slim
+FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y \
     libsqlite3-0 \
     git \
     openssh-client \
     ca-certificates \
+    curl \
+    python3 \
+    python3-pip \
+    gcc \
+    g++ \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=backend /app/src-tauri/target/release/codeg-server /usr/local/bin/codeg-server
