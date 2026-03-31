@@ -98,6 +98,7 @@ function defaultSkillLayoutForAgent(
   if (agentType === "codex") return "skill_directory"
   if (agentType === "gemini") return "skill_directory"
   if (agentType === "open_claw") return "skill_directory"
+  if (agentType === "cline") return "skill_directory"
   return null
 }
 

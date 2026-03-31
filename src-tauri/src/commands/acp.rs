@@ -1234,7 +1234,19 @@ fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSpec> {
             global_dirs: vec![home_dir_or_default().join(".openclaw").join("skills")],
             project_rel_dirs: vec!["skills"],
         }),
-        AgentType::Cline => None,
+        AgentType::Cline => Some(SkillStorageSpec {
+            kind: SkillStorageKind::SkillDirectoryOnly,
+            global_dirs: vec![
+                home_dir_or_default().join(".agents").join("skills"),
+                home_dir_or_default().join(".cline").join("skills"),
+            ],
+            project_rel_dirs: vec![
+                ".agents/skills",
+                ".cline/skills",
+                ".clinerules/skills",
+                ".claude/skills",
+            ],
+        }),
     }
 }
 
@@ -2225,7 +2237,7 @@ pub async fn acp_list_agent_skills(
         return Ok(AgentSkillsListResult {
             supported: false,
             message: Some(format!(
-                "{agent_type} 暂不支持在设置页管理 Skills（当前仅支持 Claude Code / Codex / OpenCode / Gemini CLI / OpenClaw）"
+                "{agent_type} 暂不支持在设置页管理 Skills"
             )),
             locations: Vec::new(),
             skills: Vec::new(),
