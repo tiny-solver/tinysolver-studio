@@ -225,3 +225,24 @@ pub async fn set_chat_event_filter(
     cc_commands::set_chat_event_filter_core(&state.db, params.filter).await?;
     Ok(Json(()))
 }
+
+pub async fn get_chat_message_language(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<String>, AppCommandError> {
+    let result = cc_commands::get_chat_message_language_core(&state.db).await?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMessageLanguageParams {
+    pub language: String,
+}
+
+pub async fn set_chat_message_language(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<SetMessageLanguageParams>,
+) -> Result<Json<()>, AppCommandError> {
+    cc_commands::set_chat_message_language_core(&state.db, params.language).await?;
+    Ok(Json(()))
+}

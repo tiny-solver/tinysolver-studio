@@ -197,6 +197,8 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/set_chat_command_prefix", post(handlers::chat_channel::set_chat_command_prefix))
         .route("/get_chat_event_filter", post(handlers::chat_channel::get_chat_event_filter))
         .route("/set_chat_event_filter", post(handlers::chat_channel::set_chat_event_filter))
+        .route("/get_chat_message_language", post(handlers::chat_channel::get_chat_message_language))
+        .route("/set_chat_message_language", post(handlers::chat_channel::set_chat_message_language))
         // ─── Terminal ───
         .route("/terminal_spawn", post(handlers::terminal::terminal_spawn))
         .route("/terminal_write", post(handlers::terminal::terminal_write))

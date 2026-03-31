@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use sea_orm::DatabaseConnection;
 use tokio::task::JoinHandle;
 
+use super::i18n::Lang;
 use super::manager::ChatChannelManager;
 use super::message_formatter;
 use super::types::RichMessage;
@@ -13,6 +14,7 @@ use crate::web::event_bridge::WebEventBroadcaster;
 
 /// Minimum interval between pushes for the same event type per channel (debounce).
 const DEBOUNCE_SECS: u64 = 5;
+const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
 
 pub fn spawn_event_subscriber(
     broadcaster: Arc<WebEventBroadcaster>,
@@ -36,7 +38,9 @@ pub fn spawn_event_subscriber(
                 }
             };
 
-            let message = match parse_event(&event.channel, &event.payload) {
+            let lang = load_lang(&db_conn).await;
+
+            let message = match parse_event(&event.channel, &event.payload, lang) {
                 Some((event_type, msg)) => {
                     // Global event filter check
                     let global_filter = app_metadata_service::get_value(&db_conn, "chat_event_filter")
@@ -100,14 +104,23 @@ pub fn spawn_event_subscriber(
     })
 }
 
-fn parse_event(channel: &str, payload: &serde_json::Value) -> Option<(String, RichMessage)> {
+async fn load_lang(db: &DatabaseConnection) -> Lang {
+    app_metadata_service::get_value(db, MESSAGE_LANGUAGE_KEY)
+        .await
+        .ok()
+        .flatten()
+        .map(|v| Lang::from_str_lossy(&v))
+        .unwrap_or_default()
+}
+
+fn parse_event(channel: &str, payload: &serde_json::Value, lang: Lang) -> Option<(String, RichMessage)> {
     match channel {
-        "acp://event" => parse_acp_event(payload),
+        "acp://event" => parse_acp_event(payload, lang),
         _ => None,
     }
 }
 
-fn parse_acp_event(payload: &serde_json::Value) -> Option<(String, RichMessage)> {
+fn parse_acp_event(payload: &serde_json::Value, lang: Lang) -> Option<(String, RichMessage)> {
     let event_type = payload.get("type")?.as_str()?;
 
     match event_type {
@@ -126,7 +139,7 @@ fn parse_acp_event(payload: &serde_json::Value) -> Option<(String, RichMessage)>
                 .unwrap_or("Unknown Agent");
             Some((
                 "turn_complete".to_string(),
-                message_formatter::format_turn_complete(agent_type, stop_reason),
+                message_formatter::format_turn_complete(agent_type, stop_reason, lang),
             ))
         }
         "error" => {
@@ -140,10 +153,9 @@ fn parse_acp_event(payload: &serde_json::Value) -> Option<(String, RichMessage)>
                 .unwrap_or("Unknown error");
             Some((
                 "error".to_string(),
-                message_formatter::format_agent_error(agent_type, message),
+                message_formatter::format_agent_error(agent_type, message, lang),
             ))
         }
         _ => None,
     }
 }
-

@@ -1,11 +1,12 @@
 use chrono::Utc;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
+use super::i18n::{self, Lang};
 use super::manager::ChatChannelManager;
 use super::types::{MessageLevel, RichMessage};
 use crate::db::entities::conversation;
 
-pub async fn handle_recent(db: &DatabaseConnection) -> RichMessage {
+pub async fn handle_recent(db: &DatabaseConnection, lang: Lang) -> RichMessage {
     let rows = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
         .order_by_desc(conversation::Column::CreatedAt)
@@ -15,7 +16,7 @@ pub async fn handle_recent(db: &DatabaseConnection) -> RichMessage {
         Ok(rows) => rows,
         Err(e) => {
             return RichMessage {
-                title: Some("查询失败".to_string()),
+                title: Some(i18n::query_failed_title(lang).to_string()),
                 body: e.to_string(),
                 fields: Vec::new(),
                 level: MessageLevel::Error,
@@ -25,12 +26,13 @@ pub async fn handle_recent(db: &DatabaseConnection) -> RichMessage {
 
     let recent: Vec<_> = rows.into_iter().take(5).collect();
     if recent.is_empty() {
-        return RichMessage::info("暂无会话记录").with_title("最近会话");
+        return RichMessage::info(i18n::no_conversations(lang))
+            .with_title(i18n::recent_conversations_title(lang));
     }
 
     let mut body = String::new();
     for (i, conv) in recent.iter().enumerate() {
-        let title = conv.title.as_deref().unwrap_or("(无标题)");
+        let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
         let agent = &conv.agent_type;
         let time = conv.created_at.format("%m-%d %H:%M");
         body.push_str(&format!(
@@ -42,10 +44,15 @@ pub async fn handle_recent(db: &DatabaseConnection) -> RichMessage {
         ));
     }
 
-    RichMessage::info(body.trim_end()).with_title("最近 5 条会话")
+    RichMessage::info(body.trim_end())
+        .with_title(i18n::recent_n_conversations_title(lang, recent.len()))
 }
 
-pub async fn handle_search(db: &DatabaseConnection, keyword: &str) -> RichMessage {
+pub async fn handle_search(
+    db: &DatabaseConnection,
+    keyword: &str,
+    lang: Lang,
+) -> RichMessage {
     let rows = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
         .order_by_desc(conversation::Column::CreatedAt)
@@ -55,7 +62,7 @@ pub async fn handle_search(db: &DatabaseConnection, keyword: &str) -> RichMessag
         Ok(rows) => rows,
         Err(e) => {
             return RichMessage {
-                title: Some("查询失败".to_string()),
+                title: Some(i18n::query_failed_title(lang).to_string()),
                 body: e.to_string(),
                 fields: Vec::new(),
                 level: MessageLevel::Error,
@@ -76,22 +83,35 @@ pub async fn handle_search(db: &DatabaseConnection, keyword: &str) -> RichMessag
         .collect();
 
     if matched.is_empty() {
-        return RichMessage::info(format!("未找到包含 \"{keyword}\" 的会话"))
-            .with_title("搜索结果");
+        return RichMessage::info(i18n::search_no_results(lang, keyword))
+            .with_title(i18n::search_results_title(lang));
     }
 
     let mut body = String::new();
     for (i, conv) in matched.iter().enumerate() {
-        let title = conv.title.as_deref().unwrap_or("(无标题)");
+        let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
         let agent = &conv.agent_type;
-        body.push_str(&format!("{}. [{}] {} (ID:{})\n", i + 1, agent, title, conv.id));
+        body.push_str(&format!(
+            "{}. [{}] {} (ID:{})\n",
+            i + 1,
+            agent,
+            title,
+            conv.id
+        ));
     }
 
-    RichMessage::info(body.trim_end())
-        .with_title(format!("搜索 \"{}\" - {} 条结果", keyword, matched.len()))
+    RichMessage::info(body.trim_end()).with_title(i18n::search_results_count_title(
+        lang,
+        keyword,
+        matched.len(),
+    ))
 }
 
-pub async fn handle_detail(db: &DatabaseConnection, conversation_id: i32) -> RichMessage {
+pub async fn handle_detail(
+    db: &DatabaseConnection,
+    conversation_id: i32,
+    lang: Lang,
+) -> RichMessage {
     let conv = match conversation::Entity::find_by_id(conversation_id)
         .filter(conversation::Column::DeletedAt.is_null())
         .one(db)
@@ -99,12 +119,12 @@ pub async fn handle_detail(db: &DatabaseConnection, conversation_id: i32) -> Ric
     {
         Ok(Some(c)) => c,
         Ok(None) => {
-            return RichMessage::info(format!("会话 {conversation_id} 不存在"))
-                .with_title("未找到");
+            return RichMessage::info(i18n::conversation_not_found(lang, conversation_id))
+                .with_title(i18n::not_found_title(lang));
         }
         Err(e) => {
             return RichMessage {
-                title: Some("查询失败".to_string()),
+                title: Some(i18n::query_failed_title(lang).to_string()),
                 body: e.to_string(),
                 fields: Vec::new(),
                 level: MessageLevel::Error,
@@ -112,16 +132,22 @@ pub async fn handle_detail(db: &DatabaseConnection, conversation_id: i32) -> Ric
         }
     };
 
-    let title = conv.title.as_deref().unwrap_or("(无标题)");
+    let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
     RichMessage::info(title)
-        .with_title(format!("会话详情 #{}", conv.id))
-        .with_field("代理", &conv.agent_type)
-        .with_field("状态", format!("{:?}", conv.status))
-        .with_field("消息数", conv.message_count.to_string())
-        .with_field("创建时间", conv.created_at.format("%Y-%m-%d %H:%M").to_string())
+        .with_title(i18n::conversation_detail_title(lang, conv.id))
+        .with_field(i18n::field_agent(lang), &conv.agent_type)
+        .with_field(i18n::field_status(lang), format!("{:?}", conv.status))
+        .with_field(
+            i18n::field_message_count(lang),
+            conv.message_count.to_string(),
+        )
+        .with_field(
+            i18n::field_created_at(lang),
+            conv.created_at.format("%Y-%m-%d %H:%M").to_string(),
+        )
 }
 
-pub async fn handle_today(db: &DatabaseConnection) -> RichMessage {
+pub async fn handle_today(db: &DatabaseConnection, lang: Lang) -> RichMessage {
     let now = Utc::now();
     let today_start = now
         .date_naive()
@@ -139,7 +165,7 @@ pub async fn handle_today(db: &DatabaseConnection) -> RichMessage {
         Ok(rows) => rows,
         Err(e) => {
             return RichMessage {
-                title: Some("查询失败".to_string()),
+                title: Some(i18n::query_failed_title(lang).to_string()),
                 body: e.to_string(),
                 fields: Vec::new(),
                 level: MessageLevel::Error,
@@ -148,7 +174,8 @@ pub async fn handle_today(db: &DatabaseConnection) -> RichMessage {
     };
 
     if rows.is_empty() {
-        return RichMessage::info("今日暂无编码活动").with_title("今日活动");
+        return RichMessage::info(i18n::no_activity_today(lang))
+            .with_title(i18n::today_activity_title(lang));
     }
 
     // Group by agent_type
@@ -163,29 +190,33 @@ pub async fn handle_today(db: &DatabaseConnection) -> RichMessage {
         }
     }
 
-    let mut body = format!("会话总数: {}", rows.len());
-    body.push_str("\n\n按代理:");
+    let mut body = i18n::total_sessions(lang, rows.len() as u32);
+    body.push_str(&format!("\n\n{}", i18n::by_agent_label(lang)));
     for (agent, count) in &by_agent {
-        body.push_str(&format!("\n  {agent} - {count} 个"));
+        body.push_str(&format!(
+            "\n  {}",
+            i18n::agent_count(lang, agent, *count)
+        ));
     }
 
     if !titles.is_empty() {
-        body.push_str("\n\n最近活动:");
+        body.push_str(&format!("\n\n{}", i18n::recent_activity_label(lang)));
         for t in &titles {
             body.push_str(&format!("\n  • {t}"));
         }
     }
 
-    RichMessage::info(body).with_title(format!(
-        "今日活动 ({})",
-        now.format("%Y-%m-%d")
+    RichMessage::info(body).with_title(i18n::today_activity_date_title(
+        lang,
+        &now.format("%Y-%m-%d").to_string(),
     ))
 }
 
-pub async fn handle_status(manager: &ChatChannelManager) -> RichMessage {
+pub async fn handle_status(manager: &ChatChannelManager, lang: Lang) -> RichMessage {
     let statuses = manager.get_status().await;
     if statuses.is_empty() {
-        return RichMessage::info("暂无活跃渠道").with_title("渠道状态");
+        return RichMessage::info(i18n::no_active_channels(lang))
+            .with_title(i18n::channel_status_title(lang));
     }
 
     let mut body = String::new();
@@ -202,17 +233,9 @@ pub async fn handle_status(manager: &ChatChannelManager) -> RichMessage {
         ));
     }
 
-    RichMessage::info(body.trim_end()).with_title("渠道状态")
+    RichMessage::info(body.trim_end()).with_title(i18n::channel_status_title(lang))
 }
 
-pub fn handle_help(prefix: &str) -> RichMessage {
-    RichMessage::info(format!(
-        "{prefix}recent - 最近 5 条会话\n\
-         {prefix}search <关键词> - 搜索会话\n\
-         {prefix}detail <ID> - 会话详情\n\
-         {prefix}today - 今日活动汇总\n\
-         {prefix}status - 渠道连接状态\n\
-         {prefix}help - 显示帮助",
-    ))
-    .with_title("Codeg Bot 帮助")
+pub fn handle_help(prefix: &str, lang: Lang) -> RichMessage {
+    RichMessage::info(i18n::help_body(lang, prefix)).with_title(i18n::help_title(lang))
 }

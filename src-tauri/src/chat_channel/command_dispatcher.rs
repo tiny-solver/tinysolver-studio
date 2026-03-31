@@ -3,12 +3,14 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::command_handlers;
+use super::i18n::{self, Lang};
 use super::manager::ChatChannelManager;
 use super::types::IncomingCommand;
 use crate::db::service::{app_metadata_service, chat_channel_message_log_service};
 
 const COMMAND_PREFIX_KEY: &str = "chat_command_prefix";
 const DEFAULT_COMMAND_PREFIX: &str = "/";
+const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
 
 pub fn spawn_command_dispatcher(
     mut command_rx: mpsc::Receiver<IncomingCommand>,
@@ -37,7 +39,9 @@ pub fn spawn_command_dispatcher(
                 .flatten()
                 .unwrap_or_else(|| DEFAULT_COMMAND_PREFIX.to_string());
 
-            let response = dispatch_command(text, &prefix, &db_conn, &manager).await;
+            let lang = load_lang(&db_conn).await;
+
+            let response = dispatch_command(text, &prefix, &db_conn, &manager, lang).await;
 
             // Send response back via the same channel
             let send_result = manager.send_to_channel(cmd.channel_id, &response).await;
@@ -66,15 +70,25 @@ pub fn spawn_command_dispatcher(
     })
 }
 
+async fn load_lang(db: &DatabaseConnection) -> Lang {
+    app_metadata_service::get_value(db, MESSAGE_LANGUAGE_KEY)
+        .await
+        .ok()
+        .flatten()
+        .map(|v| Lang::from_str_lossy(&v))
+        .unwrap_or_default()
+}
+
 async fn dispatch_command(
     text: &str,
     prefix: &str,
     db: &DatabaseConnection,
     manager: &ChatChannelManager,
+    lang: Lang,
 ) -> super::types::RichMessage {
     // Check if text starts with the configured prefix
     if !text.starts_with(prefix) {
-        return command_handlers::handle_help(prefix);
+        return command_handlers::handle_help(prefix, lang);
     }
 
     // Strip prefix and parse command + args
@@ -84,31 +98,27 @@ async fn dispatch_command(
     let args = parts.get(1).map(|s| s.trim()).unwrap_or("");
 
     match command.as_str() {
-        "recent" => command_handlers::handle_recent(db).await,
+        "recent" => command_handlers::handle_recent(db, lang).await,
         "search" => {
             if args.is_empty() {
-                super::types::RichMessage::info(format!("用法: {prefix}search <关键词>"))
-                    .with_title("参数错误")
+                super::types::RichMessage::info(i18n::search_usage(lang, prefix))
+                    .with_title(i18n::invalid_args_title(lang))
             } else {
-                command_handlers::handle_search(db, args).await
+                command_handlers::handle_search(db, args, lang).await
             }
         }
         "detail" => {
             if let Ok(id) = args.parse::<i32>() {
-                command_handlers::handle_detail(db, id).await
+                command_handlers::handle_detail(db, id, lang).await
             } else {
-                super::types::RichMessage::info(format!("用法: {prefix}detail <会话ID>"))
-                    .with_title("参数错误")
+                super::types::RichMessage::info(i18n::detail_usage(lang, prefix))
+                    .with_title(i18n::invalid_args_title(lang))
             }
         }
-        "today" => command_handlers::handle_today(db).await,
-        "status" => command_handlers::handle_status(manager).await,
-        "help" | "start" => command_handlers::handle_help(prefix),
-        _ => {
-            super::types::RichMessage::info(format!(
-                "未知命令: {prefix}{command}\n输入 {prefix}help 查看可用命令",
-            ))
-            .with_title("未知命令")
-        }
+        "today" => command_handlers::handle_today(db, lang).await,
+        "status" => command_handlers::handle_status(manager, lang).await,
+        "help" | "start" => command_handlers::handle_help(prefix, lang),
+        _ => super::types::RichMessage::info(i18n::unknown_command(lang, prefix, &command))
+            .with_title(i18n::unknown_command_title(lang)),
     }
 }

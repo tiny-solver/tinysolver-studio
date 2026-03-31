@@ -1418,3 +1418,11 @@ export async function setChatEventFilter(
 ): Promise<void> {
   return getTransport().call("set_chat_event_filter", { filter })
 }
+
+export async function getChatMessageLanguage(): Promise<string> {
+  return getTransport().call("get_chat_message_language")
+}
+
+export async function setChatMessageLanguage(language: string): Promise<void> {
+  return getTransport().call("set_chat_message_language", { language })
+}

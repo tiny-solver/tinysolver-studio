@@ -296,6 +296,42 @@ pub async fn set_chat_command_prefix_core(
     Ok(())
 }
 
+const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
+
+pub async fn get_chat_message_language_core(
+    db: &AppDatabase,
+) -> Result<String, AppCommandError> {
+    let val = crate::db::service::app_metadata_service::get_value(&db.conn, MESSAGE_LANGUAGE_KEY)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(val.unwrap_or_else(|| "en".to_string()))
+}
+
+pub async fn set_chat_message_language_core(
+    db: &AppDatabase,
+    language: String,
+) -> Result<(), AppCommandError> {
+    // Validate language code
+    let valid = [
+        "en", "zh-cn", "zh-tw", "ja", "ko", "es", "de", "fr", "pt", "ar",
+    ];
+    let lang_lower = language.to_lowercase();
+    if !valid.contains(&lang_lower.as_str()) {
+        return Err(AppCommandError::invalid_input(format!(
+            "Unsupported language: {language}. Supported: {}",
+            valid.join(", ")
+        )));
+    }
+    crate::db::service::app_metadata_service::upsert_value(
+        &db.conn,
+        MESSAGE_LANGUAGE_KEY,
+        &lang_lower,
+    )
+    .await
+    .map_err(AppCommandError::from)?;
+    Ok(())
+}
+
 const EVENT_FILTER_KEY: &str = "chat_event_filter";
 
 pub async fn get_chat_event_filter_core(
@@ -492,4 +528,21 @@ pub async fn set_chat_event_filter(
     filter: Option<Vec<String>>,
 ) -> Result<(), AppCommandError> {
     set_chat_event_filter_core(&db, filter).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn get_chat_message_language(
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<String, AppCommandError> {
+    get_chat_message_language_core(&db).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn set_chat_message_language(
+    db: tauri::State<'_, AppDatabase>,
+    language: String,
+) -> Result<(), AppCommandError> {
+    set_chat_message_language_core(&db, language).await
 }

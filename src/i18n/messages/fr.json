@@ -1713,7 +1713,8 @@
     "tabs": {
       "channels": "Canaux",
       "commands": "Commandes",
-      "events": "Événements"
+      "events": "Événements",
+      "other": "Autres"
     },
     "commands": {
       "title": "Commandes intégrées",
@@ -1740,6 +1741,22 @@
       "errorDesc": "Lorsqu'un agent rencontre une erreur",
       "saved": "Filtre d'événements mis à jour.",
       "saveFailed": "Échec de l'enregistrement du filtre d'événements."
+    },
+    "language": {
+      "title": "Langue des messages",
+      "description": "Langue utilisée pour les notifications d'événements, les réponses aux commandes et les rapports quotidiens envoyés aux canaux de chat.",
+      "saved": "Langue des messages enregistrée.",
+      "saveFailed": "Échec de l'enregistrement de la langue des messages.",
+      "en": "Anglais",
+      "zh-cn": "Chinois simplifié",
+      "zh-tw": "Chinois traditionnel",
+      "ja": "Japonais",
+      "ko": "Coréen",
+      "es": "Espagnol",
+      "de": "Allemand",
+      "fr": "Français",
+      "pt": "Portugais",
+      "ar": "Arabe"
     }
   }
 }

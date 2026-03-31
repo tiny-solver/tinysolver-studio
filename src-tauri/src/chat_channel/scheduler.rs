@@ -4,10 +4,13 @@ use chrono::{Local, NaiveDate, Timelike, Utc};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use tokio::task::JoinHandle;
 
+use super::i18n::Lang;
 use super::manager::ChatChannelManager;
 use super::message_formatter::{self, DailyReportData};
 use crate::db::entities::conversation;
-use crate::db::service::{chat_channel_message_log_service, chat_channel_service};
+use crate::db::service::{app_metadata_service, chat_channel_message_log_service, chat_channel_service};
+
+const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
 
 pub fn spawn_daily_report_scheduler(
     manager: ChatChannelManager,
@@ -53,9 +56,11 @@ pub fn spawn_daily_report_scheduler(
                     continue;
                 }
 
+                let lang = load_lang(&db_conn).await;
+
                 // Generate and send report
                 let report = generate_daily_report(&db_conn).await;
-                let message = message_formatter::format_daily_report(&report);
+                let message = message_formatter::format_daily_report(&report, lang);
 
                 let send_result = manager.send_to_channel(ch.id, &message).await;
                 let (status, error_detail) = match &send_result {
@@ -78,6 +83,15 @@ pub fn spawn_daily_report_scheduler(
             }
         }
     })
+}
+
+async fn load_lang(db: &DatabaseConnection) -> Lang {
+    app_metadata_service::get_value(db, MESSAGE_LANGUAGE_KEY)
+        .await
+        .ok()
+        .flatten()
+        .map(|v| Lang::from_str_lossy(&v))
+        .unwrap_or_default()
 }
 
 async fn generate_daily_report(db: &DatabaseConnection) -> DailyReportData {

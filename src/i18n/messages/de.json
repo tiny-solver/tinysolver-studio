@@ -1713,7 +1713,8 @@
     "tabs": {
       "channels": "Kanäle",
       "commands": "Befehle",
-      "events": "Ereignisse"
+      "events": "Ereignisse",
+      "other": "Sonstiges"
     },
     "commands": {
       "title": "Integrierte Befehle",
@@ -1740,6 +1741,22 @@
       "errorDesc": "Wenn ein Agent einen Fehler feststellt",
       "saved": "Ereignisfilter aktualisiert.",
       "saveFailed": "Fehler beim Speichern des Ereignisfilters."
+    },
+    "language": {
+      "title": "Nachrichtensprache",
+      "description": "Sprache für Ereignisbenachrichtigungen, Befehlsantworten und tägliche Berichte, die an Chat-Kanäle gesendet werden.",
+      "saved": "Nachrichtensprache gespeichert.",
+      "saveFailed": "Fehler beim Speichern der Nachrichtensprache.",
+      "en": "Englisch",
+      "zh-cn": "Vereinfachtes Chinesisch",
+      "zh-tw": "Traditionelles Chinesisch",
+      "ja": "Japanisch",
+      "ko": "Koreanisch",
+      "es": "Spanisch",
+      "de": "Deutsch",
+      "fr": "Französisch",
+      "pt": "Portugiesisch",
+      "ar": "Arabisch"
     }
   }
 }
