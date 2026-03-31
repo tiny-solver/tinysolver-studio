@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AppToaster } from "@/components/ui/app-toaster"
 import { cn } from "@/lib/utils"
+import { detectEnvironment } from "@/lib/transport/detect"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
 
 interface SettingsNavItem {
@@ -149,7 +150,13 @@ export function SettingsShell({ children }: SettingsShellProps) {
             {t("preferences")}
           </div>
           <nav className="space-y-1">
-            {SETTINGS_NAV_ITEMS.map((item) => {
+            {SETTINGS_NAV_ITEMS.filter(
+              (item) =>
+                !(
+                  item.labelKey === "web_service" &&
+                  detectEnvironment() === "web"
+                )
+            ).map((item) => {
               const Icon = item.icon
               const translationKey = `nav.${item.labelKey}` as const
               const active =
