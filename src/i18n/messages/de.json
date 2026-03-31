@@ -1055,7 +1055,7 @@
     "pushWindow": {
       "title": "Code pushen",
       "noUnpushedCommits": "Keine ungepushten Commits",
-      "noRemoteConfigured": "Kein Git-Remote konfiguriert\nFüge einen unter „Remotes verwalten" hinzu",
+      "noRemoteConfigured": "Kein Git-Remote konfiguriert\nFüge einen unter \u201ERemotes verwalten\u201C hinzu",
       "newBranchNoPushedCommits": "Neuer Branch — pushen, um Remote-Tracking-Branch zu erstellen",
       "unpushed": "Nicht gepusht",
       "selectFileToViewDiff": "Datei auswählen, um Unterschiede anzuzeigen",
