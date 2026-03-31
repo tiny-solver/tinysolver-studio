@@ -1350,7 +1350,8 @@
         "connectFailedTitle": "فشل اتصال {agent}",
         "toolFallbackTitle": "أداة",
         "eventErrorTitle": "خطأ الوكيل",
-        "notificationTurnComplete": "{agent} أنهى الاستجابة"
+        "notificationTurnComplete": "{agent} أنهى الاستجابة",
+        "notificationError": "{agent} خطأ: {message}"
       },
       "connectionLifecycle": {
         "tasks": {

@@ -1351,7 +1351,8 @@
         "connectFailedTitle": "{agent} 连接失败",
         "toolFallbackTitle": "工具",
         "eventErrorTitle": "Agent 错误",
-        "notificationTurnComplete": "{agent} 已完成响应"
+        "notificationTurnComplete": "{agent} 已完成响应",
+        "notificationError": "{agent} 错误：{message}"
       },
       "connectionLifecycle": {
         "tasks": {

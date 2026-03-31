@@ -1350,7 +1350,8 @@
         "connectFailedTitle": "{agent} 연결 실패",
         "toolFallbackTitle": "도구",
         "eventErrorTitle": "에이전트 오류",
-        "notificationTurnComplete": "{agent} 응답이 완료되었습니다"
+        "notificationTurnComplete": "{agent} 응답이 완료되었습니다",
+        "notificationError": "{agent} 오류: {message}"
       },
       "connectionLifecycle": {
         "tasks": {
