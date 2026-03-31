@@ -112,7 +112,8 @@ pub async fn delete_chat_channel(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<ChannelIdParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    cc_commands::delete_chat_channel_core(&state.db, params.id).await?;
+    cc_commands::delete_chat_channel_core(&state.db, &state.chat_channel_manager, params.id)
+        .await?;
     Ok(Json(()))
 }
 

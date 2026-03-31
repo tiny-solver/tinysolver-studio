@@ -7,6 +7,19 @@ pub enum ChannelType {
     Telegram,
 }
 
+// ── Per-channel strong typed configs ──
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelegramConfig {
+    pub chat_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LarkConfig {
+    pub app_id: String,
+    pub chat_id: String,
+}
+
 impl std::fmt::Display for ChannelType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

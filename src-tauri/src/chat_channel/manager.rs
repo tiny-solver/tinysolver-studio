@@ -13,7 +13,7 @@ struct ActiveChannel {
     id: i32,
     name: String,
     channel_type: ChannelType,
-    backend: Box<dyn ChatChannelBackend>,
+    backend: Arc<dyn ChatChannelBackend>,
 }
 
 /// Inner state shared across clones.
@@ -21,6 +21,7 @@ struct Inner {
     channels: Mutex<HashMap<i32, ActiveChannel>>,
     command_tx: mpsc::Sender<IncomingCommand>,
     command_rx: Mutex<Option<mpsc::Receiver<IncomingCommand>>>,
+    broadcaster: Mutex<Option<Arc<WebEventBroadcaster>>>,
 }
 
 pub struct ChatChannelManager {
@@ -41,6 +42,7 @@ impl ChatChannelManager {
                 channels: Mutex::new(HashMap::new()),
                 command_tx,
                 command_rx: Mutex::new(Some(command_rx)),
+                broadcaster: Mutex::new(None),
             }),
         }
     }
@@ -61,6 +63,19 @@ impl ChatChannelManager {
         self.inner.command_rx.lock().await.take()
     }
 
+    /// Emit a status change event to the frontend via broadcaster.
+    async fn emit_status_event(&self, channel_id: i32, status: &str) {
+        if let Some(broadcaster) = self.inner.broadcaster.lock().await.as_ref() {
+            broadcaster.send(
+                "chat-channel://status",
+                &serde_json::json!({
+                    "channel_id": channel_id,
+                    "status": status,
+                }),
+            );
+        }
+    }
+
     pub async fn add_channel(
         &self,
         id: i32,
@@ -68,6 +83,14 @@ impl ChatChannelManager {
         channel_type: ChannelType,
         backend: Box<dyn ChatChannelBackend>,
     ) -> Result<(), ChatChannelError> {
+        let backend: Arc<dyn ChatChannelBackend> = Arc::from(backend);
+
+        // Stop existing channel if present (prevents task leak on duplicate connect)
+        let old = self.inner.channels.lock().await.remove(&id);
+        if let Some(existing) = old {
+            let _ = existing.backend.stop().await;
+        }
+
         let command_tx = self.inner.command_tx.clone();
         backend.start(command_tx).await?;
 
@@ -79,20 +102,25 @@ impl ChatChannelManager {
         };
 
         self.inner.channels.lock().await.insert(id, channel);
+        self.emit_status_event(id, "connected").await;
         Ok(())
     }
 
     pub async fn remove_channel(&self, id: i32) -> Result<(), ChatChannelError> {
-        let mut channels = self.inner.channels.lock().await;
-        if let Some(channel) = channels.remove(&id) {
+        let removed = self.inner.channels.lock().await.remove(&id);
+        if let Some(channel) = removed {
             channel.backend.stop().await?;
+            self.emit_status_event(id, "disconnected").await;
         }
         Ok(())
     }
 
     pub async fn stop_all(&self) {
-        let mut channels = self.inner.channels.lock().await;
-        for (_, channel) in channels.drain() {
+        let drained: Vec<ActiveChannel> = {
+            let mut channels = self.inner.channels.lock().await;
+            channels.drain().map(|(_, ch)| ch).collect()
+        };
+        for channel in drained {
             let _ = channel.backend.stop().await;
         }
     }
@@ -102,29 +130,49 @@ impl ChatChannelManager {
         channel_id: i32,
         message: &RichMessage,
     ) -> Result<SentMessageId, ChatChannelError> {
-        let channels = self.inner.channels.lock().await;
-        let channel = channels
-            .get(&channel_id)
-            .ok_or(ChatChannelError::NotFound(channel_id))?;
-        channel.backend.send_rich_message(message).await
+        let backend = {
+            let channels = self.inner.channels.lock().await;
+            channels
+                .get(&channel_id)
+                .ok_or(ChatChannelError::NotFound(channel_id))?
+                .backend
+                .clone()
+        };
+        backend.send_rich_message(message).await
     }
 
     pub async fn send_to_all(&self, message: &RichMessage) {
-        let channels = self.inner.channels.lock().await;
-        for (_, channel) in channels.iter() {
-            let _ = channel.backend.send_rich_message(message).await;
+        let backends: Vec<Arc<dyn ChatChannelBackend>> = {
+            let channels = self.inner.channels.lock().await;
+            channels.values().map(|ch| ch.backend.clone()).collect()
+        };
+        for backend in backends {
+            let _ = backend.send_rich_message(message).await;
         }
     }
 
     pub async fn get_status(&self) -> Vec<crate::models::ChannelStatusInfo> {
-        let channels = self.inner.channels.lock().await;
-        let mut result = Vec::new();
-        for (_, ch) in channels.iter() {
-            let status = ch.backend.status().await;
+        let entries: Vec<(i32, String, String, Arc<dyn ChatChannelBackend>)> = {
+            let channels = self.inner.channels.lock().await;
+            channels
+                .values()
+                .map(|ch| {
+                    (
+                        ch.id,
+                        ch.name.clone(),
+                        ch.channel_type.to_string(),
+                        ch.backend.clone(),
+                    )
+                })
+                .collect()
+        };
+        let mut result = Vec::with_capacity(entries.len());
+        for (id, name, ct, backend) in entries {
+            let status = backend.status().await;
             result.push(crate::models::ChannelStatusInfo {
-                channel_id: ch.id,
-                name: ch.name.clone(),
-                channel_type: ch.channel_type.to_string(),
+                channel_id: id,
+                name,
+                channel_type: ct,
                 status: serde_json::to_value(status)
                     .ok()
                     .and_then(|v| v.as_str().map(String::from))
@@ -135,17 +183,24 @@ impl ChatChannelManager {
     }
 
     pub async fn test_channel(&self, id: i32) -> Result<(), ChatChannelError> {
-        let channels = self.inner.channels.lock().await;
-        let channel = channels
-            .get(&id)
-            .ok_or(ChatChannelError::NotFound(id))?;
-        channel.backend.test_connection().await
+        let backend = {
+            let channels = self.inner.channels.lock().await;
+            channels
+                .get(&id)
+                .ok_or(ChatChannelError::NotFound(id))?
+                .backend
+                .clone()
+        };
+        backend.test_connection().await
     }
 
     pub async fn is_connected(&self, id: i32) -> bool {
-        let channels = self.inner.channels.lock().await;
-        if let Some(ch) = channels.get(&id) {
-            ch.backend.status().await == ChannelConnectionStatus::Connected
+        let backend = {
+            let channels = self.inner.channels.lock().await;
+            channels.get(&id).map(|ch| ch.backend.clone())
+        };
+        if let Some(b) = backend {
+            b.status().await == ChannelConnectionStatus::Connected
         } else {
             false
         }
@@ -158,6 +213,9 @@ impl ChatChannelManager {
         broadcaster: Arc<WebEventBroadcaster>,
         db_conn: DatabaseConnection,
     ) {
+        // Store broadcaster for status event emission
+        *self.inner.broadcaster.lock().await = Some(broadcaster.clone());
+
         let db_conn2 = db_conn.clone();
 
         // Spawn event subscriber
@@ -201,54 +259,53 @@ impl ChatChannelManager {
                 serde_json::Value::String(ch.channel_type.clone()),
             ) {
                 Ok(t) => t,
-                Err(_) => continue,
+                Err(_) => {
+                    eprintln!(
+                        "[ChatChannel] unknown channel type '{}' for '{}' (id={}), skipping",
+                        ch.channel_type, ch.name, ch.id
+                    );
+                    continue;
+                }
             };
 
             let config: serde_json::Value = match serde_json::from_str(&ch.config_json) {
                 Ok(v) => v,
-                Err(_) => continue,
+                Err(e) => {
+                    eprintln!(
+                        "[ChatChannel] invalid config for '{}' (id={}): {e}, skipping",
+                        ch.name, ch.id
+                    );
+                    continue;
+                }
             };
 
             let token = match crate::keyring_store::get_channel_token(ch.id) {
                 Some(t) => t,
-                None => continue,
-            };
-
-            let backend: Box<dyn ChatChannelBackend> = match channel_type {
-                ChannelType::Telegram => {
-                    let chat_id = config
-                        .get("chat_id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    if chat_id.is_empty() {
-                        continue;
-                    }
-                    Box::new(super::backends::telegram::TelegramBackend::new(
-                        ch.id, token, chat_id,
-                    ))
-                }
-                ChannelType::Lark => {
-                    let app_id = config
-                        .get("app_id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let chat_id = config
-                        .get("chat_id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    if app_id.is_empty() || chat_id.is_empty() {
-                        continue;
-                    }
-                    Box::new(super::backends::lark::LarkBackend::new(
-                        ch.id, app_id, token, chat_id,
-                    ))
+                None => {
+                    eprintln!(
+                        "[ChatChannel] no token found for '{}' (id={}), skipping auto-connect",
+                        ch.name, ch.id
+                    );
+                    continue;
                 }
             };
 
-            if let Err(e) = self.add_channel(ch.id, ch.name.clone(), channel_type, backend).await {
+            let backend =
+                match super::backends::create_backend(ch.id, channel_type, &config, token) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!(
+                            "[ChatChannel] failed to create backend for '{}' (id={}): {e}",
+                            ch.name, ch.id
+                        );
+                        continue;
+                    }
+                };
+
+            if let Err(e) = self
+                .add_channel(ch.id, ch.name.clone(), channel_type, backend)
+                .await
+            {
                 eprintln!(
                     "[ChatChannel] failed to auto-connect '{}' (id={}): {e}",
                     ch.name, ch.id

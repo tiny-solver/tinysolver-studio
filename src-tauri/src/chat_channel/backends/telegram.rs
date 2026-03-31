@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex};
@@ -21,7 +22,11 @@ impl TelegramBackend {
         Self {
             bot_token,
             chat_id,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(60))
+                .build()
+                .unwrap_or_default(),
             status: Arc::new(Mutex::new(ChannelConnectionStatus::Disconnected)),
             channel_id,
             shutdown_tx: Arc::new(Mutex::new(None)),
@@ -91,7 +96,7 @@ impl ChatChannelBackend for TelegramBackend {
     ) -> Result<(), ChatChannelError> {
         *self.status.lock().await = ChannelConnectionStatus::Connecting;
 
-        // Verify bot token by calling getMe
+        // Verify bot token and extract bot username for group @mention filtering
         let resp = self
             .client
             .get(self.api_url("getMe"))
@@ -99,12 +104,23 @@ impl ChatChannelBackend for TelegramBackend {
             .await
             .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
 
-        if !resp.status().is_success() {
+        let me_body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
+
+        if me_body.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             *self.status.lock().await = ChannelConnectionStatus::Error;
             return Err(ChatChannelError::AuthenticationFailed(
                 "Invalid bot token".to_string(),
             ));
         }
+
+        let bot_username = me_body
+            .pointer("/result/username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_lowercase();
 
         *self.status.lock().await = ChannelConnectionStatus::Connected;
 
@@ -136,6 +152,14 @@ impl ChatChannelBackend for TelegramBackend {
 
                 match result {
                     Ok(resp) => {
+                        // Recover from error state after successful poll
+                        {
+                            let mut s = status.lock().await;
+                            if *s == ChannelConnectionStatus::Error {
+                                *s = ChannelConnectionStatus::Connected;
+                            }
+                        }
+
                         if let Ok(body) = resp.json::<serde_json::Value>().await {
                             if let Some(updates) = body.get("result").and_then(|r| r.as_array()) {
                                 for update in updates {
@@ -148,6 +172,25 @@ impl ChatChannelBackend for TelegramBackend {
                                         .pointer("/message/text")
                                         .and_then(|t| t.as_str())
                                     {
+                                        // Group chat filtering: only process if @bot is mentioned
+                                        let chat_type = update
+                                            .pointer("/message/chat/type")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("private");
+
+                                        if (chat_type == "group" || chat_type == "supergroup")
+                                            && !bot_username.is_empty()
+                                        {
+                                            let at_bot =
+                                                format!("@{}", bot_username);
+                                            if !text.to_lowercase().contains(&at_bot) {
+                                                continue;
+                                            }
+                                        }
+
+                                        // Strip @bot_username from command text (case-insensitive)
+                                        let clean_text = strip_bot_mention(text, &bot_username);
+
                                         let sender_id = update
                                             .pointer("/message/from/id")
                                             .and_then(|i| i.as_i64())
@@ -157,7 +200,7 @@ impl ChatChannelBackend for TelegramBackend {
                                             .send(IncomingCommand {
                                                 channel_id,
                                                 sender_id,
-                                                command_text: text.to_string(),
+                                                command_text: clean_text,
                                                 metadata: update.clone(),
                                             })
                                             .await;
@@ -170,7 +213,6 @@ impl ChatChannelBackend for TelegramBackend {
                         eprintln!("[Telegram] polling error: {e}");
                         *status.lock().await = ChannelConnectionStatus::Error;
                         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                        *status.lock().await = ChannelConnectionStatus::Connected;
                     }
                 }
             }
@@ -222,13 +264,39 @@ impl ChatChannelBackend for TelegramBackend {
             .await
             .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
 
-        if resp.status().is_success() {
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
+
+        if body.get("ok").and_then(|v| v.as_bool()) == Some(true) {
             Ok(())
         } else {
-            Err(ChatChannelError::AuthenticationFailed(
-                "Invalid bot token".to_string(),
-            ))
+            let desc = body
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Invalid bot token");
+            Err(ChatChannelError::AuthenticationFailed(desc.to_string()))
         }
+    }
+}
+
+/// Strip `@bot_username` from text (case-insensitive).
+/// Handles Telegram convention: `/command@botname args` → `/command args`
+fn strip_bot_mention(text: &str, bot_username: &str) -> String {
+    if bot_username.is_empty() {
+        return text.to_string();
+    }
+    let at_bot = format!("@{}", bot_username);
+    let text_lower = text.to_lowercase();
+    let at_bot_lower = at_bot.to_lowercase();
+    if let Some(pos) = text_lower.find(&at_bot_lower) {
+        let mut result = String::with_capacity(text.len());
+        result.push_str(&text[..pos]);
+        result.push_str(&text[pos + at_bot.len()..]);
+        result.trim().to_string()
+    } else {
+        text.to_string()
     }
 }
 

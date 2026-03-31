@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use super::i18n::{self, Lang};
 use super::manager::ChatChannelManager;
@@ -7,9 +7,10 @@ use super::types::{MessageLevel, RichMessage};
 use crate::db::entities::conversation;
 
 pub async fn handle_recent(db: &DatabaseConnection, lang: Lang) -> RichMessage {
-    let rows = match conversation::Entity::find()
+    let recent = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
         .order_by_desc(conversation::Column::CreatedAt)
+        .limit(5)
         .all(db)
         .await
     {
@@ -24,7 +25,6 @@ pub async fn handle_recent(db: &DatabaseConnection, lang: Lang) -> RichMessage {
         }
     };
 
-    let recent: Vec<_> = rows.into_iter().take(5).collect();
     if recent.is_empty() {
         return RichMessage::info(i18n::no_conversations(lang))
             .with_title(i18n::recent_conversations_title(lang));
@@ -53,9 +53,11 @@ pub async fn handle_search(
     keyword: &str,
     lang: Lang,
 ) -> RichMessage {
-    let rows = match conversation::Entity::find()
+    let matched = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
+        .filter(conversation::Column::Title.contains(keyword))
         .order_by_desc(conversation::Column::CreatedAt)
+        .limit(10)
         .all(db)
         .await
     {
@@ -69,18 +71,6 @@ pub async fn handle_search(
             };
         }
     };
-
-    let keyword_lower = keyword.to_lowercase();
-    let matched: Vec<_> = rows
-        .into_iter()
-        .filter(|c| {
-            c.title
-                .as_deref()
-                .map(|t| t.to_lowercase().contains(&keyword_lower))
-                .unwrap_or(false)
-        })
-        .take(10)
-        .collect();
 
     if matched.is_empty() {
         return RichMessage::info(i18n::search_no_results(lang, keyword))

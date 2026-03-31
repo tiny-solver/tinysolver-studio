@@ -1,8 +1,5 @@
 use crate::app_error::AppCommandError;
-use crate::chat_channel::backends::lark::LarkBackend;
-use crate::chat_channel::backends::telegram::TelegramBackend;
 use crate::chat_channel::manager::ChatChannelManager;
-use crate::chat_channel::traits::ChatChannelBackend;
 use crate::chat_channel::types::ChannelType;
 use crate::db::service::{chat_channel_message_log_service, chat_channel_service};
 use crate::db::AppDatabase;
@@ -76,7 +73,13 @@ pub async fn update_chat_channel_core(
     Ok(ChatChannelInfo::from(model))
 }
 
-pub async fn delete_chat_channel_core(db: &AppDatabase, id: i32) -> Result<(), AppCommandError> {
+pub async fn delete_chat_channel_core(
+    db: &AppDatabase,
+    manager: &ChatChannelManager,
+    id: i32,
+) -> Result<(), AppCommandError> {
+    // Disconnect running backend before deleting from DB (prevents orphaned task)
+    let _ = manager.remove_channel(id).await;
     chat_channel_service::delete(&db.conn, id)
         .await
         .map_err(AppCommandError::from)?;
@@ -103,45 +106,17 @@ pub async fn connect_chat_channel_core(
                 ))
             })?;
 
-    let backend: Box<dyn crate::chat_channel::traits::ChatChannelBackend> = match channel_type {
-        ChannelType::Telegram => {
-            let config: serde_json::Value =
-                serde_json::from_str(&model.config_json).map_err(|e| {
-                    AppCommandError::configuration_invalid("Invalid config JSON")
-                        .with_detail(e.to_string())
-                })?;
-            let chat_id = config
-                .get("chat_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppCommandError::configuration_missing("chat_id is required"))?
-                .to_string();
-            let bot_token = crate::keyring_store::get_channel_token(id).ok_or_else(|| {
-                AppCommandError::configuration_missing("Bot token not set")
-            })?;
-            Box::new(TelegramBackend::new(id, bot_token, chat_id))
-        }
-        ChannelType::Lark => {
-            let config: serde_json::Value =
-                serde_json::from_str(&model.config_json).map_err(|e| {
-                    AppCommandError::configuration_invalid("Invalid config JSON")
-                        .with_detail(e.to_string())
-                })?;
-            let app_id = config
-                .get("app_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppCommandError::configuration_missing("app_id is required"))?
-                .to_string();
-            let chat_id = config
-                .get("chat_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppCommandError::configuration_missing("chat_id is required"))?
-                .to_string();
-            let app_secret = crate::keyring_store::get_channel_token(id).ok_or_else(|| {
-                AppCommandError::configuration_missing("App Secret not set")
-            })?;
-            Box::new(LarkBackend::new(id, app_id, app_secret, chat_id))
-        }
-    };
+    let config: serde_json::Value =
+        serde_json::from_str(&model.config_json).map_err(|e| {
+            AppCommandError::configuration_invalid("Invalid config JSON")
+                .with_detail(e.to_string())
+        })?;
+
+    let token = crate::keyring_store::get_channel_token(id)
+        .ok_or_else(|| AppCommandError::configuration_missing("Token not set"))?;
+
+    let backend = crate::chat_channel::backends::create_backend(id, channel_type, &config, token)
+        .map_err(AppCommandError::from)?;
 
     manager
         .add_channel(id, model.name, channel_type, backend)
@@ -169,53 +144,22 @@ pub async fn test_chat_channel_core(
                 ))
             })?;
 
-    match channel_type {
-        ChannelType::Telegram => {
-            let config: serde_json::Value =
-                serde_json::from_str(&model.config_json).map_err(|e| {
-                    AppCommandError::configuration_invalid("Invalid config JSON")
-                        .with_detail(e.to_string())
-                })?;
-            let chat_id = config
-                .get("chat_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppCommandError::configuration_missing("chat_id is required"))?
-                .to_string();
-            let bot_token = crate::keyring_store::get_channel_token(id).ok_or_else(|| {
-                AppCommandError::configuration_missing("Bot token not set")
-            })?;
-            let backend = TelegramBackend::new(id, bot_token, chat_id);
-            backend
-                .test_connection()
-                .await
-                .map_err(AppCommandError::from)?;
-        }
-        ChannelType::Lark => {
-            let config: serde_json::Value =
-                serde_json::from_str(&model.config_json).map_err(|e| {
-                    AppCommandError::configuration_invalid("Invalid config JSON")
-                        .with_detail(e.to_string())
-                })?;
-            let app_id = config
-                .get("app_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppCommandError::configuration_missing("app_id is required"))?
-                .to_string();
-            let chat_id = config
-                .get("chat_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppCommandError::configuration_missing("chat_id is required"))?
-                .to_string();
-            let app_secret = crate::keyring_store::get_channel_token(id).ok_or_else(|| {
-                AppCommandError::configuration_missing("App Secret not set")
-            })?;
-            let backend = LarkBackend::new(id, app_id, app_secret, chat_id);
-            backend
-                .test_connection()
-                .await
-                .map_err(AppCommandError::from)?;
-        }
-    }
+    let config: serde_json::Value =
+        serde_json::from_str(&model.config_json).map_err(|e| {
+            AppCommandError::configuration_invalid("Invalid config JSON")
+                .with_detail(e.to_string())
+        })?;
+
+    let token = crate::keyring_store::get_channel_token(id)
+        .ok_or_else(|| AppCommandError::configuration_missing("Token not set"))?;
+
+    let backend = crate::chat_channel::backends::create_backend(id, channel_type, &config, token)
+        .map_err(AppCommandError::from)?;
+
+    backend
+        .test_connection()
+        .await
+        .map_err(AppCommandError::from)?;
 
     Ok(())
 }
@@ -342,9 +286,10 @@ pub async fn get_chat_event_filter_core(
         .map_err(AppCommandError::from)?;
     match val {
         Some(json) => {
-            let arr: Vec<String> =
-                serde_json::from_str(&json).map_err(|e| AppCommandError::invalid_input(e.to_string()))?;
-            Ok(Some(arr))
+            // Parse as Option<Vec<String>> to correctly handle stored "null"
+            let filter: Option<Vec<String>> = serde_json::from_str(&json)
+                .map_err(|e| AppCommandError::invalid_input(e.to_string()))?;
+            Ok(filter)
         }
         None => Ok(None),
     }
@@ -426,9 +371,10 @@ pub async fn update_chat_channel(
 #[tauri::command]
 pub async fn delete_chat_channel(
     db: tauri::State<'_, AppDatabase>,
+    manager: tauri::State<'_, ChatChannelManager>,
     id: i32,
 ) -> Result<(), AppCommandError> {
-    delete_chat_channel_core(&db, id).await
+    delete_chat_channel_core(&db, &manager, id).await
 }
 
 #[cfg(feature = "tauri-runtime")]

@@ -36,6 +36,7 @@ import {
   updateChatChannel,
   getChatChannelStatus,
 } from "@/lib/api"
+import { subscribe } from "@/lib/platform"
 import type { ChatChannelInfo, ChannelStatusInfo } from "@/lib/types"
 import { AddChatChannelDialog } from "./add-chat-channel-dialog"
 import { EditChatChannelDialog } from "./edit-chat-channel-dialog"
@@ -68,6 +69,33 @@ export function ChannelListTab() {
   useEffect(() => {
     loadChannels().catch(console.error)
   }, [loadChannels])
+
+  // Subscribe to real-time status change events from backend
+  useEffect(() => {
+    let cancelled = false
+    let unsub: (() => void) | undefined
+    subscribe<{
+      channel_id: number
+      status: ChannelStatusInfo["status"]
+    }>("chat-channel://status", (payload) => {
+      setStatuses((prev) => {
+        const idx = prev.findIndex((s) => s.channel_id === payload.channel_id)
+        if (idx >= 0) {
+          const updated = [...prev]
+          updated[idx] = { ...updated[idx], status: payload.status }
+          return updated
+        }
+        return prev
+      })
+    }).then((fn) => {
+      if (cancelled) fn()
+      else unsub = fn
+    })
+    return () => {
+      cancelled = true
+      unsub?.()
+    }
+  }, [])
 
   const handleToggleEnabled = useCallback(
     async (ch: ChatChannelInfo, connected: boolean) => {

@@ -126,7 +126,12 @@ struct TokenCache {
 struct PartialMessage {
     parts: HashMap<i32, Vec<u8>>,
     total: i32,
+    created_at: Instant,
 }
+
+/// TTL for partial message reassembly entries. Prevents unbounded memory growth
+/// if a multi-part message never completes (network issue, Lark SDK bug, etc).
+const PARTIAL_MSG_TTL_SECS: u64 = 60;
 
 // ── LarkBackend ──
 
@@ -148,7 +153,11 @@ impl LarkBackend {
             app_secret,
             chat_id,
             channel_id,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap_or_default(),
             token_cache: Arc::new(RwLock::new(None)),
             status: Arc::new(Mutex::new(ChannelConnectionStatus::Disconnected)),
             shutdown_tx: Arc::new(Mutex::new(None)),
@@ -310,6 +319,7 @@ impl LarkBackend {
 
                 let (mut write, mut read) = ws_stream.split();
                 let mut partial_msgs: HashMap<String, PartialMessage> = HashMap::new();
+                let mut last_partial_cleanup = Instant::now();
 
                 loop {
                     tokio::select! {
@@ -340,12 +350,19 @@ impl LarkBackend {
                                                 let sum: i32 = frame.get_header("sum").and_then(|s| s.parse().ok()).unwrap_or(1);
                                                 let seq: i32 = frame.get_header("seq").and_then(|s| s.parse().ok()).unwrap_or(0);
 
-                                                let full_payload = if sum <= 1 {
+                                                // Evict stale partial messages to prevent unbounded memory growth
+                                if last_partial_cleanup.elapsed() > Duration::from_secs(PARTIAL_MSG_TTL_SECS) {
+                                    partial_msgs.retain(|_, pm| pm.created_at.elapsed() < Duration::from_secs(PARTIAL_MSG_TTL_SECS));
+                                    last_partial_cleanup = Instant::now();
+                                }
+
+                                let full_payload = if sum <= 1 {
                                                     Some(frame.payload.clone())
                                                 } else {
                                                     let entry = partial_msgs.entry(msg_id.clone()).or_insert_with(|| PartialMessage {
                                                         parts: HashMap::new(),
                                                         total: sum,
+                                                        created_at: Instant::now(),
                                                     });
                                                     entry.parts.insert(seq, frame.payload.clone());
                                                     if entry.parts.len() as i32 >= entry.total {
@@ -447,6 +464,21 @@ async fn handle_lark_event(
             return;
         }
 
+        // Group chat filtering: only process if bot is mentioned
+        let chat_type = event
+            .pointer("/event/message/chat_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("p2p");
+
+        if chat_type == "group" {
+            let mentions = event
+                .pointer("/event/message/mentions")
+                .and_then(|v| v.as_array());
+            if mentions.is_none() || mentions.unwrap().is_empty() {
+                return; // No mentions in group chat, ignore
+            }
+        }
+
         let content_str = event
             .pointer("/event/message/content")
             .and_then(|v| v.as_str())
@@ -462,23 +494,46 @@ async fn handle_lark_event(
             return;
         }
 
+        // Strip mention placeholders (e.g. "@_user_1") from text
+        let clean_text = strip_lark_mentions(&text, event);
+
+        if clean_text.is_empty() {
+            return;
+        }
+
         let sender_id = event
             .pointer("/event/sender/sender_id/open_id")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string();
 
-        eprintln!("[Lark] incoming message from {}: {}", sender_id, text);
+        eprintln!("[Lark] incoming message from {}: {}", sender_id, clean_text);
 
         let _ = command_tx
             .send(IncomingCommand {
                 channel_id,
                 sender_id,
-                command_text: text,
+                command_text: clean_text,
                 metadata: event.clone(),
             })
             .await;
     }
+}
+
+/// Strip Lark mention placeholders (e.g. `@_user_1`) from the message text.
+fn strip_lark_mentions(text: &str, event: &serde_json::Value) -> String {
+    let mut result = text.to_string();
+    if let Some(mentions) = event
+        .pointer("/event/message/mentions")
+        .and_then(|v| v.as_array())
+    {
+        for mention in mentions {
+            if let Some(key) = mention.get("key").and_then(|v| v.as_str()) {
+                result = result.replace(key, "");
+            }
+        }
+    }
+    result.trim().to_string()
 }
 
 /// Fetch a fresh WebSocket endpoint URL from Feishu.
