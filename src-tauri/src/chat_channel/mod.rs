@@ -7,5 +7,8 @@ pub mod i18n;
 pub mod manager;
 pub mod message_formatter;
 pub mod scheduler;
+pub mod session_bridge;
+pub mod session_commands;
+pub mod session_event_subscriber;
 pub mod traits;
 pub mod types;

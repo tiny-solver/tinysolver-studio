@@ -1,14 +1,19 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use sea_orm::DatabaseConnection;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use super::command_handlers;
 use super::i18n::{self, Lang};
 use super::manager::ChatChannelManager;
+use super::session_bridge::SessionBridge;
+use super::session_commands;
 use super::types::IncomingCommand;
+use crate::acp::manager::ConnectionManager;
 use crate::db::service::{app_metadata_service, chat_channel_message_log_service};
+use crate::web::event_bridge::EventEmitter;
 
 const COMMAND_PREFIX_KEY: &str = "chat_command_prefix";
 const DEFAULT_COMMAND_PREFIX: &str = "/";
@@ -52,12 +57,19 @@ pub fn spawn_command_dispatcher(
     mut command_rx: mpsc::Receiver<IncomingCommand>,
     manager: ChatChannelManager,
     db_conn: DatabaseConnection,
+    conn_mgr: ConnectionManager,
+    emitter: EventEmitter,
+    bridge: Arc<Mutex<SessionBridge>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut config = CommandConfigCache::new();
 
         while let Some(cmd) = command_rx.recv().await {
             let text = cmd.command_text.trim();
+            eprintln!(
+                "[ChatChannel] received command from channel={} sender={}: {:?}",
+                cmd.channel_id, cmd.sender_id, text
+            );
 
             // Log inbound command
             let _ = chat_channel_message_log_service::create_log(
@@ -73,7 +85,25 @@ pub fn spawn_command_dispatcher(
 
             config.refresh_if_needed(&db_conn).await;
 
-            let response = dispatch_command(text, &config.prefix, &db_conn, &manager, config.lang).await;
+            let response = dispatch_command(
+                text,
+                &config.prefix,
+                &db_conn,
+                &manager,
+                &conn_mgr,
+                &emitter,
+                &bridge,
+                cmd.channel_id,
+                &cmd.sender_id,
+                config.lang,
+            )
+            .await;
+
+            eprintln!(
+                "[ChatChannel] dispatch result: title={:?}, body_len={}",
+                response.title,
+                response.body.len()
+            );
 
             // Send response back via the same channel
             let send_result = manager.send_to_channel(cmd.channel_id, &response).await;
@@ -102,17 +132,36 @@ pub fn spawn_command_dispatcher(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn dispatch_command(
     text: &str,
     prefix: &str,
     db: &DatabaseConnection,
     manager: &ChatChannelManager,
+    conn_mgr: &ConnectionManager,
+    emitter: &EventEmitter,
+    bridge: &Arc<Mutex<SessionBridge>>,
+    channel_id: i32,
+    sender_id: &str,
     lang: Lang,
 ) -> super::types::RichMessage {
-    // Strip prefix; if text doesn't start with it, show help
+    // Strip prefix; if text doesn't start with it, try as follow-up
     let without_prefix = match text.strip_prefix(prefix) {
         Some(rest) => rest,
-        None => return command_handlers::handle_help(prefix, lang),
+        None => {
+            // Check if sender has an active session for follow-up
+            let has_session = {
+                let guard = bridge.lock().await;
+                guard.find_by_sender(channel_id, sender_id).is_some()
+            };
+            if has_session {
+                return session_commands::handle_followup(
+                    db, text, channel_id, sender_id, conn_mgr, bridge, lang,
+                )
+                .await;
+            }
+            return command_handlers::handle_help(prefix, lang);
+        }
     };
 
     let parts: Vec<&str> = without_prefix.splitn(2, ' ').collect();
@@ -120,6 +169,7 @@ async fn dispatch_command(
     let args = parts.get(1).map(|s| s.trim()).unwrap_or("");
 
     match command.as_str() {
+        // Existing commands
         "recent" => command_handlers::handle_recent(db, lang).await,
         "search" => {
             if args.is_empty() {
@@ -140,6 +190,47 @@ async fn dispatch_command(
         "today" => command_handlers::handle_today(db, lang).await,
         "status" => command_handlers::handle_status(manager, lang).await,
         "help" | "start" => command_handlers::handle_help(prefix, lang),
+
+        // Session commands
+        "folder" => {
+            session_commands::handle_folder(db, args, channel_id, sender_id, lang).await
+        }
+        "agent" => {
+            session_commands::handle_agent(db, args, channel_id, sender_id, lang).await
+        }
+        "task" | "do" => {
+            session_commands::handle_task(
+                db, args, channel_id, sender_id, conn_mgr, emitter, bridge, lang,
+            )
+            .await
+        }
+        "sessions" => {
+            session_commands::handle_sessions(db, channel_id, sender_id, lang).await
+        }
+        "resume" => {
+            session_commands::handle_resume(
+                db, args, channel_id, sender_id, conn_mgr, emitter, bridge, lang,
+            )
+            .await
+        }
+        "cancel" => {
+            session_commands::handle_cancel(db, channel_id, sender_id, conn_mgr, bridge, lang)
+                .await
+        }
+        "approve" => {
+            let always = args.eq_ignore_ascii_case("always");
+            session_commands::handle_permission_response(
+                true, always, db, channel_id, sender_id, conn_mgr, bridge, lang,
+            )
+            .await
+        }
+        "deny" => {
+            session_commands::handle_permission_response(
+                false, false, db, channel_id, sender_id, conn_mgr, bridge, lang,
+            )
+            .await
+        }
+
         _ => super::types::RichMessage::info(i18n::unknown_command(lang, prefix, &command))
             .with_title(i18n::unknown_command_title(lang)),
     }
