@@ -1,14 +1,6 @@
 "use client"
 
-import {
-  memo,
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Plus, RefreshCw, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -63,11 +55,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
 
 interface ConversationTabViewProps {
   tabId: string
@@ -1188,68 +1175,44 @@ export function ConversationDetailPanel() {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="relative h-full min-h-0 overflow-hidden">
-          {canTile ? (
-            <ResizablePanelGroup direction="horizontal">
-              {tabs.map((tab, index) => {
-                const active = tab.id === activeTabId
-                return (
-                  <Fragment key={tab.id}>
-                    {index > 0 && <ResizableHandle withHandle />}
-                    <ResizablePanel
-                      id={`tile-${tab.id}`}
-                      order={index}
-                      minSize={15}
-                    >
-                      <div
-                        className={cn(
-                          "h-full",
-                          active
-                            ? "bg-gradient-to-b from-muted/50 to-transparent"
-                            : ""
-                        )}
-                        onPointerDownCapture={() => {
-                          if (!active) switchTab(tab.id)
-                        }}
-                      >
-                        <ConversationTabView
-                          tabId={tab.id}
-                          conversationId={tab.conversationId}
-                          agentType={tab.agentType}
-                          workingDir={tab.workingDir ?? folder?.path}
-                          isActive={active}
-                          reloadSignal={reloadByTabId[tab.id] ?? 0}
-                        />
-                      </div>
-                    </ResizablePanel>
-                  </Fragment>
-                )
-              })}
-            </ResizablePanelGroup>
-          ) : (
-            tabs.map((tab) => {
-              const active = tab.id === activeTabId
-              return (
-                <div
-                  key={tab.id}
-                  className={
-                    active
+        <div
+          className={cn(
+            "relative h-full min-h-0 overflow-hidden",
+            canTile && "flex flex-row"
+          )}
+        >
+          {tabs.map((tab, index) => {
+            const active = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                className={cn(
+                  canTile
+                    ? cn(
+                        "relative h-full min-w-[200px] flex-1 overflow-hidden",
+                        index > 0 && "border-l border-border",
+                        active &&
+                          "bg-gradient-to-b from-muted/50 to-transparent"
+                      )
+                    : active
                       ? "h-full"
                       : "absolute inset-0 invisible pointer-events-none"
-                  }
-                >
-                  <ConversationTabView
-                    tabId={tab.id}
-                    conversationId={tab.conversationId}
-                    agentType={tab.agentType}
-                    workingDir={tab.workingDir ?? folder?.path}
-                    isActive={active}
-                    reloadSignal={reloadByTabId[tab.id] ?? 0}
-                  />
-                </div>
-              )
-            })
-          )}
+                )}
+                onPointerDownCapture={
+                  canTile && !active ? () => switchTab(tab.id) : undefined
+                }
+              >
+                <ConversationTabView
+                  tabId={tab.id}
+                  conversationId={tab.conversationId}
+                  agentType={tab.agentType}
+                  workingDir={tab.workingDir ?? folder?.path}
+                  isActive={active}
+                  reloadSignal={reloadByTabId[tab.id] ?? 0}
+                />
+              </div>
+            )
+          })}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
