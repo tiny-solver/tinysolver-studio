@@ -12,6 +12,7 @@ import { CommitWorkspace } from "@/components/layout/commit-dialog"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
 import { AppToaster } from "@/components/ui/app-toaster"
 import { getFolder } from "@/lib/api"
+import { toErrorMessage } from "@/lib/app-error"
 import type { FolderDetail } from "@/lib/types"
 
 const TOAST_DURATION_MS = 6000
@@ -67,7 +68,7 @@ function CommitPageInner() {
           setState({
             loadedId: normalizedFolderId,
             folder: null,
-            error: String(err),
+            error: toErrorMessage(err),
           })
         }
       })

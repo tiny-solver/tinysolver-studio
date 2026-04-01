@@ -1566,19 +1566,44 @@ pub(crate) async fn git_commit_core(
     message: &str,
     files: &[String],
 ) -> Result<GitCommitResult, AppCommandError> {
-    // Stage selected files
-    let mut add_args = vec!["add".to_string(), "--".to_string()];
-    add_args.extend(files.iter().map(|file| to_git_literal_pathspec(file)));
+    // Find files already staged for deletion — git add would fail on these
+    // because they no longer exist in either the working tree or the index.
+    let staged_deletions: std::collections::HashSet<String> =
+        crate::process::tokio_command("git")
+            .args(["diff", "--cached", "--name-only", "--diff-filter=D", "-z"])
+            .current_dir(path)
+            .output()
+            .await
+            .ok()
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .split('\0')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
 
-    let add_output = crate::process::tokio_command("git")
-        .args(&add_args)
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
+    // Stage only files that aren't already staged deletions
+    let files_to_add: Vec<_> = files
+        .iter()
+        .filter(|f| !staged_deletions.contains(f.as_str()))
+        .collect();
 
-    if !add_output.status.success() {
-        return Err(git_command_error("add", &add_output.stderr));
+    if !files_to_add.is_empty() {
+        let mut add_args = vec!["add".to_string(), "--".to_string()];
+        add_args.extend(files_to_add.iter().map(|file| to_git_literal_pathspec(file)));
+
+        let add_output = crate::process::tokio_command("git")
+            .args(&add_args)
+            .current_dir(path)
+            .output()
+            .await
+            .map_err(AppCommandError::io)?;
+
+        if !add_output.status.success() {
+            return Err(git_command_error("add", &add_output.stderr));
+        }
     }
 
     // Resolve commit author from matching account (e.g. GitHub username)

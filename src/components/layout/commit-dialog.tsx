@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { DiffViewer } from "@/components/diff/diff-viewer"
 import { languageFromPath } from "@/lib/language-detect"
+import { toErrorMessage } from "@/lib/app-error"
 
 interface CommitWorkspaceProps {
   folderPath: string
@@ -342,7 +343,7 @@ export function CommitWorkspace({
         await loadDiff(firstFile, result)
       }
     } catch (err) {
-      setError(String(err))
+      setError(toErrorMessage(err))
       setEntries([])
       setExpandedTrackedDirs(new Set())
       setExpandedUntrackedDirs(new Set())
@@ -432,7 +433,7 @@ export function CommitWorkspace({
       })
       onCommitted?.()
     } catch (err) {
-      setError(String(err))
+      setError(toErrorMessage(err))
     } finally {
       setCommitting(false)
     }
@@ -448,7 +449,7 @@ export function CommitWorkspace({
         toast.success(t("toasts.addedToVcs"), { description: file })
         void loadStatus()
       } catch (err) {
-        toast.error(t("toasts.addToVcsFailed"), { description: String(err) })
+        toast.error(t("toasts.addToVcsFailed"), { description: toErrorMessage(err) })
       }
     },
     [folderPath, loadStatus, t]
@@ -482,7 +483,7 @@ export function CommitWorkspace({
               void loadStatus()
             } catch (err) {
               toast.error(t("toasts.deleteFailed"), {
-                description: String(err),
+                description: toErrorMessage(err),
               })
             }
           })()
@@ -519,7 +520,7 @@ export function CommitWorkspace({
               void loadStatus()
             } catch (err) {
               toast.error(t("toasts.rollbackFailed"), {
-                description: String(err),
+                description: toErrorMessage(err),
               })
             }
           })()
@@ -558,7 +559,7 @@ export function CommitWorkspace({
               void loadStatus()
             } catch (err) {
               toast.error(t("toasts.rollbackFailed"), {
-                description: String(err),
+                description: toErrorMessage(err),
               })
             }
           })()
@@ -597,7 +598,7 @@ export function CommitWorkspace({
               void loadStatus()
             } catch (err) {
               toast.error(t("toasts.deleteFailed"), {
-                description: String(err),
+                description: toErrorMessage(err),
               })
             }
           })()
@@ -616,7 +617,7 @@ export function CommitWorkspace({
         toast.success(t("toasts.addedToVcs"), { description: label })
         void loadStatus()
       } catch (err) {
-        toast.error(t("toasts.addToVcsFailed"), { description: String(err) })
+        toast.error(t("toasts.addToVcsFailed"), { description: toErrorMessage(err) })
       }
     },
     [folderPath, loadStatus, t]
