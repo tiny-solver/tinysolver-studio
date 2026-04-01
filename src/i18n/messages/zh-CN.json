@@ -914,6 +914,7 @@
         "mergeBranch": "合并 {branchName}",
         "rebaseTo": "变基到 {branchName}",
         "deleteBranch": "删除分支 {branchName}",
+        "deleteRemoteBranch": "删除远程分支 {branchName}",
         "initGitRepo": "初始化 Git 仓库",
         "pullCode": "更新代码",
         "fetchInfo": "获取信息",
@@ -929,7 +930,9 @@
         "rebaseDescription": "确定将当前分支 {currentBranch} 变基到 {branchName} 吗？",
         "deleteDescription": "确定删除分支 {branchName} 吗？此操作不可恢复。",
         "forceDeleteTitle": "强制删除分支",
-        "forceDeleteDescription": "分支 {branchName} 尚未完全合并，确定要强制删除吗？此操作不可恢复。"
+        "forceDeleteDescription": "分支 {branchName} 尚未完全合并，确定要强制删除吗？此操作不可恢复。",
+        "deleteRemoteTitle": "删除远程分支",
+        "deleteRemoteDescription": "确定删除远程分支 {branchName} 吗？此操作将从远程仓库中移除该分支，且不可恢复。"
       },
       "current": "当前",
       "switchToBranch": "切换到此分支",

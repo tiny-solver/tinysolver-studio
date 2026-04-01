@@ -451,6 +451,32 @@ pub async fn git_delete_branch(
     Ok(Json(()))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDeleteRemoteBranchParams {
+    pub path: String,
+    pub remote: String,
+    pub branch: String,
+    pub credentials: Option<GitCredentials>,
+}
+
+pub async fn git_delete_remote_branch(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<GitDeleteRemoteBranchParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = &state.db;
+    folder_commands::git_delete_remote_branch_core(
+        &params.path,
+        &params.remote,
+        &params.branch,
+        params.credentials.as_ref(),
+        db,
+        &state.data_dir,
+    )
+    .await?;
+    Ok(Json(()))
+}
+
 pub async fn git_list_conflicts(
     Json(params): Json<PathParams>,
 ) -> Result<Json<Vec<String>>, AppCommandError> {

@@ -81,6 +81,7 @@ import {
   gitMerge,
   gitRebase,
   gitDeleteBranch,
+  gitDeleteRemoteBranch,
   openFolderWindow,
   openCommitWindow,
   setFolderParentBranch,
@@ -105,7 +106,7 @@ interface BranchDropdownProps {
 }
 
 type ConfirmAction = {
-  type: "merge" | "rebase" | "delete" | "forceDelete"
+  type: "merge" | "rebase" | "delete" | "forceDelete" | "deleteRemote"
   branchName: string
 }
 
@@ -424,6 +425,18 @@ export function BranchDropdown({
           gitDeleteBranch(folderPath, branchName, true)
         )
         break
+      case "deleteRemote": {
+        const idx = branchName.indexOf("/")
+        const remote = branchName.substring(0, idx)
+        const rb = branchName.substring(idx + 1)
+        await runGitTask(t("tasks.deleteRemoteBranch", { branchName }), () =>
+          withCredentialRetry(
+            (creds) => gitDeleteRemoteBranch(folderPath, remote, rb, creds),
+            { folderPath }
+          )
+        )
+        break
+      }
     }
   }
 
@@ -438,6 +451,8 @@ export function BranchDropdown({
         return t("confirm.deleteTitle")
       case "forceDelete":
         return t("confirm.forceDeleteTitle")
+      case "deleteRemote":
+        return t("confirm.deleteRemoteTitle")
     }
   }
 
@@ -462,6 +477,10 @@ export function BranchDropdown({
         return t("confirm.forceDeleteDescription", {
           branchName: confirmAction.branchName,
         })
+      case "deleteRemote":
+        return t("confirm.deleteRemoteDescription", {
+          branchName: confirmAction.branchName,
+        })
     }
   }
 
@@ -472,6 +491,8 @@ export function BranchDropdown({
   ) {
     const label = displayName ?? b
     const isCurrent = b === branch
+    const isTrackingCurrent =
+      isRemote && !!branch && b.replace(/^[^/]+\//, "") === branch
     const isWorktree = worktreeBranchSet.has(
       isRemote ? b.replace(/^[^/]+\//, "") : b
     )
@@ -553,14 +574,17 @@ export function BranchDropdown({
               branchName: b,
             })}
           </DropdownMenuItem>
-          {!isRemote && (
+          {!isTrackingCurrent && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
                 onSelect={() => {
                   setDropdownOpen(false)
-                  setConfirmAction({ type: "delete", branchName: b })
+                  setConfirmAction({
+                    type: isRemote ? "deleteRemote" : "delete",
+                    branchName: b,
+                  })
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -841,7 +865,11 @@ export function BranchDropdown({
             <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant={
-                confirmAction?.type === "delete" ? "destructive" : "default"
+                confirmAction?.type === "delete" ||
+                confirmAction?.type === "forceDelete" ||
+                confirmAction?.type === "deleteRemote"
+                  ? "destructive"
+                  : "default"
               }
               onClick={handleConfirm}
             >

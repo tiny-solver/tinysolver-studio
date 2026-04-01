@@ -106,6 +106,7 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/git_fetch", post(handlers::git::git_fetch))
         .route("/git_commit", post(handlers::git::git_commit))
         .route("/git_fetch_remote", post(handlers::git::git_fetch_remote))
+        .route("/git_delete_remote_branch", post(handlers::git::git_delete_remote_branch))
         .route("/clone_repository", post(handlers::git::clone_repository))
         // ─── Files ───
         .route("/read_file_preview", post(handlers::files::read_file_preview))

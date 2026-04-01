@@ -914,6 +914,7 @@
         "mergeBranch": "Merge {branchName}",
         "rebaseTo": "Rebase to {branchName}",
         "deleteBranch": "Delete branch {branchName}",
+        "deleteRemoteBranch": "Delete remote branch {branchName}",
         "initGitRepo": "Initialize Git repository",
         "pullCode": "Pull code",
         "fetchInfo": "Fetch info",
@@ -929,7 +930,9 @@
         "rebaseDescription": "Rebase current branch {currentBranch} onto {branchName}?",
         "deleteDescription": "Delete branch {branchName}? This action cannot be undone.",
         "forceDeleteTitle": "Force Delete Branch",
-        "forceDeleteDescription": "Branch {branchName} is not fully merged. Are you sure you want to force delete it? This action cannot be undone."
+        "forceDeleteDescription": "Branch {branchName} is not fully merged. Are you sure you want to force delete it? This action cannot be undone.",
+        "deleteRemoteTitle": "Delete Remote Branch",
+        "deleteRemoteDescription": "Delete remote branch {branchName}? This will remove it from the remote repository and cannot be undone."
       },
       "current": "Current",
       "switchToBranch": "Switch to this branch",
