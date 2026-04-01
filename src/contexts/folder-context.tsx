@@ -50,6 +50,11 @@ interface FolderContextValue {
   stats: AgentStats | null
 
   refreshConversations: () => void
+  /** Optimistically update a conversation's status in local state + cache. */
+  updateConversationLocal: (
+    id: number,
+    patch: Partial<Pick<DbConversationSummary, "status" | "title">>
+  ) => void
 }
 
 const FolderContext = createContext<FolderContextValue | null>(null)
@@ -222,9 +227,27 @@ export function FolderProvider({
   }, [])
 
   const refreshConversations = useCallback(() => {
-    cache.delete(cacheKey)
+    // Keep cache intact so fetchConversations shows existing data (refreshing
+    // spinner) instead of falling through to the loading/skeleton path.
     fetchConversations()
-  }, [cacheKey, fetchConversations])
+  }, [fetchConversations])
+
+  const updateConversationLocal = useCallback(
+    (
+      id: number,
+      patch: Partial<Pick<DbConversationSummary, "status" | "title">>
+    ) => {
+      const now = new Date().toISOString()
+      const apply = (list: DbConversationSummary[]) =>
+        list.map((c) => (c.id === id ? { ...c, ...patch, updated_at: now } : c))
+      setConversations((prev) => {
+        const next = apply(prev)
+        cache.set(cacheKey, next)
+        return next
+      })
+    },
+    [cacheKey]
+  )
 
   const stats = useMemo(
     () => (conversations.length > 0 ? computeStats(conversations) : null),
@@ -248,6 +271,7 @@ export function FolderProvider({
       cancelNewConversation,
       stats,
       refreshConversations,
+      updateConversationLocal,
     }),
     [
       folder,
@@ -265,6 +289,7 @@ export function FolderProvider({
       cancelNewConversation,
       stats,
       refreshConversations,
+      updateConversationLocal,
     ]
   )
 

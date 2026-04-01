@@ -144,7 +144,8 @@ const ConversationTabView = memo(function ConversationTabView({
   const t = useTranslations("Folder.conversation")
   const tWelcome = useTranslations("Folder.chat.welcomeInputPanel")
   const sharedT = useTranslations("Folder.chat.shared")
-  const { folder, folderId, refreshConversations } = useFolderContext()
+  const { folder, folderId, refreshConversations, updateConversationLocal } =
+    useFolderContext()
   const { tabs, bindConversationTab, setTabRuntimeConversationId, pinTab } =
     useTabContext()
   const { setSessionStats } = useSessionStats()
@@ -371,18 +372,17 @@ const ConversationTabView = memo(function ConversationTabView({
     }
 
     if (targetStatus) {
-      updateConversationStatus(persistedId, targetStatus)
-        .then(() => refreshConversations())
-        .catch((e: unknown) =>
-          console.error("[ConversationTabView] update status:", e)
-        )
+      updateConversationLocal(persistedId, { status: targetStatus })
+      updateConversationStatus(persistedId, targetStatus).catch((e: unknown) =>
+        console.error("[ConversationTabView] update status:", e)
+      )
     }
   }, [
     completeTurn,
     connStatus,
     effectiveConversationId,
-    refreshConversations,
     syncTurnMetadata,
+    updateConversationLocal,
   ])
 
   // Auto-send queued messages when agent finishes responding.
@@ -473,16 +473,18 @@ const ConversationTabView = memo(function ConversationTabView({
     if (!persistedId) return
     if (connStatus === "disconnected") {
       statusUpdatedRef.current = true
-      updateConversationStatus(persistedId, "completed")
-        .then(() => refreshConversations())
-        .catch((e) => console.error("[ConversationTabView] update status:", e))
+      updateConversationLocal(persistedId, { status: "completed" })
+      updateConversationStatus(persistedId, "completed").catch((e) =>
+        console.error("[ConversationTabView] update status:", e)
+      )
     } else if (connStatus === "error") {
       statusUpdatedRef.current = true
-      updateConversationStatus(persistedId, "cancelled")
-        .then(() => refreshConversations())
-        .catch((e) => console.error("[ConversationTabView] update status:", e))
+      updateConversationLocal(persistedId, { status: "cancelled" })
+      updateConversationStatus(persistedId, "cancelled").catch((e) =>
+        console.error("[ConversationTabView] update status:", e)
+      )
     }
-  }, [connStatus, refreshConversations])
+  }, [connStatus, updateConversationLocal])
 
   useEffect(() => {
     if (dbConversationId == null) return
@@ -561,11 +563,11 @@ const ConversationTabView = memo(function ConversationTabView({
 
       const persistedId = dbConvIdRef.current
       if (persistedId) {
-        updateConversationStatus(persistedId, "in_progress")
-          .then(() => refreshConversations())
-          .catch((e: unknown) =>
+        updateConversationLocal(persistedId, { status: "in_progress" })
+        updateConversationStatus(persistedId, "in_progress").catch(
+          (e: unknown) =>
             console.error("[ConversationTabView] update status:", e)
-          )
+        )
         statusUpdatedRef.current = false
         return
       }
@@ -610,11 +612,14 @@ const ConversationTabView = memo(function ConversationTabView({
           // of setting "in_progress" (which would never be updated).
           const initialStatus = deferredStatusRef.current ?? "in_progress"
           deferredStatusRef.current = null
-          updateConversationStatus(newConversationId, initialStatus)
-            .then(() => refreshConversations())
-            .catch((e: unknown) =>
+          refreshConversations()
+          updateConversationLocal(newConversationId, {
+            status: initialStatus,
+          })
+          updateConversationStatus(newConversationId, initialStatus).catch(
+            (e: unknown) =>
               console.error("[ConversationTabView] update status:", e)
-            )
+          )
         })
         .catch((e: unknown) =>
           console.error("[ConversationTabView] create conversation:", e)
@@ -643,6 +648,7 @@ const ConversationTabView = memo(function ConversationTabView({
       tWelcome,
       tabId,
       trySaveExternalId,
+      updateConversationLocal,
     ]
   )
 
@@ -686,7 +692,7 @@ const ConversationTabView = memo(function ConversationTabView({
         sessionIdRef.current = forkedSessionId
         setExternalId(effectiveConversationId, forkedSessionId)
 
-        await refreshConversations()
+        refreshConversations()
         // Send the message on the forked session (S2)
         handleSend(draft, selectedModeIdArg)
       } catch (err) {
@@ -1004,8 +1010,13 @@ export function ConversationDetailPanel() {
     getSession,
     removeConversation: runtimeRemoveConversation,
   } = useConversationRuntime()
-  const { folder, newConversation, conversations, refreshConversations } =
-    useFolderContext()
+  const {
+    folder,
+    newConversation,
+    conversations,
+    refreshConversations,
+    updateConversationLocal,
+  } = useFolderContext()
   const {
     tabs,
     activeTabId,
@@ -1042,6 +1053,7 @@ export function ConversationDetailPanel() {
   const runtimeCompleteTurnRef = useRef(runtimeCompleteTurn)
   const runtimeRemoveConversationRef = useRef(runtimeRemoveConversation)
   const refreshConversationsRef = useRef(refreshConversations)
+  const updateConversationLocalRef = useRef(updateConversationLocal)
   useEffect(() => {
     getConversationIdByExternalIdRef.current = getConversationIdByExternalId
   }, [getConversationIdByExternalId])
@@ -1057,6 +1069,9 @@ export function ConversationDetailPanel() {
   useEffect(() => {
     refreshConversationsRef.current = refreshConversations
   }, [refreshConversations])
+  useEffect(() => {
+    updateConversationLocalRef.current = updateConversationLocal
+  }, [updateConversationLocal])
 
   // Background turn_complete handler: for conversations not open in tabs.
   // Registered once — uses refs to avoid re-creating the listener on every
@@ -1108,14 +1123,16 @@ export function ConversationDetailPanel() {
             summary?.id ??
             (matchedConversationId > 0 ? matchedConversationId : null)
           if (dbId && (!summary || summary.status === "in_progress")) {
-            updateConversationStatus(dbId, "pending_review")
-              .then(() => refreshConversationsRef.current())
-              .catch((error: unknown) =>
+            updateConversationLocalRef.current(dbId, {
+              status: "pending_review",
+            })
+            updateConversationStatus(dbId, "pending_review").catch(
+              (error: unknown) =>
                 console.error(
                   "[ConversationDetailPanel] background update status:",
                   error
                 )
-              )
+            )
           }
         })
       )

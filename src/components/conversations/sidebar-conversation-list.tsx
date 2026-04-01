@@ -186,6 +186,7 @@ export function SidebarConversationList({
     selectedConversation,
     folderId,
     refreshConversations,
+    updateConversationLocal,
   } = useFolderContext()
 
   const { openTab, closeConversationTab, openNewConversationTab } =
@@ -347,10 +348,10 @@ export function SidebarConversationList({
 
   const handleStatusChange = useCallback(
     async (id: number, status: ConversationStatus) => {
+      updateConversationLocal(id, { status })
       await updateConversationStatus(id, status)
-      refreshConversations()
     },
-    [refreshConversations]
+    [updateConversationLocal]
   )
 
   const handleNewConversation = useCallback(() => {
@@ -391,12 +392,15 @@ export function SidebarConversationList({
     if (completingReview || reviewConversationCount === 0) return
     setCompletingReview(true)
     try {
+      // Optimistic: update all locally first
+      for (const conversation of reviewConversations) {
+        updateConversationLocal(conversation.id, { status: "completed" })
+      }
       await Promise.all(
         reviewConversations.map((conversation) =>
           updateConversationStatus(conversation.id, "completed")
         )
       )
-      refreshConversations()
       toast.success(
         t("toasts.reviewCompleted", { count: reviewConversationCount })
       )
@@ -404,6 +408,8 @@ export function SidebarConversationList({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       toast.error(t("toasts.completeReviewFailed", { message: msg }))
+      // Revert on error — refetch from server
+      refreshConversations()
     } finally {
       setCompletingReview(false)
     }
@@ -412,13 +418,14 @@ export function SidebarConversationList({
     reviewConversationCount,
     reviewConversations,
     refreshConversations,
+    updateConversationLocal,
     t,
   ])
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="relative flex flex-col flex-1 min-h-0">
       {(loading || refreshing) && (
-        <div className="flex items-center justify-center py-1">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-center py-1 z-10 pointer-events-none">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         </div>
       )}
