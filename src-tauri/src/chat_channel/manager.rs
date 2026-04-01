@@ -5,9 +5,11 @@ use sea_orm::DatabaseConnection;
 use tokio::sync::{mpsc, Mutex};
 
 use super::error::ChatChannelError;
+use super::session_bridge::SessionBridge;
 use super::traits::ChatChannelBackend;
 use super::types::*;
-use crate::web::event_bridge::WebEventBroadcaster;
+use crate::acp::manager::ConnectionManager;
+use crate::web::event_bridge::{EventEmitter, WebEventBroadcaster};
 
 struct ActiveChannel {
     id: i32,
@@ -212,28 +214,49 @@ impl ChatChannelManager {
         &self,
         broadcaster: Arc<WebEventBroadcaster>,
         db_conn: DatabaseConnection,
+        conn_mgr: ConnectionManager,
+        emitter: EventEmitter,
     ) {
         // Store broadcaster for status event emission
         *self.inner.broadcaster.lock().await = Some(broadcaster.clone());
 
         let db_conn2 = db_conn.clone();
 
+        // Create shared session bridge
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+
         // Spawn event subscriber
         let manager_for_events = self.clone_ref();
         super::event_subscriber::spawn_event_subscriber(
-            broadcaster,
+            broadcaster.clone(),
             manager_for_events,
+            db_conn.clone(),
+        );
+
+        // Spawn session event subscriber (ACP event routing to channels)
+        let manager_for_session_events = self.clone_ref();
+        super::session_event_subscriber::spawn_session_event_subscriber(
+            broadcaster,
+            bridge.clone(),
+            manager_for_session_events,
+            conn_mgr.clone_ref(),
             db_conn.clone(),
         );
 
         // Spawn command dispatcher
         if let Some(command_rx) = self.take_command_receiver().await {
+            eprintln!("[ChatChannel] command dispatcher started");
             let manager_for_cmds = self.clone_ref();
             super::command_dispatcher::spawn_command_dispatcher(
                 command_rx,
                 manager_for_cmds,
                 db_conn.clone(),
+                conn_mgr,
+                emitter,
+                bridge,
             );
+        } else {
+            eprintln!("[ChatChannel] WARNING: command_rx already taken, dispatcher NOT started");
         }
 
         // Spawn daily report scheduler

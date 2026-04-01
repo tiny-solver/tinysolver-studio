@@ -90,8 +90,10 @@ mod tauri_app {
                     let db_conn = app.state::<db::AppDatabase>().conn.clone();
                     let ccm_ref = ccm.clone_ref();
                     let br = broadcaster.inner().clone();
+                    let cm = app.state::<ConnectionManager>().clone_ref();
+                    let emitter = web::event_bridge::EventEmitter::Tauri(app.handle().clone());
                     tauri::async_runtime::spawn(async move {
-                        ccm_ref.start_background(br, db_conn).await;
+                        ccm_ref.start_background(br, db_conn, cm, emitter).await;
                     });
                 }
 

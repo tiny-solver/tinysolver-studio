@@ -162,6 +162,9 @@ impl ChatChannelBackend for TelegramBackend {
 
                         if let Ok(body) = resp.json::<serde_json::Value>().await {
                             if let Some(updates) = body.get("result").and_then(|r| r.as_array()) {
+                                if !updates.is_empty() {
+                                    eprintln!("[Telegram] got {} update(s)", updates.len());
+                                }
                                 for update in updates {
                                     if let Some(uid) =
                                         update.get("update_id").and_then(|u| u.as_i64())
@@ -184,6 +187,7 @@ impl ChatChannelBackend for TelegramBackend {
                                             let at_bot =
                                                 format!("@{}", bot_username);
                                             if !text.to_lowercase().contains(&at_bot) {
+                                                eprintln!("[Telegram] skipped group msg without @bot: {text}");
                                                 continue;
                                             }
                                         }
@@ -196,7 +200,8 @@ impl ChatChannelBackend for TelegramBackend {
                                             .and_then(|i| i.as_i64())
                                             .map(|i| i.to_string())
                                             .unwrap_or_default();
-                                        let _ = command_tx
+                                        eprintln!("[Telegram] dispatching: {clean_text}");
+                                        let send_result = command_tx
                                             .send(IncomingCommand {
                                                 channel_id,
                                                 sender_id,
@@ -204,9 +209,16 @@ impl ChatChannelBackend for TelegramBackend {
                                                 metadata: update.clone(),
                                             })
                                             .await;
+                                        if let Err(e) = send_result {
+                                            eprintln!("[Telegram] command_tx.send failed: {e}");
+                                        }
+                                    } else {
+                                        eprintln!("[Telegram] update without /message/text");
                                     }
                                 }
                             }
+                        } else {
+                            eprintln!("[Telegram] failed to parse response body");
                         }
                     }
                     Err(e) => {

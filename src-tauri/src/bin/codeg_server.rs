@@ -53,7 +53,12 @@ async fn main() {
     // Start chat channel background tasks (event subscriber, command dispatcher, scheduler, auto-connect)
     state
         .chat_channel_manager
-        .start_background(state.event_broadcaster.clone(), state.db.conn.clone())
+        .start_background(
+            state.event_broadcaster.clone(),
+            state.db.conn.clone(),
+            state.connection_manager.clone_ref(),
+            state.emitter.clone(),
+        )
         .await;
 
     // Build router

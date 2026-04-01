@@ -74,6 +74,15 @@ impl RichMessage {
         }
     }
 
+    pub fn error(body: impl Into<String>) -> Self {
+        Self {
+            title: None,
+            body: body.into(),
+            fields: Vec::new(),
+            level: MessageLevel::Error,
+        }
+    }
+
     pub fn with_title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self

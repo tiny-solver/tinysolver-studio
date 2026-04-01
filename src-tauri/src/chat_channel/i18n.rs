@@ -610,12 +610,23 @@ pub fn help_title(lang: Lang) -> &'static str {
 pub fn help_body(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!(
-            "{prefix}recent - 最近 5 条会话\n\
+            "📂 {prefix}folder - 选择工作目录\n\
+             🤖 {prefix}agent - 选择 Agent\n\
+             🚀 {prefix}task <描述> - 创建会话并执行任务\n\
+             📋 {prefix}sessions - 当前目录的活跃会话\n\
+             ▶️ {prefix}resume <ID> - 恢复已有会话\n\
+             ⏹️ {prefix}cancel - 取消当前任务\n\
+             ✅ {prefix}approve [always] - 批准权限请求\n\
+             ❌ {prefix}deny - 拒绝权限请求\n\
+             \n\
+             {prefix}recent - 最近 5 条会话\n\
              {prefix}search <关键词> - 搜索会话\n\
              {prefix}detail <ID> - 会话详情\n\
              {prefix}today - 今日活动汇总\n\
              {prefix}status - 渠道连接状态\n\
-             {prefix}help - 显示帮助"
+             {prefix}help - 显示帮助\n\
+             \n\
+             💡 有活跃会话时，直接发文本即可继续对话"
         ),
         Lang::ZhTw => format!(
             "{prefix}recent - 最近 5 條對話\n\
@@ -682,12 +693,23 @@ pub fn help_body(lang: Lang, prefix: &str) -> String {
              {prefix}help - عرض المساعدة"
         ),
         Lang::En => format!(
-            "{prefix}recent - 5 most recent conversations\n\
+            "📂 {prefix}folder - Select working folder\n\
+             🤖 {prefix}agent - Select agent\n\
+             🚀 {prefix}task <desc> - Create session & run task\n\
+             📋 {prefix}sessions - Active sessions in folder\n\
+             ▶️ {prefix}resume <ID> - Resume a session\n\
+             ⏹️ {prefix}cancel - Cancel current task\n\
+             ✅ {prefix}approve [always] - Approve permission\n\
+             ❌ {prefix}deny - Deny permission\n\
+             \n\
+             {prefix}recent - 5 most recent conversations\n\
              {prefix}search <keyword> - Search conversations\n\
              {prefix}detail <ID> - Conversation details\n\
              {prefix}today - Today's activity summary\n\
              {prefix}status - Channel connection status\n\
-             {prefix}help - Show help"
+             {prefix}help - Show help\n\
+             \n\
+             💡 When a session is active, just type text to continue the conversation"
         ),
     }
 }

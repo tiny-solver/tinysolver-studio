@@ -10,6 +10,14 @@ import { Input } from "@/components/ui/input"
 import { getChatCommandPrefix, setChatCommandPrefix } from "@/lib/api"
 
 const BUILT_IN_COMMANDS = [
+  { name: "folder [n|path]", descKey: "folderDesc" },
+  { name: "agent [n|name]", descKey: "agentDesc" },
+  { name: "task <description>", descKey: "taskDesc" },
+  { name: "sessions", descKey: "sessionsDesc" },
+  { name: "resume <id>", descKey: "resumeDesc" },
+  { name: "cancel", descKey: "cancelDesc" },
+  { name: "approve [always]", descKey: "approveDesc" },
+  { name: "deny", descKey: "denyDesc" },
   { name: "recent", descKey: "recentDesc" },
   { name: "search <keyword>", descKey: "searchDesc" },
   { name: "detail <id>", descKey: "detailDesc" },
