@@ -18,6 +18,8 @@ pub struct ActiveSession {
     pub connection_id: String,
     pub content_buffer: String,
     pub tool_calls: Vec<String>,
+    /// Stores raw_input by tool_call_id for detail extraction on completion.
+    pub tool_call_inputs: HashMap<String, String>,
     pub last_flushed: Instant,
     pub pending_prompt: Option<String>,
     pub permission_pending: Option<PendingPermission>,
