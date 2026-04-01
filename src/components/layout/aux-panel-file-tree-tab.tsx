@@ -272,7 +272,10 @@ function filterDirectoryGitCandidates(
   action: DirectoryGitAction
 ): DirectoryGitCandidateEntry[] {
   if (action === "add") {
-    return entries.filter((entry) => entry.status.trim().length > 0)
+    return entries.filter((entry) => {
+      const fileState = classifyGitFileState(entry.status)
+      return fileState === "untracked"
+    })
   }
 
   return entries.filter((entry) => {

@@ -201,7 +201,10 @@ function filterDirectoryGitCandidates(
   action: DirectoryGitAction
 ): DirectoryGitCandidateEntry[] {
   if (action === "add") {
-    return entries.filter((entry) => entry.status.trim().length > 0)
+    return entries.filter((entry) => {
+      const fileState = classifyGitFileState(entry.status)
+      return fileState === "untracked"
+    })
   }
 
   if (action === "delete-tracked") {
@@ -1001,11 +1004,7 @@ export function GitChangesTab() {
               >
                 {t("actions.rollback")}
               </ContextMenuItem>
-              <ContextMenuItem
-                onSelect={() => {
-                  void handleAddToVcs(target)
-                }}
-              >
+              <ContextMenuItem disabled>
                 {t("actions.addToVcs")}
               </ContextMenuItem>
               <ContextMenuItem
@@ -1089,13 +1088,7 @@ export function GitChangesTab() {
             >
               {t("actions.rollback")}
             </ContextMenuItem>
-            <ContextMenuItem
-              onSelect={() => {
-                void handleAddToVcs(target)
-              }}
-            >
-              {t("actions.addToVcs")}
-            </ContextMenuItem>
+            <ContextMenuItem disabled>{t("actions.addToVcs")}</ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
                 handleRequestDelete(target, "tracked")
@@ -1110,7 +1103,6 @@ export function GitChangesTab() {
     },
     [
       handleOpenCommitWindow,
-      handleAddToVcs,
       handleRequestDelete,
       handleRequestRollback,
       openFilePreview,
@@ -1380,17 +1372,10 @@ export function GitChangesTab() {
                       >
                         {t("actions.rollback")}
                       </ContextMenuItem>
-                      <ContextMenuItem
-                        onSelect={() => {
-                          void handleAddToVcs({
-                            kind: "dir",
-                            path: "",
-                            name: folderName,
-                          })
-                        }}
-                      >
+                      <ContextMenuItem disabled>
                         {t("actions.addToVcs")}
                       </ContextMenuItem>
+
                       <ContextMenuItem
                         onSelect={() => {
                           handleRequestDelete(
