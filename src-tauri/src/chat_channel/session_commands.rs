@@ -928,9 +928,10 @@ fn resolve_agent_type(
 }
 
 fn truncate_title(s: &str) -> String {
-    if s.len() <= 80 {
+    if s.chars().count() <= 80 {
         s.to_string()
     } else {
-        format!("{}...", &s[..77])
+        let truncated: String = s.chars().take(77).collect();
+        format!("{truncated}...")
     }
 }
