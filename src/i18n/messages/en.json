@@ -1724,7 +1724,7 @@
     },
     "commands": {
       "title": "Built-in Commands",
-      "description": "Bot commands available in chat channels.",
+      "description": "Bot commands available in chat channels. In group chats, @Bot is required to process messages.",
       "prefixLabel": "Command Prefix",
       "prefixDescription": "1-3 non-alphanumeric characters used to trigger bot commands (default /).",
       "prefixSaved": "Command prefix saved.",
@@ -1735,13 +1735,11 @@
       "agentDesc": "Select AI agent",
       "taskDesc": "Create session and run task",
       "sessionsDesc": "List active sessions in folder",
-      "resumeDesc": "Resume an existing session",
+      "resumeDesc": "Recent conversations / resume a session",
       "cancelDesc": "Cancel current task",
       "approveDesc": "Approve agent permission request",
       "denyDesc": "Deny agent permission request",
-      "recentDesc": "Show 5 most recent conversations",
       "searchDesc": "Search conversations by keyword",
-      "detailDesc": "Show conversation details",
       "todayDesc": "Today's activity summary",
       "statusDesc": "Channel connection status",
       "helpDesc": "Show help message"

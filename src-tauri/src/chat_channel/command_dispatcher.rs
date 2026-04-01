@@ -170,21 +170,12 @@ async fn dispatch_command(
 
     match command.as_str() {
         // Existing commands
-        "recent" => command_handlers::handle_recent(db, lang).await,
         "search" => {
             if args.is_empty() {
                 super::types::RichMessage::info(i18n::search_usage(lang, prefix))
                     .with_title(i18n::invalid_args_title(lang))
             } else {
                 command_handlers::handle_search(db, args, lang).await
-            }
-        }
-        "detail" => {
-            if let Ok(id) = args.parse::<i32>() {
-                command_handlers::handle_detail(db, id, lang).await
-            } else {
-                super::types::RichMessage::info(i18n::detail_usage(lang, prefix))
-                    .with_title(i18n::invalid_args_title(lang))
             }
         }
         "today" => command_handlers::handle_today(db, lang).await,

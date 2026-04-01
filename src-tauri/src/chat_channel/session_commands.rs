@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use sea_orm::DatabaseConnection;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use tokio::sync::Mutex;
 
-use super::i18n::Lang;
+use super::i18n::{self, Lang};
 use super::session_bridge::{ActiveSession, SessionBridge};
-use super::types::RichMessage;
+use super::types::{MessageLevel, RichMessage};
 use crate::acp::manager::ConnectionManager;
 use crate::acp::registry::all_acp_agents;
 use crate::acp::types::PromptInputBlock;
@@ -476,7 +476,7 @@ pub async fn handle_sessions(
             lang,
             prefix,
             "Reply {prefix}resume <id> to continue.",
-            "回复 {prefix}resume <ID> 继续会话。"
+            "回复 {prefix}resume <会话ID> 继续会话。"
         )
     ));
 
@@ -501,15 +501,14 @@ pub async fn handle_resume(
     lang: Lang,
     prefix: &str,
 ) -> RichMessage {
+    if args.is_empty() {
+        return list_recent_sessions(db, lang, prefix).await;
+    }
+
     let conversation_id: i32 = match args.parse() {
         Ok(id) => id,
         Err(_) => {
-            return RichMessage::info(tp(
-                lang,
-                prefix,
-                "Usage: {prefix}resume <conversation_id>",
-                "用法: {prefix}resume <会话ID>",
-            ));
+            return list_recent_sessions(db, lang, prefix).await;
         }
     };
 
@@ -823,6 +822,68 @@ pub async fn handle_followup(
     }
 
     RichMessage::info(t(lang, "Message sent.", "消息已发送。"))
+}
+
+// ── /resume (list recent) ──
+
+async fn list_recent_sessions(
+    db: &DatabaseConnection,
+    lang: Lang,
+    prefix: &str,
+) -> RichMessage {
+    let recent = match conversation::Entity::find()
+        .filter(conversation::Column::DeletedAt.is_null())
+        .order_by_desc(conversation::Column::CreatedAt)
+        .limit(10)
+        .all(db)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            return RichMessage {
+                title: Some(i18n::query_failed_title(lang).to_string()),
+                body: e.to_string(),
+                fields: Vec::new(),
+                level: MessageLevel::Error,
+            };
+        }
+    };
+
+    if recent.is_empty() {
+        return RichMessage::info(t(
+            lang,
+            "No conversations found.",
+            "暂无会话记录。",
+        ))
+        .with_title(t(lang, "Recent Conversations", "最近会话"));
+    }
+
+    let mut body = String::new();
+    for conv in &recent {
+        let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
+        let agent = &conv.agent_type;
+        let time = conv.created_at.format("%m-%d %H:%M");
+        body.push_str(&format!(
+            "#{} [{}] {} ({})\n",
+            conv.id, agent, title, time,
+        ));
+    }
+
+    body.push_str(&format!(
+        "\n{}",
+        tp(
+            lang,
+            prefix,
+            "Reply {prefix}resume <id> to resume a session.",
+            "回复 {prefix}resume <会话ID> 恢复会话。"
+        )
+    ));
+
+    RichMessage::info(body.trim_end()).with_title(t(
+        lang,
+        "Recent Conversations",
+        "最近会话",
+    ))
 }
 
 // ── Helpers ──
