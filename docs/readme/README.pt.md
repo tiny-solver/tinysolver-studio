@@ -41,7 +41,7 @@ e fluxos integrados de Git/arquivos/terminal.
 - Ingestão local de conversas com renderização estruturada
 - Desenvolvimento paralelo com fluxos `git worktree` integrados
 - **Inicializador de Projeto** — crie novos projetos visualmente com pré-visualização em tempo real
-- **Canais de Chat** — conecte Telegram, Lark (Feishu) e mais aos seus agentes de codificação para notificações em tempo real e comandos interativos
+- **Canais de Chat** — conecte Telegram, Lark (Feishu) e mais aos seus agentes de codificação para interação completa de sessão e controle remoto de tarefas
 - Gerenciamento de MCP (varredura local + busca/instalação no registro)
 - Gerenciamento de Skills (escopo global e por projeto)
 - Gerenciamento de contas remotas Git (GitHub e outros servidores Git)
@@ -69,7 +69,7 @@ Atualmente suporta scaffolding de projetos **shadcn/ui**, com um design baseado 
 
 ## Canais de Chat
 
-Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e mais — aos seus agentes de codificação IA. Receba notificações em tempo real quando os agentes concluírem tarefas ou encontrarem erros, consulte o histórico de conversas pelo celular e receba relatórios diários automatizados — tudo sem sair do seu app de chat.
+Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e mais — aos seus agentes de codificação IA. Crie tarefas, envie mensagens de acompanhamento, aprove permissões, retome sessões e monitore a atividade diretamente do chat — recebendo respostas do agente em tempo real com detalhes de chamadas de ferramentas, prompts de permissão e resumos de conclusão, tudo sem abrir o navegador.
 
 ### Canais suportados
 
@@ -82,8 +82,10 @@ Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e ma
 
 ### Recursos principais
 
-- **Notificações de eventos** — conclusões de turno e erros dos agentes são enviados a todos os canais habilitados em tempo real
-- **Comandos interativos** — envie comandos (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) do seu app de chat e receba respostas instantâneas; prefixo de comando configurável. Comandos relacionados a conversas (iniciar, parar, aprovar) estão planejados para próximas versões
+- **Interação de sessão** — execute sessões completas de agente: `/folder` para selecionar o projeto, `/agent` para escolher o agente, `/task <descrição>` para iniciar uma tarefa, envie mensagens de acompanhamento como texto simples. `/resume` para continuar uma sessão anterior, `/cancel` para cancelar, `/sessions` para listar sessões ativas
+- **Controle de permissões** — os agentes solicitam permissões de execução de ferramentas diretamente no chat; `/approve` (ou `/approve always` para aprovação automática) e `/deny`
+- **Notificações de eventos** — conclusões de turno, chamadas de ferramentas e erros dos agentes são enviados em tempo real com formatação rica
+- **Comandos de consulta** — `/search <palavra-chave>`, `/today`, `/status`, `/help` para consultas rápidas; prefixo de comando configurável
 - **Relatórios diários** — resumo diário automatizado em um horário programado, incluindo contagem de conversas, divisão por tipo de agente e atividade do projeto
 - **Multi-idioma** — templates de mensagens em 10 idiomas (inglês, chinês simplificado/tradicional, japonês, coreano, espanhol, alemão, francês, português, árabe)
 - **Credenciais seguras** — tokens armazenados no chaveiro do SO, nunca expostos em arquivos de configuração ou logs

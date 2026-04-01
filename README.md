@@ -41,7 +41,7 @@ and integrated Git/file/terminal workflows.
 - Local conversation ingestion with structured rendering
 - Parallel development with built-in `git worktree` flows
 - **Project Boot** — visually scaffold new projects with live preview
-- **Chat Channels** — connect Telegram, Lark (Feishu) and more to your coding agents for real-time notifications and interactive commands
+- **Chat Channels** — connect Telegram, Lark (Feishu) and more to your coding agents for real-time notifications, full session interaction, and remote task control
 - MCP management (local scan + registry search/install)
 - Skills management (global and project scope)
 - Git remote account management (GitHub and other Git servers)
@@ -69,7 +69,7 @@ Currently supports **shadcn/ui** project scaffolding, with a tab-based design re
 
 ## Chat Channels
 
-Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — to your AI coding agents. Receive real-time notifications when agents complete tasks or encounter errors, query conversation history from your phone, and get automated daily reports — all without leaving your chat app.
+Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — to your AI coding agents. Create tasks, send follow-up messages, approve permissions, resume sessions, and monitor activity — all from your chat app. Receive real-time agent responses with tool-call details, permission prompts, and completion summaries without ever opening a browser.
 
 ### Supported Channels
 
@@ -82,8 +82,10 @@ Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — t
 
 ### Key Features
 
-- **Event Notifications** — agent turn completions and errors are pushed to all enabled channels in real time
-- **Interactive Commands** — send commands (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) from your chat app and get instant responses; configurable command prefix. Conversation-related commands (e.g. start, stop, approve) are planned for upcoming releases
+- **Session Interaction** — run full agent sessions from your chat app: `/folder` to pick a project, `/agent` to choose an agent, `/task <description>` to start a task, then send follow-up messages as plain text. `/resume` to continue a previous session, `/cancel` to abort, `/sessions` to list active sessions
+- **Permission Control** — agents can request tool-execution permissions in-chat; respond with `/approve` (or `/approve always` for auto-approve) and `/deny` without switching context
+- **Event Notifications** — agent turn completions, tool calls, and errors are pushed to all enabled channels in real time with rich formatting
+- **Query Commands** — `/search <keyword>`, `/today`, `/status`, `/help` for quick lookups; configurable command prefix
 - **Daily Reports** — automated daily summary at a scheduled time, including conversation counts, agent-type breakdown, and project activity
 - **Multi-Language** — message templates in 10 languages (English, Simplified/Traditional Chinese, Japanese, Korean, Spanish, German, French, Portuguese, Arabic)
 - **Secure Credentials** — tokens stored in the OS keyring, never exposed in config files or logs
