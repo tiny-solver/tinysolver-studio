@@ -914,6 +914,7 @@
         "mergeBranch": "Fusionar {branchName}",
         "rebaseTo": "Rebase a {branchName}",
         "deleteBranch": "Eliminar rama {branchName}",
+        "deleteRemoteBranch": "Eliminar rama remota {branchName}",
         "initGitRepo": "Inicializar repositorio Git",
         "pullCode": "Hacer pull del código",
         "fetchInfo": "Obtener información",
@@ -929,7 +930,9 @@
         "rebaseDescription": "¿Hacer rebase de la rama actual {currentBranch} sobre {branchName}?",
         "deleteDescription": "¿Eliminar la rama {branchName}? Esta acción no se puede deshacer.",
         "forceDeleteTitle": "Forzar eliminación de rama",
-        "forceDeleteDescription": "La rama {branchName} no está completamente fusionada. ¿Estás seguro de que quieres forzar su eliminación? Esta acción no se puede deshacer."
+        "forceDeleteDescription": "La rama {branchName} no está completamente fusionada. ¿Estás seguro de que quieres forzar su eliminación? Esta acción no se puede deshacer.",
+        "deleteRemoteTitle": "Eliminar rama remota",
+        "deleteRemoteDescription": "¿Eliminar la rama remota {branchName}? Esto la eliminará del repositorio remoto y no se puede deshacer."
       },
       "current": "Actual",
       "switchToBranch": "Cambiar a esta rama",

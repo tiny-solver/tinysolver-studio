@@ -644,6 +644,20 @@ export async function gitDeleteBranch(
   return getTransport().call("git_delete_branch", { path, branchName, force })
 }
 
+export async function gitDeleteRemoteBranch(
+  path: string,
+  remote: string,
+  branch: string,
+  credentials?: GitCredentials | null
+): Promise<void> {
+  return getTransport().call("git_delete_remote_branch", {
+    path,
+    remote,
+    branch,
+    credentials: credentials ?? null,
+  })
+}
+
 export async function gitListConflicts(path: string): Promise<string[]> {
   return getTransport().call("git_list_conflicts", { path })
 }

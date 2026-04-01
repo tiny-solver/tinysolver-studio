@@ -279,6 +279,7 @@ mod tauri_app {
                 folders::git_merge,
                 folders::git_rebase,
                 folders::git_delete_branch,
+                folders::git_delete_remote_branch,
                 folders::git_list_conflicts,
                 folders::git_conflict_file_versions,
                 folders::git_resolve_conflict,

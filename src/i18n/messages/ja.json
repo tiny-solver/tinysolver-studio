@@ -914,6 +914,7 @@
         "mergeBranch": "{branchName} をマージ",
         "rebaseTo": "{branchName} にリベース",
         "deleteBranch": "ブランチ {branchName} を削除",
+        "deleteRemoteBranch": "リモートブランチ {branchName} を削除",
         "initGitRepo": "Git リポジトリを初期化",
         "pullCode": "コードをプル",
         "fetchInfo": "情報をフェッチ",
@@ -929,7 +930,9 @@
         "rebaseDescription": "現在のブランチ {currentBranch} を {branchName} にリベースしますか？",
         "deleteDescription": "ブランチ {branchName} を削除しますか？この操作は元に戻せません。",
         "forceDeleteTitle": "ブランチを強制削除",
-        "forceDeleteDescription": "ブランチ {branchName} はまだ完全にマージされていません。強制削除してもよろしいですか？この操作は元に戻せません。"
+        "forceDeleteDescription": "ブランチ {branchName} はまだ完全にマージされていません。強制削除してもよろしいですか？この操作は元に戻せません。",
+        "deleteRemoteTitle": "リモートブランチの削除",
+        "deleteRemoteDescription": "リモートブランチ {branchName} を削除しますか？この操作はリモートリポジトリからブランチを削除し、元に戻せません。"
       },
       "current": "現在",
       "switchToBranch": "このブランチに切り替え",

@@ -2055,6 +2055,45 @@ pub async fn git_delete_branch(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+pub(crate) async fn git_delete_remote_branch_core(
+    path: &str,
+    remote: &str,
+    branch: &str,
+    credentials: Option<&GitCredentials>,
+    db: &AppDatabase,
+    data_dir: &std::path::Path,
+) -> Result<String, AppCommandError> {
+    let mut cmd = crate::process::tokio_command("git");
+    cmd.args(["push", remote, "--delete", branch])
+        .current_dir(path);
+    prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(remote), credentials, db, data_dir)
+        .await;
+
+    let output = cmd.output().await.map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(classify_remote_git_error("push --delete", &output.stderr));
+    }
+    Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn git_delete_remote_branch(
+    path: String,
+    remote: String,
+    branch: String,
+    credentials: Option<GitCredentials>,
+    db: tauri::State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, AppCommandError> {
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
+        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
+    })?;
+    git_delete_remote_branch_core(&path, &remote, &branch, credentials.as_ref(), &db, &data_dir)
+        .await
+}
+
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_conflicts(path: String) -> Result<Vec<String>, AppCommandError> {
     detect_conflicts(&path).await

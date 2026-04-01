@@ -914,6 +914,7 @@
         "mergeBranch": "{branchName} 병합",
         "rebaseTo": "{branchName}로 리베이스",
         "deleteBranch": "브랜치 {branchName} 삭제",
+        "deleteRemoteBranch": "원격 브랜치 {branchName} 삭제",
         "initGitRepo": "Git 저장소 초기화",
         "pullCode": "코드 pull",
         "fetchInfo": "정보 fetch",
@@ -929,7 +930,9 @@
         "rebaseDescription": "현재 브랜치 {currentBranch}를 {branchName} 위로 리베이스할까요?",
         "deleteDescription": "브랜치 {branchName}을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
         "forceDeleteTitle": "브랜치 강제 삭제",
-        "forceDeleteDescription": "브랜치 {branchName}가 완전히 병합되지 않았습니다. 강제 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+        "forceDeleteDescription": "브랜치 {branchName}가 완전히 병합되지 않았습니다. 강제 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        "deleteRemoteTitle": "원격 브랜치 삭제",
+        "deleteRemoteDescription": "원격 브랜치 {branchName}을(를) 삭제하시겠습니까? 이 작업은 원격 저장소에서 브랜치를 제거하며 되돌릴 수 없습니다."
       },
       "current": "현재",
       "switchToBranch": "이 브랜치로 전환",

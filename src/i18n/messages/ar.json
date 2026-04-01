@@ -914,6 +914,7 @@
         "mergeBranch": "دمج {branchName}",
         "rebaseTo": "Rebase إلى {branchName}",
         "deleteBranch": "حذف الفرع {branchName}",
+        "deleteRemoteBranch": "حذف الفرع البعيد {branchName}",
         "initGitRepo": "تهيئة مستودع Git",
         "pullCode": "سحب الكود",
         "fetchInfo": "جلب المعلومات",
@@ -929,7 +930,9 @@
         "rebaseDescription": "إجراء rebase للفرع الحالي {currentBranch} على {branchName}؟",
         "deleteDescription": "حذف الفرع {branchName}؟ لا يمكن التراجع عن هذا الإجراء.",
         "forceDeleteTitle": "حذف الفرع بالقوة",
-        "forceDeleteDescription": "الفرع {branchName} لم يتم دمجه بالكامل. هل أنت متأكد من أنك تريد حذفه بالقوة؟ لا يمكن التراجع عن هذا الإجراء."
+        "forceDeleteDescription": "الفرع {branchName} لم يتم دمجه بالكامل. هل أنت متأكد من أنك تريد حذفه بالقوة؟ لا يمكن التراجع عن هذا الإجراء.",
+        "deleteRemoteTitle": "حذف الفرع البعيد",
+        "deleteRemoteDescription": "هل تريد حذف الفرع البعيد {branchName}؟ سيؤدي ذلك إلى إزالته من المستودع البعيد ولا يمكن التراجع عن هذا الإجراء."
       },
       "current": "الحالي",
       "switchToBranch": "التبديل إلى هذا الفرع",
