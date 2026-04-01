@@ -411,6 +411,7 @@ impl ChatChannelBackend for WeixinBackend {
 
         tokio::spawn(async move {
             let mut cursor = initial_cursor;
+            let mut consecutive_errors: u32 = 0;
 
             loop {
                 if *shutdown_rx.borrow() {
@@ -434,6 +435,7 @@ impl ChatChannelBackend for WeixinBackend {
                 match result {
                     Ok(resp) => {
                         // Recover from error state after successful poll
+                        consecutive_errors = 0;
                         {
                             let mut s = status.lock().await;
                             if *s == ChannelConnectionStatus::Error {
@@ -458,6 +460,13 @@ impl ChatChannelBackend for WeixinBackend {
                                 if r != 0 {
                                     eprintln!("[Weixin] getupdates ret={r}");
                                 }
+                                // Session expired — pause and wait for re-auth
+                                if r == -14 {
+                                    eprintln!("[Weixin] session expired (ret=-14), pausing 30s");
+                                    *status.lock().await = ChannelConnectionStatus::Error;
+                                    tokio::time::sleep(Duration::from_secs(30)).await;
+                                    continue;
+                                }
                             }
 
                             // Process messages
@@ -466,7 +475,15 @@ impl ChatChannelBackend for WeixinBackend {
                                     eprintln!("[Weixin] got {} message(s)", msgs.len());
                                 }
                                 for msg in msgs {
-                                    // Only handle text messages (type 1 in item_list)
+                                    // Only handle user messages (message_type=1),
+                                    // skip bot echo (message_type=2)
+                                    let msg_type =
+                                        msg.get("message_type").and_then(|v| v.as_i64());
+                                    if msg_type != Some(1) {
+                                        continue;
+                                    }
+
+                                    // Extract text from type=1 (text) or type=3 (voice-to-text)
                                     let text = msg
                                         .get("item_list")
                                         .and_then(|v| v.as_array())
@@ -474,11 +491,14 @@ impl ChatChannelBackend for WeixinBackend {
                                             items.iter().find_map(|item| {
                                                 let t =
                                                     item.get("type").and_then(|v| v.as_i64())?;
-                                                if t == 1 {
-                                                    item.pointer("/text_item/text")
-                                                        .and_then(|v| v.as_str())
-                                                } else {
-                                                    None
+                                                match t {
+                                                    1 => item
+                                                        .pointer("/text_item/text")
+                                                        .and_then(|v| v.as_str()),
+                                                    3 => item
+                                                        .pointer("/voice_item/text")
+                                                        .and_then(|v| v.as_str()),
+                                                    _ => None,
                                                 }
                                             })
                                         });
@@ -542,7 +562,7 @@ impl ChatChannelBackend for WeixinBackend {
                                                         },
                                                         "base_info": { "channel_version": "1.0.2" }
                                                     });
-                                                    let _ = client
+                                                    let send_ok = match client
                                                         .post(format!(
                                                             "{base_url}/ilink/bot/sendmessage"
                                                         ))
@@ -551,7 +571,26 @@ impl ChatChannelBackend for WeixinBackend {
                                                         ))
                                                         .json(&send_body)
                                                         .send()
-                                                        .await;
+                                                        .await
+                                                    {
+                                                        Ok(r) => {
+                                                            let ok = r.status().is_success();
+                                                            if !ok {
+                                                                eprintln!("[Weixin] resend failed: HTTP {}", r.status());
+                                                            }
+                                                            ok
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("[Weixin] resend error: {e}");
+                                                            false
+                                                        }
+                                                    };
+                                                    if !send_ok {
+                                                        // Re-buffer remaining messages
+                                                        pending_messages.lock().await.push(
+                                                            pending_text.clone(),
+                                                        );
+                                                    }
                                                 }
                                             }
                                         }
@@ -576,9 +615,17 @@ impl ChatChannelBackend for WeixinBackend {
                         }
                     }
                     Err(e) => {
-                        eprintln!("[Weixin] polling error: {e}");
+                        consecutive_errors += 1;
+                        eprintln!(
+                            "[Weixin] polling error ({consecutive_errors}): {e}"
+                        );
                         *status.lock().await = ChannelConnectionStatus::Error;
-                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        // Exponential backoff: 5s, 10s, 20s, capped at 30s
+                        let delay = std::cmp::min(
+                            5 * 2u64.saturating_pow(consecutive_errors - 1),
+                            30,
+                        );
+                        tokio::time::sleep(Duration::from_secs(delay)).await;
                     }
                 }
             }
