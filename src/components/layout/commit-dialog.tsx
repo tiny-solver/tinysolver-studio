@@ -449,7 +449,9 @@ export function CommitWorkspace({
         toast.success(t("toasts.addedToVcs"), { description: file })
         void loadStatus()
       } catch (err) {
-        toast.error(t("toasts.addToVcsFailed"), { description: toErrorMessage(err) })
+        toast.error(t("toasts.addToVcsFailed"), {
+          description: toErrorMessage(err),
+        })
       }
     },
     [folderPath, loadStatus, t]
@@ -617,7 +619,9 @@ export function CommitWorkspace({
         toast.success(t("toasts.addedToVcs"), { description: label })
         void loadStatus()
       } catch (err) {
-        toast.error(t("toasts.addToVcsFailed"), { description: toErrorMessage(err) })
+        toast.error(t("toasts.addToVcsFailed"), {
+          description: toErrorMessage(err),
+        })
       }
     },
     [folderPath, loadStatus, t]
