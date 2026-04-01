@@ -156,7 +156,7 @@ async fn dispatch_command(
             };
             if has_session {
                 return session_commands::handle_followup(
-                    db, text, channel_id, sender_id, conn_mgr, bridge, lang,
+                    db, text, channel_id, sender_id, conn_mgr, bridge, lang, prefix,
                 )
                 .await;
             }
@@ -193,23 +193,23 @@ async fn dispatch_command(
 
         // Session commands
         "folder" => {
-            session_commands::handle_folder(db, args, channel_id, sender_id, lang).await
+            session_commands::handle_folder(db, args, channel_id, sender_id, lang, prefix).await
         }
         "agent" => {
-            session_commands::handle_agent(db, args, channel_id, sender_id, lang).await
+            session_commands::handle_agent(db, args, channel_id, sender_id, lang, prefix).await
         }
         "task" | "do" => {
             session_commands::handle_task(
-                db, args, channel_id, sender_id, conn_mgr, emitter, bridge, lang,
+                db, args, channel_id, sender_id, conn_mgr, emitter, bridge, lang, prefix,
             )
             .await
         }
         "sessions" => {
-            session_commands::handle_sessions(db, channel_id, sender_id, lang).await
+            session_commands::handle_sessions(db, channel_id, sender_id, lang, prefix).await
         }
         "resume" => {
             session_commands::handle_resume(
-                db, args, channel_id, sender_id, conn_mgr, emitter, bridge, lang,
+                db, args, channel_id, sender_id, conn_mgr, emitter, bridge, lang, prefix,
             )
             .await
         }

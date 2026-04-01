@@ -17,10 +17,12 @@ use crate::web::event_bridge::WebEventBroadcaster;
 
 use super::manager::ChatChannelManager;
 
-const FLUSH_INTERVAL_SECS: u64 = 5;
+const FLUSH_INTERVAL_SECS: u64 = 10;
 const BUFFER_FLUSH_THRESHOLD: usize = 500;
 const MAX_MESSAGE_LEN: usize = 2000;
 const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
+const COMMAND_PREFIX_KEY: &str = "chat_command_prefix";
+const DEFAULT_COMMAND_PREFIX: &str = "/";
 
 pub fn spawn_session_event_subscriber(
     broadcaster: Arc<WebEventBroadcaster>,
@@ -59,7 +61,7 @@ pub fn spawn_session_event_subscriber(
                 }
                 _ = tokio::time::sleep(Duration::from_secs(FLUSH_INTERVAL_SECS)) => {
                     if last_heartbeat.elapsed() >= Duration::from_secs(FLUSH_INTERVAL_SECS) {
-                        flush_progress(&bridge, &manager).await;
+                        flush_progress(&bridge, &manager, &db_conn).await;
                         last_heartbeat = Instant::now();
                     }
                 }
@@ -75,6 +77,14 @@ async fn get_lang(db: &DatabaseConnection) -> Lang {
         .flatten()
         .map(|v| Lang::from_str_lossy(&v))
         .unwrap_or_default()
+}
+
+async fn get_prefix(db: &DatabaseConnection) -> String {
+    app_metadata_service::get_value(db, COMMAND_PREFIX_KEY)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| DEFAULT_COMMAND_PREFIX.to_string())
 }
 
 async fn handle_acp_event_payload(
@@ -135,11 +145,11 @@ async fn handle_acp_event_payload(
                     && session.last_flushed.elapsed() >= Duration::from_secs(2)
                 {
                     let channel_id = session.channel_id;
-                    let buf_len = session.content_buffer.len();
                     let last_tool = session.tool_calls.last().cloned();
                     session.last_flushed = Instant::now();
 
-                    let mut status = format!("... ({buf_len} chars)");
+                    let lang = get_lang(db).await;
+                    let mut status = super::i18n::agent_responding(lang).to_string();
                     if let Some(tool) = last_tool {
                         status.push_str(&format!(" | {tool}"));
                     }
@@ -252,12 +262,13 @@ async fn handle_acp_event_payload(
                 drop(guard);
 
                 let lang = get_lang(db).await;
+                let prefix = get_prefix(db).await;
                 let body = match lang {
                     Lang::ZhCn | Lang::ZhTw => {
-                        format!("Agent 请求权限: {tool_desc}\n\n/approve 批准 | /deny 拒绝 | /approve always 自动批准")
+                        format!("Agent 请求权限: {tool_desc}\n\n{prefix}approve 批准 | {prefix}deny 拒绝 | {prefix}approve always 自动批准")
                     }
                     _ => {
-                        format!("Agent requests permission: {tool_desc}\n\n/approve | /deny | /approve always")
+                        format!("Agent requests permission: {tool_desc}\n\n{prefix}approve | {prefix}deny | {prefix}approve always")
                     }
                 };
 
@@ -387,7 +398,11 @@ async fn handle_acp_event_payload(
     }
 }
 
-async fn flush_progress(bridge: &Arc<Mutex<SessionBridge>>, manager: &ChatChannelManager) {
+async fn flush_progress(
+    bridge: &Arc<Mutex<SessionBridge>>,
+    manager: &ChatChannelManager,
+    db: &DatabaseConnection,
+) {
     let updates: Vec<(i32, String)> = {
         let mut guard = bridge.lock().await;
         let mut out = Vec::new();
@@ -395,13 +410,14 @@ async fn flush_progress(bridge: &Arc<Mutex<SessionBridge>>, manager: &ChatChanne
             if !session.content_buffer.is_empty()
                 && session.last_flushed.elapsed() >= Duration::from_secs(FLUSH_INTERVAL_SECS)
             {
-                let buf_len = session.content_buffer.len();
-                let tool_count = session.tool_calls.len();
                 session.last_flushed = Instant::now();
-                out.push((
-                    session.channel_id,
-                    format!("... ({buf_len} chars, {tool_count} tools)"),
-                ));
+                let last_tool = session.tool_calls.last().cloned();
+                let lang = get_lang(db).await;
+                let mut status = super::i18n::agent_responding(lang).to_string();
+                if let Some(tool) = last_tool {
+                    status.push_str(&format!(" | {tool}"));
+                }
+                out.push((session.channel_id, status));
             }
         }
         out

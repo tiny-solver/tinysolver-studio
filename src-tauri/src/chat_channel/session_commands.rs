@@ -24,14 +24,15 @@ pub async fn handle_folder(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     if args.is_empty() {
-        return list_folders(db, channel_id, sender_id, lang).await;
+        return list_folders(db, channel_id, sender_id, lang, prefix).await;
     }
 
     // Try parse as index (1-based)
     if let Ok(idx) = args.parse::<usize>() {
-        return select_folder_by_index(db, idx, channel_id, sender_id, lang).await;
+        return select_folder_by_index(db, idx, channel_id, sender_id, lang, prefix).await;
     }
 
     // Treat as path
@@ -43,6 +44,7 @@ async fn list_folders(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     let folders = match folder_service::list_folders(db).await {
         Ok(f) => f,
@@ -77,10 +79,11 @@ async fn list_folders(
 
     body.push_str(&format!(
         "\n{}",
-        t(
+        tp(
             lang,
-            "Reply /folder <number> to select.",
-            "回复 /folder <数字> 选择目录。"
+            prefix,
+            "Reply {prefix}folder <number> to select.",
+            "回复 {prefix}folder <数字> 选择目录。"
         )
     ));
 
@@ -94,6 +97,7 @@ async fn select_folder_by_index(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     if idx == 0 {
         return RichMessage::info(t(lang, "Index starts from 1.", "序号从 1 开始。"));
@@ -105,10 +109,11 @@ async fn select_folder_by_index(
     };
 
     let Some(folder) = folders.get(idx - 1) else {
-        return RichMessage::info(t(
+        return RichMessage::info(tp(
             lang,
-            "Index out of range. Use /folder to list.",
-            "序号超出范围，请使用 /folder 查看列表。",
+            prefix,
+            "Index out of range. Use {prefix}folder to list.",
+            "序号超出范围，请使用 {prefix}folder 查看列表。",
         ));
     };
 
@@ -146,14 +151,15 @@ pub async fn handle_agent(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     if args.is_empty() {
-        return list_agents(db, channel_id, sender_id, lang).await;
+        return list_agents(db, channel_id, sender_id, lang, prefix).await;
     }
 
     // Try parse as index
     if let Ok(idx) = args.parse::<usize>() {
-        return select_agent_by_index(db, idx, channel_id, sender_id, lang).await;
+        return select_agent_by_index(db, idx, channel_id, sender_id, lang, prefix).await;
     }
 
     // Try parse as agent type name
@@ -165,6 +171,7 @@ async fn list_agents(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     let agents = all_acp_agents();
     let ctx = sender_context_service::get_or_create(db, channel_id, sender_id)
@@ -185,10 +192,11 @@ async fn list_agents(
 
     body.push_str(&format!(
         "\n{}",
-        t(
+        tp(
             lang,
-            "Reply /agent <number> or /agent <name> to select.",
-            "回复 /agent <数字> 或 /agent <名称> 选择。"
+            prefix,
+            "Reply {prefix}agent <number> or {prefix}agent <name> to select.",
+            "回复 {prefix}agent <数字> 或 {prefix}agent <名称> 选择。"
         )
     ));
 
@@ -202,13 +210,15 @@ async fn select_agent_by_index(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     let agents = all_acp_agents();
     if idx == 0 || idx > agents.len() {
-        return RichMessage::info(t(
+        return RichMessage::info(tp(
             lang,
-            "Index out of range. Use /agent to list.",
-            "序号超出范围，请使用 /agent 查看列表。",
+            prefix,
+            "Index out of range. Use {prefix}agent to list.",
+            "序号超出范围，请使用 {prefix}agent 查看列表。",
         ));
     }
 
@@ -257,12 +267,14 @@ pub async fn handle_task(
     emitter: &EventEmitter,
     bridge: &Arc<Mutex<SessionBridge>>,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     if task_description.is_empty() {
-        return RichMessage::info(t(
+        return RichMessage::info(tp(
             lang,
-            "Usage: /task <description>",
-            "用法: /task <任务描述>",
+            prefix,
+            "Usage: {prefix}task <description>",
+            "用法: {prefix}task <任务描述>",
         ));
     }
 
@@ -275,10 +287,11 @@ pub async fn handle_task(
     let folder_id = match ctx.current_folder_id {
         Some(id) => id,
         None => {
-            return RichMessage::info(t(
+            return RichMessage::info(tp(
                 lang,
-                "No folder selected. Use /folder first.",
-                "未选择工作目录，请先使用 /folder 选择。",
+                prefix,
+                "No folder selected. Use {prefix}folder first.",
+                "未选择工作目录，请先使用 {prefix}folder 选择。",
             ));
         }
     };
@@ -287,10 +300,11 @@ pub async fn handle_task(
     let folder = match folder_service::get_folder_by_id(db, folder_id).await {
         Ok(Some(f)) => f,
         _ => {
-            return RichMessage::info(t(
+            return RichMessage::info(tp(
                 lang,
-                "Folder not found. Use /folder to select.",
-                "目录不存在，请使用 /folder 重新选择。",
+                prefix,
+                "Folder not found. Use {prefix}folder to select.",
+                "目录不存在，请使用 {prefix}folder 重新选择。",
             ));
         }
     };
@@ -381,6 +395,7 @@ pub async fn handle_sessions(
     channel_id: i32,
     sender_id: &str,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
@@ -390,10 +405,11 @@ pub async fn handle_sessions(
     let folder_id = match ctx.current_folder_id {
         Some(id) => id,
         None => {
-            return RichMessage::info(t(
+            return RichMessage::info(tp(
                 lang,
-                "No folder selected. Use /folder first.",
-                "未选择工作目录，请先使用 /folder 选择。",
+                prefix,
+                "No folder selected. Use {prefix}folder first.",
+                "未选择工作目录，请先使用 {prefix}folder 选择。",
             ));
         }
     };
@@ -456,10 +472,11 @@ pub async fn handle_sessions(
 
     body.push_str(&format!(
         "\n{}",
-        t(
+        tp(
             lang,
-            "Reply /resume <id> to continue.",
-            "回复 /resume <ID> 继续会话。"
+            prefix,
+            "Reply {prefix}resume <id> to continue.",
+            "回复 {prefix}resume <ID> 继续会话。"
         )
     ));
 
@@ -482,14 +499,16 @@ pub async fn handle_resume(
     emitter: &EventEmitter,
     bridge: &Arc<Mutex<SessionBridge>>,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     let conversation_id: i32 = match args.parse() {
         Ok(id) => id,
         Err(_) => {
-            return RichMessage::info(t(
+            return RichMessage::info(tp(
                 lang,
-                "Usage: /resume <conversation_id>",
-                "用法: /resume <会话ID>",
+                prefix,
+                "Usage: {prefix}resume <conversation_id>",
+                "用法: {prefix}resume <会话ID>",
             ));
         }
     };
@@ -753,6 +772,7 @@ pub async fn handle_followup(
     conn_mgr: &ConnectionManager,
     bridge: &Arc<Mutex<SessionBridge>>,
     lang: Lang,
+    prefix: &str,
 ) -> RichMessage {
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
@@ -762,10 +782,11 @@ pub async fn handle_followup(
     let connection_id = match &ctx.current_connection_id {
         Some(id) => id.clone(),
         None => {
-            return RichMessage::info(t(
+            return RichMessage::info(tp(
                 lang,
-                "No active session. Use /task to start one.",
-                "没有活跃的会话，请使用 /task 开始新任务。",
+                prefix,
+                "No active session. Use {prefix}task to start one.",
+                "没有活跃的会话，请使用 {prefix}task 开始新任务。",
             ));
         }
     };
@@ -777,10 +798,11 @@ pub async fn handle_followup(
             // Connection lost, clear context
             drop(bridge_guard);
             let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
-            return RichMessage::info(t(
+            return RichMessage::info(tp(
                 lang,
-                "Session connection lost. Use /task to start a new one.",
-                "会话连接已断开，请使用 /task 开始新任务。",
+                prefix,
+                "Session connection lost. Use {prefix}task to start a new one.",
+                "会话连接已断开，请使用 {prefix}task 开始新任务。",
             ));
         }
     }
@@ -810,6 +832,11 @@ fn t(lang: Lang, en: &str, zh: &str) -> String {
         Lang::ZhCn | Lang::ZhTw => zh.to_string(),
         _ => en.to_string(),
     }
+}
+
+/// Like `t()` but replaces `{prefix}` placeholders with the actual command prefix.
+fn tp(lang: Lang, prefix: &str, en: &str, zh: &str) -> String {
+    t(lang, en, zh).replace("{prefix}", prefix)
 }
 
 fn agent_type_to_string(at: AgentType) -> String {
