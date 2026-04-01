@@ -1440,3 +1440,23 @@ export async function getChatMessageLanguage(): Promise<string> {
 export async function setChatMessageLanguage(language: string): Promise<void> {
   return getTransport().call("set_chat_message_language", { language })
 }
+
+// ─── WeChat QR Code Auth ───
+
+export async function weixinGetQrcode(): Promise<{
+  qrcode_id: string
+  qrcode_img_content: string
+}> {
+  return getTransport().call("weixin_get_qrcode")
+}
+
+export async function weixinCheckQrcode(
+  channelId: number,
+  qrcode: string
+): Promise<{
+  status: string
+  bot_token?: string
+  base_url?: string
+}> {
+  return getTransport().call("weixin_check_qrcode", { channelId, qrcode })
+}

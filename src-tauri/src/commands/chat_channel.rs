@@ -1,4 +1,5 @@
 use crate::app_error::AppCommandError;
+use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatus};
 use crate::chat_channel::manager::ChatChannelManager;
 use crate::chat_channel::types::ChannelType;
 use crate::db::service::{chat_channel_message_log_service, chat_channel_service};
@@ -112,8 +113,15 @@ pub async fn connect_chat_channel_core(
                 .with_detail(e.to_string())
         })?;
 
-    let token = crate::keyring_store::get_channel_token(id)
-        .ok_or_else(|| AppCommandError::configuration_missing("Token not set"))?;
+    let token = crate::keyring_store::get_channel_token(id).ok_or_else(|| {
+        eprintln!("[connect_chat_channel] channel {id}: Token not set in keyring");
+        AppCommandError::configuration_missing("Token not set")
+    })?;
+
+    eprintln!(
+        "[connect_chat_channel] channel {id}: creating {channel_type} backend, config={}",
+        model.config_json
+    );
 
     let backend = crate::chat_channel::backends::create_backend(id, channel_type, &config, token)
         .map_err(AppCommandError::from)?;
@@ -121,8 +129,12 @@ pub async fn connect_chat_channel_core(
     manager
         .add_channel(id, model.name, channel_type, backend)
         .await
-        .map_err(AppCommandError::from)?;
+        .map_err(|e| {
+            eprintln!("[connect_chat_channel] channel {id}: add_channel failed: {e}");
+            AppCommandError::from(e)
+        })?;
 
+    eprintln!("[connect_chat_channel] channel {id}: connected successfully");
     Ok(())
 }
 
@@ -326,6 +338,58 @@ pub async fn set_chat_event_filter_core(
 }
 
 // ---------------------------------------------------------------------------
+// WeChat QR code auth
+// ---------------------------------------------------------------------------
+
+pub async fn weixin_get_qrcode_core() -> Result<WeixinQrcodeInfo, AppCommandError> {
+    crate::chat_channel::backends::weixin::weixin_get_qrcode()
+        .await
+        .map_err(AppCommandError::from)
+}
+
+pub async fn weixin_check_qrcode_core(
+    db: &AppDatabase,
+    channel_id: i32,
+    qrcode: &str,
+) -> Result<WeixinQrcodeStatus, AppCommandError> {
+    let result = crate::chat_channel::backends::weixin::weixin_check_qrcode(qrcode)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    // On confirmed: save token + update config with base_url
+    if result.status == "confirmed" {
+        eprintln!(
+            "[Weixin] QR confirmed for channel {channel_id}, bot_token={}, base_url={}",
+            result.bot_token.as_deref().map(|t| if t.len() > 8 { &t[..8] } else { t }).unwrap_or("None"),
+            result.base_url.as_deref().unwrap_or("None"),
+        );
+        if let Some(ref token) = result.bot_token {
+            save_chat_channel_token_core(channel_id, token)?;
+            eprintln!("[Weixin] Token saved for channel {channel_id}");
+        } else {
+            eprintln!("[Weixin] WARNING: No bot_token in confirmed response for channel {channel_id}");
+        }
+        if let Some(ref base_url) = result.base_url {
+            let config_json = serde_json::json!({ "base_url": base_url }).to_string();
+            update_chat_channel_core(
+                db,
+                channel_id,
+                None,
+                None,
+                Some(config_json),
+                None,
+                None,
+                None,
+            )
+            .await?;
+            eprintln!("[Weixin] Config updated with base_url for channel {channel_id}");
+        }
+    }
+
+    Ok(result)
+}
+
+// ---------------------------------------------------------------------------
 // Tauri commands (use tauri::State for injection)
 // ---------------------------------------------------------------------------
 
@@ -491,4 +555,20 @@ pub async fn set_chat_message_language(
     language: String,
 ) -> Result<(), AppCommandError> {
     set_chat_message_language_core(&db, language).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn weixin_get_qrcode() -> Result<WeixinQrcodeInfo, AppCommandError> {
+    weixin_get_qrcode_core().await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn weixin_check_qrcode(
+    db: tauri::State<'_, AppDatabase>,
+    channel_id: i32,
+    qrcode: String,
+) -> Result<WeixinQrcodeStatus, AppCommandError> {
+    weixin_check_qrcode_core(&db, channel_id, &qrcode).await
 }

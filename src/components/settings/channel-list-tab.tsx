@@ -37,9 +37,14 @@ import {
   getChatChannelStatus,
 } from "@/lib/api"
 import { subscribe } from "@/lib/platform"
-import type { ChatChannelInfo, ChannelStatusInfo } from "@/lib/types"
+import type {
+  ChatChannelInfo,
+  ChannelStatusInfo,
+  ChannelType,
+} from "@/lib/types"
 import { AddChatChannelDialog } from "./add-chat-channel-dialog"
 import { EditChatChannelDialog } from "./edit-chat-channel-dialog"
+import { WeixinQrcodeDialog } from "./weixin-qrcode-dialog"
 
 export function ChannelListTab() {
   const t = useTranslations("ChatChannelSettings")
@@ -50,6 +55,7 @@ export function ChannelListTab() {
   const [editTarget, setEditTarget] = useState<ChatChannelInfo | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ChatChannelInfo | null>(null)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [qrcodeChannelId, setQrcodeChannelId] = useState<number | null>(null)
 
   const loadChannels = useCallback(async () => {
     try {
@@ -114,10 +120,33 @@ export function ChannelListTab() {
   )
 
   const handleConnect = useCallback(
-    async (id: number) => {
+    async (id: number, channelType?: ChannelType) => {
       setActionLoading(id)
       try {
         await connectChatChannel(id)
+        toast.success(t("connectSuccess"))
+        await loadChannels()
+      } catch (err: unknown) {
+        if (channelType === "weixin") {
+          // No token or token expired — show QR code dialog
+          setQrcodeChannelId(id)
+        } else {
+          const msg = err instanceof Error ? err.message : String(err)
+          toast.error(t("connectFailed") + ": " + msg)
+        }
+      } finally {
+        setActionLoading(null)
+      }
+    },
+    [loadChannels, t]
+  )
+
+  const handleWeixinAuthSuccess = useCallback(
+    async (channelId: number) => {
+      setQrcodeChannelId(null)
+      setActionLoading(channelId)
+      try {
+        await connectChatChannel(channelId)
         toast.success(t("connectSuccess"))
         await loadChannels()
       } catch (err: unknown) {
@@ -270,7 +299,7 @@ export function ChannelListTab() {
                       size="sm"
                       title={t("connect")}
                       disabled={isLoading || !ch.enabled}
-                      onClick={() => handleConnect(ch.id)}
+                      onClick={() => handleConnect(ch.id, ch.channel_type)}
                     >
                       {isLoading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -324,6 +353,15 @@ export function ChannelListTab() {
           channel={editTarget}
           onOpenChange={(open) => !open && setEditTarget(null)}
           onChannelUpdated={loadChannels}
+        />
+      )}
+
+      {qrcodeChannelId !== null && (
+        <WeixinQrcodeDialog
+          open
+          channelId={qrcodeChannelId}
+          onOpenChange={(open) => !open && setQrcodeChannelId(null)}
+          onAuthSuccess={handleWeixinAuthSuccess}
         />
       )}
 

@@ -6,6 +6,7 @@ use serde::Deserialize;
 use crate::app_error::AppCommandError;
 use crate::app_state::AppState;
 use crate::commands::chat_channel as cc_commands;
+use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatus};
 use crate::models::chat_channel::{ChannelStatusInfo, ChatChannelInfo, ChatChannelMessageLogInfo};
 
 // ---------------------------------------------------------------------------
@@ -246,4 +247,30 @@ pub async fn set_chat_message_language(
 ) -> Result<Json<()>, AppCommandError> {
     cc_commands::set_chat_message_language_core(&state.db, params.language).await?;
     Ok(Json(()))
+}
+
+// ---------------------------------------------------------------------------
+// WeChat QR code auth
+// ---------------------------------------------------------------------------
+
+pub async fn weixin_get_qrcode() -> Result<Json<WeixinQrcodeInfo>, AppCommandError> {
+    let result = cc_commands::weixin_get_qrcode_core().await?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeixinCheckQrcodeParams {
+    pub channel_id: i32,
+    pub qrcode: String,
+}
+
+pub async fn weixin_check_qrcode(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<WeixinCheckQrcodeParams>,
+) -> Result<Json<WeixinQrcodeStatus>, AppCommandError> {
+    let result =
+        cc_commands::weixin_check_qrcode_core(&state.db, params.channel_id, &params.qrcode)
+            .await?;
+    Ok(Json(result))
 }

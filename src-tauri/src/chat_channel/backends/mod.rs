@@ -1,5 +1,6 @@
 pub mod lark;
 pub mod telegram;
+pub mod weixin;
 
 use super::error::ChatChannelError;
 use super::traits::ChatChannelBackend;
@@ -27,6 +28,21 @@ pub fn create_backend(
                 channel_id,
                 token,
                 cfg.chat_id,
+            )))
+        }
+        ChannelType::Weixin => {
+            let cfg: WeixinConfig = serde_json::from_value(config.clone()).map_err(|e| {
+                ChatChannelError::ConfigurationInvalid(format!("Invalid Weixin config: {e}"))
+            })?;
+            if cfg.base_url.is_empty() {
+                return Err(ChatChannelError::ConfigurationInvalid(
+                    "base_url is required".into(),
+                ));
+            }
+            Ok(Box::new(weixin::WeixinBackend::new(
+                channel_id,
+                token,
+                cfg.base_url,
             )))
         }
         ChannelType::Lark => {

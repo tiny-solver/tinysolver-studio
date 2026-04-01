@@ -44,6 +44,7 @@ export function AddChatChannelDialog({
   const [token, setToken] = useState("")
   const [chatId, setChatId] = useState("")
   const [appId, setAppId] = useState("")
+  const [baseUrl, setBaseUrl] = useState("https://ilinkai.weixin.qq.com")
   const [dailyReportEnabled, setDailyReportEnabled] = useState(false)
   const [dailyReportTime, setDailyReportTime] = useState("18:00")
 
@@ -53,6 +54,7 @@ export function AddChatChannelDialog({
     setToken("")
     setChatId("")
     setAppId("")
+    setBaseUrl("https://ilinkai.weixin.qq.com")
     setDailyReportEnabled(false)
     setDailyReportTime("18:00")
     setError(null)
@@ -71,11 +73,11 @@ export function AddChatChannelDialog({
       setError(t("nameRequired"))
       return
     }
-    if (!token.trim()) {
+    if (channelType !== "weixin" && !token.trim()) {
       setError(t("tokenRequired"))
       return
     }
-    if (!chatId.trim()) {
+    if (channelType !== "weixin" && !chatId.trim()) {
       setError(t("chatIdRequired"))
       return
     }
@@ -84,9 +86,11 @@ export function AddChatChannelDialog({
     setError(null)
     try {
       const configJson =
-        channelType === "lark"
-          ? JSON.stringify({ app_id: appId, chat_id: chatId })
-          : JSON.stringify({ chat_id: chatId })
+        channelType === "weixin"
+          ? JSON.stringify({ base_url: baseUrl })
+          : channelType === "lark"
+            ? JSON.stringify({ app_id: appId, chat_id: chatId })
+            : JSON.stringify({ chat_id: chatId })
 
       const channel = await createChatChannel({
         name: name.trim(),
@@ -97,7 +101,9 @@ export function AddChatChannelDialog({
         dailyReportTime: dailyReportEnabled ? dailyReportTime : null,
       })
 
-      await saveChatChannelToken(channel.id, token.trim())
+      if (channelType !== "weixin" && token.trim()) {
+        await saveChatChannelToken(channel.id, token.trim())
+      }
 
       handleOpenChange(false)
       onChannelAdded()
@@ -113,6 +119,7 @@ export function AddChatChannelDialog({
     chatId,
     channelType,
     appId,
+    baseUrl,
     dailyReportEnabled,
     dailyReportTime,
     handleOpenChange,
@@ -149,6 +156,7 @@ export function AddChatChannelDialog({
               <SelectContent>
                 <SelectItem value="telegram">Telegram</SelectItem>
                 <SelectItem value="lark">{t("lark")}</SelectItem>
+                <SelectItem value="weixin">{t("weixin")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -164,30 +172,40 @@ export function AddChatChannelDialog({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">
-              {channelType === "telegram" ? "Bot Token" : "App Secret"}
-            </label>
-            <Input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={
-                channelType === "telegram" ? "123456:ABC-DEF..." : "xxxxx"
-              }
-            />
-          </div>
+          {channelType !== "weixin" && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">
+                {channelType === "telegram" ? "Bot Token" : "App Secret"}
+              </label>
+              <Input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder={
+                  channelType === "telegram" ? "123456:ABC-DEF..." : "xxxxx"
+                }
+              />
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">Chat ID</label>
-            <Input
-              value={chatId}
-              onChange={(e) => setChatId(e.target.value)}
-              placeholder={
-                channelType === "telegram" ? "-100123456789" : "oc_xxxxx"
-              }
-            />
-          </div>
+          {channelType !== "weixin" && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Chat ID</label>
+              <Input
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value)}
+                placeholder={
+                  channelType === "telegram" ? "-100123456789" : "oc_xxxxx"
+                }
+              />
+            </div>
+          )}
+
+          {channelType === "weixin" && (
+            <p className="text-xs text-muted-foreground">
+              {t("weixinScanDescription")}
+            </p>
+          )}
 
           <div className="flex items-center justify-between">
             <label className="text-xs font-medium">{t("dailyReport")}</label>

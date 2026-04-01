@@ -389,6 +389,8 @@ mod tauri_app {
                 chat_channel_commands::set_chat_event_filter,
                 chat_channel_commands::get_chat_message_language,
                 chat_channel_commands::set_chat_message_language,
+                chat_channel_commands::weixin_get_qrcode,
+                chat_channel_commands::weixin_check_qrcode,
                 web::start_web_server,
                 web::stop_web_server,
                 web::get_web_server_status,

@@ -850,7 +850,7 @@ export interface PreflightResult {
 
 // ─── Chat Channels ───
 
-export type ChannelType = "lark" | "telegram"
+export type ChannelType = "lark" | "telegram" | "weixin"
 
 export type ChannelConnectionStatus =
   | "connected"

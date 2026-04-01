@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum ChannelType {
     Lark,
     Telegram,
+    Weixin,
 }
 
 // ── Per-channel strong typed configs ──
@@ -20,11 +21,17 @@ pub struct LarkConfig {
     pub chat_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeixinConfig {
+    pub base_url: String,
+}
+
 impl std::fmt::Display for ChannelType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ChannelType::Lark => write!(f, "lark"),
             ChannelType::Telegram => write!(f, "telegram"),
+            ChannelType::Weixin => write!(f, "weixin"),
         }
     }
 }

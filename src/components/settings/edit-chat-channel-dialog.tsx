@@ -44,6 +44,7 @@ export function EditChatChannelDialog({
   const [token, setToken] = useState("")
   const [chatId, setChatId] = useState(config.chat_id ?? "")
   const [appId, setAppId] = useState(config.app_id ?? "")
+  const [baseUrl] = useState(config.base_url ?? "")
   const [dailyReportEnabled, setDailyReportEnabled] = useState(
     channel.daily_report_enabled
   )
@@ -65,7 +66,7 @@ export function EditChatChannelDialog({
       setError(t("nameRequired"))
       return
     }
-    if (!chatId.trim()) {
+    if (channel.channel_type !== "weixin" && !chatId.trim()) {
       setError(t("chatIdRequired"))
       return
     }
@@ -74,9 +75,11 @@ export function EditChatChannelDialog({
     setError(null)
     try {
       const configJson =
-        channel.channel_type === "lark"
-          ? JSON.stringify({ app_id: appId, chat_id: chatId })
-          : JSON.stringify({ chat_id: chatId })
+        channel.channel_type === "weixin"
+          ? JSON.stringify({ base_url: baseUrl })
+          : channel.channel_type === "lark"
+            ? JSON.stringify({ app_id: appId, chat_id: chatId })
+            : JSON.stringify({ chat_id: chatId })
 
       await updateChatChannel({
         id: channel.id,
@@ -105,6 +108,7 @@ export function EditChatChannelDialog({
     chatId,
     channel,
     appId,
+    baseUrl,
     dailyReportEnabled,
     dailyReportTime,
     onOpenChange,
@@ -140,32 +144,45 @@ export function EditChatChannelDialog({
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">
-              {channel.channel_type === "telegram" ? "Bot Token" : "App Secret"}
-            </label>
-            <Input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={
-                hasToken ? t("tokenPlaceholderKeep") : t("tokenRequired")
-              }
-            />
-          </div>
+          {channel.channel_type !== "weixin" && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">
+                {channel.channel_type === "telegram"
+                  ? "Bot Token"
+                  : "App Secret"}
+              </label>
+              <Input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder={
+                  hasToken ? t("tokenPlaceholderKeep") : t("tokenRequired")
+                }
+              />
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">Chat ID</label>
-            <Input
-              value={chatId}
-              onChange={(e) => setChatId(e.target.value)}
-              placeholder={
-                channel.channel_type === "telegram"
-                  ? "-100123456789"
-                  : "oc_xxxxx"
-              }
-            />
-          </div>
+          {channel.channel_type !== "weixin" && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Chat ID</label>
+              <Input
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value)}
+                placeholder={
+                  channel.channel_type === "telegram"
+                    ? "-100123456789"
+                    : "oc_xxxxx"
+                }
+              />
+            </div>
+          )}
+
+          {channel.channel_type === "weixin" && baseUrl && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Base URL</label>
+              <Input value={baseUrl} disabled />
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <label className="text-xs font-medium">{t("dailyReport")}</label>
