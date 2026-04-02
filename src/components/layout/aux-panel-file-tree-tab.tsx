@@ -36,10 +36,7 @@ import {
   startFileTreeWatch,
   stopFileTreeWatch,
 } from "@/lib/api"
-import {
-  emitAttachFileToSession,
-  emitAppendTextToSession,
-} from "@/lib/session-attachment-events"
+import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import type {
   FileTreeChangedEvent,
   FileTreeNode,
@@ -86,16 +83,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
-
-function joinFsPath(basePath: string, relPath: string): string {
-  if (!relPath) return basePath
-  const separator = basePath.includes("\\") ? "\\" : "/"
-  const normalizedRel = relPath.replace(/[\\/]/g, separator)
-  if (basePath.endsWith("/") || basePath.endsWith("\\")) {
-    return `${basePath}${normalizedRel}`
-  }
-  return `${basePath}${separator}${normalizedRel}`
-}
+import { joinFsPath } from "@/lib/path-utils"
 
 function parentDir(filePath: string): string {
   const slashIndex = filePath.lastIndexOf("/")
@@ -618,12 +606,9 @@ function RenderNode({
 
   const handleAttachDirToSession = () => {
     if (!activeSessionTabId) return
-    const relativePath = node.path.endsWith("/")
-      ? `@${node.path} `
-      : `@${node.path}/ `
-    emitAppendTextToSession({
+    emitAttachFileToSession({
       tabId: activeSessionTabId,
-      text: relativePath,
+      path: absolutePath,
     })
   }
 

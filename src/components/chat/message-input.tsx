@@ -53,6 +53,9 @@ import {
 import { ModeSelector } from "@/components/chat/mode-selector"
 import { SessionConfigSelector } from "@/components/chat/session-config-selector"
 import { SlashCommandMenu } from "@/components/chat/slash-command-menu"
+import { FileMentionMenu } from "@/components/chat/file-mention-menu"
+import { useFileTree } from "@/hooks/use-file-tree"
+import { joinFsPath } from "@/lib/path-utils"
 import {
   clearMessageInputDraft,
   loadMessageInputDraft,
@@ -433,6 +436,37 @@ export function MessageInput({
     )
   }, [slashMenuOpen, slashCommands, text])
 
+  // ── @ file mention autocomplete ──
+  const [atMenuOpen, setAtMenuOpen] = useState(false)
+  const [atSelectedIndex, setAtSelectedIndex] = useState(0)
+  const [atTriggerPos, setAtTriggerPos] = useState<number | null>(null)
+  const [atFileTreeEnabled, setAtFileTreeEnabled] = useState(false)
+
+  const { allFiles: atAllFiles } = useFileTree({
+    folderPath: defaultPath,
+    enabled: atFileTreeEnabled,
+  })
+
+  const filteredAtFiles = useMemo(() => {
+    if (!atMenuOpen || atTriggerPos == null) return []
+    // Extract the query after "@" up to the next space or end of text
+    const afterAt = text.slice(atTriggerPos + 1)
+    const spaceIdx = afterAt.indexOf(" ")
+    const filter =
+      spaceIdx === -1
+        ? afterAt.toLowerCase()
+        : afterAt.slice(0, spaceIdx).toLowerCase()
+    if (!filter) return atAllFiles.slice(0, 50)
+    const matched: typeof atAllFiles = []
+    for (const f of atAllFiles) {
+      if (f.lowerName.includes(filter) || f.lowerPath.includes(filter)) {
+        matched.push(f)
+        if (matched.length >= 50) break
+      }
+    }
+    return matched
+  }, [atMenuOpen, atTriggerPos, text, atAllFiles])
+
   const appendResourceLinks = useCallback(
     (
       links: Array<{
@@ -744,18 +778,69 @@ export function MessageInput({
     setSlashMenuOpen(false)
   }, [])
 
+  const atTriggerPosRef = useRef(atTriggerPos)
+  useEffect(() => {
+    atTriggerPosRef.current = atTriggerPos
+  }, [atTriggerPos])
+
+  const handleAtSelect = useCallback(
+    (entry: { relativePath: string }) => {
+      const pos = atTriggerPosRef.current
+      if (!defaultPath || pos == null) return
+
+      // Remove the @... token from text
+      const current = textRef.current
+      const beforeAt = current.slice(0, pos)
+      const afterAt = current.slice(pos)
+      const spaceIdx = afterAt.indexOf(" ", 1)
+      const afterToken = spaceIdx === -1 ? "" : afterAt.slice(spaceIdx)
+      setText(beforeAt + afterToken)
+
+      // Attach the file
+      const absPath = joinFsPath(defaultPath, entry.relativePath)
+      appendResourceAttachments([absPath])
+
+      setAtMenuOpen(false)
+      setAtTriggerPos(null)
+
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    },
+    [defaultPath, appendResourceAttachments]
+  )
+
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value
       setText(value)
+
+      // Slash command detection (only at start of input)
       if (slashCommands.length > 0 && /^\/(\S*)$/.test(value)) {
         setSlashSelectedIndex(0)
         setSlashMenuOpen(true)
+        setAtMenuOpen(false)
+        return
       } else {
         setSlashMenuOpen(false)
       }
+
+      // @ file mention detection (at any cursor position)
+      const cursorPos = e.target.selectionStart
+      if (cursorPos != null && defaultPath) {
+        const beforeCursor = value.slice(0, cursorPos)
+        const atMatch = beforeCursor.match(/(^|[\s])@([^\s]*)$/)
+        if (atMatch) {
+          const atPos =
+            beforeCursor.length - atMatch[0].length + atMatch[1].length
+          setAtTriggerPos(atPos)
+          setAtSelectedIndex(0)
+          setAtMenuOpen(true)
+          setAtFileTreeEnabled(true)
+          return
+        }
+      }
+      setAtMenuOpen(false)
     },
-    [slashCommands.length]
+    [slashCommands.length, defaultPath]
   )
 
   const handlePickFiles = useCallback(async () => {
@@ -1064,6 +1149,33 @@ export function MessageInput({
         }
       }
 
+      if (atMenuOpen && filteredAtFiles.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault()
+          setAtSelectedIndex((i) =>
+            i < filteredAtFiles.length - 1 ? i + 1 : 0
+          )
+          return
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault()
+          setAtSelectedIndex((i) =>
+            i > 0 ? i - 1 : filteredAtFiles.length - 1
+          )
+          return
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault()
+          handleAtSelect(filteredAtFiles[atSelectedIndex])
+          return
+        }
+        if (e.key === "Escape") {
+          e.preventDefault()
+          setAtMenuOpen(false)
+          return
+        }
+      }
+
       if (isEditingQueueItem && e.key === "Escape") {
         e.preventDefault()
         onCancelQueueEdit?.()
@@ -1097,6 +1209,10 @@ export function MessageInput({
       filteredSlashCommands,
       slashSelectedIndex,
       handleSlashSelect,
+      atMenuOpen,
+      filteredAtFiles,
+      atSelectedIndex,
+      handleAtSelect,
     ]
   )
 
@@ -1268,6 +1384,13 @@ export function MessageInput({
           commands={filteredSlashCommands}
           selectedIndex={slashSelectedIndex}
           onSelect={handleSlashSelect}
+        />
+      )}
+      {atMenuOpen && filteredAtFiles.length > 0 && (
+        <FileMentionMenu
+          files={filteredAtFiles}
+          selectedIndex={atSelectedIndex}
+          onSelect={handleAtSelect}
         />
       )}
       <div

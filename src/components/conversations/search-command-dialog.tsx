@@ -4,23 +4,18 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { formatDistanceToNow } from "date-fns"
 import { enUS, zhCN, zhTW } from "date-fns/locale"
 import { File, Folder } from "lucide-react"
-import ig from "ignore"
 import { useLocale, useTranslations } from "next-intl"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
-import {
-  getFileTree,
-  listFolderConversations,
-  readFilePreview,
-} from "@/lib/api"
+import { listFolderConversations } from "@/lib/api"
 import type {
   AgentType,
   ConversationStatus,
   DbConversationSummary,
-  FileTreeNode,
 } from "@/lib/types"
+import { useFileTree, type FlatFileEntry } from "@/hooks/use-file-tree"
 import { AGENT_LABELS, STATUS_COLORS, compareAgentType } from "@/lib/types"
 import { AgentIcon } from "@/components/agent-icon"
 import {
@@ -34,49 +29,6 @@ import {
 import { cn } from "@/lib/utils"
 
 type SearchTab = "conversations" | "files"
-
-interface FlatFileEntry {
-  name: string
-  /** Relative path from folder root (same as FileTreeNode.path) */
-  relativePath: string
-  kind: "file" | "dir"
-  /** Pre-computed lowercase relativePath for filtering */
-  lowerPath: string
-  /** Pre-computed lowercase name for filtering */
-  lowerName: string
-}
-
-function flattenTree(nodes: FileTreeNode[]): FlatFileEntry[] {
-  const entries: FlatFileEntry[] = []
-  function walk(node: FileTreeNode) {
-    entries.push({
-      name: node.name,
-      relativePath: node.path,
-      kind: node.kind,
-      lowerPath: node.path.toLowerCase(),
-      lowerName: node.name.toLowerCase(),
-    })
-    if (node.kind === "dir" && node.children) {
-      for (const child of node.children) {
-        walk(child)
-      }
-    }
-  }
-  for (const node of nodes) {
-    walk(node)
-  }
-  return entries
-}
-
-/** Check whether any ancestor directory of `path` is in `ignoredDirs`. */
-function hasIgnoredAncestor(path: string, ignoredDirs: Set<string>): boolean {
-  let idx = path.indexOf("/")
-  while (idx !== -1) {
-    if (ignoredDirs.has(path.slice(0, idx))) return true
-    idx = path.indexOf("/", idx + 1)
-  }
-  return false
-}
 
 interface SearchCommandDialogProps {
   open: boolean
@@ -103,97 +55,22 @@ export function SearchCommandDialog({
   const [searching, setSearching] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // File search state
-  const [allFiles, setAllFiles] = useState<FlatFileEntry[]>([])
-  const [filesLoading, setFilesLoading] = useState(false)
-  const filesLoadedRef = useRef(false)
-
   const folderPath = folder?.path ?? ""
+
+  // File search via shared hook (lazy-loaded when files tab is active)
+  const {
+    allFiles,
+    loading: filesLoading,
+    reset: resetFileTree,
+  } = useFileTree({
+    folderPath: folderPath || undefined,
+    enabled: activeTab === "files",
+  })
 
   // Compute which agent types exist in current folder
   const availableAgents = Array.from(
     new Set(conversations.map((c) => c.agent_type))
   ).sort(compareAgentType)
-
-  // Load file tree when switching to files tab, filtering by .gitignore
-  useEffect(() => {
-    if (activeTab !== "files" || !folderPath || filesLoadedRef.current) return
-    let canceled = false
-    setFilesLoading(true)
-
-    async function load() {
-      try {
-        const tree = await getFileTree(folderPath, 10)
-        const flat = flattenTree(tree)
-
-        // Collect all .gitignore files from the tree
-        const gitignoreEntries = flat.filter(
-          (f) => f.kind === "file" && f.name === ".gitignore"
-        )
-
-        // Build matchers keyed by directory prefix
-        const matchers: { prefix: string; matcher: ReturnType<typeof ig> }[] =
-          []
-        await Promise.all(
-          gitignoreEntries.map(async (entry) => {
-            try {
-              const result = await readFilePreview(
-                folderPath,
-                entry.relativePath
-              )
-              const lastSlash = entry.relativePath.lastIndexOf("/")
-              const dir =
-                lastSlash === -1 ? "" : entry.relativePath.slice(0, lastSlash)
-              matchers.push({
-                prefix: dir ? dir + "/" : "",
-                matcher: ig().add(result.content),
-              })
-            } catch {
-              // skip unreadable .gitignore
-            }
-          })
-        )
-
-        // Sort matchers by prefix length (shortest/root first) so that
-        // parent rules are evaluated before child rules.
-        matchers.sort((a, b) => a.prefix.length - b.prefix.length)
-
-        // Filter: check each entry against all applicable .gitignore matchers
-        const ignoredDirs = new Set<string>()
-        const filtered = flat.filter((f) => {
-          // Skip .gitignore files themselves from results
-          if (f.name === ".gitignore") return false
-          // If an ancestor directory is already ignored, skip — O(depth) lookup
-          if (hasIgnoredAncestor(f.relativePath, ignoredDirs)) return false
-          for (const { prefix, matcher } of matchers) {
-            if (!f.relativePath.startsWith(prefix)) continue
-            const relPath = f.relativePath.slice(prefix.length)
-            if (!relPath) continue
-            const testPath = f.kind === "dir" ? `${relPath}/` : relPath
-            if (matcher.ignores(testPath)) {
-              if (f.kind === "dir") ignoredDirs.add(f.relativePath)
-              return false
-            }
-          }
-          return true
-        })
-
-        if (!canceled) {
-          setAllFiles(filtered)
-          filesLoadedRef.current = true
-        }
-      } catch {
-        if (!canceled) setAllFiles([])
-      } finally {
-        if (!canceled) setFilesLoading(false)
-      }
-    }
-
-    void load()
-    return () => {
-      canceled = true
-    }
-  }, [activeTab, folderPath])
 
   // Filter files by query using pre-computed lowercase fields
   const filteredFiles = useMemo(() => {
@@ -253,10 +130,9 @@ export function SearchCommandDialog({
       setAgentFilter(null)
       setResults([])
       setActiveTab("conversations")
-      filesLoadedRef.current = false
-      setAllFiles([])
+      resetFileTree()
     }
-  }, [open])
+  }, [open, resetFileTree])
 
   const handleSelectConversation = useCallback(
     (conv: DbConversationSummary) => {
