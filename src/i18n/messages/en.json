@@ -1009,6 +1009,7 @@
     "commitDialog": {
       "toasts": {
         "commitCompleted": "Code commit completed",
+        "pushFailed": "Push failed",
         "committedFiles": "Committed {count, plural, one {# file} other {# files}}",
         "addedToVcs": "Added to VCS",
         "addToVcsFailed": "Failed to add to VCS",
@@ -1050,6 +1051,7 @@
       "commitMessage": "Commit message",
       "commitMessagePlaceholder": "Enter commit message...",
       "commitButton": "Commit ({count})",
+      "commitAndPushButton": "Commit and Push ({count})",
       "head": "HEAD",
       "workingTree": "Working Tree",
       "clickFileToDiff": "Click a file name to view diff",

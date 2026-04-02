@@ -111,6 +111,7 @@ function PushPageInner() {
           <PushWorkspace
             folderPath={folder.path}
             folderName={folder.name}
+            folderId={folder.id}
             onPushed={closeWindow}
           />
         ) : null}

@@ -14,6 +14,7 @@ import { AppToaster } from "@/components/ui/app-toaster"
 import { getFolder } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import type { FolderDetail } from "@/lib/types"
+import { GitCredentialProvider } from "@/contexts/git-credential-context"
 
 const TOAST_DURATION_MS = 6000
 
@@ -85,45 +86,48 @@ function CommitPageInner() {
   }, [pageTitle])
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <AppTitleBar
-        center={
-          <div className="text-sm font-semibold tracking-tight">
-            {t("title")}
-            {hasValidFolderId && folder ? ` · ${folder.name}` : ""}
-          </div>
-        }
-      />
+    <GitCredentialProvider>
+      <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+        <AppTitleBar
+          center={
+            <div className="text-sm font-semibold tracking-tight">
+              {t("title")}
+              {hasValidFolderId && folder ? ` · ${folder.name}` : ""}
+            </div>
+          }
+        />
 
-      <main className="flex-1 min-h-0 p-3">
-        {!hasValidFolderId ? (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {t("invalidFolderId")}
-          </div>
-        ) : loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t("loadingRepo")}
-          </div>
-        ) : error ? (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        ) : folder ? (
-          <CommitWorkspace
-            folderPath={folder.path}
-            onCommitted={closeWindow}
-            onCancel={closeWindow}
-          />
-        ) : null}
-      </main>
+        <main className="flex-1 min-h-0 p-3">
+          {!hasValidFolderId ? (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {t("invalidFolderId")}
+            </div>
+          ) : loading ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t("loadingRepo")}
+            </div>
+          ) : error ? (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          ) : folder ? (
+            <CommitWorkspace
+              folderPath={folder.path}
+              folderId={folder.id}
+              onCommitted={closeWindow}
+              onCancel={closeWindow}
+            />
+          ) : null}
+        </main>
 
-      <AppToaster
-        position="bottom-right"
-        duration={TOAST_DURATION_MS}
-        closeButton
-      />
-    </div>
+        <AppToaster
+          position="bottom-right"
+          duration={TOAST_DURATION_MS}
+          closeButton
+        />
+      </div>
+    </GitCredentialProvider>
   )
 }
 
