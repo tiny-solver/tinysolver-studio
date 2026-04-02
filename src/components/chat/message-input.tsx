@@ -29,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
 import { cn, randomUUID } from "@/lib/utils"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
@@ -303,6 +304,9 @@ export function MessageInput({
   })
   const [attachments, setAttachments] = useState<InputAttachment[]>([])
   const [isDragActive, setIsDragActive] = useState(false)
+  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(
+    null
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastDomDropAtRef = useRef(0)
@@ -393,6 +397,13 @@ export function MessageInput({
           attachment.type === "image"
       ),
     [attachments]
+  )
+  const previewAttachment = useMemo(
+    () =>
+      previewAttachmentId
+        ? (imageAttachments.find((a) => a.id === previewAttachmentId) ?? null)
+        : null,
+    [previewAttachmentId, imageAttachments]
   )
   const resourceAttachments = useMemo(
     () =>
@@ -1275,14 +1286,20 @@ export function MessageInput({
                     key={attachment.id}
                     className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
                   >
-                    <Image
-                      src={`data:${attachment.mimeType};base64,${attachment.data}`}
-                      alt={attachment.name}
-                      width={56}
-                      height={56}
-                      unoptimized
-                      className="h-14 w-14 object-cover"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAttachmentId(attachment.id)}
+                      className="cursor-pointer transition-opacity hover:opacity-80"
+                    >
+                      <Image
+                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                        alt={attachment.name}
+                        width={56}
+                        height={56}
+                        unoptimized
+                        className="h-14 w-14 object-cover"
+                      />
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeAttachment(attachment.id)}
@@ -1378,6 +1395,18 @@ export function MessageInput({
           {t("dropFilesToAttach")}
         </div>
       )}
+      <ImagePreviewDialog
+        src={
+          previewAttachment
+            ? `data:${previewAttachment.mimeType};base64,${previewAttachment.data}`
+            : ""
+        }
+        alt={previewAttachment?.name ?? ""}
+        open={previewAttachment !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAttachmentId(null)
+        }}
+      />
     </div>
   )
 }
