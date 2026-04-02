@@ -1719,7 +1719,7 @@
     "weixinQrcodeExpired": "二维码已过期。",
     "weixinRefreshQrcode": "刷新二维码",
     "weixinWaitingScan": "等待扫码...",
-    "weixinOpenQrcode": "在浏览器中打开二维码",
+    "weixinPollError": "连接不稳定，正在重试...",
     "connect": "连接",
     "disconnect": "断开",
     "test": "测试连接",

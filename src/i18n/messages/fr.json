@@ -1719,7 +1719,7 @@
     "weixinQrcodeExpired": "QR code expiré.",
     "weixinRefreshQrcode": "Actualiser",
     "weixinWaitingScan": "En attente du scan...",
-    "weixinOpenQrcode": "Ouvrir le QR code dans le navigateur",
+    "weixinPollError": "Connexion instable, nouvelle tentative...",
     "connect": "Connecter",
     "disconnect": "Déconnecter",
     "test": "Tester la connexion",

@@ -1455,8 +1455,6 @@ export async function weixinCheckQrcode(
   qrcode: string
 ): Promise<{
   status: string
-  bot_token?: string
-  base_url?: string
 }> {
   return getTransport().call("weixin_check_qrcode", { channelId, qrcode })
 }

@@ -13,6 +13,24 @@ use crate::chat_channel::traits::ChatChannelBackend;
 use crate::chat_channel::types::*;
 
 const ILINK_BASE_URL: &str = "https://ilinkai.weixin.qq.com";
+const ILINK_CHANNEL_VERSION: &str = "1.0.2";
+/// Maximum number of messages buffered while context_token is expired.
+const MAX_PENDING_MESSAGES: usize = 50;
+
+/// Shared HTTP client for QR code auth requests (avoids re-creating TLS state).
+fn qr_client() -> reqwest::Client {
+    use std::sync::OnceLock;
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(15))
+                .build()
+                .unwrap_or_default()
+        })
+        .clone()
+}
 
 // ── QR code auth types (public, used by commands) ──
 
@@ -25,16 +43,24 @@ pub struct WeixinQrcodeInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WeixinQrcodeStatus {
     pub status: String,
+    /// bot_token and base_url are consumed by the _core command layer and
+    /// stripped before the response reaches the frontend.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bot_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
 }
 
+/// Frontend-safe subset of [`WeixinQrcodeStatus`] — no credentials.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeixinQrcodeStatusPublic {
+    pub status: String,
+}
+
 // ── QR code auth functions (called before backend exists) ──
 
 pub async fn weixin_get_qrcode() -> Result<WeixinQrcodeInfo, ChatChannelError> {
-    let client = reqwest::Client::new();
+    let client = qr_client();
     let resp = client
         .get(format!("{ILINK_BASE_URL}/ilink/bot/get_bot_qrcode"))
         .query(&[("bot_type", "3")])
@@ -64,14 +90,15 @@ pub async fn weixin_get_qrcode() -> Result<WeixinQrcodeInfo, ChatChannelError> {
         ));
     }
 
-    // If the image content is a URL, fetch the actual image bytes and
-    // convert to a data-URI so the frontend can display it without CORS issues.
+    // If the image content is a URL, try to fetch the actual image bytes.
+    // If the URL points to an HTML SPA (which renders the QR code via JS),
+    // generate the QR code ourselves — the SPA simply encodes the page URL.
     let qrcode_img_content = if raw_img.starts_with("http://") || raw_img.starts_with("https://") {
         match fetch_image_as_data_uri(&client, &raw_img).await {
             Ok(data_uri) => data_uri,
-            Err(e) => {
-                eprintln!("[Weixin] failed to proxy QR image: {e}, falling back to URL");
-                raw_img
+            Err(_) => {
+                eprintln!("[Weixin] URL is an SPA page, generating QR code from URL");
+                generate_qrcode_data_uri(&raw_img)?
             }
         }
     } else {
@@ -85,6 +112,9 @@ pub async fn weixin_get_qrcode() -> Result<WeixinQrcodeInfo, ChatChannelError> {
 }
 
 /// Fetch an image from a URL and return it as a `data:<mime>;base64,...` string.
+///
+/// Returns an error if the URL points to an HTML page (SPA) rather than a
+/// raw image — the caller will generate a QR code from the URL instead.
 async fn fetch_image_as_data_uri(
     client: &reqwest::Client,
     url: &str,
@@ -107,11 +137,10 @@ async fn fetch_image_as_data_uri(
         .unwrap_or("image/png")
         .to_string();
 
-    // If the server returned HTML instead of an image, bail out
     if content_type.contains("text/html") || content_type.contains("text/plain") {
-        return Err(ChatChannelError::ConnectionFailed(format!(
-            "Expected image but got {content_type}"
-        )));
+        return Err(ChatChannelError::ConnectionFailed(
+            "QR code URL is an SPA page".into(),
+        ));
     }
 
     let bytes = resp
@@ -119,16 +148,48 @@ async fn fetch_image_as_data_uri(
         .await
         .map_err(|e| ChatChannelError::ConnectionFailed(format!("Image read failed: {e}")))?;
 
+    if bytes.is_empty() {
+        return Err(ChatChannelError::ConnectionFailed(
+            "Empty image response".into(),
+        ));
+    }
     let b64 = B64.encode(&bytes);
-    // Normalize content-type: strip parameters like charset
     let mime = content_type.split(';').next().unwrap_or("image/png").trim();
     Ok(format!("data:{mime};base64,{b64}"))
+}
+
+/// Generate a QR code image encoding the given text and return as a PNG data URI.
+///
+/// The iLink QR page is a SPA that renders `window.location.href` as a QR code.
+/// We replicate that logic server-side so the frontend can display it directly.
+fn generate_qrcode_data_uri(content: &str) -> Result<String, ChatChannelError> {
+    use image::{codecs::png::PngEncoder, ImageEncoder, Luma};
+    use qrcode::QrCode;
+
+    let code = QrCode::new(content.as_bytes()).map_err(|e| {
+        ChatChannelError::ConnectionFailed(format!("QR code generation failed: {e}"))
+    })?;
+
+    let img = code
+        .render::<Luma<u8>>()
+        .quiet_zone(true)
+        .min_dimensions(250, 250)
+        .build();
+    let (w, h) = (img.width(), img.height());
+
+    let mut png_buf: Vec<u8> = Vec::new();
+    PngEncoder::new(&mut png_buf)
+        .write_image(img.as_raw(), w, h, image::ExtendedColorType::L8)
+        .map_err(|e| ChatChannelError::ConnectionFailed(format!("PNG encoding failed: {e}")))?;
+
+    let b64 = B64.encode(&png_buf);
+    Ok(format!("data:image/png;base64,{b64}"))
 }
 
 pub async fn weixin_check_qrcode(
     qrcode: &str,
 ) -> Result<WeixinQrcodeStatus, ChatChannelError> {
-    let client = reqwest::Client::new();
+    let client = qr_client();
     let resp = client
         .get(format!("{ILINK_BASE_URL}/ilink/bot/get_qrcode_status"))
         .query(&[("qrcode", qrcode)])
@@ -181,10 +242,15 @@ pub struct WeixinBackend {
     reply_context: Arc<Mutex<Option<WeixinReplyContext>>>,
     /// Messages that failed due to expired context_token, resend on next refresh.
     pending_messages: Arc<Mutex<Vec<String>>>,
+    /// Stable X-WECHAT-UIN value for this backend instance.
+    wechat_uin: String,
 }
 
 impl WeixinBackend {
     pub fn new(channel_id: i32, bot_token: String, base_url: String) -> Self {
+        let uin_raw = rand::thread_rng().gen::<u32>().to_string();
+        let wechat_uin = B64.encode(uin_raw.as_bytes());
+
         Self {
             bot_token,
             base_url,
@@ -198,10 +264,11 @@ impl WeixinBackend {
             shutdown_tx: Arc::new(Mutex::new(None)),
             reply_context: Arc::new(Mutex::new(None)),
             pending_messages: Arc::new(Mutex::new(Vec::new())),
+            wechat_uin,
         }
     }
 
-    fn build_headers(bot_token: &str) -> HeaderMap {
+    fn build_headers(bot_token: &str, wechat_uin: &str) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert("Content-Type", HeaderValue::from_static("application/json"));
         headers.insert(
@@ -209,9 +276,7 @@ impl WeixinBackend {
             HeaderValue::from_static("ilink_bot_token"),
         );
 
-        let uin_raw = rand::thread_rng().gen::<u32>().to_string();
-        let uin_b64 = B64.encode(uin_raw.as_bytes());
-        if let Ok(val) = HeaderValue::from_str(&uin_b64) {
+        if let Ok(val) = HeaderValue::from_str(wechat_uin) {
             headers.insert("X-WECHAT-UIN", val);
         }
 
@@ -221,6 +286,95 @@ impl WeixinBackend {
         }
 
         headers
+    }
+
+    /// Build the JSON body for the iLink sendmessage API.
+    fn build_send_body(
+        to_user_id: &str,
+        context_token: &str,
+        text: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "msg": {
+                "from_user_id": "",
+                "to_user_id": to_user_id,
+                "client_id": format!("codeg-{}", uuid::Uuid::new_v4()),
+                "message_type": 2,
+                "message_state": 2,
+                "context_token": context_token,
+                "item_list": [{
+                    "type": 1,
+                    "text_item": { "text": text }
+                }]
+            },
+            "base_info": { "channel_version": ILINK_CHANNEL_VERSION }
+        })
+    }
+
+    /// Send a message via the iLink API and handle the response.
+    /// Returns `Ok(true)` if sent, `Ok(false)` if buffered due to expired context.
+    async fn do_send(
+        client: &reqwest::Client,
+        base_url: &str,
+        bot_token: &str,
+        wechat_uin: &str,
+        to_user_id: &str,
+        context_token: &str,
+        text: &str,
+        reply_context: &Mutex<Option<WeixinReplyContext>>,
+        pending_messages: &Mutex<Vec<String>>,
+    ) -> Result<bool, ChatChannelError> {
+        let body = Self::build_send_body(to_user_id, context_token, text);
+        let url = format!("{base_url}/ilink/bot/sendmessage");
+
+        let resp = client
+            .post(&url)
+            .headers(Self::build_headers(bot_token, wechat_uin))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+
+        let status_code = resp.status();
+        let resp_text = resp.text().await.unwrap_or_default();
+
+        if !status_code.is_success() {
+            return Err(ChatChannelError::SendFailed(format!(
+                "HTTP {status_code}: {resp_text}"
+            )));
+        }
+
+        // Check for ret errors in response (e.g. -2 = context expired)
+        if let Ok(resp_json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
+            if let Some(ret) = resp_json.get("ret").and_then(|v| v.as_i64()) {
+                if ret != 0 {
+                    let errmsg = resp_json
+                        .get("errmsg")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    eprintln!("[Weixin] sendmessage ret={ret}, errmsg={errmsg}");
+
+                    if ret == -2 {
+                        // Context token expired — mark stale and buffer
+                        if let Some(ref mut c) = *reply_context.lock().await {
+                            c.expired = true;
+                        }
+                        let mut buf = pending_messages.lock().await;
+                        if buf.len() < MAX_PENDING_MESSAGES {
+                            buf.push(text.to_string());
+                        }
+                        eprintln!("[Weixin] context_token expired (ret=-2), buffered message");
+                        return Ok(false);
+                    }
+
+                    return Err(ChatChannelError::SendFailed(format!(
+                        "ret={ret}: {errmsg}"
+                    )));
+                }
+            }
+        }
+
+        Ok(true)
     }
 
     async fn send_text(
@@ -249,79 +403,33 @@ impl WeixinBackend {
                 "[Weixin] context expired, buffering message (len={})",
                 text.len()
             );
-            self.pending_messages.lock().await.push(text.to_string());
+            let mut buf = self.pending_messages.lock().await;
+            if buf.len() < MAX_PENDING_MESSAGES {
+                buf.push(text.to_string());
+            } else {
+                eprintln!("[Weixin] pending buffer full, dropping message");
+            }
             return Ok(SentMessageId(String::new()));
         }
 
-        let client_id = format!("codeg-{}", uuid::Uuid::new_v4());
-        let body = serde_json::json!({
-            "msg": {
-                "from_user_id": "",
-                "to_user_id": to_user_id,
-                "client_id": client_id,
-                "message_type": 2,
-                "message_state": 2,
-                "context_token": context_token,
-                "item_list": [{
-                    "type": 1,
-                    "text_item": { "text": text }
-                }]
-            },
-            "base_info": { "channel_version": "1.0.2" }
-        });
-
-        let url = format!("{}/ilink/bot/sendmessage", self.base_url);
         eprintln!(
             "[Weixin] sendmessage to={to_user_id}, context_token_len={}, text_len={}",
             context_token.len(),
             text.len()
         );
 
-        let resp = self
-            .client
-            .post(&url)
-            .headers(Self::build_headers(&self.bot_token))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
-
-        let status_code = resp.status();
-        let resp_text = resp.text().await.unwrap_or_default();
-        eprintln!("[Weixin] sendmessage response: status={status_code}, body={resp_text}");
-
-        if !status_code.is_success() {
-            return Err(ChatChannelError::SendFailed(format!(
-                "HTTP {status_code}: {resp_text}"
-            )));
-        }
-
-        // Check for ret errors in response (e.g. -2 = context expired)
-        if let Ok(resp_json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
-            if let Some(ret) = resp_json.get("ret").and_then(|v| v.as_i64()) {
-                if ret != 0 {
-                    let errmsg = resp_json
-                        .get("errmsg")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown");
-                    eprintln!("[Weixin] sendmessage ret={ret}, errmsg={errmsg}");
-
-                    if ret == -2 {
-                        // Context token expired — mark stale and buffer
-                        if let Some(ref mut c) = *self.reply_context.lock().await {
-                            c.expired = true;
-                        }
-                        self.pending_messages.lock().await.push(text.to_string());
-                        eprintln!("[Weixin] context_token expired (ret=-2), buffered message");
-                        return Ok(SentMessageId(String::new()));
-                    }
-
-                    return Err(ChatChannelError::SendFailed(format!(
-                        "ret={ret}: {errmsg}"
-                    )));
-                }
-            }
-        }
+        Self::do_send(
+            &self.client,
+            &self.base_url,
+            &self.bot_token,
+            &self.wechat_uin,
+            &to_user_id,
+            &context_token,
+            text,
+            &self.reply_context,
+            &self.pending_messages,
+        )
+        .await?;
 
         Ok(SentMessageId(String::new()))
     }
@@ -348,7 +456,7 @@ impl ChatChannelBackend for WeixinBackend {
         // Verify auth by doing a quick getupdates with empty cursor
         let verify_body = serde_json::json!({
             "get_updates_buf": "",
-            "base_info": { "channel_version": "1.0.2" }
+            "base_info": { "channel_version": ILINK_CHANNEL_VERSION }
         });
         let url = format!("{}/ilink/bot/getupdates", self.base_url);
         eprintln!("[Weixin] verify POST {url}");
@@ -356,7 +464,7 @@ impl ChatChannelBackend for WeixinBackend {
         let resp = self
             .client
             .post(&url)
-            .headers(Self::build_headers(&self.bot_token))
+            .headers(Self::build_headers(&self.bot_token, &self.wechat_uin))
             .json(&verify_body)
             .send()
             .await
@@ -379,6 +487,13 @@ impl ChatChannelBackend for WeixinBackend {
             .get("ret")
             .and_then(|v| v.as_i64())
             .unwrap_or(-1);
+
+        // Check for known auth-failure codes
+        if ret == -14 {
+            return Err(ChatChannelError::AuthenticationFailed(
+                "Session expired (ret=-14), please re-authenticate".into(),
+            ));
+        }
 
         // The iLink API may omit the `ret` field or return non-zero on the first
         // call. Always extract the cursor if present — it's needed for polling.
@@ -404,6 +519,7 @@ impl ChatChannelBackend for WeixinBackend {
         let client = self.client.clone();
         let bot_token = self.bot_token.clone();
         let base_url = self.base_url.clone();
+        let wechat_uin = self.wechat_uin.clone();
         let channel_id = self.channel_id;
         let status = self.status.clone();
         let reply_context = self.reply_context.clone();
@@ -420,13 +536,13 @@ impl ChatChannelBackend for WeixinBackend {
 
                 let body = serde_json::json!({
                     "get_updates_buf": cursor,
-                    "base_info": { "channel_version": "1.0.2" }
+                    "base_info": { "channel_version": ILINK_CHANNEL_VERSION }
                 });
 
                 let result = tokio::select! {
                     r = client
                         .post(format!("{base_url}/ilink/bot/getupdates"))
-                        .headers(WeixinBackend::build_headers(&bot_token))
+                        .headers(WeixinBackend::build_headers(&bot_token, &wechat_uin))
                         .json(&body)
                         .send() => r,
                     _ = shutdown_rx.changed() => break,
@@ -521,19 +637,21 @@ impl ChatChannelBackend for WeixinBackend {
                                         .unwrap_or_default();
 
                                     // Store reply context for outbound messages
+                                    // Single lock scope to avoid TOCTOU
                                     if !from_user_id.is_empty() && !context_token.is_empty() {
-                                        let was_expired = reply_context
-                                            .lock()
-                                            .await
-                                            .as_ref()
-                                            .map(|c| c.expired)
-                                            .unwrap_or(false);
-
-                                        *reply_context.lock().await = Some(WeixinReplyContext {
-                                            to_user_id: from_user_id.to_string(),
-                                            context_token: context_token.to_string(),
-                                            expired: false,
-                                        });
+                                        let was_expired = {
+                                            let mut guard = reply_context.lock().await;
+                                            let was = guard
+                                                .as_ref()
+                                                .map(|c| c.expired)
+                                                .unwrap_or(false);
+                                            *guard = Some(WeixinReplyContext {
+                                                to_user_id: from_user_id.to_string(),
+                                                context_token: context_token.to_string(),
+                                                expired: false,
+                                            });
+                                            was
+                                        };
 
                                         // Resend buffered messages with fresh context
                                         if was_expired {
@@ -545,52 +663,29 @@ impl ChatChannelBackend for WeixinBackend {
                                                     buffered.len()
                                                 );
                                                 for pending_text in &buffered {
-                                                    let cid =
-                                                        format!("codeg-{}", uuid::Uuid::new_v4());
-                                                    let send_body = serde_json::json!({
-                                                        "msg": {
-                                                            "from_user_id": "",
-                                                            "to_user_id": from_user_id,
-                                                            "client_id": cid,
-                                                            "message_type": 2,
-                                                            "message_state": 2,
-                                                            "context_token": context_token,
-                                                            "item_list": [{
-                                                                "type": 1,
-                                                                "text_item": { "text": pending_text }
-                                                            }]
-                                                        },
-                                                        "base_info": { "channel_version": "1.0.2" }
-                                                    });
-                                                    let send_ok = match client
-                                                        .post(format!(
-                                                            "{base_url}/ilink/bot/sendmessage"
-                                                        ))
-                                                        .headers(WeixinBackend::build_headers(
-                                                            &bot_token,
-                                                        ))
-                                                        .json(&send_body)
-                                                        .send()
-                                                        .await
-                                                    {
-                                                        Ok(r) => {
-                                                            let ok = r.status().is_success();
-                                                            if !ok {
-                                                                eprintln!("[Weixin] resend failed: HTTP {}", r.status());
-                                                            }
-                                                            ok
+                                                    let ok = WeixinBackend::do_send(
+                                                        &client,
+                                                        &base_url,
+                                                        &bot_token,
+                                                        &wechat_uin,
+                                                        from_user_id,
+                                                        context_token,
+                                                        pending_text,
+                                                        &reply_context,
+                                                        &pending_messages,
+                                                    )
+                                                    .await;
+                                                    if let Err(e) = ok {
+                                                        eprintln!("[Weixin] resend error: {e}");
+                                                        // Re-buffer remaining on hard error
+                                                        let mut buf =
+                                                            pending_messages.lock().await;
+                                                        if buf.len() < MAX_PENDING_MESSAGES {
+                                                            buf.push(pending_text.clone());
                                                         }
-                                                        Err(e) => {
-                                                            eprintln!("[Weixin] resend error: {e}");
-                                                            false
-                                                        }
-                                                    };
-                                                    if !send_ok {
-                                                        // Re-buffer remaining messages
-                                                        pending_messages.lock().await.push(
-                                                            pending_text.clone(),
-                                                        );
                                                     }
+                                                    // If do_send returned Ok(false), it
+                                                    // already re-buffered internally.
                                                 }
                                             }
                                         }
@@ -662,14 +757,14 @@ impl ChatChannelBackend for WeixinBackend {
     async fn test_connection(&self) -> Result<(), ChatChannelError> {
         let body = serde_json::json!({
             "get_updates_buf": "",
-            "base_info": { "channel_version": "1.0.2" }
+            "base_info": { "channel_version": ILINK_CHANNEL_VERSION }
         });
 
         let url = format!("{}/ilink/bot/getupdates", self.base_url);
         let resp = self
             .client
             .post(&url)
-            .headers(Self::build_headers(&self.bot_token))
+            .headers(Self::build_headers(&self.bot_token, &self.wechat_uin))
             .json(&body)
             .send()
             .await
@@ -683,9 +778,7 @@ impl ChatChannelBackend for WeixinBackend {
 
         eprintln!("[Weixin] test_connection: status={status_code}, body={resp_text}");
 
-        // As long as we got a valid JSON response from the server, treat it as reachable.
-        // The iLink API may return ret != 0 on first empty-cursor call.
-        let _: serde_json::Value = serde_json::from_str(&resp_text).map_err(|e| {
+        let resp_json: serde_json::Value = serde_json::from_str(&resp_text).map_err(|e| {
             ChatChannelError::ConnectionFailed(format!("Not valid JSON: {e}"))
         })?;
 
@@ -693,6 +786,15 @@ impl ChatChannelBackend for WeixinBackend {
             return Err(ChatChannelError::AuthenticationFailed(format!(
                 "HTTP {status_code}"
             )));
+        }
+
+        // Check for known auth-failure codes
+        if let Some(ret) = resp_json.get("ret").and_then(|v| v.as_i64()) {
+            if ret == -14 {
+                return Err(ChatChannelError::AuthenticationFailed(
+                    "Session expired (ret=-14)".into(),
+                ));
+            }
         }
 
         Ok(())

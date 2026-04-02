@@ -1,5 +1,5 @@
 use crate::app_error::AppCommandError;
-use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatus};
+use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatusPublic};
 use crate::chat_channel::manager::ChatChannelManager;
 use crate::chat_channel::types::ChannelType;
 use crate::db::service::{chat_channel_message_log_service, chat_channel_service};
@@ -351,7 +351,7 @@ pub async fn weixin_check_qrcode_core(
     db: &AppDatabase,
     channel_id: i32,
     qrcode: &str,
-) -> Result<WeixinQrcodeStatus, AppCommandError> {
+) -> Result<WeixinQrcodeStatusPublic, AppCommandError> {
     let result = crate::chat_channel::backends::weixin::weixin_check_qrcode(qrcode)
         .await
         .map_err(AppCommandError::from)?;
@@ -386,7 +386,10 @@ pub async fn weixin_check_qrcode_core(
         }
     }
 
-    Ok(result)
+    // Return only the status — never expose bot_token to the frontend
+    Ok(WeixinQrcodeStatusPublic {
+        status: result.status,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -569,6 +572,6 @@ pub async fn weixin_check_qrcode(
     db: tauri::State<'_, AppDatabase>,
     channel_id: i32,
     qrcode: String,
-) -> Result<WeixinQrcodeStatus, AppCommandError> {
+) -> Result<WeixinQrcodeStatusPublic, AppCommandError> {
     weixin_check_qrcode_core(&db, channel_id, &qrcode).await
 }

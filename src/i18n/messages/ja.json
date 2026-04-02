@@ -1719,7 +1719,7 @@
     "weixinQrcodeExpired": "QRコードの有効期限が切れました。",
     "weixinRefreshQrcode": "更新",
     "weixinWaitingScan": "スキャン待ち...",
-    "weixinOpenQrcode": "ブラウザでQRコードを開く",
+    "weixinPollError": "接続が不安定です。再試行中...",
     "connect": "接続",
     "disconnect": "切断",
     "test": "接続テスト",

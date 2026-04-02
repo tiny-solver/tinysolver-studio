@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ExternalLink, Loader2, RefreshCw } from "lucide-react"
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { weixinGetQrcode, weixinCheckQrcode } from "@/lib/api"
+
+/** Client-side QR code expiry (5 minutes). */
+const QR_EXPIRY_MS = 5 * 60 * 1000
+/** Show a warning after this many consecutive polling failures. */
+const POLL_ERROR_WARN_THRESHOLD = 3
 
 interface WeixinQrcodeDialogProps {
   open: boolean
@@ -31,19 +36,31 @@ function WeixinQrcodeContent({
 }) {
   const t = useTranslations("ChatChannelSettings")
   const [qrcodeImg, setQrcodeImg] = useState<string | null>(null)
-  const [qrcodeUrl, setQrcodeUrl] = useState<string | null>(null)
-  const [imgFailed, setImgFailed] = useState(false)
   const [qrcodeId, setQrcodeId] = useState<string | null>(null)
   const [status, setStatus] = useState<"loading" | "waiting" | "expired">(
     "loading"
   )
   const [error, setError] = useState<string | null>(null)
+  const [pollErrors, setPollErrors] = useState(0)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const expiryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Stabilise callbacks via ref so the polling effect doesn't re-trigger
+  const onAuthSuccessRef = useRef(onAuthSuccess)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onAuthSuccessRef.current = onAuthSuccess
+    onCloseRef.current = onClose
+  })
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
+    }
+    if (expiryRef.current) {
+      clearTimeout(expiryRef.current)
+      expiryRef.current = null
     }
   }, [])
 
@@ -51,9 +68,8 @@ function WeixinQrcodeContent({
     setStatus("loading")
     setError(null)
     setQrcodeImg(null)
-    setQrcodeUrl(null)
-    setImgFailed(false)
     setQrcodeId(null)
+    setPollErrors(0)
     stopPolling()
 
     try {
@@ -62,15 +78,9 @@ function WeixinQrcodeContent({
 
       if (result.qrcode_img_content) {
         const raw = result.qrcode_img_content
-        // Keep the original URL for fallback link
-        if (raw.startsWith("http")) {
-          setQrcodeUrl(raw)
-        }
         const imgSrc = raw.startsWith("data:")
           ? raw
-          : raw.startsWith("http")
-            ? raw
-            : `data:image/png;base64,${raw}`
+          : `data:image/png;base64,${raw}`
         setQrcodeImg(imgSrc)
       }
 
@@ -82,35 +92,42 @@ function WeixinQrcodeContent({
     }
   }, [stopPolling])
 
-  // Fetch QR code on mount + cleanup polling on unmount
+  // Fetch QR code on mount + cleanup on unmount
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
     fetchQrcode()
     return () => stopPolling()
   }, [fetchQrcode, stopPolling])
 
-  // Start polling when we have a qrcodeId
+  // Start polling + expiry timer when we have a qrcodeId
   useEffect(() => {
     if (!qrcodeId || status !== "waiting") return
+
+    // Client-side expiry guard
+    expiryRef.current = setTimeout(() => {
+      stopPolling()
+      setStatus("expired")
+    }, QR_EXPIRY_MS)
 
     pollingRef.current = setInterval(async () => {
       try {
         const result = await weixinCheckQrcode(channelId, qrcodeId)
+        setPollErrors(0)
         if (result.status === "confirmed") {
           stopPolling()
-          onAuthSuccess(channelId)
-          onClose()
+          onAuthSuccessRef.current(channelId)
+          onCloseRef.current()
         } else if (result.status === "expired") {
           stopPolling()
           setStatus("expired")
         }
       } catch {
-        // Polling error — keep trying
+        setPollErrors((n) => n + 1)
       }
     }, 2000)
 
     return () => stopPolling()
-  }, [qrcodeId, status, channelId, stopPolling, onAuthSuccess, onClose])
+  }, [qrcodeId, status, channelId, stopPolling])
 
   return (
     <div className="flex flex-col items-center gap-4 py-4">
@@ -126,32 +143,23 @@ function WeixinQrcodeContent({
 
       {status === "waiting" && qrcodeImg && (
         <>
-          {!imgFailed ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrcodeImg}
-                alt="WeChat QR Code"
-                className="h-48 w-48 rounded-md"
-                referrerPolicy="no-referrer"
-                onError={() => setImgFailed(true)}
-              />
-            </>
-          ) : qrcodeUrl ? (
-            <a
-              href={qrcodeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-48 w-48 flex-col items-center justify-center gap-2 rounded-md border border-dashed text-sm text-muted-foreground hover:bg-muted"
-            >
-              <ExternalLink className="h-6 w-6" />
-              {t("weixinOpenQrcode")}
-            </a>
-          ) : null}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qrcodeImg}
+            alt="WeChat QR Code"
+            className="h-48 w-48 rounded-md"
+            referrerPolicy="no-referrer"
+          />
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             {t("weixinWaitingScan")}
           </p>
+          {pollErrors >= POLL_ERROR_WARN_THRESHOLD && (
+            <div className="flex items-center gap-1.5 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-1.5 text-xs text-yellow-500">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              {t("weixinPollError")}
+            </div>
+          )}
         </>
       )}
 

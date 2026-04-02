@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::app_error::AppCommandError;
 use crate::app_state::AppState;
 use crate::commands::chat_channel as cc_commands;
-use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatus};
+use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatusPublic};
 use crate::models::chat_channel::{ChannelStatusInfo, ChatChannelInfo, ChatChannelMessageLogInfo};
 
 // ---------------------------------------------------------------------------
@@ -268,7 +268,7 @@ pub struct WeixinCheckQrcodeParams {
 pub async fn weixin_check_qrcode(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<WeixinCheckQrcodeParams>,
-) -> Result<Json<WeixinQrcodeStatus>, AppCommandError> {
+) -> Result<Json<WeixinQrcodeStatusPublic>, AppCommandError> {
     let result =
         cc_commands::weixin_check_qrcode_core(&state.db, params.channel_id, &params.qrcode)
             .await?;
