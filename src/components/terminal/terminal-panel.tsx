@@ -18,6 +18,8 @@ export function TerminalPanel() {
           <TerminalView
             key={tab.id}
             terminalId={tab.id}
+            workingDir={tab.workingDir}
+            initialCommand={tab.initialCommand}
             isActive={tab.id === activeTabId}
             isVisible={isOpen}
           />

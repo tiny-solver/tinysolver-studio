@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { terminalSpawn, terminalKill } from "@/lib/api"
+import { terminalKill } from "@/lib/api"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
@@ -18,6 +18,8 @@ import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 export interface TerminalTab {
   id: string
   title: string
+  workingDir: string
+  initialCommand?: string
 }
 
 const DEFAULT_HEIGHT = 300
@@ -67,12 +69,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useState<TerminalTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const tabCounterRef = useRef(0)
-  const spawningRef = useRef(false)
-  const suppressAutoCreateRef = useRef(false)
   const lastMouseActivityInTerminalRef = useRef(false)
   // Keep a ref of tabs for cleanup on unmount (effect [] captures stale state)
   const tabsRef = useRef(tabs)
-  tabsRef.current = tabs
+  useEffect(() => {
+    tabsRef.current = tabs
+  }, [tabs])
 
   const folderPath = folder?.path ?? ""
 
@@ -83,54 +85,66 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const toggle = useCallback(() => {
-    setIsOpen((prev) => !prev)
-  }, [])
+    const autoId = crypto.randomUUID()
+    const nextCounter = tabCounterRef.current + 1
+
+    setIsOpen((wasOpen) => !wasOpen)
+
+    // Auto-create first terminal when opening with no tabs
+    setTabs((currentTabs) => {
+      if (currentTabs.length > 0 || !folderPath) return currentTabs
+      tabCounterRef.current = nextCounter
+      return [
+        {
+          id: autoId,
+          title: `Terminal ${nextCounter}`,
+          workingDir: folderPath,
+        },
+      ]
+    })
+
+    setActiveTabId((prev) => {
+      if (prev !== null) return prev
+      if (!folderPath) return null
+      return autoId
+    })
+  }, [folderPath])
 
   const createTerminalWithCommand = useCallback(
     async (title: string, command: string) => {
       if (!folderPath) return null
 
-      suppressAutoCreateRef.current = true
       setIsOpen(true)
 
-      try {
-        const id = await terminalSpawn(folderPath, command)
-        tabCounterRef.current += 1
-        setTabs((prev) => [...prev, { id, title }])
-        setActiveTabId(id)
-        return id
-      } catch (err) {
-        console.error("Failed to spawn terminal for command:", err)
-        return null
-      } finally {
-        suppressAutoCreateRef.current = false
-      }
+      const id = crypto.randomUUID()
+      tabCounterRef.current += 1
+      setTabs((prev) => [
+        ...prev,
+        { id, title, workingDir: folderPath, initialCommand: command },
+      ])
+      setActiveTabId(id)
+
+      return id
     },
     [folderPath]
   )
 
   const createTerminalInDirectory = useCallback(
     async (workingDir: string, title?: string) => {
-      if (!workingDir || spawningRef.current) return null
+      if (!workingDir) return null
 
-      suppressAutoCreateRef.current = true
       setIsOpen(true)
-      spawningRef.current = true
 
-      try {
-        const id = await terminalSpawn(workingDir)
-        tabCounterRef.current += 1
-        const defaultTitle = `Terminal ${tabCounterRef.current}`
-        setTabs((prev) => [...prev, { id, title: title ?? defaultTitle }])
-        setActiveTabId(id)
-        return id
-      } catch (err) {
-        console.error("Failed to spawn terminal in directory:", err)
-        return null
-      } finally {
-        spawningRef.current = false
-        suppressAutoCreateRef.current = false
-      }
+      const id = crypto.randomUUID()
+      tabCounterRef.current += 1
+      const defaultTitle = `Terminal ${tabCounterRef.current}`
+      setTabs((prev) => [
+        ...prev,
+        { id, title: title ?? defaultTitle, workingDir },
+      ])
+      setActiveTabId(id)
+
+      return id
     },
     []
   )
@@ -140,18 +154,10 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     await createTerminalInDirectory(folderPath)
   }, [folderPath, createTerminalInDirectory])
 
-  // Auto-create first terminal when panel opens with no tabs
-  useEffect(() => {
-    if (isOpen && tabs.length === 0 && !suppressAutoCreateRef.current) {
-      createTerminal()
-    }
-  }, [isOpen, tabs.length, createTerminal])
-
   const setHeight = useCallback((h: number) => {
     setHeightState(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, h)))
   }, [])
 
-  // No stale closure — reads current activeTabId via updater
   const closeTerminal = useCallback((id: string) => {
     terminalKill(id).catch(() => {})
     setTabs((prev) => {
@@ -160,18 +166,14 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         tabCounterRef.current = 0
         setIsOpen(false)
         setActiveTabId(null)
+      } else {
+        setActiveTabId((prevActive) =>
+          prevActive === id ? next[next.length - 1].id : prevActive
+        )
       }
       return next
     })
-    setActiveTabId((prev) => (prev === id ? null : prev))
   }, [])
-
-  // Auto-select last tab when active tab is removed
-  useEffect(() => {
-    if (activeTabId === null && tabs.length > 0) {
-      setActiveTabId(tabs[tabs.length - 1].id)
-    }
-  }, [activeTabId, tabs])
 
   const closeOtherTerminals = useCallback(
     (id: string) => {

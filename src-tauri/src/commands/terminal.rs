@@ -69,11 +69,14 @@ pub(crate) fn prepare_credential_env(
 pub async fn terminal_spawn(
     working_dir: String,
     initial_command: Option<String>,
+    terminal_id: Option<String>,
     manager: State<'_, TerminalManager>,
     app_handle: tauri::AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<String, TerminalError> {
-    let terminal_id = uuid::Uuid::new_v4().to_string();
+    let terminal_id = terminal_id
+        .filter(|id| !id.is_empty() && id.len() <= 256)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     let app_data_dir = app_handle
         .path()

@@ -18,6 +18,7 @@ use crate::terminal::types::TerminalInfo;
 pub struct TerminalSpawnParams {
     pub working_dir: String,
     pub initial_command: Option<String>,
+    pub terminal_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -50,7 +51,10 @@ pub async fn terminal_spawn(
     Json(params): Json<TerminalSpawnParams>,
 ) -> Result<Json<String>, AppCommandError> {
     let manager = &state.terminal_manager;
-    let terminal_id = uuid::Uuid::new_v4().to_string();
+    let terminal_id = params
+        .terminal_id
+        .filter(|id| !id.is_empty() && id.len() <= 256)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     let extra_env = prepare_credential_env(&state.data_dir);
 

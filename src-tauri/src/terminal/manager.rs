@@ -162,6 +162,17 @@ impl TerminalManager {
         opts: SpawnOptions,
         emitter: EventEmitter,
     ) -> Result<String, TerminalError> {
+        // Reject duplicate IDs to prevent orphaning an existing PTY process.
+        {
+            let terminals = self.terminals.lock().unwrap();
+            if terminals.contains_key(&opts.terminal_id) {
+                return Err(TerminalError::SpawnFailed(format!(
+                    "terminal id '{}' already exists",
+                    opts.terminal_id
+                )));
+            }
+        }
+
         let pty_system = native_pty_system();
 
         let pair = pty_system

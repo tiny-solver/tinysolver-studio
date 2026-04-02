@@ -1265,11 +1265,13 @@ export async function gitCommitBranches(
 
 export async function terminalSpawn(
   workingDir: string,
-  initialCommand?: string
+  initialCommand?: string,
+  terminalId?: string
 ): Promise<string> {
   return getTransport().call("terminal_spawn", {
     workingDir,
     initialCommand: initialCommand ?? null,
+    terminalId: terminalId ?? null,
   })
 }
 
