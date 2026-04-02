@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronDown, ChevronRight, Loader2 } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Loader2, Upload } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -36,12 +36,23 @@ import {
 import {
   gitAddFiles,
   gitCommit,
+  gitPush,
   gitRollbackFile,
   gitShowFile,
   gitStatus,
   deleteFileTreeEntry,
   readFilePreview,
 } from "@/lib/api"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  useGitCredential,
+  type GitRemoteHint,
+} from "@/contexts/git-credential-context"
 import type { GitStatusEntry } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -51,6 +62,7 @@ import { toErrorMessage } from "@/lib/app-error"
 
 interface CommitWorkspaceProps {
   folderPath: string
+  folderId?: number | null
   onCommitted?: () => void
   onCancel?: () => void
 }
@@ -209,11 +221,13 @@ const CONFIRM_INITIAL: ConfirmState = {
 
 export function CommitWorkspace({
   folderPath,
+  folderId,
   onCommitted,
   onCancel,
 }: CommitWorkspaceProps) {
   const t = useTranslations("Folder.commitDialog")
   const tCommon = useTranslations("Folder.common")
+  const { withCredentialRetry } = useGitCredential()
   const [entries, setEntries] = useState<GitStatusEntry[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -415,29 +429,49 @@ export function CommitWorkspace({
     [filePathSet, handleViewDiff]
   )
 
-  const handleCommit = useCallback(async () => {
-    const commitMessage = messageRef.current.trim()
-    if (!commitMessage || selected.size === 0 || !folderPath) return
-    setCommitting(true)
-    setError(null)
-    try {
-      const result = await gitCommit(
-        folderPath,
-        commitMessage,
-        Array.from(selected)
-      )
-      toast.success(t("toasts.commitCompleted"), {
-        description: t("toasts.committedFiles", {
-          count: result.committed_files,
-        }),
-      })
-      onCommitted?.()
-    } catch (err) {
-      setError(toErrorMessage(err))
-    } finally {
-      setCommitting(false)
-    }
-  }, [folderPath, onCommitted, selected, t])
+  const handleCommit = useCallback(
+    async (andPush?: boolean) => {
+      const commitMessage = messageRef.current.trim()
+      if (!commitMessage || selected.size === 0 || !folderPath) return
+      setCommitting(true)
+      setError(null)
+      try {
+        const result = await gitCommit(
+          folderPath,
+          commitMessage,
+          Array.from(selected),
+          folderId
+        )
+        toast.success(t("toasts.commitCompleted"), {
+          description: t("toasts.committedFiles", {
+            count: result.committed_files,
+          }),
+        })
+
+        if (andPush) {
+          try {
+            const hint: GitRemoteHint = { folderPath }
+            await withCredentialRetry(
+              (creds) => gitPush(folderPath, null, creds, folderId),
+              hint
+            )
+          } catch (pushErr) {
+            toast.error(t("toasts.pushFailed"), {
+              description: toErrorMessage(pushErr),
+            })
+            return
+          }
+        }
+
+        onCommitted?.()
+      } catch (err) {
+        setError(toErrorMessage(err))
+      } finally {
+        setCommitting(false)
+      }
+    },
+    [folderId, folderPath, onCommitted, selected, t, withCredentialRetry]
+  )
 
   // --- Context menu actions ---
 
@@ -1168,15 +1202,42 @@ export function CommitWorkspace({
                 <Button variant="outline" onClick={onCancel}>
                   {tCommon("cancel")}
                 </Button>
-                <Button
-                  disabled={committing || !hasMessage || selected.size === 0}
-                  onClick={handleCommit}
-                >
-                  {committing && (
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                  )}
-                  {t("commitButton", { count: selected.size })}
-                </Button>
+                <div className="flex">
+                  <Button
+                    disabled={committing || !hasMessage || selected.size === 0}
+                    onClick={() => handleCommit()}
+                    className="rounded-r-none"
+                  >
+                    {committing && (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    )}
+                    {t("commitButton", { count: selected.size })}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        disabled={
+                          committing || !hasMessage || selected.size === 0
+                        }
+                        className="rounded-l-none border-l border-l-primary-foreground/20 px-1.5"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleCommit()}>
+                        <Check className="h-4 w-4" />
+                        {t("commitButton", { count: selected.size })}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCommit(true)}>
+                        <Upload className="h-4 w-4" />
+                        {t("commitAndPushButton", {
+                          count: selected.size,
+                        })}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
           </div>

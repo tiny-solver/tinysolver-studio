@@ -1009,6 +1009,7 @@
     "commitDialog": {
       "toasts": {
         "commitCompleted": "اكتمل التزام الكود",
+        "pushFailed": "فشل الدفع",
         "committedFiles": "{count, plural, one {# ملف تم الالتزام به} other {# ملفات تم الالتزام بها}}",
         "addedToVcs": "تمت الإضافة إلى VCS",
         "addToVcsFailed": "فشلت الإضافة إلى VCS",
@@ -1050,6 +1051,7 @@
       "commitMessage": "رسالة الالتزام",
       "commitMessagePlaceholder": "أدخل رسالة الالتزام...",
       "commitButton": "التزام ({count})",
+      "commitAndPushButton": "إيداع ودفع ({count})",
       "head": "HEAD",
       "workingTree": "شجرة العمل",
       "clickFileToDiff": "انقر اسم الملف لعرض الفرق",

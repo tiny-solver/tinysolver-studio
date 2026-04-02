@@ -1009,6 +1009,7 @@
     "commitDialog": {
       "toasts": {
         "commitCompleted": "Commit de código concluído",
+        "pushFailed": "Falha no envio",
         "committedFiles": "{count, plural, one {# arquivo commitado} other {# arquivos commitados}}",
         "addedToVcs": "Adicionado ao VCS",
         "addToVcsFailed": "Falha ao adicionar ao VCS",
@@ -1050,6 +1051,7 @@
       "commitMessage": "Mensagem de commit",
       "commitMessagePlaceholder": "Digite a mensagem de commit...",
       "commitButton": "Confirmar ({count})",
+      "commitAndPushButton": "Confirmar e enviar ({count})",
       "head": "HEAD",
       "workingTree": "Árvore de trabalho",
       "clickFileToDiff": "Clique no nome do arquivo para ver o diff",

@@ -1009,6 +1009,7 @@
     "commitDialog": {
       "toasts": {
         "commitCompleted": "提交程式碼完成",
+        "pushFailed": "推送失敗",
         "committedFiles": "已提交 {count} 個檔案",
         "addedToVcs": "已加入到 VCS",
         "addToVcsFailed": "加入到 VCS 失敗",
@@ -1050,6 +1051,7 @@
       "commitMessage": "提交訊息",
       "commitMessagePlaceholder": "輸入提交訊息...",
       "commitButton": "提交 ({count})",
+      "commitAndPushButton": "提交並推送 ({count})",
       "head": "HEAD（目前提交）",
       "workingTree": "工作目錄",
       "clickFileToDiff": "點擊檔案名稱查看差異",

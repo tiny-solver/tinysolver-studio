@@ -1052,12 +1052,15 @@ pub async fn git_push(
     path: String,
     remote: Option<String>,
     credentials: Option<GitCredentials>,
+    folder_id: Option<i32>,
     db: tauri::State<'_, AppDatabase>,
 ) -> Result<GitPushResult, AppCommandError> {
-    let folder_id = window
-        .label()
-        .strip_prefix("push-")
-        .and_then(|value| value.parse::<i32>().ok());
+    let folder_id = folder_id.or_else(|| {
+        window
+            .label()
+            .strip_prefix("push-")
+            .and_then(|value| value.parse::<i32>().ok())
+    });
     let data_dir = app.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
@@ -1658,11 +1661,14 @@ pub async fn git_commit(
     path: String,
     message: String,
     files: Vec<String>,
+    folder_id: Option<i32>,
 ) -> Result<GitCommitResult, AppCommandError> {
-    let folder_id = window
-        .label()
-        .strip_prefix("commit-")
-        .and_then(|value| value.parse::<i32>().ok());
+    let folder_id = folder_id.or_else(|| {
+        window
+            .label()
+            .strip_prefix("commit-")
+            .and_then(|value| value.parse::<i32>().ok())
+    });
     let emitter = EventEmitter::Tauri(app.clone());
     git_commit_core(&emitter, folder_id, &db.conn, &path, &message, &files).await
 }

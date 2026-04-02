@@ -1009,6 +1009,7 @@
     "commitDialog": {
       "toasts": {
         "commitCompleted": "코드 커밋이 완료되었습니다",
+        "pushFailed": "푸시 실패",
         "committedFiles": "{count, plural, one {#개 파일 커밋됨} other {#개 파일 커밋됨}}",
         "addedToVcs": "VCS에 추가되었습니다",
         "addToVcsFailed": "VCS에 추가하지 못했습니다",
@@ -1050,6 +1051,7 @@
       "commitMessage": "커밋 메시지",
       "commitMessagePlaceholder": "커밋 메시지 입력...",
       "commitButton": "커밋 ({count})",
+      "commitAndPushButton": "커밋 후 푸시 ({count})",
       "head": "HEAD",
       "workingTree": "작업 트리",
       "clickFileToDiff": "파일 이름을 클릭해 diff를 확인하세요",

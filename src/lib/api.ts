@@ -574,12 +574,14 @@ export async function gitPushInfo(path: string): Promise<GitPushInfo> {
 export async function gitPush(
   path: string,
   remote?: string | null,
-  credentials?: GitCredentials | null
+  credentials?: GitCredentials | null,
+  folderId?: number | null
 ): Promise<GitPushResult> {
   return getTransport().call("git_push", {
     path,
     remote: remote ?? null,
     credentials: credentials ?? null,
+    folderId: folderId ?? null,
   })
 }
 
@@ -886,9 +888,15 @@ export async function gitIsTracked(
 export async function gitCommit(
   path: string,
   message: string,
-  files: string[]
+  files: string[],
+  folderId?: number | null
 ): Promise<GitCommitResult> {
-  return getTransport().call("git_commit", { path, message, files })
+  return getTransport().call("git_commit", {
+    path,
+    message,
+    files,
+    folderId: folderId ?? null,
+  })
 }
 
 export async function gitRollbackFile(

@@ -278,12 +278,14 @@ function parseDate(dateStr: string): Date | null {
 interface PushWorkspaceProps {
   folderPath: string
   folderName: string
+  folderId?: number | null
   onPushed?: () => void
 }
 
 export function PushWorkspace({
   folderPath,
   folderName,
+  folderId,
   onPushed,
 }: PushWorkspaceProps) {
   const t = useTranslations("Folder.pushWindow")
@@ -392,7 +394,7 @@ export function PushWorkspace({
       )?.url
       const hint: GitRemoteHint = remoteUrl ? { remoteUrl } : { folderPath }
       await withCredentialRetry(
-        (creds) => gitPush(folderPath, selectedRemote, creds),
+        (creds) => gitPush(folderPath, selectedRemote, creds, folderId),
         hint
       )
       onPushed?.()
