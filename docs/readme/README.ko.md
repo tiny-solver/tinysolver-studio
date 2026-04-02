@@ -22,7 +22,7 @@
 Codeg(Code Generation)는 엔터프라이즈급 멀티 Agent 코딩 워크스페이스입니다.
 Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agent를
 데스크톱 앱, 독립형 서버 또는 Docker 컨테이너로 통합하여 — 브라우저만으로 어디서든 원격 개발이 가능하며 — 대화 집계, 병렬 `git worktree` 개발, MCP/Skills 관리,
-채팅 채널 연동(Telegram, Lark 등), Git/파일/터미널 통합 워크플로를 제공합니다.
+채팅 채널 연동(Telegram, Lark, iLink 등), Git/파일/터미널 통합 워크플로를 제공합니다.
 
 ## 메인 인터페이스
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -39,7 +39,7 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 - 로컬 대화 수집 및 구조화 렌더링
 - 내장 `git worktree` 플로를 통한 병렬 개발
 - **프로젝트 부트** — 시각적 설정과 실시간 미리보기로 새 프로젝트 생성
-- **채팅 채널** — Telegram, Lark(Feishu) 등을 코딩 에이전트에 연결하여 전체 세션 상호작용 및 원격 작업 제어
+- **채팅 채널** — Telegram, Lark(Feishu), iLink(Weixin) 등을 코딩 에이전트에 연결하여 전체 세션 상호작용 및 원격 작업 제어
 - MCP 관리 (로컬 스캔 + 레지스트리 검색/설치)
 - Skills 관리 (글로벌 및 프로젝트 범위)
 - Git 원격 계정 관리 (GitHub 및 기타 Git 서버)
@@ -67,7 +67,7 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 
 ## 채팅 채널
 
-즐겨 사용하는 메신저 앱 — Telegram, Lark(Feishu) 등 — 을 AI 코딩 에이전트에 연결하세요. 채팅에서 직접 작업을 생성하고, 후속 메시지를 보내고, 권한을 승인하고, 세션을 재개하고, 활동을 모니터링할 수 있습니다 — 도구 호출 상세 정보, 권한 프롬프트, 완료 요약이 포함된 실시간 에이전트 응답을 브라우저를 열지 않고도 받을 수 있습니다.
+즐겨 사용하는 메신저 앱 — Telegram, Lark(Feishu), iLink(Weixin) 등 — 을 AI 코딩 에이전트에 연결하세요. 채팅에서 직접 작업을 생성하고, 후속 메시지를 보내고, 권한을 승인하고, 세션을 재개하고, 활동을 모니터링할 수 있습니다 — 도구 호출 상세 정보, 권한 프롬프트, 완료 요약이 포함된 실시간 에이전트 응답을 브라우저를 열지 않고도 받을 수 있습니다.
 
 ### 지원 채널
 
@@ -75,8 +75,9 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 | --- | --- | --- |
 | Telegram | Bot API (HTTP 롱폴링) | 내장 |
 | Lark (Feishu) | WebSocket + REST API | 내장 |
+| iLink (Weixin) | WebSocket + REST API | 내장 |
 
-> 추가 채널(Discord, Slack, WeChat, DingTalk 등)은 향후 릴리스에서 지원 예정입니다.
+> 추가 채널(Discord, Slack, DingTalk 등)은 향후 릴리스에서 지원 예정입니다.
 
 ### 주요 기능
 
@@ -87,12 +88,12 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 - **일일 리포트** — 예약된 시간에 자동 일일 요약 생성(대화 수, 에이전트 유형별 분석, 프로젝트 활동 포함)
 - **다국어 지원** — 10개 언어의 메시지 템플릿(영어, 간체/번체 중국어, 일본어, 한국어, 스페인어, 독일어, 프랑스어, 포르투갈어, 아랍어)
 - **보안 자격증명** — 토큰은 OS 키링에 저장되며 설정 파일이나 로그에 노출되지 않음
-- **리치 메시지** — Telegram은 Markdown 포맷, Lark은 카드 기반 레이아웃; 모든 플랫폼에서 일반 텍스트 폴백 지원
+- **리치 메시지** — Telegram은 Markdown 포맷, Lark은 카드 기반 레이아웃, iLink은 리치 텍스트 메시지; 모든 플랫폼에서 일반 텍스트 폴백 지원
 
 ### 설정
 
-1. **설정 → 채팅 채널**에서 채널 생성(Telegram 또는 Lark 선택)
-2. 봇 토큰(Telegram) 또는 앱 자격증명(Lark) 입력 — OS 키링에 안전하게 저장
+1. **설정 → 채팅 채널**에서 채널 생성(Telegram, Lark 또는 iLink 선택)
+2. 봇 토큰(Telegram), 앱 자격증명(Lark) 또는 QR 코드로 로그인(iLink) — OS 키링에 안전하게 저장
 3. 이벤트 필터 및 선택적 일일 리포트 일정 설정
 4. 연결 — 에이전트가 이벤트를 발생시키면 메시지가 흐르기 시작
 
@@ -285,7 +286,7 @@ Next.js 16 (Static Export) + React 19
               ┌───────┼───────┐
               v       v       v
   Local Filesystem  Git   Chat Channels
-    / Git Repos    Repos  (Telegram, Lark)
+    / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
 
 ## 제약 사항

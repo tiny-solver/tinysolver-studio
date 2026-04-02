@@ -25,7 +25,7 @@ Es vereint lokale KI-Coding-Agenten (Claude Code, Codex CLI, OpenCode,
 Gemini CLI, OpenClaw usw.) in einer Desktop-App, einem Standalone-Server oder
 Docker-Container — Remote-Entwicklung von jedem Browser aus — mit Konversationsaggregation,
 paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integration
-(Telegram, Lark usw.) und integrierten Git/Datei/Terminal-Workflows.
+(Telegram, Lark, iLink usw.) und integrierten Git/Datei/Terminal-Workflows.
 
 ## Hauptoberfläche
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -42,7 +42,7 @@ paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integra
 - Lokale Konversationserfassung mit strukturierter Darstellung
 - Parallele Entwicklung mit integrierten `git worktree`-Abläufen
 - **Projekt-Starter** — neue Projekte visuell erstellen mit Live-Vorschau
-- **Chat-Kanäle** — Telegram, Lark (Feishu) und mehr mit Ihren Coding-Agenten verbinden für vollständige Sitzungsinteraktion und Remote-Aufgabensteuerung
+- **Chat-Kanäle** — Telegram, Lark (Feishu), iLink (Weixin) und mehr mit Ihren Coding-Agenten verbinden für vollständige Sitzungsinteraktion und Remote-Aufgabensteuerung
 - MCP-Verwaltung (lokaler Scan + Registry-Suche/Installation)
 - Skills-Verwaltung (global und projektbezogen)
 - Git-Remote-Kontoverwaltung (GitHub und andere Git-Server)
@@ -70,7 +70,7 @@ Unterstützt derzeit **shadcn/ui**-Projekt-Scaffolding, mit einem Tab-basierten 
 
 ## Chat-Kanäle
 
-Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und mehr — mit Ihren KI-Coding-Agenten. Erstellen Sie Aufgaben, senden Sie Folgenachrichten, genehmigen Sie Berechtigungen, setzen Sie Sitzungen fort und überwachen Sie die Aktivität direkt aus dem Chat — empfangen Sie Echtzeit-Antworten der Agenten mit Tool-Call-Details, Berechtigungsanfragen und Abschlusszusammenfassungen, ohne einen Browser zu öffnen.
+Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu), iLink (Weixin) und mehr — mit Ihren KI-Coding-Agenten. Erstellen Sie Aufgaben, senden Sie Folgenachrichten, genehmigen Sie Berechtigungen, setzen Sie Sitzungen fort und überwachen Sie die Aktivität direkt aus dem Chat — empfangen Sie Echtzeit-Antworten der Agenten mit Tool-Call-Details, Berechtigungsanfragen und Abschlusszusammenfassungen, ohne einen Browser zu öffnen.
 
 ### Unterstützte Kanäle
 
@@ -78,8 +78,9 @@ Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und me
 | --- | --- | --- |
 | Telegram | Bot API (HTTP Long-Polling) | Integriert |
 | Lark (Feishu) | WebSocket + REST API | Integriert |
+| iLink (Weixin) | WebSocket + REST API | Integriert |
 
-> Weitere Kanäle (Discord, Slack, WeChat, DingTalk usw.) sind für zukünftige Releases geplant.
+> Weitere Kanäle (Discord, Slack, DingTalk usw.) sind für zukünftige Releases geplant.
 
 ### Hauptfunktionen
 
@@ -94,8 +95,8 @@ Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und me
 
 ### Einrichtung
 
-1. Erstellen Sie einen Kanal unter **Einstellungen → Chat-Kanäle** (wählen Sie Telegram oder Lark)
-2. Geben Sie Ihren Bot-Token (Telegram) oder App-Anmeldedaten (Lark) ein — sicher im OS-Schlüsselbund gespeichert
+1. Erstellen Sie einen Kanal unter **Einstellungen → Chat-Kanäle** (wählen Sie Telegram, Lark oder iLink)
+2. Geben Sie Ihren Bot-Token (Telegram), App-Anmeldedaten (Lark) ein oder scannen Sie den QR-Code zum Anmelden (iLink) — sicher im OS-Schlüsselbund gespeichert
 3. Konfigurieren Sie Ereignisfilter und optionalen Tagesberichtsplan
 4. Verbinden — Nachrichten beginnen zu fließen, sobald Agenten Ereignisse aussenden
 
@@ -288,7 +289,7 @@ Next.js 16 (Static Export) + React 19
               ┌───────┼───────┐
               v       v       v
   Local Filesystem  Git   Chat Channels
-    / Git Repos    Repos  (Telegram, Lark)
+    / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
 
 ## Einschränkungen

@@ -23,7 +23,7 @@ Codeg (Code Generation) is an enterprise-grade multi-agent coding workspace.
 It unifies local AI coding agents (Claude Code, Codex CLI, OpenCode, Gemini CLI,
 OpenClaw, Cline, etc.) in a desktop app, standalone server, or Docker container — enabling
 remote development from any browser — with conversation aggregation, parallel `git worktree`
-development, MCP/Skills management, chat channel interactions (Telegram, Lark, etc.),
+development, MCP/Skills management, chat channel interactions (Telegram, Lark, iLink, etc.),
 and integrated Git/file/terminal workflows.
 
 ## Main Interface
@@ -41,7 +41,7 @@ and integrated Git/file/terminal workflows.
 - Local conversation ingestion with structured rendering
 - Parallel development with built-in `git worktree` flows
 - **Project Boot** — visually scaffold new projects with live preview
-- **Chat Channels** — connect Telegram, Lark (Feishu) and more to your coding agents for real-time notifications, full session interaction, and remote task control
+- **Chat Channels** — connect Telegram, Lark (Feishu), iLink (Weixin) and more to your coding agents for real-time notifications, full session interaction, and remote task control
 - MCP management (local scan + registry search/install)
 - Skills management (global and project scope)
 - Git remote account management (GitHub and other Git servers)
@@ -69,7 +69,7 @@ Currently supports **shadcn/ui** project scaffolding, with a tab-based design re
 
 ## Chat Channels
 
-Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — to your AI coding agents. Create tasks, send follow-up messages, approve permissions, resume sessions, and monitor activity — all from your chat app. Receive real-time agent responses with tool-call details, permission prompts, and completion summaries without ever opening a browser.
+Connect your favorite messaging apps — Telegram, Lark (Feishu), iLink (Weixin), and more — to your AI coding agents. Create tasks, send follow-up messages, approve permissions, resume sessions, and monitor activity — all from your chat app. Receive real-time agent responses with tool-call details, permission prompts, and completion summaries without ever opening a browser.
 
 ### Supported Channels
 
@@ -77,8 +77,9 @@ Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — t
 | --- | --- | --- |
 | Telegram | Bot API (HTTP long-polling) | Built-in |
 | Lark (Feishu) | WebSocket + REST API | Built-in |
+| iLink (Weixin) | WebSocket + REST API | Built-in |
 
-> More channels (Discord, Slack, WeChat, DingTalk, etc.) are planned for future releases.
+> More channels (Discord, Slack, DingTalk, etc.) are planned for future releases.
 
 ### Key Features
 
@@ -93,8 +94,8 @@ Connect your favorite messaging apps — Telegram, Lark (Feishu), and more — t
 
 ### Setup
 
-1. Create a channel in **Settings → Chat Channels** (choose Telegram or Lark)
-2. Enter your bot token (Telegram) or app credentials (Lark) — stored securely in the OS keyring
+1. Create a channel in **Settings → Chat Channels** (choose Telegram, Lark, or iLink)
+2. Enter your bot token (Telegram), app credentials (Lark), or scan QR code to log in (iLink) — stored securely in the OS keyring
 3. Configure event filters and optional daily report schedule
 4. Connect — messages start flowing as agents emit events
 
@@ -287,7 +288,7 @@ Next.js 16 (Static Export) + React 19
               ┌───────┼───────┐
               v       v       v
   Local Filesystem  Git   Chat Channels
-    / Git Repos    Repos  (Telegram, Lark)
+    / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
 
 ## Constraints

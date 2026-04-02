@@ -23,7 +23,7 @@ Codeg (Code Generation) est un workspace de codage multi-agents de niveau entrep
 Il unifie les agents de codage IA locaux (Claude Code, Codex CLI, OpenCode, Gemini CLI,
 OpenClaw, Cline, etc.) dans une application de bureau, un serveur autonome ou un conteneur
 Docker — permettant le développement à distance depuis n'importe quel navigateur — avec agrégation de conversations, développement
-parallèle via `git worktree`, gestion MCP/Skills, interaction avec les canaux de chat (Telegram, Lark, etc.)
+parallèle via `git worktree`, gestion MCP/Skills, interaction avec les canaux de chat (Telegram, Lark, iLink, etc.)
 et workflows intégrés Git/fichiers/terminal.
 
 ## Interface principale
@@ -41,7 +41,7 @@ et workflows intégrés Git/fichiers/terminal.
 - Ingestion locale des conversations avec rendu structuré
 - Développement parallèle avec flux `git worktree` intégré
 - **Lanceur de projet** — créez visuellement de nouveaux projets avec aperçu en temps réel
-- **Canaux de chat** — connectez Telegram, Lark (Feishu) et plus à vos agents de codage pour une interaction complète avec les sessions et le contrôle à distance des tâches
+- **Canaux de chat** — connectez Telegram, Lark (Feishu), iLink (Weixin) et plus à vos agents de codage pour une interaction complète avec les sessions et le contrôle à distance des tâches
 - Gestion MCP (scan local + recherche/installation depuis le registre)
 - Gestion des Skills (portée globale et projet)
 - Gestion des comptes distants Git (GitHub et autres serveurs Git)
@@ -69,7 +69,7 @@ Prend actuellement en charge le scaffolding de projets **shadcn/ui**, avec un de
 
 ## Canaux de chat
 
-Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu) et plus — à vos agents de codage IA. Créez des tâches, envoyez des messages de suivi, approuvez les permissions, reprenez des sessions et surveillez l'activité directement depuis votre chat — recevez les réponses des agents en temps réel avec les détails des appels d'outils, les demandes de permissions et les résumés de complétion, le tout sans ouvrir de navigateur.
+Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu), iLink (Weixin) et plus — à vos agents de codage IA. Créez des tâches, envoyez des messages de suivi, approuvez les permissions, reprenez des sessions et surveillez l'activité directement depuis votre chat — recevez les réponses des agents en temps réel avec les détails des appels d'outils, les demandes de permissions et les résumés de complétion, le tout sans ouvrir de navigateur.
 
 ### Canaux pris en charge
 
@@ -77,8 +77,9 @@ Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu
 | --- | --- | --- |
 | Telegram | Bot API (HTTP long-polling) | Intégré |
 | Lark (Feishu) | WebSocket + REST API | Intégré |
+| iLink (Weixin) | WebSocket + REST API | Intégré |
 
-> D'autres canaux (Discord, Slack, WeChat, DingTalk, etc.) sont prévus pour de futures versions.
+> D'autres canaux (Discord, Slack, DingTalk, etc.) sont prévus pour de futures versions.
 
 ### Fonctionnalités clés
 
@@ -93,8 +94,8 @@ Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu
 
 ### Configuration
 
-1. Créez un canal dans **Paramètres → Canaux de chat** (choisissez Telegram ou Lark)
-2. Entrez votre token de bot (Telegram) ou les identifiants de l'application (Lark) — stockés en toute sécurité dans le trousseau du SO
+1. Créez un canal dans **Paramètres → Canaux de chat** (choisissez Telegram, Lark ou iLink)
+2. Entrez votre token de bot (Telegram), les identifiants de l'application (Lark) ou scannez le code QR pour vous connecter (iLink) — stockés en toute sécurité dans le trousseau du SO
 3. Configurez les filtres d'événements et la planification optionnelle du rapport quotidien
 4. Connectez — les messages commencent à circuler dès que les agents émettent des événements
 
@@ -287,7 +288,7 @@ Next.js 16 (Static Export) + React 19
               ┌───────┼───────┐
               v       v       v
   Local Filesystem  Git   Chat Channels
-    / Git Repos    Repos  (Telegram, Lark)
+    / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
 
 ## Contraintes

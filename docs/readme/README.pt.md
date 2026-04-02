@@ -23,7 +23,7 @@ Codeg (Code Generation) é um workspace de codificação multi-agentes de nível
 Ele unifica agentes de codificação IA locais (Claude Code, Codex CLI, OpenCode, Gemini CLI,
 OpenClaw, Cline, etc.) em um aplicativo desktop, servidor standalone ou contêiner
 Docker — possibilitando o desenvolvimento remoto a partir de qualquer navegador — com agregação de conversas, desenvolvimento
-paralelo via `git worktree`, gerenciamento de MCP/Skills, interação com canais de chat (Telegram, Lark, etc.)
+paralelo via `git worktree`, gerenciamento de MCP/Skills, interação com canais de chat (Telegram, Lark, iLink, etc.)
 e fluxos integrados de Git/arquivos/terminal.
 
 ## Interface principal
@@ -41,7 +41,7 @@ e fluxos integrados de Git/arquivos/terminal.
 - Ingestão local de conversas com renderização estruturada
 - Desenvolvimento paralelo com fluxos `git worktree` integrados
 - **Inicializador de Projeto** — crie novos projetos visualmente com pré-visualização em tempo real
-- **Canais de Chat** — conecte Telegram, Lark (Feishu) e mais aos seus agentes de codificação para interação completa de sessão e controle remoto de tarefas
+- **Canais de Chat** — conecte Telegram, Lark (Feishu), iLink (Weixin) e mais aos seus agentes de codificação para interação completa de sessão e controle remoto de tarefas
 - Gerenciamento de MCP (varredura local + busca/instalação no registro)
 - Gerenciamento de Skills (escopo global e por projeto)
 - Gerenciamento de contas remotas Git (GitHub e outros servidores Git)
@@ -69,7 +69,7 @@ Atualmente suporta scaffolding de projetos **shadcn/ui**, com um design baseado 
 
 ## Canais de Chat
 
-Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e mais — aos seus agentes de codificação IA. Crie tarefas, envie mensagens de acompanhamento, aprove permissões, retome sessões e monitore a atividade diretamente do chat — recebendo respostas do agente em tempo real com detalhes de chamadas de ferramentas, prompts de permissão e resumos de conclusão, tudo sem abrir o navegador.
+Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu), iLink (Weixin) e mais — aos seus agentes de codificação IA. Crie tarefas, envie mensagens de acompanhamento, aprove permissões, retome sessões e monitore a atividade diretamente do chat — recebendo respostas do agente em tempo real com detalhes de chamadas de ferramentas, prompts de permissão e resumos de conclusão, tudo sem abrir o navegador.
 
 ### Canais suportados
 
@@ -77,8 +77,9 @@ Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e ma
 | --- | --- | --- |
 | Telegram | Bot API (HTTP long-polling) | Integrado |
 | Lark (Feishu) | WebSocket + REST API | Integrado |
+| iLink (Weixin) | WebSocket + REST API | Integrado |
 
-> Mais canais (Discord, Slack, WeChat, DingTalk, etc.) estão planejados para versões futuras.
+> Mais canais (Discord, Slack, DingTalk, etc.) estão planejados para versões futuras.
 
 ### Recursos principais
 
@@ -93,8 +94,8 @@ Conecte seus aplicativos de mensagens favoritos — Telegram, Lark (Feishu) e ma
 
 ### Configuração
 
-1. Crie um canal em **Configurações → Canais de Chat** (escolha Telegram ou Lark)
-2. Insira seu token de bot (Telegram) ou credenciais do app (Lark) — armazenados com segurança no chaveiro do SO
+1. Crie um canal em **Configurações → Canais de Chat** (escolha Telegram, Lark ou iLink)
+2. Insira seu token de bot (Telegram), credenciais do app (Lark) ou escaneie o código QR para fazer login (iLink) — armazenados com segurança no chaveiro do SO
 3. Configure filtros de eventos e programação opcional do relatório diário
 4. Conecte — as mensagens começam a fluir assim que os agentes emitem eventos
 
@@ -287,7 +288,7 @@ Next.js 16 (Static Export) + React 19
               ┌───────┼───────┐
               v       v       v
   Local Filesystem  Git   Chat Channels
-    / Git Repos    Repos  (Telegram, Lark)
+    / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
 
 ## Restrições
