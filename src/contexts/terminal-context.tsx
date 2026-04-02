@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { terminalKill } from "@/lib/api"
+import { randomUUID } from "@/lib/utils"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
@@ -109,7 +110,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const toggle = useCallback(() => {
-    const autoId = crypto.randomUUID()
+    const autoId = randomUUID()
     const nextCounter = tabCounterRef.current + 1
 
     setIsOpen((wasOpen) => !wasOpen)
@@ -140,7 +141,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
       setIsOpen(true)
 
-      const id = crypto.randomUUID()
+      const id = randomUUID()
       tabCounterRef.current += 1
       setTabs((prev) => [
         ...prev,
@@ -159,7 +160,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
 
       setIsOpen(true)
 
-      const id = crypto.randomUUID()
+      const id = randomUUID()
       tabCounterRef.current += 1
       const defaultTitle = `Terminal ${tabCounterRef.current}`
       setTabs((prev) => [
