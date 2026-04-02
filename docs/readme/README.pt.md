@@ -26,6 +26,10 @@ Docker — possibilitando o desenvolvimento remoto a partir de qualquer navegado
 paralelo via `git worktree`, gerenciamento de MCP/Skills, interação com canais de chat (Telegram, Lark, iLink, etc.)
 e fluxos integrados de Git/arquivos/terminal.
 
+## Fluxo de comunicação
+
+![Fluxo de comunicação](../images/communication-flow.svg)
+
 ## Interface principal
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)

@@ -24,6 +24,10 @@ Claude Code、Codex CLI、OpenCode、Gemini CLI、OpenClaw などのローカル
 デスクトップアプリ、スタンドアロンサーバー、または Docker コンテナに統合し——ブラウザからどこでもリモート開発が可能——会話集約、並列 `git worktree` 開発、MCP/Skills 管理、
 チャットチャンネル連携（Telegram、Lark、iLink など）、Git/ファイル/ターミナル連携ワークフローを提供します。
 
+## 通信フロー
+
+![通信フロー](../images/communication-flow.svg)
+
 ## メインインターフェース
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)

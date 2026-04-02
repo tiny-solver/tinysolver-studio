@@ -27,6 +27,10 @@ o contenedor Docker — permitiendo el desarrollo remoto desde cualquier navegad
 de conversaciones, desarrollo paralelo con `git worktree`, gestión de MCP/Skills,
 interacción con canales de chat (Telegram, Lark, iLink, etc.) y flujos integrados de Git/archivos/terminal.
 
+## Flujo de comunicación
+
+![Flujo de comunicación](../images/communication-flow.svg)
+
 ## Interfaz principal
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)

@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 510" fill="none" role="img" aria-label="Codeg Communication Flow Diagram">
+  <defs>
+    <style>
+      @keyframes f { to { stroke-dashoffset: -24 } }
+      text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif }
+      .fl { stroke-width: 2; stroke-dasharray: 8 4; stroke-linecap: round; fill: none; animation: f .8s linear infinite; stroke: #93c5fd }
+      .card { fill: #ffffff; stroke: #e5e7eb; stroke-width: 1 }
+      .t1 { fill: #1f2937 }
+      .t2 { fill: #6b7280 }
+      .th { fill: #9ca3af }
+      .uc { fill: #dbeafe }
+      .ui { fill: #3b82f6 }
+      @media (prefers-color-scheme: dark) {
+        .fl { stroke: #3b82f6 }
+        .card { fill: #161b22; stroke: #30363d }
+        .t1 { fill: #e6edf3 }
+        .t2 { fill: #8b949e }
+        .th { fill: #6e7681 }
+        .uc { fill: #1e3a5f }
+        .ui { fill: #58a6ff }
+      }
+    </style>
+    <!-- Icon gradients from src-tauri/icons/icon.svg -->
+    <linearGradient id="ic-code" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#dcdfe9"/>
+      <stop offset="100%" stop-color="#cdd1e2"/>
+    </linearGradient>
+    <linearGradient id="ic-b1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4081"/>
+      <stop offset="100%" stop-color="#e91e63"/>
+    </linearGradient>
+    <linearGradient id="ic-b2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffeb3b"/>
+      <stop offset="100%" stop-color="#fdd835"/>
+    </linearGradient>
+    <linearGradient id="ic-b3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#29b6f6"/>
+      <stop offset="100%" stop-color="#03a9f4"/>
+    </linearGradient>
+    <clipPath id="uc">
+      <circle cx="158" cy="280" r="38"/>
+    </clipPath>
+  </defs>
+
+  <!-- ═══ Flow Lines (behind everything) ═══ -->
+
+  <!-- User → Clients -->
+  <path d="M196,280 C238,280 250,148 280,148" class="fl"/>
+  <path d="M196,280 C238,280 250,214 280,214" class="fl" style="animation-delay:-0.15s"/>
+  <path d="M196,280 C235,280 260,280 280,280" class="fl" style="animation-delay:-0.3s"/>
+  <path d="M196,280 C238,280 250,346 280,346" class="fl" style="animation-delay:-0.45s"/>
+  <path d="M196,280 C238,280 250,412 280,412" class="fl" style="animation-delay:-0.6s"/>
+
+  <!-- Clients → Codeg -->
+  <path d="M480,148 C525,148 600,280 640,280" class="fl" style="animation-delay:-0.1s"/>
+  <path d="M480,214 C525,214 600,280 640,280" class="fl" style="animation-delay:-0.25s"/>
+  <path d="M480,280 C525,280 600,280 640,280" class="fl" style="animation-delay:-0.4s"/>
+  <path d="M480,346 C525,346 600,280 640,280" class="fl" style="animation-delay:-0.55s"/>
+  <path d="M480,412 C525,412 600,280 640,280" class="fl" style="animation-delay:-0.7s"/>
+
+  <!-- Codeg → Agents -->
+  <path d="M720,280 C760,280 830,135 870,135" class="fl" style="animation-delay:-0.05s"/>
+  <path d="M720,280 C760,280 830,193 870,193" class="fl" style="animation-delay:-0.2s"/>
+  <path d="M720,280 C760,280 830,251 870,251" class="fl" style="animation-delay:-0.35s"/>
+  <path d="M720,280 C760,280 830,309 870,309" class="fl" style="animation-delay:-0.5s"/>
+  <path d="M720,280 C760,280 830,367 870,367" class="fl" style="animation-delay:-0.65s"/>
+  <path d="M720,280 C760,280 830,425 870,425" class="fl" style="animation-delay:-0.8s"/>
+
+  <!-- ═══ User Section ═══ -->
+
+  <circle cx="158" cy="280" r="38" class="uc"/>
+  <g clip-path="url(#uc)">
+    <circle cx="158" cy="264" r="13" class="ui"/>
+    <ellipse cx="158" cy="304" rx="24" ry="16" class="ui"/>
+  </g>
+  <text x="158" y="338" text-anchor="middle" font-size="13" font-weight="600" class="t2">Users</text>
+
+  <!-- ═══ Client Cards ═══ -->
+
+  <text x="280" y="88" text-anchor="start" font-size="11" font-weight="700" letter-spacing="1.5" class="th">CLIENTS</text>
+
+  <!-- Web Browser -->
+  <rect x="280" y="123" width="200" height="50" rx="12" class="card"/>
+  <circle cx="304" cy="148" r="6" fill="#4285F4"/>
+  <text x="322" y="153" font-size="14" font-weight="500" class="t1">Web Browser</text>
+
+  <!-- Desktop App -->
+  <rect x="280" y="189" width="200" height="50" rx="12" class="card"/>
+  <circle cx="304" cy="214" r="6" fill="#24C8DB"/>
+  <text x="322" y="219" font-size="14" font-weight="500" class="t1">Desktop App</text>
+
+  <!-- Telegram -->
+  <rect x="280" y="255" width="200" height="50" rx="12" class="card"/>
+  <circle cx="304" cy="280" r="6" fill="#26A5E4"/>
+  <text x="322" y="285" font-size="14" font-weight="500" class="t1">Telegram</text>
+
+  <!-- Lark (Feishu) -->
+  <rect x="280" y="321" width="200" height="50" rx="12" class="card"/>
+  <circle cx="304" cy="346" r="6" fill="#3370FF"/>
+  <text x="322" y="351" font-size="14" font-weight="500" class="t1">Lark (Feishu)</text>
+
+  <!-- iLink (Weixin) -->
+  <rect x="280" y="387" width="200" height="50" rx="12" class="card"/>
+  <circle cx="304" cy="412" r="6" fill="#07C160"/>
+  <text x="322" y="417" font-size="14" font-weight="500" class="t1">iLink (Weixin)</text>
+
+  <text x="380" y="458" text-anchor="middle" font-size="11" font-weight="500" class="t2">More channels ...</text>
+
+  <!-- ═══ Codeg Hub (icon from src-tauri/icons/icon.svg, scaled to 80x80) ═══ -->
+
+  <g transform="translate(640,240) scale(0.15625)">
+    <rect x="0" y="0" width="512" height="512" rx="90" ry="90" fill="#1a1a2e"/>
+    <polyline points="180,186 100,256 180,326" fill="none" stroke="url(#ic-code)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="332,186 412,256 332,326" fill="none" stroke="url(#ic-code)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="206" cy="256" r="30" fill="url(#ic-b1)" opacity="0.95"/>
+    <circle cx="256" cy="256" r="36" fill="url(#ic-b2)" opacity="0.95"/>
+    <circle cx="306" cy="256" r="30" fill="url(#ic-b3)" opacity="0.95"/>
+  </g>
+  <text x="680" y="340" text-anchor="middle" font-size="18" font-weight="700" letter-spacing="0.5" class="t1">Codeg</text>
+  <text x="680" y="358" text-anchor="middle" font-size="11" font-weight="500" class="t2">Unified Hub</text>
+
+  <!-- ═══ AI Agent Cards ═══ -->
+
+  <text x="870" y="88" text-anchor="start" font-size="11" font-weight="700" letter-spacing="1.5" class="th">AI CODING AGENTS</text>
+
+  <!-- Claude Code -->
+  <rect x="870" y="112" width="210" height="46" rx="12" class="card"/>
+  <circle cx="892" cy="135" r="5" fill="#D97757"/>
+  <text x="908" y="140" font-size="14" font-weight="500" class="t1">Claude Code</text>
+
+  <!-- Codex CLI -->
+  <rect x="870" y="170" width="210" height="46" rx="12" class="card"/>
+  <circle cx="892" cy="193" r="5" fill="#10A37F"/>
+  <text x="908" y="198" font-size="14" font-weight="500" class="t1">Codex CLI</text>
+
+  <!-- OpenCode -->
+  <rect x="870" y="228" width="210" height="46" rx="12" class="card"/>
+  <circle cx="892" cy="251" r="5" fill="#6366F1"/>
+  <text x="908" y="256" font-size="14" font-weight="500" class="t1">OpenCode</text>
+
+  <!-- Gemini CLI -->
+  <rect x="870" y="286" width="210" height="46" rx="12" class="card"/>
+  <circle cx="892" cy="309" r="5" fill="#8B5CF6"/>
+  <text x="908" y="314" font-size="14" font-weight="500" class="t1">Gemini CLI</text>
+
+  <!-- OpenClaw -->
+  <rect x="870" y="344" width="210" height="46" rx="12" class="card"/>
+  <circle cx="892" cy="367" r="5" fill="#F59E0B"/>
+  <text x="908" y="372" font-size="14" font-weight="500" class="t1">OpenClaw</text>
+
+  <!-- Cline -->
+  <rect x="870" y="402" width="210" height="46" rx="12" class="card"/>
+  <circle cx="892" cy="425" r="5" fill="#EC4899"/>
+  <text x="908" y="430" font-size="14" font-weight="500" class="t1">Cline</text>
+
+  <text x="975" y="468" text-anchor="middle" font-size="11" font-weight="500" class="t2">More agents ...</text>
+
+</svg>

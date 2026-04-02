@@ -24,6 +24,10 @@ Codeg（Code Generation）是一個企業級多 Agent 編碼工作台。
 OpenClaw、Cline 等）整合到桌面應用、獨立伺服器或 Docker 容器中——透過瀏覽器即可遠端開發——支援對話彙整、並行 `git worktree`
 開發、MCP/Skills 管理、訊息渠道互動（Telegram、飛書、iLink 等），以及整合的 Git/檔案/終端工作流。
 
+## 通訊流程
+
+![通訊流程](../images/communication-flow.svg)
+
 ## 主介面
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)

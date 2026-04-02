@@ -26,6 +26,10 @@ remote development from any browser — with conversation aggregation, parallel 
 development, MCP/Skills management, chat channel interactions (Telegram, Lark, iLink, etc.),
 and integrated Git/file/terminal workflows.
 
+## Communication Flow
+
+![Communication Flow](./docs/images/communication-flow.svg)
+
 ## Main Interface
 ![Codeg Light](./docs/images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](./docs/images/main-dark.png#gh-dark-mode-only)

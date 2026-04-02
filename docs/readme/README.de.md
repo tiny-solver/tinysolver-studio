@@ -27,6 +27,10 @@ Docker-Container — Remote-Entwicklung von jedem Browser aus — mit Konversati
 paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integration
 (Telegram, Lark, iLink usw.) und integrierten Git/Datei/Terminal-Workflows.
 
+## Kommunikationsfluss
+
+![Kommunikationsfluss](../images/communication-flow.svg)
+
 ## Hauptoberfläche
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
