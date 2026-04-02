@@ -42,7 +42,7 @@ interacción con canales de chat (Telegram, Lark, etc.) y flujos integrados de G
 - Ingesta local de conversaciones con renderizado estructurado
 - Desarrollo paralelo con flujos integrados de `git worktree`
 - **Inicio de Proyecto** — crea nuevos proyectos visualmente con vista previa en tiempo real
-- **Canales de Chat** — conecta Telegram, Lark (Feishu) y más a tus agentes de codificación para notificaciones en tiempo real y comandos interactivos
+- **Canales de Chat** — conecta Telegram, Lark (Feishu) y más a tus agentes de codificación para interacción completa con sesiones y control remoto de tareas
 - Gestión de MCP (escaneo local + búsqueda/instalación desde registro)
 - Gestión de Skills (ámbito global y por proyecto)
 - Gestión de cuentas remotas de Git (GitHub y otros servidores Git)
@@ -70,7 +70,7 @@ Actualmente soporta scaffolding de proyectos **shadcn/ui**, con un diseño basad
 
 ## Canales de Chat
 
-Conecta tus aplicaciones de mensajería favoritas — Telegram, Lark (Feishu) y más — a tus agentes de codificación IA. Recibe notificaciones en tiempo real cuando los agentes completen tareas o encuentren errores, consulta el historial de conversaciones desde tu teléfono y obtén informes diarios automatizados — todo sin salir de tu aplicación de chat.
+Conecta tus aplicaciones de mensajería favoritas — Telegram, Lark (Feishu) y más — a tus agentes de codificación IA. Crea tareas, envía mensajes de seguimiento, aprueba permisos, reanuda sesiones y monitorea la actividad directamente desde el chat — recibe respuestas del agente en tiempo real con detalles de llamadas a herramientas, solicitudes de permisos y resúmenes de finalización sin necesidad de abrir un navegador.
 
 ### Canales soportados
 
@@ -83,12 +83,14 @@ Conecta tus aplicaciones de mensajería favoritas — Telegram, Lark (Feishu) y 
 
 ### Características principales
 
-- **Notificaciones de eventos** — las finalizaciones de turno y errores de los agentes se envían a todos los canales habilitados en tiempo real
-- **Comandos interactivos** — envía comandos (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) desde tu app de chat y obtén respuestas instantáneas; prefijo de comando configurable. Los comandos relacionados con conversaciones (inicio, parada, aprobación) están planificados para próximas versiones
+- **Interacción de sesiones** — ejecuta sesiones completas de agente: `/folder` para elegir proyecto, `/agent` para seleccionar agente, `/task <descripción>` para iniciar una tarea, envía mensajes de seguimiento como texto plano. `/resume` para continuar una sesión anterior, `/cancel` para cancelar, `/sessions` para listar las sesiones activas
+- **Control de permisos** — los agentes solicitan permisos de ejecución de herramientas directamente en el chat; `/approve` (o `/approve always` para aprobación automática) y `/deny`
+- **Notificaciones de eventos** — las finalizaciones de turno, llamadas a herramientas y errores de los agentes se envían en tiempo real con formato enriquecido
+- **Comandos de consulta** — `/search <palabra clave>`, `/today`, `/status`, `/help` para búsquedas rápidas; prefijo de comando configurable
 - **Informes diarios** — resumen diario automatizado a una hora programada, incluyendo recuento de conversaciones, desglose por tipo de agente y actividad del proyecto
 - **Multi-idioma** — plantillas de mensajes en 10 idiomas (inglés, chino simplificado/tradicional, japonés, coreano, español, alemán, francés, portugués, árabe)
 - **Credenciales seguras** — los tokens se almacenan en el llavero del SO, nunca se exponen en archivos de configuración ni logs
-- **Mensajes enriquecidos** — formato Markdown para Telegram, diseño basado en tarjetas para Lark; respaldo en texto plano para todas las plataformas
+- **Mensajes enriquecidos** — formato Markdown para Telegram, diseño de tarjetas para Lark; respaldo en texto plano para todas las plataformas
 
 ### Configuración
 

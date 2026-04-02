@@ -42,7 +42,7 @@ paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integra
 - Lokale Konversationserfassung mit strukturierter Darstellung
 - Parallele Entwicklung mit integrierten `git worktree`-Abläufen
 - **Projekt-Starter** — neue Projekte visuell erstellen mit Live-Vorschau
-- **Chat-Kanäle** — Telegram, Lark (Feishu) und mehr mit Ihren Coding-Agenten verbinden für Echtzeit-Benachrichtigungen und interaktive Befehle
+- **Chat-Kanäle** — Telegram, Lark (Feishu) und mehr mit Ihren Coding-Agenten verbinden für vollständige Sitzungsinteraktion und Remote-Aufgabensteuerung
 - MCP-Verwaltung (lokaler Scan + Registry-Suche/Installation)
 - Skills-Verwaltung (global und projektbezogen)
 - Git-Remote-Kontoverwaltung (GitHub und andere Git-Server)
@@ -70,7 +70,7 @@ Unterstützt derzeit **shadcn/ui**-Projekt-Scaffolding, mit einem Tab-basierten 
 
 ## Chat-Kanäle
 
-Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und mehr — mit Ihren KI-Coding-Agenten. Erhalten Sie Echtzeit-Benachrichtigungen, wenn Agenten Aufgaben abschließen oder auf Fehler stoßen, fragen Sie den Konversationsverlauf von Ihrem Smartphone ab und erhalten Sie automatisierte Tagesberichte — alles ohne Ihre Chat-App zu verlassen.
+Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und mehr — mit Ihren KI-Coding-Agenten. Erstellen Sie Aufgaben, senden Sie Folgenachrichten, genehmigen Sie Berechtigungen, setzen Sie Sitzungen fort und überwachen Sie die Aktivität direkt aus dem Chat — empfangen Sie Echtzeit-Antworten der Agenten mit Tool-Call-Details, Berechtigungsanfragen und Abschlusszusammenfassungen, ohne einen Browser zu öffnen.
 
 ### Unterstützte Kanäle
 
@@ -83,8 +83,10 @@ Verbinden Sie Ihre bevorzugten Messaging-Apps — Telegram, Lark (Feishu) und me
 
 ### Hauptfunktionen
 
-- **Ereignisbenachrichtigungen** — Agenten-Rundenvervollständigungen und Fehler werden in Echtzeit an alle aktivierten Kanäle gepusht
-- **Interaktive Befehle** — senden Sie Befehle (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) aus Ihrer Chat-App und erhalten Sie sofortige Antworten; konfigurierbarer Befehlspräfix. Konversationsbezogene Befehle (Start, Stopp, Genehmigung) sind für kommende Releases geplant
+- **Sitzungs-Interaktion** — vollständige Agenten-Sitzungen ausführen: `/folder` Projekt wählen, `/agent` Agent auswählen, `/task <Beschreibung>` Aufgabe starten, Folgenachrichten als Klartext senden. `/resume` vorherige Sitzung fortsetzen, `/cancel` abbrechen, `/sessions` aktive Sitzungen auflisten
+- **Berechtigungssteuerung** — Agenten fordern Tool-Ausführungsberechtigungen im Chat an; `/approve` (oder `/approve always` für automatische Genehmigung) und `/deny`
+- **Ereignisbenachrichtigungen** — Agenten-Rundenvervollständigungen, Tool-Calls und Fehler werden in Echtzeit mit Rich-Formatierung gepusht
+- **Abfragebefehle** — `/search <Suchbegriff>`, `/today`, `/status`, `/help` für schnelle Abfragen; konfigurierbarer Befehlspräfix
 - **Tagesberichte** — automatisierte tägliche Zusammenfassung zu einer geplanten Zeit, einschließlich Konversationszählung, Aufschlüsselung nach Agent-Typ und Projektaktivität
 - **Mehrsprachig** — Nachrichtenvorlagen in 10 Sprachen (Englisch, vereinfachtes/traditionelles Chinesisch, Japanisch, Koreanisch, Spanisch, Deutsch, Französisch, Portugiesisch, Arabisch)
 - **Sichere Anmeldedaten** — Token werden im OS-Schlüsselbund gespeichert, nie in Konfigurationsdateien oder Logs exponiert

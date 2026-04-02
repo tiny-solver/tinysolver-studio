@@ -41,7 +41,7 @@ et workflows intégrés Git/fichiers/terminal.
 - Ingestion locale des conversations avec rendu structuré
 - Développement parallèle avec flux `git worktree` intégré
 - **Lanceur de projet** — créez visuellement de nouveaux projets avec aperçu en temps réel
-- **Canaux de chat** — connectez Telegram, Lark (Feishu) et plus à vos agents de codage pour des notifications en temps réel et des commandes interactives
+- **Canaux de chat** — connectez Telegram, Lark (Feishu) et plus à vos agents de codage pour une interaction complète avec les sessions et le contrôle à distance des tâches
 - Gestion MCP (scan local + recherche/installation depuis le registre)
 - Gestion des Skills (portée globale et projet)
 - Gestion des comptes distants Git (GitHub et autres serveurs Git)
@@ -69,7 +69,7 @@ Prend actuellement en charge le scaffolding de projets **shadcn/ui**, avec un de
 
 ## Canaux de chat
 
-Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu) et plus — à vos agents de codage IA. Recevez des notifications en temps réel lorsque les agents terminent des tâches ou rencontrent des erreurs, consultez l'historique des conversations depuis votre téléphone et obtenez des rapports quotidiens automatisés — le tout sans quitter votre application de chat.
+Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu) et plus — à vos agents de codage IA. Créez des tâches, envoyez des messages de suivi, approuvez les permissions, reprenez des sessions et surveillez l'activité directement depuis votre chat — recevez les réponses des agents en temps réel avec les détails des appels d'outils, les demandes de permissions et les résumés de complétion, le tout sans ouvrir de navigateur.
 
 ### Canaux pris en charge
 
@@ -82,8 +82,10 @@ Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu
 
 ### Fonctionnalités clés
 
-- **Notifications d'événements** — les complétions de tour et les erreurs des agents sont poussées vers tous les canaux activés en temps réel
-- **Commandes interactives** — envoyez des commandes (`/recent`, `/search`, `/detail`, `/today`, `/status`, `/help`) depuis votre application de chat et obtenez des réponses instantanées ; préfixe de commande configurable. Les commandes liées aux conversations (démarrage, arrêt, approbation) sont prévues pour les prochaines versions
+- **Interaction de session** — exécutez des sessions complètes avec les agents : `/folder` pour choisir le projet, `/agent` pour sélectionner l'agent, `/task <description>` pour lancer une tâche, envoyez des messages de suivi en texte libre. `/resume` pour reprendre une session précédente, `/cancel` pour annuler, `/sessions` pour lister les sessions actives
+- **Contrôle des permissions** — les agents demandent les permissions d'exécution d'outils directement dans le chat ; `/approve` (ou `/approve always` pour l'approbation automatique) et `/deny`
+- **Notifications d'événements** — les complétions de tour, les appels d'outils et les erreurs des agents sont poussés en temps réel avec un formatage enrichi
+- **Commandes de requête** — `/search <mot-clé>`, `/today`, `/status`, `/help` pour des consultations rapides ; préfixe de commande configurable
 - **Rapports quotidiens** — résumé quotidien automatisé à une heure programmée, incluant le nombre de conversations, la répartition par type d'agent et l'activité du projet
 - **Multi-langue** — modèles de messages en 10 langues (anglais, chinois simplifié/traditionnel, japonais, coréen, espagnol, allemand, français, portugais, arabe)
 - **Identifiants sécurisés** — les tokens sont stockés dans le trousseau du système d'exploitation, jamais exposés dans les fichiers de configuration ou les logs

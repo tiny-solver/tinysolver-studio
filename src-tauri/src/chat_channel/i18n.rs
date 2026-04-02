@@ -280,36 +280,6 @@ pub fn query_failed_title(lang: Lang) -> &'static str {
     }
 }
 
-pub fn no_conversations(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "暂无会话记录",
-        Lang::ZhTw => "暫無對話記錄",
-        Lang::Ja => "セッション履歴なし",
-        Lang::Ko => "대화 기록 없음",
-        Lang::Es => "Sin conversaciones",
-        Lang::De => "Keine Sitzungen",
-        Lang::Fr => "Aucune session",
-        Lang::Pt => "Nenhuma sessão",
-        Lang::Ar => "لا توجد جلسات",
-        Lang::En => "No conversations found",
-    }
-}
-
-pub fn recent_conversations_title(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "最近会话",
-        Lang::ZhTw => "最近對話",
-        Lang::Ja => "最近のセッション",
-        Lang::Ko => "최근 대화",
-        Lang::Es => "Conversaciones recientes",
-        Lang::De => "Letzte Sitzungen",
-        Lang::Fr => "Sessions récentes",
-        Lang::Pt => "Sessões recentes",
-        Lang::Ar => "الجلسات الأخيرة",
-        Lang::En => "Recent Conversations",
-    }
-}
-
 pub fn untitled(lang: Lang) -> &'static str {
     match lang {
         Lang::ZhCn => "(无标题)",
@@ -322,21 +292,6 @@ pub fn untitled(lang: Lang) -> &'static str {
         Lang::Pt => "(Sem título)",
         Lang::Ar => "(بدون عنوان)",
         Lang::En => "(Untitled)",
-    }
-}
-
-pub fn recent_n_conversations_title(lang: Lang, n: usize) -> String {
-    match lang {
-        Lang::ZhCn => format!("最近 {n} 条会话"),
-        Lang::ZhTw => format!("最近 {n} 條對話"),
-        Lang::Ja => format!("最新 {n} セッション"),
-        Lang::Ko => format!("최근 {n}개 대화"),
-        Lang::Es => format!("{n} conversaciones más recientes"),
-        Lang::De => format!("Letzte {n} Sitzungen"),
-        Lang::Fr => format!("{n} dernières sessions"),
-        Lang::Pt => format!("{n} sessões mais recentes"),
-        Lang::Ar => format!("أحدث {n} جلسات"),
-        Lang::En => format!("{n} Most Recent Conversations"),
     }
 }
 
@@ -385,110 +340,6 @@ pub fn search_results_count_title(lang: Lang, keyword: &str, count: usize) -> St
     }
 }
 
-pub fn conversation_not_found(lang: Lang, id: i32) -> String {
-    match lang {
-        Lang::ZhCn => format!("会话 {id} 不存在"),
-        Lang::ZhTw => format!("對話 {id} 不存在"),
-        Lang::Ja => format!("セッション {id} が見つかりません"),
-        Lang::Ko => format!("대화 {id}를 찾을 수 없습니다"),
-        Lang::Es => format!("Conversación {id} no encontrada"),
-        Lang::De => format!("Sitzung {id} nicht gefunden"),
-        Lang::Fr => format!("Session {id} introuvable"),
-        Lang::Pt => format!("Sessão {id} não encontrada"),
-        Lang::Ar => format!("الجلسة {id} غير موجودة"),
-        Lang::En => format!("Conversation {id} not found"),
-    }
-}
-
-pub fn not_found_title(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "未找到",
-        Lang::ZhTw => "未找到",
-        Lang::Ja => "見つかりません",
-        Lang::Ko => "찾을 수 없음",
-        Lang::Es => "No encontrado",
-        Lang::De => "Nicht gefunden",
-        Lang::Fr => "Introuvable",
-        Lang::Pt => "Não encontrado",
-        Lang::Ar => "غير موجود",
-        Lang::En => "Not Found",
-    }
-}
-
-pub fn conversation_detail_title(lang: Lang, id: i32) -> String {
-    match lang {
-        Lang::ZhCn => format!("会话详情 #{id}"),
-        Lang::ZhTw => format!("對話詳情 #{id}"),
-        Lang::Ja => format!("セッション詳細 #{id}"),
-        Lang::Ko => format!("대화 상세 #{id}"),
-        Lang::Es => format!("Detalles #{id}"),
-        Lang::De => format!("Sitzungsdetails #{id}"),
-        Lang::Fr => format!("Détails #{id}"),
-        Lang::Pt => format!("Detalhes #{id}"),
-        Lang::Ar => format!("تفاصيل الجلسة #{id}"),
-        Lang::En => format!("Conversation Details #{id}"),
-    }
-}
-
-pub fn field_agent(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "代理",
-        Lang::ZhTw => "代理",
-        Lang::Ja => "エージェント",
-        Lang::Ko => "에이전트",
-        Lang::Es => "Agente",
-        Lang::De => "Agent",
-        Lang::Fr => "Agent",
-        Lang::Pt => "Agente",
-        Lang::Ar => "الوكيل",
-        Lang::En => "Agent",
-    }
-}
-
-pub fn field_status(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "状态",
-        Lang::ZhTw => "狀態",
-        Lang::Ja => "ステータス",
-        Lang::Ko => "상태",
-        Lang::Es => "Estado",
-        Lang::De => "Status",
-        Lang::Fr => "Statut",
-        Lang::Pt => "Status",
-        Lang::Ar => "الحالة",
-        Lang::En => "Status",
-    }
-}
-
-pub fn field_message_count(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "消息数",
-        Lang::ZhTw => "訊息數",
-        Lang::Ja => "メッセージ数",
-        Lang::Ko => "메시지 수",
-        Lang::Es => "Mensajes",
-        Lang::De => "Nachrichten",
-        Lang::Fr => "Messages",
-        Lang::Pt => "Mensagens",
-        Lang::Ar => "عدد الرسائل",
-        Lang::En => "Messages",
-    }
-}
-
-pub fn field_created_at(lang: Lang) -> &'static str {
-    match lang {
-        Lang::ZhCn => "创建时间",
-        Lang::ZhTw => "建立時間",
-        Lang::Ja => "作成日時",
-        Lang::Ko => "생성 시간",
-        Lang::Es => "Creado",
-        Lang::De => "Erstellt",
-        Lang::Fr => "Créé",
-        Lang::Pt => "Criado",
-        Lang::Ar => "تاريخ الإنشاء",
-        Lang::En => "Created",
-    }
-}
 
 pub fn no_activity_today(lang: Lang) -> &'static str {
     match lang {
@@ -610,84 +461,174 @@ pub fn help_title(lang: Lang) -> &'static str {
 pub fn help_body(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!(
-            "{prefix}recent - 最近 5 条会话\n\
+            "{prefix}folder - 选择工作目录\n\
+             {prefix}agent - 选择 Agent\n\
+             {prefix}task <描述> - 创建会话并执行任务\n\
+             {prefix}sessions - 当前目录的活跃会话\n\
+             {prefix}resume [ID] - 最近会话 / 恢复指定会话\n\
+             {prefix}cancel - 取消当前任务\n\
+             {prefix}approve [always] - 批准权限请求\n\
+             {prefix}deny - 拒绝权限请求\n\
+             \n\
              {prefix}search <关键词> - 搜索会话\n\
-             {prefix}detail <ID> - 会话详情\n\
              {prefix}today - 今日活动汇总\n\
              {prefix}status - 渠道连接状态\n\
-             {prefix}help - 显示帮助"
+             {prefix}help - 显示帮助\n\
+             \n\
+             有活跃会话时，直接发文本即可继续对话"
         ),
         Lang::ZhTw => format!(
-            "{prefix}recent - 最近 5 條對話\n\
+            "{prefix}folder - 選擇工作目錄\n\
+             {prefix}agent - 選擇 Agent\n\
+             {prefix}task <描述> - 建立對話並執行任務\n\
+             {prefix}sessions - 當前目錄的活躍對話\n\
+             {prefix}resume [ID] - 最近對話 / 恢復指定對話\n\
+             {prefix}cancel - 取消當前任務\n\
+             {prefix}approve [always] - 批准權限請求\n\
+             {prefix}deny - 拒絕權限請求\n\
+             \n\
              {prefix}search <關鍵字> - 搜尋對話\n\
-             {prefix}detail <ID> - 對話詳情\n\
              {prefix}today - 今日活動匯總\n\
              {prefix}status - 頻道連線狀態\n\
-             {prefix}help - 顯示幫助"
+             {prefix}help - 顯示幫助\n\
+             \n\
+             有活躍對話時，直接發文字即可繼續對話"
         ),
         Lang::Ja => format!(
-            "{prefix}recent - 最新5件のセッション\n\
+            "{prefix}folder - 作業フォルダを選択\n\
+             {prefix}agent - エージェントを選択\n\
+             {prefix}task <説明> - セッションを作成してタスクを実行\n\
+             {prefix}sessions - フォルダ内のアクティブセッション\n\
+             {prefix}resume [ID] - 最近のセッション / セッションを再開\n\
+             {prefix}cancel - 現在のタスクをキャンセル\n\
+             {prefix}approve [always] - 権限を承認\n\
+             {prefix}deny - 権限を拒否\n\
+             \n\
              {prefix}search <キーワード> - セッション検索\n\
-             {prefix}detail <ID> - セッション詳細\n\
              {prefix}today - 本日の活動まとめ\n\
              {prefix}status - チャンネル接続状況\n\
-             {prefix}help - ヘルプを表示"
+             {prefix}help - ヘルプを表示\n\
+             \n\
+             セッションがアクティブな場合、テキストを送信するだけで会話を続けられます"
         ),
         Lang::Ko => format!(
-            "{prefix}recent - 최근 5개 대화\n\
+            "{prefix}folder - 작업 폴더 선택\n\
+             {prefix}agent - 에이전트 선택\n\
+             {prefix}task <설명> - 세션 생성 및 작업 실행\n\
+             {prefix}sessions - 폴더 내 활성 세션\n\
+             {prefix}resume [ID] - 최근 대화 / 세션 재개\n\
+             {prefix}cancel - 현재 작업 취소\n\
+             {prefix}approve [always] - 권한 승인\n\
+             {prefix}deny - 권한 거부\n\
+             \n\
              {prefix}search <키워드> - 대화 검색\n\
-             {prefix}detail <ID> - 대화 상세\n\
              {prefix}today - 오늘의 활동 요약\n\
              {prefix}status - 채널 연결 상태\n\
-             {prefix}help - 도움말 표시"
+             {prefix}help - 도움말 표시\n\
+             \n\
+             세션이 활성화된 경우 텍스트를 보내면 대화를 계속할 수 있습니다"
         ),
         Lang::Es => format!(
-            "{prefix}recent - 5 conversaciones más recientes\n\
+            "{prefix}folder - Seleccionar carpeta de trabajo\n\
+             {prefix}agent - Seleccionar agente\n\
+             {prefix}task <desc> - Crear sesion y ejecutar tarea\n\
+             {prefix}sessions - Sesiones activas en la carpeta\n\
+             {prefix}resume [ID] - Recientes / reanudar una sesion\n\
+             {prefix}cancel - Cancelar tarea actual\n\
+             {prefix}approve [always] - Aprobar permiso\n\
+             {prefix}deny - Denegar permiso\n\
+             \n\
              {prefix}search <palabra> - Buscar conversaciones\n\
-             {prefix}detail <ID> - Detalles de conversación\n\
              {prefix}today - Resumen de hoy\n\
              {prefix}status - Estado de canales\n\
-             {prefix}help - Mostrar ayuda"
+             {prefix}help - Mostrar ayuda\n\
+             \n\
+             Cuando hay una sesion activa, simplemente escriba texto para continuar"
         ),
         Lang::De => format!(
-            "{prefix}recent - 5 neueste Sitzungen\n\
+            "{prefix}folder - Arbeitsordner auswahlen\n\
+             {prefix}agent - Agent auswahlen\n\
+             {prefix}task <Beschreibung> - Sitzung erstellen und Aufgabe ausfuhren\n\
+             {prefix}sessions - Aktive Sitzungen im Ordner\n\
+             {prefix}resume [ID] - Neueste Sitzungen / Sitzung fortsetzen\n\
+             {prefix}cancel - Aktuelle Aufgabe abbrechen\n\
+             {prefix}approve [always] - Berechtigung genehmigen\n\
+             {prefix}deny - Berechtigung verweigern\n\
+             \n\
              {prefix}search <Stichwort> - Sitzungen suchen\n\
-             {prefix}detail <ID> - Sitzungsdetails\n\
              {prefix}today - Heutige Zusammenfassung\n\
              {prefix}status - Kanalstatus\n\
-             {prefix}help - Hilfe anzeigen"
+             {prefix}help - Hilfe anzeigen\n\
+             \n\
+             Bei aktiver Sitzung einfach Text eingeben, um das Gesprach fortzusetzen"
         ),
         Lang::Fr => format!(
-            "{prefix}recent - 5 dernières sessions\n\
-             {prefix}search <mot-clé> - Rechercher des sessions\n\
-             {prefix}detail <ID> - Détails de la session\n\
-             {prefix}today - Résumé du jour\n\
+            "{prefix}folder - Selectionner le dossier de travail\n\
+             {prefix}agent - Selectionner l'agent\n\
+             {prefix}task <desc> - Creer une session et executer une tache\n\
+             {prefix}sessions - Sessions actives dans le dossier\n\
+             {prefix}resume [ID] - Sessions recentes / reprendre une session\n\
+             {prefix}cancel - Annuler la tache en cours\n\
+             {prefix}approve [always] - Approuver la permission\n\
+             {prefix}deny - Refuser la permission\n\
+             \n\
+             {prefix}search <mot-cle> - Rechercher des sessions\n\
+             {prefix}today - Resume du jour\n\
              {prefix}status - Statut des canaux\n\
-             {prefix}help - Afficher l'aide"
+             {prefix}help - Afficher l'aide\n\
+             \n\
+             Lorsqu'une session est active, envoyez du texte pour continuer la conversation"
         ),
         Lang::Pt => format!(
-            "{prefix}recent - 5 sessões mais recentes\n\
-             {prefix}search <palavra> - Buscar sessões\n\
-             {prefix}detail <ID> - Detalhes da sessão\n\
+            "{prefix}folder - Selecionar pasta de trabalho\n\
+             {prefix}agent - Selecionar agente\n\
+             {prefix}task <desc> - Criar sessao e executar tarefa\n\
+             {prefix}sessions - Sessoes ativas na pasta\n\
+             {prefix}resume [ID] - Recentes / retomar uma sessao\n\
+             {prefix}cancel - Cancelar tarefa atual\n\
+             {prefix}approve [always] - Aprovar permissao\n\
+             {prefix}deny - Negar permissao\n\
+             \n\
+             {prefix}search <palavra> - Buscar sessoes\n\
              {prefix}today - Resumo de hoje\n\
              {prefix}status - Status dos canais\n\
-             {prefix}help - Mostrar ajuda"
+             {prefix}help - Mostrar ajuda\n\
+             \n\
+             Quando uma sessao esta ativa, basta digitar texto para continuar a conversa"
         ),
         Lang::Ar => format!(
-            "{prefix}recent - أحدث 5 جلسات\n\
+            "{prefix}folder - اختيار مجلد العمل\n\
+             {prefix}agent - اختيار الوكيل\n\
+             {prefix}task <وصف> - انشاء جلسة وتنفيذ مهمة\n\
+             {prefix}sessions - الجلسات النشطة في المجلد\n\
+             {prefix}resume [ID] - الجلسات الاخيرة / استئناف جلسة\n\
+             {prefix}cancel - الغاء المهمة الحالية\n\
+             {prefix}approve [always] - الموافقة على الاذن\n\
+             {prefix}deny - رفض الاذن\n\
+             \n\
              {prefix}search <كلمة> - البحث في الجلسات\n\
-             {prefix}detail <ID> - تفاصيل الجلسة\n\
              {prefix}today - ملخص اليوم\n\
              {prefix}status - حالة القنوات\n\
-             {prefix}help - عرض المساعدة"
+             {prefix}help - عرض المساعدة\n\
+             \n\
+             عندما تكون الجلسة نشطة، ارسل نصا لمتابعة المحادثة"
         ),
         Lang::En => format!(
-            "{prefix}recent - 5 most recent conversations\n\
+            "{prefix}folder - Select working folder\n\
+             {prefix}agent - Select agent\n\
+             {prefix}task <desc> - Create session & run task\n\
+             {prefix}sessions - Active sessions in folder\n\
+             {prefix}resume [ID] - Recent conversations / resume a session\n\
+             {prefix}cancel - Cancel current task\n\
+             {prefix}approve [always] - Approve permission\n\
+             {prefix}deny - Deny permission\n\
+             \n\
              {prefix}search <keyword> - Search conversations\n\
-             {prefix}detail <ID> - Conversation details\n\
              {prefix}today - Today's activity summary\n\
              {prefix}status - Channel connection status\n\
-             {prefix}help - Show help"
+             {prefix}help - Show help\n\
+             \n\
+             When a session is active, just type text to continue the conversation"
         ),
     }
 }
@@ -721,21 +662,6 @@ pub fn search_usage(lang: Lang, prefix: &str) -> String {
         Lang::Pt => format!("Uso: {prefix}search <palavra>"),
         Lang::Ar => format!("الاستخدام: {prefix}search <كلمة>"),
         Lang::En => format!("Usage: {prefix}search <keyword>"),
-    }
-}
-
-pub fn detail_usage(lang: Lang, prefix: &str) -> String {
-    match lang {
-        Lang::ZhCn => format!("用法: {prefix}detail <会话ID>"),
-        Lang::ZhTw => format!("用法: {prefix}detail <對話ID>"),
-        Lang::Ja => format!("使い方: {prefix}detail <セッションID>"),
-        Lang::Ko => format!("사용법: {prefix}detail <대화ID>"),
-        Lang::Es => format!("Uso: {prefix}detail <ID>"),
-        Lang::De => format!("Verwendung: {prefix}detail <ID>"),
-        Lang::Fr => format!("Utilisation : {prefix}detail <ID>"),
-        Lang::Pt => format!("Uso: {prefix}detail <ID>"),
-        Lang::Ar => format!("الاستخدام: {prefix}detail <ID>"),
-        Lang::En => format!("Usage: {prefix}detail <ID>"),
     }
 }
 
@@ -786,5 +712,22 @@ pub fn unknown_command_title(lang: Lang) -> &'static str {
         Lang::Pt => "Comando desconhecido",
         Lang::Ar => "أمر غير معروف",
         Lang::En => "Unknown Command",
+    }
+}
+
+// ── Session progress messages ──
+
+pub fn agent_responding(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "Claude Code 正在响应中...",
+        Lang::ZhTw => "Claude Code 正在回應中...",
+        Lang::Ja => "Claude Code が応答中...",
+        Lang::Ko => "Claude Code 응답 중...",
+        Lang::Es => "Claude Code respondiendo...",
+        Lang::De => "Claude Code antwortet...",
+        Lang::Fr => "Claude Code en cours de reponse...",
+        Lang::Pt => "Claude Code respondendo...",
+        Lang::Ar => "...Claude Code يستجيب",
+        Lang::En => "Claude Code is responding...",
     }
 }

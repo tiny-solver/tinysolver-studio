@@ -6,48 +6,6 @@ use super::manager::ChatChannelManager;
 use super::types::{MessageLevel, RichMessage};
 use crate::db::entities::conversation;
 
-pub async fn handle_recent(db: &DatabaseConnection, lang: Lang) -> RichMessage {
-    let recent = match conversation::Entity::find()
-        .filter(conversation::Column::DeletedAt.is_null())
-        .order_by_desc(conversation::Column::CreatedAt)
-        .limit(5)
-        .all(db)
-        .await
-    {
-        Ok(rows) => rows,
-        Err(e) => {
-            return RichMessage {
-                title: Some(i18n::query_failed_title(lang).to_string()),
-                body: e.to_string(),
-                fields: Vec::new(),
-                level: MessageLevel::Error,
-            };
-        }
-    };
-
-    if recent.is_empty() {
-        return RichMessage::info(i18n::no_conversations(lang))
-            .with_title(i18n::recent_conversations_title(lang));
-    }
-
-    let mut body = String::new();
-    for (i, conv) in recent.iter().enumerate() {
-        let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
-        let agent = &conv.agent_type;
-        let time = conv.created_at.format("%m-%d %H:%M");
-        body.push_str(&format!(
-            "{}. [{}] {} ({})\n",
-            i + 1,
-            agent,
-            title,
-            time
-        ));
-    }
-
-    RichMessage::info(body.trim_end())
-        .with_title(i18n::recent_n_conversations_title(lang, recent.len()))
-}
-
 pub async fn handle_search(
     db: &DatabaseConnection,
     keyword: &str,
@@ -78,15 +36,13 @@ pub async fn handle_search(
     }
 
     let mut body = String::new();
-    for (i, conv) in matched.iter().enumerate() {
+    for conv in &matched {
         let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
         let agent = &conv.agent_type;
+        let time = conv.created_at.format("%m-%d %H:%M");
         body.push_str(&format!(
-            "{}. [{}] {} (ID:{})\n",
-            i + 1,
-            agent,
-            title,
-            conv.id
+            "#{} [{}] {} ({})\n",
+            conv.id, agent, title, time,
         ));
     }
 
@@ -95,46 +51,6 @@ pub async fn handle_search(
         keyword,
         matched.len(),
     ))
-}
-
-pub async fn handle_detail(
-    db: &DatabaseConnection,
-    conversation_id: i32,
-    lang: Lang,
-) -> RichMessage {
-    let conv = match conversation::Entity::find_by_id(conversation_id)
-        .filter(conversation::Column::DeletedAt.is_null())
-        .one(db)
-        .await
-    {
-        Ok(Some(c)) => c,
-        Ok(None) => {
-            return RichMessage::info(i18n::conversation_not_found(lang, conversation_id))
-                .with_title(i18n::not_found_title(lang));
-        }
-        Err(e) => {
-            return RichMessage {
-                title: Some(i18n::query_failed_title(lang).to_string()),
-                body: e.to_string(),
-                fields: Vec::new(),
-                level: MessageLevel::Error,
-            };
-        }
-    };
-
-    let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
-    RichMessage::info(title)
-        .with_title(i18n::conversation_detail_title(lang, conv.id))
-        .with_field(i18n::field_agent(lang), &conv.agent_type)
-        .with_field(i18n::field_status(lang), format!("{:?}", conv.status))
-        .with_field(
-            i18n::field_message_count(lang),
-            conv.message_count.to_string(),
-        )
-        .with_field(
-            i18n::field_created_at(lang),
-            conv.created_at.format("%Y-%m-%d %H:%M").to_string(),
-        )
 }
 
 pub async fn handle_today(db: &DatabaseConnection, lang: Lang) -> RichMessage {
