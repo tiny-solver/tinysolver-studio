@@ -35,6 +35,8 @@ interface TerminalContextValue {
   setHeight: (h: number) => void
   tabs: TerminalTab[]
   activeTabId: string | null
+  exitedTerminals: Set<string>
+  markTerminalExited: (id: string) => void
   createTerminal: () => Promise<void>
   createTerminalInDirectory: (
     workingDir: string,
@@ -69,6 +71,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [tabs, setTabs] = useState<TerminalTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const tabCounterRef = useRef(0)
+  const [exitedTerminals, setExitedTerminals] = useState<Set<string>>(new Set())
   const lastMouseActivityInTerminalRef = useRef(false)
   // Keep a ref of tabs for cleanup on unmount (effect [] captures stale state)
   const tabsRef = useRef(tabs)
@@ -77,6 +80,27 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }, [tabs])
 
   const folderPath = folder?.path ?? ""
+
+  const markTerminalExited = useCallback((id: string) => {
+    setExitedTerminals((prev) => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }, [])
+
+  const removeExitedTerminals = useCallback((ids: string[]) => {
+    setExitedTerminals((prev) => {
+      if (prev.size === 0) return prev
+      let changed = false
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (next.delete(id)) changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [])
 
   const killTerminalTabs = useCallback((targetTabs: TerminalTab[]) => {
     targetTabs.forEach((tab) => {
@@ -158,43 +182,51 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     setHeightState(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, h)))
   }, [])
 
-  const closeTerminal = useCallback((id: string) => {
-    terminalKill(id).catch(() => {})
-    setTabs((prev) => {
-      const next = prev.filter((t) => t.id !== id)
-      if (next.length === 0) {
-        tabCounterRef.current = 0
-        setIsOpen(false)
-        setActiveTabId(null)
-      } else {
-        setActiveTabId((prevActive) =>
-          prevActive === id ? next[next.length - 1].id : prevActive
-        )
-      }
-      return next
-    })
-  }, [])
+  const closeTerminal = useCallback(
+    (id: string) => {
+      markTerminalExited(id)
+      removeExitedTerminals([id])
+      terminalKill(id).catch(() => {})
+      setTabs((prev) => {
+        const next = prev.filter((t) => t.id !== id)
+        if (next.length === 0) {
+          tabCounterRef.current = 0
+          setIsOpen(false)
+          setActiveTabId(null)
+        } else {
+          setActiveTabId((prevActive) =>
+            prevActive === id ? next[next.length - 1].id : prevActive
+          )
+        }
+        return next
+      })
+    },
+    [markTerminalExited, removeExitedTerminals]
+  )
 
   const closeOtherTerminals = useCallback(
     (id: string) => {
       setTabs((prev) => {
-        killTerminalTabs(prev.filter((t) => t.id !== id))
+        const closed = prev.filter((t) => t.id !== id)
+        killTerminalTabs(closed)
+        removeExitedTerminals(closed.map((t) => t.id))
         return prev.filter((t) => t.id === id)
       })
       setActiveTabId(id)
     },
-    [killTerminalTabs]
+    [killTerminalTabs, removeExitedTerminals]
   )
 
   const closeAllTerminals = useCallback(() => {
     setTabs((prev) => {
       killTerminalTabs(prev)
+      removeExitedTerminals(prev.map((t) => t.id))
       return []
     })
     tabCounterRef.current = 0
     setActiveTabId(null)
     setIsOpen(false)
-  }, [killTerminalTabs])
+  }, [killTerminalTabs, removeExitedTerminals])
 
   const renameTerminal = useCallback((id: string, title: string) => {
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)))
@@ -304,6 +336,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       setHeight,
       tabs,
       activeTabId,
+      exitedTerminals,
+      markTerminalExited,
       createTerminal,
       createTerminalInDirectory,
       createTerminalWithCommand,
@@ -320,6 +354,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       setHeight,
       tabs,
       activeTabId,
+      exitedTerminals,
+      markTerminalExited,
       createTerminal,
       createTerminalInDirectory,
       createTerminalWithCommand,

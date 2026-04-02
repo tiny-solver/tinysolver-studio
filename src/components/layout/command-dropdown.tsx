@@ -1,6 +1,5 @@
 "use client"
 
-import { subscribe } from "@/lib/platform"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { ChevronDown, Play, Plus, Square } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -18,9 +17,8 @@ import {
   bootstrapFolderCommandsFromPackageJson,
   listFolderCommands,
   terminalKill,
-  terminalList,
 } from "@/lib/api"
-import type { FolderCommand, TerminalEvent } from "@/lib/types"
+import type { FolderCommand } from "@/lib/types"
 import { CommandManageDialog } from "./command-manage-dialog"
 
 function getSelectedCommandId(folderId: number): number | null {
@@ -43,7 +41,7 @@ function setSelectedCommandId(folderId: number, cmdId: number) {
 export function CommandDropdown() {
   const t = useTranslations("Folder.commandDropdown")
   const { folder } = useFolderContext()
-  const { createTerminalWithCommand } = useTerminalContext()
+  const { createTerminalWithCommand, exitedTerminals } = useTerminalContext()
   const [commands, setCommands] = useState<FolderCommand[]>([])
   const [manageOpen, setManageOpen] = useState(false)
   const [bootstrapping, setBootstrapping] = useState(false)
@@ -53,7 +51,6 @@ export function CommandDropdown() {
   const [runningCommandTerminals, setRunningCommandTerminals] = useState<
     Record<number, string>
   >({})
-  const exitUnlistenersRef = useRef<Map<string, () => void>>(new Map())
   const runningCommandTerminalsRef = useRef<Record<number, string>>({})
 
   const folderId = folder?.id ?? 0
@@ -63,33 +60,22 @@ export function CommandDropdown() {
     runningCommandTerminalsRef.current = runningCommandTerminals
   }, [runningCommandTerminals])
 
-  const clearRunningByTerminalId = useCallback((terminalId: string) => {
-    const unlisten = exitUnlistenersRef.current.get(terminalId)
-    if (unlisten) {
-      unlisten()
-      exitUnlistenersRef.current.delete(terminalId)
-    }
-
+  // React to process exits reported by the terminal context
+  useEffect(() => {
+    if (exitedTerminals.size === 0) return
     setRunningCommandTerminals((prev) => {
+      if (Object.keys(prev).length === 0) return prev
       let changed = false
       const next = { ...prev }
-      for (const [commandId, mappedTerminalId] of Object.entries(prev)) {
-        if (mappedTerminalId === terminalId) {
-          delete next[Number(commandId)]
+      for (const [cmdId, termId] of Object.entries(prev)) {
+        if (exitedTerminals.has(termId)) {
+          delete next[Number(cmdId)]
           changed = true
         }
       }
       return changed ? next : prev
     })
-  }, [])
-
-  const clearAllRunningStates = useCallback(() => {
-    for (const unlisten of exitUnlistenersRef.current.values()) {
-      unlisten()
-    }
-    exitUnlistenersRef.current.clear()
-    setRunningCommandTerminals({})
-  }, [])
+  }, [exitedTerminals])
 
   const selectCommand = useCallback(
     (commandId: number) => {
@@ -103,19 +89,12 @@ export function CommandDropdown() {
   useEffect(() => {
     if (!folderId) {
       setSelectedCommandIdState(null)
-      clearAllRunningStates()
+      setRunningCommandTerminals({})
       return
     }
     setSelectedCommandIdState(getSelectedCommandId(folderId))
-    clearAllRunningStates()
-  }, [clearAllRunningStates, folderId])
-
-  useEffect(
-    () => () => {
-      clearAllRunningStates()
-    },
-    [clearAllRunningStates]
-  )
+    setRunningCommandTerminals({})
+  }, [folderId])
 
   const refreshCommands = useCallback(async () => {
     if (!folderId) return
@@ -160,24 +139,6 @@ export function CommandDropdown() {
     }
   }, [folderId, folderPath])
 
-  const registerExitListener = useCallback(
-    async (terminalId: string) => {
-      if (exitUnlistenersRef.current.has(terminalId)) return
-      try {
-        const unlisten = await subscribe<TerminalEvent>(
-          `terminal://exit/${terminalId}`,
-          () => {
-            clearRunningByTerminalId(terminalId)
-          }
-        )
-        exitUnlistenersRef.current.set(terminalId, unlisten)
-      } catch (err) {
-        console.error("Failed to subscribe terminal exit event:", err)
-      }
-    },
-    [clearRunningByTerminalId]
-  )
-
   const runCommand = useCallback(
     async (cmd: FolderCommand) => {
       if (!folderPath) return
@@ -188,55 +149,26 @@ export function CommandDropdown() {
       if (!terminalId) return
 
       setRunningCommandTerminals((prev) => ({ ...prev, [cmd.id]: terminalId }))
-      await registerExitListener(terminalId)
     },
-    [createTerminalWithCommand, folderPath, registerExitListener, selectCommand]
+    [createTerminalWithCommand, folderPath, selectCommand]
   )
 
-  const stopCommand = useCallback(
-    async (cmd: FolderCommand) => {
-      const terminalId = runningCommandTerminalsRef.current[cmd.id]
-      if (!terminalId) return
+  const stopCommand = useCallback(async (cmd: FolderCommand) => {
+    const terminalId = runningCommandTerminalsRef.current[cmd.id]
+    if (!terminalId) return
 
-      clearRunningByTerminalId(terminalId)
-      try {
-        await terminalKill(terminalId)
-      } catch (err) {
-        console.error("Failed to stop command terminal:", err)
-      }
-    },
-    [clearRunningByTerminalId]
-  )
-
-  useEffect(() => {
-    if (Object.keys(runningCommandTerminals).length === 0) return
-    let cancelled = false
-
-    const syncRunningCommandState = async () => {
-      try {
-        const terminals = await terminalList()
-        if (cancelled) return
-
-        const aliveTerminalIds = new Set(terminals.map((item) => item.id))
-        for (const terminalId of Object.values(
-          runningCommandTerminalsRef.current
-        )) {
-          if (!aliveTerminalIds.has(terminalId)) {
-            clearRunningByTerminalId(terminalId)
-          }
-        }
-      } catch (err) {
-        console.error("Failed to sync command terminal state:", err)
-      }
+    setRunningCommandTerminals((prev) => {
+      if (!(cmd.id in prev)) return prev
+      const next = { ...prev }
+      delete next[cmd.id]
+      return next
+    })
+    try {
+      await terminalKill(terminalId)
+    } catch (err) {
+      console.error("Failed to stop command terminal:", err)
     }
-
-    syncRunningCommandState()
-    const timer = setInterval(syncRunningCommandState, 1500)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [clearRunningByTerminalId, runningCommandTerminals])
+  }, [])
 
   const activeCmd = useMemo(
     () =>

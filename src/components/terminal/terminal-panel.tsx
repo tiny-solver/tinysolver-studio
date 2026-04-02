@@ -5,7 +5,7 @@ import { TerminalTabBar } from "./terminal-tab-bar"
 import { TerminalView } from "./terminal-view"
 
 export function TerminalPanel() {
-  const { isOpen, tabs, activeTabId } = useTerminalContext()
+  const { isOpen, tabs, activeTabId, markTerminalExited } = useTerminalContext()
 
   return (
     <section
@@ -22,6 +22,7 @@ export function TerminalPanel() {
             initialCommand={tab.initialCommand}
             isActive={tab.id === activeTabId}
             isVisible={isOpen}
+            onProcessExited={markTerminalExited}
           />
         ))}
       </div>

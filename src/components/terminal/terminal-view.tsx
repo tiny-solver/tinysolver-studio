@@ -95,6 +95,7 @@ interface TerminalViewProps {
   initialCommand?: string
   isActive: boolean
   isVisible: boolean
+  onProcessExited?: (terminalId: string) => void
 }
 
 export function TerminalView({
@@ -103,6 +104,7 @@ export function TerminalView({
   initialCommand,
   isActive,
   isVisible,
+  onProcessExited,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const fitAddonRef = useRef<{ fit: () => void } | null>(null)
@@ -110,12 +112,17 @@ export function TerminalView({
   const lastResizeRef = useRef<{ cols: number; rows: number } | null>(null)
   const isActiveRef = useRef(isActive)
   const isVisibleRef = useRef(isVisible)
+  const onProcessExitedRef = useRef(onProcessExited)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     isActiveRef.current = isActive
     isVisibleRef.current = isVisible
   }, [isActive, isVisible])
+
+  useEffect(() => {
+    onProcessExitedRef.current = onProcessExited
+  }, [onProcessExited])
 
   useEffect(() => {
     let cancelled = false
@@ -188,6 +195,7 @@ export function TerminalView({
       const unlistenExit = await subscribe<TerminalEvent>(
         `terminal://exit/${terminalId}`,
         () => {
+          onProcessExitedRef.current?.(terminalId)
           term.write("\r\n\x1b[90m[Process exited]\x1b[0m\r\n")
         }
       )
@@ -206,6 +214,7 @@ export function TerminalView({
       try {
         await terminalSpawn(workingDir, initialCommand, terminalId)
       } catch (err) {
+        onProcessExitedRef.current?.(terminalId)
         term.write(`\r\n\x1b[31m[Failed to start terminal: ${err}]\x1b[0m\r\n`)
       } finally {
         if (!cancelled) setLoading(false)
