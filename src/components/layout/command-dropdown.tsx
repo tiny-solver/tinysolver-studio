@@ -41,7 +41,11 @@ function setSelectedCommandId(folderId: number, cmdId: number) {
 export function CommandDropdown() {
   const t = useTranslations("Folder.commandDropdown")
   const { folder } = useFolderContext()
-  const { createTerminalWithCommand, exitedTerminals } = useTerminalContext()
+  const {
+    createTerminalWithCommand,
+    exitedTerminals,
+    tabs: terminalTabs,
+  } = useTerminalContext()
   const [commands, setCommands] = useState<FolderCommand[]>([])
   const [manageOpen, setManageOpen] = useState(false)
   const [bootstrapping, setBootstrapping] = useState(false)
@@ -76,6 +80,23 @@ export function CommandDropdown() {
       return changed ? next : prev
     })
   }, [exitedTerminals])
+
+  // React to terminal tabs being closed (e.g. user closes the tab directly)
+  useEffect(() => {
+    setRunningCommandTerminals((prev) => {
+      if (Object.keys(prev).length === 0) return prev
+      const tabIds = new Set(terminalTabs.map((t) => t.id))
+      let changed = false
+      const next = { ...prev }
+      for (const [cmdId, termId] of Object.entries(prev)) {
+        if (!tabIds.has(termId)) {
+          delete next[Number(cmdId)]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [terminalTabs])
 
   const selectCommand = useCallback(
     (commandId: number) => {
