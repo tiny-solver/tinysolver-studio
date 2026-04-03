@@ -445,6 +445,13 @@ export function exportAsHtml(data: ExportConversationData): void {
 // Safari caps at 16384, Chrome at ~32767. Use a safe limit.
 const MAX_IMAGE_HEIGHT = 16000
 
+export class ExportTooLongError extends Error {
+  constructor() {
+    super("Content too long for image export")
+    this.name = "ExportTooLongError"
+  }
+}
+
 export async function exportAsImage(
   data: ExportConversationData
 ): Promise<void> {
@@ -477,11 +484,16 @@ export async function exportAsImage(
     })
 
     const target = iframeDoc.querySelector(".container") ?? body
-    const dataUrl = await toPng(target as HTMLElement, {
-      width: 800,
-      pixelRatio: 2,
-      backgroundColor: "#f9fafb",
-    })
+    let dataUrl: string
+    try {
+      dataUrl = await toPng(target as HTMLElement, {
+        width: 800,
+        pixelRatio: 2,
+        backgroundColor: "#f9fafb",
+      })
+    } catch {
+      throw new ExportTooLongError()
+    }
     const res = await fetch(dataUrl)
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)

@@ -743,6 +743,7 @@
       "exportHtml": "HTML",
       "exportSuccess": "대화를 내보냈습니다",
       "exportFailed": "내보내기 실패",
+      "exportImageTooLong": "대화가 너무 길어 이미지로 내보낼 수 없습니다",
       "exportLabels": {
         "untitledConversation": "제목 없는 대화",
         "agent": "에이전트",

@@ -743,6 +743,7 @@
       "exportHtml": "HTML",
       "exportSuccess": "對話已匯出",
       "exportFailed": "匯出失敗",
+      "exportImageTooLong": "對話內容過長，不支援匯出為圖片",
       "exportLabels": {
         "untitledConversation": "未命名對話",
         "agent": "代理",

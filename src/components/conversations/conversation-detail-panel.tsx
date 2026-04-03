@@ -71,6 +71,7 @@ import {
   exportAsHtml,
   exportAsImage,
   exportAsMarkdown,
+  ExportTooLongError,
   type ExportLabels,
 } from "@/lib/export-conversation"
 
@@ -1275,7 +1276,11 @@ export function ConversationDetailPanel() {
       toast.success(t("exportSuccess"))
     } catch (err) {
       updateTask(taskId, { status: "failed" })
-      toast.error(t("exportFailed"))
+      if (err instanceof ExportTooLongError) {
+        toast.error(t("exportImageTooLong"))
+      } else {
+        toast.error(t("exportFailed"))
+      }
       console.error("[ConversationDetailPanel] export image:", err)
     }
   }, [getExportData, t, addTask, updateTask])

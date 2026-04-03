@@ -743,6 +743,7 @@
       "exportHtml": "HTML",
       "exportSuccess": "تم تصدير المحادثة",
       "exportFailed": "فشل التصدير",
+      "exportImageTooLong": "المحادثة طويلة جداً ولا يمكن تصديرها كصورة",
       "exportLabels": {
         "untitledConversation": "محادثة بدون عنوان",
         "agent": "الوكيل",

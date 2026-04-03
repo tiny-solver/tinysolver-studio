@@ -743,6 +743,7 @@
       "exportHtml": "HTML",
       "exportSuccess": "Conversation exportée",
       "exportFailed": "Échec de l'exportation",
+      "exportImageTooLong": "La conversation est trop longue pour être exportée en image",
       "exportLabels": {
         "untitledConversation": "Conversation sans titre",
         "agent": "Agent",

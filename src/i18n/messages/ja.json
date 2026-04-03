@@ -743,6 +743,7 @@
       "exportHtml": "HTML",
       "exportSuccess": "会話をエクスポートしました",
       "exportFailed": "エクスポートに失敗しました",
+      "exportImageTooLong": "会話が長すぎるため、画像としてエクスポートできません",
       "exportLabels": {
         "untitledConversation": "無題の会話",
         "agent": "エージェント",

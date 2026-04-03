@@ -743,6 +743,7 @@
       "exportHtml": "HTML",
       "exportSuccess": "会话已导出",
       "exportFailed": "导出失败",
+      "exportImageTooLong": "会话内容过长，不支持导出为图片",
       "exportLabels": {
         "untitledConversation": "未命名会话",
         "agent": "代理",
