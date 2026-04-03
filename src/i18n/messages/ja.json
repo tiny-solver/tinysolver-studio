@@ -736,7 +736,32 @@
       "closeConversation": "会話を閉じる",
       "forkSession": "セッションをフォーク",
       "forkSessionSuccess": "セッションのフォークに成功しました",
-      "forkSessionFailed": "セッションのフォークに失敗しました：{error}"
+      "forkSessionFailed": "セッションのフォークに失敗しました：{error}",
+      "exportConversation": "会話をエクスポート",
+      "exportImage": "画像",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "会話をエクスポートしました",
+      "exportFailed": "エクスポートに失敗しました",
+      "exportLabels": {
+        "untitledConversation": "無題の会話",
+        "agent": "エージェント",
+        "model": "モデル",
+        "status": "ステータス",
+        "started": "開始",
+        "updated": "更新",
+        "tokens": "トークン統計",
+        "duration": "所要時間",
+        "inputTokens": "入力",
+        "outputTokens": "出力",
+        "cacheRead": "キャッシュ読取",
+        "cacheWrite": "キャッシュ書込",
+        "user": "ユーザー",
+        "assistant": "アシスタント",
+        "system": "システム",
+        "toolResult": "結果",
+        "toolError": "エラー"
+      }
     },
     "conversationCard": {
       "untitledConversation": "無題の会話",

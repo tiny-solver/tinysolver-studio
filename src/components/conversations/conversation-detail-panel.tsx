@@ -1,7 +1,15 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Plus, RefreshCw, X } from "lucide-react"
+import {
+  Download,
+  FileCode,
+  FileImage,
+  FileText,
+  Plus,
+  RefreshCw,
+  X,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { disposeTauriListener } from "@/lib/tauri-listener"
@@ -9,6 +17,7 @@ import { useAcpActions } from "@/contexts/acp-connections-context"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useSessionStats } from "@/contexts/session-stats-context"
+import { useTaskContext } from "@/contexts/task-context"
 import { cn, randomUUID } from "@/lib/utils"
 import { useConnectionLifecycle } from "@/hooks/use-connection-lifecycle"
 import { useMessageQueue, type QueuedMessage } from "@/hooks/use-message-queue"
@@ -53,8 +62,17 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import {
+  exportAsHtml,
+  exportAsImage,
+  exportAsMarkdown,
+  type ExportLabels,
+} from "@/lib/export-conversation"
 
 interface ConversationTabViewProps {
   tabId: string
@@ -991,6 +1009,8 @@ const ConversationTabView = memo(function ConversationTabView({
 
 export function ConversationDetailPanel() {
   const t = useTranslations("Folder.conversation")
+  const tStatus = useTranslations("Folder.statusLabels")
+  const tExport = useTranslations("Folder.conversation.exportLabels")
   const {
     completeTurn: runtimeCompleteTurn,
     getConversationIdByExternalId,
@@ -1014,6 +1034,7 @@ export function ConversationDetailPanel() {
     onPreviewTabReplaced,
   } = useTabContext()
   const { disconnect: disconnectByKey } = useAcpActions()
+  const { addTask, updateTask } = useTaskContext()
   const [reloadByTabId, setReloadByTabId] = useState<Record<string, number>>({})
   const tabsRef = useRef(tabs)
   const conversationsRef = useRef(conversations)
@@ -1025,6 +1046,35 @@ export function ConversationDetailPanel() {
   useEffect(() => {
     conversationsRef.current = conversations
   }, [conversations])
+
+  const exportLabels = useMemo<ExportLabels>(
+    () => ({
+      untitledConversation: tExport("untitledConversation"),
+      agent: tExport("agent"),
+      model: tExport("model"),
+      status: tExport("status"),
+      started: tExport("started"),
+      updated: tExport("updated"),
+      tokens: tExport("tokens"),
+      duration: tExport("duration"),
+      inputTokens: tExport("inputTokens"),
+      outputTokens: tExport("outputTokens"),
+      cacheRead: tExport("cacheRead"),
+      cacheWrite: tExport("cacheWrite"),
+      user: tExport("user"),
+      assistant: tExport("assistant"),
+      system: tExport("system"),
+      toolResult: tExport("toolResult"),
+      toolError: tExport("toolError"),
+      statusLabels: {
+        in_progress: tStatus("in_progress"),
+        pending_review: tStatus("pending_review"),
+        completed: tStatus("completed"),
+        cancelled: tStatus("cancelled"),
+      },
+    }),
+    [tExport, tStatus]
+  )
 
   // Disconnect the old connection immediately when a preview tab is replaced
   useEffect(() => {
@@ -1173,6 +1223,63 @@ export function ConversationDetailPanel() {
     closeTab(activeTabId)
   }, [activeTabId, closeTab])
 
+  const canExport =
+    activeConversationTab?.conversationId != null &&
+    getSession(activeConversationTab.conversationId)?.detail != null
+
+  const getExportData = useCallback(() => {
+    if (!activeConversationTab?.conversationId) return null
+    const session = getSession(activeConversationTab.conversationId)
+    if (!session?.detail) return null
+    return {
+      summary: session.detail.summary,
+      turns: session.detail.turns,
+      sessionStats: session.detail.session_stats,
+      labels: exportLabels,
+    }
+  }, [activeConversationTab, getSession, exportLabels])
+
+  const handleExportMarkdown = useCallback(() => {
+    const data = getExportData()
+    if (!data) return
+    try {
+      exportAsMarkdown(data)
+      toast.success(t("exportSuccess"))
+    } catch (err) {
+      toast.error(t("exportFailed"))
+      console.error("[ConversationDetailPanel] export markdown:", err)
+    }
+  }, [getExportData, t])
+
+  const handleExportHtml = useCallback(() => {
+    const data = getExportData()
+    if (!data) return
+    try {
+      exportAsHtml(data)
+      toast.success(t("exportSuccess"))
+    } catch (err) {
+      toast.error(t("exportFailed"))
+      console.error("[ConversationDetailPanel] export html:", err)
+    }
+  }, [getExportData, t])
+
+  const handleExportImage = useCallback(async () => {
+    const data = getExportData()
+    if (!data) return
+    const taskId = `export-image-${Date.now()}`
+    addTask(taskId, t("exportImage"))
+    updateTask(taskId, { status: "running" })
+    try {
+      await exportAsImage(data)
+      updateTask(taskId, { status: "completed" })
+      toast.success(t("exportSuccess"))
+    } catch (err) {
+      updateTask(taskId, { status: "failed" })
+      toast.error(t("exportFailed"))
+      console.error("[ConversationDetailPanel] export image:", err)
+    }
+  }, [getExportData, t, addTask, updateTask])
+
   // Ensure no-tab state is immediately bridged to a real new-conversation tab.
   useEffect(() => {
     if (!folder) return
@@ -1247,6 +1354,26 @@ export function ConversationDetailPanel() {
           <Plus className="h-4 w-4" />
           {t("newConversation")}
         </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger disabled={!canExport}>
+            <Download className="h-4 w-4" />
+            {t("exportConversation")}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem onSelect={handleExportImage}>
+              <FileImage className="h-4 w-4" />
+              {t("exportImage")}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={handleExportMarkdown}>
+              <FileText className="h-4 w-4" />
+              {t("exportMarkdown")}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={handleExportHtml}>
+              <FileCode className="h-4 w-4" />
+              {t("exportHtml")}
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuSeparator />
         <ContextMenuItem
           disabled={!activeTabId}

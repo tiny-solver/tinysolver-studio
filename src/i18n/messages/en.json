@@ -736,7 +736,32 @@
       "closeConversation": "Close Conversation",
       "forkSession": "Fork Session",
       "forkSessionSuccess": "Session forked successfully",
-      "forkSessionFailed": "Failed to fork session: {error}"
+      "forkSessionFailed": "Failed to fork session: {error}",
+      "exportConversation": "Export Conversation",
+      "exportImage": "Image",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "Conversation exported",
+      "exportFailed": "Export failed",
+      "exportLabels": {
+        "untitledConversation": "Untitled Conversation",
+        "agent": "Agent",
+        "model": "Model",
+        "status": "Status",
+        "started": "Started",
+        "updated": "Updated",
+        "tokens": "Token Stats",
+        "duration": "Duration",
+        "inputTokens": "Input",
+        "outputTokens": "Output",
+        "cacheRead": "Cache Read",
+        "cacheWrite": "Cache Write",
+        "user": "User",
+        "assistant": "Assistant",
+        "system": "System",
+        "toolResult": "Result",
+        "toolError": "Error"
+      }
     },
     "conversationCard": {
       "untitledConversation": "Untitled conversation",

@@ -736,7 +736,32 @@
       "closeConversation": "إغلاق المحادثة",
       "forkSession": "تفريع الجلسة",
       "forkSessionSuccess": "تم تفريع الجلسة بنجاح",
-      "forkSessionFailed": "فشل في تفريع الجلسة: {error}"
+      "forkSessionFailed": "فشل في تفريع الجلسة: {error}",
+      "exportConversation": "تصدير المحادثة",
+      "exportImage": "صورة",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "تم تصدير المحادثة",
+      "exportFailed": "فشل التصدير",
+      "exportLabels": {
+        "untitledConversation": "محادثة بدون عنوان",
+        "agent": "الوكيل",
+        "model": "النموذج",
+        "status": "الحالة",
+        "started": "البداية",
+        "updated": "التحديث",
+        "tokens": "إحصائيات الرموز",
+        "duration": "المدة",
+        "inputTokens": "الإدخال",
+        "outputTokens": "الإخراج",
+        "cacheRead": "قراءة الذاكرة",
+        "cacheWrite": "كتابة الذاكرة",
+        "user": "المستخدم",
+        "assistant": "المساعد",
+        "system": "النظام",
+        "toolResult": "النتيجة",
+        "toolError": "خطأ"
+      }
     },
     "conversationCard": {
       "untitledConversation": "محادثة بدون عنوان",

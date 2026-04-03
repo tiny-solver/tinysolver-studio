@@ -736,7 +736,32 @@
       "closeConversation": "Fermer la conversation",
       "forkSession": "Dupliquer la session",
       "forkSessionSuccess": "Session dupliquée avec succès",
-      "forkSessionFailed": "Échec de la duplication de la session : {error}"
+      "forkSessionFailed": "Échec de la duplication de la session : {error}",
+      "exportConversation": "Exporter la conversation",
+      "exportImage": "Image",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "Conversation exportée",
+      "exportFailed": "Échec de l'exportation",
+      "exportLabels": {
+        "untitledConversation": "Conversation sans titre",
+        "agent": "Agent",
+        "model": "Modèle",
+        "status": "Statut",
+        "started": "Début",
+        "updated": "Mis à jour",
+        "tokens": "Statistiques de tokens",
+        "duration": "Durée",
+        "inputTokens": "Entrée",
+        "outputTokens": "Sortie",
+        "cacheRead": "Cache lu",
+        "cacheWrite": "Cache écrit",
+        "user": "Utilisateur",
+        "assistant": "Assistant",
+        "system": "Système",
+        "toolResult": "Résultat",
+        "toolError": "Erreur"
+      }
     },
     "conversationCard": {
       "untitledConversation": "Conversation sans titre",

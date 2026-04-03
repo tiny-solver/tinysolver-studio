@@ -736,7 +736,32 @@
       "closeConversation": "Fechar conversa",
       "forkSession": "Bifurcar sessão",
       "forkSessionSuccess": "Sessão bifurcada com sucesso",
-      "forkSessionFailed": "Falha ao bifurcar a sessão: {error}"
+      "forkSessionFailed": "Falha ao bifurcar a sessão: {error}",
+      "exportConversation": "Exportar conversa",
+      "exportImage": "Imagem",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "Conversa exportada",
+      "exportFailed": "Falha ao exportar",
+      "exportLabels": {
+        "untitledConversation": "Conversa sem título",
+        "agent": "Agente",
+        "model": "Modelo",
+        "status": "Estado",
+        "started": "Início",
+        "updated": "Atualizado",
+        "tokens": "Estatísticas de tokens",
+        "duration": "Duração",
+        "inputTokens": "Entrada",
+        "outputTokens": "Saída",
+        "cacheRead": "Cache lido",
+        "cacheWrite": "Cache escrito",
+        "user": "Utilizador",
+        "assistant": "Assistente",
+        "system": "Sistema",
+        "toolResult": "Resultado",
+        "toolError": "Erro"
+      }
     },
     "conversationCard": {
       "untitledConversation": "Conversa sem título",

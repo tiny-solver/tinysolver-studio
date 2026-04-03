@@ -736,7 +736,32 @@
       "closeConversation": "關閉會話",
       "forkSession": "分叉會話",
       "forkSessionSuccess": "會話分叉成功",
-      "forkSessionFailed": "會話分叉失敗：{error}"
+      "forkSessionFailed": "會話分叉失敗：{error}",
+      "exportConversation": "匯出對話",
+      "exportImage": "圖片",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "對話已匯出",
+      "exportFailed": "匯出失敗",
+      "exportLabels": {
+        "untitledConversation": "未命名對話",
+        "agent": "代理",
+        "model": "模型",
+        "status": "狀態",
+        "started": "開始時間",
+        "updated": "更新時間",
+        "tokens": "令牌統計",
+        "duration": "時長",
+        "inputTokens": "輸入",
+        "outputTokens": "輸出",
+        "cacheRead": "快取讀取",
+        "cacheWrite": "快取寫入",
+        "user": "使用者",
+        "assistant": "助手",
+        "system": "系統",
+        "toolResult": "結果",
+        "toolError": "錯誤"
+      }
     },
     "conversationCard": {
       "untitledConversation": "未命名會話",

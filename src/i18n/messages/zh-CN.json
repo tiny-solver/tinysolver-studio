@@ -736,7 +736,32 @@
       "closeConversation": "关闭会话",
       "forkSession": "分叉会话",
       "forkSessionSuccess": "会话分叉成功",
-      "forkSessionFailed": "会话分叉失败：{error}"
+      "forkSessionFailed": "会话分叉失败：{error}",
+      "exportConversation": "导出会话",
+      "exportImage": "图片",
+      "exportMarkdown": "Markdown",
+      "exportHtml": "HTML",
+      "exportSuccess": "会话已导出",
+      "exportFailed": "导出失败",
+      "exportLabels": {
+        "untitledConversation": "未命名会话",
+        "agent": "代理",
+        "model": "模型",
+        "status": "状态",
+        "started": "开始时间",
+        "updated": "更新时间",
+        "tokens": "令牌统计",
+        "duration": "时长",
+        "inputTokens": "输入",
+        "outputTokens": "输出",
+        "cacheRead": "缓存读取",
+        "cacheWrite": "缓存写入",
+        "user": "用户",
+        "assistant": "助手",
+        "system": "系统",
+        "toolResult": "结果",
+        "toolError": "错误"
+      }
     },
     "conversationCard": {
       "untitledConversation": "未命名会话",
