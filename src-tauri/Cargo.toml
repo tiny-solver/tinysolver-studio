@@ -53,8 +53,8 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 dirs = "6"
 walkdir = "2"
-sacp = "11.0.0-alpha.1"
-sacp-tokio = "11.0.0-alpha.1"
+sacp = "11.0.0"
+sacp-tokio = "11.0.0"
 tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt", "net", "rt-multi-thread"] }
 uuid = { version = "1", features = ["v4"] }
 futures = "0.3"
@@ -72,7 +72,7 @@ sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio
 toml = "0.8"
 notify = "6"
 base64 = "0.22"
-agent-client-protocol-schema = { version = "0.10", features = ["unstable_session_usage", "unstable_session_fork"] }
+agent-client-protocol-schema = { version = "0.11", features = ["unstable_session_usage", "unstable_session_fork"] }
 kill_tree = { version = "0.2", features = ["tokio"] }
 which = "7"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"], optional = true }

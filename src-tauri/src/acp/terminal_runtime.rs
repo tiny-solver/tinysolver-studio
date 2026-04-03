@@ -3,8 +3,8 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use sacp::schema::{
-    CreateTerminalRequest, CreateTerminalResponse, KillTerminalCommandRequest,
-    KillTerminalCommandResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest,
+    KillTerminalResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
     TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WaitForTerminalExitResponse,
 };
@@ -335,8 +335,8 @@ impl TerminalRuntime {
 
     pub async fn kill_terminal(
         &self,
-        request: KillTerminalCommandRequest,
-    ) -> Result<KillTerminalCommandResponse, TerminalRuntimeError> {
+        request: KillTerminalRequest,
+    ) -> Result<KillTerminalResponse, TerminalRuntimeError> {
         let terminal = self
             .find_terminal(
                 &request.terminal_id.to_string(),
@@ -344,7 +344,7 @@ impl TerminalRuntime {
             )
             .await?;
         terminal.kill_command().await?;
-        Ok(KillTerminalCommandResponse::new())
+        Ok(KillTerminalResponse::new())
     }
 
     pub async fn release_terminal(

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "sacp-tokio"
-version = "11.0.0-alpha.1"
+version = "11.0.0"
 build = false
 autolib = false
 autobins = false
@@ -45,7 +45,7 @@ path = "tests/debug_logging.rs"
 version = "0.3.31"
 
 [dependencies.sacp]
-version = "11.0.0-alpha.1"
+version = "11.0.0"
 
 [dependencies.serde]
 version = "1.0"

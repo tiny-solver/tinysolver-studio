@@ -6,8 +6,8 @@ use sacp::schema::McpServerStdio;
 use sacp::schema::{
     BlobResourceContents, CancelNotification, ClientCapabilities, ContentBlock, ContentChunk,
     CreateTerminalRequest, CreateTerminalResponse, EmbeddedResource, EmbeddedResourceResource,
-    FileSystemCapability, ImageContent, InitializeRequest, KillTerminalCommandRequest,
-    KillTerminalCommandResponse, LoadSessionRequest, NewSessionRequest, NewSessionResponse,
+    FileSystemCapabilities, ImageContent, InitializeRequest, KillTerminalRequest,
+    KillTerminalResponse, LoadSessionRequest, NewSessionRequest, NewSessionResponse,
     PermissionOptionKind, Plan, PlanEntryPriority, PlanEntryStatus, PromptRequest, ProtocolVersion,
     ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, ResourceLink,
@@ -656,8 +656,8 @@ async fn run_connection(
         .on_receive_request(
             {
                 let runtime = terminal_runtime.clone();
-                async move |req: KillTerminalCommandRequest,
-                            responder: Responder<KillTerminalCommandResponse>,
+                async move |req: KillTerminalRequest,
+                            responder: Responder<KillTerminalResponse>,
                             _cx: ConnectionTo<Agent>| {
                     respond_terminal_request(responder, runtime.kill_terminal(req).await)?;
                     Ok(())
@@ -677,12 +677,12 @@ async fn run_connection(
             },
             on_receive_request!(),
         )
-        .connect_with(agent, async move |cx| {
+        .connect_with(agent, async move |cx| -> Result<(), sacp::Error> {
             // Advertise filesystem + terminal capabilities for ACP tool execution.
             let init_request = InitializeRequest::new(ProtocolVersion::LATEST).client_capabilities(
                 ClientCapabilities::new()
                     .terminal(true)
-                    .fs(FileSystemCapability::new()
+                    .fs(FileSystemCapabilities::new()
                         .read_text_file(true)
                         .write_text_file(true)),
             );
