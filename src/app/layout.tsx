@@ -16,6 +16,13 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "codeg",
   description: "AI Coding Agent Conversation Manager",
+  icons: {
+    icon: [
+      { url: "/icon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: { url: "/icon-128x128.png", sizes: "128x128", type: "image/png" },
+  },
 }
 
 export default async function RootLayout({
