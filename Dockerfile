@@ -26,9 +26,6 @@ RUN apt-get update && apt-get install -y \
     curl \
     python3 \
     python3-pip \
-    gcc \
-    g++ \
-    make \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=backend /app/src-tauri/target/release/codeg-server /usr/local/bin/codeg-server
@@ -38,6 +35,7 @@ ENV CODEG_STATIC_DIR=/app/web
 ENV CODEG_DATA_DIR=/data
 ENV CODEG_PORT=3080
 ENV CODEG_HOST=0.0.0.0
+ENV SHELL=/bin/bash
 
 EXPOSE 3080
 VOLUME /data

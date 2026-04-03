@@ -44,7 +44,19 @@ fn resolve_shell() -> String {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+        if let Ok(shell) = std::env::var("SHELL") {
+            let trimmed = shell.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+        // Try common shells in order of preference
+        for candidate in ["/bin/zsh", "/bin/bash", "/bin/sh"] {
+            if std::path::Path::new(candidate).exists() {
+                return candidate.to_string();
+            }
+        }
+        "/bin/sh".to_string()
     }
 }
 
