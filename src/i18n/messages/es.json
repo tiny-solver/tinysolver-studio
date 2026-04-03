@@ -1467,7 +1467,9 @@
         "loading": "Cargando...",
         "error": "Error del chat: {message}",
         "emptyConversation": "No hay mensajes en esta conversación.",
-        "systemMessage": "Mensaje del sistema"
+        "systemMessage": "Mensaje del sistema",
+        "copyMessage": "Copiar",
+        "copied": "Copiado"
       },
       "liveTurnStats": {
         "thinking": "Pensando...",

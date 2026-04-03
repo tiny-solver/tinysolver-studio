@@ -1467,7 +1467,9 @@
         "loading": "جارٍ التحميل...",
         "error": "خطأ: {message}",
         "emptyConversation": "لا توجد رسائل في هذه المحادثة.",
-        "systemMessage": "رسالة النظام"
+        "systemMessage": "رسالة النظام",
+        "copyMessage": "نسخ",
+        "copied": "تم النسخ"
       },
       "liveTurnStats": {
         "thinking": "جارٍ التفكير...",

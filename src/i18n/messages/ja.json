@@ -1467,7 +1467,9 @@
         "loading": "読み込み中...",
         "error": "エラー: {message}",
         "emptyConversation": "この会話にはメッセージがありません。",
-        "systemMessage": "システムメッセージ"
+        "systemMessage": "システムメッセージ",
+        "copyMessage": "コピー",
+        "copied": "コピー済み"
       },
       "liveTurnStats": {
         "thinking": "考え中...",

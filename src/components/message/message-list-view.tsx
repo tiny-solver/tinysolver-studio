@@ -19,8 +19,19 @@ import {
   MessageThread,
   MessageThreadScrollButton,
 } from "@/components/ai-elements/message-thread"
-import { Message, MessageContent } from "@/components/ai-elements/message"
-import { ChevronDown, ChevronRight, Info, Loader2 } from "lucide-react"
+import {
+  Message,
+  MessageContent,
+  MessageAction,
+} from "@/components/ai-elements/message"
+import {
+  CheckIcon,
+  ChevronDown,
+  ChevronRight,
+  CopyIcon,
+  Info,
+  Loader2,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import {
   buildPlanKey,
@@ -103,6 +114,54 @@ const CollapsibleSystemMessage = memo(function CollapsibleSystemMessage({
   )
 })
 
+function extractTextFromParts(parts: AdaptedContentPart[]): string {
+  return parts
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("\n")
+}
+
+const UserMessageCopyButton = memo(function UserMessageCopyButton({
+  parts,
+}: {
+  parts: AdaptedContentPart[]
+}) {
+  const t = useTranslations("Folder.chat.messageList")
+  const [isCopied, setIsCopied] = useState(false)
+  const timeoutRef = useRef<number>(0)
+
+  const handleCopy = useCallback(async () => {
+    if (isCopied) return
+    const text = extractTextFromParts(parts)
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setIsCopied(true)
+      timeoutRef.current = window.setTimeout(() => setIsCopied(false), 2000)
+    } catch {
+      // ignore
+    }
+  }, [parts, isCopied])
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(timeoutRef.current)
+    },
+    []
+  )
+
+  return (
+    <MessageAction
+      tooltip={isCopied ? t("copied") : t("copyMessage")}
+      className="opacity-0 group-hover/user-msg:opacity-100 transition-opacity self-end"
+      onClick={handleCopy}
+      size="icon-xs"
+    >
+      {isCopied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+    </MessageAction>
+  )
+})
+
 const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
   group,
   dimmed = false,
@@ -122,9 +181,18 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
         {group.role === "user" && group.images.length > 0 ? (
           <UserImageAttachments images={group.images} className="self-end" />
         ) : null}
-        <MessageContent>
-          <ContentPartsRenderer parts={group.parts} role={group.role} />
-        </MessageContent>
+        {group.role === "user" ? (
+          <div className="group/user-msg flex w-fit ml-auto max-w-full items-start gap-1">
+            <UserMessageCopyButton parts={group.parts} />
+            <MessageContent>
+              <ContentPartsRenderer parts={group.parts} role={group.role} />
+            </MessageContent>
+          </div>
+        ) : (
+          <MessageContent>
+            <ContentPartsRenderer parts={group.parts} role={group.role} />
+          </MessageContent>
+        )}
         {group.role === "user" && group.resources.length > 0 ? (
           <UserResourceLinks resources={group.resources} className="self-end" />
         ) : null}

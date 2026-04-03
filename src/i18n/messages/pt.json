@@ -1467,7 +1467,9 @@
         "loading": "Carregando...",
         "error": "Erro: {message}",
         "emptyConversation": "Nenhuma mensagem nesta conversa.",
-        "systemMessage": "Mensagem do sistema"
+        "systemMessage": "Mensagem do sistema",
+        "copyMessage": "Copiar",
+        "copied": "Copiado"
       },
       "liveTurnStats": {
         "thinking": "Pensando...",

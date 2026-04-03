@@ -1467,7 +1467,9 @@
         "loading": "載入中...",
         "error": "錯誤：{message}",
         "emptyConversation": "目前會話暫無訊息。",
-        "systemMessage": "系統訊息"
+        "systemMessage": "系統訊息",
+        "copyMessage": "複製",
+        "copied": "已複製"
       },
       "liveTurnStats": {
         "thinking": "思考中...",

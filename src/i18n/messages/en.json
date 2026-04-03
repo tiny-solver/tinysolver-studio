@@ -1467,7 +1467,9 @@
         "loading": "Loading...",
         "error": "Error: {message}",
         "emptyConversation": "No messages in this conversation.",
-        "systemMessage": "System message"
+        "systemMessage": "System message",
+        "copyMessage": "Copy",
+        "copied": "Copied"
       },
       "liveTurnStats": {
         "thinking": "Thinking...",

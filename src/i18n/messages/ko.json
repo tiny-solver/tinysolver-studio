@@ -1467,7 +1467,9 @@
         "loading": "불러오는 중...",
         "error": "오류: {message}",
         "emptyConversation": "이 대화에는 메시지가 없습니다.",
-        "systemMessage": "시스템 메시지"
+        "systemMessage": "시스템 메시지",
+        "copyMessage": "복사",
+        "copied": "복사됨"
       },
       "liveTurnStats": {
         "thinking": "생각 중...",
