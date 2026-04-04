@@ -1421,7 +1421,8 @@
         "loadingMode": "Loading mode...",
         "cancel": "Cancel",
         "send": "Send",
-        "forkAndSend": "Fork & Send"
+        "forkAndSend": "Fork & Send",
+        "slashCommands": "Slash commands"
       },
       "messageQueue": {
         "addToQueue": "Queue message",

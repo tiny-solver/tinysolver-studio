@@ -1421,7 +1421,8 @@
         "loadingMode": "جارٍ تحميل الوضع...",
         "cancel": "إلغاء",
         "send": "إرسال",
-        "forkAndSend": "تفريع وإرسال"
+        "forkAndSend": "تفريع وإرسال",
+        "slashCommands": "أوامر الشرطة المائلة"
       },
       "messageQueue": {
         "addToQueue": "إضافة للقائمة",

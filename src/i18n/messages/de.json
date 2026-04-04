@@ -1421,7 +1421,8 @@
         "loadingMode": "Modus wird geladen...",
         "cancel": "Abbrechen",
         "send": "Senden",
-        "forkAndSend": "Fork & Senden"
+        "forkAndSend": "Fork & Senden",
+        "slashCommands": "Slash-Befehle"
       },
       "messageQueue": {
         "addToQueue": "Zur Warteschlange",

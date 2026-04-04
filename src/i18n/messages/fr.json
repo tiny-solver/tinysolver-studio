@@ -1421,7 +1421,8 @@
         "loadingMode": "Chargement du mode...",
         "cancel": "Annuler",
         "send": "Envoyer",
-        "forkAndSend": "Fork & Envoyer"
+        "forkAndSend": "Fork & Envoyer",
+        "slashCommands": "Commandes slash"
       },
       "messageQueue": {
         "addToQueue": "Mettre en file",

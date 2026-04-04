@@ -1421,7 +1421,8 @@
         "loadingMode": "Cargando modo...",
         "cancel": "Cancelar",
         "send": "Enviar",
-        "forkAndSend": "Fork y Enviar"
+        "forkAndSend": "Fork y Enviar",
+        "slashCommands": "Comandos de barra"
       },
       "messageQueue": {
         "addToQueue": "Agregar a la cola",

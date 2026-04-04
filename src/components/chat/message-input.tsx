@@ -20,6 +20,7 @@ import {
   ListPlus,
   Plus,
   Send,
+  Command,
   Square,
   X,
 } from "lucide-react"
@@ -54,6 +55,7 @@ import { ModeSelector } from "@/components/chat/mode-selector"
 import { SessionConfigSelector } from "@/components/chat/session-config-selector"
 import { SlashCommandMenu } from "@/components/chat/slash-command-menu"
 import { FileMentionMenu } from "@/components/chat/file-mention-menu"
+import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
 import { useFileTree } from "@/hooks/use-file-tree"
 import { joinFsPath } from "@/lib/path-utils"
 import {
@@ -314,6 +316,7 @@ export function MessageInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastDomDropAtRef = useRef(0)
   const composingRef = useRef(false)
+  const cursorPosRef = useRef<number | null>(null)
   const textRef = useRef(text)
   const disabledRef = useRef(disabled)
   const isPromptingRef = useRef(isPrompting)
@@ -776,6 +779,24 @@ export function MessageInput({
   const handleSlashSelect = useCallback((cmd: AvailableCommandInfo) => {
     setText(`/${cmd.name} `)
     setSlashMenuOpen(false)
+  }, [])
+
+  const handleSlashPopoverSelect = useCallback((cmd: AvailableCommandInfo) => {
+    const pos = cursorPosRef.current ?? textRef.current.length
+    const before = textRef.current.slice(0, pos)
+    const after = textRef.current.slice(pos)
+    const needsSpace = pos > 0 && !/\s$/.test(before)
+    const insertion = `${needsSpace ? " " : ""}/${cmd.name} `
+    const newText = before + insertion + after
+    setText(newText)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) {
+        ta.focus()
+        const newPos = pos + insertion.length
+        ta.setSelectionRange(newPos, newPos)
+      }
+    })
   }, [])
 
   const atTriggerPosRef = useRef(atTriggerPos)
@@ -1476,26 +1497,60 @@ export function MessageInput({
           autoFocus={autoFocus}
         />
         <div className="@container flex shrink-0 items-end justify-between gap-2 px-2 pb-2">
-          <div className="flex min-w-0 items-end gap-1">
+          <div className="flex min-w-0 items-end gap-2">
             <Button
               onClick={handlePickFiles}
               disabled={disabled}
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className="h-6 w-6 shrink-0"
+              className="h-6 w-6 shrink-0 bg-transparent"
               title={t("attachFiles")}
             >
               <Plus className="size-4" />
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={disabled || slashCommands.length === 0}
+                  variant="outline"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 bg-transparent"
+                  onPointerDown={() => {
+                    cursorPosRef.current =
+                      textareaRef.current?.selectionStart ?? null
+                  }}
+                  title={t("slashCommands")}
+                >
+                  <Command className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                className="min-w-72"
+              >
+                {slashCommands.map((cmd) => (
+                  <DropdownMenuItem
+                    key={cmd.name}
+                    onClick={() => handleSlashPopoverSelect(cmd)}
+                  >
+                    <DropdownRadioItemContent
+                      label={`/${cmd.name}`}
+                      description={cmd.description}
+                    />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* 宽屏内联显示，窄屏（<300px）通过"更多"气泡显示 */}
             <div className="hidden @[300px]:contents">{selectorItems}</div>
             {hasAnySelector && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="icon"
-                    className="h-6 w-6 shrink-0 @[300px]:hidden"
+                    className="h-6 w-6 shrink-0 bg-transparent @[300px]:hidden"
                   >
                     <Ellipsis className="size-4" />
                   </Button>

@@ -37,9 +37,12 @@ export function SessionConfigSelector({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
+          variant="outline"
           size="xs"
-          className={cn("gap-1 min-w-0", isActive && "text-primary")}
+          className={cn(
+            "gap-1 min-w-0 bg-transparent",
+            isActive && "text-primary"
+          )}
           title={option.description ?? option.name}
         >
           <span className="truncate">{label}</span>

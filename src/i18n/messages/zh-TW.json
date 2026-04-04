@@ -1421,7 +1421,8 @@
         "loadingMode": "正在載入模式...",
         "cancel": "取消",
         "send": "傳送",
-        "forkAndSend": "分叉發送"
+        "forkAndSend": "分叉發送",
+        "slashCommands": "斜線命令"
       },
       "messageQueue": {
         "addToQueue": "加入佇列",

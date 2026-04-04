@@ -1421,7 +1421,8 @@
         "loadingMode": "モードを読み込み中...",
         "cancel": "キャンセル",
         "send": "送信",
-        "forkAndSend": "フォークして送信"
+        "forkAndSend": "フォークして送信",
+        "slashCommands": "スラッシュコマンド"
       },
       "messageQueue": {
         "addToQueue": "キューに追加",
