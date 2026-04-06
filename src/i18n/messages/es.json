@@ -1849,6 +1849,7 @@
     "deleteSuccess": "Proveedor eliminado.",
     "deleteConfirmTitle": "Eliminar Proveedor",
     "deleteConfirmMessage": "Esto eliminará permanentemente el proveedor \"{name}\". ¿Está seguro?",
+    "deleteBlockedByAgent": "{agents} está usando este proveedor. Desvincúlelo antes de eliminarlo.",
     "cancel": "Cancelar",
     "delete": "Eliminar",
     "create": "Crear",

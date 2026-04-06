@@ -1849,6 +1849,7 @@
     "deleteSuccess": "제공업체가 삭제되었습니다.",
     "deleteConfirmTitle": "제공업체 삭제",
     "deleteConfirmMessage": "제공업체 \"{name}\"을(를) 영구적으로 삭제하시겠습니까?",
+    "deleteBlockedByAgent": "{agents}이(가) 이 공급자를 사용 중입니다. 삭제하기 전에 연결을 해제해 주세요.",
     "cancel": "취소",
     "delete": "삭제",
     "create": "생성",

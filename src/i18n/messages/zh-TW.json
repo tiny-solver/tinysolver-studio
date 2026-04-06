@@ -1849,6 +1849,7 @@
     "deleteSuccess": "供應商已刪除。",
     "deleteConfirmTitle": "刪除供應商",
     "deleteConfirmMessage": "確定要永久刪除供應商「{name}」嗎？",
+    "deleteBlockedByAgent": "{agents} 正在使用此設定，請先解除關聯後再刪除。",
     "cancel": "取消",
     "delete": "刪除",
     "create": "建立",

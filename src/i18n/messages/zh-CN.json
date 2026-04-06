@@ -1849,6 +1849,7 @@
     "deleteSuccess": "供应商已删除。",
     "deleteConfirmTitle": "删除供应商",
     "deleteConfirmMessage": "确定要永久删除供应商「{name}」吗？",
+    "deleteBlockedByAgent": "{agents} 正在使用该配置，请先解除关联后再删除。",
     "cancel": "取消",
     "delete": "删除",
     "create": "创建",

@@ -97,8 +97,14 @@ export function EditModelProviderDialog({
       toast.success(t("editSuccess"))
       handleOpenChange(false)
       onProviderUpdated()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+    } catch (err: unknown) {
+      const raw = err as Record<string, unknown>
+      const msg =
+        typeof raw?.message === "string"
+          ? raw.message
+          : err instanceof Error
+            ? err.message
+            : String(err)
       setError(msg)
     } finally {
       setLoading(false)

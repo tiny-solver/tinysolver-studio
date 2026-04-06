@@ -1849,6 +1849,7 @@
     "deleteSuccess": "Fournisseur supprimé.",
     "deleteConfirmTitle": "Supprimer le Fournisseur",
     "deleteConfirmMessage": "Le fournisseur \"{name}\" sera définitivement supprimé. Êtes-vous sûr ?",
+    "deleteBlockedByAgent": "{agents} utilise ce fournisseur. Veuillez le dissocier avant de supprimer.",
     "cancel": "Annuler",
     "delete": "Supprimer",
     "create": "Créer",

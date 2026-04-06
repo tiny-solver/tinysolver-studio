@@ -1849,6 +1849,7 @@
     "deleteSuccess": "تم حذف المزود.",
     "deleteConfirmTitle": "حذف المزود",
     "deleteConfirmMessage": "سيتم حذف المزود \"{name}\" نهائياً. هل أنت متأكد؟",
+    "deleteBlockedByAgent": "{agents} يستخدم هذا المزود. يرجى إلغاء الربط قبل الحذف.",
     "cancel": "إلغاء",
     "delete": "حذف",
     "create": "إنشاء",

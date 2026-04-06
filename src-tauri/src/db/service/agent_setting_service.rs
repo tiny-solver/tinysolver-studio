@@ -205,23 +205,15 @@ async fn reorder_once(conn: &DatabaseConnection, agent_types: &[AgentType]) -> R
     Ok(())
 }
 
-pub async fn clear_model_provider_id(
+pub async fn find_by_model_provider_id(
     conn: &DatabaseConnection,
     model_provider_id: i32,
-) -> Result<(), DbError> {
+) -> Result<Vec<agent_setting::Model>, DbError> {
     let rows = agent_setting::Entity::find()
+        .filter(agent_setting::Column::ModelProviderId.eq(Some(model_provider_id)))
         .all(conn)
         .await?;
-    let now = Utc::now();
-    for row in rows {
-        if row.model_provider_id == Some(model_provider_id) {
-            let mut active = row.into_active_model();
-            active.model_provider_id = Set(None);
-            active.updated_at = Set(now);
-            active.update(conn).await?;
-        }
-    }
-    Ok(())
+    Ok(rows)
 }
 
 fn is_sqlite_full_error(err: &DbError) -> bool {

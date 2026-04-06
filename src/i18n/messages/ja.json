@@ -1849,6 +1849,7 @@
     "deleteSuccess": "プロバイダーを削除しました。",
     "deleteConfirmTitle": "プロバイダーを削除",
     "deleteConfirmMessage": "プロバイダー「{name}」を完全に削除しますか？",
+    "deleteBlockedByAgent": "{agents} がこのプロバイダーを使用中です。削除する前にリンクを解除してください。",
     "cancel": "キャンセル",
     "delete": "削除",
     "create": "作成",

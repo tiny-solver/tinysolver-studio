@@ -1849,6 +1849,7 @@
     "deleteSuccess": "Anbieter gelöscht.",
     "deleteConfirmTitle": "Anbieter löschen",
     "deleteConfirmMessage": "Der Anbieter \"{name}\" wird dauerhaft gelöscht. Sind Sie sicher?",
+    "deleteBlockedByAgent": "{agents} verwendet diesen Anbieter. Bitte trennen Sie die Verbindung vor dem Löschen.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "create": "Erstellen",

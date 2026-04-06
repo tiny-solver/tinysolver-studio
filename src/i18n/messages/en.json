@@ -1849,6 +1849,7 @@
     "deleteSuccess": "Provider deleted.",
     "deleteConfirmTitle": "Delete Provider",
     "deleteConfirmMessage": "This will permanently delete the provider \"{name}\". Are you sure?",
+    "deleteBlockedByAgent": "{agents} is currently using this provider. Please unlink before deleting.",
     "cancel": "Cancel",
     "delete": "Delete",
     "create": "Create",

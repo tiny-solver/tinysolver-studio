@@ -74,6 +74,7 @@ pub async fn update_model_provider(
         params.api_url,
         params.api_key,
         params.agent_types,
+        &state.emitter,
     )
     .await?;
     Ok(Json(result))

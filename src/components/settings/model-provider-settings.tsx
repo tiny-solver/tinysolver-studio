@@ -72,9 +72,21 @@ export function ModelProviderSettings() {
       toast.success(t("deleteSuccess"))
       setDeleteTarget(null)
       await loadProviders()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast.error(msg)
+    } catch (err: unknown) {
+      const raw = err as Record<string, unknown>
+      const msg =
+        typeof raw?.message === "string"
+          ? raw.message
+          : err instanceof Error
+            ? err.message
+            : String(err)
+      const prefix = "PROVIDER_IN_USE:"
+      if (msg.includes(prefix)) {
+        const agentNames = msg.substring(msg.indexOf(prefix) + prefix.length)
+        toast.error(t("deleteBlockedByAgent", { agents: agentNames }))
+      } else {
+        toast.error(msg)
+      }
     }
   }, [deleteTarget, loadProviders, t])
 
