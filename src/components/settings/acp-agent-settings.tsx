@@ -1782,7 +1782,7 @@ function ensureCodexProviderDefaults(
 
 function patchCodexAuthJsonText(
   authJsonText: string,
-  patch: { apiKey?: string }
+  patch: { apiKey?: string; authMode?: "chatgpt" | null }
 ): {
   authJsonText: string
   recoveredFromInvalid: boolean
@@ -1799,6 +1799,14 @@ function patchCodexAuthJsonText(
       delete authObject.OPENAI_API_KEY
       delete authObject.OPENAI_API_TOKEN
       delete authObject.API_KEY
+    }
+  }
+  if ("authMode" in patch) {
+    if (patch.authMode === "chatgpt") {
+      authObject.auth_mode = "chatgpt"
+      authObject.OPENAI_API_KEY = null
+    } else {
+      delete authObject.auth_mode
     }
   }
   return {
@@ -2082,9 +2090,24 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     openCodeAuthJsonText
   )
   const clineImportant = extractClineImportantValues(configText)
+  const codexAuthMode: CodexAuthMode =
+    agent.agent_type === "codex" && agent.model_provider_id != null
+      ? "model_provider"
+      : agent.agent_type === "codex"
+        ? inferCodexAuthMode(codexAuthJsonText)
+        : "api_key"
+  const rawEnvText = envMapToText(agent.env)
+  // When codex is in official subscription mode, clean up API keys/URLs from env
+  const envText =
+    agent.agent_type === "codex" && codexAuthMode === "chatgpt_subscription"
+      ? patchEnvText(rawEnvText, {
+          OPENAI_API_KEY: "",
+          OPENAI_BASE_URL: "",
+        })
+      : rawEnvText
   return {
     enabled: agent.enabled,
-    envText: envMapToText(agent.env),
+    envText,
     configText,
     apiBaseUrl:
       agent.agent_type === "codex"
@@ -2123,12 +2146,7 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     googleCloudProject: geminiImportant.googleCloudProject,
     googleCloudLocation: geminiImportant.googleCloudLocation,
     googleApplicationCredentials: geminiImportant.googleApplicationCredentials,
-    codexAuthMode:
-      agent.agent_type === "codex" && agent.model_provider_id != null
-        ? "model_provider"
-        : agent.agent_type === "codex"
-          ? inferCodexAuthMode(codexAuthJsonText)
-          : "api_key",
+    codexAuthMode,
     codexModelProvider: codexImportant.modelProvider,
     codexProviderOptions: codexImportant.providerOptions,
     codexReasoningEffort: codexImportant.reasoningEffort,
@@ -3472,9 +3490,11 @@ export function AcpAgentSettings() {
           configText: nextConfigJson.configText,
         }))
       } else if (agentType === "codex") {
-        const nextAuthJsonText = apiKey
-          ? JSON.stringify({ OPENAI_API_KEY: apiKey }, null, 2)
-          : "{}"
+        const nextAuthPatch = patchCodexAuthJsonText(
+          selectedDraft.codexAuthJsonText,
+          { apiKey, authMode: null }
+        )
+        const nextAuthJsonText = nextAuthPatch.authJsonText
         const nextConfigTomlText = patchCodexConfigTomlText(
           selectedDraft.codexConfigTomlText,
           {
@@ -4344,8 +4364,12 @@ export function AcpAgentSettings() {
         return
 
       if (nextMode === "chatgpt_subscription") {
-        // Official subscription: clear API URL/Key from env, remove model_provider config from toml
-        const nextAuthJsonText = "{}"
+        // Official subscription: set auth_mode to chatgpt, OPENAI_API_KEY to null
+        const nextAuth = patchCodexAuthJsonText(
+          selectedDraft.codexAuthJsonText,
+          { authMode: "chatgpt" }
+        )
+        const nextAuthJsonText = nextAuth.authJsonText
         let nextConfigTomlText = updateTomlRootStringKey(
           selectedDraft.codexConfigTomlText,
           "model_provider",
@@ -4385,14 +4409,11 @@ export function AcpAgentSettings() {
         selectedDraft.codexConfigTomlText,
         { modelProvider: CODEX_DEFAULT_MODEL_PROVIDER }
       )
-      const nextAuthJsonText =
-        nextMode === "api_key"
-          ? JSON.stringify(
-              { OPENAI_API_KEY: selectedDraft.apiKey || "" },
-              null,
-              2
-            )
-          : selectedDraft.codexAuthJsonText
+      const nextAuthPatch = patchCodexAuthJsonText(
+        selectedDraft.codexAuthJsonText,
+        { authMode: null }
+      )
+      const nextAuthJsonText = nextAuthPatch.authJsonText
       const synced = extractCodexImportantValues(
         nextAuthJsonText,
         nextConfigTomlText
@@ -4940,17 +4961,13 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {(selectedDraft.codexAuthMode === "api_key" ||
-                      selectedDraft.codexAuthMode === "model_provider") && (
+                    {selectedDraft.codexAuthMode === "api_key" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API URL
                         </label>
                         <Input
                           value={selectedDraft.apiBaseUrl}
-                          readOnly={
-                            selectedDraft.codexAuthMode === "model_provider"
-                          }
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
                               "apiBaseUrl",
@@ -4962,8 +4979,7 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {(selectedDraft.codexAuthMode === "api_key" ||
-                      selectedDraft.codexAuthMode === "model_provider") && (
+                    {selectedDraft.codexAuthMode === "api_key" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API Key
@@ -4976,9 +4992,6 @@ export function AcpAgentSettings() {
                                 : "password"
                             }
                             value={selectedDraft.apiKey}
-                            readOnly={
-                              selectedDraft.codexAuthMode === "model_provider"
-                            }
                             onChange={(event) => {
                               handleCodexImportantConfigChange(
                                 "apiKey",
