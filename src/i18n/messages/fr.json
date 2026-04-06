@@ -565,7 +565,18 @@
       "gatewayTokenHint": "Utilisez token-file plutôt qu’un token en clair si possible ; configurez-le via le CLI openclaw.",
       "sessionKeyHint": "Optionnel. Spécifie la session key de la gateway ; laisser vide pour auto-attribuer une session isolée."
     },
+    "authModeOfficialSubscription": "Abonnement officiel",
+    "authModeCustomEndpoint": "Endpoint personnalisé",
+    "authModeCustomEndpointHint": "Configurer manuellement l'URL API et la clé API pour un endpoint personnalisé.",
+    "authModeModelProvider": "Fournisseur de modèle",
+    "modelProvider": "Fournisseur de modèle",
+    "modelProviderHint": "Utiliser l'URL API et la clé API d'un fournisseur de modèle configuré.",
+    "selectModelProvider": "Sélectionner un fournisseur de modèle",
+    "noModelProviderAvailable": "Aucun fournisseur de modèle configuré pour cet agent. Allez dans les paramètres des fournisseurs de modèle pour en ajouter un.",
     "claude": {
+      "authMode": "Mode d'authentification",
+      "officialSubscription": "Abonnement officiel",
+      "officialSubscriptionHint": "Utiliser l'abonnement officiel Anthropic, pas de clé API requise.",
       "mainModel": "Modèle principal",
       "reasoningModel": "Modèle de raisonnement (thinking)",
       "haikuDefaultModel": "Modèle Haiku par défaut",
@@ -624,7 +635,8 @@
       "configSavedHint": "Les sessions existantes doivent être rouvertes pour prendre effet",
       "saveConfigManagementFailed": "Échec de l’enregistrement de la gestion de configuration",
       "clineSaved": "Configuration Cline enregistrée",
-      "saveClineFailed": "Échec de l'enregistrement de la configuration Cline"
+      "saveClineFailed": "Échec de l'enregistrement de la configuration Cline",
+      "modelProviderRequired": "Veuillez sélectionner un fournisseur de modèle avant d'enregistrer."
     },
     "version": {
       "statusLabel": "Statut de version",

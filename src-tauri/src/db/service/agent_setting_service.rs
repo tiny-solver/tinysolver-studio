@@ -22,6 +22,7 @@ pub struct AgentDefaultInput {
 pub struct AgentSettingsUpdate {
     pub enabled: bool,
     pub env_json: Option<String>,
+    pub model_provider_id: Option<i32>,
 }
 
 fn default_enabled(agent_type: AgentType) -> bool {
@@ -67,6 +68,7 @@ pub async fn ensure_defaults(
             sort_order: Set(default.default_sort_order),
             installed_version: Set(None),
             env_json: Set(None),
+            model_provider_id: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -133,6 +135,7 @@ pub async fn update(
     let mut active = model.into_active_model();
     active.enabled = Set(patch.enabled);
     active.env_json = Set(patch.env_json);
+    active.model_provider_id = Set(patch.model_provider_id);
     active.updated_at = Set(Utc::now());
     active.update(conn).await?;
     Ok(())
@@ -195,6 +198,25 @@ async fn reorder_once(conn: &DatabaseConnection, agent_types: &[AgentType]) -> R
             }
             let mut active = model.into_active_model();
             active.sort_order = Set(index as i32);
+            active.updated_at = Set(now);
+            active.update(conn).await?;
+        }
+    }
+    Ok(())
+}
+
+pub async fn clear_model_provider_id(
+    conn: &DatabaseConnection,
+    model_provider_id: i32,
+) -> Result<(), DbError> {
+    let rows = agent_setting::Entity::find()
+        .all(conn)
+        .await?;
+    let now = Utc::now();
+    for row in rows {
+        if row.model_provider_id == Some(model_provider_id) {
+            let mut active = row.into_active_model();
+            active.model_provider_id = Set(None);
             active.updated_at = Set(now);
             active.update(conn).await?;
         }

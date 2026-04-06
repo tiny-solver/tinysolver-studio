@@ -164,6 +164,8 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/acp_list_connections", post(handlers::acp::acp_list_connections))
         .route("/acp_clear_binary_cache", post(handlers::acp::acp_clear_binary_cache))
         .route("/acp_update_agent_preferences", post(handlers::acp::acp_update_agent_preferences))
+        .route("/acp_update_agent_env", post(handlers::acp::acp_update_agent_env))
+        .route("/acp_update_agent_config", post(handlers::acp::acp_update_agent_config))
         .route("/acp_download_agent_binary", post(handlers::acp::acp_download_agent_binary))
         .route("/acp_detect_agent_local_version", post(handlers::acp::acp_detect_agent_local_version))
         .route("/acp_prepare_npx_agent", post(handlers::acp::acp_prepare_npx_agent))

@@ -245,6 +245,7 @@ pub struct AcpAgentInfo {
     pub codex_auth_json: Option<String>,
     pub codex_config_toml: Option<String>,
     pub cline_secrets_json: Option<String>,
+    pub model_provider_id: Option<i32>,
 }
 
 /// Lightweight status info for a single agent, used by connect() pre-check.

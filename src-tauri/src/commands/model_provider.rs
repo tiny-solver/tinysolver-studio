@@ -1,5 +1,5 @@
 use crate::app_error::AppCommandError;
-use crate::db::service::model_provider_service;
+use crate::db::service::{agent_setting_service, model_provider_service};
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::models::model_provider::ModelProviderInfo;
@@ -118,6 +118,10 @@ pub async fn delete_model_provider_core(
     db: &AppDatabase,
     id: i32,
 ) -> Result<(), AppCommandError> {
+    // Clear any agent settings that reference this provider before deleting.
+    agent_setting_service::clear_model_provider_id(&db.conn, id)
+        .await
+        .map_err(AppCommandError::from)?;
     model_provider_service::delete(&db.conn, id)
         .await
         .map_err(AppCommandError::from)?;

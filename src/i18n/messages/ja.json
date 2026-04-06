@@ -565,7 +565,18 @@
       "gatewayTokenHint": "可能な場合は平文トークンではなく token-file の使用を推奨します。openclaw CLI で設定してください。",
       "sessionKeyHint": "任意。gateway の session key を指定します。空欄の場合は分離されたセッションが自動割り当てされます。"
     },
+    "authModeOfficialSubscription": "公式サブスクリプション",
+    "authModeCustomEndpoint": "カスタムエンドポイント",
+    "authModeCustomEndpointHint": "API URL と API Key を手動で設定してカスタムエンドポイントに接続します。",
+    "authModeModelProvider": "モデルプロバイダー",
+    "modelProvider": "モデルプロバイダー",
+    "modelProviderHint": "設定済みモデルプロバイダーの API URL と API Key を使用します。",
+    "selectModelProvider": "モデルプロバイダーを選択",
+    "noModelProviderAvailable": "このエージェントにはモデルプロバイダーが設定されていません。モデルプロバイダー設定で追加してください。",
     "claude": {
+      "authMode": "認証方式",
+      "officialSubscription": "公式サブスクリプション",
+      "officialSubscriptionHint": "Anthropic 公式サブスクリプションを使用、API Key 不要。",
       "mainModel": "メインモデル",
       "reasoningModel": "推論モデル（thinking）",
       "haikuDefaultModel": "デフォルト Haiku モデル",
@@ -624,7 +635,8 @@
       "configSavedHint": "既存のセッションは再度開く必要があります",
       "saveConfigManagementFailed": "設定管理の保存に失敗しました",
       "clineSaved": "Cline設定を保存しました",
-      "saveClineFailed": "Cline設定の保存に失敗しました"
+      "saveClineFailed": "Cline設定の保存に失敗しました",
+      "modelProviderRequired": "保存する前にモデルプロバイダーを選択してください。"
     },
     "version": {
       "statusLabel": "バージョン状態",

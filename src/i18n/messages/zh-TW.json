@@ -565,7 +565,18 @@
       "gatewayTokenHint": "建議使用 token-file 取代明文 Token，可透過 openclaw 命令列配置。",
       "sessionKeyHint": "可選。指定 Gateway Session Key，留空則自動分配隔離會話。"
     },
+    "authModeOfficialSubscription": "官網訂閱",
+    "authModeCustomEndpoint": "自定義介面",
+    "authModeCustomEndpointHint": "手動配置 API URL 和 API Key 連接自定義介面。",
+    "authModeModelProvider": "模型供應商",
+    "modelProvider": "模型供應商",
+    "modelProviderHint": "使用已配置的模型供應商的 API URL 和 API Key。",
+    "selectModelProvider": "選擇模型供應商",
+    "noModelProviderAvailable": "該代理未配置模型供應商。請前往模型供應商設定添加。",
     "claude": {
+      "authMode": "認證方式",
+      "officialSubscription": "官方訂閱",
+      "officialSubscriptionHint": "使用 Anthropic 官方訂閱，無需 API Key。",
       "mainModel": "主模型",
       "reasoningModel": "推理模型（thinking）",
       "haikuDefaultModel": "Haiku 預設模型",
@@ -624,7 +635,8 @@
       "configSavedHint": "已有會話需要重新打開才能生效",
       "saveConfigManagementFailed": "儲存配置管理失敗",
       "clineSaved": "Cline 配置已儲存",
-      "saveClineFailed": "儲存 Cline 配置失敗"
+      "saveClineFailed": "儲存 Cline 配置失敗",
+      "modelProviderRequired": "請先選擇一個模型供應商再儲存。"
     },
     "version": {
       "statusLabel": "版本狀態",

@@ -347,6 +347,8 @@ mod tauri_app {
                 acp_commands::acp_prepare_npx_agent,
                 acp_commands::acp_uninstall_agent,
                 acp_commands::acp_update_agent_preferences,
+                acp_commands::acp_update_agent_env,
+                acp_commands::acp_update_agent_config,
                 acp_commands::acp_reorder_agents,
                 acp_commands::acp_list_agent_skills,
                 acp_commands::acp_read_agent_skill,

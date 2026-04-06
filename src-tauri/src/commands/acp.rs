@@ -19,6 +19,7 @@ use crate::acp::types::{
 #[cfg(feature = "tauri-runtime")]
 use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
 use crate::db::service::agent_setting_service;
+use crate::db::service::model_provider_service;
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::EventEmitter;
@@ -1121,6 +1122,11 @@ pub(crate) fn load_agent_local_config_json(agent_type: AgentType) -> Option<Stri
 fn merge_json_values(base: &mut serde_json::Value, patch: &serde_json::Value) {
     if let (Some(base_obj), Some(patch_obj)) = (base.as_object_mut(), patch.as_object()) {
         for (key, patch_value) in patch_obj {
+            if patch_value.is_null() {
+                // null in patch means "remove this key"
+                base_obj.remove(key);
+                continue;
+            }
             match base_obj.get_mut(key) {
                 Some(base_value) => merge_json_values(base_value, patch_value),
                 None => {
@@ -1539,6 +1545,30 @@ pub(crate) fn build_runtime_env_from_setting(
     merged
 }
 
+/// Resolve model provider credentials into runtime env vars if `model_provider_id` is set.
+pub(crate) async fn apply_model_provider_env(
+    agent_type: AgentType,
+    setting: Option<&crate::db::entities::agent_setting::Model>,
+    runtime_env: &mut BTreeMap<String, String>,
+    conn: &sea_orm::DatabaseConnection,
+) {
+    let provider_id = match setting.and_then(|s| s.model_provider_id) {
+        Some(id) => id,
+        None => return,
+    };
+    let provider = match model_provider_service::get_by_id(conn, provider_id).await {
+        Ok(Some(p)) => p,
+        _ => return,
+    };
+    let (url_key, key_key, _) = important_env_targets(agent_type);
+    if !provider.api_url.trim().is_empty() {
+        runtime_env.insert(url_key.to_string(), provider.api_url.clone());
+    }
+    if !provider.api_key.trim().is_empty() {
+        runtime_env.insert(key_key.to_string(), provider.api_key.clone());
+    }
+}
+
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_preflight(
     agent_type: AgentType,
@@ -1578,6 +1608,9 @@ pub async fn acp_connect(
     let local_config_json = load_agent_local_config_json(agent_type);
     let mut runtime_env =
         build_runtime_env_from_setting(agent_type, setting.as_ref(), local_config_json.as_deref());
+
+    // Resolve model provider credentials if configured.
+    apply_model_provider_env(agent_type, setting.as_ref(), &mut runtime_env, &db.conn).await;
 
     // For OpenClaw: when creating a new conversation (no session_id to resume),
     // signal that we want a fresh transcript via --reset-session.
@@ -1859,6 +1892,7 @@ pub(crate) async fn acp_list_agents_core(
             codex_auth_json,
             codex_config_toml,
             cline_secrets_json,
+            model_provider_id: setting.and_then(|m| m.model_provider_id),
         });
     }
 
@@ -1943,7 +1977,11 @@ pub(crate) async fn acp_update_agent_preferences_core(
         }
     }
 
-    let patch = agent_setting_service::AgentSettingsUpdate { enabled, env_json };
+    let patch = agent_setting_service::AgentSettingsUpdate {
+        enabled,
+        env_json,
+        model_provider_id: None,
+    };
     agent_setting_service::update(&db.conn, agent_type, patch)
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
@@ -2016,6 +2054,152 @@ pub async fn acp_update_agent_preferences(
         agent_type, enabled, env, config_json, opencode_auth_json,
         codex_auth_json, codex_config_toml, &db, &emitter,
     ).await
+}
+
+pub(crate) async fn acp_update_agent_env_core(
+    agent_type: AgentType,
+    enabled: bool,
+    env: BTreeMap<String, String>,
+    model_provider_id: Option<i32>,
+    db: &AppDatabase,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
+    let default = agent_setting_service::AgentDefaultInput {
+        agent_type,
+        registry_id: registry::registry_id_for(agent_type).to_string(),
+        default_sort_order: i32::MAX / 2,
+    };
+
+    agent_setting_service::ensure_defaults(&db.conn, &[default])
+        .await
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+
+    let env_json = if env.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_string(&env).map_err(|e| AcpError::protocol(e.to_string()))?)
+    };
+
+    let patch = agent_setting_service::AgentSettingsUpdate {
+        enabled,
+        env_json,
+        model_provider_id,
+    };
+    agent_setting_service::update(&db.conn, agent_type, patch)
+        .await
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+
+    emit_acp_agents_updated(emitter, "env_updated", Some(agent_type));
+    Ok(())
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_update_agent_env(
+    agent_type: AgentType,
+    enabled: bool,
+    env: BTreeMap<String, String>,
+    model_provider_id: Option<i32>,
+    db: State<'_, AppDatabase>,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    let emitter = EventEmitter::Tauri(app);
+    acp_update_agent_env_core(agent_type, enabled, env, model_provider_id, &db, &emitter).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn acp_update_agent_config_core(
+    agent_type: AgentType,
+    config_json: Option<String>,
+    opencode_auth_json: Option<String>,
+    codex_auth_json: Option<String>,
+    codex_config_toml: Option<String>,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
+    let config_json = config_json.and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let opencode_auth_json = opencode_auth_json.and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    if let Some(raw) = config_json.as_deref() {
+        let parsed = serde_json::from_str::<serde_json::Value>(raw)
+            .map_err(|e| AcpError::protocol(format!("invalid config_json: {e}")))?;
+        if !parsed.is_object() {
+            return Err(AcpError::protocol(
+                "invalid config_json: root must be a JSON object",
+            ));
+        }
+    }
+
+    if agent_type == AgentType::Codex {
+        if codex_auth_json.is_some() || codex_config_toml.is_some() {
+            persist_codex_native_config_files(
+                codex_auth_json.as_deref(),
+                codex_config_toml.as_deref(),
+            )?;
+        }
+        emit_acp_agents_updated(emitter, "config_updated", Some(agent_type));
+        return Ok(());
+    }
+
+    if agent_type == AgentType::OpenCode {
+        if let Some(raw_auth) = opencode_auth_json.as_deref() {
+            persist_opencode_auth_json(raw_auth)?;
+        }
+        if let Some(raw) = config_json.as_deref() {
+            persist_agent_local_config_json(agent_type, Some(raw))?;
+        }
+        emit_acp_agents_updated(emitter, "config_updated", Some(agent_type));
+        return Ok(());
+    }
+
+    if agent_type == AgentType::Cline {
+        if let Some(raw) = config_json.as_deref() {
+            persist_cline_local_config(Some(raw))?;
+        }
+        emit_acp_agents_updated(emitter, "config_updated", Some(agent_type));
+        return Ok(());
+    }
+
+    // Claude Code, Gemini, OpenClaw — write config JSON to local file without merging env
+    let local_patch_value = config_json
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .filter(|value| value.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+    let local_patch_json = serde_json::to_string(&local_patch_value)
+        .map_err(|e| AcpError::protocol(format!("serialize local patch failed: {e}")))?;
+    persist_agent_local_config_json(agent_type, Some(local_patch_json.as_str()))?;
+    emit_acp_agents_updated(emitter, "config_updated", Some(agent_type));
+    Ok(())
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_update_agent_config(
+    agent_type: AgentType,
+    config_json: Option<String>,
+    opencode_auth_json: Option<String>,
+    codex_auth_json: Option<String>,
+    codex_config_toml: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    let emitter = EventEmitter::Tauri(app);
+    acp_update_agent_config_core(
+        agent_type, config_json, opencode_auth_json, codex_auth_json, codex_config_toml, &emitter,
+    )
+    .await
 }
 
 pub(crate) async fn acp_download_agent_binary_core(

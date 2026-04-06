@@ -80,6 +80,15 @@ pub async fn acp_connect(
         local_config_json.as_deref(),
     );
 
+    // Resolve model provider credentials if configured.
+    acp_commands::apply_model_provider_env(
+        params.agent_type,
+        setting.as_ref(),
+        &mut runtime_env,
+        &db.conn,
+    )
+    .await;
+
     if params.agent_type == AgentType::OpenClaw && params.session_id.is_none() {
         runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
     }
@@ -391,6 +400,62 @@ pub async fn acp_update_agent_preferences(
         params.codex_auth_json,
         params.codex_config_toml,
         db,
+        &emitter,
+    )
+    .await
+    .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpUpdateAgentEnvParams {
+    pub agent_type: AgentType,
+    pub enabled: bool,
+    pub env: BTreeMap<String, String>,
+    pub model_provider_id: Option<i32>,
+}
+
+pub async fn acp_update_agent_env(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AcpUpdateAgentEnvParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = &state.db;
+    let emitter = state.emitter.clone();
+    acp_commands::acp_update_agent_env_core(
+        params.agent_type,
+        params.enabled,
+        params.env,
+        params.model_provider_id,
+        db,
+        &emitter,
+    )
+    .await
+    .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpUpdateAgentConfigParams {
+    pub agent_type: AgentType,
+    pub config_json: Option<String>,
+    pub opencode_auth_json: Option<String>,
+    pub codex_auth_json: Option<String>,
+    pub codex_config_toml: Option<String>,
+}
+
+pub async fn acp_update_agent_config(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AcpUpdateAgentConfigParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let emitter = state.emitter.clone();
+    acp_commands::acp_update_agent_config_core(
+        params.agent_type,
+        params.config_json,
+        params.opencode_auth_json,
+        params.codex_auth_json,
+        params.codex_config_toml,
         &emitter,
     )
     .await

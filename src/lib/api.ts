@@ -228,6 +228,40 @@ export async function acpUpdateAgentPreferences(
   })
 }
 
+export async function acpUpdateAgentEnv(
+  agentType: AgentType,
+  params: {
+    enabled: boolean
+    env: Record<string, string>
+    modelProviderId?: number | null
+  }
+): Promise<void> {
+  return getTransport().call("acp_update_agent_env", {
+    agentType,
+    enabled: params.enabled,
+    env: params.env,
+    modelProviderId: params.modelProviderId ?? null,
+  })
+}
+
+export async function acpUpdateAgentConfig(
+  agentType: AgentType,
+  params: {
+    config_json?: string | null
+    opencode_auth_json?: string | null
+    codex_auth_json?: string | null
+    codex_config_toml?: string | null
+  }
+): Promise<void> {
+  return getTransport().call("acp_update_agent_config", {
+    agentType,
+    configJson: params.config_json ?? null,
+    opencodeAuthJson: params.opencode_auth_json ?? null,
+    codexAuthJson: params.codex_auth_json ?? null,
+    codexConfigToml: params.codex_config_toml ?? null,
+  })
+}
+
 export async function acpReorderAgents(agentTypes: AgentType[]): Promise<void> {
   return getTransport().call("acp_reorder_agents", { agentTypes })
 }

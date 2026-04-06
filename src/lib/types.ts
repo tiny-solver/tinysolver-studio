@@ -475,6 +475,7 @@ export interface AcpAgentInfo {
   codex_auth_json: string | null
   codex_config_toml: string | null
   cline_secrets_json: string | null
+  model_provider_id: number | null
 }
 
 // Lightweight agent status returned by acp_get_agent_status
@@ -902,6 +903,7 @@ export interface ModelProviderInfo {
   id: number
   name: string
   api_url: string
+  api_key: string
   api_key_masked: string
   agent_types: AgentType[]
   created_at: string

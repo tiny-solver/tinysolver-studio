@@ -565,7 +565,18 @@
       "gatewayTokenHint": "Wenn möglich token-file statt Klartext-Token verwenden; über openclaw CLI konfigurieren.",
       "sessionKeyHint": "Optional. Gateway-Session-Key angeben; leer lassen für automatische Zuweisung einer isolierten Session."
     },
+    "authModeOfficialSubscription": "Offizielles Abonnement",
+    "authModeCustomEndpoint": "Benutzerdefinierter Endpunkt",
+    "authModeCustomEndpointHint": "API-URL und API-Key manuell für einen benutzerdefinierten Endpunkt konfigurieren.",
+    "authModeModelProvider": "Modellanbieter",
+    "modelProvider": "Modellanbieter",
+    "modelProviderHint": "API-URL und API-Key eines konfigurierten Modellanbieters verwenden.",
+    "selectModelProvider": "Modellanbieter auswählen",
+    "noModelProviderAvailable": "Kein Modellanbieter für diesen Agent konfiguriert. Gehen Sie zu den Modellanbieter-Einstellungen, um einen hinzuzufügen.",
     "claude": {
+      "authMode": "Authentifizierungsmodus",
+      "officialSubscription": "Offizielles Abonnement",
+      "officialSubscriptionHint": "Offizielles Anthropic-Abonnement verwenden, kein API-Key erforderlich.",
       "mainModel": "Hauptmodell",
       "reasoningModel": "Reasoning-Modell (thinking)",
       "haikuDefaultModel": "Standard-Haiku-Modell",
@@ -624,7 +635,8 @@
       "configSavedHint": "Bestehende Sitzungen müssen neu geöffnet werden, damit die Änderungen wirksam werden",
       "saveConfigManagementFailed": "Speichern der Konfigurationsverwaltung fehlgeschlagen",
       "clineSaved": "Cline-Konfiguration gespeichert",
-      "saveClineFailed": "Cline-Konfiguration konnte nicht gespeichert werden"
+      "saveClineFailed": "Cline-Konfiguration konnte nicht gespeichert werden",
+      "modelProviderRequired": "Bitte wählen Sie vor dem Speichern einen Modellanbieter aus."
     },
     "version": {
       "statusLabel": "Versionsstatus",

@@ -63,13 +63,16 @@ import {
   acpPrepareNpxAgent,
   acpReorderAgents,
   acpUninstallAgent,
-  acpUpdateAgentPreferences,
+  acpUpdateAgentConfig,
+  acpUpdateAgentEnv,
+  listModelProviders,
 } from "@/lib/api"
 import type {
   AcpAgentInfo,
   AgentType,
   CheckStatus,
   FixAction,
+  ModelProviderInfo,
   PreflightResult,
 } from "@/lib/types"
 
@@ -78,6 +81,13 @@ interface AgentCheckState {
   error?: string
 }
 
+const CLAUDE_AUTH_MODES = [
+  "official_subscription",
+  "custom",
+  "model_provider",
+] as const
+type ClaudeAuthMode = (typeof CLAUDE_AUTH_MODES)[number]
+
 interface AgentDraft {
   enabled: boolean
   envText: string
@@ -85,6 +95,8 @@ interface AgentDraft {
   apiBaseUrl: string
   apiKey: string
   model: string
+  claudeAuthMode: ClaudeAuthMode
+  modelProviderId: number | null
   geminiAuthMode: GeminiAuthMode
   geminiApiKey: string
   googleApiKey: string
@@ -231,6 +243,7 @@ const GEMINI_AUTH_MODES = [
   "vertex_adc",
   "vertex_service_account",
   "vertex_api_key",
+  "model_provider",
 ] as const
 
 type GeminiAuthMode = (typeof GEMINI_AUTH_MODES)[number]
@@ -785,7 +798,8 @@ function patchGeminiAuthMode(
 }
 
 function geminiAuthModeLabel(mode: GeminiAuthMode): string {
-  if (mode === "custom") return acpText("gemini.mode.custom", "Custom Endpoint")
+  if (mode === "custom")
+    return acpText("authModeCustomEndpoint", "Custom Endpoint")
   if (mode === "login_google")
     return acpText("gemini.mode.loginGoogle", "Google Login (OAuth)")
   if (mode === "gemini_api_key") return "Gemini API Key"
@@ -795,6 +809,8 @@ function geminiAuthModeLabel(mode: GeminiAuthMode): string {
       "gemini.mode.vertexServiceAccount",
       "Vertex AI (Service Account)"
     )
+  if (mode === "model_provider")
+    return acpText("authModeModelProvider", "Model Provider")
   return "Vertex AI API Key"
 }
 
@@ -829,10 +845,46 @@ function geminiAuthModeHint(mode: GeminiAuthMode): string {
       "Set service account JSON path to GOOGLE_APPLICATION_CREDENTIALS."
     )
   }
+  if (mode === "model_provider") {
+    return acpText(
+      "modelProviderHint",
+      "Use API URL and API Key from a configured model provider."
+    )
+  }
   return acpText(
     "gemini.hint.vertexApiKey",
     "Fill GOOGLE_API_KEY when using Vertex AI API key."
   )
+}
+
+/**
+ * Compare original and current config objects. For any key present in
+ * original but missing in current, set it to `null` in the result so
+ * the backend merge can delete it from the file on disk.
+ */
+function markRemovedKeysNull(
+  original: Record<string, unknown>,
+  current: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...current }
+  for (const key of Object.keys(original)) {
+    if (!(key in result)) {
+      result[key] = null
+    } else if (
+      original[key] &&
+      typeof original[key] === "object" &&
+      !Array.isArray(original[key]) &&
+      result[key] &&
+      typeof result[key] === "object" &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = markRemovedKeysNull(
+        original[key] as Record<string, unknown>,
+        result[key] as Record<string, unknown>
+      )
+    }
+  }
+  return result
 }
 
 function normalizeConfigText(configText: string): string {
@@ -1003,7 +1055,11 @@ interface CodexImportantValues {
 
 const CODEX_DEFAULT_MODEL_PROVIDER = "codeg"
 
-const CODEX_AUTH_MODES = ["api_key", "chatgpt_subscription"] as const
+const CODEX_AUTH_MODES = [
+  "api_key",
+  "chatgpt_subscription",
+  "model_provider",
+] as const
 type CodexAuthMode = (typeof CODEX_AUTH_MODES)[number]
 
 type CodexReasoningEffort = "low" | "medium" | "high" | "xhigh"
@@ -1474,6 +1530,22 @@ function findTomlSectionRange(
   return { start: sectionStart, end: sectionEnd }
 }
 
+function removeTomlSection(
+  configTomlText: string,
+  sectionName: string
+): string {
+  const lines = configTomlText.split(/\r?\n/)
+  const range = findTomlSectionRange(lines, sectionName)
+  if (!range) return configTomlText
+  // Remove blank line before section header if present
+  const removeStart =
+    range.start > 0 && lines[range.start - 1].trim() === ""
+      ? range.start - 1
+      : range.start
+  lines.splice(removeStart, range.end - removeStart)
+  return lines.join("\n").trim()
+}
+
 function upsertTomlSectionBooleanKey(
   configTomlText: string,
   sectionName: string,
@@ -1867,9 +1939,8 @@ function patchImportantConfigText(
     config[key] = trimmed
   }
 
-  assignOrRemove("apiBaseUrl", patch.apiBaseUrl)
-  assignOrRemove("apiKey", patch.apiKey)
   if (agentType === "claude_code") {
+    // Claude Code: write apiBaseUrl/apiKey into config.env, not root
     const env =
       typeof config.env === "object" && config.env && !Array.isArray(config.env)
         ? { ...(config.env as Record<string, unknown>) }
@@ -1882,6 +1953,11 @@ function patchImportantConfigText(
       }
       env[key] = trimmed
     }
+    // Remove root-level apiBaseUrl/apiKey if present (legacy cleanup)
+    delete config.apiBaseUrl
+    delete config.apiKey
+    assignEnv("ANTHROPIC_BASE_URL", patch.apiBaseUrl)
+    assignEnv("ANTHROPIC_AUTH_TOKEN", patch.apiKey)
 
     assignEnv(CLAUDE_MODEL_ENV_KEYS.claudeMainModel, patch.claudeMainModel)
     assignEnv(
@@ -1907,6 +1983,8 @@ function patchImportantConfigText(
       config.env = env
     }
   } else {
+    assignOrRemove("apiBaseUrl", patch.apiBaseUrl)
+    assignOrRemove("apiKey", patch.apiKey)
     assignOrRemove("model", patch.model)
   }
 
@@ -2028,16 +2106,29 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
           : agent.agent_type === "open_code"
             ? openCodeImportant.model
             : important.model,
-    geminiAuthMode: geminiImportant.authMode,
+    claudeAuthMode:
+      agent.agent_type === "claude_code" && agent.model_provider_id != null
+        ? "model_provider"
+        : agent.agent_type === "claude_code" &&
+            (important.apiBaseUrl || important.apiKey)
+          ? "custom"
+          : "official_subscription",
+    modelProviderId: agent.model_provider_id ?? null,
+    geminiAuthMode:
+      agent.agent_type === "gemini" && agent.model_provider_id != null
+        ? "model_provider"
+        : geminiImportant.authMode,
     geminiApiKey: geminiImportant.geminiApiKey,
     googleApiKey: geminiImportant.googleApiKey,
     googleCloudProject: geminiImportant.googleCloudProject,
     googleCloudLocation: geminiImportant.googleCloudLocation,
     googleApplicationCredentials: geminiImportant.googleApplicationCredentials,
     codexAuthMode:
-      agent.agent_type === "codex"
-        ? inferCodexAuthMode(codexAuthJsonText)
-        : "api_key",
+      agent.agent_type === "codex" && agent.model_provider_id != null
+        ? "model_provider"
+        : agent.agent_type === "codex"
+          ? inferCodexAuthMode(codexAuthJsonText)
+          : "api_key",
     codexModelProvider: codexImportant.modelProvider,
     codexProviderOptions: codexImportant.providerOptions,
     codexReasoningEffort: codexImportant.reasoningEffort,
@@ -2334,7 +2425,13 @@ export function AcpAgentSettings() {
   const [runningActionKind, setRunningActionKind] = useState<
     Partial<Record<AgentType, RunningActionKind>>
   >({})
-  const [saving, setSaving] = useState<Partial<Record<AgentType, boolean>>>({})
+  const [savingEnv, setSavingEnv] = useState<
+    Partial<Record<AgentType, boolean>>
+  >({})
+  const [savingConfig, setSavingConfig] = useState<
+    Partial<Record<AgentType, boolean>>
+  >({})
+  const [modelProviders, setModelProviders] = useState<ModelProviderInfo[]>([])
   const [uninstallConfirmAgent, setUninstallConfirmAgent] =
     useState<AcpAgentInfo | null>(null)
   const [expandedChecks, setExpandedChecks] = useState<Record<string, boolean>>(
@@ -2399,8 +2496,12 @@ export function AcpAgentSettings() {
     setLoadingAgents(true)
     setLoadingError(null)
     try {
-      const next = await acpListAgents()
+      const [next, providers] = await Promise.all([
+        acpListAgents(),
+        listModelProviders().catch(() => [] as ModelProviderInfo[]),
+      ])
       setAgents(next)
+      setModelProviders(providers)
       setDrafts((prev) => {
         const updated = { ...prev }
         for (const agent of next) {
@@ -2549,11 +2650,43 @@ export function AcpAgentSettings() {
     })
   }, [sortedAgents])
 
-  const persistPreferences = useCallback(
+  const persistEnv = useCallback(
     async (
       agentType: AgentType,
       enabled: boolean,
       envText: string,
+      modelProviderId?: number | null
+    ) => {
+      const parsedEnv = parseEnvText(envText)
+      setSavingEnv((prev) => ({ ...prev, [agentType]: true }))
+      try {
+        await acpUpdateAgentEnv(agentType, {
+          enabled,
+          env: parsedEnv,
+          modelProviderId: modelProviderId ?? null,
+        })
+        setAgents((prev) =>
+          prev.map((agent) =>
+            agent.agent_type === agentType
+              ? {
+                  ...agent,
+                  enabled,
+                  env: parsedEnv,
+                  model_provider_id: modelProviderId ?? null,
+                }
+              : agent
+          )
+        )
+      } finally {
+        setSavingEnv((prev) => ({ ...prev, [agentType]: false }))
+      }
+    },
+    []
+  )
+
+  const persistConfig = useCallback(
+    async (
+      agentType: AgentType,
       configText: string,
       options?: {
         openCodeAuthJsonText?: string
@@ -2565,34 +2698,47 @@ export function AcpAgentSettings() {
       if (parsedConfig.error) {
         throw new Error(parsedConfig.error)
       }
-      const openCodeAuthJsonText = options?.openCodeAuthJsonText
       const codexAuthJsonText = options?.codexAuthJsonText
-      const codexConfigTomlText = options?.codexConfigTomlText
       if (agentType === "codex" && typeof codexAuthJsonText === "string") {
         const authError = parseCodexAuthJsonText(codexAuthJsonText)
         if (authError) {
           throw new Error(authError)
         }
       }
-      const parsedEnv = parseEnvText(envText)
       const normalizedConfig = normalizeConfigText(configText)
-      const configForPersist =
+      // For agents using merge strategy, mark removed keys as null
+      // so the backend merge_json_values can delete them from disk.
+      let configForPersist =
         agentType === "open_code" && !normalizedConfig ? "{}" : normalizedConfig
-      setSaving((prev) => ({ ...prev, [agentType]: true }))
+      const usesMerge =
+        agentType === "claude_code" ||
+        agentType === "gemini" ||
+        agentType === "open_claw"
+      if (usesMerge && configForPersist) {
+        const originalAgent = agents.find((a) => a.agent_type === agentType)
+        const originalConfig = originalAgent?.config_json
+          ? parseConfigJsonText(originalAgent.config_json).config
+          : {}
+        const currentConfig = parsedConfig.config
+        configForPersist = JSON.stringify(
+          markRemovedKeysNull(originalConfig, currentConfig),
+          null,
+          2
+        )
+      }
+      setSavingConfig((prev) => ({ ...prev, [agentType]: true }))
       try {
-        await acpUpdateAgentPreferences(agentType, {
-          enabled,
-          env: parsedEnv,
+        await acpUpdateAgentConfig(agentType, {
           config_json: configForPersist || null,
           opencode_auth_json:
-            typeof openCodeAuthJsonText === "string"
-              ? openCodeAuthJsonText
+            typeof options?.openCodeAuthJsonText === "string"
+              ? options.openCodeAuthJsonText
               : null,
           codex_auth_json:
             typeof codexAuthJsonText === "string" ? codexAuthJsonText : null,
           codex_config_toml:
-            typeof codexConfigTomlText === "string"
-              ? codexConfigTomlText
+            typeof options?.codexConfigTomlText === "string"
+              ? options.codexConfigTomlText
               : null,
         })
         setAgents((prev) =>
@@ -2600,30 +2746,28 @@ export function AcpAgentSettings() {
             agent.agent_type === agentType
               ? {
                   ...agent,
-                  enabled,
-                  env: parsedEnv,
-                  config_json: configForPersist || null,
+                  config_json: normalizedConfig || null,
                   opencode_auth_json:
-                    typeof openCodeAuthJsonText === "string"
-                      ? openCodeAuthJsonText
+                    typeof options?.openCodeAuthJsonText === "string"
+                      ? options.openCodeAuthJsonText
                       : agent.opencode_auth_json,
                   codex_auth_json:
                     typeof codexAuthJsonText === "string"
                       ? codexAuthJsonText
                       : agent.codex_auth_json,
                   codex_config_toml:
-                    typeof codexConfigTomlText === "string"
-                      ? codexConfigTomlText
+                    typeof options?.codexConfigTomlText === "string"
+                      ? options.codexConfigTomlText
                       : agent.codex_config_toml,
                 }
               : agent
           )
         )
       } finally {
-        setSaving((prev) => ({ ...prev, [agentType]: false }))
+        setSavingConfig((prev) => ({ ...prev, [agentType]: false }))
       }
     },
-    []
+    [agents]
   )
 
   const runBinaryAction = useCallback(
@@ -2986,9 +3130,40 @@ export function AcpAgentSettings() {
     ? (configErrors[selectedAgent.agent_type] ?? null)
     : null
   const selectedIsSaving = selectedAgent
-    ? Boolean(saving[selectedAgent.agent_type])
+    ? Boolean(
+        savingEnv[selectedAgent.agent_type] ||
+        savingConfig[selectedAgent.agent_type]
+      )
+    : false
+  const selectedIsSavingEnv = selectedAgent
+    ? Boolean(savingEnv[selectedAgent.agent_type])
+    : false
+  const selectedIsSavingConfig = selectedAgent
+    ? Boolean(savingConfig[selectedAgent.agent_type])
     : false
   const selectedAgentKind = selectedAgent?.agent_type ?? null
+
+  const selectedModelProviders = useMemo(() => {
+    if (!selectedAgent) return []
+    return modelProviders.filter((p) =>
+      p.agent_types.includes(selectedAgent.agent_type)
+    )
+  }, [modelProviders, selectedAgent])
+
+  const selectedNeedsModelProvider = useMemo(() => {
+    if (!selectedDraft) return false
+    if (!selectedAgent) return false
+    const at = selectedAgent.agent_type
+    if (at === "claude_code")
+      return selectedDraft.claudeAuthMode === "model_provider"
+    if (at === "codex") return selectedDraft.codexAuthMode === "model_provider"
+    if (at === "gemini")
+      return selectedDraft.geminiAuthMode === "model_provider"
+    return false
+  }, [selectedAgent, selectedDraft])
+
+  const selectedMissingModelProvider =
+    selectedNeedsModelProvider && selectedDraft?.modelProviderId == null
   const selectedCodexAuthJsonText = selectedDraft?.codexAuthJsonText ?? ""
   const selectedConfigText = selectedDraft?.configText ?? ""
   const selectedOpenCodeAuthJsonText = selectedDraft?.openCodeAuthJsonText ?? ""
@@ -3196,6 +3371,166 @@ export function AcpAgentSettings() {
     [selectedAgent, selectedDraft, t, updateSelectedDraft]
   )
 
+  const handleClaudeAuthModeChange = useCallback(
+    (nextMode: ClaudeAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "claude_code"
+      )
+        return
+
+      const keys = importantEnvKeysByAgent("claude_code")
+      const allEnvKeys = [...keys.apiBaseUrl, ...keys.apiKey]
+
+      if (nextMode === "official_subscription") {
+        // Clear API URL/API Key from env and config
+        const envPatch: Record<string, string> = {}
+        for (const k of allEnvKeys) envPatch[k] = ""
+        // Build clean display config (remove null keys)
+        const parsed = parseConfigJsonText(selectedDraft.configText)
+        const config: Record<string, unknown> = parsed.error
+          ? {}
+          : { ...parsed.config }
+        delete config.apiBaseUrl
+        delete config.apiKey
+        if (config.env && typeof config.env === "object") {
+          const cfgEnv = { ...(config.env as Record<string, unknown>) }
+          for (const k of allEnvKeys) delete cfgEnv[k]
+          if (Object.keys(cfgEnv).length > 0) {
+            config.env = cfgEnv
+          } else {
+            delete config.env
+          }
+        }
+        const nextConfigText =
+          Object.keys(config).length > 0 ? JSON.stringify(config, null, 2) : ""
+        setConfigErrors((prev) => ({
+          ...prev,
+          [selectedAgent.agent_type]: null,
+        }))
+        updateSelectedDraft((current) => ({
+          ...current,
+          claudeAuthMode: nextMode,
+          modelProviderId: null,
+          apiBaseUrl: "",
+          apiKey: "",
+          envText: patchEnvText(current.envText, envPatch),
+          configText: nextConfigText,
+        }))
+        return
+      }
+
+      // "custom" or "model_provider" — keep existing values, just switch mode
+      updateSelectedDraft((current) => ({
+        ...current,
+        claudeAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleModelProviderSelect = useCallback(
+    (providerIdStr: string) => {
+      if (!selectedAgent || !selectedDraft) return
+      const providerId = providerIdStr ? Number(providerIdStr) : null
+      const provider = providerId
+        ? modelProviders.find((p) => p.id === providerId)
+        : null
+      const apiUrl = provider?.api_url ?? ""
+      const apiKey = provider?.api_key ?? ""
+      const agentType = selectedAgent.agent_type
+
+      if (agentType === "claude_code") {
+        const nextConfigJson = patchImportantConfigText(
+          agentType,
+          selectedDraft.configText,
+          { apiBaseUrl: apiUrl, apiKey }
+        )
+        setConfigErrors((prev) => ({
+          ...prev,
+          [agentType]: null,
+        }))
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          envText: patchEnvByImportantKey(
+            agentType,
+            patchEnvByImportantKey(
+              agentType,
+              current.envText,
+              "apiBaseUrl",
+              apiUrl
+            ),
+            "apiKey",
+            apiKey
+          ),
+          configText: nextConfigJson.configText,
+        }))
+      } else if (agentType === "codex") {
+        const nextAuthJsonText = apiKey
+          ? JSON.stringify({ OPENAI_API_KEY: apiKey }, null, 2)
+          : "{}"
+        const nextConfigTomlText = patchCodexConfigTomlText(
+          selectedDraft.codexConfigTomlText,
+          {
+            modelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
+            apiBaseUrl: apiUrl,
+          }
+        )
+        const synced = extractCodexImportantValues(
+          nextAuthJsonText,
+          nextConfigTomlText
+        )
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          codexAuthJsonText: nextAuthJsonText,
+          codexConfigTomlText: nextConfigTomlText,
+          codexModelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
+          codexProviderOptions: synced.providerOptions,
+          envText: patchEnvText(current.envText, {
+            OPENAI_API_KEY: apiKey,
+            OPENAI_BASE_URL: apiUrl,
+          }),
+        }))
+      } else if (agentType === "gemini") {
+        const nextConfigJson = patchGeminiConfigText(selectedDraft.configText, {
+          apiBaseUrl: apiUrl,
+          geminiApiKey: apiKey,
+        })
+        setConfigErrors((prev) => ({
+          ...prev,
+          [agentType]: null,
+        }))
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          geminiApiKey: apiKey,
+          envText: patchGeminiEnvText(current.envText, {
+            apiBaseUrl: apiUrl,
+            geminiApiKey: apiKey,
+          }),
+          configText: nextConfigJson.configText,
+        }))
+      } else {
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+        }))
+      }
+    },
+    [selectedAgent, selectedDraft, modelProviders, updateSelectedDraft]
+  )
+
   const handleGeminiFieldChange = useCallback(
     (
       key:
@@ -3291,6 +3626,16 @@ export function AcpAgentSettings() {
       )
         return
 
+      if (nextMode === "model_provider") {
+        // Keep existing values; provider selection will fill API URL/Key
+        updateSelectedDraft((current) => ({
+          ...current,
+          geminiAuthMode: nextMode,
+          modelProviderId: current.modelProviderId,
+        }))
+        return
+      }
+
       const patched = patchGeminiAuthMode(
         {
           authMode: selectedDraft.geminiAuthMode,
@@ -3326,6 +3671,7 @@ export function AcpAgentSettings() {
       updateSelectedDraft((current) => ({
         ...current,
         geminiAuthMode: patched.authMode,
+        modelProviderId: null,
         apiBaseUrl: patched.apiBaseUrl,
         apiKey: patched.geminiApiKey || patched.googleApiKey,
         geminiApiKey: patched.geminiApiKey,
@@ -3608,15 +3954,9 @@ export function AcpAgentSettings() {
     ) {
       return
     }
-    persistPreferences(
-      selectedAgent.agent_type,
-      removed.enabled,
-      removed.envText,
-      removed.configText,
-      {
-        openCodeAuthJsonText: removed.openCodeAuthJsonText,
-      }
-    )
+    persistConfig(selectedAgent.agent_type, removed.configText, {
+      openCodeAuthJsonText: removed.openCodeAuthJsonText,
+    })
       .then(() => {
         toast.success(t("toasts.providerDeleted", { providerId }), {
           description: t("toasts.openCodeConfigSynced"),
@@ -3632,7 +3972,7 @@ export function AcpAgentSettings() {
   }, [
     handleOpenCodeRemoveProvider,
     openCodeDeleteProviderId,
-    persistPreferences,
+    persistConfig,
     selectedAgent,
     t,
   ])
@@ -3994,42 +4334,6 @@ export function AcpAgentSettings() {
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
 
-  const handleCodexModelProviderChange = useCallback(
-    (nextProvider: string) => {
-      if (
-        !selectedAgent ||
-        !selectedDraft ||
-        selectedAgent.agent_type !== "codex"
-      )
-        return
-      const trimmedProvider = nextProvider.trim()
-      if (!trimmedProvider) return
-      const nextToml = patchCodexConfigTomlText(
-        selectedDraft.codexConfigTomlText,
-        {
-          modelProvider: trimmedProvider,
-          modelReasoningEffort: selectedDraft.codexReasoningEffort,
-        }
-      )
-      const synced = extractCodexImportantValues(
-        selectedDraft.codexAuthJsonText,
-        nextToml
-      )
-      updateSelectedDraft((current) => ({
-        ...current,
-        apiBaseUrl: synced.apiBaseUrl,
-        apiKey: synced.apiKey ?? current.apiKey,
-        model: synced.model,
-        codexModelProvider: synced.modelProvider,
-        codexProviderOptions: synced.providerOptions,
-        codexReasoningEffort: synced.reasoningEffort,
-        codexSupportsWebsockets: synced.supportsWebsockets,
-        codexConfigTomlText: nextToml,
-      }))
-    },
-    [selectedAgent, selectedDraft, updateSelectedDraft]
-  )
-
   const handleCodexAuthModeChange = useCallback(
     (nextMode: CodexAuthMode) => {
       if (
@@ -4039,41 +4343,71 @@ export function AcpAgentSettings() {
       )
         return
 
+      if (nextMode === "chatgpt_subscription") {
+        // Official subscription: clear API URL/Key from env, remove model_provider config from toml
+        const nextAuthJsonText = "{}"
+        let nextConfigTomlText = updateTomlRootStringKey(
+          selectedDraft.codexConfigTomlText,
+          "model_provider",
+          ""
+        )
+        nextConfigTomlText = removeTomlSection(
+          nextConfigTomlText,
+          `model_providers.${CODEX_DEFAULT_MODEL_PROVIDER}`
+        )
+        const synced = extractCodexImportantValues(
+          nextAuthJsonText,
+          nextConfigTomlText
+        )
+        updateSelectedDraft((current) => ({
+          ...current,
+          codexAuthMode: nextMode,
+          modelProviderId: null,
+          codexAuthJsonText: nextAuthJsonText,
+          codexConfigTomlText: nextConfigTomlText,
+          envText: patchEnvText(current.envText, {
+            OPENAI_API_KEY: "",
+            OPENAI_BASE_URL: "",
+          }),
+          apiBaseUrl: "",
+          apiKey: "",
+          model: synced.model,
+          codexModelProvider: synced.modelProvider,
+          codexProviderOptions: synced.providerOptions,
+          codexReasoningEffort: synced.reasoningEffort,
+          codexSupportsWebsockets: synced.supportsWebsockets,
+        }))
+        return
+      }
+
+      // "api_key" or "model_provider": ensure model_provider = "codeg" in toml
+      const nextConfigTomlText = patchCodexConfigTomlText(
+        selectedDraft.codexConfigTomlText,
+        { modelProvider: CODEX_DEFAULT_MODEL_PROVIDER }
+      )
       const nextAuthJsonText =
-        nextMode === "chatgpt_subscription"
-          ? "{}"
-          : JSON.stringify({ OPENAI_API_KEY: "" }, null, 2)
-
-      const nextConfigTomlText =
-        nextMode === "chatgpt_subscription"
-          ? ""
-          : selectedDraft.codexConfigTomlText
-
-      const nextEnvText =
-        nextMode === "chatgpt_subscription"
-          ? patchEnvText(selectedDraft.envText, {
-              OPENAI_API_KEY: "",
-              OPENAI_BASE_URL: "",
-            })
-          : selectedDraft.envText
-
+        nextMode === "api_key"
+          ? JSON.stringify(
+              { OPENAI_API_KEY: selectedDraft.apiKey || "" },
+              null,
+              2
+            )
+          : selectedDraft.codexAuthJsonText
       const synced = extractCodexImportantValues(
         nextAuthJsonText,
         nextConfigTomlText
       )
-
       updateSelectedDraft((current) => ({
         ...current,
         codexAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
         codexAuthJsonText: nextAuthJsonText,
         codexConfigTomlText: nextConfigTomlText,
-        envText: nextEnvText,
-        apiBaseUrl:
-          nextMode === "chatgpt_subscription" ? "" : synced.apiBaseUrl,
-        apiKey:
-          nextMode === "chatgpt_subscription" ? "" : (synced.apiKey ?? ""),
+        apiBaseUrl: synced.apiBaseUrl,
+        apiKey: synced.apiKey ?? current.apiKey,
         model: synced.model,
-        codexModelProvider: synced.modelProvider,
+        codexModelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
         codexProviderOptions: synced.providerOptions,
         codexReasoningEffort: synced.reasoningEffort,
         codexSupportsWebsockets: synced.supportsWebsockets,
@@ -4405,17 +4739,11 @@ export function AcpAgentSettings() {
                           ...prev,
                           [selectedAgent.agent_type]: nextDraft,
                         }))
-                        persistPreferences(
+                        persistEnv(
                           selectedAgent.agent_type,
                           nextEnabled,
                           nextDraft.envText,
-                          nextDraft.configText,
-                          selectedAgent.agent_type === "open_code"
-                            ? {
-                                openCodeAuthJsonText:
-                                  nextDraft.openCodeAuthJsonText,
-                              }
-                            : undefined
+                          nextDraft.modelProviderId
                         ).catch((err) => {
                           console.error(
                             "[Settings] persist enabled failed:",
@@ -4488,17 +4816,11 @@ export function AcpAgentSettings() {
                     <Button
                       size="sm"
                       onClick={() => {
-                        persistPreferences(
+                        persistEnv(
                           selectedAgent.agent_type,
                           selectedDraft.enabled,
                           selectedDraft.envText,
-                          selectedDraft.configText,
-                          selectedAgent.agent_type === "open_code"
-                            ? {
-                                openCodeAuthJsonText:
-                                  selectedDraft.openCodeAuthJsonText,
-                              }
-                            : undefined
+                          selectedDraft.modelProviderId
                         )
                           .then(() => {
                             toast.success(t("toasts.configSaved"), {
@@ -4506,10 +4828,7 @@ export function AcpAgentSettings() {
                             })
                           })
                           .catch((err) => {
-                            console.error(
-                              "[Settings] save preferences failed:",
-                              err
-                            )
+                            console.error("[Settings] save env failed:", err)
                             const message =
                               err instanceof Error ? err.message : String(err)
                             toast.error(t("toasts.saveEnvFailed"), {
@@ -4517,9 +4836,9 @@ export function AcpAgentSettings() {
                             })
                           })
                       }}
-                      disabled={selectedIsSaving}
+                      disabled={selectedIsSavingEnv}
                     >
-                      {selectedIsSaving ? (
+                      {selectedIsSavingEnv ? (
                         <>
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           {t("actions.saving")}
@@ -4566,8 +4885,10 @@ export function AcpAgentSettings() {
                           {CODEX_AUTH_MODES.map((mode) => (
                             <SelectItem key={mode} value={mode}>
                               {mode === "chatgpt_subscription"
-                                ? t("codex.chatgptSubscription")
-                                : "API Key"}
+                                ? t("authModeOfficialSubscription")
+                                : mode === "model_provider"
+                                  ? t("authModeModelProvider")
+                                  : t("authModeCustomEndpoint")}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -4575,44 +4896,61 @@ export function AcpAgentSettings() {
                       <p className="text-[11px] text-muted-foreground">
                         {selectedDraft.codexAuthMode === "chatgpt_subscription"
                           ? t("codex.chatgptSubscriptionHint")
-                          : t("codex.apiKeyHint")}
+                          : selectedDraft.codexAuthMode === "model_provider"
+                            ? t("modelProviderHint")
+                            : t("authModeCustomEndpointHint")}
                       </p>
                     </div>
 
-                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                    {selectedDraft.codexAuthMode === "model_provider" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
-                          Provider
+                          {t("selectModelProvider")}
                         </label>
-                        <Select
-                          value={selectedDraft.codexModelProvider}
-                          onValueChange={handleCodexModelProviderChange}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue
-                              placeholder={t("codex.selectProvider")}
-                            />
-                          </SelectTrigger>
-                          <SelectContent align="start">
-                            {selectedDraft.codexProviderOptions.map(
-                              (provider) => (
-                                <SelectItem key={provider} value={provider}>
-                                  {provider}
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
                                 </SelectItem>
-                              )
-                            )}
-                          </SelectContent>
-                        </Select>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
                       </div>
                     )}
 
-                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                    {(selectedDraft.codexAuthMode === "api_key" ||
+                      selectedDraft.codexAuthMode === "model_provider") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API URL
                         </label>
                         <Input
                           value={selectedDraft.apiBaseUrl}
+                          readOnly={
+                            selectedDraft.codexAuthMode === "model_provider"
+                          }
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
                               "apiBaseUrl",
@@ -4624,7 +4962,8 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                    {(selectedDraft.codexAuthMode === "api_key" ||
+                      selectedDraft.codexAuthMode === "model_provider") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API Key
@@ -4637,6 +4976,9 @@ export function AcpAgentSettings() {
                                 : "password"
                             }
                             value={selectedDraft.apiKey}
+                            readOnly={
+                              selectedDraft.codexAuthMode === "model_provider"
+                            }
                             onChange={(event) => {
                               handleCodexImportantConfigChange(
                                 "apiKey",
@@ -4672,7 +5014,8 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {selectedDraft.codexAuthMode !== "chatgpt_subscription" && (
+                    {(selectedDraft.codexAuthMode === "api_key" ||
+                      selectedDraft.codexAuthMode === "model_provider") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           {t("codex.modelName")}
@@ -4784,6 +5127,10 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
+                          if (selectedMissingModelProvider) {
+                            toast.error(t("toasts.modelProviderRequired"))
+                            return
+                          }
                           const codexEnvText =
                             selectedDraft.codexAuthMode ===
                             "chatgpt_subscription"
@@ -4792,18 +5139,24 @@ supports_websockets = true`}
                                   OPENAI_BASE_URL: "",
                                 })
                               : selectedDraft.envText
-                          persistPreferences(
-                            selectedAgent.agent_type,
-                            selectedDraft.enabled,
-                            codexEnvText,
-                            selectedDraft.configText,
-                            {
-                              codexAuthJsonText:
-                                selectedDraft.codexAuthJsonText,
-                              codexConfigTomlText:
-                                selectedDraft.codexConfigTomlText,
-                            }
-                          )
+                          Promise.all([
+                            persistEnv(
+                              selectedAgent.agent_type,
+                              selectedDraft.enabled,
+                              codexEnvText,
+                              selectedDraft.modelProviderId
+                            ),
+                            persistConfig(
+                              selectedAgent.agent_type,
+                              selectedDraft.configText,
+                              {
+                                codexAuthJsonText:
+                                  selectedDraft.codexAuthJsonText,
+                                codexConfigTomlText:
+                                  selectedDraft.codexConfigTomlText,
+                              }
+                            ),
+                          ])
                             .then(() => {
                               toast.success(t("toasts.codexSaved"), {
                                 description: t("toasts.configSavedHint"),
@@ -4821,9 +5174,9 @@ supports_websockets = true`}
                               })
                             })
                         }}
-                        disabled={selectedIsSaving}
+                        disabled={selectedIsSavingEnv || selectedIsSavingConfig}
                       >
-                        {selectedIsSaving ? (
+                        {selectedIsSavingEnv || selectedIsSavingConfig ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("actions.saving")}
@@ -4880,6 +5233,44 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    {selectedDraft.geminiAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         Model
@@ -4896,13 +5287,17 @@ supports_websockets = true`}
                       </p>
                     </div>
 
-                    {selectedDraft.geminiAuthMode === "custom" && (
+                    {(selectedDraft.geminiAuthMode === "custom" ||
+                      selectedDraft.geminiAuthMode === "model_provider") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           GOOGLE_GEMINI_BASE_URL
                         </label>
                         <Input
                           value={selectedDraft.apiBaseUrl}
+                          readOnly={
+                            selectedDraft.geminiAuthMode === "model_provider"
+                          }
                           onChange={(event) => {
                             handleGeminiFieldChange(
                               "apiBaseUrl",
@@ -4916,6 +5311,7 @@ supports_websockets = true`}
 
                     {(selectedDraft.geminiAuthMode === "custom" ||
                       selectedDraft.geminiAuthMode === "gemini_api_key" ||
+                      selectedDraft.geminiAuthMode === "model_provider" ||
                       selectedDraft.geminiAuthMode === "vertex_api_key") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
@@ -4934,6 +5330,9 @@ supports_websockets = true`}
                               selectedDraft.geminiAuthMode === "vertex_api_key"
                                 ? selectedDraft.googleApiKey
                                 : selectedDraft.geminiApiKey
+                            }
+                            readOnly={
+                              selectedDraft.geminiAuthMode === "model_provider"
                             }
                             onChange={(event) => {
                               if (
@@ -5058,12 +5457,22 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
-                          persistPreferences(
-                            selectedAgent.agent_type,
-                            selectedDraft.enabled,
-                            selectedDraft.envText,
-                            selectedDraft.configText
-                          )
+                          if (selectedMissingModelProvider) {
+                            toast.error(t("toasts.modelProviderRequired"))
+                            return
+                          }
+                          Promise.all([
+                            persistEnv(
+                              selectedAgent.agent_type,
+                              selectedDraft.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            ),
+                            persistConfig(
+                              selectedAgent.agent_type,
+                              selectedDraft.configText
+                            ),
+                          ])
                             .then(() => {
                               toast.success(t("toasts.geminiSaved"), {
                                 description: t("toasts.configSavedHint"),
@@ -5081,9 +5490,9 @@ supports_websockets = true`}
                               })
                             })
                         }}
-                        disabled={selectedIsSaving}
+                        disabled={selectedIsSavingEnv || selectedIsSavingConfig}
                       >
-                        {selectedIsSaving ? (
+                        {selectedIsSavingEnv || selectedIsSavingConfig ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("actions.saving")}
@@ -5638,10 +6047,8 @@ supports_websockets = true`}
                                           type="button"
                                           size="sm"
                                           onClick={() => {
-                                            persistPreferences(
+                                            persistConfig(
                                               selectedAgent.agent_type,
-                                              selectedDraft.enabled,
-                                              selectedDraft.envText,
                                               selectedDraft.configText,
                                               {
                                                 openCodeAuthJsonText:
@@ -5680,9 +6087,9 @@ supports_websockets = true`}
                                                 )
                                               })
                                           }}
-                                          disabled={selectedIsSaving}
+                                          disabled={selectedIsSavingConfig}
                                         >
-                                          {selectedIsSaving ? (
+                                          {selectedIsSavingConfig ? (
                                             <>
                                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                               {t("actions.saving")}
@@ -5738,10 +6145,8 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
-                          persistPreferences(
+                          persistConfig(
                             selectedAgent.agent_type,
-                            selectedDraft.enabled,
-                            selectedDraft.envText,
                             selectedDraft.configText,
                             {
                               openCodeAuthJsonText:
@@ -5765,9 +6170,9 @@ supports_websockets = true`}
                               })
                             })
                         }}
-                        disabled={selectedIsSaving}
+                        disabled={selectedIsSavingConfig}
                       >
-                        {selectedIsSaving ? (
+                        {selectedIsSavingConfig ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("actions.saving")}
@@ -5918,10 +6323,8 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
-                          persistPreferences(
+                          persistConfig(
                             selectedAgent.agent_type,
-                            selectedDraft.enabled,
-                            selectedDraft.envText,
                             selectedDraft.configText
                           )
                             .then(() => {
@@ -5941,9 +6344,9 @@ supports_websockets = true`}
                               })
                             })
                         }}
-                        disabled={selectedIsSaving}
+                        disabled={selectedIsSavingConfig}
                       >
-                        {selectedIsSaving ? (
+                        {selectedIsSavingConfig ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("actions.saving")}
@@ -6059,12 +6462,18 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
-                          persistPreferences(
-                            selectedAgent.agent_type,
-                            selectedDraft.enabled,
-                            selectedDraft.envText,
-                            selectedDraft.configText
-                          )
+                          Promise.all([
+                            persistEnv(
+                              selectedAgent.agent_type,
+                              selectedDraft.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            ),
+                            persistConfig(
+                              selectedAgent.agent_type,
+                              selectedDraft.configText
+                            ),
+                          ])
                             .then(() => {
                               toast.success(t("toasts.openClawSaved"), {
                                 description: t("toasts.configSavedHint"),
@@ -6082,9 +6491,9 @@ supports_websockets = true`}
                               })
                             })
                         }}
-                        disabled={selectedIsSaving}
+                        disabled={selectedIsSavingEnv || selectedIsSavingConfig}
                       >
-                        {selectedIsSaving ? (
+                        {selectedIsSavingEnv || selectedIsSavingConfig ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("actions.saving")}
@@ -6111,67 +6520,165 @@ supports_websockets = true`}
                       </p>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        API URL
-                      </label>
-                      <Input
-                        value={selectedDraft.apiBaseUrl}
-                        onChange={(event) => {
-                          handleImportantConfigChange(
-                            "apiBaseUrl",
-                            event.target.value
-                          )
-                        }}
-                        placeholder="https://api.example.com"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        API Key
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? "text"
-                              : "password"
-                          }
-                          value={selectedDraft.apiKey}
-                          onChange={(event) => {
-                            handleImportantConfigChange(
-                              "apiKey",
-                              event.target.value
-                            )
+                    {selectedAgent.agent_type === "claude_code" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("claude.authMode")}
+                        </label>
+                        <Select
+                          value={selectedDraft.claudeAuthMode}
+                          onValueChange={(value) => {
+                            if (
+                              CLAUDE_AUTH_MODES.includes(
+                                value as ClaudeAuthMode
+                              )
+                            ) {
+                              handleClaudeAuthModeChange(
+                                value as ClaudeAuthMode
+                              )
+                            }
                           }}
-                          placeholder="sk-..."
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowApiKeys((prev) => ({
-                              ...prev,
-                              [selectedAgent.agent_type]:
-                                !prev[selectedAgent.agent_type],
-                            }))
-                          }}
-                          title={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? t("actions.hideApiKey")
-                              : t("actions.showApiKey")
-                          }
                         >
-                          {showApiKeys[selectedAgent.agent_type] ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectItem value="official_subscription">
+                              {t("authModeOfficialSubscription")}
+                            </SelectItem>
+                            <SelectItem value="custom">
+                              {t("authModeCustomEndpoint")}
+                            </SelectItem>
+                            <SelectItem value="model_provider">
+                              {t("authModeModelProvider")}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                          {selectedDraft.claudeAuthMode ===
+                          "official_subscription"
+                            ? t("claude.officialSubscriptionHint")
+                            : selectedDraft.claudeAuthMode === "custom"
+                              ? t("authModeCustomEndpointHint")
+                              : t("modelProviderHint")}
+                        </p>
                       </div>
-                    </div>
+                    )}
+
+                    {selectedAgent.agent_type === "claude_code" &&
+                      selectedDraft.claudeAuthMode === "model_provider" && (
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("selectModelProvider")}
+                          </label>
+                          {selectedModelProviders.length > 0 ? (
+                            <Select
+                              value={
+                                selectedDraft.modelProviderId != null
+                                  ? String(selectedDraft.modelProviderId)
+                                  : ""
+                              }
+                              onValueChange={handleModelProviderSelect}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue
+                                  placeholder={t("selectModelProvider")}
+                                />
+                              </SelectTrigger>
+                              <SelectContent align="start">
+                                {selectedModelProviders.map((provider) => (
+                                  <SelectItem
+                                    key={provider.id}
+                                    value={String(provider.id)}
+                                  >
+                                    {provider.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("noModelProviderAvailable")}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                    {(selectedAgent.agent_type !== "claude_code" ||
+                      selectedDraft.claudeAuthMode === "custom") && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            API URL
+                          </label>
+                          <Input
+                            value={selectedDraft.apiBaseUrl}
+                            readOnly={
+                              selectedAgent.agent_type === "claude_code" &&
+                              selectedDraft.claudeAuthMode === "model_provider"
+                            }
+                            onChange={(event) => {
+                              handleImportantConfigChange(
+                                "apiBaseUrl",
+                                event.target.value
+                              )
+                            }}
+                            placeholder="https://api.example.com"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            API Key
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type={
+                                showApiKeys[selectedAgent.agent_type]
+                                  ? "text"
+                                  : "password"
+                              }
+                              value={selectedDraft.apiKey}
+                              readOnly={
+                                selectedAgent.agent_type === "claude_code" &&
+                                selectedDraft.claudeAuthMode ===
+                                  "model_provider"
+                              }
+                              onChange={(event) => {
+                                handleImportantConfigChange(
+                                  "apiKey",
+                                  event.target.value
+                                )
+                              }}
+                              placeholder="sk-..."
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowApiKeys((prev) => ({
+                                  ...prev,
+                                  [selectedAgent.agent_type]:
+                                    !prev[selectedAgent.agent_type],
+                                }))
+                              }}
+                              title={
+                                showApiKeys[selectedAgent.agent_type]
+                                  ? t("actions.hideApiKey")
+                                  : t("actions.showApiKey")
+                              }
+                            >
+                              {showApiKeys[selectedAgent.agent_type] ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     {selectedAgent.agent_type === "claude_code" ? (
                       <div className="space-y-2">
@@ -6304,12 +6811,22 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
-                          persistPreferences(
-                            selectedAgent.agent_type,
-                            selectedDraft.enabled,
-                            selectedDraft.envText,
-                            selectedDraft.configText
-                          )
+                          if (selectedMissingModelProvider) {
+                            toast.error(t("toasts.modelProviderRequired"))
+                            return
+                          }
+                          Promise.all([
+                            persistEnv(
+                              selectedAgent.agent_type,
+                              selectedDraft.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            ),
+                            persistConfig(
+                              selectedAgent.agent_type,
+                              selectedDraft.configText
+                            ),
+                          ])
                             .then(() => {
                               toast.success(t("toasts.configSaved"), {
                                 description: t("toasts.configSavedHint"),
@@ -6330,9 +6847,9 @@ supports_websockets = true`}
                               )
                             })
                         }}
-                        disabled={selectedIsSaving}
+                        disabled={selectedIsSavingEnv || selectedIsSavingConfig}
                       >
-                        {selectedIsSaving ? (
+                        {selectedIsSavingEnv || selectedIsSavingConfig ? (
                           <>
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("actions.saving")}

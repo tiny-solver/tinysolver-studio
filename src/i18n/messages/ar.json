@@ -565,7 +565,18 @@
       "gatewayTokenHint": "يُفضّل استخدام token-file بدل الرمز النصي متى أمكن؛ قم بالإعداد عبر openclaw CLI.",
       "sessionKeyHint": "اختياري. حدّد مفتاح جلسة gateway؛ واتركه فارغًا للتعيين التلقائي لجلسة معزولة."
     },
+    "authModeOfficialSubscription": "الاشتراك الرسمي",
+    "authModeCustomEndpoint": "نقطة نهاية مخصصة",
+    "authModeCustomEndpointHint": "تكوين عنوان API ومفتاح API يدوياً لنقطة نهاية مخصصة.",
+    "authModeModelProvider": "مزود النموذج",
+    "modelProvider": "مزود النموذج",
+    "modelProviderHint": "استخدم عنوان API ومفتاح API من مزود نموذج مُعدّ.",
+    "selectModelProvider": "اختر مزود النموذج",
+    "noModelProviderAvailable": "لا يوجد مزود نموذج مُعدّ لهذا الوكيل. انتقل إلى إعدادات مزود النموذج لإضافة واحد.",
     "claude": {
+      "authMode": "وضع المصادقة",
+      "officialSubscription": "الاشتراك الرسمي",
+      "officialSubscriptionHint": "استخدم اشتراك Anthropic الرسمي، لا حاجة لمفتاح API.",
       "mainModel": "النموذج الرئيسي",
       "reasoningModel": "نموذج الاستدلال (thinking)",
       "haikuDefaultModel": "نموذج Haiku الافتراضي",
@@ -624,7 +635,8 @@
       "configSavedHint": "يجب إعادة فتح الجلسات الحالية لتطبيق التغييرات",
       "saveConfigManagementFailed": "فشل حفظ إدارة الإعدادات",
       "clineSaved": "تم حفظ تكوين Cline",
-      "saveClineFailed": "فشل في حفظ تكوين Cline"
+      "saveClineFailed": "فشل في حفظ تكوين Cline",
+      "modelProviderRequired": "يرجى اختيار مزود نموذج قبل الحفظ."
     },
     "version": {
       "statusLabel": "حالة الإصدار",

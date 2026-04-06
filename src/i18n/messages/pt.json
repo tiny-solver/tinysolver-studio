@@ -565,7 +565,18 @@
       "gatewayTokenHint": "Use token-file em vez de token em texto puro quando possível; configure via CLI do openclaw.",
       "sessionKeyHint": "Opcional. Especifique a session key do gateway; deixe vazio para atribuição automática de sessão isolada."
     },
+    "authModeOfficialSubscription": "Assinatura oficial",
+    "authModeCustomEndpoint": "Endpoint personalizado",
+    "authModeCustomEndpointHint": "Configurar manualmente a URL da API e a chave API para um endpoint personalizado.",
+    "authModeModelProvider": "Provedor de modelo",
+    "modelProvider": "Provedor de modelo",
+    "modelProviderHint": "Usar URL da API e chave API de um provedor de modelo configurado.",
+    "selectModelProvider": "Selecionar provedor de modelo",
+    "noModelProviderAvailable": "Nenhum provedor de modelo configurado para este agente. Vá para as configurações de provedores de modelo para adicionar um.",
     "claude": {
+      "authMode": "Modo de autenticação",
+      "officialSubscription": "Assinatura oficial",
+      "officialSubscriptionHint": "Usar assinatura oficial da Anthropic, sem necessidade de API Key.",
       "mainModel": "Modelo principal",
       "reasoningModel": "Modelo de raciocínio (thinking)",
       "haikuDefaultModel": "Modelo Haiku padrão",
@@ -624,7 +635,8 @@
       "configSavedHint": "Sessões existentes precisam ser reabertas para que as alterações tenham efeito",
       "saveConfigManagementFailed": "Falha ao salvar o gerenciamento de configuração",
       "clineSaved": "Configuração do Cline salva",
-      "saveClineFailed": "Falha ao salvar a configuração do Cline"
+      "saveClineFailed": "Falha ao salvar a configuração do Cline",
+      "modelProviderRequired": "Selecione um provedor de modelo antes de salvar."
     },
     "version": {
       "statusLabel": "Status da versão",
