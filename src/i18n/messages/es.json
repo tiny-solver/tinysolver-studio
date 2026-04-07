@@ -555,7 +555,10 @@
       "modelId": "ID de modelo",
       "modelName": "Nombre del modelo",
       "deleteModel": "Eliminar modelo {modelId}",
-      "nativeJsonConfig": "Configuración JSON nativa de OpenCode"
+      "nativeJsonConfig": "Configuración JSON nativa de OpenCode",
+      "mainModel": "Modelo principal",
+      "smallModel": "Modelo pequeño",
+      "noMatchingModels": "No hay modelos coincidentes"
     },
     "openClaw": {
       "gatewayConfig": "Configuración de Gateway",

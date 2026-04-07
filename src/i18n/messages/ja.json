@@ -555,7 +555,10 @@
       "modelId": "モデル ID",
       "modelName": "モデル名",
       "deleteModel": "モデル {modelId} を削除",
-      "nativeJsonConfig": "OpenCode ネイティブ JSON 設定"
+      "nativeJsonConfig": "OpenCode ネイティブ JSON 設定",
+      "mainModel": "メインモデル",
+      "smallModel": "スモールモデル",
+      "noMatchingModels": "一致するモデルがありません"
     },
     "openClaw": {
       "gatewayConfig": "Gateway 設定",

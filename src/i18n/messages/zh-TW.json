@@ -555,7 +555,10 @@
       "modelId": "模型 ID",
       "modelName": "模型名稱",
       "deleteModel": "刪除模型 {modelId}",
-      "nativeJsonConfig": "OpenCode 原生 JSON 配置"
+      "nativeJsonConfig": "OpenCode 原生 JSON 配置",
+      "mainModel": "主模型",
+      "smallModel": "小模型",
+      "noMatchingModels": "沒有匹配的模型"
     },
     "openClaw": {
       "gatewayConfig": "Gateway 配置",

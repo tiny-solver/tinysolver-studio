@@ -555,7 +555,10 @@
       "modelId": "모델 ID",
       "modelName": "모델 이름",
       "deleteModel": "모델 {modelId} 삭제",
-      "nativeJsonConfig": "OpenCode 네이티브 JSON 구성"
+      "nativeJsonConfig": "OpenCode 네이티브 JSON 구성",
+      "mainModel": "메인 모델",
+      "smallModel": "스몰 모델",
+      "noMatchingModels": "일치하는 모델 없음"
     },
     "openClaw": {
       "gatewayConfig": "Gateway 구성",

@@ -53,6 +53,16 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+} from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
 import {
   acpClearBinaryCache,
@@ -931,6 +941,90 @@ const OPENCODE_PROVIDER_NPM_OPTIONS = [
     label: "@ai-sdk/cerebras",
   },
 ] as const
+
+interface OpenCodeModelOptionGroup {
+  providerId: string
+  label: string
+  models: { value: string; label: string }[]
+}
+
+function buildOpenCodeModelOptions(
+  config: OpenCodeConfigView | null
+): OpenCodeModelOptionGroup[] {
+  if (!config) return []
+  const groups: OpenCodeModelOptionGroup[] = []
+  for (const providerId of config.providerIds) {
+    const provider = config.providers[providerId]
+    if (!provider || provider.modelIds.length === 0) continue
+    groups.push({
+      providerId,
+      label: provider.name || providerId,
+      models: provider.modelIds.map((modelId) => ({
+        value: `${providerId}/${modelId}`,
+        label: modelId,
+      })),
+    })
+  }
+  return groups
+}
+
+function OpenCodeModelCombobox({
+  value,
+  onValueChange,
+  groups,
+  placeholder,
+}: {
+  value: string
+  onValueChange: (value: string) => void
+  groups: OpenCodeModelOptionGroup[]
+  placeholder: string
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleSelect = useCallback(
+    (next: string | null) => {
+      if (typeof next === "string" && next !== value) {
+        onValueChange(next)
+      }
+    },
+    [onValueChange, value]
+  )
+
+  const handleBlur = useCallback(() => {
+    const trimmed = (inputRef.current?.value ?? "").trim()
+    if (trimmed !== value) {
+      onValueChange(trimmed)
+    }
+  }, [onValueChange, value])
+
+  return (
+    <Combobox key={value} value={value} onValueChange={handleSelect}>
+      <ComboboxInput
+        ref={inputRef}
+        placeholder={placeholder}
+        onBlur={handleBlur}
+        showClear={false}
+      />
+      <ComboboxContent>
+        <ComboboxList>
+          {groups.map((group) => (
+            <ComboboxGroup key={group.providerId}>
+              <ComboboxLabel>{group.label}</ComboboxLabel>
+              {group.models.map((model) => (
+                <ComboboxItem key={model.value} value={model.value}>
+                  {model.value}
+                </ComboboxItem>
+              ))}
+            </ComboboxGroup>
+          ))}
+          <ComboboxEmpty>
+            {acpText("openCode.noMatchingModels", "No matching models")}
+          </ComboboxEmpty>
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
+}
 
 function buildOpenCodeNpmOptions(currentValue: string): string[] {
   const next = new Set<string>(
@@ -3207,6 +3301,10 @@ export function AcpAgentSettings() {
     selectedConfigText,
     selectedOpenCodeAuthJsonText,
   ])
+  const openCodeModelOptions = useMemo(
+    () => buildOpenCodeModelOptions(selectedOpenCodeConfig),
+    [selectedOpenCodeConfig]
+  )
   const selectedChecks = useMemo(() => {
     if (!selectedAgent || !locale) return []
     return getAgentChecks(selectedAgent, selectedCurrent)
@@ -5533,32 +5631,28 @@ supports_websockets = true`}
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
-                          model
+                          {t("openCode.mainModel")}
                         </label>
-                        <Input
+                        <OpenCodeModelCombobox
                           value={selectedOpenCodeConfig?.model ?? ""}
-                          onChange={(event) => {
-                            handleOpenCodeFieldChange(
-                              "model",
-                              event.target.value
-                            )
-                          }}
-                          placeholder="google/gemini-3-pro-preview"
+                          onValueChange={(v) =>
+                            handleOpenCodeFieldChange("model", v)
+                          }
+                          groups={openCodeModelOptions}
+                          placeholder="provider/model-id"
                         />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
-                          small_model
+                          {t("openCode.smallModel")}
                         </label>
-                        <Input
+                        <OpenCodeModelCombobox
                           value={selectedOpenCodeConfig?.smallModel ?? ""}
-                          onChange={(event) => {
-                            handleOpenCodeFieldChange(
-                              "small_model",
-                              event.target.value
-                            )
-                          }}
-                          placeholder="google/gemini-3-flash-preview"
+                          onValueChange={(v) =>
+                            handleOpenCodeFieldChange("small_model", v)
+                          }
+                          groups={openCodeModelOptions}
+                          placeholder="provider/model-id"
                         />
                       </div>
                     </div>
