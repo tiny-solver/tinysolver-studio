@@ -50,11 +50,6 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: Palette,
   },
   {
-    href: "/settings/agents",
-    labelKey: "agents",
-    icon: Bot,
-  },
-  {
     href: "/settings/mcp",
     labelKey: "mcp",
     icon: PlugZap,
@@ -63,6 +58,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/skills",
     labelKey: "skills",
     icon: BookOpenText,
+  },
+  {
+    href: "/settings/agents",
+    labelKey: "agents",
+    icon: Bot,
   },
   {
     href: "/settings/model-providers",
