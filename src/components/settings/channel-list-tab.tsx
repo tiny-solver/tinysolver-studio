@@ -5,9 +5,9 @@ import {
   Loader2,
   MessageCircle,
   Pencil,
+  Play,
   Plus,
-  Power,
-  PowerOff,
+  Square,
   Trash2,
   Zap,
 } from "lucide-react"
@@ -290,7 +290,7 @@ export function ChannelListTab() {
                       {isLoading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <PowerOff className="h-3.5 w-3.5" />
+                        <Square className="h-3.5 w-3.5" />
                       )}
                     </Button>
                   ) : (
@@ -304,7 +304,7 @@ export function ChannelListTab() {
                       {isLoading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <Power className="h-3.5 w-3.5" />
+                        <Play className="h-3.5 w-3.5" />
                       )}
                     </Button>
                   )}
