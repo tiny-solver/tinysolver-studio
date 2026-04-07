@@ -15,7 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { createModelProvider } from "@/lib/api"
-import { ALL_AGENT_TYPES, AGENT_LABELS, type AgentType } from "@/lib/types"
+import {
+  MODEL_PROVIDER_AGENT_TYPES,
+  AGENT_LABELS,
+  type AgentType,
+} from "@/lib/types"
 
 interface AddModelProviderDialogProps {
   open: boolean
@@ -159,7 +163,7 @@ export function AddModelProviderDialog({
           <div className="space-y-1.5">
             <label className="text-xs font-medium">{t("agentTypes")}</label>
             <div className="flex flex-wrap gap-1.5">
-              {ALL_AGENT_TYPES.map((at) => (
+              {MODEL_PROVIDER_AGENT_TYPES.map((at) => (
                 <Button
                   key={at}
                   type="button"

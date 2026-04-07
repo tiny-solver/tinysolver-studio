@@ -229,6 +229,12 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "cline",
 ]
 
+export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
+  "claude_code",
+  "codex",
+  "gemini",
+]
+
 export const AGENT_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
   codex: "Codex",

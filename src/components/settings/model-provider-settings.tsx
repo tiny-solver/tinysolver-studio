@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { listModelProviders, deleteModelProvider } from "@/lib/api"
 import {
-  ALL_AGENT_TYPES,
+  MODEL_PROVIDER_AGENT_TYPES,
   AGENT_LABELS,
   type AgentType,
   type ModelProviderInfo,
@@ -114,7 +114,7 @@ export function ModelProviderSettings() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{t("filterAll")}</SelectItem>
-              {ALL_AGENT_TYPES.map((at) => (
+              {MODEL_PROVIDER_AGENT_TYPES.map((at) => (
                 <SelectItem key={at} value={at}>
                   {AGENT_LABELS[at]}
                 </SelectItem>
@@ -147,9 +147,14 @@ export function ModelProviderSettings() {
                 key={p.id}
                 className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
               >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-medium">{p.name}</span>
+                <div className="min-w-0 flex-1 flex items-center gap-3">
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="text-sm font-medium truncate">{p.name}</div>
+                    <div className="truncate text-xs text-muted-foreground font-mono">
+                      {p.api_url}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
                     {p.agent_types.map((at) => (
                       <Badge
                         key={at}
@@ -159,9 +164,6 @@ export function ModelProviderSettings() {
                         {AGENT_LABELS[at as AgentType] ?? at}
                       </Badge>
                     ))}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground font-mono">
-                    {p.api_url}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">

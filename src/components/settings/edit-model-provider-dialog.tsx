@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { updateModelProvider } from "@/lib/api"
 import {
-  ALL_AGENT_TYPES,
+  MODEL_PROVIDER_AGENT_TYPES,
   AGENT_LABELS,
   type AgentType,
   type ModelProviderInfo,
@@ -168,7 +168,7 @@ export function EditModelProviderDialog({
           <div className="space-y-1.5">
             <label className="text-xs font-medium">{t("agentTypes")}</label>
             <div className="flex flex-wrap gap-1.5">
-              {ALL_AGENT_TYPES.map((at) => (
+              {MODEL_PROVIDER_AGENT_TYPES.map((at) => (
                 <Button
                   key={at}
                   type="button"
