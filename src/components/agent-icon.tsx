@@ -2,11 +2,14 @@ import type { AgentType } from "@/lib/types"
 import { AGENT_COLORS } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-import ClaudeColor from "@lobehub/icons/es/Claude/components/Color"
-import GeminiColor from "@lobehub/icons/es/Gemini/components/Color"
-import OpenClawColor from "@lobehub/icons/es/OpenClaw/components/Color"
-import ClineMono from "@lobehub/icons/es/Cline/components/Mono"
-import { OpenAI, OpenCode } from "@lobehub/icons"
+import {
+  ClaudeCode,
+  Cline,
+  Codex,
+  GeminiCLI,
+  OpenClaw,
+  OpenCode,
+} from "@lobehub/icons"
 
 interface AgentIconProps {
   agentType: AgentType
@@ -17,21 +20,19 @@ interface AgentIconProps {
 type AnyIcon = React.ComponentType<any>
 
 const COLOR_ICONS: Partial<Record<AgentType, AnyIcon>> = {
-  claude_code: ClaudeColor,
-  gemini: GeminiColor,
-  open_claw: OpenClawColor,
+  claude_code: ClaudeCode.Color,
+  codex: Codex.Color,
+  gemini: GeminiCLI.Color,
+  open_claw: OpenClaw.Color,
 }
 
 const MONO_ICONS: Partial<Record<AgentType, AnyIcon>> = {
-  codex: OpenAI,
   open_code: OpenCode,
-  cline: ClineMono,
+  cline: Cline,
 }
 
 // Text-color versions for Mono icons
-const AGENT_TEXT_COLORS: Partial<Record<AgentType, string>> = {
-  open_code: "text-blue-500",
-}
+const AGENT_TEXT_COLORS: Partial<Record<AgentType, string>> = {}
 
 export function AgentIcon({ agentType, className }: AgentIconProps) {
   const ColorIcon = COLOR_ICONS[agentType]

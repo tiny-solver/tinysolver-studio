@@ -245,10 +245,10 @@ export const AGENT_LABELS: Record<AgentType, string> = {
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
-  claude_code: "bg-orange-500",
-  codex: "bg-green-500",
-  open_code: "bg-blue-500",
-  gemini: "bg-blue-400",
+  claude_code: "bg-[#D97757]",
+  codex: "bg-[#7A9DFF]",
+  open_code: "bg-black",
+  gemini: "bg-[#3186FF]",
   open_claw: "bg-emerald-600",
   cline: "bg-purple-500",
 }
