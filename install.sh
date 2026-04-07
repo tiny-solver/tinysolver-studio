@@ -61,7 +61,63 @@ if [ -z "$VERSION" ]; then
   fi
 fi
 
-echo "Installing codeg-server ${VERSION} (${PLATFORM}/${ARCH_SUFFIX})..."
+# ── Version detection — skip if already up to date ──
+
+CURRENT_VERSION=""
+EXISTING_BIN="${INSTALL_DIR}/codeg-server"
+
+if [ -x "$EXISTING_BIN" ]; then
+  # Run with timeout to handle old binaries that lack --version support
+  # (old binaries would start the full server and hang)
+  VER_TMP=$(mktemp)
+  "$EXISTING_BIN" --version > "$VER_TMP" 2>/dev/null &
+  VER_PID=$!
+  ( sleep 3 && kill "$VER_PID" 2>/dev/null ) &
+  VER_GUARD=$!
+  wait "$VER_PID" 2>/dev/null || true
+  kill "$VER_GUARD" 2>/dev/null || true
+  wait "$VER_GUARD" 2>/dev/null || true
+  CURRENT_VERSION=$(head -1 "$VER_TMP" 2>/dev/null | tr -d '[:space:]')
+  rm -f "$VER_TMP"
+fi
+
+# Normalize: strip leading "v" for comparison
+TARGET_VER="${VERSION#v}"
+
+if [ -n "$CURRENT_VERSION" ] && [ "$CURRENT_VERSION" = "$TARGET_VER" ]; then
+  echo "codeg-server is already at version ${TARGET_VER}, nothing to do."
+  exit 0
+fi
+
+if [ -n "$CURRENT_VERSION" ]; then
+  echo "Upgrading codeg-server: ${CURRENT_VERSION} -> ${TARGET_VER}..."
+else
+  echo "Installing codeg-server ${VERSION} (${PLATFORM}/${ARCH_SUFFIX})..."
+fi
+
+# ── Stop running service before upgrade ──
+
+RESTARTED_PIDS=""
+if pgrep -x codeg-server >/dev/null 2>&1; then
+  echo "Stopping running codeg-server process(es)..."
+  RESTARTED_PIDS=$(pgrep -x codeg-server || true)
+  if kill $RESTARTED_PIDS 2>/dev/null; then
+    # Wait up to 10 seconds for graceful shutdown
+    for i in $(seq 1 10); do
+      if ! pgrep -x codeg-server >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    # Force kill if still running
+    if pgrep -x codeg-server >/dev/null 2>&1; then
+      echo "Force stopping codeg-server..."
+      kill -9 $RESTARTED_PIDS 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+  echo "codeg-server stopped."
+fi
 
 # ── Download and extract ──
 
@@ -112,10 +168,21 @@ if [ -d "$WEB_SRC" ]; then
   fi
 fi
 
+# ── Restart service if it was running ──
+
+if [ -n "$RESTARTED_PIDS" ]; then
+  echo ""
+  echo "Note: codeg-server was stopped for the upgrade."
+  echo "Please restart it manually to ensure your environment variables (CODEG_PORT, CODEG_TOKEN, etc.) are preserved:"
+  echo "  CODEG_STATIC_DIR=${WEB_DIR} codeg-server"
+fi
+
 # ── Done ──
 
 echo ""
 echo "codeg-server installed to ${INSTALL_DIR}/codeg-server"
+INSTALLED_VER=$("${INSTALL_DIR}/codeg-server" --version 2>/dev/null || echo "${TARGET_VER}")
+echo "Version: ${INSTALLED_VER}"
 echo ""
 echo "Quick start:"
 echo "  CODEG_STATIC_DIR=${WEB_DIR} codeg-server"

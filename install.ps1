@@ -26,7 +26,61 @@ if (-not $Version) {
     }
 }
 
-Write-Host "Installing codeg-server $Version (windows/x64)..."
+$TargetVer = $Version -replace '^v', ''
+
+# ── Version detection — skip if already up to date ──
+
+$ExistingBin = Join-Path $InstallDir "codeg-server.exe"
+$CurrentVersion = ""
+$WasRunning = $false
+
+if (Test-Path $ExistingBin) {
+    # Run with timeout to handle old binaries that lack --version support
+    # (old binaries would start the full server and hang)
+    try {
+        $verProc = Start-Process -FilePath $ExistingBin -ArgumentList "--version" `
+            -NoNewWindow -PassThru -RedirectStandardOutput "$env:TEMP\codeg-ver.txt" `
+            -RedirectStandardError "$env:TEMP\codeg-ver-err.txt"
+        $exited = $verProc.WaitForExit(3000)
+        if (-not $exited) { $verProc.Kill() }
+        if (Test-Path "$env:TEMP\codeg-ver.txt") {
+            $CurrentVersion = (Get-Content "$env:TEMP\codeg-ver.txt" -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
+        }
+    } catch {
+        $CurrentVersion = ""
+    } finally {
+        Remove-Item "$env:TEMP\codeg-ver.txt" -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:TEMP\codeg-ver-err.txt" -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if ($CurrentVersion -and ($CurrentVersion -eq $TargetVer)) {
+    Write-Host "codeg-server is already at version $TargetVer, nothing to do."
+    exit 0
+}
+
+if ($CurrentVersion) {
+    Write-Host "Upgrading codeg-server: $CurrentVersion -> $TargetVer..."
+} else {
+    Write-Host "Installing codeg-server $Version (windows/x64)..."
+}
+
+# ── Stop running service before upgrade ──
+
+$ServerProcesses = Get-Process -Name "codeg-server" -ErrorAction SilentlyContinue
+if ($ServerProcesses) {
+    Write-Host "Stopping running codeg-server process(es)..."
+    $WasRunning = $true
+    $ServerProcesses | Stop-Process -Force
+    Start-Sleep -Seconds 2
+    # Verify stopped
+    $StillRunning = Get-Process -Name "codeg-server" -ErrorAction SilentlyContinue
+    if ($StillRunning) {
+        $StillRunning | Stop-Process -Force
+        Start-Sleep -Seconds 1
+    }
+    Write-Host "codeg-server stopped."
+}
 
 # ── Download and extract ──
 
@@ -78,10 +132,26 @@ if ($UserPath -notlike "*$InstallDir*") {
 
 Remove-Item $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
 
+# ── Restart service if it was running ──
+
+if ($WasRunning) {
+    Write-Host ""
+    Write-Host "Note: codeg-server was stopped for the upgrade."
+    Write-Host "Please restart it manually to ensure your environment variables (CODEG_PORT, CODEG_TOKEN, etc.) are preserved:"
+    Write-Host "  `$env:CODEG_STATIC_DIR=`"$WebDir`"; codeg-server"
+}
+
 # ── Done ──
+
+$InstalledVer = ""
+try {
+    $InstalledVer = (& (Join-Path $InstallDir "codeg-server.exe") --version 2>$null).Trim()
+} catch {}
+if (-not $InstalledVer) { $InstalledVer = $TargetVer }
 
 Write-Host ""
 Write-Host "codeg-server installed to $InstallDir\codeg-server.exe"
+Write-Host "Version: $InstalledVer"
 Write-Host ""
 Write-Host "Quick start:"
 Write-Host "  `$env:CODEG_STATIC_DIR=`"$WebDir`"; codeg-server"

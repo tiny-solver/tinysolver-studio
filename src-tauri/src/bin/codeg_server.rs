@@ -9,6 +9,13 @@ use codeg_lib::web::{
 
 #[tokio::main]
 async fn main() {
+    // Support --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     codeg_lib::process::ensure_user_npm_prefix_in_path();
 
     let port: u16 = std::env::var("CODEG_PORT")
