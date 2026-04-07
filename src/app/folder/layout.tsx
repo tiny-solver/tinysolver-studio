@@ -51,6 +51,8 @@ import {
 import type { AgentType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { useFolderContext } from "@/contexts/folder-context"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 
 function FolderDocumentTitle() {
   const { folder } = useFolderContext()
@@ -242,6 +244,90 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
           </section>
         </ResizablePanel>
       </ResizablePanelGroup>
+    </div>
+  )
+}
+
+function MobileWorkspaceContent({ children }: { children: React.ReactNode }) {
+  const { mode } = useWorkspaceContext()
+
+  // On mobile, fusion mode falls back to conversation view
+  const showConversation = mode === "conversation" || mode === "fusion"
+
+  return (
+    <div className="relative h-full min-h-0 overflow-hidden">
+      {showConversation ? (
+        <section className="flex h-full min-h-0 flex-col overflow-hidden">
+          <TabBar />
+          <div className="relative flex-1 min-h-0 overflow-hidden">
+            {children}
+          </div>
+        </section>
+      ) : (
+        <section className="flex h-full min-h-0 flex-col overflow-hidden">
+          <FileWorkspaceTabBar />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <FileWorkspacePanel />
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function MobileFolderWorkspaceShell({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarContext()
+  const { isOpen: auxOpen, toggle: toggleAux } = useAuxPanelContext()
+  const { isOpen: terminalOpen, toggle: toggleTerminal } = useTerminalContext()
+
+  return (
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Sidebar Sheet (left) */}
+      <Sheet open={sidebarOpen} onOpenChange={toggleSidebar}>
+        <SheetContent
+          side="left"
+          showCloseButton={false}
+          className="w-[85%] max-w-[360px] p-0"
+        >
+          <SheetTitle className="sr-only">Sidebar</SheetTitle>
+          <Sidebar />
+        </SheetContent>
+      </Sheet>
+
+      {/* Main workspace */}
+      <main className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+        <MobileWorkspaceContent>{children}</MobileWorkspaceContent>
+      </main>
+
+      {/* Aux panel Sheet (right) */}
+      <Sheet open={auxOpen} onOpenChange={toggleAux}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="w-[85%] max-w-[360px] p-0"
+        >
+          <SheetTitle className="sr-only">Panel</SheetTitle>
+          <AuxPanel />
+        </SheetContent>
+      </Sheet>
+
+      {/* Terminal Sheet (bottom) */}
+      <Sheet open={terminalOpen} onOpenChange={toggleTerminal}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="!h-[70vh] p-0"
+        >
+          <SheetTitle className="sr-only">Terminal</SheetTitle>
+          <div className="h-full min-h-0 overflow-hidden">
+            <TerminalPanel />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -661,6 +747,27 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
   )
 }
 
+function FolderLayoutShell({ children }: { children: React.ReactNode }) {
+  const isMobile = useIsMobile()
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden">
+      <FolderTitleBar />
+      {isMobile ? (
+        <MobileFolderWorkspaceShell>{children}</MobileFolderWorkspaceShell>
+      ) : (
+        <FolderWorkspaceShell>{children}</FolderWorkspaceShell>
+      )}
+      <StatusBar />
+      <AppToaster
+        position="bottom-right"
+        duration={TOAST_DURATION_MS}
+        closeButton
+      />
+    </div>
+  )
+}
+
 function FolderLayoutInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams()
   const folderId = Number(searchParams.get("id") ?? "0")
@@ -693,18 +800,7 @@ function FolderLayoutInner({ children }: { children: React.ReactNode }) {
                           folderId={normalizedFolderId}
                         >
                           <TerminalProvider>
-                            <div className="flex h-screen flex-col overflow-hidden">
-                              <FolderTitleBar />
-                              <FolderWorkspaceShell>
-                                {children}
-                              </FolderWorkspaceShell>
-                              <StatusBar />
-                              <AppToaster
-                                position="bottom-right"
-                                duration={TOAST_DURATION_MS}
-                                closeButton
-                              />
-                            </div>
+                            <FolderLayoutShell>{children}</FolderLayoutShell>
                           </TerminalProvider>
                         </AuxPanelProvider>
                       </SidebarProvider>

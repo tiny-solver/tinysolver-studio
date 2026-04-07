@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useState,
   type ComponentType,
   type ReactNode,
 } from "react"
@@ -12,6 +13,7 @@ import {
   GitBranch,
   Globe,
   Keyboard,
+  Menu,
   SendHorizontal,
   Palette,
   PlugZap,
@@ -26,6 +28,8 @@ import { AppToaster } from "@/components/ui/app-toaster"
 import { cn } from "@/lib/utils"
 import { detectEnvironment } from "@/lib/transport/detect"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 
 interface SettingsNavItem {
   href: string
@@ -118,6 +122,8 @@ export function SettingsShell({ children }: SettingsShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const normalizedPathname = normalizePath(pathname)
+  const isMobile = useIsMobile()
+  const [navOpen, setNavOpen] = useState(false)
 
   useEffect(() => {
     document.title = `${t("title")} - codeg`
@@ -129,67 +135,108 @@ export function SettingsShell({ children }: SettingsShellProps) {
 
       const target = normalizePath(href)
       const current = normalizePath(window.location.pathname)
-      if (current === target) return
+      if (current === target) {
+        setNavOpen(false)
+        return
+      }
 
       if (isWindowsRuntime()) {
-        // WebView2 on Windows: hard navigation is more reliable than client routing.
         window.location.assign(target)
         return
       }
 
-      // macOS/Linux: keep client-side routing for snappier transitions.
       router.push(target)
+      setNavOpen(false)
     },
-    [router]
+    [router, setNavOpen]
+  )
+
+  const filteredNavItems = SETTINGS_NAV_ITEMS.filter(
+    (item) =>
+      !(item.labelKey === "web_service" && detectEnvironment() === "web")
+  )
+
+  const navContent = (
+    <>
+      <div className="px-1 pb-2 text-[11px] font-medium text-muted-foreground">
+        {t("preferences")}
+      </div>
+      <nav className="space-y-1">
+        {filteredNavItems.map((item) => {
+          const Icon = item.icon
+          const translationKey = `nav.${item.labelKey}` as const
+          const active =
+            normalizedPathname === item.href ||
+            normalizedPathname.startsWith(`${item.href}/`)
+          return (
+            <Button
+              key={item.href}
+              variant={active ? "secondary" : "ghost"}
+              size="sm"
+              className={cn("w-full justify-start")}
+              type="button"
+              onClick={() => navigateTo(item.href)}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="inline-flex items-center gap-1">
+                <Icon className="h-3.5 w-3.5" />
+                {t(translationKey)}
+              </span>
+            </Button>
+          )
+        })}
+      </nav>
+    </>
   )
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background text-foreground">
       <AppTitleBar
+        left={
+          isMobile ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setNavOpen(true)}
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+          ) : undefined
+        }
         center={
           <div className="text-sm font-bold tracking-tight">{t("title")}</div>
         }
       />
 
       <div className="flex-1 min-h-0 flex">
-        <aside className="w-56 shrink-0 border-r p-3">
-          <div className="px-1 pb-2 text-[11px] font-medium text-muted-foreground">
-            {t("preferences")}
-          </div>
-          <nav className="space-y-1">
-            {SETTINGS_NAV_ITEMS.filter(
-              (item) =>
-                !(
-                  item.labelKey === "web_service" &&
-                  detectEnvironment() === "web"
-                )
-            ).map((item) => {
-              const Icon = item.icon
-              const translationKey = `nav.${item.labelKey}` as const
-              const active =
-                normalizedPathname === item.href ||
-                normalizedPathname.startsWith(`${item.href}/`)
-              return (
-                <Button
-                  key={item.href}
-                  variant={active ? "secondary" : "ghost"}
-                  size="sm"
-                  className={cn("w-full justify-start")}
-                  type="button"
-                  onClick={() => navigateTo(item.href)}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <Icon className="h-3.5 w-3.5" />
-                    {t(translationKey)}
-                  </span>
-                </Button>
-              )
-            })}
-          </nav>
-        </aside>
+        {/* Desktop sidebar */}
+        {!isMobile && (
+          <aside className="w-56 shrink-0 border-r p-3">{navContent}</aside>
+        )}
 
-        <section className="flex-1 min-w-0 min-h-0 p-4">{children}</section>
+        {/* Mobile navigation Sheet */}
+        {isMobile && (
+          <Sheet open={navOpen} onOpenChange={setNavOpen}>
+            <SheetContent
+              side="left"
+              showCloseButton={false}
+              className="w-[260px] p-3"
+            >
+              <SheetTitle className="sr-only">{t("title")}</SheetTitle>
+              {navContent}
+            </SheetContent>
+          </Sheet>
+        )}
+
+        <section
+          className={cn(
+            "flex-1 min-w-0 min-h-0 overflow-auto",
+            isMobile ? "p-3" : "p-4"
+          )}
+        >
+          {children}
+        </section>
       </div>
       <AppToaster position="bottom-right" closeButton duration={4000} />
     </div>

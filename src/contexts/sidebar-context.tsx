@@ -64,9 +64,12 @@ export function SidebarProvider({ children, folderId }: SidebarProviderProps) {
 
   useEffect(() => {
     const stored = loadPersistedPanelState(storageKey)
+    // On mobile (< 768px), always start closed regardless of persisted state.
+    const isMobileViewport = window.innerWidth < 768
+    const defaultOpen = isMobileViewport ? false : DEFAULT_IS_OPEN
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsOpen(stored?.isOpen ?? DEFAULT_IS_OPEN)
+    setIsOpen(isMobileViewport ? false : (stored?.isOpen ?? defaultOpen))
     setWidthState(clampWidth(stored?.width ?? DEFAULT_WIDTH))
     setRestored(true)
   }, [storageKey])

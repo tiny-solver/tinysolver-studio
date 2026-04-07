@@ -15,11 +15,13 @@ import { Button } from "@/components/ui/button"
 import { AppToaster } from "@/components/ui/app-toaster"
 import { resolveWelcomeError } from "@/components/welcome/error-utils"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export function WelcomeScreen() {
   const t = useTranslations("WelcomePage")
   const [history, setHistory] = useState<FolderHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const isMobile = useIsMobile()
   const { shortcuts } = useShortcutSettings()
 
   const handleOpenSettings = useCallback(() => {
@@ -83,8 +85,20 @@ export function WelcomeScreen() {
         }
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-60 shrink-0 flex flex-col border-r">
+      <div
+        className={
+          isMobile
+            ? "flex-1 flex flex-col overflow-hidden"
+            : "flex-1 flex overflow-hidden"
+        }
+      >
+        <div
+          className={
+            isMobile
+              ? "shrink-0 flex flex-col border-b"
+              : "w-60 shrink-0 flex flex-col border-r"
+          }
+        >
           <SoftwareInfo />
           <FolderActions />
         </div>

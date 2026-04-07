@@ -11,12 +11,14 @@ import {
   type SidebarConversationListHandle,
 } from "@/components/conversations/sidebar-conversation-list"
 import { Button } from "@/components/ui/button"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export function Sidebar() {
   const t = useTranslations("Folder.sidebar")
   const { folder } = useFolderContext()
   const { openNewConversationTab } = useTabContext()
-  const { isOpen } = useSidebarContext()
+  const { isOpen, toggle } = useSidebarContext()
+  const isMobile = useIsMobile()
   const listRef = useRef<SidebarConversationListHandle>(null)
 
   const handleNewConversation = useCallback(() => {
@@ -70,7 +72,22 @@ export function Sidebar() {
         </div>
       </div>
 
-      <SidebarConversationList ref={listRef} />
+      {/* On mobile, clicking a conversation card auto-closes the Sheet */}
+      <div
+        className="flex-1 min-h-0 overflow-hidden"
+        onClick={
+          isMobile
+            ? (e) => {
+                const target = e.target as HTMLElement
+                if (target.closest("[data-conversation-id]")) {
+                  toggle()
+                }
+              }
+            : undefined
+        }
+      >
+        <SidebarConversationList ref={listRef} />
+      </div>
     </aside>
   )
 }

@@ -1493,7 +1493,7 @@ export function MessageInput({
           onPaste={handlePaste}
           onFocus={onFocus}
           placeholder={resolvedPlaceholder}
-          className="min-h-0 flex-1 overflow-y-auto rounded-none border-0 bg-transparent text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
+          className="min-h-0 flex-1 overflow-y-auto rounded-none border-0 bg-transparent text-base md:text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
           autoFocus={autoFocus}
         />
         <div className="@container flex shrink-0 items-end justify-between gap-2 px-2 pb-2">

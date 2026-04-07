@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import { usePlatform } from "@/hooks/use-platform"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { WindowControls } from "./window-controls"
 
@@ -25,6 +26,7 @@ export function AppTitleBar({
   showWindowControls = true,
 }: AppTitleBarProps) {
   const { isMac, isWindows } = usePlatform()
+  const isMobile = useIsMobile()
   const isDesktopRuntime =
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
   const hasDesktopWindowChrome = showWindowControls && isDesktopRuntime
@@ -38,7 +40,8 @@ export function AppTitleBar({
   return (
     <div
       className={cn(
-        "relative h-8 shrink-0 border-b bg-muted/70 select-none",
+        "relative shrink-0 border-b bg-muted/70 select-none",
+        isMobile ? "h-11" : "h-8",
         className
       )}
     >
