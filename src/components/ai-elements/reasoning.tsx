@@ -29,6 +29,7 @@ import { Streamdown } from "streamdown"
 
 import { Shimmer } from "./shimmer"
 import { useStreamdownLinkSafety } from "./link-safety"
+import { normalizeMathDelimiters } from "./message"
 
 interface ReasoningContextValue {
   isStreaming: boolean
@@ -218,6 +219,10 @@ const streamdownPlugins = { cjk, code, math, mermaid }
 export const ReasoningContent = memo(
   ({ className, children, ...props }: ReasoningContentProps) => {
     const linkSafety = useStreamdownLinkSafety()
+    const normalized = useMemo(
+      () => normalizeMathDelimiters(children),
+      [children]
+    )
 
     return (
       <CollapsibleContent
@@ -233,7 +238,7 @@ export const ReasoningContent = memo(
           plugins={streamdownPlugins}
           {...props}
         >
-          {children}
+          {normalized}
         </Streamdown>
       </CollapsibleContent>
     )

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next"
+import "katex/dist/katex.min.css"
 import "./globals.css"
 import { JetBrains_Mono } from "next/font/google"
 import { NextIntlClientProvider } from "next-intl"

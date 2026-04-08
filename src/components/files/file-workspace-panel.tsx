@@ -22,6 +22,7 @@ import { createMathPlugin } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
 import { Streamdown } from "streamdown"
 import { readFileBase64 } from "@/lib/api"
+import { normalizeMathDelimiters } from "@/components/ai-elements/message"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
 import "@/lib/monaco-local"
 
@@ -1354,9 +1355,8 @@ export function FileWorkspacePanel() {
     const relativeFileDir = activeFileTab.path?.includes("/")
       ? activeFileTab.path.replace(/\/[^/]*$/, "")
       : ""
-    const preprocessedContent = preprocessMarkdownPaths(
-      renderedContent,
-      relativeFileDir
+    const preprocessedContent = normalizeMathDelimiters(
+      preprocessMarkdownPaths(renderedContent, relativeFileDir)
     )
 
     return (
