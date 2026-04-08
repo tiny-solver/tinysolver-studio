@@ -165,8 +165,194 @@ export const defineDiffLanguage: BeforeMount = (monaco) => {
   })
 }
 
+/**
+ * Override Monaco's built-in Python tokenizer to fix triple-quoted string
+ * handling. The default monarch tokenizer doesn't correctly parse `f"""..."""`
+ * or `"""..."""`, causing everything after the closing quotes to be highlighted
+ * as a string.
+ */
+const fixPythonTripleQuotes: BeforeMount = (monaco) => {
+  monaco.languages.setMonarchTokensProvider("python", {
+    defaultToken: "",
+    keywords: [
+      "False",
+      "None",
+      "True",
+      "and",
+      "as",
+      "assert",
+      "async",
+      "await",
+      "break",
+      "class",
+      "continue",
+      "def",
+      "del",
+      "elif",
+      "else",
+      "except",
+      "finally",
+      "for",
+      "from",
+      "global",
+      "if",
+      "import",
+      "in",
+      "is",
+      "lambda",
+      "nonlocal",
+      "not",
+      "or",
+      "pass",
+      "raise",
+      "return",
+      "try",
+      "while",
+      "with",
+      "yield",
+    ],
+    builtins: [
+      "abs",
+      "all",
+      "any",
+      "bin",
+      "bool",
+      "breakpoint",
+      "bytearray",
+      "bytes",
+      "callable",
+      "chr",
+      "classmethod",
+      "compile",
+      "complex",
+      "delattr",
+      "dict",
+      "dir",
+      "divmod",
+      "enumerate",
+      "eval",
+      "exec",
+      "filter",
+      "float",
+      "format",
+      "frozenset",
+      "getattr",
+      "globals",
+      "hasattr",
+      "hash",
+      "help",
+      "hex",
+      "id",
+      "input",
+      "int",
+      "isinstance",
+      "issubclass",
+      "iter",
+      "len",
+      "list",
+      "locals",
+      "map",
+      "max",
+      "memoryview",
+      "min",
+      "next",
+      "object",
+      "oct",
+      "open",
+      "ord",
+      "pow",
+      "print",
+      "property",
+      "range",
+      "repr",
+      "reversed",
+      "round",
+      "set",
+      "setattr",
+      "slice",
+      "sorted",
+      "staticmethod",
+      "str",
+      "sum",
+      "super",
+      "tuple",
+      "type",
+      "vars",
+      "zip",
+    ],
+    brackets: [
+      { open: "{", close: "}", token: "delimiter.curly" },
+      { open: "[", close: "]", token: "delimiter.bracket" },
+      { open: "(", close: ")", token: "delimiter.parenthesis" },
+    ],
+    tokenizer: {
+      root: [
+        // decorators
+        [/^(\s*)(@\w+)/, ["white", "tag"]],
+        // triple-quoted strings (must come before single-quoted)
+        [/(?:[fFrRbBuU]{1,2})?"""/, "string", "@tdqs"],
+        [/(?:[fFrRbBuU]{1,2})?'''/, "string", "@tsqs"],
+        // single-line strings
+        [/(?:[fFrRbBuU]{1,2})?"([^"\\]|\\.)*$/, "string.invalid"],
+        [/(?:[fFrRbBuU]{1,2})?'([^'\\]|\\.)*$/, "string.invalid"],
+        [/(?:[fFrRbBuU]{1,2})?"/, "string", "@dqs"],
+        [/(?:[fFrRbBuU]{1,2})?'/, "string", "@sqs"],
+        // comments
+        [/#.*$/, "comment"],
+        // identifiers and keywords
+        [
+          /[a-zA-Z_]\w*/,
+          {
+            cases: {
+              "@keywords": "keyword",
+              "@builtins": "type.identifier",
+              "@default": "identifier",
+            },
+          },
+        ],
+        // numbers
+        [/0[xX][0-9a-fA-F](_?[0-9a-fA-F])*/, "number.hex"],
+        [/0[oO][0-7](_?[0-7])*/, "number.octal"],
+        [/0[bB][01](_?[01])*/, "number.binary"],
+        [/\d[\d_]*(\.\d[\d_]*)?([eE][+-]?\d[\d_]*)?[jJ]?/, "number"],
+        // operators
+        [/[+\-*/%&|^~<>!=]=?/, "operator"],
+        [/[{}()[\]]/, "@brackets"],
+        [/[;,.]/, "delimiter"],
+      ],
+      // triple-double-quoted string
+      tdqs: [
+        [/[^"\\]+/, "string"],
+        [/\\./, "string.escape"],
+        [/"""/, "string", "@pop"],
+        [/"/, "string"],
+      ],
+      // triple-single-quoted string
+      tsqs: [
+        [/[^'\\]+/, "string"],
+        [/\\./, "string.escape"],
+        [/'''/, "string", "@pop"],
+        [/'/, "string"],
+      ],
+      // double-quoted string
+      dqs: [
+        [/[^"\\]+/, "string"],
+        [/\\./, "string.escape"],
+        [/"/, "string", "@pop"],
+      ],
+      // single-quoted string
+      sqs: [
+        [/[^'\\]+/, "string"],
+        [/\\./, "string.escape"],
+        [/'/, "string", "@pop"],
+      ],
+    },
+  })
+}
+
 export const defineMonacoThemes: BeforeMount = (monaco) => {
   defineDiffLanguage(monaco)
+  fixPythonTripleQuotes(monaco)
 
   monaco.editor.defineTheme(MONACO_LIGHT_THEME, {
     base: "vs",
