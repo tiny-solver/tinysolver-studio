@@ -74,7 +74,7 @@ export function Sidebar() {
 
       {/* On mobile, clicking a conversation card auto-closes the Sheet */}
       <div
-        className="flex-1 min-h-0 overflow-hidden"
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
         onClick={
           isMobile
             ? (e) => {

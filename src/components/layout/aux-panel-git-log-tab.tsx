@@ -903,7 +903,7 @@ export function GitLogTab() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full overflow-y-auto p-2">
+      <div className="flex flex-col h-full overflow-y-auto scrollbar-thin px-1 py-3">
         {hasBranches && (
           <BranchSelector
             branchList={branchList}
@@ -929,7 +929,7 @@ export function GitLogTab() {
 
   if (error) {
     return (
-      <div className="flex flex-col h-full overflow-y-auto p-2">
+      <div className="flex flex-col h-full overflow-y-auto scrollbar-thin px-1 py-3">
         {hasBranches && (
           <BranchSelector
             branchList={branchList}
@@ -959,7 +959,7 @@ export function GitLogTab() {
 
   if (entries.length === 0) {
     return (
-      <div className="flex flex-col h-full overflow-y-auto p-2">
+      <div className="flex flex-col h-full overflow-y-auto scrollbar-thin px-1 py-3">
         {hasBranches && (
           <BranchSelector
             branchList={branchList}
@@ -985,7 +985,7 @@ export function GitLogTab() {
         <ContextMenuTrigger asChild>
           <div
             onScroll={handleScroll}
-            className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2"
+            className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-1 py-3 space-y-3"
           >
             {hasBranches && (
               <div

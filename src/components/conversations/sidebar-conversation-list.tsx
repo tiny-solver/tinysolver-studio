@@ -482,11 +482,8 @@ export function SidebarConversationList({
             <div
               ref={scrollContainerRef}
               className={cn(
-                "flex-1 min-h-0 overflow-y-auto px-1.5",
-                "[overflow-anchor:none]",
-                "[&::-webkit-scrollbar]:w-1.5",
-                "[&::-webkit-scrollbar-thumb]:rounded-full",
-                "[&::-webkit-scrollbar-thumb]:bg-border"
+                "flex-1 min-h-0 overflow-y-auto scrollbar-thin",
+                "[overflow-anchor:none]"
               )}
             >
               <Virtualizer ref={virtualizerRef} itemSize={CARD_HEIGHT}>

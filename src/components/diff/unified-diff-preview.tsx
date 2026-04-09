@@ -546,7 +546,7 @@ export function UnifiedDiffPreview({
 
   if (files.length === 0) {
     return (
-      <div className={cn("h-full overflow-auto", className)}>
+      <div className={cn("h-full overflow-auto scrollbar-thin", className)}>
         <pre className="font-mono text-[11px] leading-5 whitespace-pre-wrap text-muted-foreground p-3">
           {diffText}
         </pre>
@@ -555,7 +555,7 @@ export function UnifiedDiffPreview({
   }
 
   return (
-    <div className={cn("h-full overflow-auto", className)}>
+    <div className={cn("h-full overflow-auto scrollbar-thin", className)}>
       <div className="space-y-3">
         {files.map((file) => {
           const newFile = isNewFileOnly(file)
@@ -586,7 +586,7 @@ export function UnifiedDiffPreview({
                 )}
               </header>
 
-              <div className="overflow-auto">
+              <div className="overflow-auto scrollbar-thin">
                 <div className="inline-block min-w-full">
                   {newFile
                     ? file.hunks.map((hunk) => (
