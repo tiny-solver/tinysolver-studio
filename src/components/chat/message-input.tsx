@@ -1542,15 +1542,15 @@ export function MessageInput({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* 宽屏内联显示，窄屏（<300px）通过"更多"气泡显示 */}
-            <div className="hidden @[300px]:contents">{selectorItems}</div>
+            {/* 宽屏内联显示，窄屏（<420px）通过"更多"气泡显示 */}
+            <div className="hidden @[420px]:contents">{selectorItems}</div>
             {hasAnySelector && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-6 w-6 shrink-0 bg-transparent @[300px]:hidden"
+                    className="h-6 w-6 shrink-0 bg-transparent @[420px]:hidden"
                   >
                     <Ellipsis className="size-4" />
                   </Button>
