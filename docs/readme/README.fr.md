@@ -26,9 +26,7 @@ Docker — permettant le développement à distance depuis n'importe quel naviga
 parallèle via `git worktree`, gestion MCP/Skills, interaction avec les canaux de chat (Telegram, Lark, iLink, etc.)
 et workflows intégrés Git/fichiers/terminal.
 
-## Flux de communication
-
-![Flux de communication](../images/communication-flow.svg)
+![gallery](../images/gallery.svg)
 
 ## Interface principale
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -45,12 +43,12 @@ et workflows intégrés Git/fichiers/terminal.
 - Ingestion locale des conversations avec rendu structuré
 - Développement parallèle avec flux `git worktree` intégré
 - **Lanceur de projet** — créez visuellement de nouveaux projets avec aperçu en temps réel
-- **Canaux de chat** — connectez Telegram, Lark (Feishu), iLink (Weixin) et plus à vos agents de codage pour une interaction complète avec les sessions et le contrôle à distance des tâches
+- **Canaux de chat** — connectez Telegram, Lark (Feishu), iLink (Weixin) et plus à vos agents de codage pour des notifications en temps réel, une interaction complète avec les sessions et le contrôle à distance des tâches
 - Gestion MCP (scan local + recherche/installation depuis le registre)
 - Gestion des Skills (portée globale et projet)
 - Gestion des comptes distants Git (GitHub et autres serveurs Git)
 - Mode service web — accédez à Codeg depuis n'importe quel navigateur pour le travail à distance
-- Déploiement en serveur autonome — exécutez codeg-server sur n'importe quel serveur Linux/macOS, accédez via le navigateur
+- **Déploiement en serveur autonome** — exécutez `codeg-server` sur n'importe quel serveur Linux/macOS, accédez via le navigateur
 - **Support Docker** — `docker compose up` ou `docker run`, avec token/port personnalisables, persistance des données et montage de répertoires de projets
 - Boucle d'ingénierie intégrée (arborescence de fichiers, diff, changements git, commit, terminal)
 

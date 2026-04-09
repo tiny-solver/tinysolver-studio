@@ -22,14 +22,12 @@
 Codeg (Code Generation) ist ein unternehmenstauglicher Multi-Agent-Workspace
 für die Programmierung.
 Es vereint lokale KI-Coding-Agenten (Claude Code, Codex CLI, OpenCode,
-Gemini CLI, OpenClaw usw.) in einer Desktop-App, einem Standalone-Server oder
+Gemini CLI, OpenClaw, Cline usw.) in einer Desktop-App, einem Standalone-Server oder
 Docker-Container — Remote-Entwicklung von jedem Browser aus — mit Konversationsaggregation,
 paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integration
 (Telegram, Lark, iLink usw.) und integrierten Git/Datei/Terminal-Workflows.
 
-## Kommunikationsfluss
-
-![Kommunikationsfluss](../images/communication-flow.svg)
+![gallery](../images/gallery.svg)
 
 ## Hauptoberfläche
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -46,12 +44,12 @@ paralleler `git worktree`-Entwicklung, MCP/Skills-Verwaltung, Chat-Kanal-Integra
 - Lokale Konversationserfassung mit strukturierter Darstellung
 - Parallele Entwicklung mit integrierten `git worktree`-Abläufen
 - **Projekt-Starter** — neue Projekte visuell erstellen mit Live-Vorschau
-- **Chat-Kanäle** — Telegram, Lark (Feishu), iLink (Weixin) und mehr mit Ihren Coding-Agenten verbinden für vollständige Sitzungsinteraktion und Remote-Aufgabensteuerung
+- **Chat-Kanäle** — Telegram, Lark (Feishu), iLink (Weixin) und mehr mit Ihren Coding-Agenten verbinden für Echtzeit-Benachrichtigungen, vollständige Sitzungsinteraktion und Remote-Aufgabensteuerung
 - MCP-Verwaltung (lokaler Scan + Registry-Suche/Installation)
 - Skills-Verwaltung (global und projektbezogen)
 - Git-Remote-Kontoverwaltung (GitHub und andere Git-Server)
 - Webdienst-Modus — Zugriff auf Codeg über jeden Browser für Remote-Arbeit
-- Standalone-Server-Bereitstellung — codeg-server auf jedem Linux/macOS-Server ausführen, Zugriff über den Browser
+- **Standalone-Server-Bereitstellung** — `codeg-server` auf jedem Linux/macOS-Server ausführen, Zugriff über den Browser
 - **Docker-Unterstützung** — `docker compose up` oder `docker run`, mit benutzerdefiniertem Token/Port, Datenpersistenz und Projektverzeichnis-Mounts
 - Integrierter Engineering-Kreislauf (Dateibaum, Diff, Git-Änderungen, Commit, Terminal)
 

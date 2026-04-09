@@ -20,13 +20,11 @@
 </p>
 
 Codeg(Code Generation)는 엔터프라이즈급 멀티 Agent 코딩 워크스페이스입니다.
-Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agent를
+Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Cline 등 로컬 AI 코딩 Agent를
 데스크톱 앱, 독립형 서버 또는 Docker 컨테이너로 통합하여 — 브라우저만으로 어디서든 원격 개발이 가능하며 — 대화 집계, 병렬 `git worktree` 개발, MCP/Skills 관리,
 채팅 채널 연동(Telegram, Lark, iLink 등), Git/파일/터미널 통합 워크플로를 제공합니다.
 
-## 통신 흐름
-
-![통신 흐름](../images/communication-flow.svg)
+![gallery](../images/gallery.svg)
 
 ## 메인 인터페이스
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
@@ -43,7 +41,7 @@ Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw 등 로컬 AI 코딩 Agen
 - 로컬 대화 수집 및 구조화 렌더링
 - 내장 `git worktree` 플로를 통한 병렬 개발
 - **프로젝트 부트** — 시각적 설정과 실시간 미리보기로 새 프로젝트 생성
-- **채팅 채널** — Telegram, Lark(Feishu), iLink(Weixin) 등을 코딩 에이전트에 연결하여 전체 세션 상호작용 및 원격 작업 제어
+- **채팅 채널** — Telegram, Lark(Feishu), iLink(Weixin) 등을 코딩 에이전트에 연결하여 실시간 알림 수신, 전체 세션 상호작용 및 원격 작업 제어
 - MCP 관리 (로컬 스캔 + 레지스트리 검색/설치)
 - Skills 관리 (글로벌 및 프로젝트 범위)
 - Git 원격 계정 관리 (GitHub 및 기타 Git 서버)
