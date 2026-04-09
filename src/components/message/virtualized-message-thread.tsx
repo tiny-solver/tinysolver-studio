@@ -73,7 +73,7 @@ export function VirtualizedMessageThread<T>({
   return (
     <MessageThreadContent
       className={cn("mx-0 max-w-none p-0", contentClassName)}
-      scrollClassName="[overflow-anchor:none]"
+      scrollClassName="scrollbar-thin [overflow-anchor:none]"
       {...contentProps}
     >
       {items.length === 0 ? (
@@ -88,7 +88,7 @@ export function VirtualizedMessageThread<T>({
               key={getItemKey(item, index)}
               style={itemStyle(index, items.length)}
             >
-              <div className={cn("mx-auto max-w-3xl px-4", className)}>
+              <div className={cn("mx-auto max-w-3xl px-2", className)}>
                 {renderItem(item, index)}
               </div>
             </div>

@@ -174,6 +174,22 @@
   }
 }
 
+/* Unified scrollbar style for scrollable containers.
+   Matches StickToBottom's internal scrollbar-gutter so all scroll areas
+   behave the same: symmetric gutter, no layout shift. */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Single-edge variant: only reserves space on the scrollbar side */
+.scrollbar-thin-edge {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-gutter: stable;
+}
+
 /* Streamdown code blocks: dark mode via shiki dual-theme CSS variables */
 .dark [data-streamdown="code-block-body"] {
   background-color: var(--shiki-dark-bg, var(--sdm-bg, transparent)) !important;

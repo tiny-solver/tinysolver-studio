@@ -2167,7 +2167,7 @@ export function FileTreeTab() {
     <div className="flex flex-col h-full">
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="flex-1 min-h-0 overflow-auto pb-1 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+          <div className="flex-1 min-h-0 overflow-auto pb-1 scrollbar-thin-edge">
             <FileTree
               key={folder?.path ?? "file-tree-empty"}
               className="border-0 rounded-none bg-transparent w-max min-w-full"

@@ -1287,7 +1287,7 @@ export function GitChangesTab() {
 
   return (
     <>
-      <div className="h-full min-h-0 overflow-y-auto">
+      <div className="h-full min-h-0 overflow-y-auto scrollbar-thin-edge">
         {trackedChanges.length === 0 && untrackedChanges.length === 0 ? (
           <div className="flex items-center justify-center h-full p-4">
             <p className="text-xs text-muted-foreground text-center">
