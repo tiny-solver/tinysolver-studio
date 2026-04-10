@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { expertsListForAgent } from "@/lib/api"
 import type { AgentType, ExpertListItem } from "@/lib/types"
@@ -9,6 +9,25 @@ const agentCache = new Map<AgentType, ExpertListItem[]>()
 const inflightMap = new Map<AgentType, Promise<ExpertListItem[]>>()
 
 const EMPTY: ExpertListItem[] = []
+
+function fetchForAgent(agentType: AgentType): Promise<ExpertListItem[]> {
+  let promise = inflightMap.get(agentType)
+  if (!promise) {
+    promise = expertsListForAgent(agentType)
+      .then((list) => {
+        agentCache.set(agentType, list)
+        inflightMap.delete(agentType)
+        return list
+      })
+      .catch((err) => {
+        inflightMap.delete(agentType)
+        console.warn("[useAgentExperts] failed:", err)
+        return EMPTY
+      })
+    inflightMap.set(agentType, promise)
+  }
+  return promise
+}
 
 export function useAgentExperts(agentType: AgentType | null): ExpertListItem[] {
   const cached = useMemo(
@@ -22,34 +41,33 @@ export function useAgentExperts(agentType: AgentType | null): ExpertListItem[] {
     experts: ExpertListItem[]
   } | null>(null)
 
-  useEffect(() => {
+  const doFetch = useCallback(() => {
     if (!agentType || agentCache.has(agentType)) return
-
     let cancelled = false
-    let promise = inflightMap.get(agentType)
-    if (!promise) {
-      promise = expertsListForAgent(agentType)
-        .then((list) => {
-          agentCache.set(agentType, list)
-          inflightMap.delete(agentType)
-          return list
-        })
-        .catch((err) => {
-          inflightMap.delete(agentType)
-          console.warn("[useAgentExperts] failed:", err)
-          return EMPTY
-        })
-      inflightMap.set(agentType, promise)
-    }
-
-    promise.then((list) => {
+    fetchForAgent(agentType).then((list) => {
       if (!cancelled) setFetched({ agentType, experts: list })
     })
-
     return () => {
       cancelled = true
     }
   }, [agentType])
+
+  // Initial fetch
+  useEffect(() => doFetch(), [doFetch])
+
+  // Re-fetch when window regains focus (covers cross-window cache
+  // invalidation — e.g. settings window links/unlinks experts while the
+  // conversation window stays mounted).
+  useEffect(() => {
+    const onFocus = () => {
+      if (!agentType) return
+      agentCache.delete(agentType)
+      inflightMap.delete(agentType)
+      doFetch()
+    }
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [agentType, doFetch])
 
   if (!agentType) return EMPTY
   if (cached) return cached

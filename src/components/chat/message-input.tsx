@@ -1757,7 +1757,7 @@ export function MessageInput({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  disabled={disabled || availableExperts.length === 0}
+                  disabled={disabled}
                   variant="outline"
                   size="icon"
                   className="h-6 w-6 shrink-0 bg-transparent"

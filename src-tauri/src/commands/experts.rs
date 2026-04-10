@@ -851,9 +851,8 @@ pub async fn experts_unlink_from_agent(
 
     let _guard = mutation_lock().lock().await;
 
-    // Scan ALL global dirs for this agent to handle shared-dir agents
-    // (Codex and Cline both point at `~/.agents/skills/`). Remove the
-    // link wherever it is found.
+    // Scan ALL global dirs for this agent to handle shared-dir agents.
+    // Remove the link wherever it is found.
     let dirs = scoped_skill_dirs(agent_type, AgentSkillScope::Global, None)
         .map_err(|_| ExpertsError::UnsupportedAgent(agent_type))?;
 
