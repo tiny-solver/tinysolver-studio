@@ -94,7 +94,8 @@
       "system": "Sistema",
       "chat_channels": "Canais de chat",
       "web_service": "Serviço Web",
-      "model_providers": "Provedores de Modelos"
+      "model_providers": "Provedores de Modelos",
+      "experts": "Especialistas"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "Excluir",
     "create": "Criar",
     "save": "Salvar"
+  },
+  "ExpertsSettings": {
+    "title": "Habilidades de Especialista",
+    "description": "Ative fluxos de trabalho de habilidades selecionados e comprovados em campo para seus agentes de codificação de IA. Cada especialista é uma habilidade independente do projeto superpowers — o codeg gerencia a cópia central e a vincula aos agentes escolhidos.",
+    "loading": "Carregando especialistas…",
+    "loadingContent": "Carregando conteúdo…",
+    "emptyExperts": "Nenhum especialista disponível. Verifique os logs da aplicação.",
+    "emptySelection": "Selecione um especialista para ver seu conteúdo e gerenciar a ativação.",
+    "emptySearch": "Nenhum especialista corresponde à pesquisa atual.",
+    "searchPlaceholder": "Pesquisar especialistas por nome, ID ou descrição",
+    "enableForAgents": "Ativar para agentes",
+    "noAgents": "Nenhum agente ACP detectado.",
+    "copyModeWarning": "Copiado (não vinculado). Reative após as atualizações do codeg para obter a versão mais recente.",
+    "previewTitle": "Prévia do SKILL.md",
+    "categories": {
+      "discovery": "Descoberta e Design",
+      "planning": "Planejamento",
+      "execution": "Execução",
+      "quality": "Qualidade e Testes",
+      "debugging": "Depuração",
+      "review": "Revisão e Integração",
+      "meta": "Meta"
+    },
+    "states": {
+      "not_linked": "Não ativado",
+      "linked_to_codeg": "Ativado",
+      "linked_elsewhere": "Bloqueado — outro vínculo existe",
+      "blocked_by_real_directory": "Bloqueado — uma habilidade personalizada ocupa este nome",
+      "broken": "Vínculo quebrado"
+    },
+    "badges": {
+      "userModified": "Modificado pelo usuário"
+    },
+    "actions": {
+      "openCentralDir": "Abrir pasta central",
+      "refresh": "Atualizar"
+    },
+    "toasts": {
+      "loadFailed": "Falha ao carregar detalhes do especialista",
+      "enabled": "Especialista ativado para este agente",
+      "disabled": "Especialista desativado para este agente",
+      "enableFailed": "Falha ao ativar o especialista",
+      "disableFailed": "Falha ao desativar o especialista",
+      "openFolderFailed": "Falha ao abrir a pasta"
+    }
   }
 }

@@ -94,7 +94,8 @@
       "system": "Système",
       "chat_channels": "Canaux de chat",
       "web_service": "Service Web",
-      "model_providers": "Fournisseurs de Modèles"
+      "model_providers": "Fournisseurs de Modèles",
+      "experts": "Experts"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "Supprimer",
     "create": "Créer",
     "save": "Enregistrer"
+  },
+  "ExpertsSettings": {
+    "title": "Compétences d'experts",
+    "description": "Activez des workflows de compétences soigneusement sélectionnés et éprouvés pour vos agents de codage IA. Chaque expert est une compétence autonome du projet superpowers — codeg gère la copie centrale et la lie aux agents que vous choisissez.",
+    "loading": "Chargement des experts…",
+    "loadingContent": "Chargement du contenu…",
+    "emptyExperts": "Aucun expert disponible. Vérifiez les journaux de l'application.",
+    "emptySelection": "Sélectionnez un expert pour voir son contenu et gérer son activation.",
+    "emptySearch": "Aucun expert ne correspond à la recherche actuelle.",
+    "searchPlaceholder": "Rechercher des experts par nom, ID ou description",
+    "enableForAgents": "Activer pour les agents",
+    "noAgents": "Aucun agent ACP détecté.",
+    "copyModeWarning": "Copié (non lié). Réactivez après les mises à jour de codeg pour obtenir la dernière version.",
+    "previewTitle": "Aperçu de SKILL.md",
+    "categories": {
+      "discovery": "Découverte et conception",
+      "planning": "Planification",
+      "execution": "Exécution",
+      "quality": "Qualité et tests",
+      "debugging": "Débogage",
+      "review": "Révision et intégration",
+      "meta": "Meta"
+    },
+    "states": {
+      "not_linked": "Non activé",
+      "linked_to_codeg": "Activé",
+      "linked_elsewhere": "Bloqué — un autre lien existe",
+      "blocked_by_real_directory": "Bloqué — une compétence personnalisée occupe ce nom",
+      "broken": "Lien cassé"
+    },
+    "badges": {
+      "userModified": "Modifié par l'utilisateur"
+    },
+    "actions": {
+      "openCentralDir": "Ouvrir le dossier central",
+      "refresh": "Actualiser"
+    },
+    "toasts": {
+      "loadFailed": "Échec du chargement des détails de l'expert",
+      "enabled": "Expert activé pour cet agent",
+      "disabled": "Expert désactivé pour cet agent",
+      "enableFailed": "Échec de l'activation de l'expert",
+      "disableFailed": "Échec de la désactivation de l'expert",
+      "openFolderFailed": "Échec de l'ouverture du dossier"
+    }
   }
 }

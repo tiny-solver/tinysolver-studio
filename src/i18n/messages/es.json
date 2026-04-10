@@ -94,7 +94,8 @@
       "system": "Sistema",
       "chat_channels": "Canales de chat",
       "web_service": "Servicio Web",
-      "model_providers": "Proveedores de Modelos"
+      "model_providers": "Proveedores de Modelos",
+      "experts": "Expertos"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "Eliminar",
     "create": "Crear",
     "save": "Guardar"
+  },
+  "ExpertsSettings": {
+    "title": "Habilidades de expertos",
+    "description": "Habilita flujos de trabajo de habilidades cuidadosamente seleccionadas y probadas en la práctica para tus agentes de codificación de IA. Cada experto es una habilidad independiente del proyecto superpowers — codeg gestiona la copia central y la vincula a los agentes que elijas.",
+    "loading": "Cargando expertos…",
+    "loadingContent": "Cargando contenido…",
+    "emptyExperts": "No hay expertos disponibles. Revisa los registros de la aplicación.",
+    "emptySelection": "Selecciona un experto para ver su contenido y gestionar la activación.",
+    "emptySearch": "Ningún experto coincide con la búsqueda actual.",
+    "searchPlaceholder": "Buscar expertos por nombre, ID o descripción",
+    "enableForAgents": "Habilitar para agentes",
+    "noAgents": "No se detectaron agentes ACP.",
+    "copyModeWarning": "Copiado (no vinculado). Vuelve a habilitarlo después de actualizar codeg para obtener la última versión.",
+    "previewTitle": "Vista previa de SKILL.md",
+    "categories": {
+      "discovery": "Descubrimiento y diseño",
+      "planning": "Planificación",
+      "execution": "Ejecución",
+      "quality": "Calidad y pruebas",
+      "debugging": "Depuración",
+      "review": "Revisión e integración",
+      "meta": "Meta"
+    },
+    "states": {
+      "not_linked": "No habilitado",
+      "linked_to_codeg": "Habilitado",
+      "linked_elsewhere": "Bloqueado — existe otro vínculo",
+      "blocked_by_real_directory": "Bloqueado — una habilidad personalizada ocupa este nombre",
+      "broken": "Vínculo roto"
+    },
+    "badges": {
+      "userModified": "Modificado por el usuario"
+    },
+    "actions": {
+      "openCentralDir": "Abrir carpeta central",
+      "refresh": "Actualizar"
+    },
+    "toasts": {
+      "loadFailed": "Error al cargar los detalles del experto",
+      "enabled": "Experto habilitado para este agente",
+      "disabled": "Experto deshabilitado para este agente",
+      "enableFailed": "Error al habilitar el experto",
+      "disableFailed": "Error al deshabilitar el experto",
+      "openFolderFailed": "Error al abrir la carpeta"
+    }
   }
 }

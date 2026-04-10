@@ -521,6 +521,45 @@ export interface AgentSkillContent {
   content: string
 }
 
+/**
+ * Built-in expert skills, sourced from obra/superpowers and bundled into
+ * the codeg binary. Experts live in a central store at `~/.codeg/skills/`
+ * and are linked into agent skill directories on demand.
+ */
+export interface ExpertMetadata {
+  id: string
+  category: string
+  icon: string | null
+  sort_order: number
+  display_name: Record<string, string>
+  description: Record<string, string>
+  bundled_hash: string
+}
+
+export interface ExpertListItem {
+  metadata: ExpertMetadata
+  installed_centrally: boolean
+  user_modified: boolean
+  central_path: string
+}
+
+export type ExpertLinkState =
+  | "not_linked"
+  | "linked_to_codeg"
+  | "linked_elsewhere"
+  | "blocked_by_real_directory"
+  | "broken"
+
+export interface ExpertInstallStatus {
+  expertId: string
+  agentType: AgentType
+  state: ExpertLinkState
+  linkPath: string
+  targetPath: string | null
+  expectedTargetPath: string
+  copyMode: boolean
+}
+
 export interface SystemProxySettings {
   enabled: boolean
   proxy_url: string | null

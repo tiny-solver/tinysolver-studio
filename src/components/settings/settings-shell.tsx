@@ -19,6 +19,7 @@ import {
   PlugZap,
   Server,
   Settings,
+  Sparkles,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { usePathname } from "next/navigation"
@@ -39,6 +40,7 @@ interface SettingsNavItem {
     | "model_providers"
     | "mcp"
     | "skills"
+    | "experts"
     | "shortcuts"
     | "version_control"
     | "chat_channels"
@@ -62,6 +64,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/skills",
     labelKey: "skills",
     icon: BookOpenText,
+  },
+  {
+    href: "/settings/experts",
+    labelKey: "experts",
+    icon: Sparkles,
   },
   {
     href: "/settings/agents",

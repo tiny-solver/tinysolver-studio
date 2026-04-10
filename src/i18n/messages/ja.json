@@ -94,7 +94,8 @@
       "system": "システム",
       "chat_channels": "チャットチャンネル",
       "web_service": "Webサービス",
-      "model_providers": "モデルプロバイダー"
+      "model_providers": "モデルプロバイダー",
+      "experts": "エキスパート"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "削除",
     "create": "作成",
     "save": "保存"
+  },
+  "ExpertsSettings": {
+    "title": "エキスパートスキル",
+    "description": "AI コーディングエージェント向けに、厳選され実戦で検証されたスキルワークフローを有効にします。各エキスパートは superpowers プロジェクトの独立したスキルで、codeg が中央コピーを管理し、選択したエージェントにリンクします。",
+    "loading": "エキスパートを読み込み中…",
+    "loadingContent": "コンテンツを読み込み中…",
+    "emptyExperts": "利用可能なエキスパートがありません。アプリケーションログを確認してください。",
+    "emptySelection": "エキスパートを選択して内容を表示し、有効化を管理します。",
+    "emptySearch": "現在の検索に一致するエキスパートはありません。",
+    "searchPlaceholder": "名前、ID、または説明でエキスパートを検索",
+    "enableForAgents": "エージェントで有効化",
+    "noAgents": "ACP エージェントが検出されません。",
+    "copyModeWarning": "コピー済み（リンクなし）。codeg 更新後に最新版を取得するには再度有効化してください。",
+    "previewTitle": "SKILL.md プレビュー",
+    "categories": {
+      "discovery": "発見と設計",
+      "planning": "計画",
+      "execution": "実行",
+      "quality": "品質とテスト",
+      "debugging": "デバッグ",
+      "review": "レビューと統合",
+      "meta": "メタ"
+    },
+    "states": {
+      "not_linked": "未有効",
+      "linked_to_codeg": "有効",
+      "linked_elsewhere": "ブロック — 別のリンクが存在",
+      "blocked_by_real_directory": "ブロック — カスタムスキルがこの名前を占有",
+      "broken": "壊れたリンク"
+    },
+    "badges": {
+      "userModified": "ユーザーにより変更"
+    },
+    "actions": {
+      "openCentralDir": "中央フォルダを開く",
+      "refresh": "更新"
+    },
+    "toasts": {
+      "loadFailed": "エキスパート詳細の読み込みに失敗しました",
+      "enabled": "このエージェントでエキスパートを有効化しました",
+      "disabled": "このエージェントでエキスパートを無効化しました",
+      "enableFailed": "エキスパートの有効化に失敗しました",
+      "disableFailed": "エキスパートの無効化に失敗しました",
+      "openFolderFailed": "フォルダを開けませんでした"
+    }
   }
 }

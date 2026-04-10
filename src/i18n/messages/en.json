@@ -94,7 +94,8 @@
       "system": "System",
       "chat_channels": "Chat Channels",
       "web_service": "Web Service",
-      "model_providers": "Model Providers"
+      "model_providers": "Model Providers",
+      "experts": "Experts"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "Delete",
     "create": "Create",
     "save": "Save"
+  },
+  "ExpertsSettings": {
+    "title": "Expert Skills",
+    "description": "Enable curated, battle-tested skill workflows for your AI coding agents. Each expert is a standalone skill from the superpowers project — codeg manages the central copy and links it into the agents you choose.",
+    "loading": "Loading experts…",
+    "loadingContent": "Loading content…",
+    "emptyExperts": "No experts available. Check the application logs.",
+    "emptySelection": "Select an expert to see its content and manage activation.",
+    "emptySearch": "No experts match the current search.",
+    "searchPlaceholder": "Search experts by name, id, or description",
+    "enableForAgents": "Enable for agents",
+    "noAgents": "No ACP agents detected.",
+    "copyModeWarning": "Copied (not linked). Re-enable after codeg updates to get the latest version.",
+    "previewTitle": "SKILL.md preview",
+    "categories": {
+      "discovery": "Discovery & Design",
+      "planning": "Planning",
+      "execution": "Execution",
+      "quality": "Quality & Testing",
+      "debugging": "Debugging",
+      "review": "Review & Integration",
+      "meta": "Meta"
+    },
+    "states": {
+      "not_linked": "Not enabled",
+      "linked_to_codeg": "Enabled",
+      "linked_elsewhere": "Blocked — another link exists",
+      "blocked_by_real_directory": "Blocked — a custom skill occupies this name",
+      "broken": "Broken link"
+    },
+    "badges": {
+      "userModified": "User modified"
+    },
+    "actions": {
+      "openCentralDir": "Open central folder",
+      "refresh": "Refresh"
+    },
+    "toasts": {
+      "loadFailed": "Failed to load expert details",
+      "enabled": "Expert enabled for this agent",
+      "disabled": "Expert disabled for this agent",
+      "enableFailed": "Failed to enable expert",
+      "disableFailed": "Failed to disable expert",
+      "openFolderFailed": "Failed to open folder"
+    }
   }
 }

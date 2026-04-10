@@ -94,7 +94,8 @@
       "system": "시스템",
       "chat_channels": "채팅 채널",
       "web_service": "웹 서비스",
-      "model_providers": "모델 제공업체"
+      "model_providers": "모델 제공업체",
+      "experts": "전문가"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "삭제",
     "create": "생성",
     "save": "저장"
+  },
+  "ExpertsSettings": {
+    "title": "전문가 스킬",
+    "description": "AI 코딩 에이전트를 위해 엄선되고 실전 검증된 스킬 워크플로를 활성화하세요. 각 전문가는 superpowers 프로젝트의 독립 실행형 스킬이며 — codeg가 중앙 복사본을 관리하고 선택한 에이전트에 연결합니다.",
+    "loading": "전문가 로딩 중…",
+    "loadingContent": "콘텐츠 로딩 중…",
+    "emptyExperts": "사용 가능한 전문가가 없습니다. 애플리케이션 로그를 확인하세요.",
+    "emptySelection": "전문가를 선택하여 내용을 보고 활성화를 관리하세요.",
+    "emptySearch": "현재 검색과 일치하는 전문가가 없습니다.",
+    "searchPlaceholder": "이름, ID 또는 설명으로 전문가 검색",
+    "enableForAgents": "에이전트에 활성화",
+    "noAgents": "ACP 에이전트가 감지되지 않았습니다.",
+    "copyModeWarning": "복사됨(연결되지 않음). 최신 버전을 받으려면 codeg 업데이트 후 재활성화하세요.",
+    "previewTitle": "SKILL.md 미리보기",
+    "categories": {
+      "discovery": "발견 및 설계",
+      "planning": "계획",
+      "execution": "실행",
+      "quality": "품질 및 테스트",
+      "debugging": "디버깅",
+      "review": "검토 및 통합",
+      "meta": "메타"
+    },
+    "states": {
+      "not_linked": "활성화되지 않음",
+      "linked_to_codeg": "활성화됨",
+      "linked_elsewhere": "차단됨 — 다른 링크가 존재함",
+      "blocked_by_real_directory": "차단됨 — 사용자 정의 스킬이 이 이름을 점유 중",
+      "broken": "손상된 링크"
+    },
+    "badges": {
+      "userModified": "사용자가 수정함"
+    },
+    "actions": {
+      "openCentralDir": "중앙 폴더 열기",
+      "refresh": "새로고침"
+    },
+    "toasts": {
+      "loadFailed": "전문가 세부 정보를 로드하지 못했습니다",
+      "enabled": "이 에이전트에 전문가가 활성화되었습니다",
+      "disabled": "이 에이전트에서 전문가가 비활성화되었습니다",
+      "enableFailed": "전문가 활성화에 실패했습니다",
+      "disableFailed": "전문가 비활성화에 실패했습니다",
+      "openFolderFailed": "폴더를 열지 못했습니다"
+    }
   }
 }

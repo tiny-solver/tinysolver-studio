@@ -392,16 +392,16 @@ async fn uninstall_npm_from_user_prefix(package_name: &str) -> Result<(), AcpErr
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SkillStorageKind {
+pub(crate) enum SkillStorageKind {
     SkillDirectoryOnly,
     SkillDirectoryOrMarkdownFile,
 }
 
 #[derive(Debug, Clone)]
-struct SkillStorageSpec {
-    kind: SkillStorageKind,
-    global_dirs: Vec<PathBuf>,
-    project_rel_dirs: Vec<&'static str>,
+pub(crate) struct SkillStorageSpec {
+    pub kind: SkillStorageKind,
+    pub global_dirs: Vec<PathBuf>,
+    pub project_rel_dirs: Vec<&'static str>,
 }
 
 fn home_dir_or_default() -> PathBuf {
@@ -1204,7 +1204,7 @@ fn persist_agent_local_config_json(
     Ok(())
 }
 
-fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSpec> {
+pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSpec> {
     match agent_type {
         AgentType::ClaudeCode => Some(SkillStorageSpec {
             kind: SkillStorageKind::SkillDirectoryOnly,
@@ -1263,7 +1263,7 @@ fn scope_rank(scope: AgentSkillScope) -> u8 {
     }
 }
 
-fn validate_skill_id(raw: &str) -> Result<String, AcpError> {
+pub(crate) fn validate_skill_id(raw: &str) -> Result<String, AcpError> {
     let id = raw.trim();
     if id.is_empty() {
         return Err(AcpError::protocol("skill id cannot be empty"));
@@ -1287,7 +1287,7 @@ fn validate_skill_id(raw: &str) -> Result<String, AcpError> {
     Ok(id.to_string())
 }
 
-fn scoped_skill_dirs(
+pub(crate) fn scoped_skill_dirs(
     agent_type: AgentType,
     scope: AgentSkillScope,
     workspace_path: Option<&str>,
@@ -1316,7 +1316,7 @@ fn scoped_skill_dirs(
     }
 }
 
-fn preferred_scope_skill_dir(
+pub(crate) fn preferred_scope_skill_dir(
     agent_type: AgentType,
     scope: AgentSkillScope,
     workspace_path: Option<&str>,
@@ -1357,6 +1357,24 @@ fn skill_content_path(layout: AgentSkillLayout, skill_path: &Path) -> PathBuf {
     match layout {
         AgentSkillLayout::SkillDirectory => skill_path.join("SKILL.md"),
         AgentSkillLayout::MarkdownFile => skill_path.to_path_buf(),
+    }
+}
+
+/// Symlink-safe removal: if `path` is a symlink (to a file or directory),
+/// only the link itself is removed. Otherwise directories are removed
+/// recursively and files are unlinked. This prevents `remove_dir_all` from
+/// accidentally wiping the contents of a symlink target — which is critical
+/// for the Experts feature where agent skill dirs may contain symlinks into
+/// the central `~/.codeg/skills/` store.
+pub(crate) fn remove_skill_entry(path: &Path) -> std::io::Result<()> {
+    let meta = fs::symlink_metadata(path)?;
+    let file_type = meta.file_type();
+    if file_type.is_symlink() {
+        fs::remove_file(path)
+    } else if file_type.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
     }
 }
 
@@ -2726,12 +2744,7 @@ pub async fn acp_delete_agent_skill(
     let skill = locate_existing_skill_across_dirs(&dirs, spec.kind, &id, scope)
         .ok_or_else(|| AcpError::protocol(format!("skill not found: {id}")))?;
     let skill_path = PathBuf::from(&skill.path);
-    if skill.layout == AgentSkillLayout::SkillDirectory {
-        fs::remove_dir_all(&skill_path)
-            .map_err(|e| AcpError::protocol(format!("failed to delete skill directory: {e}")))?;
-    } else {
-        fs::remove_file(&skill_path)
-            .map_err(|e| AcpError::protocol(format!("failed to delete skill file: {e}")))?;
-    }
+    remove_skill_entry(&skill_path)
+        .map_err(|e| AcpError::protocol(format!("failed to delete skill entry: {e}")))?;
     Ok(())
 }

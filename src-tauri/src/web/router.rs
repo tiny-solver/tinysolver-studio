@@ -175,6 +175,13 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/acp_read_agent_skill", post(handlers::acp::acp_read_agent_skill))
         .route("/acp_save_agent_skill", post(handlers::acp::acp_save_agent_skill))
         .route("/acp_delete_agent_skill", post(handlers::acp::acp_delete_agent_skill))
+        // ─── Experts ───
+        .route("/experts_list", post(handlers::experts::experts_list))
+        .route("/experts_get_install_status", post(handlers::experts::experts_get_install_status))
+        .route("/experts_link_to_agent", post(handlers::experts::experts_link_to_agent))
+        .route("/experts_unlink_from_agent", post(handlers::experts::experts_unlink_from_agent))
+        .route("/experts_read_content", post(handlers::experts::experts_read_content))
+        .route("/experts_open_central_dir", post(handlers::experts::experts_open_central_dir))
         // ─── Project boot ───
         .route("/detect_package_manager", post(handlers::project_boot::detect_package_manager))
         .route("/create_shadcn_project", post(handlers::project_boot::create_shadcn_project))

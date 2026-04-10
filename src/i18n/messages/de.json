@@ -94,7 +94,8 @@
       "system": "Systemeinstellungen",
       "chat_channels": "Chat-Kanäle",
       "web_service": "Webdienst",
-      "model_providers": "Modellanbieter"
+      "model_providers": "Modellanbieter",
+      "experts": "Experten"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "Löschen",
     "create": "Erstellen",
     "save": "Speichern"
+  },
+  "ExpertsSettings": {
+    "title": "Experten-Skills",
+    "description": "Aktivieren Sie kuratierte, praxiserprobte Skill-Workflows für Ihre KI-Coding-Agents. Jeder Experte ist ein eigenständiger Skill aus dem superpowers-Projekt — codeg verwaltet die zentrale Kopie und verknüpft sie mit den von Ihnen ausgewählten Agents.",
+    "loading": "Experten werden geladen…",
+    "loadingContent": "Inhalt wird geladen…",
+    "emptyExperts": "Keine Experten verfügbar. Prüfen Sie die Anwendungsprotokolle.",
+    "emptySelection": "Wählen Sie einen Experten aus, um seinen Inhalt anzuzeigen und die Aktivierung zu verwalten.",
+    "emptySearch": "Keine Experten entsprechen der aktuellen Suche.",
+    "searchPlaceholder": "Experten nach Name, ID oder Beschreibung suchen",
+    "enableForAgents": "Für Agents aktivieren",
+    "noAgents": "Keine ACP-Agents erkannt.",
+    "copyModeWarning": "Kopiert (nicht verknüpft). Nach codeg-Updates erneut aktivieren, um die neueste Version zu erhalten.",
+    "previewTitle": "SKILL.md-Vorschau",
+    "categories": {
+      "discovery": "Entdeckung & Design",
+      "planning": "Planung",
+      "execution": "Ausführung",
+      "quality": "Qualität & Tests",
+      "debugging": "Debugging",
+      "review": "Review & Integration",
+      "meta": "Meta"
+    },
+    "states": {
+      "not_linked": "Nicht aktiviert",
+      "linked_to_codeg": "Aktiviert",
+      "linked_elsewhere": "Blockiert — ein anderer Link existiert",
+      "blocked_by_real_directory": "Blockiert — ein benutzerdefinierter Skill belegt diesen Namen",
+      "broken": "Defekter Link"
+    },
+    "badges": {
+      "userModified": "Vom Benutzer geändert"
+    },
+    "actions": {
+      "openCentralDir": "Zentralen Ordner öffnen",
+      "refresh": "Aktualisieren"
+    },
+    "toasts": {
+      "loadFailed": "Laden der Expertendetails fehlgeschlagen",
+      "enabled": "Experte für diesen Agent aktiviert",
+      "disabled": "Experte für diesen Agent deaktiviert",
+      "enableFailed": "Aktivieren des Experten fehlgeschlagen",
+      "disableFailed": "Deaktivieren des Experten fehlgeschlagen",
+      "openFolderFailed": "Ordner konnte nicht geöffnet werden"
+    }
   }
 }

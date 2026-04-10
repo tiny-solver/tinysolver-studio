@@ -15,6 +15,8 @@ import type {
   AgentSkillItem,
   AgentSkillsListResult,
   AgentSkillContent,
+  ExpertListItem,
+  ExpertInstallStatus,
   FolderHistoryEntry,
   FolderDetail,
   DbConversationSummary,
@@ -330,6 +332,46 @@ export async function acpDeleteAgentSkill(params: {
     skillId: params.skillId,
     workspacePath: params.workspacePath ?? null,
   })
+}
+
+// ─── Experts (built-in expert skills) ───────────────────────────────────
+
+export async function expertsList(): Promise<ExpertListItem[]> {
+  return getTransport().call("experts_list")
+}
+
+export async function expertsGetInstallStatus(
+  expertId: string
+): Promise<ExpertInstallStatus[]> {
+  return getTransport().call("experts_get_install_status", { expertId })
+}
+
+export async function expertsLinkToAgent(params: {
+  expertId: string
+  agentType: AgentType
+}): Promise<ExpertInstallStatus> {
+  return getTransport().call("experts_link_to_agent", {
+    expertId: params.expertId,
+    agentType: params.agentType,
+  })
+}
+
+export async function expertsUnlinkFromAgent(params: {
+  expertId: string
+  agentType: AgentType
+}): Promise<void> {
+  return getTransport().call("experts_unlink_from_agent", {
+    expertId: params.expertId,
+    agentType: params.agentType,
+  })
+}
+
+export async function expertsReadContent(expertId: string): Promise<string> {
+  return getTransport().call("experts_read_content", { expertId })
+}
+
+export async function expertsOpenCentralDir(): Promise<string> {
+  return getTransport().call("experts_open_central_dir")
 }
 
 export async function getSystemProxySettings(): Promise<SystemProxySettings> {

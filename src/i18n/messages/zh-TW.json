@@ -94,7 +94,8 @@
       "system": "系統",
       "chat_channels": "訊息頻道",
       "web_service": "Web 服務",
-      "model_providers": "模型供應商"
+      "model_providers": "模型供應商",
+      "experts": "專家"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "刪除",
     "create": "建立",
     "save": "儲存"
+  },
+  "ExpertsSettings": {
+    "title": "專家技能",
+    "description": "為 AI 編碼代理啟用精心挑選、經過實戰驗證的技能工作流程。每個專家都是 superpowers 專案中的獨立技能 —— codeg 維護中央副本，並將其軟連結到你選擇的代理目錄。",
+    "loading": "正在載入專家清單…",
+    "loadingContent": "正在載入內容…",
+    "emptyExperts": "目前沒有可用的專家，請查看應用程式日誌。",
+    "emptySelection": "從左側選擇一個專家以檢視內容並管理啟用狀態。",
+    "emptySearch": "沒有符合目前搜尋條件的專家。",
+    "searchPlaceholder": "依名稱、ID 或描述搜尋專家",
+    "enableForAgents": "為代理啟用",
+    "noAgents": "未偵測到 ACP 代理。",
+    "copyModeWarning": "已複製(非軟連結)。codeg 更新後需要重新啟用以取得最新版本。",
+    "previewTitle": "SKILL.md 預覽",
+    "categories": {
+      "discovery": "探索與設計",
+      "planning": "規劃",
+      "execution": "執行",
+      "quality": "品質與測試",
+      "debugging": "除錯",
+      "review": "審查與整合",
+      "meta": "後設技能"
+    },
+    "states": {
+      "not_linked": "未啟用",
+      "linked_to_codeg": "已啟用",
+      "linked_elsewhere": "衝突 — 已有其他連結",
+      "blocked_by_real_directory": "衝突 — 已有同名的自訂 skill 佔用",
+      "broken": "連結損壞"
+    },
+    "badges": {
+      "userModified": "使用者修改過"
+    },
+    "actions": {
+      "openCentralDir": "開啟中央目錄",
+      "refresh": "重新整理"
+    },
+    "toasts": {
+      "loadFailed": "載入專家詳情失敗",
+      "enabled": "已為該代理啟用專家",
+      "disabled": "已為該代理停用專家",
+      "enableFailed": "啟用專家失敗",
+      "disableFailed": "停用專家失敗",
+      "openFolderFailed": "開啟目錄失敗"
+    }
   }
 }

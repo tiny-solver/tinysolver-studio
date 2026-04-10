@@ -2,6 +2,7 @@ mod error;
 pub mod acp;
 pub mod chat_channel;
 pub mod conversations;
+pub mod experts;
 pub mod files;
 pub mod folder_commands;
 pub mod folders;

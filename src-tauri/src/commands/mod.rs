@@ -1,6 +1,7 @@
 pub mod acp;
 pub mod chat_channel;
 pub mod conversations;
+pub mod experts;
 pub mod folder_commands;
 pub mod folders;
 pub mod mcp;

@@ -94,7 +94,8 @@
       "system": "系统",
       "chat_channels": "消息渠道",
       "web_service": "Web 服务",
-      "model_providers": "模型供应商"
+      "model_providers": "模型供应商",
+      "experts": "专家"
     }
   },
   "AppearanceSettings": {
@@ -1857,5 +1858,50 @@
     "delete": "删除",
     "create": "创建",
     "save": "保存"
+  },
+  "ExpertsSettings": {
+    "title": "专家技能",
+    "description": "为 AI 编码代理启用精心挑选、经过实战验证的技能工作流。每个专家都是 superpowers 项目中的独立技能 —— codeg 维护中央副本，并将其软链接到你选择的代理目录。",
+    "loading": "正在加载专家列表…",
+    "loadingContent": "正在加载内容…",
+    "emptyExperts": "当前没有可用的专家，请查看应用日志。",
+    "emptySelection": "从左侧选择一个专家以查看内容并管理启用状态。",
+    "emptySearch": "没有匹配当前搜索条件的专家。",
+    "searchPlaceholder": "按名称、ID 或描述搜索专家",
+    "enableForAgents": "为代理启用",
+    "noAgents": "未检测到 ACP 代理。",
+    "copyModeWarning": "已复制(非软链接)。codeg 更新后需要重新启用以获取最新版本。",
+    "previewTitle": "SKILL.md 预览",
+    "categories": {
+      "discovery": "发现与设计",
+      "planning": "规划",
+      "execution": "执行",
+      "quality": "质量与测试",
+      "debugging": "调试",
+      "review": "评审与集成",
+      "meta": "元技能"
+    },
+    "states": {
+      "not_linked": "未启用",
+      "linked_to_codeg": "已启用",
+      "linked_elsewhere": "冲突 — 已有其他链接",
+      "blocked_by_real_directory": "冲突 — 已有同名的自定义 skill 占用",
+      "broken": "链接损坏"
+    },
+    "badges": {
+      "userModified": "用户修改过"
+    },
+    "actions": {
+      "openCentralDir": "打开中央目录",
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "loadFailed": "加载专家详情失败",
+      "enabled": "已为该代理启用专家",
+      "disabled": "已为该代理禁用专家",
+      "enableFailed": "启用专家失败",
+      "disableFailed": "禁用专家失败",
+      "openFolderFailed": "打开目录失败"
+    }
   }
 }
