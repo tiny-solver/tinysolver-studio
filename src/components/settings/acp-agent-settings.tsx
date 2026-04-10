@@ -118,6 +118,7 @@ interface AgentDraft {
   codexProviderOptions: string[]
   codexReasoningEffort: CodexReasoningEffort
   codexSupportsWebsockets: boolean
+  codexSkills: boolean
   claudeMainModel: string
   claudeReasoningModel: string
   claudeDefaultHaikuModel: string
@@ -1142,6 +1143,7 @@ interface CodexTomlImportantValues {
   providerBaseUrls: Record<string, string>
   providerSupportsWebsockets: Record<string, boolean>
   featureResponsesWebsocketsV2: boolean
+  featureSkills: boolean
 }
 
 interface CodexImportantValues {
@@ -1152,6 +1154,7 @@ interface CodexImportantValues {
   reasoningEffort: CodexReasoningEffort
   providerOptions: string[]
   supportsWebsockets: boolean
+  skills: boolean
 }
 
 const CODEX_DEFAULT_MODEL_PROVIDER = "codeg"
@@ -1312,6 +1315,7 @@ function extractCodexTomlImportantValues(
   let modelReasoningEffort: CodexReasoningEffort =
     CODEX_DEFAULT_REASONING_EFFORT
   let featureResponsesWebsocketsV2 = false
+  let featureSkills = false
   let currentProviderSection: string | null = null
   let inFeaturesSection = false
 
@@ -1377,6 +1381,10 @@ function extractCodexTomlImportantValues(
         featureResponsesWebsocketsV2 = boolAssignment.value
         continue
       }
+      if (inFeaturesSection && boolAssignment.key === "skills") {
+        featureSkills = boolAssignment.value
+        continue
+      }
       const dottedProviderWebsocketMatch = boolAssignment.key.match(
         /^model_providers\.([A-Za-z0-9_-]+)\.supports_websockets$/
       )
@@ -1388,6 +1396,10 @@ function extractCodexTomlImportantValues(
       }
       if (boolAssignment.key === "features.responses_websockets_v2") {
         featureResponsesWebsocketsV2 = boolAssignment.value
+        continue
+      }
+      if (boolAssignment.key === "features.skills") {
+        featureSkills = boolAssignment.value
         continue
       }
     }
@@ -1436,6 +1448,7 @@ function extractCodexTomlImportantValues(
     providerBaseUrls,
     providerSupportsWebsockets,
     featureResponsesWebsocketsV2,
+    featureSkills,
   }
 }
 
@@ -1530,6 +1543,7 @@ function extractCodexImportantValues(
       toml.providerNames
     ),
     supportsWebsockets: providerSupportsWebsockets,
+    skills: toml.featureSkills,
   }
 }
 
@@ -1701,7 +1715,14 @@ function upsertTomlSectionBooleanKey(
     if (assignmentIndex >= 0) {
       lines[assignmentIndex] = lineText
     } else {
-      lines.splice(section.end, 0, lineText)
+      let insertAt = section.end
+      for (let i = section.end - 1; i > section.start; i -= 1) {
+        if (lines[i].trim() !== "") {
+          insertAt = i + 1
+          break
+        }
+      }
+      lines.splice(insertAt, 0, lineText)
     }
     return lines.join("\n").trim()
   }
@@ -1927,6 +1948,7 @@ function patchCodexConfigTomlText(
     modelProvider?: string
     modelReasoningEffort?: string
     supportsWebsockets?: boolean
+    skills?: boolean
   }
 ): string {
   let nextTomlText = configTomlText
@@ -2019,6 +2041,14 @@ function patchCodexConfigTomlText(
     "responses_websockets_v2",
     shouldEnableFeature ? true : null
   )
+  if (typeof patch.skills === "boolean") {
+    nextTomlText = upsertTomlSectionBooleanKey(
+      nextTomlText,
+      "features",
+      "skills",
+      patch.skills ? true : null
+    )
+  }
   nextTomlText = updateTomlRootBooleanKey(
     nextTomlText,
     "disable_response_storage",
@@ -2252,6 +2282,7 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     codexProviderOptions: codexImportant.providerOptions,
     codexReasoningEffort: codexImportant.reasoningEffort,
     codexSupportsWebsockets: codexImportant.supportsWebsockets,
+    codexSkills: codexImportant.skills,
     claudeMainModel: important.claudeMainModel,
     claudeReasoningModel: important.claudeReasoningModel,
     claudeDefaultHaikuModel: important.claudeDefaultHaikuModel,
@@ -4432,6 +4463,7 @@ export function AcpAgentSettings() {
         codexProviderOptions: important.providerOptions,
         codexReasoningEffort: important.reasoningEffort,
         codexSupportsWebsockets: important.supportsWebsockets,
+        codexSkills: important.skills,
       }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
@@ -4454,6 +4486,7 @@ export function AcpAgentSettings() {
         codexProviderOptions: important.providerOptions,
         codexReasoningEffort: important.reasoningEffort,
         codexSupportsWebsockets: important.supportsWebsockets,
+        codexSkills: important.skills,
       }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
@@ -4505,6 +4538,7 @@ export function AcpAgentSettings() {
           codexProviderOptions: synced.providerOptions,
           codexReasoningEffort: synced.reasoningEffort,
           codexSupportsWebsockets: synced.supportsWebsockets,
+          codexSkills: synced.skills,
         }))
         return
       }
@@ -4537,6 +4571,7 @@ export function AcpAgentSettings() {
         codexProviderOptions: synced.providerOptions,
         codexReasoningEffort: synced.reasoningEffort,
         codexSupportsWebsockets: synced.supportsWebsockets,
+        codexSkills: synced.skills,
       }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
@@ -4602,6 +4637,7 @@ export function AcpAgentSettings() {
         codexProviderOptions: synced.providerOptions,
         codexReasoningEffort: synced.reasoningEffort,
         codexSupportsWebsockets: synced.supportsWebsockets,
+        codexSkills: synced.skills,
         codexAuthJsonText: nextAuth.authJsonText,
         codexConfigTomlText: nextToml,
       }))
@@ -4637,6 +4673,39 @@ export function AcpAgentSettings() {
         codexProviderOptions: synced.providerOptions,
         codexReasoningEffort: synced.reasoningEffort,
         codexSupportsWebsockets: synced.supportsWebsockets,
+        codexSkills: synced.skills,
+        codexConfigTomlText: nextToml,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleCodexSkillsChange = useCallback(
+    (enabled: boolean) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "codex"
+      )
+        return
+      const nextToml = patchCodexConfigTomlText(
+        selectedDraft.codexConfigTomlText,
+        { skills: enabled }
+      )
+      const synced = extractCodexImportantValues(
+        selectedDraft.codexAuthJsonText,
+        nextToml
+      )
+      updateSelectedDraft((current) => ({
+        ...current,
+        apiBaseUrl: synced.apiBaseUrl,
+        apiKey: synced.apiKey ?? current.apiKey,
+        model: synced.model,
+        codexModelProvider: synced.modelProvider,
+        codexProviderOptions: synced.providerOptions,
+        codexReasoningEffort: synced.reasoningEffort,
+        codexSupportsWebsockets: synced.supportsWebsockets,
+        codexSkills: synced.skills,
         codexConfigTomlText: nextToml,
       }))
     },
@@ -5197,6 +5266,19 @@ export function AcpAgentSettings() {
                     </div>
 
                     <div className="space-y-1.5">
+                      <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("codex.enableSkills")}
+                        </label>
+                        <Switch
+                          checked={selectedDraft.codexSkills}
+                          onCheckedChange={handleCodexSkillsChange}
+                          aria-label={t("codex.enableSkillsAria")}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         {t("codex.authJsonNative")}
                       </label>
@@ -5208,7 +5290,7 @@ export function AcpAgentSettings() {
                         placeholder={`{
   "OPENAI_API_KEY": "sk-..."
 }`}
-                        className="min-h-28 font-mono text-xs"
+                        className="min-h-28 max-h-60 font-mono text-xs"
                       />
                       {selectedCodexAuthError && (
                         <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
@@ -5237,7 +5319,7 @@ responses_websockets_v2 = true
 [model_providers.codeg]
 base_url = "https://api.openai.com/v1"
 supports_websockets = true`}
-                        className="min-h-40 font-mono text-xs"
+                        className="min-h-40 max-h-80 font-mono text-xs"
                       />
                     </div>
 

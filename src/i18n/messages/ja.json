@@ -515,6 +515,8 @@
       "selectReasoningEffort": "Reasoning Effort を選択",
       "enableWebsocket": "WebSocket を有効化",
       "enableWebsocketAria": "Codex Provider の WebSocket を有効化",
+      "enableSkills": "Skills を有効化",
+      "enableSkillsAria": "Codex の Skills を有効化",
       "authJsonNative": "auth.json（ネイティブ）",
       "configTomlNative": "config.toml（ネイティブ）"
     },

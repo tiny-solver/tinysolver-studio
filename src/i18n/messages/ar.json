@@ -515,6 +515,8 @@
       "selectReasoningEffort": "اختر Reasoning Effort",
       "enableWebsocket": "تفعيل WebSocket",
       "enableWebsocketAria": "تفعيل WebSocket لـ Codex Provider",
+      "enableSkills": "تفعيل Skills",
+      "enableSkillsAria": "تفعيل Skills لـ Codex",
       "authJsonNative": "auth.json (أصلي)",
       "configTomlNative": "config.toml (أصلي)"
     },
