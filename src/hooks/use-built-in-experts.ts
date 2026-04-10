@@ -73,12 +73,3 @@ export function useBuiltInExperts(): ExpertListItem[] {
 
   return experts
 }
-
-/**
- * Invalidate the cached experts list. Call this after installing/uninstalling
- * experts so subsequent consumers see the fresh list.
- */
-export function invalidateBuiltInExperts(): void {
-  cachedExperts = null
-  inflight = null
-}

@@ -540,6 +540,20 @@ export function MessageInput({
   const slashAutocompleteCount =
     filteredSlashCommands.length + filteredSlashExperts.length
 
+  // Keep the highlighted row inside the current result window. As the user
+  // types and the filter narrows, the previously-highlighted index can point
+  // past the end of the merged list (commands + experts), which would make
+  // Enter/Tab a silent no-op. Clamp back to the last available row whenever
+  // the count changes.
+  useEffect(() => {
+    if (
+      slashAutocompleteCount > 0 &&
+      slashSelectedIndex >= slashAutocompleteCount
+    ) {
+      setSlashSelectedIndex(slashAutocompleteCount - 1)
+    }
+  }, [slashAutocompleteCount, slashSelectedIndex])
+
   // ── @ file mention autocomplete ──
   const [atMenuOpen, setAtMenuOpen] = useState(false)
   const [atSelectedIndex, setAtSelectedIndex] = useState(0)
@@ -911,23 +925,34 @@ export function MessageInput({
   // Experts always inject `/expert-id ` at the very front of the input,
   // never at the cursor. The expert skill is a whole-turn directive that
   // the agent inspects first, so prepending keeps semantics unambiguous
-  // regardless of what the user has already typed.
-  const handleExpertPopoverSelect = useCallback((expert: ExpertListItem) => {
-    const current = textRef.current
-    const insertion = `/${expert.metadata.id} `
-    const newText = current.length === 0 ? insertion : insertion + current
-    setText(newText)
-    requestAnimationFrame(() => {
-      const ta = textareaRef.current
-      if (ta) {
-        ta.focus()
-        // Place the caret just after the inserted prefix so the user can
-        // start (or continue) typing context for the expert.
-        const pos = insertion.length
-        ta.setSelectionRange(pos, pos)
+  // regardless of what the user has already typed. If another expert prefix
+  // is already at the front (from a prior click), replace it instead of
+  // stacking — the agent only honors the first slash command, so a stacked
+  // prefix would silently drop the earlier choice.
+  const handleExpertPopoverSelect = useCallback(
+    (expert: ExpertListItem) => {
+      const current = textRef.current
+      const insertion = `/${expert.metadata.id} `
+      const existingPrefix = current.match(/^\/([A-Za-z0-9_-]+)\s/)
+      let base = current
+      if (existingPrefix && expertIdSet.has(existingPrefix[1])) {
+        base = current.slice(existingPrefix[0].length)
       }
-    })
-  }, [])
+      const newText = base.length === 0 ? insertion : insertion + base
+      setText(newText)
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current
+        if (ta) {
+          ta.focus()
+          // Place the caret just after the inserted prefix so the user can
+          // start (or continue) typing context for the expert.
+          const pos = insertion.length
+          ta.setSelectionRange(pos, pos)
+        }
+      })
+    },
+    [expertIdSet]
+  )
 
   const atTriggerPosRef = useRef(atTriggerPos)
   useEffect(() => {
@@ -1547,7 +1572,7 @@ export function MessageInput({
       onDrop={handleContainerDrop}
     >
       {slashMenuOpen && slashAutocompleteCount > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-[min(16rem,40dvh)] overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
           {filteredSlashCommands.map((cmd, i) => (
             <button
               key={`cmd-${cmd.name}`}
@@ -1724,6 +1749,7 @@ export function MessageInput({
                   size="icon"
                   className="h-6 w-6 shrink-0 bg-transparent"
                   title={t("expertSkills")}
+                  aria-label={t("expertSkills")}
                 >
                   <Sparkles className="size-4" />
                 </Button>
