@@ -376,6 +376,7 @@ mod tauri_app {
                 acp_commands::acp_save_agent_skill,
                 acp_commands::acp_delete_agent_skill,
                 experts_commands::experts_list,
+                experts_commands::experts_list_for_agent,
                 experts_commands::experts_get_install_status,
                 experts_commands::experts_link_to_agent,
                 experts_commands::experts_unlink_from_agent,

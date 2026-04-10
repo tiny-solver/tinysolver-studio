@@ -41,6 +41,7 @@ import { readFileBase64 } from "@/lib/api"
 import { openFileDialog } from "@/lib/platform"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import type {
+  AgentType,
   AvailableCommandInfo,
   ExpertListItem,
   PromptCapabilitiesInfo,
@@ -65,6 +66,7 @@ import { FileMentionMenu } from "@/components/chat/file-mention-menu"
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
 import { useFileTree } from "@/hooks/use-file-tree"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
+import { useAgentExperts } from "@/hooks/use-agent-experts"
 import { joinFsPath } from "@/lib/path-utils"
 import {
   clearMessageInputDraft,
@@ -89,6 +91,7 @@ interface MessageInputProps {
   selectedModeId?: string | null
   onModeChange?: (modeId: string) => void
   onConfigOptionChange?: (configId: string, valueId: string) => void
+  agentType?: AgentType | null
   availableCommands?: AvailableCommandInfo[] | null
   promptCapabilities: PromptCapabilitiesInfo
   attachmentTabId?: string | null
@@ -294,6 +297,7 @@ export function MessageInput({
   selectedModeId,
   onModeChange,
   onConfigOptionChange,
+  agentType,
   availableCommands,
   promptCapabilities,
   attachmentTabId,
@@ -315,19 +319,10 @@ export function MessageInput({
     () => new Set(builtInExperts.map((item) => item.metadata.id)),
     [builtInExperts]
   )
-  // Derive the list of experts this specific agent session actually knows
-  // about. The backend advertises every enabled expert via its skill
-  // directory, so any expert whose id appears in `availableCommands` is
-  // guaranteed to be linked for the current agent. Using this intersection
-  // keeps the experts button in lockstep with what the agent will accept
-  // — an expert disabled in settings simply never reaches this dropdown.
-  const availableExperts = useMemo(() => {
-    if (!availableCommands || availableCommands.length === 0) return []
-    const agentCommandNames = new Set(availableCommands.map((cmd) => cmd.name))
-    return builtInExperts.filter((item) =>
-      agentCommandNames.has(item.metadata.id)
-    )
-  }, [availableCommands, builtInExperts])
+  // Experts linked to the current agent via symlinks in the settings page.
+  // This is the single source of truth — no dependency on ACP availableCommands.
+  const availableExperts = useAgentExperts(agentType ?? null)
+  const expertPrefix = agentType === "codex" ? "$" : "/"
   // Stable presentation order for expert categories in the button
   // dropdown. Keep this in sync with experts-settings.tsx so both surfaces
   // group experts the same way.
@@ -519,6 +514,15 @@ export function MessageInput({
     () => (availableCommands ?? []).filter((cmd) => !expertIdSet.has(cmd.name)),
     [availableCommands, expertIdSet]
   )
+  // For Codex the menu triggers on both "/" (commands) and "$" (experts).
+  const menuTriggerRegex = useMemo(
+    () => (agentType === "codex" ? /^[/$](\S*)$/ : /^\/(\S*)$/),
+    [agentType]
+  )
+  const expertPrefixRegex = useMemo(
+    () => (agentType === "codex" ? /^\$(\S*)$/ : /^\/(\S*)$/),
+    [agentType]
+  )
   const filteredSlashCommands = useMemo(() => {
     if (!slashMenuOpen || slashCommands.length === 0) return []
     const match = text.match(/^\/(\S*)$/)
@@ -530,13 +534,13 @@ export function MessageInput({
   }, [slashMenuOpen, slashCommands, text])
   const filteredSlashExperts = useMemo(() => {
     if (!slashMenuOpen || availableExperts.length === 0) return []
-    const match = text.match(/^\/(\S*)$/)
+    const match = text.match(expertPrefixRegex)
     if (!match) return []
     const filter = match[1].toLowerCase()
     return availableExperts.filter((item) =>
       item.metadata.id.toLowerCase().startsWith(filter)
     )
-  }, [slashMenuOpen, availableExperts, text])
+  }, [slashMenuOpen, availableExperts, text, expertPrefixRegex])
   const slashAutocompleteCount =
     filteredSlashCommands.length + filteredSlashExperts.length
 
@@ -916,24 +920,27 @@ export function MessageInput({
 
   const handleExpertAutocompleteSelect = useCallback(
     (expert: ExpertListItem) => {
-      setText(`/${expert.metadata.id} `)
+      setText(`${expertPrefix}${expert.metadata.id} `)
       setSlashMenuOpen(false)
     },
-    []
+    [expertPrefix]
   )
 
-  // Experts always inject `/expert-id ` at the very front of the input,
-  // never at the cursor. The expert skill is a whole-turn directive that
-  // the agent inspects first, so prepending keeps semantics unambiguous
+  // Experts always inject `prefix + expert-id ` at the very front of the
+  // input, never at the cursor. The expert skill is a whole-turn directive
+  // that the agent inspects first, so prepending keeps semantics unambiguous
   // regardless of what the user has already typed. If another expert prefix
   // is already at the front (from a prior click), replace it instead of
-  // stacking — the agent only honors the first slash command, so a stacked
-  // prefix would silently drop the earlier choice.
+  // stacking — the agent only honors the first command, so a stacked prefix
+  // would silently drop the earlier choice.
   const handleExpertPopoverSelect = useCallback(
     (expert: ExpertListItem) => {
       const current = textRef.current
-      const insertion = `/${expert.metadata.id} `
-      const existingPrefix = current.match(/^\/([A-Za-z0-9_-]+)\s/)
+      const insertion = `${expertPrefix}${expert.metadata.id} `
+      const escapedPrefix = expertPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const existingPrefix = current.match(
+        new RegExp(`^${escapedPrefix}([A-Za-z0-9_-]+)\\s`)
+      )
       let base = current
       if (existingPrefix && expertIdSet.has(existingPrefix[1])) {
         base = current.slice(existingPrefix[0].length)
@@ -951,7 +958,7 @@ export function MessageInput({
         }
       })
     },
-    [expertIdSet]
+    [expertIdSet, expertPrefix]
   )
 
   const atTriggerPosRef = useRef(atTriggerPos)
@@ -994,7 +1001,7 @@ export function MessageInput({
       // the menu whenever at least one of them is available.
       const hasSlashSource =
         slashCommands.length > 0 || availableExperts.length > 0
-      if (hasSlashSource && /^\/(\S*)$/.test(value)) {
+      if (hasSlashSource && menuTriggerRegex.test(value)) {
         setSlashSelectedIndex(0)
         setSlashMenuOpen(true)
         setAtMenuOpen(false)
@@ -1020,7 +1027,12 @@ export function MessageInput({
       }
       setAtMenuOpen(false)
     },
-    [slashCommands.length, availableExperts.length, defaultPath]
+    [
+      slashCommands.length,
+      availableExperts.length,
+      defaultPath,
+      menuTriggerRegex,
+    ]
   )
 
   const handlePickFiles = useCallback(async () => {
@@ -1626,7 +1638,8 @@ export function MessageInput({
                   <div className="flex items-center gap-1.5">
                     <span className="truncate font-medium">{name}</span>
                     <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                      /{expert.metadata.id}
+                      {expertPrefix}
+                      {expert.metadata.id}
                     </span>
                   </div>
                   {description && (
@@ -1744,7 +1757,7 @@ export function MessageInput({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  disabled={disabled}
+                  disabled={disabled || availableExperts.length === 0}
                   variant="outline"
                   size="icon"
                   className="h-6 w-6 shrink-0 bg-transparent"

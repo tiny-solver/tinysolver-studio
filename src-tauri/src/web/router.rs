@@ -177,6 +177,7 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/acp_delete_agent_skill", post(handlers::acp::acp_delete_agent_skill))
         // ─── Experts ───
         .route("/experts_list", post(handlers::experts::experts_list))
+        .route("/experts_list_for_agent", post(handlers::experts::experts_list_for_agent))
         .route("/experts_get_install_status", post(handlers::experts::experts_get_install_status))
         .route("/experts_link_to_agent", post(handlers::experts::experts_link_to_agent))
         .route("/experts_unlink_from_agent", post(handlers::experts::experts_unlink_from_agent))
