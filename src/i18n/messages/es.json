@@ -1439,7 +1439,9 @@
         "cancel": "Cancelar",
         "send": "Enviar",
         "forkAndSend": "Fork y Enviar",
-        "slashCommands": "Comandos de barra"
+        "slashCommands": "Comandos de barra",
+        "expertSkills": "Habilidades de expertos",
+        "expertsEmptyForAgent": "Este agente no tiene expertos habilitados. Actívalos en Configuración > Expertos."
       },
       "messageQueue": {
         "addToQueue": "Agregar a la cola",

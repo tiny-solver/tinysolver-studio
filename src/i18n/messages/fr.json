@@ -1439,7 +1439,9 @@
         "cancel": "Annuler",
         "send": "Envoyer",
         "forkAndSend": "Fork & Envoyer",
-        "slashCommands": "Commandes slash"
+        "slashCommands": "Commandes slash",
+        "expertSkills": "Compétences d'expert",
+        "expertsEmptyForAgent": "Cet agent n'a aucun expert activé. Activez-les dans Paramètres > Experts."
       },
       "messageQueue": {
         "addToQueue": "Mettre en file",

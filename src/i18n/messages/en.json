@@ -1439,7 +1439,9 @@
         "cancel": "Cancel",
         "send": "Send",
         "forkAndSend": "Fork & Send",
-        "slashCommands": "Slash commands"
+        "slashCommands": "Slash commands",
+        "expertSkills": "Expert skills",
+        "expertsEmptyForAgent": "This agent has no enabled experts. Enable them in Settings > Experts."
       },
       "messageQueue": {
         "addToQueue": "Queue message",

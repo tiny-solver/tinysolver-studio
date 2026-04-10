@@ -1439,7 +1439,9 @@
         "cancel": "إلغاء",
         "send": "إرسال",
         "forkAndSend": "تفريع وإرسال",
-        "slashCommands": "أوامر الشرطة المائلة"
+        "slashCommands": "أوامر الشرطة المائلة",
+        "expertSkills": "مهارات الخبراء",
+        "expertsEmptyForAgent": "لا يحتوي هذا العميل على خبراء مفعّلين. فعّلهم من الإعدادات > الخبراء."
       },
       "messageQueue": {
         "addToQueue": "إضافة للقائمة",

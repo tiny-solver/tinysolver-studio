@@ -1439,7 +1439,9 @@
         "cancel": "Abbrechen",
         "send": "Senden",
         "forkAndSend": "Fork & Senden",
-        "slashCommands": "Slash-Befehle"
+        "slashCommands": "Slash-Befehle",
+        "expertSkills": "Expertenfähigkeiten",
+        "expertsEmptyForAgent": "Dieser Agent hat keine aktivierten Experten. Aktivieren Sie sie unter Einstellungen > Experten."
       },
       "messageQueue": {
         "addToQueue": "Zur Warteschlange",

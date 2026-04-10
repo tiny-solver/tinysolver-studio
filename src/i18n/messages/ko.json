@@ -1439,7 +1439,9 @@
         "cancel": "취소",
         "send": "보내기",
         "forkAndSend": "포크 & 전송",
-        "slashCommands": "슬래시 명령"
+        "slashCommands": "슬래시 명령",
+        "expertSkills": "전문가 스킬",
+        "expertsEmptyForAgent": "이 에이전트에 활성화된 전문가가 없습니다. 설정 > 전문가에서 활성화하세요."
       },
       "messageQueue": {
         "addToQueue": "대기열에 추가",
