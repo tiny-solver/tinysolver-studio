@@ -307,6 +307,11 @@ Next.js 16 (Static Export) + React 19
 - System proxy support for enterprise environments
 - Web service mode uses token-based authentication
 
+## Acknowledgments
+
+- [LinuxDO](https://linux.do) — the community where it all began
+- [ACP](https://agentclientprotocol.com) — the Agent Client Protocol (ACP) is the foundation that enables Codeg to connect with multiple agents
+
 ## License
 
 Apache-2.0. See `LICENSE`.

@@ -308,6 +308,11 @@ Next.js 16 (Static Export) + React 19
 - Systemproxy-Unterstützung für Unternehmensumgebungen
 - Der Webdienst-Modus verwendet tokenbasierte Authentifizierung
 
+## Danksagungen
+
+- [LinuxDO](https://linux.do) — die Community, in der alles begann
+- [ACP](https://agentclientprotocol.com) — das Agent Client Protocol (ACP) ist die Grundlage, auf der Codeg die Verbindung zu mehreren Agenten realisiert
+
 ## Lizenz
 
 Apache-2.0. Siehe `LICENSE`.

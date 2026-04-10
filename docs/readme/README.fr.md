@@ -307,6 +307,11 @@ Next.js 16 (Static Export) + React 19
 - Prise en charge du proxy système pour les environnements d'entreprise
 - Le mode service web utilise l'authentification par jeton
 
+## Remerciements
+
+- [LinuxDO](https://linux.do) — la communauté à l'origine du projet
+- [ACP](https://agentclientprotocol.com) — l'Agent Client Protocol (ACP) est la base qui permet à Codeg de se connecter à plusieurs agents
+
 ## Licence
 
 Apache-2.0. Voir `LICENSE`.

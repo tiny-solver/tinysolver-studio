@@ -305,6 +305,11 @@ Next.js 16 (Static Export) + React 19
 - エンタープライズ環境向けのシステムプロキシサポート
 - Web サービスモードではトークンベースの認証を使用
 
+## 謝辞
+
+- [LinuxDO](https://linux.do) — すべての始まりとなったコミュニティ
+- [ACP](https://agentclientprotocol.com) — Agent Client Protocol (ACP) は、codeg が複数のエージェントと接続するための基盤です
+
 ## ライセンス
 
 Apache-2.0。`LICENSE` を参照してください。

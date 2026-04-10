@@ -305,6 +305,11 @@ Next.js 16 (Static Export) + React 19
 - 엔터프라이즈 환경을 위한 시스템 프록시 지원
 - 웹 서비스 모드에서는 토큰 기반 인증 사용
 
+## 감사의 말
+
+- [LinuxDO](https://linux.do) — 모든 것이 시작된 커뮤니티
+- [ACP](https://agentclientprotocol.com) — Agent Client Protocol (ACP)은 codeg가 여러 에이전트와 연결할 수 있는 기반입니다
+
 ## 라이선스
 
 Apache-2.0. `LICENSE` 참고.

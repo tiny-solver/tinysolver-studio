@@ -305,6 +305,11 @@ Next.js 16 (Static Export) + React 19
 - 支援系統代理，適配企業網路環境
 - Web 服務模式使用基於令牌的身份認證
 
+## 致謝
+
+- [LinuxDO](https://linux.do)：起源社群
+- [ACP](https://agentclientprotocol.com)：Agent Client Protocol (ACP) 是 codeg 實現多智能體連接的基礎
+
 ## 授權
 
 Apache-2.0，詳見 `LICENSE`。

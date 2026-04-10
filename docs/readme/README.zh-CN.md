@@ -305,6 +305,11 @@ Next.js 16 (Static Export) + React 19
 - 支持系统代理，适配企业网络环境
 - Web 服务模式使用基于令牌的身份认证
 
+## 鸣谢
+
+- [LinuxDO](https://linux.do)：起源社区
+- [ACP](https://agentclientprotocol.com)：智能体客户端协议 (ACP) 是 codeg 实现多智能体连接的基础
+
 ## 许可证
 
 Apache-2.0，详见 `LICENSE`。
