@@ -100,13 +100,13 @@
   },
   "AppearanceSettings": {
     "sectionTitle": "مظهر السمة",
-    "sectionDescription": "اختر فاتح أو داكن أو اتباع النظام. يتم حفظ الإعدادات تلقائياً.",
+    "sectionDescription": "اختر الفاتح أو الداكن أو اتباع النظام. يتم حفظ الإعدادات تلقائيًا.",
     "themeMode": "وضع السمة",
     "placeholder": "اختر وضع السمة",
     "system": "اتباع النظام",
     "light": "فاتح",
     "dark": "داكن",
-    "currentTheme": "السمة الحالية: {theme}",
+    "currentTheme": "السمة الفعالة الحالية: {theme}",
     "resolvedTheme": {
       "light": "فاتح",
       "dark": "داكن",

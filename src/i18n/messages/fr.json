@@ -102,11 +102,11 @@
     "sectionTitle": "Apparence du thème",
     "sectionDescription": "Choisissez clair, sombre ou suivre le système. Les paramètres sont enregistrés automatiquement.",
     "themeMode": "Mode du thème",
-    "placeholder": "Sélectionnez le mode du thème",
+    "placeholder": "Sélectionner le mode du thème",
     "system": "Suivre le système",
     "light": "Clair",
     "dark": "Sombre",
-    "currentTheme": "Thème actuellement appliqué : {theme}",
+    "currentTheme": "Thème effectif actuel : {theme}",
     "resolvedTheme": {
       "light": "Clair",
       "dark": "Sombre",

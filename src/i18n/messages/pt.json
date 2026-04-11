@@ -101,12 +101,12 @@
   "AppearanceSettings": {
     "sectionTitle": "Aparência do tema",
     "sectionDescription": "Escolha claro, escuro ou seguir o sistema. As configurações são salvas automaticamente.",
-    "themeMode": "Modo do tema",
-    "placeholder": "Selecione o modo do tema",
+    "themeMode": "Modo de tema",
+    "placeholder": "Selecionar modo de tema",
     "system": "Seguir o sistema",
     "light": "Claro",
     "dark": "Escuro",
-    "currentTheme": "Tema atualmente em uso: {theme}",
+    "currentTheme": "Tema efetivo atual: {theme}",
     "resolvedTheme": {
       "light": "Claro",
       "dark": "Escuro",

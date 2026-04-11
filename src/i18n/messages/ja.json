@@ -100,13 +100,13 @@
   },
   "AppearanceSettings": {
     "sectionTitle": "テーマ外観",
-    "sectionDescription": "ライト、ダーク、またはシステムに従うを選択します。設定は自動的に保存されます。",
+    "sectionDescription": "ライト、ダーク、またはシステム追従を選択できます。設定は自動保存されます。",
     "themeMode": "テーマモード",
     "placeholder": "テーマモードを選択",
     "system": "システムに従う",
     "light": "ライト",
     "dark": "ダーク",
-    "currentTheme": "現在有効なテーマ：{theme}",
+    "currentTheme": "現在の有効テーマ: {theme}",
     "resolvedTheme": {
       "light": "ライト",
       "dark": "ダーク",
