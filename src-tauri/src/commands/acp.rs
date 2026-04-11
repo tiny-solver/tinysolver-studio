@@ -1213,8 +1213,11 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
         }),
         AgentType::Codex => Some(SkillStorageSpec {
             kind: SkillStorageKind::SkillDirectoryOrMarkdownFile,
-            global_dirs: vec![codex_home_dir().join("skills")],
-            project_rel_dirs: vec![".codex/skills"],
+            global_dirs: vec![
+                codex_home_dir().join("skills"),
+                home_dir_or_default().join(".agents").join("skills"),
+            ],
+            project_rel_dirs: vec![".codex/skills", ".agents/skills"],
         }),
         AgentType::OpenCode => Some(SkillStorageSpec {
             kind: SkillStorageKind::SkillDirectoryOnly,
