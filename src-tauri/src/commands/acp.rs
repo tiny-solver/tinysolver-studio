@@ -1369,13 +1369,45 @@ fn skill_content_path(layout: AgentSkillLayout, skill_path: &Path) -> PathBuf {
 pub(crate) fn remove_skill_entry(path: &Path) -> std::io::Result<()> {
     let meta = fs::symlink_metadata(path)?;
     let file_type = meta.file_type();
+
+    #[cfg(windows)]
+    let is_reparse_point = {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+        meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    };
+
     if file_type.is_symlink() {
-        fs::remove_file(path)
-    } else if file_type.is_dir() {
-        fs::remove_dir_all(path)
-    } else {
-        fs::remove_file(path)
+        #[cfg(windows)]
+        {
+            // Directory symlinks on Windows require remove_dir.
+            return match fs::remove_file(path) {
+                Ok(()) => Ok(()),
+                Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => {
+                    fs::remove_dir(path)
+                }
+                Err(err) => Err(err),
+            };
+        }
+
+        #[cfg(not(windows))]
+        {
+            return fs::remove_file(path);
+        }
     }
+
+    if file_type.is_dir() {
+        #[cfg(windows)]
+        {
+            // Junctions are directory reparse points; remove only the link.
+            if is_reparse_point {
+                return fs::remove_dir(path);
+            }
+        }
+        return fs::remove_dir_all(path);
+    }
+
+    fs::remove_file(path)
 }
 
 fn list_skills_from_dir(
