@@ -527,35 +527,51 @@ export function MessageInput({
   // command set is very small.
   const [slashMenuOpen, setSlashMenuOpen] = useState(false)
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
+  // Byte offset of the `/` or `$` character that opened the menu. Tracking the
+  // position lets the user invoke a slash command mid-text (e.g. after typing
+  // prose) and only replace the slash token on selection, leaving surrounding
+  // content intact.
+  const [slashTriggerPos, setSlashTriggerPos] = useState<number | null>(null)
+  const slashTriggerPosRef = useRef<number | null>(null)
+  useEffect(() => {
+    slashTriggerPosRef.current = slashTriggerPos
+  }, [slashTriggerPos])
   const slashCommands = useMemo(
     () => (availableCommands ?? []).filter((cmd) => !expertIdSet.has(cmd.name)),
     [availableCommands, expertIdSet]
   )
-  // For Codex the menu triggers on both "/" (commands) and "$" (skills).
-  const menuTriggerRegex = useMemo(
-    () => (agentType === "codex" ? /^[/$](\S*)$/ : /^\/(\S*)$/),
-    [agentType]
-  )
   const filteredSlashCommands = useMemo(() => {
-    if (!slashMenuOpen || slashCommands.length === 0) return []
-    const match = text.match(/^\/(\S*)$/)
-    if (!match) return []
-    const filter = match[1].toLowerCase()
+    if (!slashMenuOpen || slashCommands.length === 0 || slashTriggerPos == null)
+      return []
+    if (text[slashTriggerPos] !== "/") return []
+    const afterTrigger = text.slice(slashTriggerPos + 1)
+    const endIdx = afterTrigger.search(/\s/)
+    const filter = (
+      endIdx === -1 ? afterTrigger : afterTrigger.slice(0, endIdx)
+    ).toLowerCase()
     return slashCommands.filter((cmd) =>
       cmd.name.toLowerCase().startsWith(filter)
     )
-  }, [slashMenuOpen, slashCommands, text])
+  }, [slashMenuOpen, slashCommands, text, slashTriggerPos])
   const filteredSlashSkills = useMemo(() => {
     // Skills autocomplete is Codex-only and triggered by `$`.
     if (agentType !== "codex") return []
-    if (!slashMenuOpen || nonExpertSkills.length === 0) return []
-    const match = text.match(/^\$(\S*)$/)
-    if (!match) return []
-    const filter = match[1].toLowerCase()
+    if (
+      !slashMenuOpen ||
+      nonExpertSkills.length === 0 ||
+      slashTriggerPos == null
+    )
+      return []
+    if (text[slashTriggerPos] !== "$") return []
+    const afterTrigger = text.slice(slashTriggerPos + 1)
+    const endIdx = afterTrigger.search(/\s/)
+    const filter = (
+      endIdx === -1 ? afterTrigger : afterTrigger.slice(0, endIdx)
+    ).toLowerCase()
     return nonExpertSkills.filter((skill) =>
       skill.id.toLowerCase().startsWith(filter)
     )
-  }, [slashMenuOpen, nonExpertSkills, text, agentType])
+  }, [slashMenuOpen, nonExpertSkills, text, agentType, slashTriggerPos])
   const slashAutocompleteCount =
     filteredSlashCommands.length + filteredSlashSkills.length
 
@@ -572,6 +588,27 @@ export function MessageInput({
       setSlashSelectedIndex(slashAutocompleteCount - 1)
     }
   }, [slashAutocompleteCount, slashSelectedIndex])
+
+  // Keep the highlighted row visible inside the popup when keyboard navigation
+  // pushes it past the scroll viewport. Without this the cursor silently runs
+  // off the rendered area when the filtered list overflows `max-h`.
+  const slashMenuListRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!slashMenuOpen) return
+    const container = slashMenuListRef.current
+    if (!container) return
+    const el = container.children[slashSelectedIndex] as HTMLElement | undefined
+    if (!el) return
+    const elTop = el.offsetTop
+    const elBottom = elTop + el.offsetHeight
+    const viewTop = container.scrollTop
+    const viewBottom = viewTop + container.clientHeight
+    if (elTop < viewTop) {
+      container.scrollTop = elTop
+    } else if (elBottom > viewBottom) {
+      container.scrollTop = elBottom - container.clientHeight
+    }
+  }, [slashMenuOpen, slashSelectedIndex, slashAutocompleteCount])
 
   // ── @ file mention autocomplete ──
   const [atMenuOpen, setAtMenuOpen] = useState(false)
@@ -911,8 +948,40 @@ export function MessageInput({
   )
 
   const handleSlashSelect = useCallback((cmd: AvailableCommandInfo) => {
-    setText(`/${cmd.name} `)
+    const pos = slashTriggerPosRef.current
+    const current = textRef.current
+    const insertion = `/${cmd.name}`
+    if (
+      pos == null ||
+      pos < 0 ||
+      pos >= current.length ||
+      current[pos] !== "/"
+    ) {
+      // Fallback path: no tracked trigger (shouldn't normally happen). Behave
+      // like the legacy wholesale-replace so slash commands still work.
+      setText(`${insertion} `)
+      setSlashMenuOpen(false)
+      setSlashTriggerPos(null)
+      return
+    }
+    const before = current.slice(0, pos)
+    const afterSlash = current.slice(pos + 1)
+    const tokenMatch = afterSlash.match(/^\S*/)
+    const tokenLen = tokenMatch ? tokenMatch[0].length : 0
+    const rest = afterSlash.slice(tokenLen)
+    const needsSpace = !/^\s/.test(rest)
+    const newText = before + insertion + (needsSpace ? " " : "") + rest
+    setText(newText)
     setSlashMenuOpen(false)
+    setSlashTriggerPos(null)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) {
+        ta.focus()
+        const newPos = before.length + insertion.length + (needsSpace ? 1 : 0)
+        ta.setSelectionRange(newPos, newPos)
+      }
+    })
   }, [])
 
   const handleSlashPopoverSelect = useCallback((cmd: AvailableCommandInfo) => {
@@ -937,8 +1006,39 @@ export function MessageInput({
     (skill: AgentSkillItem) => {
       // Codex uses `$<id>`, other agents use `/<id>` — matching the prefix
       // that triggered the autocomplete list.
-      setText(`${expertPrefix}${skill.id} `)
+      const pos = slashTriggerPosRef.current
+      const current = textRef.current
+      const triggerChar = expertPrefix.length === 1 ? expertPrefix : "$"
+      const insertion = `${expertPrefix}${skill.id}`
+      if (
+        pos == null ||
+        pos < 0 ||
+        pos >= current.length ||
+        current[pos] !== triggerChar
+      ) {
+        setText(`${insertion} `)
+        setSlashMenuOpen(false)
+        setSlashTriggerPos(null)
+        return
+      }
+      const before = current.slice(0, pos)
+      const afterTrigger = current.slice(pos + 1)
+      const tokenMatch = afterTrigger.match(/^\S*/)
+      const tokenLen = tokenMatch ? tokenMatch[0].length : 0
+      const rest = afterTrigger.slice(tokenLen)
+      const needsSpace = !/^\s/.test(rest)
+      const newText = before + insertion + (needsSpace ? " " : "") + rest
+      setText(newText)
       setSlashMenuOpen(false)
+      setSlashTriggerPos(null)
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current
+        if (ta) {
+          ta.focus()
+          const newPos = before.length + insertion.length + (needsSpace ? 1 : 0)
+          ta.setSelectionRange(newPos, newPos)
+        }
+      })
     },
     [expertPrefix]
   )
@@ -1013,26 +1113,37 @@ export function MessageInput({
       const value = e.target.value
       setText(value)
 
-      // Slash command detection (only at start of input). Any of agent
-      // commands, agent-enabled experts, or (for Codex) skills can satisfy
-      // the prompt, so open the menu whenever at least one is available.
+      const cursorPos = e.target.selectionStart ?? value.length
+      const beforeCursor = value.slice(0, cursorPos)
+
+      // Slash command detection. Allow the trigger at the very start of the
+      // input or immediately after whitespace, so users can still invoke a
+      // command after typing surrounding prose. Any of agent commands,
+      // agent-enabled experts, or (for Codex) skills can satisfy the prompt,
+      // so open the menu whenever at least one is available.
       const hasSlashSource =
         slashCommands.length > 0 ||
         availableExperts.length > 0 ||
         nonExpertSkills.length > 0
-      if (hasSlashSource && menuTriggerRegex.test(value)) {
-        setSlashSelectedIndex(0)
-        setSlashMenuOpen(true)
-        setAtMenuOpen(false)
-        return
-      } else {
-        setSlashMenuOpen(false)
+      if (hasSlashSource) {
+        const slashRegex =
+          agentType === "codex" ? /(^|\s)([/$])(\S*)$/ : /(^|\s)(\/)(\S*)$/
+        const slashMatch = beforeCursor.match(slashRegex)
+        if (slashMatch) {
+          const triggerPos =
+            beforeCursor.length - slashMatch[0].length + slashMatch[1].length
+          setSlashTriggerPos(triggerPos)
+          setSlashSelectedIndex(0)
+          setSlashMenuOpen(true)
+          setAtMenuOpen(false)
+          return
+        }
       }
+      setSlashMenuOpen(false)
+      setSlashTriggerPos(null)
 
       // @ file mention detection (at any cursor position)
-      const cursorPos = e.target.selectionStart
-      if (cursorPos != null && defaultPath) {
-        const beforeCursor = value.slice(0, cursorPos)
+      if (defaultPath) {
         const atMatch = beforeCursor.match(/(^|[\s])@([^\s]*)$/)
         if (atMatch) {
           const atPos =
@@ -1051,7 +1162,7 @@ export function MessageInput({
       availableExperts.length,
       nonExpertSkills.length,
       defaultPath,
-      menuTriggerRegex,
+      agentType,
     ]
   )
 
@@ -1366,6 +1477,7 @@ export function MessageInput({
         if (e.key === "Escape") {
           e.preventDefault()
           setSlashMenuOpen(false)
+          setSlashTriggerPos(null)
           return
         }
       }
@@ -1604,7 +1716,10 @@ export function MessageInput({
       onDrop={handleContainerDrop}
     >
       {slashMenuOpen && slashAutocompleteCount > 0 && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-[min(16rem,40dvh)] overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
+        <div
+          ref={slashMenuListRef}
+          className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-[min(16rem,40dvh)] overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-lg"
+        >
           {filteredSlashCommands.map((cmd, i) => (
             <button
               key={`cmd-${cmd.name}`}
