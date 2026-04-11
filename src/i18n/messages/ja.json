@@ -100,18 +100,46 @@
   },
   "AppearanceSettings": {
     "sectionTitle": "テーマ外観",
-    "sectionDescription": "ライト、ダーク、またはシステム追従を選択できます。設定は自動保存されます。",
+    "sectionDescription": "ライト、ダーク、またはシステムに従うを選択します。設定は自動的に保存されます。",
     "themeMode": "テーマモード",
     "placeholder": "テーマモードを選択",
     "system": "システムに従う",
     "light": "ライト",
     "dark": "ダーク",
-    "currentTheme": "現在の有効テーマ: {theme}",
+    "currentTheme": "現在有効なテーマ：{theme}",
     "resolvedTheme": {
       "light": "ライト",
       "dark": "ダーク",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "テーマカラー",
+      "sectionDescription": "ボタンやアクセント、ハイライトに使用する色を選択します。",
+      "current": "現在のカラー：{color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "ウィンドウズーム",
+      "sectionDescription": "インターフェイス全体を拡大・縮小します。すぐに反映され、デバイスごとに保存されます。",
+      "placeholder": "ズームレベルを選択",
+      "default": "デフォルト",
+      "current": "現在のズーム：{zoom}%"
+    },
+    "resetToDefaults": "デフォルトに戻す",
+    "resetHint": "テーマカラーとウィンドウズームをデフォルトに戻します。"
   },
   "SystemSettings": {
     "loading": "読み込み中...",

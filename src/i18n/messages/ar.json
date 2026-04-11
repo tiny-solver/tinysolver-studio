@@ -100,18 +100,46 @@
   },
   "AppearanceSettings": {
     "sectionTitle": "مظهر السمة",
-    "sectionDescription": "اختر الفاتح أو الداكن أو اتباع النظام. يتم حفظ الإعدادات تلقائيًا.",
+    "sectionDescription": "اختر فاتح أو داكن أو اتباع النظام. يتم حفظ الإعدادات تلقائياً.",
     "themeMode": "وضع السمة",
     "placeholder": "اختر وضع السمة",
     "system": "اتباع النظام",
     "light": "فاتح",
     "dark": "داكن",
-    "currentTheme": "السمة الفعالة الحالية: {theme}",
+    "currentTheme": "السمة الحالية: {theme}",
     "resolvedTheme": {
       "light": "فاتح",
       "dark": "داكن",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "لون السمة",
+      "sectionDescription": "اختر لوحة ألوان للتمييزات والأزرار والإبرازات.",
+      "current": "اللون الحالي: {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "تكبير النافذة",
+      "sectionDescription": "تكبير أو تصغير الواجهة بالكامل. يتم تطبيقه فوراً ويُحفظ لكل جهاز على حدة.",
+      "placeholder": "اختر مستوى التكبير",
+      "default": "افتراضي",
+      "current": "التكبير الحالي: {zoom}%"
+    },
+    "resetToDefaults": "إعادة الضبط",
+    "resetHint": "إعادة ضبط لون السمة وتكبير النافذة إلى الإعدادات الافتراضية."
   },
   "SystemSettings": {
     "loading": "جارٍ التحميل...",

@@ -101,17 +101,45 @@
   "AppearanceSettings": {
     "sectionTitle": "Aparência do tema",
     "sectionDescription": "Escolha claro, escuro ou seguir o sistema. As configurações são salvas automaticamente.",
-    "themeMode": "Modo de tema",
-    "placeholder": "Selecionar modo de tema",
+    "themeMode": "Modo do tema",
+    "placeholder": "Selecione o modo do tema",
     "system": "Seguir o sistema",
     "light": "Claro",
     "dark": "Escuro",
-    "currentTheme": "Tema efetivo atual: {theme}",
+    "currentTheme": "Tema atualmente em uso: {theme}",
     "resolvedTheme": {
       "light": "Claro",
       "dark": "Escuro",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "Cor do tema",
+      "sectionDescription": "Escolha uma paleta de cores para acentos, botões e destaques.",
+      "current": "Cor atual: {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "Zoom da janela",
+      "sectionDescription": "Dimensiona toda a interface. Aplica imediatamente e é salvo por dispositivo.",
+      "placeholder": "Selecione o nível de zoom",
+      "default": "Padrão",
+      "current": "Zoom atual: {zoom}%"
+    },
+    "resetToDefaults": "Restaurar padrões",
+    "resetHint": "Restaura a cor do tema e o zoom da janela para os padrões."
   },
   "SystemSettings": {
     "loading": "Carregando...",

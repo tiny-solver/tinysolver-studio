@@ -100,10 +100,10 @@
   },
   "AppearanceSettings": {
     "sectionTitle": "테마 모양",
-    "sectionDescription": "라이트, 다크 또는 시스템 설정을 선택할 수 있습니다. 설정은 자동으로 저장됩니다.",
+    "sectionDescription": "라이트, 다크 또는 시스템 따르기를 선택하세요. 설정은 자동으로 저장됩니다.",
     "themeMode": "테마 모드",
     "placeholder": "테마 모드 선택",
-    "system": "시스템 설정 따름",
+    "system": "시스템 따르기",
     "light": "라이트",
     "dark": "다크",
     "currentTheme": "현재 적용된 테마: {theme}",
@@ -111,7 +111,35 @@
       "light": "라이트",
       "dark": "다크",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "테마 색상",
+      "sectionDescription": "버튼, 강조 색상, 하이라이트에 사용할 색상 팔레트를 선택하세요.",
+      "current": "현재 색상: {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "창 확대/축소",
+      "sectionDescription": "전체 인터페이스를 확대하거나 축소합니다. 즉시 적용되며 장치별로 저장됩니다.",
+      "placeholder": "확대/축소 단계 선택",
+      "default": "기본값",
+      "current": "현재 확대/축소: {zoom}%"
+    },
+    "resetToDefaults": "기본값으로 재설정",
+    "resetHint": "테마 색상과 창 확대/축소를 기본값으로 재설정합니다."
   },
   "SystemSettings": {
     "loading": "로딩 중...",

@@ -99,11 +99,11 @@
     }
   },
   "AppearanceSettings": {
-    "sectionTitle": "Design",
-    "sectionDescription": "Wähle hell, dunkel oder Systemvorgabe. Einstellungen werden automatisch gespeichert.",
-    "themeMode": "Designmodus",
-    "placeholder": "Designmodus auswählen",
-    "system": "Systemvorgabe",
+    "sectionTitle": "Design-Erscheinungsbild",
+    "sectionDescription": "Wähle Hell, Dunkel oder System folgen. Einstellungen werden automatisch gespeichert.",
+    "themeMode": "Design-Modus",
+    "placeholder": "Design-Modus wählen",
+    "system": "System folgen",
     "light": "Hell",
     "dark": "Dunkel",
     "currentTheme": "Aktuell wirksames Design: {theme}",
@@ -111,7 +111,35 @@
       "light": "Hell",
       "dark": "Dunkel",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "Themenfarbe",
+      "sectionDescription": "Wähle eine Farbpalette für Akzente, Schaltflächen und Hervorhebungen.",
+      "current": "Aktuelle Farbe: {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "Fensterzoom",
+      "sectionDescription": "Skaliert die gesamte Oberfläche. Wird sofort übernommen und pro Gerät gespeichert.",
+      "placeholder": "Zoomstufe wählen",
+      "default": "Standard",
+      "current": "Aktueller Zoom: {zoom}%"
+    },
+    "resetToDefaults": "Auf Standard zurücksetzen",
+    "resetHint": "Themenfarbe und Fensterzoom auf Standardwerte zurücksetzen."
   },
   "SystemSettings": {
     "loading": "Wird geladen...",

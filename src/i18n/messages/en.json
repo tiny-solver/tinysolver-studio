@@ -111,7 +111,35 @@
       "light": "Light",
       "dark": "Dark",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "Theme color",
+      "sectionDescription": "Pick a color palette for accents, buttons, and highlights.",
+      "current": "Current color: {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "Window zoom",
+      "sectionDescription": "Scale the entire interface. Applies immediately and persists per device.",
+      "placeholder": "Select zoom level",
+      "default": "Default",
+      "current": "Current zoom: {zoom}%"
+    },
+    "resetToDefaults": "Reset to defaults",
+    "resetHint": "Reset theme color and window zoom to defaults."
   },
   "SystemSettings": {
     "loading": "Loading...",

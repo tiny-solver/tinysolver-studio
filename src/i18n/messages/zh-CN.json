@@ -111,7 +111,35 @@
       "light": "浅色",
       "dark": "深色",
       "unknown": "未知"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "主题颜色",
+      "sectionDescription": "选择按钮、强调色和高亮使用的色调。",
+      "current": "当前颜色：{color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "窗口缩放",
+      "sectionDescription": "整体放大或缩小界面，立即生效，按设备分别保存。",
+      "placeholder": "请选择缩放档位",
+      "default": "默认",
+      "current": "当前缩放：{zoom}%"
+    },
+    "resetToDefaults": "恢复默认",
+    "resetHint": "将主题颜色和窗口缩放恢复到默认值。"
   },
   "SystemSettings": {
     "loading": "加载中...",

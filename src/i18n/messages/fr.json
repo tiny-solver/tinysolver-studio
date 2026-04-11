@@ -102,16 +102,44 @@
     "sectionTitle": "Apparence du thème",
     "sectionDescription": "Choisissez clair, sombre ou suivre le système. Les paramètres sont enregistrés automatiquement.",
     "themeMode": "Mode du thème",
-    "placeholder": "Sélectionner le mode du thème",
+    "placeholder": "Sélectionnez le mode du thème",
     "system": "Suivre le système",
     "light": "Clair",
     "dark": "Sombre",
-    "currentTheme": "Thème effectif actuel : {theme}",
+    "currentTheme": "Thème actuellement appliqué : {theme}",
     "resolvedTheme": {
       "light": "Clair",
       "dark": "Sombre",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "Couleur du thème",
+      "sectionDescription": "Choisissez une palette pour les accents, les boutons et les surlignages.",
+      "current": "Couleur actuelle : {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "Zoom de la fenêtre",
+      "sectionDescription": "Met à l'échelle toute l'interface. S'applique immédiatement et est enregistré par appareil.",
+      "placeholder": "Sélectionnez le niveau de zoom",
+      "default": "Par défaut",
+      "current": "Zoom actuel : {zoom}%"
+    },
+    "resetToDefaults": "Réinitialiser",
+    "resetHint": "Réinitialise la couleur du thème et le zoom de la fenêtre."
   },
   "SystemSettings": {
     "loading": "Chargement...",

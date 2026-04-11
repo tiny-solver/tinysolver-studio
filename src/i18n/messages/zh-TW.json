@@ -111,7 +111,35 @@
       "light": "淺色",
       "dark": "深色",
       "unknown": "未知"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "主題顏色",
+      "sectionDescription": "選擇按鈕、強調色和高亮使用的色調。",
+      "current": "目前顏色：{color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "視窗縮放",
+      "sectionDescription": "整體放大或縮小介面，立即生效，依裝置分別儲存。",
+      "placeholder": "請選擇縮放檔位",
+      "default": "預設",
+      "current": "目前縮放：{zoom}%"
+    },
+    "resetToDefaults": "恢復預設",
+    "resetHint": "將主題顏色和視窗縮放恢復到預設值。"
   },
   "SystemSettings": {
     "loading": "載入中...",

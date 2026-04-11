@@ -101,17 +101,45 @@
   "AppearanceSettings": {
     "sectionTitle": "Apariencia del tema",
     "sectionDescription": "Elige claro, oscuro o seguir el sistema. La configuración se guarda automáticamente.",
-    "themeMode": "Modo de tema",
-    "placeholder": "Selecciona el modo de tema",
+    "themeMode": "Modo del tema",
+    "placeholder": "Selecciona el modo del tema",
     "system": "Seguir el sistema",
     "light": "Claro",
     "dark": "Oscuro",
-    "currentTheme": "Tema efectivo actual: {theme}",
+    "currentTheme": "Tema actual: {theme}",
     "resolvedTheme": {
       "light": "Claro",
       "dark": "Oscuro",
       "unknown": "--"
-    }
+    },
+    "themeColor": {
+      "sectionTitle": "Color del tema",
+      "sectionDescription": "Elige una paleta de colores para acentos, botones y resaltados.",
+      "current": "Color actual: {color}",
+      "options": {
+        "neutral": "Neutral",
+        "zinc": "Zinc",
+        "slate": "Slate",
+        "stone": "Stone",
+        "gray": "Gray",
+        "red": "Red",
+        "rose": "Rose",
+        "orange": "Orange",
+        "green": "Green",
+        "blue": "Blue",
+        "yellow": "Yellow",
+        "violet": "Violet"
+      }
+    },
+    "zoomLevel": {
+      "sectionTitle": "Zoom de ventana",
+      "sectionDescription": "Escala toda la interfaz. Se aplica al instante y se guarda por dispositivo.",
+      "placeholder": "Selecciona el nivel de zoom",
+      "default": "Predeterminado",
+      "current": "Zoom actual: {zoom}%"
+    },
+    "resetToDefaults": "Restablecer valores",
+    "resetHint": "Restablece el color del tema y el zoom de ventana a los valores predeterminados."
   },
   "SystemSettings": {
     "loading": "Cargando...",
