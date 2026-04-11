@@ -109,7 +109,7 @@ fn resolve_settings_route(section: Option<&str>) -> &'static str {
         Some("skills") => "settings/skills",
         Some("shortcuts") => "settings/shortcuts",
         Some("system") => "settings/system",
-        _ => "settings/system",
+        _ => "settings/appearance",
     }
 }
 
