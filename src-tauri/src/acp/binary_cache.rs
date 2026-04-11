@@ -133,6 +133,34 @@ pub fn detect_installed_version(
     installed_version_for_agent(agent_type, cmd_name)
 }
 
+/// Return the best cached binary across all installed versions.
+///
+/// This returns the path + version label of the highest semver-ish
+/// version cached on disk, regardless of what the registry considers
+/// the "recommended" version. The session-page connect path uses this
+/// to tolerate older-but-still-usable cached binaries (e.g. the user
+/// hasn't upgraded yet) — the Settings page will continue to surface
+/// an "upgrade available" hint via the separate version-badge path.
+///
+/// Returns Ok(None) when no usable binary is cached.
+pub fn find_best_cached_binary_for_agent(
+    agent_type: AgentType,
+    cmd_name: &str,
+) -> Result<Option<(PathBuf, String)>, AcpError> {
+    let agent_id = agent_cache_key(agent_type);
+    let mut versions = installed_version_labels(&agent_id, cmd_name)?;
+    if versions.is_empty() {
+        return Ok(None);
+    }
+    versions.sort_by(|a, b| version_cmp(a, b));
+    while let Some(version) = versions.pop() {
+        if let Some(path) = installed_binary_path(&agent_id, &version, cmd_name) {
+            return Ok(Some((path, version)));
+        }
+    }
+    Ok(None)
+}
+
 fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let mut a_parts = parse_version_parts(a);
     let mut b_parts = parse_version_parts(b);

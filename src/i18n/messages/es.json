@@ -851,7 +851,6 @@
       "connection": {
         "connected": "Conectado",
         "connecting": "Conectando...",
-        "downloading": "Descargando...",
         "prompting": "Respondiendo...",
         "error": "Error de conexión",
         "disconnected": "Desconectado",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} no está disponible en la plataforma actual.",
           "sdkMissing": "El SDK de {agent} no está instalado"
         },
+        "backendErrors": {
+          "initializeTimeout": "Se agotó el tiempo del handshake de conexión de {agent} (sin respuesta tras 60 segundos). Abre Ajustes para revisar la configuración del agente y de la red.",
+          "processExited": "El proceso de {agent} terminó inesperadamente.",
+          "spawnFailed": "No se pudo iniciar {agent}: {message}",
+          "downloadFailed": "La descarga de {agent} falló: {message}"
+        },
         "unableReadAgentConfig": "No se puede leer la configuración del agente: {message}",
-        "autoLinkFailedTitle": "Falló el autovínculo de {agent}",
-        "preflightCheckFailedDefault": "Fallaron las comprobaciones previas. Revisa los ajustes de agentes.",
-        "preflightFailedTitle": "Falló la verificación previa de {agent}",
-        "autoLinkPreflightFailed": "Falló la verificación previa del autovínculo: {message}",
         "connectFailedTitle": "Falló la conexión de {agent}",
         "toolFallbackTitle": "Herramienta",
         "eventErrorTitle": "Error del agente",

@@ -5,7 +5,6 @@ use axum::{extract::Extension, Json};
 use serde::Deserialize;
 
 use crate::acp::preflight::PreflightResult;
-use crate::acp::registry;
 use crate::acp::types::{
     AcpAgentInfo, AcpAgentStatus, AgentSkillContent, AgentSkillLayout, AgentSkillScope,
     AgentSkillsListResult, ConnectionInfo, ForkResultInfo,
@@ -57,7 +56,6 @@ pub async fn acp_connect(
 ) -> Result<Json<String>, AppCommandError> {
     let db = &state.db;
     let manager = &state.connection_manager;
-    let meta = registry::get_agent_meta(params.agent_type);
 
     let setting = agent_setting_service::get_by_agent_type(&db.conn, params.agent_type)
         .await
@@ -93,14 +91,11 @@ pub async fn acp_connect(
         runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
     }
 
-    if let registry::AgentDistribution::Npx { cmd, .. } = meta.distribution {
-        if !acp_commands::is_cmd_available(cmd) {
-            return Err(AppCommandError::task_execution_failed(format!(
-                "{} SDK is not installed. Please install it in Agent Settings.",
-                meta.name
-            )));
-        }
-    }
+    // Guard: the session page must never trigger a download or install.
+    // If the agent isn't ready, return SdkNotInstalled here so the frontend
+    // can prompt the user to install it from Agent Settings.
+    acp_commands::verify_agent_installed(params.agent_type)
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
 
     let emitter = state.emitter.clone();
     let connection_id = manager

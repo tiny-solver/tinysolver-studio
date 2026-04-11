@@ -299,32 +299,51 @@ async fn check_binary_environment(
     };
     checks.push(platform_check);
 
-    // Check binary cache
+    // Check binary cache.
+    //
+    // Pass as long as *any* cached version is present — the session-page
+    // connect path uses the best cached version via
+    // `find_best_cached_binary_for_agent`, so an older-but-working cache
+    // should still be considered "ready". If the cached version differs
+    // from the registry's recommended version, we note it in the message
+    // but still pass — the Settings page's version-badge flow is the
+    // canonical place to surface "upgrade available".
     if platform_supported {
-        let cache_check = match binary_cache::find_cached_binary_for_agent(agent_type, version, cmd)
-        {
-            Ok(Some(_)) => CheckItem {
-                check_id: "binary_cached".into(),
-                label: "Binary cache".into(),
-                status: CheckStatus::Pass,
-                message: "Binary is cached locally".into(),
-                fixes: vec![],
-            },
-            Ok(None) => CheckItem {
-                check_id: "binary_cached".into(),
-                label: "Binary cache".into(),
-                status: CheckStatus::Warn,
-                message: "Binary not cached yet, will be downloaded on first connection".into(),
-                fixes: vec![],
-            },
-            Err(_) => CheckItem {
-                check_id: "binary_cached".into(),
-                label: "Binary cache".into(),
-                status: CheckStatus::Warn,
-                message: "Cannot determine binary cache path".into(),
-                fixes: vec![],
-            },
-        };
+        let cache_check =
+            match binary_cache::find_best_cached_binary_for_agent(agent_type, cmd) {
+                Ok(Some((_, cached_version))) => {
+                    let message = if cached_version == version {
+                        "Binary is cached locally".to_string()
+                    } else {
+                        format!(
+                            "Binary {cached_version} is cached locally (recommended: {version})"
+                        )
+                    };
+                    CheckItem {
+                        check_id: "binary_cached".into(),
+                        label: "Binary cache".into(),
+                        status: CheckStatus::Pass,
+                        message,
+                        fixes: vec![],
+                    }
+                }
+                Ok(None) => CheckItem {
+                    check_id: "binary_cached".into(),
+                    label: "Binary cache".into(),
+                    status: CheckStatus::Warn,
+                    message:
+                        "Binary is not installed. Download it from Agent Settings before connecting."
+                            .into(),
+                    fixes: vec![],
+                },
+                Err(_) => CheckItem {
+                    check_id: "binary_cached".into(),
+                    label: "Binary cache".into(),
+                    status: CheckStatus::Warn,
+                    message: "Cannot determine binary cache path".into(),
+                    fixes: vec![],
+                },
+            };
         checks.push(cache_check);
     }
 

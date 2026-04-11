@@ -84,7 +84,7 @@ export function ChatInput({
   const t = useTranslations("Folder.chat.chatInput")
   const isConnected = status === "connected"
   const isPrompting = status === "prompting"
-  const isConnecting = status === "connecting" || status === "downloading"
+  const isConnecting = status === "connecting"
 
   return (
     <div className="p-4 pt-0">

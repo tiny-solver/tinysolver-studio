@@ -851,7 +851,6 @@
       "connection": {
         "connected": "Verbunden",
         "connecting": "Verbinde...",
-        "downloading": "Lade herunter...",
         "prompting": "Antworte...",
         "error": "Verbindungsfehler",
         "disconnected": "Getrennt",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} ist auf der aktuellen Plattform nicht verfügbar.",
           "sdkMissing": "{agent} SDK ist nicht installiert"
         },
+        "backendErrors": {
+          "initializeTimeout": "Der Verbindungs-Handshake von {agent} hat nach 60 Sekunden das Zeitlimit überschritten. Öffnen Sie die Einstellungen, um Agenten- und Netzwerkkonfiguration zu prüfen.",
+          "processExited": "{agent}-Prozess wurde unerwartet beendet.",
+          "spawnFailed": "{agent} konnte nicht gestartet werden: {message}",
+          "downloadFailed": "{agent}-Download fehlgeschlagen: {message}"
+        },
         "unableReadAgentConfig": "Agenten-Konfiguration kann nicht gelesen werden: {message}",
-        "autoLinkFailedTitle": "{agent} Auto-Link fehlgeschlagen",
-        "preflightCheckFailedDefault": "Preflight-Prüfungen fehlgeschlagen. Prüfen Sie die Agenten-Einstellungen.",
-        "preflightFailedTitle": "{agent} Preflight fehlgeschlagen",
-        "autoLinkPreflightFailed": "Auto-Link-Preflight fehlgeschlagen: {message}",
         "connectFailedTitle": "{agent} Verbindung fehlgeschlagen",
         "toolFallbackTitle": "Werkzeug",
         "eventErrorTitle": "Agentenfehler",

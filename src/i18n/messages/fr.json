@@ -851,7 +851,6 @@
       "connection": {
         "connected": "Connecté",
         "connecting": "Connexion...",
-        "downloading": "Téléchargement...",
         "prompting": "Réponse...",
         "error": "Erreur de connexion",
         "disconnected": "Déconnecté",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} n'est pas disponible sur la plateforme actuelle.",
           "sdkMissing": "Le SDK de {agent} n'est pas installé"
         },
+        "backendErrors": {
+          "initializeTimeout": "Le handshake de connexion de {agent} a expiré (aucune réponse après 60 secondes). Ouvrez Paramètres pour vérifier la configuration de l'agent et du réseau.",
+          "processExited": "Le processus {agent} s'est arrêté de manière inattendue.",
+          "spawnFailed": "Impossible de démarrer {agent} : {message}",
+          "downloadFailed": "Échec du téléchargement de {agent} : {message}"
+        },
         "unableReadAgentConfig": "Impossible de lire la configuration de l'agent : {message}",
-        "autoLinkFailedTitle": "Échec de l'auto-liaison de {agent}",
-        "preflightCheckFailedDefault": "Les vérifications préalables ont échoué. Vérifiez les paramètres des agents.",
-        "preflightFailedTitle": "Échec de la vérification préalable de {agent}",
-        "autoLinkPreflightFailed": "Échec de la vérification préalable de l'auto-liaison : {message}",
         "connectFailedTitle": "Échec de la connexion de {agent}",
         "toolFallbackTitle": "Outil",
         "eventErrorTitle": "Erreur de l'agent",

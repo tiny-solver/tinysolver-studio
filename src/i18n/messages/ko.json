@@ -851,7 +851,6 @@
       "connection": {
         "connected": "연결됨",
         "connecting": "연결 중...",
-        "downloading": "다운로드 중...",
         "prompting": "응답 중...",
         "error": "연결 오류",
         "disconnected": "연결 끊김",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent}은(는) 현재 플랫폼에서 사용할 수 없습니다.",
           "sdkMissing": "{agent} SDK가 설치되어 있지 않습니다"
         },
+        "backendErrors": {
+          "initializeTimeout": "{agent} 연결 핸드셰이크가 시간 초과되었습니다(60초 동안 응답 없음). 설정을 열어 에이전트 및 네트워크 구성을 확인하세요.",
+          "processExited": "{agent} 프로세스가 예기치 않게 종료되었습니다.",
+          "spawnFailed": "{agent} 시작 실패: {message}",
+          "downloadFailed": "{agent} 다운로드 실패: {message}"
+        },
         "unableReadAgentConfig": "에이전트 구성을 읽을 수 없습니다: {message}",
-        "autoLinkFailedTitle": "{agent} 자동 연결 실패",
-        "preflightCheckFailedDefault": "사전 점검에 실패했습니다. 에이전트 설정을 확인하세요.",
-        "preflightFailedTitle": "{agent} 사전 점검 실패",
-        "autoLinkPreflightFailed": "자동 연결 사전 점검 실패: {message}",
         "connectFailedTitle": "{agent} 연결 실패",
         "toolFallbackTitle": "도구",
         "eventErrorTitle": "에이전트 오류",

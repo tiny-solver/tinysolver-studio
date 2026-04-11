@@ -851,7 +851,6 @@
       "connection": {
         "connected": "接続済み",
         "connecting": "接続中...",
-        "downloading": "ダウンロード中...",
         "prompting": "応答中...",
         "error": "接続エラー",
         "disconnected": "未接続",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} は現在のプラットフォームでは利用できません。",
           "sdkMissing": "{agent} SDK がインストールされていません"
         },
+        "backendErrors": {
+          "initializeTimeout": "{agent} の接続ハンドシェイクがタイムアウトしました（60 秒以内に応答なし）。設定を開いてエージェントとネットワーク設定を確認してください。",
+          "processExited": "{agent} プロセスが予期せず終了しました。",
+          "spawnFailed": "{agent} の起動に失敗しました: {message}",
+          "downloadFailed": "{agent} のダウンロードに失敗しました: {message}"
+        },
         "unableReadAgentConfig": "エージェント設定を読み取れません: {message}",
-        "autoLinkFailedTitle": "{agent} の自動リンクに失敗しました",
-        "preflightCheckFailedDefault": "事前チェックに失敗しました。エージェント設定を確認してください。",
-        "preflightFailedTitle": "{agent} の事前チェックに失敗しました",
-        "autoLinkPreflightFailed": "自動リンクの事前チェックに失敗しました: {message}",
         "connectFailedTitle": "{agent} の接続に失敗しました",
         "toolFallbackTitle": "ツール",
         "eventErrorTitle": "エージェントエラー",

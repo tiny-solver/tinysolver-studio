@@ -256,7 +256,6 @@ export const AGENT_COLORS: Record<AgentType, string> = {
 // ACP connection status (matches Rust ConnectionStatus)
 export type ConnectionStatus =
   | "connecting"
-  | "downloading"
   | "connected"
   | "prompting"
   | "disconnected"
@@ -442,7 +441,14 @@ export type AcpEvent =
       connection_id: string
       status: ConnectionStatus
     }
-  | { type: "error"; connection_id: string; message: string }
+  | {
+      type: "error"
+      connection_id: string
+      message: string
+      agent_type: string
+      /** Stable backend error identifier for localization (e.g. "initialize_timeout"). */
+      code: string | null
+    }
   | {
       type: "available_commands"
       connection_id: string

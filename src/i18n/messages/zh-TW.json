@@ -851,7 +851,6 @@
       "connection": {
         "connected": "已連線",
         "connecting": "連線中...",
-        "downloading": "下載中...",
         "prompting": "回應中...",
         "error": "連線異常",
         "disconnected": "未連線",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} 目前平台不可用。",
           "sdkMissing": "{agent} SDK 尚未安裝"
         },
+        "backendErrors": {
+          "initializeTimeout": "{agent} 連線交握逾時（60 秒未回應），請前往設定頁面檢查智能體與網路設定。",
+          "processExited": "{agent} 處理程序意外結束。",
+          "spawnFailed": "啟動 {agent} 失敗：{message}",
+          "downloadFailed": "{agent} 下載失敗：{message}"
+        },
         "unableReadAgentConfig": "無法讀取 Agent 設定：{message}",
-        "autoLinkFailedTitle": "{agent} 自動連結失敗",
-        "preflightCheckFailedDefault": "預檢查未通過，請檢查 Agent 設定。",
-        "preflightFailedTitle": "{agent} 預檢查失敗",
-        "autoLinkPreflightFailed": "自動連結預檢查失敗：{message}",
         "connectFailedTitle": "{agent} 連線失敗",
         "toolFallbackTitle": "工具",
         "eventErrorTitle": "Agent 錯誤",

@@ -851,7 +851,6 @@
       "connection": {
         "connected": "متصل",
         "connecting": "جارٍ الاتصال...",
-        "downloading": "جارٍ التنزيل...",
         "prompting": "جارٍ الرد...",
         "error": "خطأ في الاتصال",
         "disconnected": "غير متصل",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} غير متاح على المنصة الحالية.",
           "sdkMissing": "لم يتم تثبيت SDK الخاص بـ {agent}"
         },
+        "backendErrors": {
+          "initializeTimeout": "انتهت مهلة مصافحة اتصال {agent} (لا استجابة بعد 60 ثانية). افتح الإعدادات للتحقق من إعدادات الوكيل والشبكة.",
+          "processExited": "انتهت عملية {agent} بشكل غير متوقع.",
+          "spawnFailed": "تعذر بدء تشغيل {agent}: {message}",
+          "downloadFailed": "فشل تنزيل {agent}: {message}"
+        },
         "unableReadAgentConfig": "تعذر قراءة إعدادات الوكيل: {message}",
-        "autoLinkFailedTitle": "فشل الربط التلقائي لـ {agent}",
-        "preflightCheckFailedDefault": "فشلت فحوصات ما قبل التشغيل. تحقق من إعدادات الوكلاء.",
-        "preflightFailedTitle": "فشل فحص ما قبل التشغيل لـ {agent}",
-        "autoLinkPreflightFailed": "فشل فحص ما قبل التشغيل للربط التلقائي: {message}",
         "connectFailedTitle": "فشل اتصال {agent}",
         "toolFallbackTitle": "أداة",
         "eventErrorTitle": "خطأ الوكيل",

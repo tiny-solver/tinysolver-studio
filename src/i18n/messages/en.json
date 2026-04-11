@@ -851,7 +851,6 @@
       "connection": {
         "connected": "Connected",
         "connecting": "Connecting...",
-        "downloading": "Downloading...",
         "prompting": "Responding...",
         "error": "Connection error",
         "disconnected": "Disconnected",
@@ -1422,11 +1421,13 @@
           "unavailable": "{agent} is unavailable on the current platform.",
           "sdkMissing": "{agent} SDK is not installed"
         },
+        "backendErrors": {
+          "initializeTimeout": "{agent} connection handshake timed out after 60 seconds. Please open Settings to check Agent configuration and network settings.",
+          "processExited": "{agent} process exited unexpectedly.",
+          "spawnFailed": "Failed to start {agent}: {message}",
+          "downloadFailed": "{agent} download failed: {message}"
+        },
         "unableReadAgentConfig": "Unable to read Agent config: {message}",
-        "autoLinkFailedTitle": "{agent} auto-link failed",
-        "preflightCheckFailedDefault": "Preflight checks failed. Check Agent settings.",
-        "preflightFailedTitle": "{agent} preflight failed",
-        "autoLinkPreflightFailed": "Auto-link preflight failed: {message}",
         "connectFailedTitle": "{agent} connection failed",
         "toolFallbackTitle": "Tool",
         "eventErrorTitle": "Agent Error",

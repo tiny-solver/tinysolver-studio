@@ -92,6 +92,58 @@ pub(crate) fn is_cmd_available(cmd: &str) -> bool {
     which::which(cmd).is_ok()
 }
 
+/// Verify that the agent SDK / binary is installed and usable.
+///
+/// This is the pre-spawn guard used by the session-page connect path:
+/// the session page must NEVER trigger a download or install, so if the
+/// agent isn't ready we return `AcpError::SdkNotInstalled` immediately
+/// and let the frontend prompt the user to install from Agent Settings.
+///
+/// For NPX agents: checks the command exists on PATH.
+/// For Binary agents: checks platform support and that the binary is
+/// already cached locally.
+pub(crate) fn verify_agent_installed(agent_type: AgentType) -> Result<(), AcpError> {
+    let meta = registry::get_agent_meta(agent_type);
+    match meta.distribution {
+        registry::AgentDistribution::Npx { cmd, .. } => {
+            if !is_cmd_available(cmd) {
+                // INVARIANT: the substring "is not installed" is matched
+                // verbatim by the frontend catch block in
+                // `src/contexts/acp-connections-context.tsx` to surface a
+                // localized install prompt. Do not change the wording.
+                return Err(AcpError::SdkNotInstalled(format!(
+                    "{} is not installed. Please install it in Agent Settings.",
+                    meta.name
+                )));
+            }
+            Ok(())
+        }
+        registry::AgentDistribution::Binary {
+            cmd, platforms, ..
+        } => {
+            let platform = registry::current_platform();
+            if !platforms.iter().any(|p| p.platform == platform) {
+                return Err(AcpError::PlatformNotSupported(format!(
+                    "{} is not available on {platform}",
+                    meta.name
+                )));
+            }
+            // Accept any cached version — the Settings page will still
+            // surface "upgrade available" for stale caches via its own
+            // version-badge flow.
+            if binary_cache::find_best_cached_binary_for_agent(agent_type, cmd)?.is_none() {
+                // INVARIANT: see note above — "is not installed" is a
+                // stable substring the frontend matches against.
+                return Err(AcpError::SdkNotInstalled(format!(
+                    "{} is not installed. Please install it in Agent Settings.",
+                    meta.name
+                )));
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Detect the actual installed version of an npm global package by running
 /// `npm list -g <package_name> --json` and parsing the JSON output.
 ///
@@ -1798,8 +1850,6 @@ pub async fn acp_connect(
     app_handle: tauri::AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<String, AcpError> {
-    let meta = registry::get_agent_meta(agent_type);
-
     let setting = agent_setting_service::get_by_agent_type(&db.conn, agent_type)
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
@@ -1825,14 +1875,10 @@ pub async fn acp_connect(
         runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
     }
 
-    if let registry::AgentDistribution::Npx { cmd, .. } = meta.distribution {
-        if !is_cmd_available(cmd) {
-            return Err(AcpError::protocol(format!(
-                "{} SDK is not installed. Please install it in Agent Settings.",
-                meta.name
-            )));
-        }
-    }
+    // Guard: the session page must never trigger a download or install.
+    // If the agent isn't ready, return SdkNotInstalled here so the frontend
+    // can prompt the user to install it from Agent Settings.
+    verify_agent_installed(agent_type)?;
 
     let emitter = EventEmitter::Tauri(app_handle);
     manager
