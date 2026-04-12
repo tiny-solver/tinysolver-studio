@@ -77,7 +77,7 @@ pub fn check_opencode_plugins(
         .ok_or_else(|| "Cannot determine opencode cache directory".to_string())?;
 
     let has_project_config_hint = project_root
-        .map(|root| has_project_opencode_config(root))
+        .map(has_project_opencode_config)
         .unwrap_or(false);
 
     // If config file doesn't exist, there's nothing to check
@@ -246,7 +246,7 @@ fn write_backup_and_prune(path: &Path, content: &str, keep: usize) -> Result<(),
         .collect();
 
     // Sort by name descending (timestamp in name → newest first)
-    backups.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+    backups.sort_by_key(|b| std::cmp::Reverse(b.file_name()));
 
     for old in backups.iter().skip(keep) {
         let _ = fs::remove_file(old.path());
@@ -330,9 +330,8 @@ pub async fn install_missing_plugins(
     emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Started, "");
 
     // Re-check current state
-    let summary = check_opencode_plugins(None).map_err(|e| {
-        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &e);
-        e
+    let summary = check_opencode_plugins(None).inspect_err(|e| {
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, e);
     })?;
 
     let missing: Vec<&PluginInfo> = summary
@@ -359,9 +358,8 @@ pub async fn install_missing_plugins(
     let names_display: Vec<&str> = missing.iter().map(|p| p.name.as_str()).collect();
 
     // Resolve bun
-    let bun = resolve_bun_binary().map_err(|e| {
-        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &e);
-        e
+    let bun = resolve_bun_binary().inspect_err(|e| {
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, e);
     })?;
 
     emit_plugin_event(
@@ -520,7 +518,7 @@ pub fn parse_plugin_spec(spec: &str) -> Option<(String, String)> {
 
     if spec.starts_with('@') {
         // Scoped package: @scope/name or @scope/name@version
-        let without_at = &spec[1..]; // strip leading @
+        let without_at = spec.strip_prefix('@')?;
         let slash_pos = without_at.find('/')?;
         let after_slash = &without_at[slash_pos + 1..];
         // Look for @ that separates name from version
