@@ -136,7 +136,9 @@ mod tauri_app {
                             .title(&entry.name)
                             .inner_size(1260.0, 860.0)
                             .min_inner_size(900.0, 600.0);
-                        let _ = windows::apply_platform_window_style(builder).build();
+                        if let Ok(w) = windows::apply_platform_window_style(builder).build() {
+                            windows::post_window_setup(&w);
+                        }
                     }
                 }
 
@@ -334,6 +336,7 @@ mod tauri_app {
                 windows::open_stash_window,
                 windows::open_push_window,
                 windows::open_project_boot_window,
+                windows::update_traffic_light_position,
                 project_boot::detect_package_manager,
                 project_boot::create_shadcn_project,
                 system_settings::get_system_proxy_settings,

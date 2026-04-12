@@ -442,6 +442,12 @@ export async function mcpRemoveServer(
   })
 }
 
+// Appearance / window chrome
+
+export async function updateTrafficLightPosition(zoom: number): Promise<void> {
+  return invoke("update_traffic_light_position", { zoom: zoom as number })
+}
+
 // Folder history commands
 
 export async function loadFolderHistory(): Promise<FolderHistoryEntry[]> {

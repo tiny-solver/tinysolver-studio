@@ -14,6 +14,14 @@ import {
   STORAGE_KEY_ZOOM_LEVEL,
 } from "@/lib/appearance-script"
 
+function syncTrafficLightPosition(zoom: number) {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window))
+    return
+  import("@/lib/tauri").then((t) =>
+    t.updateTrafficLightPosition(zoom).catch(() => {})
+  )
+}
+
 type AppearanceContextValue = {
   themeColor: ThemeColor
   setThemeColor: (color: ThemeColor) => void
@@ -73,11 +81,18 @@ export function AppearanceProvider({
   const setZoomLevel = useCallback((zoom: ZoomLevel) => {
     setZoomLevelState(zoom)
     document.documentElement.style.fontSize = `${(16 * zoom) / 100}px`
+    syncTrafficLightPosition(zoom)
     try {
       localStorage.setItem(STORAGE_KEY_ZOOM_LEVEL, String(zoom))
     } catch {
       // 同上
     }
+  }, [])
+
+  // Sync traffic-light position on mount (initial zoom)
+  useEffect(() => {
+    syncTrafficLightPosition(zoomLevel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 跨标签页同步：用户在另一个窗口改了设置时，本窗口实时跟进
@@ -95,6 +110,7 @@ export function AppearanceProvider({
         if ((ZOOM_LEVELS as readonly number[]).includes(zoom)) {
           setZoomLevelState(zoom)
           document.documentElement.style.fontSize = `${(16 * zoom) / 100}px`
+          syncTrafficLightPosition(zoom)
         }
       }
     }
