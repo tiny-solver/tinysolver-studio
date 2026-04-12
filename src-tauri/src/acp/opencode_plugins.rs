@@ -283,10 +283,14 @@ pub(crate) fn atomic_rewrite_opencode_json(
     let raw = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
 
-    if json_has_comments(&raw) {
+    // Try parsing first.  If serde_json succeeds the file is valid JSON
+    // and any "//" or "/*" sequences live inside string values — not real
+    // comments.  Only reject when parsing *fails* and the raw text looks
+    // like it might be JSONC (actual comments would cause a parse error).
+    if serde_json::from_str::<serde_json::Value>(&raw).is_err() && json_has_comments(&raw) {
         return Err(
-            "opencode.json contains comments (// or /*). Refusing to rewrite to avoid data loss. \
-             Please edit the file manually."
+            "opencode.json appears to be JSONC (contains comments). Refusing to rewrite to avoid \
+             data loss. Please edit the file manually."
                 .to_string(),
         );
     }
