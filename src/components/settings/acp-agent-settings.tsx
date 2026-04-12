@@ -85,6 +85,7 @@ import type {
   ModelProviderInfo,
   PreflightResult,
 } from "@/lib/types"
+import { OpencodePluginsModal } from "./opencode-plugins-modal"
 
 interface AgentCheckState {
   result?: PreflightResult
@@ -156,6 +157,7 @@ type UiFixAction =
         | "upgrade_npx"
         | "uninstall_binary"
         | "uninstall_npx"
+        | "install_opencode_plugins"
       payload: string
     }
 
@@ -2584,6 +2586,10 @@ export function AcpAgentSettings() {
   const [modelProviders, setModelProviders] = useState<ModelProviderInfo[]>([])
   const [uninstallConfirmAgent, setUninstallConfirmAgent] =
     useState<AcpAgentInfo | null>(null)
+  const [pluginModalOpen, setPluginModalOpen] = useState(false)
+  const [pluginModalAgent, setPluginModalAgent] = useState<AgentType | null>(
+    null
+  )
   const [expandedChecks, setExpandedChecks] = useState<Record<string, boolean>>(
     {}
   )
@@ -3137,6 +3143,11 @@ export function AcpAgentSettings() {
       await runBinaryAction(agent, "upgrade", "redownload_binary")
       return
     }
+    if (action.kind === "install_opencode_plugins") {
+      setPluginModalAgent(agent.agent_type)
+      setPluginModalOpen(true)
+      return
+    }
     await runPreflight(agent.agent_type)
   }
 
@@ -3238,6 +3249,7 @@ export function AcpAgentSettings() {
                         "uninstall_binary",
                         "uninstall_npx",
                         "redownload_binary",
+                        "install_opencode_plugins",
                       ].includes(fix.kind)
                     }
                     onClick={() => {
@@ -3258,6 +3270,8 @@ export function AcpAgentSettings() {
                     ) : fix.kind === "uninstall_binary" ||
                       fix.kind === "uninstall_npx" ? (
                       <Trash2 className="h-3 w-3" />
+                    ) : fix.kind === "install_opencode_plugins" ? (
+                      <Download className="h-3 w-3" />
                     ) : null}
                     {fix.label}
                   </Button>
@@ -7164,6 +7178,17 @@ supports_websockets = true`}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <OpencodePluginsModal
+        open={pluginModalOpen}
+        onOpenChange={setPluginModalOpen}
+        onCompleted={() => {
+          if (pluginModalAgent) {
+            runPreflight(pluginModalAgent)
+          }
+          setPluginModalAgent(null)
+        }}
+      />
     </div>
   )
 }
