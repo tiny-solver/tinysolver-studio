@@ -687,19 +687,19 @@
       "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。"
     },
     "opencodePlugins": {
-      "title": "OpenCode Plugins",
-      "declared": "Declared Plugins",
-      "noPlugins": "No plugins declared.",
+      "title": "OpenCode 外掛",
+      "declared": "已宣告的外掛",
+      "noPlugins": "opencode.json 中未宣告任何外掛",
       "status": {
-        "installed": "Installed",
-        "missing": "Missing"
+        "installed": "已安裝",
+        "missing": "未安裝"
       },
-      "installAll": "Install All Missing",
-      "install": "Install",
-      "uninstall": "Uninstall",
-      "refresh": "Refresh",
-      "success": "All plugins installed successfully.",
-      "failed": "Installation failed"
+      "installAll": "安裝全部缺失外掛",
+      "install": "安裝",
+      "uninstall": "解除安裝",
+      "refresh": "重新整理",
+      "success": "所有外掛安裝成功",
+      "failed": "外掛操作失敗"
     }
   },
   "SettingsPages": {

@@ -687,19 +687,19 @@
       "configDescription": "تكوين مزود واجهة برمجة التطبيقات وبيانات اعتماد Cline. يتم حفظ الإعدادات في ~/.cline/data/."
     },
     "opencodePlugins": {
-      "title": "OpenCode Plugins",
-      "declared": "Declared Plugins",
-      "noPlugins": "No plugins declared.",
+      "title": "إضافات OpenCode",
+      "declared": "الإضافات المعلنة",
+      "noPlugins": "لا توجد إضافات معلنة في opencode.json",
       "status": {
-        "installed": "Installed",
-        "missing": "Missing"
+        "installed": "مثبّت",
+        "missing": "غير مثبّت"
       },
-      "installAll": "Install All Missing",
-      "install": "Install",
-      "uninstall": "Uninstall",
-      "refresh": "Refresh",
-      "success": "All plugins installed successfully.",
-      "failed": "Installation failed"
+      "installAll": "تثبيت جميع الإضافات المفقودة",
+      "install": "تثبيت",
+      "uninstall": "إزالة",
+      "refresh": "تحديث",
+      "success": "تم تثبيت جميع الإضافات بنجاح",
+      "failed": "فشلت عملية الإضافة"
     }
   },
   "SettingsPages": {

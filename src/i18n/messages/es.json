@@ -687,19 +687,19 @@
       "configDescription": "Configure el proveedor de API y las credenciales de Cline. La configuración se guarda en ~/.cline/data/."
     },
     "opencodePlugins": {
-      "title": "OpenCode Plugins",
-      "declared": "Declared Plugins",
-      "noPlugins": "No plugins declared.",
+      "title": "Plugins de OpenCode",
+      "declared": "Plugins declarados",
+      "noPlugins": "No hay plugins declarados en opencode.json",
       "status": {
-        "installed": "Installed",
-        "missing": "Missing"
+        "installed": "Instalado",
+        "missing": "No instalado"
       },
-      "installAll": "Install All Missing",
-      "install": "Install",
-      "uninstall": "Uninstall",
-      "refresh": "Refresh",
-      "success": "All plugins installed successfully.",
-      "failed": "Installation failed"
+      "installAll": "Instalar todos los faltantes",
+      "install": "Instalar",
+      "uninstall": "Desinstalar",
+      "refresh": "Actualizar",
+      "success": "Todos los plugins se instalaron correctamente",
+      "failed": "La operación del plugin falló"
     }
   },
   "SettingsPages": {

@@ -687,19 +687,19 @@
       "configDescription": "Configurez le fournisseur API et les identifiants Cline. Les paramètres sont enregistrés dans ~/.cline/data/."
     },
     "opencodePlugins": {
-      "title": "OpenCode Plugins",
-      "declared": "Declared Plugins",
-      "noPlugins": "No plugins declared.",
+      "title": "Plugins OpenCode",
+      "declared": "Plugins déclarés",
+      "noPlugins": "Aucun plugin déclaré dans opencode.json",
       "status": {
-        "installed": "Installed",
-        "missing": "Missing"
+        "installed": "Installé",
+        "missing": "Non installé"
       },
-      "installAll": "Install All Missing",
-      "install": "Install",
-      "uninstall": "Uninstall",
-      "refresh": "Refresh",
-      "success": "All plugins installed successfully.",
-      "failed": "Installation failed"
+      "installAll": "Installer tous les manquants",
+      "install": "Installer",
+      "uninstall": "Désinstaller",
+      "refresh": "Actualiser",
+      "success": "Tous les plugins ont été installés avec succès",
+      "failed": "L'opération du plugin a échoué"
     }
   },
   "SettingsPages": {
