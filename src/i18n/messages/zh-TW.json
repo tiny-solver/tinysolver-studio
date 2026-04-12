@@ -685,6 +685,21 @@
     },
     "cline": {
       "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。"
+    },
+    "opencodePlugins": {
+      "title": "OpenCode Plugins",
+      "declared": "Declared Plugins",
+      "noPlugins": "No plugins declared.",
+      "status": {
+        "installed": "Installed",
+        "missing": "Missing"
+      },
+      "installAll": "Install All Missing",
+      "install": "Install",
+      "uninstall": "Uninstall",
+      "refresh": "Refresh",
+      "success": "All plugins installed successfully.",
+      "failed": "Installation failed"
     }
   },
   "SettingsPages": {

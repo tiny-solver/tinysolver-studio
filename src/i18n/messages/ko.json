@@ -685,6 +685,21 @@
     },
     "cline": {
       "configDescription": "Cline API 제공자와 자격 증명을 구성합니다. 설정은 ~/.cline/data/에 저장됩니다."
+    },
+    "opencodePlugins": {
+      "title": "OpenCode Plugins",
+      "declared": "Declared Plugins",
+      "noPlugins": "No plugins declared.",
+      "status": {
+        "installed": "Installed",
+        "missing": "Missing"
+      },
+      "installAll": "Install All Missing",
+      "install": "Install",
+      "uninstall": "Uninstall",
+      "refresh": "Refresh",
+      "success": "All plugins installed successfully.",
+      "failed": "Installation failed"
     }
   },
   "SettingsPages": {
