@@ -188,29 +188,30 @@ fn parse_version_parts(input: &str) -> Vec<u32> {
         .collect()
 }
 
-/// Ensure a binary agent is available locally.
-/// Returns the absolute path to the executable.
-pub async fn ensure_binary_for_agent(
+/// Same as `ensure_binary_for_agent` but calls `on_progress` with human-readable
+/// status messages during download / extraction.
+pub async fn ensure_binary_for_agent_with_progress(
     agent_type: AgentType,
     version: &str,
     archive_url: &str,
     cmd_name: &str,
+    on_progress: impl Fn(&str),
 ) -> Result<PathBuf, AcpError> {
     if let Some(path) = find_cached_binary_for_agent(agent_type, version, cmd_name)? {
+        on_progress("Binary already cached, skipping download");
         return Ok(path);
     }
 
     let agent_id = agent_cache_key(agent_type);
-    ensure_binary(&agent_id, version, archive_url, cmd_name).await
+    ensure_binary_with_progress(&agent_id, version, archive_url, cmd_name, on_progress).await
 }
 
-/// Ensure a binary is available for a specific cache key.
-/// Returns the absolute path to the executable.
-pub async fn ensure_binary(
+async fn ensure_binary_with_progress(
     agent_id: &str,
     version: &str,
     archive_url: &str,
     cmd_name: &str,
+    on_progress: impl Fn(&str),
 ) -> Result<PathBuf, AcpError> {
     if let Some(path) = find_cached_binary(agent_id, version, cmd_name)? {
         return Ok(path);
@@ -236,12 +237,14 @@ pub async fn ensure_binary(
 
     let result: Result<PathBuf, AcpError> = async {
         let archive_path = tmp_dir.join("archive");
-        download_file(archive_url, &archive_path).await?;
+        on_progress(&format!("Downloading {archive_url}"));
+        download_file_with_progress(archive_url, &archive_path, &on_progress).await?;
 
         let extract_dir = tmp_dir.join("extracted");
         std::fs::create_dir_all(&extract_dir)
             .map_err(|e| AcpError::DownloadFailed(format!("failed to create extract dir: {e}")))?;
 
+        on_progress("Extracting archive...");
         if archive_url.ends_with(".tar.gz") || archive_url.ends_with(".tgz") {
             extract_tar_gz(&archive_path, &extract_dir)?;
         } else if archive_url.ends_with(".tar.bz2") || archive_url.ends_with(".tbz2") {
@@ -255,6 +258,7 @@ pub async fn ensure_binary(
         }
 
         // Find the binary in extracted files and move to final location.
+        on_progress("Locating binary...");
         let extracted_bin = find_binary_recursive(&extract_dir, &bin_name).ok_or_else(|| {
             AcpError::DownloadFailed(format!("binary '{bin_name}' not found in archive"))
         })?;
@@ -270,6 +274,7 @@ pub async fn ensure_binary(
             ));
         }
         set_executable_permissions(&final_path)?;
+        on_progress("Binary installed successfully");
         Ok(final_path)
     }
     .await;
@@ -313,7 +318,13 @@ pub(crate) fn find_binary_recursive(dir: &PathBuf, name: &str) -> Option<PathBuf
     None
 }
 
-async fn download_file(url: &str, dest: &PathBuf) -> Result<(), AcpError> {
+async fn download_file_with_progress(
+    url: &str,
+    dest: &PathBuf,
+    on_progress: &impl Fn(&str),
+) -> Result<(), AcpError> {
+    use futures_util::StreamExt;
+
     let response = reqwest::Client::new()
         .get(url)
         .send()
@@ -327,13 +338,43 @@ async fn download_file(url: &str, dest: &PathBuf) -> Result<(), AcpError> {
         )));
     }
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| AcpError::DownloadFailed(format!("failed to read response: {e}")))?;
+    let total_size = response.content_length();
+    let mut downloaded: u64 = 0;
+    let mut last_reported_mb: u64 = 0;
+    let mut stream = response.bytes_stream();
+    let mut file = std::fs::File::create(dest)
+        .map_err(|e| AcpError::DownloadFailed(format!("failed to create archive file: {e}")))?;
 
-    std::fs::write(dest, &bytes)
-        .map_err(|e| AcpError::DownloadFailed(format!("failed to write archive: {e}")))?;
+    use std::io::Write;
+    while let Some(chunk) = stream.next().await {
+        let chunk =
+            chunk.map_err(|e| AcpError::DownloadFailed(format!("failed to read chunk: {e}")))?;
+        file.write_all(&chunk)
+            .map_err(|e| AcpError::DownloadFailed(format!("failed to write archive: {e}")))?;
+        downloaded += chunk.len() as u64;
+
+        // Report progress every 1MB
+        let current_mb = downloaded / (1024 * 1024);
+        if current_mb > last_reported_mb {
+            last_reported_mb = current_mb;
+            if let Some(total) = total_size {
+                let total_mb = total as f64 / (1024.0 * 1024.0);
+                on_progress(&format!(
+                    "Downloading... {current_mb:.0} MB / {total_mb:.1} MB"
+                ));
+            } else {
+                on_progress(&format!("Downloading... {current_mb:.0} MB"));
+            }
+        }
+    }
+
+    if let Some(total) = total_size {
+        let total_mb = total as f64 / (1024.0 * 1024.0);
+        on_progress(&format!("Download complete ({total_mb:.1} MB)"));
+    } else {
+        let final_mb = downloaded as f64 / (1024.0 * 1024.0);
+        on_progress(&format!("Download complete ({final_mb:.1} MB)"));
+    }
 
     Ok(())
 }

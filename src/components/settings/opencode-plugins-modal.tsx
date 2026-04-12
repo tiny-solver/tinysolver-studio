@@ -60,7 +60,10 @@ export function OpencodePluginsModal({
   }, [open])
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    const container = logEndRef.current?.parentElement
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
   }, [stream.logs])
 
   useEffect(() => {
@@ -240,11 +243,13 @@ export function OpencodePluginsModal({
           )}
 
           {stream.status !== "idle" && (
-            <div className="rounded-md border bg-black/80 text-green-400 p-3 max-h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed">
+            <div className="rounded-md border bg-muted/50 text-muted-foreground p-3 max-h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed">
               {stream.logs.map((line, i) => (
                 <div
                   key={i}
-                  className={line.startsWith("ERROR:") ? "text-red-400" : ""}
+                  className={
+                    line.startsWith("ERROR:") ? "text-destructive" : ""
+                  }
                 >
                   {line}
                 </div>

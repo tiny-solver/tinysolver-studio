@@ -46,6 +46,41 @@ fn emit_acp_agents_updated(
     );
 }
 
+const AGENT_INSTALL_EVENT: &str = "app://agent-install";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum AgentInstallEventKind {
+    Started,
+    Log,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct AgentInstallEvent {
+    pub task_id: String,
+    pub kind: AgentInstallEventKind,
+    pub payload: String,
+}
+
+fn emit_agent_install_event(
+    emitter: &EventEmitter,
+    task_id: &str,
+    kind: AgentInstallEventKind,
+    payload: impl Into<String>,
+) {
+    crate::web::event_bridge::emit_event(
+        emitter,
+        AGENT_INSTALL_EVENT,
+        AgentInstallEvent {
+            task_id: task_id.to_string(),
+            kind,
+            payload: payload.into(),
+        },
+    );
+}
+
 fn is_version_like(value: &str) -> bool {
     value.chars().any(|c| c.is_ascii_digit()) && value.contains('.')
 }
@@ -215,46 +250,130 @@ async fn detect_local_version(agent_type: AgentType) -> Option<String> {
 /// may not have synced niche packages like `@agentclientprotocol/*`.
 const NPM_OFFICIAL_REGISTRY: &str = "https://registry.npmjs.org";
 
-async fn install_npm_global_package(package: &str) -> Result<(), AcpError> {
+/// Run an npm command with piped stdout/stderr, streaming each line as a log event.
+/// Returns (success: bool, collected_stderr: String) so callers can inspect errors.
+async fn run_npm_streaming(
+    args: &[&str],
+    task_id: &str,
+    emitter: &EventEmitter,
+) -> Result<(bool, String), AcpError> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let mut cmd = crate::process::tokio_command("npm");
+    for arg in args {
+        cmd.arg(arg);
+    }
+    cmd.stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| {
+        AcpError::protocol(format!("failed to spawn npm: {e}"))
+    })?;
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let emitter_clone = emitter.clone();
+    let task_id_owned = task_id.to_string();
+
+    let stdout_handle = tokio::spawn({
+        let emitter = emitter_clone.clone();
+        let task_id = task_id_owned.clone();
+        async move {
+            if let Some(out) = stdout {
+                let reader = BufReader::new(out);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    emit_agent_install_event(
+                        &emitter, &task_id, AgentInstallEventKind::Log, &line,
+                    );
+                }
+            }
+        }
+    });
+
+    let stderr_handle = tokio::spawn({
+        let emitter = emitter_clone;
+        let task_id = task_id_owned;
+        async move {
+            let mut collected = String::new();
+            if let Some(err) = stderr {
+                let reader = BufReader::new(err);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    emit_agent_install_event(
+                        &emitter, &task_id, AgentInstallEventKind::Log, &line,
+                    );
+                    if !collected.is_empty() {
+                        collected.push('\n');
+                    }
+                    collected.push_str(&line);
+                }
+            }
+            collected
+        }
+    });
+
+    let (_, stderr_result) = tokio::join!(stdout_handle, stderr_handle);
+    let collected_stderr = stderr_result.unwrap_or_default();
+
+    let status = child.wait().await.map_err(|e| {
+        AcpError::protocol(format!("failed to wait for npm process: {e}"))
+    })?;
+
+    Ok((status.success(), collected_stderr))
+}
+
+async fn install_npm_global_package_streaming(
+    package: &str,
+    task_id: &str,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
     let registry_arg = format!("--registry={NPM_OFFICIAL_REGISTRY}");
 
-    let output = crate::process::tokio_command("npm")
-        .arg("install")
-        .arg("-g")
-        .arg(&registry_arg)
-        .arg(package)
-        .output()
-        .await
-        .map_err(|e| AcpError::protocol(format!("failed to run npm install -g: {e}")))?;
+    emit_agent_install_event(
+        emitter, task_id, AgentInstallEventKind::Log,
+        format!("$ npm install -g {package}"),
+    );
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    let (success, stderr) = run_npm_streaming(
+        &["install", "-g", &registry_arg, package],
+        task_id,
+        emitter,
+    ).await?;
+
+    if !success {
         // EACCES: permission denied — retry with a user-local --prefix so
         // we don't require root/sudo on macOS / Linux.
-        // Check EACCES first: an EEXIST error message may also contain EACCES
-        // context, and the --force retry would fail again without the prefix
-        // fallback.
         if stderr.contains("EACCES") {
-            return install_npm_to_user_prefix(package, &registry_arg).await;
+            emit_agent_install_event(
+                emitter, task_id, AgentInstallEventKind::Log,
+                "Permission denied, retrying with user prefix...",
+            );
+            return install_npm_to_user_prefix_streaming(
+                package, &registry_arg, task_id, emitter,
+            ).await;
         }
 
         // EEXIST: file conflict — retry with --force to overwrite
         if stderr.contains("EEXIST") {
-            let retry = crate::process::tokio_command("npm")
-                .arg("install")
-                .arg("-g")
-                .arg("--force")
-                .arg(&registry_arg)
-                .arg(package)
-                .output()
-                .await
-                .map_err(|e| AcpError::protocol(format!("failed to run npm install -g --force: {e}")))?;
-            if !retry.status.success() {
-                let retry_stderr = String::from_utf8_lossy(&retry.stderr);
-                // The --force retry itself may fail with EACCES on systems
-                // where the global prefix is not writable.
+            emit_agent_install_event(
+                emitter, task_id, AgentInstallEventKind::Log,
+                "File conflict, retrying with --force...",
+            );
+            let (retry_success, retry_stderr) = run_npm_streaming(
+                &["install", "-g", "--force", &registry_arg, package],
+                task_id,
+                emitter,
+            ).await?;
+            if !retry_success {
                 if retry_stderr.contains("EACCES") {
-                    return install_npm_to_user_prefix(package, &registry_arg).await;
+                    emit_agent_install_event(
+                        emitter, task_id, AgentInstallEventKind::Log,
+                        "Permission denied on --force retry, falling back to user prefix...",
+                    );
+                    return install_npm_to_user_prefix_streaming(
+                        package, &registry_arg, task_id, emitter,
+                    ).await;
                 }
                 let err = retry_stderr.trim().to_string();
                 let msg = if err.is_empty() {
@@ -281,7 +400,12 @@ async fn install_npm_global_package(package: &str) -> Result<(), AcpError> {
 
 /// Fallback: install an npm package into a user-local prefix (`~/.codeg/npm-global/`)
 /// when the system global prefix is not writable (EACCES).
-async fn install_npm_to_user_prefix(package: &str, registry_arg: &str) -> Result<(), AcpError> {
+async fn install_npm_to_user_prefix_streaming(
+    package: &str,
+    registry_arg: &str,
+    task_id: &str,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
     let prefix = crate::process::user_npm_prefix().ok_or_else(|| {
         AcpError::protocol(
             "npm install -g failed with EACCES and could not determine home directory for fallback"
@@ -298,41 +422,33 @@ async fn install_npm_to_user_prefix(package: &str, registry_arg: &str) -> Result
     })?;
 
     let prefix_arg = format!("--prefix={}", prefix.display());
-    let output = crate::process::tokio_command("npm")
-        .arg("install")
-        .arg("-g")
-        .arg(&prefix_arg)
-        .arg(registry_arg)
-        .arg(package)
-        .output()
-        .await
-        .map_err(|e| {
-            AcpError::protocol(format!("failed to run npm install -g with user prefix: {e}"))
-        })?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    emit_agent_install_event(
+        emitter, task_id, AgentInstallEventKind::Log,
+        format!("$ npm install -g --prefix={} {package}", prefix.display()),
+    );
+
+    let (success, stderr) = run_npm_streaming(
+        &["install", "-g", &prefix_arg, registry_arg, package],
+        task_id,
+        emitter,
+    ).await?;
+
+    if !success {
         // EEXIST in the user prefix: retry with --force to overwrite stale files
         // from a previous installation.
         if stderr.contains("EEXIST") {
-            let force_retry = crate::process::tokio_command("npm")
-                .arg("install")
-                .arg("-g")
-                .arg("--force")
-                .arg(&prefix_arg)
-                .arg(registry_arg)
-                .arg(package)
-                .output()
-                .await
-                .map_err(|e| {
-                    AcpError::protocol(format!(
-                        "failed to run npm install -g --force with user prefix: {e}"
-                    ))
-                })?;
-            if !force_retry.status.success() {
-                let err = String::from_utf8_lossy(&force_retry.stderr)
-                    .trim()
-                    .to_string();
+            emit_agent_install_event(
+                emitter, task_id, AgentInstallEventKind::Log,
+                "File conflict in user prefix, retrying with --force...",
+            );
+            let (force_success, force_stderr) = run_npm_streaming(
+                &["install", "-g", "--force", &prefix_arg, registry_arg, package],
+                task_id,
+                emitter,
+            ).await?;
+            if !force_success {
+                let err = force_stderr.trim().to_string();
                 let msg = if err.is_empty() {
                     format!(
                         "failed to install npm package (user prefix {}, --force)",
@@ -2448,10 +2564,13 @@ pub async fn acp_update_agent_config(
 
 pub(crate) async fn acp_download_agent_binary_core(
     agent_type: AgentType,
+    task_id: String,
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
+    emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
+
     let meta = registry::get_agent_meta(agent_type);
-    match meta.distribution {
+    let result = match meta.distribution {
         registry::AgentDistribution::Binary {
             version,
             cmd,
@@ -2469,25 +2588,55 @@ pub(crate) async fn acp_download_agent_binary_core(
                     ))
                 })?;
 
-            let _ = binary_cache::ensure_binary_for_agent(agent_type, version, fallback.url, cmd)
-                .await?;
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Log,
+                format!("Downloading {} v{version} for {platform}", meta.name),
+            );
+
+            let emitter_clone = emitter.clone();
+            let task_id_clone = task_id.clone();
+            let _ = binary_cache::ensure_binary_for_agent_with_progress(
+                agent_type, version, fallback.url, cmd,
+                move |msg| {
+                    emit_agent_install_event(
+                        &emitter_clone, &task_id_clone, AgentInstallEventKind::Log, msg,
+                    );
+                },
+            )
+            .await?;
             emit_acp_agents_updated(emitter, "binary_downloaded", Some(agent_type));
             Ok(())
         }
         registry::AgentDistribution::Npx { .. } => Err(
             AcpError::protocol("download is only supported for binary agents"),
         ),
+    };
+
+    match &result {
+        Ok(()) => {
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Completed,
+                format!("{} installed successfully", meta.name),
+            );
+        }
+        Err(e) => {
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Failed, e.to_string(),
+            );
+        }
     }
+    result
 }
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_download_agent_binary(
     agent_type: AgentType,
+    task_id: String,
     app: tauri::AppHandle,
 ) -> Result<(), AcpError> {
     let emitter = EventEmitter::Tauri(app);
-    acp_download_agent_binary_core(agent_type, &emitter).await
+    acp_download_agent_binary_core(agent_type, task_id, &emitter).await
 }
 
 pub(crate) async fn acp_detect_agent_local_version_core(
@@ -2525,11 +2674,14 @@ pub async fn acp_detect_agent_local_version(
 pub(crate) async fn acp_prepare_npx_agent_core(
     agent_type: AgentType,
     registry_version: Option<String>,
+    task_id: String,
     db: &AppDatabase,
     emitter: &EventEmitter,
 ) -> Result<String, AcpError> {
+    emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
+
     let meta = registry::get_agent_meta(agent_type);
-    match meta.distribution {
+    let result = match meta.distribution {
         registry::AgentDistribution::Npx { package, .. } => {
             let default = agent_setting_service::AgentDefaultInput {
                 agent_type,
@@ -2546,7 +2698,16 @@ pub(crate) async fn acp_prepare_npx_agent_core(
                 .flatten()
                 .and_then(|m| m.installed_version);
 
-            install_npm_global_package(package).await?;
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Log,
+                format!("Installing {} ({package})", meta.name),
+            );
+            install_npm_global_package_streaming(package, &task_id, emitter).await?;
+
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Log,
+                "Detecting installed version...",
+            );
             let resolved = detect_local_version(agent_type)
                 .await
                 .or_else(|| version_from_package_spec(package))
@@ -2575,7 +2736,22 @@ pub(crate) async fn acp_prepare_npx_agent_core(
         registry::AgentDistribution::Binary { .. } => Err(AcpError::protocol(
             "prepare is only supported for npx agents",
         )),
+    };
+
+    match &result {
+        Ok(version) => {
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Completed,
+                format!("{} v{version} installed successfully", meta.name),
+            );
+        }
+        Err(e) => {
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Failed, e.to_string(),
+            );
+        }
     }
+    result
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -2583,44 +2759,72 @@ pub(crate) async fn acp_prepare_npx_agent_core(
 pub async fn acp_prepare_npx_agent(
     agent_type: AgentType,
     registry_version: Option<String>,
+    task_id: String,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<String, AcpError> {
     let emitter = EventEmitter::Tauri(app);
-    acp_prepare_npx_agent_core(agent_type, registry_version, &db, &emitter).await
+    acp_prepare_npx_agent_core(agent_type, registry_version, task_id, &db, &emitter).await
 }
 
 pub(crate) async fn acp_uninstall_agent_core(
     agent_type: AgentType,
+    task_id: String,
     db: &AppDatabase,
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
+    emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
+
     let meta = registry::get_agent_meta(agent_type);
-    match meta.distribution {
-        registry::AgentDistribution::Binary { .. } => {
-            binary_cache::clear_agent_cache(agent_type)?;
+    emit_agent_install_event(
+        emitter, &task_id, AgentInstallEventKind::Log,
+        format!("Uninstalling {}...", meta.name),
+    );
+
+    let result: Result<(), AcpError> = async {
+        match meta.distribution {
+            registry::AgentDistribution::Binary { .. } => {
+                binary_cache::clear_agent_cache(agent_type)?;
+            }
+            registry::AgentDistribution::Npx { package, .. } => {
+                uninstall_npm_global_package(package).await?;
+            }
         }
-        registry::AgentDistribution::Npx { package, .. } => {
-            uninstall_npm_global_package(package).await?;
+
+        agent_setting_service::set_installed_version(&db.conn, agent_type, None)
+            .await
+            .map_err(|e| AcpError::protocol(e.to_string()))?;
+        emit_acp_agents_updated(emitter, "agent_uninstalled", Some(agent_type));
+        Ok(())
+    }
+    .await;
+
+    match &result {
+        Ok(()) => {
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Completed,
+                format!("{} uninstalled successfully", meta.name),
+            );
+        }
+        Err(e) => {
+            emit_agent_install_event(
+                emitter, &task_id, AgentInstallEventKind::Failed, e.to_string(),
+            );
         }
     }
-
-    agent_setting_service::set_installed_version(&db.conn, agent_type, None)
-        .await
-        .map_err(|e| AcpError::protocol(e.to_string()))?;
-    emit_acp_agents_updated(emitter, "agent_uninstalled", Some(agent_type));
-    Ok(())
+    result
 }
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_uninstall_agent(
     agent_type: AgentType,
+    task_id: String,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<(), AcpError> {
     let emitter = EventEmitter::Tauri(app);
-    acp_uninstall_agent_core(agent_type, &db, &emitter).await
+    acp_uninstall_agent_core(agent_type, task_id, &db, &emitter).await
 }
 
 pub(crate) async fn acp_reorder_agents_core(

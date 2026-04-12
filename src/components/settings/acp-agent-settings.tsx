@@ -85,6 +85,7 @@ import type {
   ModelProviderInfo,
   PreflightResult,
 } from "@/lib/types"
+import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
 import { OpencodePluginsModal } from "./opencode-plugins-modal"
 
 interface AgentCheckState {
@@ -2624,6 +2625,9 @@ export function AcpAgentSettings() {
   const busyActionRef = useRef<Set<AgentType>>(new Set())
   const handledSearchAgentRef = useRef<string | null>(null)
   const agentListRef = useRef<HTMLDivElement | null>(null)
+  const installStream = useAgentInstallStream()
+  const [streamAgentType, setStreamAgentType] = useState<AgentType | null>(null)
+  const installLogEndRef = useRef<HTMLDivElement | null>(null)
 
   const sortedAgents = useMemo(
     () =>
@@ -2747,6 +2751,30 @@ export function AcpAgentSettings() {
     },
     [runPreflight]
   )
+
+  useEffect(() => {
+    return () => installStream.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const container = installLogEndRef.current?.parentElement
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
+  }, [installStream.logs])
+
+  useEffect(() => {
+    if (
+      installStream.status === "success" ||
+      installStream.status === "failed"
+    ) {
+      if (streamAgentType) {
+        runPreflight(streamAgentType).catch(() => {})
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installStream.status])
 
   useEffect(() => {
     refreshAgents().catch((err) => {
@@ -2940,11 +2968,14 @@ export function AcpAgentSettings() {
         [agent.agent_type]:
           kind ?? (mode === "download" ? "download_binary" : "upgrade_binary"),
       }))
+      const taskId = crypto.randomUUID()
+      setStreamAgentType(agent.agent_type)
+      await installStream.start(taskId)
       try {
         if (mode === "upgrade") {
           await acpClearBinaryCache(agent.agent_type)
         }
-        await acpDownloadAgentBinary(agent.agent_type)
+        await acpDownloadAgentBinary(agent.agent_type, taskId)
         await runPreflight(agent.agent_type)
         const detectedVersion = await acpDetectAgentLocalVersion(
           agent.agent_type
@@ -2990,7 +3021,8 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    [runPreflight, t]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [runPreflight, t, installStream.start]
   )
 
   const runNpxAction = useCallback(
@@ -3002,10 +3034,14 @@ export function AcpAgentSettings() {
         ...prev,
         [agent.agent_type]: mode === "install" ? "install_npx" : "upgrade_npx",
       }))
+      const taskId = crypto.randomUUID()
+      setStreamAgentType(agent.agent_type)
+      await installStream.start(taskId)
       try {
         const installedVersion = await acpPrepareNpxAgent(
           agent.agent_type,
-          agent.registry_version
+          agent.registry_version,
+          taskId
         )
         setAgents((prev) =>
           prev.map((item) =>
@@ -3062,7 +3098,8 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    [runPreflight, t]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [runPreflight, t, installStream.start]
   )
 
   const runUninstallAction = useCallback(
@@ -3077,8 +3114,11 @@ export function AcpAgentSettings() {
             ? "uninstall_binary"
             : "uninstall_npx",
       }))
+      const taskId = crypto.randomUUID()
+      setStreamAgentType(agent.agent_type)
+      await installStream.start(taskId)
       try {
-        await acpUninstallAgent(agent.agent_type)
+        await acpUninstallAgent(agent.agent_type, taskId)
         setAgents((prev) =>
           prev.map((item) =>
             item.agent_type === agent.agent_type
@@ -3105,7 +3145,8 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    [runPreflight, t]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [runPreflight, t, installStream.start]
   )
 
   const handleFixAction = async (agent: AcpAgentInfo, action: UiFixAction) => {
@@ -5003,6 +5044,24 @@ export function AcpAgentSettings() {
                       {t("preflight.notRun")}
                     </div>
                   )}
+                  {installStream.status !== "idle" &&
+                    streamAgentType === selectedAgent.agent_type && (
+                      <div className="mt-2 rounded-md border bg-muted/50 text-muted-foreground p-3 max-h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed">
+                        {installStream.logs.map((line, i) => (
+                          <div
+                            key={i}
+                            className={
+                              line.startsWith("ERROR:")
+                                ? "text-destructive"
+                                : ""
+                            }
+                          >
+                            {line}
+                          </div>
+                        ))}
+                        <div ref={installLogEndRef} />
+                      </div>
+                    )}
                 </div>
 
                 <div className="space-y-2">

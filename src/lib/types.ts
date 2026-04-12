@@ -936,6 +936,14 @@ export interface PluginInstallEvent {
   payload: string
 }
 
+export type AgentInstallEventKind = "started" | "log" | "completed" | "failed"
+
+export interface AgentInstallEvent {
+  task_id: string
+  kind: AgentInstallEventKind
+  payload: string
+}
+
 // ─── Chat Channels ───
 
 export type ChannelType = "lark" | "telegram" | "weixin"

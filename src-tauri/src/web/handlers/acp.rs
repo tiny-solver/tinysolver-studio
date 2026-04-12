@@ -459,12 +459,19 @@ pub async fn acp_update_agent_config(
     Ok(Json(()))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpDownloadAgentBinaryParams {
+    pub agent_type: AgentType,
+    pub task_id: String,
+}
+
 pub async fn acp_download_agent_binary(
     Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<AgentTypeParams>,
+    Json(params): Json<AcpDownloadAgentBinaryParams>,
 ) -> Result<Json<()>, AppCommandError> {
     let emitter = state.emitter.clone();
-    acp_commands::acp_download_agent_binary_core(params.agent_type, &emitter)
+    acp_commands::acp_download_agent_binary_core(params.agent_type, params.task_id, &emitter)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))
@@ -487,6 +494,7 @@ pub async fn acp_detect_agent_local_version(
 pub struct AcpPrepareNpxAgentParams {
     pub agent_type: AgentType,
     pub registry_version: Option<String>,
+    pub task_id: String,
 }
 
 pub async fn acp_prepare_npx_agent(
@@ -498,6 +506,7 @@ pub async fn acp_prepare_npx_agent(
     let result = acp_commands::acp_prepare_npx_agent_core(
         params.agent_type,
         params.registry_version,
+        params.task_id,
         db,
         &emitter,
     )
@@ -506,13 +515,20 @@ pub async fn acp_prepare_npx_agent(
     Ok(Json(result))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpUninstallAgentParams {
+    pub agent_type: AgentType,
+    pub task_id: String,
+}
+
 pub async fn acp_uninstall_agent(
     Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<AgentTypeParams>,
+    Json(params): Json<AcpUninstallAgentParams>,
 ) -> Result<Json<()>, AppCommandError> {
     let db = &state.db;
     let emitter = state.emitter.clone();
-    acp_commands::acp_uninstall_agent_core(params.agent_type, db, &emitter)
+    acp_commands::acp_uninstall_agent_core(params.agent_type, params.task_id, db, &emitter)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))

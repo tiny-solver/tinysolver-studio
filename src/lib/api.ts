@@ -184,9 +184,10 @@ export async function acpClearBinaryCache(agentType: AgentType): Promise<void> {
 }
 
 export async function acpDownloadAgentBinary(
-  agentType: AgentType
+  agentType: AgentType,
+  taskId: string
 ): Promise<void> {
-  return getTransport().call("acp_download_agent_binary", { agentType })
+  return getTransport().call("acp_download_agent_binary", { agentType, taskId })
 }
 
 export async function acpDetectAgentLocalVersion(
@@ -197,16 +198,21 @@ export async function acpDetectAgentLocalVersion(
 
 export async function acpPrepareNpxAgent(
   agentType: AgentType,
-  registryVersion?: string | null
+  registryVersion: string | null | undefined,
+  taskId: string
 ): Promise<string> {
   return getTransport().call("acp_prepare_npx_agent", {
     agentType,
     registryVersion: registryVersion ?? null,
+    taskId,
   })
 }
 
-export async function acpUninstallAgent(agentType: AgentType): Promise<void> {
-  return getTransport().call("acp_uninstall_agent", { agentType })
+export async function acpUninstallAgent(
+  agentType: AgentType,
+  taskId: string
+): Promise<void> {
+  return getTransport().call("acp_uninstall_agent", { agentType, taskId })
 }
 
 export async function acpUpdateAgentPreferences(
