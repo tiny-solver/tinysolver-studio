@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@xterm/xterm/css/xterm.css";
+@import "overlayscrollbars/overlayscrollbars.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -1002,12 +1003,26 @@
   }
 }
 
-/* Unified scrollbar style for scrollable containers.
-   Thin overlay scrollbar — no gutter reserved, no layout shift. */
-.scrollbar-thin,
-.scrollbar-thin-edge {
+/* Native fallback for containers that cannot use OverlayScrollbars (e.g. virtua) */
+.scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+}
+
+/* OverlayScrollbars custom theme */
+.os-theme-codeg {
+  --os-size: 6px;
+  --os-handle-bg: var(--border);
+  --os-handle-bg-hover: var(--muted-foreground);
+  --os-handle-bg-active: var(--muted-foreground);
+  --os-handle-border-radius: 999px;
+  --os-handle-perpendicular-size: 100%;
+  --os-handle-perpendicular-size-hover: 100%;
+  --os-handle-perpendicular-size-active: 100%;
+}
+
+.os-theme-codeg:hover {
+  --os-size: 8px;
 }
 
 /* Streamdown code blocks: dark mode via shiki dual-theme CSS variables */
