@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -173,6 +174,117 @@ pub fn check_opencode_plugins(
         plugins,
         has_project_config_hint,
     })
+}
+
+/// Locate a usable bun binary.
+/// Priority: opencode-bundled bun → system bun → error.
+pub fn resolve_bun_binary() -> Result<PathBuf, String> {
+    let cache_dir = opencode_cache_dir();
+
+    // Try opencode-bundled bun
+    if let Some(ref dir) = cache_dir {
+        let candidates = if cfg!(windows) {
+            vec![dir.join("bin").join("bun.exe")]
+        } else {
+            vec![dir.join("bin").join("bun")]
+        };
+        for candidate in candidates {
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    // Fallback to system bun
+    if let Ok(system_bun) = which::which("bun") {
+        return Ok(system_bun);
+    }
+
+    Err(
+        "bun binary not found. Neither opencode-bundled bun (~/.cache/opencode/bin/bun) \
+         nor system bun is available."
+            .to_string(),
+    )
+}
+
+/// Detect whether a JSON string contains comments (// or /*).
+fn json_has_comments(raw: &str) -> bool {
+    raw.contains("//") || raw.contains("/*")
+}
+
+/// Write a timestamped backup of a file, keeping only the most recent `keep` copies.
+fn write_backup_and_prune(path: &Path, content: &str, keep: usize) -> Result<(), String> {
+    let now = chrono::Local::now().format("%Y-%m-%dT%H-%M-%S");
+    let backup_path = path.with_file_name(format!(
+        "{}.bak.{now}",
+        path.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    fs::write(&backup_path, content)
+        .map_err(|e| format!("Failed to write backup {}: {e}", backup_path.display()))?;
+
+    // Prune old backups
+    let parent = path.parent().ok_or("No parent directory")?;
+    let stem = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let prefix = format!("{stem}.bak.");
+
+    let mut backups: Vec<_> = fs::read_dir(parent)
+        .map_err(|e| e.to_string())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(&prefix)
+        })
+        .collect();
+
+    // Sort by name descending (timestamp in name → newest first)
+    backups.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+    for old in backups.iter().skip(keep) {
+        let _ = fs::remove_file(old.path());
+    }
+
+    Ok(())
+}
+
+/// Atomically rewrite opencode.json: read → backup → mutate → write temp → rename.
+pub(crate) fn atomic_rewrite_opencode_json(
+    path: &Path,
+    mutator: impl FnOnce(&mut serde_json::Value) -> Result<(), String>,
+) -> Result<(), String> {
+    let raw = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+
+    if json_has_comments(&raw) {
+        return Err(
+            "opencode.json contains comments (// or /*). Refusing to rewrite to avoid data loss. \
+             Please edit the file manually."
+                .to_string(),
+        );
+    }
+
+    write_backup_and_prune(path, &raw, 3)?;
+
+    let mut doc: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
+
+    mutator(&mut doc)?;
+
+    let new_raw = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize JSON: {e}"))?;
+
+    let tmp_path = path.with_extension("json.tmp");
+    fs::write(&tmp_path, &new_raw)
+        .map_err(|e| format!("Failed to write temp file: {e}"))?;
+    fs::rename(&tmp_path, path)
+        .map_err(|e| format!("Failed to rename temp file: {e}"))?;
+
+    Ok(())
 }
 
 /// Parse a plugin spec string from opencode.json `plugin[]` into (package_name, full_spec).
