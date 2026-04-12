@@ -3,6 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use tokio::io::AsyncBufReadExt;
+
+use crate::web::event_bridge::{emit_event, EventEmitter};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -285,6 +288,217 @@ pub(crate) fn atomic_rewrite_opencode_json(
         .map_err(|e| format!("Failed to rename temp file: {e}"))?;
 
     Ok(())
+}
+
+static PLUGIN_OP_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+const PLUGIN_INSTALL_EVENT: &str = "app://opencode-plugin-install";
+
+/// Packages that must never be uninstalled (opencode internals).
+fn is_protected_package(name: &str) -> bool {
+    name.starts_with("@opencode-ai/")
+}
+
+fn emit_plugin_event(
+    emitter: &EventEmitter,
+    task_id: &str,
+    kind: PluginInstallEventKind,
+    payload: impl Into<String>,
+) {
+    emit_event(
+        emitter,
+        PLUGIN_INSTALL_EVENT,
+        PluginInstallEvent {
+            task_id: task_id.to_string(),
+            kind,
+            payload: payload.into(),
+        },
+    );
+}
+
+/// Install missing plugins by running `bun add` in the opencode cache directory.
+/// Streams progress events to the given emitter.
+pub async fn install_missing_plugins(
+    names: Option<Vec<String>>,
+    task_id: String,
+    emitter: &EventEmitter,
+) -> Result<(), String> {
+    let _guard = PLUGIN_OP_LOCK.try_lock().map_err(|_| {
+        "Another plugin operation is in progress".to_string()
+    })?;
+
+    emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Started, "");
+
+    // Re-check current state
+    let summary = check_opencode_plugins(None).map_err(|e| {
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &e);
+        e
+    })?;
+
+    let missing: Vec<&PluginInfo> = summary
+        .plugins
+        .iter()
+        .filter(|p| p.status == PluginStatus::Missing)
+        .filter(|p| match &names {
+            Some(list) => list.contains(&p.name),
+            None => true,
+        })
+        .collect();
+
+    if missing.is_empty() {
+        emit_plugin_event(
+            emitter,
+            &task_id,
+            PluginInstallEventKind::Completed,
+            "Nothing to install — all plugins are already present",
+        );
+        return Ok(());
+    }
+
+    let specs: Vec<String> = missing.iter().map(|p| p.declared_spec.clone()).collect();
+    let names_display: Vec<&str> = missing.iter().map(|p| p.name.as_str()).collect();
+
+    // Resolve bun
+    let bun = resolve_bun_binary().map_err(|e| {
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &e);
+        e
+    })?;
+
+    emit_plugin_event(
+        emitter,
+        &task_id,
+        PluginInstallEventKind::Log,
+        format!("Installing: {}", names_display.join(", ")),
+    );
+
+    // Spawn bun add
+    let mut cmd = crate::process::tokio_command(&bun);
+    cmd.arg("add")
+        .args(&specs)
+        .current_dir(&summary.cache_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| {
+        let msg = format!("Failed to spawn bun: {e}");
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &msg);
+        msg
+    })?;
+
+    // Stream stdout and stderr concurrently
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let emitter_clone = emitter.clone();
+    let task_id_clone = task_id.clone();
+
+    let stdout_handle = tokio::spawn({
+        let emitter = emitter_clone.clone();
+        let task_id = task_id_clone.clone();
+        async move {
+            if let Some(stdout) = stdout {
+                let reader = tokio::io::BufReader::new(stdout);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    emit_plugin_event(&emitter, &task_id, PluginInstallEventKind::Log, &line);
+                }
+            }
+        }
+    });
+
+    let stderr_handle = tokio::spawn({
+        let emitter = emitter_clone;
+        let task_id = task_id_clone;
+        async move {
+            if let Some(stderr) = stderr {
+                let reader = tokio::io::BufReader::new(stderr);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    emit_plugin_event(&emitter, &task_id, PluginInstallEventKind::Log, &line);
+                }
+            }
+        }
+    });
+
+    let _ = tokio::join!(stdout_handle, stderr_handle);
+
+    let exit_status = child.wait().await.map_err(|e| {
+        let msg = format!("Failed to wait for bun process: {e}");
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &msg);
+        msg
+    })?;
+
+    if exit_status.success() {
+        emit_plugin_event(
+            emitter,
+            &task_id,
+            PluginInstallEventKind::Completed,
+            "All plugins installed successfully",
+        );
+        Ok(())
+    } else {
+        let msg = format!("bun exited with code {}", exit_status.code().unwrap_or(-1));
+        emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Failed, &msg);
+        Err(msg)
+    }
+}
+
+/// Uninstall a single plugin: remove from opencode.json, then `bun remove` from cache.
+pub async fn uninstall_plugin(name: String) -> Result<PluginCheckSummary, String> {
+    let _guard = PLUGIN_OP_LOCK.try_lock().map_err(|_| {
+        "Another plugin operation is in progress".to_string()
+    })?;
+
+    if is_protected_package(&name) {
+        return Err(format!("Cannot uninstall {name}: it is an internal opencode package"));
+    }
+
+    let config_path = opencode_config_path()
+        .ok_or_else(|| "Cannot determine opencode config directory".to_string())?;
+    let cache_dir = opencode_cache_dir()
+        .ok_or_else(|| "Cannot determine opencode cache directory".to_string())?;
+
+    // Step 1: Remove from opencode.json if declared
+    if config_path.exists() {
+        let _ = atomic_rewrite_opencode_json(&config_path, |doc| {
+            if let Some(arr) = doc
+                .as_object_mut()
+                .and_then(|obj| obj.get_mut("plugin"))
+                .and_then(|v| v.as_array_mut())
+            {
+                arr.retain(|item| {
+                    if let Some(spec) = item.as_str() {
+                        match parse_plugin_spec(spec) {
+                            Some((parsed_name, _)) => parsed_name != name,
+                            None => true,
+                        }
+                    } else {
+                        true
+                    }
+                });
+            }
+            Ok(())
+        });
+    }
+
+    // Step 2: bun remove
+    let bun = resolve_bun_binary()?;
+    let output = crate::process::tokio_command(&bun)
+        .arg("remove")
+        .arg(&name)
+        .current_dir(&cache_dir)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run bun remove: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.contains("not found") {
+            return Err(format!("bun remove failed: {stderr}"));
+        }
+    }
+
+    // Return fresh summary
+    check_opencode_plugins(None)
 }
 
 /// Parse a plugin spec string from opencode.json `plugin[]` into (package_name, full_spec).
