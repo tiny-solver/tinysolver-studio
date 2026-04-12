@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { toIntlLocale } from "@/lib/i18n"
 import { APPEARANCE_INIT_SCRIPT } from "@/lib/appearance-script"
 import { AppearanceProvider } from "@/components/appearance-provider"
+import { OverlayScrollbarsInit } from "@/components/overlay-scrollbars-init"
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -68,7 +69,10 @@ export default async function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              <AppearanceProvider>{children}</AppearanceProvider>
+              <AppearanceProvider>
+                <OverlayScrollbarsInit />
+                {children}
+              </AppearanceProvider>
             </ThemeProvider>
           </AppI18nProvider>
         </NextIntlClientProvider>
