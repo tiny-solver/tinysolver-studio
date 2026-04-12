@@ -695,6 +695,7 @@
         "missing": "未安装"
       },
       "installAll": "安装全部缺失插件",
+      "pinVersions": "固定 @latest 版本",
       "install": "安装",
       "uninstall": "卸载",
       "refresh": "刷新",

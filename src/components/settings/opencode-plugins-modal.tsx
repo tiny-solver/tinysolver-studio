@@ -117,6 +117,10 @@ export function OpencodePluginsModal({
 
   const missingCount =
     summary?.plugins.filter((p) => p.status === "missing").length ?? 0
+  const floatingCount =
+    summary?.plugins.filter((p) => p.declared_spec.endsWith("@latest"))
+      .length ?? 0
+  const hasActionablePlugins = missingCount > 0 || floatingCount > 0
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -209,7 +213,7 @@ export function OpencodePluginsModal({
             <div className="flex items-center justify-between">
               <Button
                 size="sm"
-                disabled={isOperating || missingCount === 0}
+                disabled={isOperating || !hasActionablePlugins}
                 onClick={handleInstallAll}
               >
                 {stream.status === "running" ? (
@@ -217,7 +221,9 @@ export function OpencodePluginsModal({
                 ) : (
                   <Download className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                {t("opencodePlugins.installAll")}
+                {missingCount > 0
+                  ? t("opencodePlugins.installAll")
+                  : t("opencodePlugins.pinVersions")}
               </Button>
               <Button
                 size="sm"

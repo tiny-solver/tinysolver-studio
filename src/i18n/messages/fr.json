@@ -695,6 +695,7 @@
         "missing": "Non installé"
       },
       "installAll": "Installer tous les manquants",
+      "pinVersions": "Fixer les versions @latest",
       "install": "Installer",
       "uninstall": "Désinstaller",
       "refresh": "Actualiser",

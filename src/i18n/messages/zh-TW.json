@@ -695,6 +695,7 @@
         "missing": "未安裝"
       },
       "installAll": "安裝全部缺失外掛",
+      "pinVersions": "固定 @latest 版本",
       "install": "安裝",
       "uninstall": "解除安裝",
       "refresh": "重新整理",

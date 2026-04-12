@@ -435,12 +435,44 @@ pub async fn install_missing_plugins(
         .collect();
 
     if missing.is_empty() {
-        emit_plugin_event(
-            emitter,
-            &task_id,
-            PluginInstallEventKind::Completed,
-            "Nothing to install — all plugins are already present",
-        );
+        // Nothing to install, but still pin any @latest specs
+        let all_specs: Vec<(String, String)> = summary
+            .plugins
+            .iter()
+            .map(|p| (p.name.clone(), p.declared_spec.clone()))
+            .collect();
+        match pin_latest_specs(&summary.config_path, &summary.cache_dir, &all_specs) {
+            Ok(n) if n > 0 => {
+                emit_plugin_event(
+                    emitter,
+                    &task_id,
+                    PluginInstallEventKind::Log,
+                    format!("Pinned {n} @latest plugin(s) to installed versions in opencode.json"),
+                );
+                emit_plugin_event(
+                    emitter,
+                    &task_id,
+                    PluginInstallEventKind::Completed,
+                    format!("Pinned {n} @latest plugin(s) — no missing plugins to install"),
+                );
+            }
+            Err(e) => {
+                emit_plugin_event(
+                    emitter,
+                    &task_id,
+                    PluginInstallEventKind::Failed,
+                    format!("Failed to pin @latest versions: {e}"),
+                );
+            }
+            _ => {
+                emit_plugin_event(
+                    emitter,
+                    &task_id,
+                    PluginInstallEventKind::Completed,
+                    "Nothing to install — all plugins are already present",
+                );
+            }
+        }
         return Ok(());
     }
 
@@ -518,7 +550,10 @@ pub async fn install_missing_plugins(
     if exit_status.success() {
         // Pin @latest specs to actual installed versions to avoid
         // opencode hitting the npm registry on every startup.
-        let spec_pairs: Vec<(String, String)> = missing
+        // Pin ALL plugins (not just the ones we installed), so already-installed
+        // @latest plugins also get pinned.
+        let spec_pairs: Vec<(String, String)> = summary
+            .plugins
             .iter()
             .map(|p| (p.name.clone(), p.declared_spec.clone()))
             .collect();

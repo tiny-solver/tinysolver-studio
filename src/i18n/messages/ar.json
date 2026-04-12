@@ -695,6 +695,7 @@
         "missing": "غير مثبّت"
       },
       "installAll": "تثبيت جميع الإضافات المفقودة",
+      "pinVersions": "تثبيت إصدارات @latest",
       "install": "تثبيت",
       "uninstall": "إزالة",
       "refresh": "تحديث",

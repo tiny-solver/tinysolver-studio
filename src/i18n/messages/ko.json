@@ -695,6 +695,7 @@
         "missing": "미설치"
       },
       "installAll": "누락된 플러그인 모두 설치",
+      "pinVersions": "@latest 버전 고정",
       "install": "설치",
       "uninstall": "제거",
       "refresh": "새로고침",

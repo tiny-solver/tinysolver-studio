@@ -695,6 +695,7 @@
         "missing": "未インストール"
       },
       "installAll": "不足プラグインをすべてインストール",
+      "pinVersions": "@latest バージョンを固定",
       "install": "インストール",
       "uninstall": "アンインストール",
       "refresh": "更新",
