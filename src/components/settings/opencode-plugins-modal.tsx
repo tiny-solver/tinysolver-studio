@@ -30,7 +30,7 @@ export function OpencodePluginsModal({
   onOpenChange,
   onCompleted,
 }: OpencodePluginsModalProps) {
-  const t = useTranslations("AcpAgentSettings.opencodePlugins")
+  const t = useTranslations("AcpAgentSettings")
   const [summary, setSummary] = useState<PluginCheckSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [uninstalling, setUninstalling] = useState<string | null>(null)
@@ -122,7 +122,7 @@ export function OpencodePluginsModal({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogTitle>{t("opencodePlugins.title")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto flex-1">
@@ -140,7 +140,7 @@ export function OpencodePluginsModal({
           ) : summary && summary.plugins.length > 0 ? (
             <div className="space-y-1.5">
               <div className="text-xs font-medium text-muted-foreground">
-                {t("declared")}
+                {t("opencodePlugins.declared")}
               </div>
               {summary.plugins.map((plugin: PluginInfo) => (
                 <div
@@ -160,7 +160,7 @@ export function OpencodePluginsModal({
                         }
                         className="text-[10px] px-1.5 py-0"
                       >
-                        {t(`status.${plugin.status}`)}
+                        {t(`opencodePlugins.status.${plugin.status}`)}
                       </Badge>
                       {plugin.installed_version && (
                         <span className="text-[10px] text-muted-foreground">
@@ -178,7 +178,7 @@ export function OpencodePluginsModal({
                         onClick={() => handleInstallOne(plugin.name)}
                       >
                         <Download className="h-3 w-3 mr-1" />
-                        {t("install")}
+                        {t("opencodePlugins.install")}
                       </Button>
                     ) : (
                       <Button
@@ -192,7 +192,7 @@ export function OpencodePluginsModal({
                         ) : (
                           <Trash2 className="h-3 w-3" />
                         )}
-                        {t("uninstall")}
+                        {t("opencodePlugins.uninstall")}
                       </Button>
                     )}
                   </div>
@@ -201,7 +201,7 @@ export function OpencodePluginsModal({
             </div>
           ) : summary ? (
             <div className="text-xs text-muted-foreground text-center py-4">
-              {t("noPlugins")}
+              {t("opencodePlugins.noPlugins")}
             </div>
           ) : null}
 
@@ -217,7 +217,7 @@ export function OpencodePluginsModal({
                 ) : (
                   <Download className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                {t("installAll")}
+                {t("opencodePlugins.installAll")}
               </Button>
               <Button
                 size="sm"
@@ -228,7 +228,7 @@ export function OpencodePluginsModal({
                 <RefreshCw
                   className={`h-3.5 w-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`}
                 />
-                {t("refresh")}
+                {t("opencodePlugins.refresh")}
               </Button>
             </div>
           )}
@@ -249,12 +249,12 @@ export function OpencodePluginsModal({
 
           {stream.status === "success" && (
             <div className="text-xs text-green-600 font-medium">
-              {t("success")}
+              {t("opencodePlugins.success")}
             </div>
           )}
           {stream.status === "failed" && (
             <div className="text-xs text-destructive font-medium">
-              {t("failed")}: {stream.error}
+              {t("opencodePlugins.failed")}: {stream.error}
             </div>
           )}
         </div>
