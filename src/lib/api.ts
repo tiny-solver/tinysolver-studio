@@ -60,6 +60,7 @@ import type {
   ChannelStatusInfo,
   ChatChannelMessageLog,
   ModelProviderInfo,
+  PluginCheckSummary,
 } from "./types"
 
 export async function listConversations(params?: {
@@ -276,6 +277,26 @@ export async function acpPreflight(
     agentType,
     forceRefresh: forceRefresh ?? null,
   })
+}
+
+export async function opencodeListPlugins(): Promise<PluginCheckSummary> {
+  return getTransport().call("opencode_list_plugins", {})
+}
+
+export async function opencodeInstallPlugins(
+  taskId: string,
+  names?: string[] | null
+): Promise<void> {
+  return getTransport().call("opencode_install_plugins", {
+    names: names ?? null,
+    taskId,
+  })
+}
+
+export async function opencodeUninstallPlugin(
+  name: string
+): Promise<PluginCheckSummary> {
+  return getTransport().call("opencode_uninstall_plugin", { name })
 }
 
 export async function acpListAgentSkills(params: {
