@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -39,6 +40,139 @@ pub struct PluginInstallEvent {
     pub task_id: String,
     pub kind: PluginInstallEventKind,
     pub payload: String,
+}
+
+/// Well-known paths for opencode configuration and cache.
+fn opencode_config_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join("opencode").join("opencode.json"))
+}
+
+fn opencode_cache_dir() -> Option<PathBuf> {
+    dirs::cache_dir().map(|d| d.join("opencode"))
+}
+
+/// Check whether a project directory contains any opencode configuration file.
+fn has_project_opencode_config(project_root: &Path) -> bool {
+    let candidates = [
+        project_root.join("opencode.json"),
+        project_root.join("opencode.jsonc"),
+        project_root.join(".opencode").join("opencode.json"),
+        project_root.join(".opencode").join("opencode.jsonc"),
+    ];
+    candidates.iter().any(|p| p.exists())
+}
+
+/// Inspect `~/.config/opencode/opencode.json` and `~/.cache/opencode/node_modules/`
+/// to determine which declared plugins are installed and which are missing.
+pub fn check_opencode_plugins(
+    project_root: Option<&Path>,
+) -> Result<PluginCheckSummary, String> {
+    let config_path = opencode_config_path()
+        .ok_or_else(|| "Cannot determine opencode config directory".to_string())?;
+    let cache_dir = opencode_cache_dir()
+        .ok_or_else(|| "Cannot determine opencode cache directory".to_string())?;
+
+    let has_project_config_hint = project_root
+        .map(|root| has_project_opencode_config(root))
+        .unwrap_or(false);
+
+    // If config file doesn't exist, there's nothing to check
+    if !config_path.exists() {
+        return Ok(PluginCheckSummary {
+            config_path,
+            cache_dir,
+            plugins: vec![],
+            has_project_config_hint,
+        });
+    }
+
+    // Read and parse JSON
+    let raw = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read {}: {e}", config_path.display()))?;
+    let doc: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
+
+    // Extract plugin[] array
+    let plugin_array = match doc.get("plugin") {
+        Some(serde_json::Value::Array(arr)) => arr,
+        Some(_) => {
+            return Ok(PluginCheckSummary {
+                config_path,
+                cache_dir,
+                plugins: vec![],
+                has_project_config_hint,
+            });
+        }
+        None => {
+            return Ok(PluginCheckSummary {
+                config_path,
+                cache_dir,
+                plugins: vec![],
+                has_project_config_hint,
+            });
+        }
+    };
+
+    // Parse specs, dedup by name
+    let mut seen_names = HashSet::new();
+    let mut plugins = Vec::new();
+
+    for item in plugin_array {
+        let spec_str = match item.as_str() {
+            Some(s) => s,
+            None => {
+                eprintln!("[opencode_plugins] Skipping non-string plugin entry: {item}");
+                continue;
+            }
+        };
+
+        let (name, declared_spec) = match parse_plugin_spec(spec_str) {
+            Some(pair) => pair,
+            None => {
+                eprintln!("[opencode_plugins] Skipping invalid plugin spec: {spec_str:?}");
+                continue;
+            }
+        };
+
+        if !seen_names.insert(name.clone()) {
+            continue; // duplicate, skip
+        }
+
+        // Check node_modules/<name>/package.json
+        let pkg_json_path = cache_dir
+            .join("node_modules")
+            .join(&name)
+            .join("package.json");
+
+        let (status, installed_version) = if pkg_json_path.exists() {
+            let version = std::fs::read_to_string(&pkg_json_path)
+                .ok()
+                .and_then(|content| {
+                    serde_json::from_str::<serde_json::Value>(&content)
+                        .ok()?
+                        .get("version")?
+                        .as_str()
+                        .map(|s| s.to_string())
+                });
+            (PluginStatus::Installed, version)
+        } else {
+            (PluginStatus::Missing, None)
+        };
+
+        plugins.push(PluginInfo {
+            name,
+            declared_spec,
+            installed_version,
+            status,
+        });
+    }
+
+    Ok(PluginCheckSummary {
+        config_path,
+        cache_dir,
+        plugins,
+        has_project_config_hint,
+    })
 }
 
 /// Parse a plugin spec string from opencode.json `plugin[]` into (package_name, full_spec).
