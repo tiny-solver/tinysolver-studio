@@ -350,7 +350,7 @@ async fn check_binary_environment(
 
     // OpenCode plugin checks
     if agent_type == AgentType::OpenCode {
-        use crate::acp::opencode_plugins::{self, PluginStatus};
+        use crate::acp::opencode_plugins::{self, PluginStatus, spec_has_floating_version};
         match opencode_plugins::check_opencode_plugins(None) {
             Ok(summary) => {
                 let missing: Vec<_> = summary
@@ -386,6 +386,32 @@ async fn check_binary_environment(
                             "{} plugin(s) not installed: {}",
                             missing.len(),
                             names.join(", ")
+                        ),
+                        fixes: vec![FixAction {
+                            label: "Install Plugins".into(),
+                            kind: FixActionKind::InstallOpencodePlugins,
+                            payload: String::new(),
+                        }],
+                    });
+                }
+
+                // Warn about @latest specs that cause slow startup
+                let floating: Vec<&str> = summary
+                    .plugins
+                    .iter()
+                    .filter(|p| spec_has_floating_version(&p.declared_spec))
+                    .map(|p| p.name.as_str())
+                    .collect();
+                if !floating.is_empty() {
+                    checks.push(CheckItem {
+                        check_id: "opencode_plugins_floating".into(),
+                        label: "Plugin versions".into(),
+                        status: CheckStatus::Warn,
+                        message: format!(
+                            "{} plugin(s) use @latest which forces a network check on every startup: {}. \
+                             Install via the plugin manager to auto-pin versions.",
+                            floating.len(),
+                            floating.join(", ")
                         ),
                         fixes: vec![FixAction {
                             label: "Install Plugins".into(),

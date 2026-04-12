@@ -310,6 +310,76 @@ pub(crate) fn atomic_rewrite_opencode_json(
     Ok(())
 }
 
+/// Check whether a plugin spec uses a floating version tag like `@latest`.
+pub fn spec_has_floating_version(spec: &str) -> bool {
+    if let Some((_, full)) = parse_plugin_spec(spec) {
+        full.ends_with("@latest")
+    } else {
+        false
+    }
+}
+
+/// After a successful install, replace `@latest` specs in opencode.json with
+/// the actual installed version read from node_modules.  This prevents
+/// opencode from hitting the npm registry on every startup.
+fn pin_latest_specs(
+    config_path: &Path,
+    cache_dir: &Path,
+    specs: &[(String, String)], // (name, original_declared_spec)
+) -> Result<usize, String> {
+    let mut pinned = 0;
+
+    // Collect name → installed_version for specs that have @latest
+    let mut pin_map: Vec<(String, String)> = Vec::new();
+    for (name, declared) in specs {
+        if !declared.ends_with("@latest") {
+            continue;
+        }
+        let pkg_json = cache_dir
+            .join("node_modules")
+            .join(name)
+            .join("package.json");
+        if let Ok(content) = fs::read_to_string(&pkg_json) {
+            if let Some(version) = serde_json::from_str::<serde_json::Value>(&content)
+                .ok()
+                .and_then(|v| v.get("version")?.as_str().map(|s| s.to_string()))
+            {
+                pin_map.push((name.clone(), version));
+            }
+        }
+    }
+
+    if pin_map.is_empty() {
+        return Ok(0);
+    }
+
+    atomic_rewrite_opencode_json(config_path, |doc| {
+        if let Some(arr) = doc
+            .as_object_mut()
+            .and_then(|obj| obj.get_mut("plugin"))
+            .and_then(|v| v.as_array_mut())
+        {
+            for item in arr.iter_mut() {
+                if let Some(spec_str) = item.as_str() {
+                    if let Some((parsed_name, _)) = parse_plugin_spec(spec_str) {
+                        if let Some((_, version)) =
+                            pin_map.iter().find(|(n, _)| *n == parsed_name)
+                        {
+                            *item = serde_json::Value::String(format!(
+                                "{parsed_name}@{version}"
+                            ));
+                            pinned += 1;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    })?;
+
+    Ok(pinned)
+}
+
 static PLUGIN_OP_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 const PLUGIN_INSTALL_EVENT: &str = "app://opencode-plugin-install";
@@ -446,6 +516,32 @@ pub async fn install_missing_plugins(
     })?;
 
     if exit_status.success() {
+        // Pin @latest specs to actual installed versions to avoid
+        // opencode hitting the npm registry on every startup.
+        let spec_pairs: Vec<(String, String)> = missing
+            .iter()
+            .map(|p| (p.name.clone(), p.declared_spec.clone()))
+            .collect();
+        match pin_latest_specs(&summary.config_path, &summary.cache_dir, &spec_pairs) {
+            Ok(n) if n > 0 => {
+                emit_plugin_event(
+                    emitter,
+                    &task_id,
+                    PluginInstallEventKind::Log,
+                    format!("Pinned {n} @latest plugin(s) to installed versions in opencode.json"),
+                );
+            }
+            Err(e) => {
+                emit_plugin_event(
+                    emitter,
+                    &task_id,
+                    PluginInstallEventKind::Log,
+                    format!("Warning: could not pin @latest versions: {e}"),
+                );
+            }
+            _ => {}
+        }
+
         emit_plugin_event(
             emitter,
             &task_id,
