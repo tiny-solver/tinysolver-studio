@@ -8,6 +8,7 @@ use tauri::State;
 
 use crate::acp::binary_cache;
 use crate::acp::error::AcpError;
+use crate::acp::opencode_plugins::{self, PluginCheckSummary};
 #[cfg(feature = "tauri-runtime")]
 use crate::acp::manager::ConnectionManager;
 use crate::acp::preflight::{self, PreflightResult};
@@ -2825,4 +2826,50 @@ pub async fn acp_delete_agent_skill(
     remove_skill_entry(&skill_path)
         .map_err(|e| AcpError::protocol(format!("failed to delete skill entry: {e}")))?;
     Ok(())
+}
+
+pub(crate) async fn opencode_list_plugins_core() -> Result<PluginCheckSummary, AcpError> {
+    opencode_plugins::check_opencode_plugins(None)
+        .map_err(|e| AcpError::Protocol(e))
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn opencode_list_plugins() -> Result<PluginCheckSummary, AcpError> {
+    opencode_list_plugins_core().await
+}
+
+pub(crate) async fn opencode_install_plugins_core(
+    names: Option<Vec<String>>,
+    task_id: String,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
+    opencode_plugins::install_missing_plugins(names, task_id, emitter)
+        .await
+        .map_err(|e| AcpError::Protocol(e))
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn opencode_install_plugins(
+    names: Option<Vec<String>>,
+    task_id: String,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    let emitter = EventEmitter::Tauri(app);
+    opencode_install_plugins_core(names, task_id, &emitter).await
+}
+
+pub(crate) async fn opencode_uninstall_plugin_core(
+    name: String,
+) -> Result<PluginCheckSummary, AcpError> {
+    opencode_plugins::uninstall_plugin(name)
+        .await
+        .map_err(|e| AcpError::Protocol(e))
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn opencode_uninstall_plugin(
+    name: String,
+) -> Result<PluginCheckSummary, AcpError> {
+    opencode_uninstall_plugin_core(name).await
 }

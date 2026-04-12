@@ -4,6 +4,7 @@ use std::sync::Arc;
 use axum::{extract::Extension, Json};
 use serde::Deserialize;
 
+use crate::acp::opencode_plugins::PluginCheckSummary;
 use crate::acp::preflight::PreflightResult;
 use crate::acp::types::{
     AcpAgentInfo, AcpAgentStatus, AgentSkillContent, AgentSkillLayout, AgentSkillScope,
@@ -533,4 +534,44 @@ pub async fn acp_reorder_agents(
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))
+}
+
+pub async fn opencode_list_plugins() -> Result<Json<PluginCheckSummary>, AppCommandError> {
+    let result = acp_commands::opencode_list_plugins_core()
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpencodeInstallPluginsParams {
+    pub names: Option<Vec<String>>,
+    pub task_id: String,
+}
+
+pub async fn opencode_install_plugins(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<OpencodeInstallPluginsParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let emitter = crate::web::event_bridge::EventEmitter::WebOnly(state.event_broadcaster.clone());
+    acp_commands::opencode_install_plugins_core(params.names, params.task_id, &emitter)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpencodeUninstallPluginParams {
+    pub name: String,
+}
+
+pub async fn opencode_uninstall_plugin(
+    Json(params): Json<OpencodeUninstallPluginParams>,
+) -> Result<Json<PluginCheckSummary>, AppCommandError> {
+    let result = acp_commands::opencode_uninstall_plugin_core(params.name)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
 }
