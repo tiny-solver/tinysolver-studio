@@ -172,6 +172,7 @@
     "checking": "检查中...",
     "checkUpdate": "检查更新",
     "updating": "升级中...",
+    "downloading": "下载中...",
     "upgradeTo": "升级到 v{version}",
     "foundUpdate": "发现新版本 v{version}",
     "alreadyLatest": "当前已经是最新版本",

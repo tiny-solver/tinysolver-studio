@@ -172,6 +172,7 @@
     "checking": "جارٍ التحقق...",
     "checkUpdate": "التحقق من التحديثات",
     "updating": "جارٍ التثبيت...",
+    "downloading": "جارٍ التنزيل...",
     "upgradeTo": "الترقية إلى v{version}",
     "foundUpdate": "تم العثور على إصدار جديد v{version}",
     "alreadyLatest": "أنت على أحدث إصدار",

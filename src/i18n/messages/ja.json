@@ -172,6 +172,7 @@
     "checking": "確認中...",
     "checkUpdate": "更新を確認",
     "updating": "インストール中...",
+    "downloading": "ダウンロード中...",
     "upgradeTo": "v{version} にアップグレード",
     "foundUpdate": "新しいバージョン v{version} が見つかりました",
     "alreadyLatest": "すでに最新バージョンです",

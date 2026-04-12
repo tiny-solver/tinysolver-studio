@@ -172,6 +172,7 @@
     "checking": "확인 중...",
     "checkUpdate": "업데이트 확인",
     "updating": "설치 중...",
+    "downloading": "다운로드 중...",
     "upgradeTo": "v{version}로 업그레이드",
     "foundUpdate": "새 버전 v{version}을 찾았습니다",
     "alreadyLatest": "이미 최신 버전입니다",

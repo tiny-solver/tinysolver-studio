@@ -172,6 +172,7 @@
     "checking": "Checking...",
     "checkUpdate": "Check for updates",
     "updating": "Installing...",
+    "downloading": "Downloading...",
     "upgradeTo": "Upgrade to v{version}",
     "foundUpdate": "New version v{version} found",
     "alreadyLatest": "You're on the latest version",
