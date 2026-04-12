@@ -14,6 +14,7 @@ static NPM_ENV_CACHE: Mutex<Option<Vec<CheckItem>>> = Mutex::new(None);
 #[serde(rename_all = "snake_case")]
 pub enum FixActionKind {
     OpenUrl,
+    InstallOpencodePlugins,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -345,6 +346,79 @@ async fn check_binary_environment(
                 },
             };
         checks.push(cache_check);
+    }
+
+    // OpenCode plugin checks
+    if agent_type == AgentType::OpenCode {
+        use crate::acp::opencode_plugins::{self, PluginStatus};
+        match opencode_plugins::check_opencode_plugins(None) {
+            Ok(summary) => {
+                let missing: Vec<_> = summary
+                    .plugins
+                    .iter()
+                    .filter(|p| p.status == PluginStatus::Missing)
+                    .collect();
+
+                if summary.plugins.is_empty() {
+                    checks.push(CheckItem {
+                        check_id: "opencode_plugins".into(),
+                        label: "OpenCode plugins".into(),
+                        status: CheckStatus::Pass,
+                        message: "No plugins declared".into(),
+                        fixes: vec![],
+                    });
+                } else if missing.is_empty() {
+                    checks.push(CheckItem {
+                        check_id: "opencode_plugins".into(),
+                        label: "OpenCode plugins".into(),
+                        status: CheckStatus::Pass,
+                        message: format!("{} plugin(s) installed", summary.plugins.len()),
+                        fixes: vec![],
+                    });
+                } else {
+                    let names: Vec<&str> =
+                        missing.iter().map(|p| p.name.as_str()).collect();
+                    checks.push(CheckItem {
+                        check_id: "opencode_plugins".into(),
+                        label: "OpenCode plugins".into(),
+                        status: CheckStatus::Fail,
+                        message: format!(
+                            "{} plugin(s) not installed: {}",
+                            missing.len(),
+                            names.join(", ")
+                        ),
+                        fixes: vec![FixAction {
+                            label: "Install Plugins".into(),
+                            kind: FixActionKind::InstallOpencodePlugins,
+                            payload: String::new(),
+                        }],
+                    });
+                }
+
+                // Project-level config hint
+                if summary.has_project_config_hint {
+                    checks.push(CheckItem {
+                        check_id: "opencode_project_config_hint".into(),
+                        label: "Project config".into(),
+                        status: CheckStatus::Warn,
+                        message:
+                            "Project-level opencode config detected; its plugins are not checked. \
+                             Expect slower first connect if it declares plugins."
+                                .into(),
+                        fixes: vec![],
+                    });
+                }
+            }
+            Err(e) => {
+                checks.push(CheckItem {
+                    check_id: "opencode_plugins".into(),
+                    label: "OpenCode plugins".into(),
+                    status: CheckStatus::Warn,
+                    message: format!("Failed to parse opencode.json: {e}"),
+                    fixes: vec![],
+                });
+            }
+        }
     }
 
     checks
