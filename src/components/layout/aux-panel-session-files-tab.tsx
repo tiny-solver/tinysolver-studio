@@ -290,7 +290,7 @@ export function SessionFilesTab() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-2">
         <SessionFilesContent conversationId={conversationId} />
       </div>
     </div>

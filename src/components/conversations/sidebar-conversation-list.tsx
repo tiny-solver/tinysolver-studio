@@ -482,7 +482,7 @@ export function SidebarConversationList({
             <div
               ref={scrollContainerRef}
               className={cn(
-                "flex-1 min-h-0 overflow-y-auto scrollbar-thin",
+                "flex-1 min-h-0 overflow-y-auto scrollbar-thin px-2",
                 "[overflow-anchor:none]"
               )}
             >
