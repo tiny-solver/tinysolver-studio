@@ -2466,16 +2466,6 @@ impl WatchEventBatch {
         !self.overflowed && self.changed_paths.is_empty()
     }
 
-    fn kind(&self) -> &'static str {
-        if self.has_remove {
-            "remove"
-        } else if self.has_create {
-            "create"
-        } else {
-            "modify"
-        }
-    }
-
     fn ingest_event(&mut self, root_canonical: &Path, event: notify::Event) {
         if !should_emit_watch_event(&event.kind) {
             return;
@@ -2521,7 +2511,7 @@ impl WatchEventBatch {
         }
     }
 
-    fn emit(&self, emitter: &EventEmitter, root_display: &str) {
+    fn emit(&self, emitter: &EventEmitter, root_display: &str, root_canonical: &Path) {
         if self.is_empty() {
             return;
         }
@@ -2534,6 +2524,24 @@ impl WatchEventBatch {
             paths
         };
 
+        // On macOS, Finder trash (move-to-trash) may be reported as a rename
+        // (`Modify(Name)`) instead of `Remove`, so `has_remove` is never set.
+        // Detect this by checking whether any changed path no longer exists on
+        // disk and promote the event kind to "remove" accordingly.
+        let has_missing_path = !self.has_remove
+            && !self.overflowed
+            && self
+                .changed_paths
+                .iter()
+                .any(|p| !root_canonical.join(p).exists());
+        let kind = if self.has_remove || has_missing_path {
+            "remove"
+        } else if self.has_create {
+            "create"
+        } else {
+            "modify"
+        };
+
         let payload = FileTreeChangedEvent {
             root_path: root_display.to_string(),
             refresh_git_status: if self.overflowed {
@@ -2542,7 +2550,7 @@ impl WatchEventBatch {
                 should_refresh_git_status_for_paths(root_display, &changed_paths)
             },
             changed_paths,
-            kind: self.kind().to_string(),
+            kind: kind.to_string(),
             full_reload: self.overflowed,
         };
 
@@ -2585,21 +2593,21 @@ fn run_file_watch_event_loop(
                 };
 
                 if should_flush {
-                    batch.emit(&emitter, &root_display);
+                    batch.emit(&emitter, &root_display, &root_canonical);
                     batch.clear();
                     batch_started_at = None;
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 if !batch.is_empty() {
-                    batch.emit(&emitter, &root_display);
+                    batch.emit(&emitter, &root_display, &root_canonical);
                     batch.clear();
                     batch_started_at = None;
                 }
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 if !batch.is_empty() {
-                    batch.emit(&emitter, &root_display);
+                    batch.emit(&emitter, &root_display, &root_canonical);
                 }
                 break;
             }
