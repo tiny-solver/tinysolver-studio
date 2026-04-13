@@ -1114,12 +1114,40 @@
 /* Monaco widgets: align popups/menus with shadcn surface style */
 .context-view .monaco-menu,
 .monaco-editor .suggest-widget,
-.monaco-editor .editor-widget,
+.monaco-editor .editor-widget:not(.find-widget),
 .monaco-editor .peekview-widget,
 .monaco-hover.workbench-hover {
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
   box-shadow: 0 18px 36px -24px rgb(0 0 0 / 55%) !important;
+}
+
+/* Find widget slides from top: only bottom corners rounded, no top border */
+.monaco-editor .find-widget {
+  border-left: 1px solid var(--border) !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-top: none !important;
+  border-radius: 0 0 var(--radius) var(--radius) !important;
+  box-shadow: 0 18px 36px -24px rgb(0 0 0 / 55%) !important;
+}
+
+/* Align the close button with the action buttons (prev/next match) */
+.monaco-editor .find-widget > .button.codicon-widget-close {
+  top: 9px !important;
+}
+
+/* Fix: Monaco hover tooltips are rendered in a .context-view overlay that
+   1) covers the trigger button causing mouseleave→show flicker, and
+   2) gets clipped by overflow:hidden on ancestor elements.
+   Using position:fixed escapes overflow clipping; translate corrects the
+   coordinates (inline top/left are container-relative, translate adds the
+   container's viewport offset). pointer-events:none prevents the overlay
+   from stealing mouse events from the button underneath. */
+.context-view:has(> .workbench-hover-container) {
+  position: fixed !important;
+  translate: var(--cv-offset-x, 0px) var(--cv-offset-y, 0px);
+  pointer-events: none;
 }
 
 .context-view .monaco-menu .monaco-action-bar.vertical .action-item .action-menu-item,

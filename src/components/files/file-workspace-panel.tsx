@@ -1014,6 +1014,21 @@ export function FileWorkspacePanel() {
       setCursorLine(editorInstance.getPosition()?.lineNumber ?? 1)
       applyHiddenAreas()
       applyGitChangeDecorations()
+
+      // Set CSS custom properties so hover tooltips can use position:fixed
+      // to escape overflow:hidden clipping on ancestor elements.
+      const dom = editorInstance.getContainerDomNode()
+      if (dom) {
+        const syncOffset = () => {
+          const r = dom.getBoundingClientRect()
+          dom.style.setProperty("--cv-offset-x", `${r.left}px`)
+          dom.style.setProperty("--cv-offset-y", `${r.top}px`)
+        }
+        syncOffset()
+        const ro = new ResizeObserver(syncOffset)
+        ro.observe(dom)
+        editorInstance.onDidDispose(() => ro.disconnect())
+      }
     },
     [applyGitChangeDecorations, applyHiddenAreas]
   )
