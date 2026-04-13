@@ -2254,8 +2254,8 @@ static FILE_IO_SEMAPHORE: LazyLock<Semaphore> =
     LazyLock::new(|| Semaphore::new(FILE_IO_MAX_CONCURRENT_OPS));
 static FILE_WATCHERS: LazyLock<Mutex<HashMap<String, FileWatchEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-const FILE_WATCH_DEBOUNCE_MS: u64 = 150;
-const FILE_WATCH_MAX_BATCH_WINDOW_MS: u64 = 500;
+const FILE_WATCH_DEBOUNCE_MS: u64 = 2_000;
+const FILE_WATCH_MAX_BATCH_WINDOW_MS: u64 = 5_000;
 const FILE_WATCH_MAX_CHANGED_PATHS: usize = 2_000;
 
 fn to_git_literal_pathspec(path: &str) -> String {
