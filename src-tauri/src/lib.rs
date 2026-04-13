@@ -83,6 +83,10 @@ mod tauri_app {
                     }
                 }
 
+                // Load saved zoom level for traffic-light positioning before
+                // any window is created.
+                tauri::async_runtime::block_on(windows::load_saved_zoom(&db.conn));
+
                 // Install bundled expert skills into the central store
                 // (`~/.codeg/skills/`). Runs in the background and does
                 // not block startup; failures are logged but non-fatal.

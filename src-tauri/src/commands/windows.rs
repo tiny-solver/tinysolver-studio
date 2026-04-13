@@ -3,10 +3,12 @@ use std::sync::Mutex;
 #[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use sea_orm::DatabaseConnection;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::app_error::AppCommandError;
 use crate::db::AppDatabase;
+use crate::db::service::app_metadata_service;
 use crate::models::FolderHistoryEntry;
 
 /// Base traffic-light position (logical px) at 100 % zoom.
@@ -24,6 +26,26 @@ fn traffic_light_position() -> tauri::LogicalPosition<f64> {
     // Only Y scales with zoom: overlay content shifts vertically with
     // font-size changes, but the horizontal inset remains constant.
     tauri::LogicalPosition::new(TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y * zoom / 100.0)
+}
+
+const ZOOM_LEVEL_DB_KEY: &str = "appearance_zoom_level";
+
+/// Load saved zoom level from DB and initialize CURRENT_ZOOM.
+/// Called once at startup before any window is created.
+pub async fn load_saved_zoom(conn: &DatabaseConnection) {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(Some(raw)) = app_metadata_service::get_value(conn, ZOOM_LEVEL_DB_KEY).await {
+            if let Ok(zoom) = raw.parse::<u32>() {
+                let clamped = zoom.clamp(50, 300);
+                CURRENT_ZOOM.store(clamped, Ordering::Relaxed);
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = conn;
+    }
 }
 
 pub struct SettingsWindowState {
@@ -687,14 +709,30 @@ pub async fn open_project_boot_window(
     Ok(())
 }
 
-/// Store the current zoom level so that newly created windows use the correct
-/// traffic-light position.  Existing windows are NOT repositioned at runtime.
+/// Store the current zoom level and persist it to DB so the next launch
+/// creates windows with the correct traffic-light position.
+/// Existing windows are NOT repositioned at runtime.
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn update_traffic_light_position(app: AppHandle, zoom: f64) -> Result<(), AppCommandError> {
+pub async fn update_traffic_light_position(
+    app: AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+    zoom: f64,
+) -> Result<(), AppCommandError> {
+    let clamped = zoom.clamp(50.0, 300.0) as u32;
+
     #[cfg(target_os = "macos")]
-    CURRENT_ZOOM.store(zoom.clamp(50.0, 300.0) as u32, Ordering::Relaxed);
-    let _ = (app, zoom);
+    CURRENT_ZOOM.store(clamped, Ordering::Relaxed);
+
+    // Persist to DB so the next launch reads the correct value.
+    let _ = app_metadata_service::upsert_value(
+        &db.conn,
+        ZOOM_LEVEL_DB_KEY,
+        &clamped.to_string(),
+    )
+    .await;
+
+    let _ = app;
     Ok(())
 }
 
