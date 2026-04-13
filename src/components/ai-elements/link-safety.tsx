@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
+import { useTranslations } from "next-intl"
 import { openUrl } from "@/lib/platform"
 import type { LinkSafetyConfig, LinkSafetyModalProps } from "streamdown"
 import { toast } from "sonner"
@@ -27,6 +28,14 @@ const URL_SCHEME = /^[a-zA-Z][a-zA-Z\d+\-.]*:/
 
 function normalizeSlashPath(path: string): string {
   return path.replace(/\\/g, "/")
+}
+
+/** Strip leading slash before Windows drive letter: /C:/foo → C:/foo */
+function stripLeadingSlashOnWindows(p: string): string {
+  if (p.startsWith("/") && WINDOWS_ABSOLUTE_PATH.test(p.slice(1))) {
+    return p.slice(1)
+  }
+  return p
 }
 
 function decodeUriSafely(value: string): string {
@@ -92,10 +101,7 @@ function parseLocalFileTarget(rawUrl: string): LocalFileTarget | null {
     try {
       const parsed = new URL(raw)
       const rawPathname = decodeUriSafely(parsed.pathname)
-      const normalizedPathname =
-        rawPathname.startsWith("/") && WINDOWS_ABSOLUTE_PATH.test(rawPathname)
-          ? rawPathname.slice(1)
-          : rawPathname
+      const normalizedPathname = stripLeadingSlashOnWindows(rawPathname)
       const pathAndLine = splitPathAndLine(normalizedPathname)
       if (!pathAndLine.path) return null
       return {
@@ -118,10 +124,11 @@ function parseLocalFileTarget(rawUrl: string): LocalFileTarget | null {
   const withoutQuery =
     queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash
   const pathAndLine = splitPathAndLine(withoutQuery)
-  if (!isLocalPathLike(pathAndLine.path)) return null
+  const normalizedPath = stripLeadingSlashOnWindows(pathAndLine.path)
+  if (!isLocalPathLike(normalizedPath)) return null
 
   return {
-    path: normalizeSlashPath(pathAndLine.path),
+    path: normalizeSlashPath(normalizedPath),
     line: parseHashLine(hash) ?? pathAndLine.line,
   }
 }
@@ -163,6 +170,7 @@ function LinkSafetyModal({
 }: LinkSafetyModalProps & {
   onAction: (url: string) => Promise<void>
 }) {
+  const t = useTranslations("Folder.chat.linkSafety")
   const [opening, setOpening] = useState(false)
   const localTarget = useMemo(() => parseLocalFileTarget(url), [url])
   const isLocalFile = Boolean(localTarget)
@@ -185,21 +193,27 @@ function LinkSafetyModal({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isLocalFile ? "Open local file?" : "Open external link?"}
+            {isLocalFile ? t("localFileTitle") : t("externalLinkTitle")}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isLocalFile
-              ? "You're about to open a local file in the Files panel."
-              : "You're about to visit an external website."}
+              ? t("localFileDescription")
+              : t("externalLinkDescription")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="max-h-28 overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">
-          {url}
+          {localTarget?.path ?? url}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={opening}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={opening}>
+            {t("cancel")}
+          </AlertDialogCancel>
           <AlertDialogAction disabled={opening} onClick={handleAction}>
-            {opening ? "Opening..." : isLocalFile ? "Open file" : "Open link"}
+            {opening
+              ? t("opening")
+              : isLocalFile
+                ? t("openFile")
+                : t("openLink")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -208,6 +222,7 @@ function LinkSafetyModal({
 }
 
 export function useStreamdownLinkSafety(): LinkSafetyConfig {
+  const t = useTranslations("Folder.chat.linkSafety")
   const { folder } = useFolderContext()
   const folderPath = folder?.path
   const { openFilePreview } = useWorkspaceContext()
@@ -217,8 +232,8 @@ export function useStreamdownLinkSafety(): LinkSafetyConfig {
       const localTarget = parseLocalFileTarget(url)
       if (localTarget) {
         if (!folderPath) {
-          toast.error("Cannot open local file", {
-            description: "No workspace folder is currently active.",
+          toast.error(t("errorCannotOpen"), {
+            description: t("errorNoWorkspace"),
           })
           return
         }
@@ -228,8 +243,8 @@ export function useStreamdownLinkSafety(): LinkSafetyConfig {
           folderPath
         )
         if (!relativePath) {
-          toast.error("Cannot open local file", {
-            description: "The file is outside the current workspace folder.",
+          toast.error(t("errorCannotOpen"), {
+            description: t("errorOutsideWorkspace"),
           })
           return
         }
@@ -239,7 +254,7 @@ export function useStreamdownLinkSafety(): LinkSafetyConfig {
             line: localTarget.line ?? undefined,
           })
         } catch (error) {
-          toast.error("Failed to open local file", {
+          toast.error(t("errorFailedOpen"), {
             description: error instanceof Error ? error.message : String(error),
           })
         }
@@ -249,12 +264,12 @@ export function useStreamdownLinkSafety(): LinkSafetyConfig {
       try {
         await openUrl(url)
       } catch (error) {
-        toast.error("Failed to open link", {
+        toast.error(t("errorFailedLink"), {
           description: error instanceof Error ? error.message : String(error),
         })
       }
     },
-    [folderPath, openFilePreview]
+    [folderPath, openFilePreview, t]
   )
 
   const renderModal = useCallback(

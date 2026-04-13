@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "생각함",
         "thoughtForSeconds": "생각함"
       },
+      "linkSafety": {
+        "localFileTitle": "로컬 파일을 여시겠습니까?",
+        "externalLinkTitle": "외부 링크를 여시겠습니까?",
+        "localFileDescription": "파일 패널에서 로컬 파일을 열려고 합니다.",
+        "externalLinkDescription": "외부 웹사이트를 방문하려고 합니다.",
+        "cancel": "취소",
+        "opening": "열고 있습니다…",
+        "openFile": "파일 열기",
+        "openLink": "링크 열기",
+        "errorCannotOpen": "로컬 파일을 열 수 없습니다",
+        "errorNoWorkspace": "현재 활성화된 워크스페이스 폴더가 없습니다.",
+        "errorOutsideWorkspace": "파일이 현재 워크스페이스 폴더 밖에 있습니다.",
+        "errorFailedOpen": "로컬 파일 열기 실패",
+        "errorFailedLink": "링크 열기 실패"
+      },
       "messageList": {
         "attachedResources": "첨부된 리소스",
         "loading": "불러오는 중...",

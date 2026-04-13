@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "考えた",
         "thoughtForSeconds": "考えた"
       },
+      "linkSafety": {
+        "localFileTitle": "ローカルファイルを開きますか？",
+        "externalLinkTitle": "外部リンクを開きますか？",
+        "localFileDescription": "ファイルパネルでローカルファイルを開こうとしています。",
+        "externalLinkDescription": "外部ウェブサイトにアクセスしようとしています。",
+        "cancel": "キャンセル",
+        "opening": "開いています…",
+        "openFile": "ファイルを開く",
+        "openLink": "リンクを開く",
+        "errorCannotOpen": "ローカルファイルを開けません",
+        "errorNoWorkspace": "現在アクティブなワークスペースフォルダがありません。",
+        "errorOutsideWorkspace": "ファイルが現在のワークスペースフォルダの外にあります。",
+        "errorFailedOpen": "ローカルファイルを開けませんでした",
+        "errorFailedLink": "リンクを開けませんでした"
+      },
       "messageList": {
         "attachedResources": "添付リソース",
         "loading": "読み込み中...",

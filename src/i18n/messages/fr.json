@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "Réflexion",
         "thoughtForSeconds": "Réflexion"
       },
+      "linkSafety": {
+        "localFileTitle": "Ouvrir le fichier local ?",
+        "externalLinkTitle": "Ouvrir le lien externe ?",
+        "localFileDescription": "Vous êtes sur le point d'ouvrir un fichier local dans le panneau de fichiers.",
+        "externalLinkDescription": "Vous êtes sur le point de visiter un site web externe.",
+        "cancel": "Annuler",
+        "opening": "Ouverture…",
+        "openFile": "Ouvrir le fichier",
+        "openLink": "Ouvrir le lien",
+        "errorCannotOpen": "Impossible d'ouvrir le fichier local",
+        "errorNoWorkspace": "Aucun dossier d'espace de travail n'est actuellement actif.",
+        "errorOutsideWorkspace": "Le fichier se trouve en dehors du dossier de l'espace de travail actuel.",
+        "errorFailedOpen": "Échec de l'ouverture du fichier local",
+        "errorFailedLink": "Échec de l'ouverture du lien"
+      },
       "messageList": {
         "attachedResources": "Ressources jointes",
         "loading": "Chargement...",

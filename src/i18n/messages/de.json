@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "Nachgedacht",
         "thoughtForSeconds": "Nachgedacht"
       },
+      "linkSafety": {
+        "localFileTitle": "Lokale Datei öffnen?",
+        "externalLinkTitle": "Externen Link öffnen?",
+        "localFileDescription": "Sie sind dabei, eine lokale Datei im Dateipanel zu öffnen.",
+        "externalLinkDescription": "Sie sind dabei, eine externe Website zu besuchen.",
+        "cancel": "Abbrechen",
+        "opening": "Wird geöffnet…",
+        "openFile": "Datei öffnen",
+        "openLink": "Link öffnen",
+        "errorCannotOpen": "Lokale Datei kann nicht geöffnet werden",
+        "errorNoWorkspace": "Es ist kein Arbeitsbereichsordner aktiv.",
+        "errorOutsideWorkspace": "Die Datei befindet sich außerhalb des aktuellen Arbeitsbereichsordners.",
+        "errorFailedOpen": "Lokale Datei konnte nicht geöffnet werden",
+        "errorFailedLink": "Link konnte nicht geöffnet werden"
+      },
       "messageList": {
         "attachedResources": "Angehängte Ressourcen",
         "loading": "Lädt...",

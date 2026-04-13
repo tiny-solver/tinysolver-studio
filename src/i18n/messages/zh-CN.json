@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "思考",
         "thoughtForSeconds": "思考"
       },
+      "linkSafety": {
+        "localFileTitle": "打开本地文件？",
+        "externalLinkTitle": "打开外部链接？",
+        "localFileDescription": "即将在文件面板中打开一个本地文件。",
+        "externalLinkDescription": "即将访问一个外部网站。",
+        "cancel": "取消",
+        "opening": "正在打开…",
+        "openFile": "打开文件",
+        "openLink": "打开链接",
+        "errorCannotOpen": "无法打开本地文件",
+        "errorNoWorkspace": "当前没有活跃的工作区文件夹。",
+        "errorOutsideWorkspace": "该文件不在当前工作区文件夹内。",
+        "errorFailedOpen": "打开本地文件失败",
+        "errorFailedLink": "打开链接失败"
+      },
       "messageList": {
         "attachedResources": "附加资源",
         "loading": "加载中...",

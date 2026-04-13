@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "Thought",
         "thoughtForSeconds": "Thought"
       },
+      "linkSafety": {
+        "localFileTitle": "Open local file?",
+        "externalLinkTitle": "Open external link?",
+        "localFileDescription": "You're about to open a local file in the Files panel.",
+        "externalLinkDescription": "You're about to visit an external website.",
+        "cancel": "Cancel",
+        "opening": "Opening...",
+        "openFile": "Open file",
+        "openLink": "Open link",
+        "errorCannotOpen": "Cannot open local file",
+        "errorNoWorkspace": "No workspace folder is currently active.",
+        "errorOutsideWorkspace": "The file is outside the current workspace folder.",
+        "errorFailedOpen": "Failed to open local file",
+        "errorFailedLink": "Failed to open link"
+      },
       "messageList": {
         "attachedResources": "Attached resources",
         "loading": "Loading...",

@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "تفكير",
         "thoughtForSeconds": "تفكير"
       },
+      "linkSafety": {
+        "localFileTitle": "فتح ملف محلي؟",
+        "externalLinkTitle": "فتح رابط خارجي؟",
+        "localFileDescription": "أنت على وشك فتح ملف محلي في لوحة الملفات.",
+        "externalLinkDescription": "أنت على وشك زيارة موقع ويب خارجي.",
+        "cancel": "إلغاء",
+        "opening": "جارٍ الفتح…",
+        "openFile": "فتح الملف",
+        "openLink": "فتح الرابط",
+        "errorCannotOpen": "تعذر فتح الملف المحلي",
+        "errorNoWorkspace": "لا يوجد مجلد مساحة عمل نشط حالياً.",
+        "errorOutsideWorkspace": "الملف خارج مجلد مساحة العمل الحالي.",
+        "errorFailedOpen": "فشل فتح الملف المحلي",
+        "errorFailedLink": "فشل فتح الرابط"
+      },
       "messageList": {
         "attachedResources": "الموارد المرفقة",
         "loading": "جارٍ التحميل...",

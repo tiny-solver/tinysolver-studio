@@ -1556,6 +1556,21 @@
         "thoughtForFewSeconds": "Pensamiento",
         "thoughtForSeconds": "Pensamiento"
       },
+      "linkSafety": {
+        "localFileTitle": "¿Abrir archivo local?",
+        "externalLinkTitle": "¿Abrir enlace externo?",
+        "localFileDescription": "Está a punto de abrir un archivo local en el panel de archivos.",
+        "externalLinkDescription": "Está a punto de visitar un sitio web externo.",
+        "cancel": "Cancelar",
+        "opening": "Abriendo…",
+        "openFile": "Abrir archivo",
+        "openLink": "Abrir enlace",
+        "errorCannotOpen": "No se puede abrir el archivo local",
+        "errorNoWorkspace": "No hay ninguna carpeta de espacio de trabajo activa.",
+        "errorOutsideWorkspace": "El archivo está fuera de la carpeta del espacio de trabajo actual.",
+        "errorFailedOpen": "Error al abrir el archivo local",
+        "errorFailedLink": "Error al abrir el enlace"
+      },
       "messageList": {
         "attachedResources": "Recursos adjuntos",
         "loading": "Cargando...",
