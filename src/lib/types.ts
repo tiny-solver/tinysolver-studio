@@ -831,12 +831,42 @@ export interface FileSaveResult {
   line_ending: "lf" | "crlf" | "mixed" | "none"
 }
 
-export interface FileTreeChangedEvent {
+export interface WorkspaceGitEntry {
+  path: string
+  status: string
+  additions: number
+  deletions: number
+}
+
+export type WorkspaceDelta =
+  | { kind: "tree_replace"; nodes: FileTreeNode[] }
+  | { kind: "git_replace"; entries: WorkspaceGitEntry[] }
+  | { kind: "meta"; reason: string }
+
+export interface WorkspaceDeltaEnvelope {
+  seq: number
+  kind: "fs_delta" | "git_delta" | "meta" | "resync_hint" | string
+  payload: WorkspaceDelta[]
+  requires_resync: boolean
+}
+
+export interface WorkspaceStateEvent {
   root_path: string
-  changed_paths: string[]
-  kind: "create" | "modify" | "remove" | "access" | "any" | "other"
-  full_reload: boolean
-  refresh_git_status: boolean
+  seq: number
+  version: number
+  kind: "fs_delta" | "git_delta" | "meta" | "resync_hint" | string
+  payload: WorkspaceDelta[]
+  requires_resync: boolean
+}
+
+export interface WorkspaceSnapshotResponse {
+  root_path: string
+  seq: number
+  version: number
+  full: boolean
+  tree_snapshot: FileTreeNode[] | null
+  git_snapshot: WorkspaceGitEntry[] | null
+  deltas: WorkspaceDeltaEnvelope[]
 }
 
 export interface GitLogResult {

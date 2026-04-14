@@ -6,11 +6,12 @@ pub mod folder_commands;
 pub mod folders;
 pub mod mcp;
 pub mod model_provider;
+#[cfg(feature = "tauri-runtime")]
+pub mod notification;
 pub mod project_boot;
 pub mod system_settings;
 pub mod terminal;
 pub mod version_control;
 #[cfg(feature = "tauri-runtime")]
-pub mod notification;
-#[cfg(feature = "tauri-runtime")]
 pub mod windows;
+pub mod workspace_state;

@@ -12,6 +12,7 @@ mod parsers;
 pub mod process;
 mod terminal;
 pub mod web;
+pub mod workspace_state;
 
 #[cfg(feature = "tauri-runtime")]
 mod tauri_app {
@@ -24,6 +25,7 @@ mod tauri_app {
         experts as experts_commands, folder_commands, folders, mcp as mcp_commands,
         model_provider as model_provider_commands, notification, project_boot, system_settings,
         terminal as terminal_commands, version_control, windows,
+        workspace_state as workspace_state_commands,
     };
     use crate::terminal::manager::TerminalManager;
     use crate::{db, network, process, web};
@@ -61,7 +63,9 @@ mod tauri_app {
             .manage(windows::CommitWindowState::new())
             .manage(windows::MergeWindowState::new())
             .manage(web::WebServerState::new())
-            .manage(std::sync::Arc::new(web::event_bridge::WebEventBroadcaster::new()))
+            .manage(std::sync::Arc::new(
+                web::event_bridge::WebEventBroadcaster::new(),
+            ))
             .setup(|app| {
                 let app_data_dir = app.path().app_data_dir()?;
                 let app_version = env!("CARGO_PKG_VERSION");
@@ -111,8 +115,8 @@ mod tauri_app {
                 // Start chat channel background tasks
                 {
                     let ccm = app.state::<ChatChannelManager>();
-                    let broadcaster = app
-                        .state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>();
+                    let broadcaster =
+                        app.state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>();
                     let db_conn = app.state::<db::AppDatabase>().conn.clone();
                     let ccm_ref = ccm.clone_ref();
                     let br = broadcaster.inner().clone();
@@ -214,8 +218,9 @@ mod tauri_app {
                     if label.starts_with("folder-") {
                         let app = window.app_handle();
                         if let Some(cm) = app.try_state::<ConnectionManager>() {
-                            let disconnected =
-                                tauri::async_runtime::block_on(cm.disconnect_by_owner_window(&label));
+                            let disconnected = tauri::async_runtime::block_on(
+                                cm.disconnect_by_owner_window(&label),
+                            );
                             eprintln!(
                                 "[ACP] folder window closing label={} disconnected_connections={}",
                                 label, disconnected
@@ -316,8 +321,9 @@ mod tauri_app {
                 folders::git_abort_operation,
                 folders::git_continue_operation,
                 folders::save_folder_opened_conversations,
-                folders::start_file_tree_watch,
-                folders::stop_file_tree_watch,
+                workspace_state_commands::start_workspace_state_stream,
+                workspace_state_commands::stop_workspace_state_stream,
+                workspace_state_commands::get_workspace_snapshot,
                 folders::get_home_directory,
                 folders::list_directory_entries,
                 folders::get_file_tree,

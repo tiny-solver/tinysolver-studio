@@ -144,27 +144,6 @@ pub async fn get_file_tree(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RootPathParams {
-    pub root_path: String,
-}
-
-pub async fn start_file_tree_watch(
-    Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<RootPathParams>,
-) -> Result<Json<()>, AppCommandError> {
-    folder_commands::start_file_tree_watch_core(state.emitter.clone(), params.root_path).await?;
-    Ok(Json(()))
-}
-
-pub async fn stop_file_tree_watch(
-    Json(params): Json<RootPathParams>,
-) -> Result<Json<()>, AppCommandError> {
-    folder_commands::stop_file_tree_watch(params.root_path).await?;
-    Ok(Json(()))
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct OpenSettingsWindowParams {
     pub section: Option<String>,
     pub agent_type: Option<String>,

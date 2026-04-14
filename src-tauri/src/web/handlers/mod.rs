@@ -1,7 +1,7 @@
-mod error;
 pub mod acp;
 pub mod chat_channel;
 pub mod conversations;
+mod error;
 pub mod experts;
 pub mod files;
 pub mod folder_commands;
@@ -14,3 +14,4 @@ pub mod system_settings;
 pub mod terminal;
 pub mod version_control;
 pub mod web_server;
+pub mod workspace_state;

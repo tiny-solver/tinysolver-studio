@@ -8,23 +8,23 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { revealItemInDir, subscribe } from "@/lib/platform"
+import { revealItemInDir } from "@/lib/platform"
 import ignore from "ignore"
 import { Check, ChevronRight } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { toErrorMessage } from "@/lib/app-error"
 import { toast } from "sonner"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
+import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import {
   createFileTreeEntry,
   deleteFileTreeEntry,
   gitAddFiles,
-  getGitBranch,
   getFileTree,
+  getGitBranch,
   gitListAllBranches,
   gitRollbackFile,
   gitStatus,
@@ -33,17 +33,10 @@ import {
   openCommitWindow,
   renameFileTreeEntry,
   saveFileCopy,
-  startFileTreeWatch,
-  stopFileTreeWatch,
 } from "@/lib/api"
 import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import type {
-  FileTreeChangedEvent,
-  FileTreeNode,
-  GitBranchList,
-  GitStatusEntry,
-} from "@/lib/types"
+import type { FileTreeNode, GitBranchList, GitStatusEntry } from "@/lib/types"
 import {
   FileTree,
   FileTreeFolder,
@@ -101,6 +94,7 @@ function baseName(path: string): string {
 
 const FILE_TREE_ROOT_PATH = "__workspace_root__"
 const GITIGNORE_MUTED_CLASS = "text-muted-foreground/55"
+const FILE_TREE_LAZY_DEBUG_LOG = process.env.NODE_ENV === "development"
 
 interface FileActionTarget {
   kind: "file" | "dir"
@@ -135,9 +129,78 @@ function normalizeComparePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "")
 }
 
-function isGitMetadataPath(path: string): boolean {
-  const normalized = normalizeComparePath(path)
-  return normalized === ".git" || normalized.startsWith(".git/")
+function logFileTreeLazyDebug(
+  message: string,
+  payload?: Record<string, unknown>
+) {
+  if (!FILE_TREE_LAZY_DEBUG_LOG) return
+  if (payload) {
+    console.info(`[FileTreeTab/lazy] ${message}`, payload)
+    return
+  }
+  console.info(`[FileTreeTab/lazy] ${message}`)
+}
+
+function logFileTreeWorkspaceDebug(
+  message: string,
+  payload?: Record<string, unknown>
+) {
+  if (!FILE_TREE_LAZY_DEBUG_LOG) return
+  if (payload) {
+    console.info(`[FileTreeTab/workspace] ${message}`, payload)
+    return
+  }
+  console.info(`[FileTreeTab/workspace] ${message}`)
+}
+
+function prefixFileTreeNodePaths(
+  nodes: FileTreeNode[],
+  prefix: string
+): FileTreeNode[] {
+  return nodes.map((node) => {
+    const nextPath = prefix ? `${prefix}/${node.path}` : node.path
+    if (node.kind === "file") {
+      return {
+        ...node,
+        path: nextPath,
+      }
+    }
+    return {
+      ...node,
+      path: nextPath,
+      children: prefixFileTreeNodePaths(node.children, nextPath),
+    }
+  })
+}
+
+function applyLazyTreeOverrides(
+  nodes: FileTreeNode[],
+  overrides: ReadonlyMap<string, FileTreeNode[]>
+): FileTreeNode[] {
+  return nodes.map((node) => {
+    if (node.kind === "file") return node
+    const overrideChildren = overrides.get(node.path)
+    const baseChildren = overrideChildren ?? node.children
+    return {
+      ...node,
+      children: applyLazyTreeOverrides(baseChildren, overrides),
+    }
+  })
+}
+
+function findDirectoryChildren(
+  nodes: FileTreeNode[],
+  targetPath: string
+): FileTreeNode[] | null {
+  for (const node of nodes) {
+    if (node.kind !== "dir") continue
+    if (normalizeComparePath(node.path) === targetPath) {
+      return node.children
+    }
+    const nested = findDirectoryChildren(node.children, targetPath)
+    if (nested) return nested
+  }
+  return null
 }
 
 function classifyGitFileState(status: string): GitFileState | null {
@@ -178,11 +241,6 @@ function hasIgnoredAncestor(path: string, ignoredPaths: ReadonlySet<string>) {
     if (ignoredPaths.has(parent)) return true
     current = parent
   }
-}
-
-function getRelativePathDepth(path: string): number {
-  if (!path) return 0
-  return path.split("/").filter(Boolean).length
 }
 
 type DirectoryGitAction = "add" | "rollback"
@@ -762,8 +820,7 @@ function RenderNode({
 export function FileTreeTab() {
   const t = useTranslations("Folder.fileTreeTab")
   const tCommon = useTranslations("Folder.common")
-  const { activeTab, pendingRevealPath, consumePendingRevealPath } =
-    useAuxPanelContext()
+  const { pendingRevealPath, consumePendingRevealPath } = useAuxPanelContext()
   const { folder } = useFolderContext()
   const { tabs, activeTabId } = useTabContext()
   const { createTerminalInDirectory } = useTerminalContext()
@@ -775,6 +832,7 @@ export function FileTreeTab() {
     openFilePreview,
     openWorkingTreeDiff,
   } = useWorkspaceContext()
+  const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
   const [nodes, setNodes] = useState<FileTreeNode[]>([])
   const [gitStatusByPath, setGitStatusByPath] = useState<Map<string, string>>(
     new Map()
@@ -841,25 +899,21 @@ export function FileTreeTab() {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set([FILE_TREE_ROOT_PATH])
   )
-  const [loadedTreeDepth, setLoadedTreeDepth] = useState(1)
   const [gitignoreIgnoredPaths, setGitignoreIgnoredPaths] = useState<
     Set<string>
   >(new Set())
-  const isFileTreeTabActive = activeTab === "file_tree"
   const activeFileTabRef = useRef(activeFileTab)
   const filePathSetRef = useRef<Set<string>>(new Set())
-  const loadedTreeDepthRef = useRef(1)
-  const isFileTreeTabActiveRef = useRef(isFileTreeTabActive)
-  const pendingTreeRefreshRef = useRef(false)
-  const pendingTreeRefreshNeedsStatusRef = useRef(false)
-  const pendingStatusRefreshRef = useRef(false)
-  const treeRefreshNeedsStatusRef = useRef(false)
-  const externalConflictSignatureByPathRef = useRef<Map<string, string>>(
+  const previousWorkspaceSeqRef = useRef(0)
+  const previousExpandedPathsRef = useRef<Set<string>>(
+    new Set([FILE_TREE_ROOT_PATH])
+  )
+  const lazyLoadedChildrenByPathRef = useRef<Map<string, FileTreeNode[]>>(
     new Map()
   )
-  const treeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const statusRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
+  const lazyLoadingDirPathsRef = useRef<Set<string>>(new Set())
+  const externalConflictSignatureByPathRef = useRef<Map<string, string>>(
+    new Map()
   )
 
   useEffect(() => {
@@ -868,12 +922,14 @@ export function FileTreeTab() {
 
   useEffect(() => {
     setExpandedPaths(new Set([FILE_TREE_ROOT_PATH]))
-    loadedTreeDepthRef.current = 1
-    setLoadedTreeDepth(1)
+    previousExpandedPathsRef.current = new Set([FILE_TREE_ROOT_PATH])
     setGitignoreIgnoredPaths(new Set())
     setExternalConflictPrompt(null)
     setSavingExternalConflictCopy(false)
+    lazyLoadedChildrenByPathRef.current.clear()
+    lazyLoadingDirPathsRef.current.clear()
     externalConflictSignatureByPathRef.current.clear()
+    previousWorkspaceSeqRef.current = 0
   }, [folder?.path])
 
   // Handle pending reveal path: expand all ancestor directories once tree is loaded
@@ -909,10 +965,6 @@ export function FileTreeTab() {
     )
   }, [activeFileTab])
 
-  useEffect(() => {
-    loadedTreeDepthRef.current = loadedTreeDepth
-  }, [loadedTreeDepth])
-
   const activeSessionTabId = useMemo(() => {
     const activeTab = tabs.find((tab) => tab.id === activeTabId)
     if (!activeTab) return null
@@ -922,39 +974,6 @@ export function FileTreeTab() {
     return activeTab.id
   }, [tabs, activeTabId])
 
-  const applyGitStatusResult = useCallback(
-    (entries: { file: string; status: string }[]) => {
-      const nextStatusByPath = new Map<string, string>()
-      for (const entry of entries) {
-        const raw = normalizeGitStatusPath(entry.file)
-        if (!raw) continue
-        // Strip trailing slash (directory entries from -unormal)
-        const normalizedPath = raw.replace(/\/+$/, "")
-        if (!normalizedPath) continue
-        nextStatusByPath.set(normalizedPath, entry.status)
-      }
-      setGitEnabled(true)
-      setGitStatusByPath(nextStatusByPath)
-    },
-    []
-  )
-
-  const refreshGitStatus = useCallback(async () => {
-    if (!folder?.path) {
-      setGitStatusByPath(new Map())
-      setGitEnabled(false)
-      return
-    }
-
-    try {
-      const result = await gitStatus(folder.path)
-      applyGitStatusResult(result)
-    } catch {
-      setGitEnabled(false)
-      setGitStatusByPath(new Map())
-    }
-  }, [applyGitStatusResult, folder?.path])
-
   const fetchTree = useCallback(
     async (options?: {
       skipTree?: boolean
@@ -962,103 +981,140 @@ export function FileTreeTab() {
       silent?: boolean
       maxDepth?: number
     }) => {
+      void options
       if (!folder?.path) {
         setNodes([])
-        loadedTreeDepthRef.current = 1
-        setLoadedTreeDepth(1)
         setGitStatusByPath(new Map())
         setGitEnabled(false)
         setLoading(false)
+        setError(null)
         return
       }
 
-      const skipTree = options?.skipTree ?? false
-      const skipStatus = options?.skipStatus ?? false
-      const silent = options?.silent ?? false
-      const maxDepth = options?.maxDepth ?? loadedTreeDepthRef.current
-
-      if (!silent) setLoading(true)
-      setError(null)
-      let loadingReleased = false
-
-      try {
-        if (skipTree) {
-          if (!skipStatus) {
-            await refreshGitStatus()
-          }
-          return
-        }
-
-        if (skipStatus) {
-          const treeResult = await getFileTree(folder.path, maxDepth)
-          setNodes(treeResult)
-          setLoadedTreeDepth((prev) => {
-            const next = Math.max(prev, maxDepth)
-            loadedTreeDepthRef.current = next
-            return next
-          })
-          return
-        }
-
-        const treePromise = getFileTree(folder.path, maxDepth)
-        const gitStatusPromise = gitStatus(folder.path)
-        const treeResult = await treePromise
-        setNodes(treeResult)
-        setLoadedTreeDepth((prev) => {
-          const next = Math.max(prev, maxDepth)
-          loadedTreeDepthRef.current = next
-          return next
-        })
-
-        // Show file tree as soon as it's ready; git status can follow.
-        if (!silent) {
-          setLoading(false)
-          loadingReleased = true
-        }
-
-        try {
-          const gitStatusResult = await gitStatusPromise
-          applyGitStatusResult(gitStatusResult)
-        } catch {
-          setGitEnabled(false)
-          setGitStatusByPath(new Map())
-        }
-      } catch (e) {
-        setError(toErrorMessage(e))
-      } finally {
-        if (!silent && !loadingReleased) setLoading(false)
-      }
+      await workspaceState.requestResync("manual_refresh")
     },
-    [applyGitStatusResult, folder?.path, refreshGitStatus]
+    [folder?.path, workspaceState]
   )
 
   useEffect(() => {
-    isFileTreeTabActiveRef.current = isFileTreeTabActive
-    if (!isFileTreeTabActive) return
-
-    if (pendingTreeRefreshRef.current) {
-      const needsStatus =
-        pendingTreeRefreshNeedsStatusRef.current ||
-        pendingStatusRefreshRef.current
-      pendingTreeRefreshRef.current = false
-      pendingTreeRefreshNeedsStatusRef.current = false
-      pendingStatusRefreshRef.current = false
-      void fetchTree({ silent: true, skipStatus: !needsStatus })
-      return
+    setNodes(
+      applyLazyTreeOverrides(
+        workspaceState.tree,
+        lazyLoadedChildrenByPathRef.current
+      )
+    )
+    const nextStatusByPath = new Map<string, string>()
+    for (const entry of workspaceState.git) {
+      nextStatusByPath.set(entry.path, entry.status)
     }
+    setGitStatusByPath(nextStatusByPath)
+    setGitEnabled(true)
+    setLoading(
+      workspaceState.health === "resyncing" && workspaceState.seq === 0
+    )
+    setError(workspaceState.health === "degraded" ? workspaceState.error : null)
 
-    if (pendingStatusRefreshRef.current) {
-      pendingStatusRefreshRef.current = false
-      void fetchTree({ skipTree: true, silent: true })
-    }
-  }, [fetchTree, isFileTreeTabActive])
+    logFileTreeWorkspaceDebug("workspace state consumed", {
+      rootPath: folder?.path ?? "",
+      seq: workspaceState.seq,
+      health: workspaceState.health,
+      treeRoots: workspaceState.tree.length,
+      gitEntries: workspaceState.git.length,
+      lazyOverrideDirs: lazyLoadedChildrenByPathRef.current.size,
+    })
+  }, [
+    folder?.path,
+    workspaceState.error,
+    workspaceState.git,
+    workspaceState.health,
+    workspaceState.seq,
+    workspaceState.tree,
+  ])
+
+  const loadDirectoryChildren = useCallback(
+    async (dirPath: string) => {
+      const rootPath = folder?.path
+      if (!rootPath) return
+      const normalizedDirPath = normalizeComparePath(dirPath)
+      if (!normalizedDirPath) return
+      if (lazyLoadedChildrenByPathRef.current.has(normalizedDirPath)) {
+        logFileTreeLazyDebug("skip cached", {
+          rootPath,
+          dirPath: normalizedDirPath,
+        })
+        return
+      }
+      if (lazyLoadingDirPathsRef.current.has(normalizedDirPath)) {
+        logFileTreeLazyDebug("skip in-flight", {
+          rootPath,
+          dirPath: normalizedDirPath,
+        })
+        return
+      }
+
+      const existingChildren = findDirectoryChildren(nodes, normalizedDirPath)
+      if (existingChildren && existingChildren.length > 0) {
+        lazyLoadedChildrenByPathRef.current.set(
+          normalizedDirPath,
+          existingChildren
+        )
+        logFileTreeLazyDebug("skip use existing children", {
+          rootPath,
+          dirPath: normalizedDirPath,
+          childrenCount: existingChildren.length,
+        })
+        return
+      }
+
+      lazyLoadingDirPathsRef.current.add(normalizedDirPath)
+      const startedAt = performance.now()
+      logFileTreeLazyDebug("request start", {
+        rootPath,
+        dirPath: normalizedDirPath,
+      })
+      try {
+        const subtree = await getFileTree(
+          joinFsPath(rootPath, normalizedDirPath),
+          1
+        )
+        const prefixed = prefixFileTreeNodePaths(subtree, normalizedDirPath)
+        lazyLoadedChildrenByPathRef.current.set(normalizedDirPath, prefixed)
+        setNodes((prev) =>
+          applyLazyTreeOverrides(prev, lazyLoadedChildrenByPathRef.current)
+        )
+        logFileTreeLazyDebug("request success", {
+          rootPath,
+          dirPath: normalizedDirPath,
+          childrenCount: prefixed.length,
+          durationMs: Math.round(performance.now() - startedAt),
+        })
+      } catch {
+        // Ignore lazy load failures and keep current collapsed/empty state.
+        logFileTreeLazyDebug("request failed", {
+          rootPath,
+          dirPath: normalizedDirPath,
+          durationMs: Math.round(performance.now() - startedAt),
+        })
+      } finally {
+        lazyLoadingDirPathsRef.current.delete(normalizedDirPath)
+      }
+    },
+    [folder?.path, nodes]
+  )
 
   useEffect(() => {
-    pendingTreeRefreshRef.current = false
-    pendingTreeRefreshNeedsStatusRef.current = false
-    pendingStatusRefreshRef.current = false
-    treeRefreshNeedsStatusRef.current = false
-  }, [folder?.path])
+    const previousExpanded = previousExpandedPathsRef.current
+    for (const path of expandedPaths) {
+      if (path === FILE_TREE_ROOT_PATH) continue
+      if (previousExpanded.has(path)) continue
+      logFileTreeLazyDebug("expanded path detected", {
+        rootPath: folder?.path ?? "",
+        dirPath: path,
+      })
+      void loadDirectoryChildren(path)
+    }
+    previousExpandedPathsRef.current = new Set(expandedPaths)
+  }, [expandedPaths, folder?.path, loadDirectoryChildren])
 
   const filePathSet = useMemo(() => {
     const paths = new Set<string>()
@@ -1098,15 +1154,6 @@ export function FileTreeTab() {
       dirs.add(path)
     }
     return Array.from(dirs)
-  }, [expandedPaths])
-
-  const desiredTreeDepth = useMemo(() => {
-    let nextDepth = 1
-    for (const path of expandedPaths) {
-      if (path === FILE_TREE_ROOT_PATH) continue
-      nextDepth = Math.max(nextDepth, getRelativePathDepth(path) + 1)
-    }
-    return nextDepth
   }, [expandedPaths])
 
   useEffect(() => {
@@ -1873,117 +1920,22 @@ export function FileTreeTab() {
     [rootNodeName]
   )
 
-  useEffect(() => {
-    if (!isFileTreeTabActive) return
-    void fetchTree()
-  }, [fetchTree, isFileTreeTabActive])
-
-  useEffect(() => {
-    if (!isFileTreeTabActive || !folder?.path) return
-    if (desiredTreeDepth <= loadedTreeDepth) return
-    void fetchTree({ silent: true, maxDepth: desiredTreeDepth })
-  }, [
-    desiredTreeDepth,
-    fetchTree,
-    folder?.path,
-    isFileTreeTabActive,
-    loadedTreeDepth,
-  ])
-
-  useEffect(() => {
-    const rootPath = folder?.path
-    if (!rootPath) return
-
-    let unlisten: (() => void) | null = null
-    let disposed = false
-    let watchStarted = false
-    let watchReleased = false
-    const normalizedRootPath = normalizeComparePath(rootPath)
-
-    const releaseWatch = () => {
-      if (watchReleased) return
-      watchReleased = true
-      if (unlisten) {
-        unlisten()
-        unlisten = null
+  type ActiveFileChangeDecision =
+    | { kind: "none" }
+    | { kind: "reload"; path: string }
+    | {
+        kind: "conflict"
+        path: string
+        diskContent: string
+        unsavedContent: string
+        signature: string
       }
-      if (watchStarted) {
-        void stopFileTreeWatch(rootPath)
-      }
-    }
 
-    const scheduleTreeRefresh = (refreshGitStatus: boolean) => {
-      if (!isFileTreeTabActiveRef.current) {
-        pendingTreeRefreshRef.current = true
-        pendingTreeRefreshNeedsStatusRef.current =
-          pendingTreeRefreshNeedsStatusRef.current || refreshGitStatus
-        if (refreshGitStatus) {
-          pendingStatusRefreshRef.current = false
-        }
-        return
-      }
-      treeRefreshNeedsStatusRef.current =
-        treeRefreshNeedsStatusRef.current || refreshGitStatus
-      if (treeRefreshTimerRef.current) {
-        clearTimeout(treeRefreshTimerRef.current)
-      }
-      treeRefreshTimerRef.current = setTimeout(() => {
-        const needsStatus = treeRefreshNeedsStatusRef.current
-        treeRefreshNeedsStatusRef.current = false
-        void fetchTree({ silent: true, skipStatus: !needsStatus })
-      }, 180)
-    }
+  const resolveActiveFileChangeDecision = useCallback(
+    async (path: string): Promise<ActiveFileChangeDecision> => {
+      const rootPath = folder?.path
+      if (!rootPath) return { kind: "none" }
 
-    const scheduleStatusRefresh = () => {
-      if (!isFileTreeTabActiveRef.current) {
-        if (pendingTreeRefreshRef.current) {
-          pendingTreeRefreshNeedsStatusRef.current = true
-        } else {
-          pendingStatusRefreshRef.current = true
-        }
-        return
-      }
-      if (statusRefreshTimerRef.current) {
-        clearTimeout(statusRefreshTimerRef.current)
-      }
-      statusRefreshTimerRef.current = setTimeout(() => {
-        void fetchTree({ skipTree: true, silent: true })
-      }, 120)
-    }
-
-    const getActiveChangedFilePath = (
-      changedPaths: string[],
-      fullReload: boolean
-    ) => {
-      if (fullReload) return null
-      const currentTab = activeFileTabRef.current
-      if (!currentTab || currentTab.kind !== "file") return null
-      if (!currentTab.path || currentTab.loading) return null
-
-      const normalizedActivePath = normalizeComparePath(currentTab.path)
-      const activePathChanged = changedPaths.some(
-        (changedPath) =>
-          normalizeComparePath(changedPath) === normalizedActivePath
-      )
-      if (!activePathChanged) return null
-
-      return currentTab.path
-    }
-
-    type ActiveFileChangeDecision =
-      | { kind: "none" }
-      | { kind: "reload"; path: string }
-      | {
-          kind: "conflict"
-          path: string
-          diskContent: string
-          unsavedContent: string
-          signature: string
-        }
-
-    const resolveActiveFileChangeDecision = async (
-      path: string
-    ): Promise<ActiveFileChangeDecision> => {
       const currentTab = activeFileTabRef.current
       if (!currentTab || currentTab.kind !== "file") return { kind: "none" }
       if (
@@ -2034,131 +1986,59 @@ export function FileTreeTab() {
         if (latestTab.loading) return { kind: "none" }
         if (latestTab.isDirty) return { kind: "none" }
         if (!knownTabEtag) return { kind: "reload", path }
-        // Fallback: if probe fails but tab is clean, reload to reflect latest disk state.
         return { kind: "reload", path }
       }
-    }
+    },
+    [folder?.path]
+  )
 
-    const setup = async () => {
-      try {
-        await startFileTreeWatch(rootPath)
-        watchStarted = true
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        toast.error(t("toasts.watchStartFailed"), { description: message })
-      }
-      if (disposed) {
-        releaseWatch()
+  useEffect(() => {
+    const rootPath = folder?.path
+    if (!rootPath) return
+
+    const nextSeq = workspaceState.seq
+    if (nextSeq <= previousWorkspaceSeqRef.current) return
+    previousWorkspaceSeqRef.current = nextSeq
+
+    const currentTab = activeFileTabRef.current
+    if (!currentTab || currentTab.kind !== "file") return
+    if (!currentTab.path || currentTab.loading) return
+
+    const activePath = currentTab.path
+    void (async () => {
+      const decision = await resolveActiveFileChangeDecision(activePath)
+      if (decision.kind === "none") return
+
+      if (decision.kind === "reload") {
+        externalConflictSignatureByPathRef.current.delete(decision.path)
+        void openFilePreview(decision.path)
         return
       }
 
-      try {
-        const subscribedUnlisten = await subscribe<FileTreeChangedEvent>(
-          "folder://file-tree-changed",
-          (payload) => {
-            if (
-              normalizeComparePath(payload.root_path) !== normalizedRootPath
-            ) {
-              return
-            }
-
-            const changedPaths = payload.changed_paths.map(normalizeComparePath)
-            const shouldRefreshGitStatus = payload.refresh_git_status ?? true
-            const nonGitChangedPaths = changedPaths.filter(
-              (path) => !isGitMetadataPath(path)
-            )
-            const onlyGitMetadataChanges =
-              changedPaths.length > 0 && nonGitChangedPaths.length === 0
-            const hasUnknownPath = nonGitChangedPaths.some(
-              (path) => !filePathSetRef.current.has(path)
-            )
-            const needsTreeRefresh =
-              payload.full_reload ||
-              (!onlyGitMetadataChanges &&
-                (payload.kind !== "modify" ||
-                  nonGitChangedPaths.length === 0 ||
-                  hasUnknownPath))
-
-            if (onlyGitMetadataChanges && !payload.full_reload) {
-              if (shouldRefreshGitStatus) {
-                scheduleStatusRefresh()
-              }
-            } else if (needsTreeRefresh) {
-              scheduleTreeRefresh(shouldRefreshGitStatus)
-            } else if (shouldRefreshGitStatus) {
-              scheduleStatusRefresh()
-            }
-
-            if (onlyGitMetadataChanges && !payload.full_reload) {
-              return
-            }
-
-            const changedActivePath = getActiveChangedFilePath(
-              nonGitChangedPaths,
-              payload.full_reload
-            )
-            if (!changedActivePath) return
-
-            void (async () => {
-              const decision =
-                await resolveActiveFileChangeDecision(changedActivePath)
-              if (decision.kind === "none") return
-
-              if (decision.kind === "reload") {
-                externalConflictSignatureByPathRef.current.delete(decision.path)
-                void openFilePreview(decision.path)
-                return
-              }
-
-              const shownSignature =
-                externalConflictSignatureByPathRef.current.get(decision.path)
-              if (shownSignature === decision.signature) return
-              externalConflictSignatureByPathRef.current.set(
-                decision.path,
-                decision.signature
-              )
-              setExternalConflictPrompt((current) => {
-                if (current?.signature === decision.signature) return current
-                return {
-                  path: decision.path,
-                  diskContent: decision.diskContent,
-                  unsavedContent: decision.unsavedContent,
-                  signature: decision.signature,
-                }
-              })
-            })()
-          }
-        )
-        if (disposed) {
-          subscribedUnlisten()
-          releaseWatch()
-          return
+      const shownSignature = externalConflictSignatureByPathRef.current.get(
+        decision.path
+      )
+      if (shownSignature === decision.signature) return
+      externalConflictSignatureByPathRef.current.set(
+        decision.path,
+        decision.signature
+      )
+      setExternalConflictPrompt((current) => {
+        if (current?.signature === decision.signature) return current
+        return {
+          path: decision.path,
+          diskContent: decision.diskContent,
+          unsavedContent: decision.unsavedContent,
+          signature: decision.signature,
         }
-        unlisten = subscribedUnlisten
-      } catch (error) {
-        console.error("[FileTreeTab] failed to listen file watch event:", error)
-      }
-    }
-
-    void setup()
-
-    return () => {
-      disposed = true
-      if (treeRefreshTimerRef.current) {
-        clearTimeout(treeRefreshTimerRef.current)
-        treeRefreshTimerRef.current = null
-      }
-      treeRefreshNeedsStatusRef.current = false
-      if (statusRefreshTimerRef.current) {
-        clearTimeout(statusRefreshTimerRef.current)
-        statusRefreshTimerRef.current = null
-      }
-      pendingTreeRefreshRef.current = false
-      pendingTreeRefreshNeedsStatusRef.current = false
-      pendingStatusRefreshRef.current = false
-      releaseWatch()
-    }
-  }, [fetchTree, folder?.path, openFilePreview, t])
+      })
+    })()
+  }, [
+    folder?.path,
+    openFilePreview,
+    resolveActiveFileChangeDecision,
+    workspaceState.seq,
+  ])
 
   if (loading && nodes.length === 0) {
     return (

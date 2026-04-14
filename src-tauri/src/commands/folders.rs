@@ -4,11 +4,10 @@ use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{mpsc, LazyLock, Mutex};
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::sync::LazyLock;
+use std::time::UNIX_EPOCH;
 
 use base64::Engine as _;
-use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 
 use tokio::sync::Semaphore;
@@ -51,8 +50,7 @@ async fn prepare_remote_git_cmd_with_remote(
     db: &AppDatabase,
     data_dir: &std::path::Path,
 ) {
-    cmd.env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(Stdio::null());
+    cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null());
 
     if let Some(creds) = credentials {
         // Explicit credentials provided (e.g. from credential dialog)
@@ -67,7 +65,11 @@ async fn prepare_remote_git_cmd_with_remote(
     } else {
         // Fall back to stored accounts, matching against the specified remote
         crate::git_credential::try_inject_for_repo_remote(
-            cmd, repo_path, remote_name, &db.conn, data_dir,
+            cmd,
+            repo_path,
+            remote_name,
+            &db.conn,
+            data_dir,
         )
         .await;
     }
@@ -81,8 +83,7 @@ async fn prepare_remote_git_cmd_for_url(
     db: &AppDatabase,
     data_dir: &std::path::Path,
 ) {
-    cmd.env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(Stdio::null());
+    cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null());
 
     if let Some(creds) = credentials {
         if let Ok(askpass) = crate::git_credential::ensure_askpass_script(data_dir) {
@@ -225,24 +226,7 @@ struct GitPushSucceededEvent {
     upstream_set: bool,
 }
 
-struct FileWatchEntry {
-    root_canonical: PathBuf,
-    root_display: String,
-    watcher: RecommendedWatcher,
-    worker: Option<std::thread::JoinHandle<()>>,
-    ref_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct FileTreeChangedEvent {
-    root_path: String,
-    changed_paths: Vec<String>,
-    kind: String,
-    full_reload: bool,
-    refresh_git_status: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FileTreeNode {
     File {
@@ -570,19 +554,14 @@ pub(crate) async fn clone_repository_core(
     cmd.args(["clone", url, target_dir]);
     prepare_remote_git_cmd_for_url(&mut cmd, url, credentials, db, data_dir).await;
 
-    let output = cmd
-        .output()
-        .await
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                AppCommandError::dependency_missing(
-                    "Git is not installed. Please install Git first.",
-                )
+    let output = cmd.output().await.map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            AppCommandError::dependency_missing("Git is not installed. Please install Git first.")
                 .with_detail("https://git-scm.com")
-            } else {
-                AppCommandError::external_command("Failed to run git clone", e.to_string())
-            }
-        })?;
+        } else {
+            AppCommandError::external_command("Failed to run git clone", e.to_string())
+        }
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -718,10 +697,7 @@ pub(crate) async fn git_pull_core(
     fetch_cmd.args(["fetch"]).current_dir(path);
     prepare_remote_git_cmd(&mut fetch_cmd, path, credentials, db, data_dir).await;
 
-    let fetch_output = fetch_cmd
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
+    let fetch_output = fetch_cmd.output().await.map_err(AppCommandError::io)?;
 
     if !fetch_output.status.success() {
         return Err(classify_remote_git_error("fetch", &fetch_output.stderr));
@@ -759,8 +735,12 @@ pub(crate) async fn git_pull_core(
         .await
         .map_err(AppCommandError::io)?;
 
-    let base_hash = String::from_utf8_lossy(&merge_base.stdout).trim().to_string();
-    let current_head = String::from_utf8_lossy(&head_hash.stdout).trim().to_string();
+    let base_hash = String::from_utf8_lossy(&merge_base.stdout)
+        .trim()
+        .to_string();
+    let current_head = String::from_utf8_lossy(&head_hash.stdout)
+        .trim()
+        .to_string();
 
     if base_hash == current_head {
         let ff_output = crate::process::tokio_command("git")
@@ -898,10 +878,7 @@ pub(crate) async fn git_fetch_core(
     cmd.args(["fetch", "--all"]).current_dir(path);
     prepare_remote_git_cmd(&mut cmd, path, credentials, db, data_dir).await;
 
-    let output = cmd
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
+    let output = cmd.output().await.map_err(AppCommandError::io)?;
 
     if !output.status.success() {
         return Err(classify_remote_git_error("fetch --all", &output.stderr));
@@ -970,9 +947,7 @@ pub(crate) async fn git_push_core(
 ) -> Result<GitPushResult, AppCommandError> {
     let pushed_commits = estimate_push_commit_count(path).await;
 
-    let target_remote = remote
-        .filter(|s| !s.is_empty())
-        .unwrap_or("origin");
+    let target_remote = remote.filter(|s| !s.is_empty()).unwrap_or("origin");
 
     let branch_output = crate::process::tokio_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -1010,13 +985,28 @@ pub(crate) async fn git_push_core(
         let mut cmd = crate::process::tokio_command("git");
         cmd.args(["push", "--set-upstream", target_remote, &branch])
             .current_dir(path);
-        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, data_dir).await;
+        prepare_remote_git_cmd_with_remote(
+            &mut cmd,
+            path,
+            Some(target_remote),
+            credentials,
+            db,
+            data_dir,
+        )
+        .await;
         cmd.output().await.map_err(AppCommandError::io)?
     } else {
         let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push", target_remote, &branch])
-            .current_dir(path);
-        prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(target_remote), credentials, db, data_dir).await;
+        cmd.args(["push", target_remote, &branch]).current_dir(path);
+        prepare_remote_git_cmd_with_remote(
+            &mut cmd,
+            path,
+            Some(target_remote),
+            credentials,
+            db,
+            data_dir,
+        )
+        .await;
         cmd.output().await.map_err(AppCommandError::io)?
     };
 
@@ -1065,7 +1055,16 @@ pub async fn git_push(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     let emitter = EventEmitter::Tauri(app.clone());
-    git_push_core(&data_dir, &emitter, folder_id, &path, remote.as_deref(), credentials.as_ref(), &db).await
+    git_push_core(
+        &data_dir,
+        &emitter,
+        folder_id,
+        &path,
+        remote.as_deref(),
+        credentials.as_ref(),
+        &db,
+    )
+    .await
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
@@ -1291,10 +1290,7 @@ pub async fn git_stash_list(path: String) -> Result<Vec<GitStashEntry>, AppComma
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_apply(
-    path: String,
-    stash_ref: String,
-) -> Result<String, AppCommandError> {
+pub async fn git_stash_apply(path: String, stash_ref: String) -> Result<String, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["stash", "apply", &stash_ref])
         .current_dir(&path)
@@ -1309,10 +1305,7 @@ pub async fn git_stash_apply(
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_drop(
-    path: String,
-    stash_ref: String,
-) -> Result<String, AppCommandError> {
+pub async fn git_stash_drop(path: String, stash_ref: String) -> Result<String, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["stash", "drop", &stash_ref])
         .current_dir(&path)
@@ -1571,21 +1564,20 @@ pub(crate) async fn git_commit_core(
 ) -> Result<GitCommitResult, AppCommandError> {
     // Find files already staged for deletion — git add would fail on these
     // because they no longer exist in either the working tree or the index.
-    let staged_deletions: std::collections::HashSet<String> =
-        crate::process::tokio_command("git")
-            .args(["diff", "--cached", "--name-only", "--diff-filter=D", "-z"])
-            .current_dir(path)
-            .output()
-            .await
-            .ok()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .split('\0')
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+    let staged_deletions: std::collections::HashSet<String> = crate::process::tokio_command("git")
+        .args(["diff", "--cached", "--name-only", "--diff-filter=D", "-z"])
+        .current_dir(path)
+        .output()
+        .await
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .split('\0')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
 
     // Stage only files that aren't already staged deletions
     let files_to_add: Vec<_> = files
@@ -1595,7 +1587,11 @@ pub(crate) async fn git_commit_core(
 
     if !files_to_add.is_empty() {
         let mut add_args = vec!["add".to_string(), "--".to_string()];
-        add_args.extend(files_to_add.iter().map(|file| to_git_literal_pathspec(file)));
+        add_args.extend(
+            files_to_add
+                .iter()
+                .map(|file| to_git_literal_pathspec(file)),
+        );
 
         let add_output = crate::process::tokio_command("git")
             .args(&add_args)
@@ -1610,8 +1606,7 @@ pub(crate) async fn git_commit_core(
     }
 
     // Resolve commit author from matching account (e.g. GitHub username)
-    let author_override =
-        crate::git_credential::resolve_commit_author(path, conn).await;
+    let author_override = crate::git_credential::resolve_commit_author(path, conn).await;
 
     // Commit
     let mut commit_cmd = crate::process::tokio_command("git");
@@ -1625,10 +1620,7 @@ pub(crate) async fn git_commit_core(
     }
     commit_cmd.args(["commit", "-m", message]).current_dir(path);
 
-    let commit_output = commit_cmd
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
+    let commit_output = commit_cmd.output().await.map_err(AppCommandError::io)?;
 
     if !commit_output.status.success() {
         return Err(git_command_error("commit", &commit_output.stderr));
@@ -1879,10 +1871,7 @@ pub(crate) async fn git_fetch_remote_core(
     cmd.args(["fetch", name]).current_dir(path);
     prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(name), credentials, db, data_dir).await;
 
-    let output = cmd
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
+    let output = cmd.output().await.map_err(AppCommandError::io)?;
 
     if !output.status.success() {
         return Err(classify_remote_git_error("fetch", &output.stderr));
@@ -2096,8 +2085,15 @@ pub async fn git_delete_remote_branch(
     let data_dir = app_handle.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
-    git_delete_remote_branch_core(&path, &remote, &branch, credentials.as_ref(), &db, &data_dir)
-        .await
+    git_delete_remote_branch_core(
+        &path,
+        &remote,
+        &branch,
+        credentials.as_ref(),
+        &db,
+        &data_dir,
+    )
+    .await
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
@@ -2157,9 +2153,8 @@ pub async fn git_resolve_conflict(
     let file_path = Path::new(&path).join(&file);
 
     // Write resolved content
-    std::fs::write(&file_path, content).map_err(|e| {
-        AppCommandError::io_error(format!("Failed to write resolved file: {}", e))
-    })?;
+    std::fs::write(&file_path, content)
+        .map_err(|e| AppCommandError::io_error(format!("Failed to write resolved file: {}", e)))?;
 
     // Stage the resolved file
     let output = crate::process::tokio_command("git")
@@ -2177,10 +2172,7 @@ pub async fn git_resolve_conflict(
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_abort_operation(
-    path: String,
-    operation: String,
-) -> Result<(), AppCommandError> {
+pub async fn git_abort_operation(path: String, operation: String) -> Result<(), AppCommandError> {
     let args = match operation.as_str() {
         "merge" | "pull" => vec!["merge", "--abort"],
         "rebase" => vec!["rebase", "--abort"],
@@ -2239,7 +2231,6 @@ pub async fn git_continue_operation(
     Ok(())
 }
 
-const WATCH_IGNORED_DIRS: &[&str] = &["__pycache__"];
 const FILE_TREE_IGNORED_DIRS: &[&str] = &[".git", "__pycache__"];
 
 /// Hard limit: refuse to open files larger than 50 MB in the text editor.
@@ -2252,11 +2243,6 @@ const FILE_IO_MAX_CONCURRENT_OPS: usize = 8;
 
 static FILE_IO_SEMAPHORE: LazyLock<Semaphore> =
     LazyLock::new(|| Semaphore::new(FILE_IO_MAX_CONCURRENT_OPS));
-static FILE_WATCHERS: LazyLock<Mutex<HashMap<String, FileWatchEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-const FILE_WATCH_DEBOUNCE_MS: u64 = 2_000;
-const FILE_WATCH_MAX_BATCH_WINDOW_MS: u64 = 5_000;
-const FILE_WATCH_MAX_CHANGED_PATHS: usize = 2_000;
 
 fn to_git_literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
@@ -2273,345 +2259,6 @@ fn unquote_git_path(path: &str) -> String {
         trimmed[1..trimmed.len() - 1].to_string()
     } else {
         trimmed.to_string()
-    }
-}
-
-fn normalize_slash_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-fn is_git_metadata_rel_path(path: &str) -> bool {
-    path == ".git" || path.starts_with(".git/")
-}
-
-fn is_gitignore_rel_path(path: &str) -> bool {
-    Path::new(path)
-        .file_name()
-        .map(|name| name.to_string_lossy() == ".gitignore")
-        .unwrap_or(false)
-}
-
-fn is_codeg_edit_temp_path(path: &Path) -> bool {
-    path.file_name()
-        .map(|name| {
-            let name = name.to_string_lossy();
-            name.starts_with(".codeg-edit-") && name.ends_with(".tmp")
-        })
-        .unwrap_or(false)
-}
-
-fn git_check_ignored_paths(
-    repo_path: &str,
-    paths: &[String],
-) -> Result<HashSet<String>, AppCommandError> {
-    if paths.is_empty() {
-        return Ok(HashSet::new());
-    }
-
-    let mut child = crate::process::std_command("git")
-        .args(["check-ignore", "--stdin", "-z"])
-        .current_dir(repo_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(AppCommandError::io)?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        for path in paths {
-            stdin
-                .write_all(path.as_bytes())
-                .map_err(AppCommandError::io)?;
-            stdin.write_all(&[0]).map_err(AppCommandError::io)?;
-        }
-    }
-
-    let output = child.wait_with_output().map_err(AppCommandError::io)?;
-
-    // Exit code 1 means "no matches", which is expected.
-    if !output.status.success() && output.status.code() != Some(1) {
-        return Err(git_command_error("check-ignore", &output.stderr));
-    }
-
-    let mut ignored = HashSet::new();
-    for raw in output.stdout.split(|byte| *byte == 0) {
-        if raw.is_empty() {
-            continue;
-        }
-        ignored.insert(String::from_utf8_lossy(raw).to_string());
-    }
-    Ok(ignored)
-}
-
-fn should_refresh_git_status_for_paths(root_display: &str, changed_paths: &[String]) -> bool {
-    if changed_paths.is_empty() {
-        return true;
-    }
-
-    let mut candidates: Vec<String> = Vec::new();
-    for path in changed_paths {
-        if is_git_metadata_rel_path(path) || is_gitignore_rel_path(path) {
-            return true;
-        }
-        candidates.push(path.clone());
-    }
-
-    if candidates.is_empty() {
-        return false;
-    }
-
-    let ignored = match git_check_ignored_paths(root_display, &candidates) {
-        Ok(ignored) => ignored,
-        // Fail safe: if detection fails, keep current behavior and refresh status.
-        Err(_) => return true,
-    };
-
-    candidates
-        .iter()
-        .any(|path| !ignored.contains(path.as_str()))
-}
-
-fn canonicalize_watch_root(root: &Path) -> Result<(PathBuf, String), AppCommandError> {
-    let canonical = std::fs::canonicalize(root).map_err(|e| {
-        AppCommandError::not_found("Unable to resolve workspace root").with_detail(e.to_string())
-    })?;
-    let key = normalize_slash_path(&canonical);
-    Ok((canonical, key))
-}
-
-fn is_allowed_git_watch_path(relative: &Path) -> bool {
-    let mut components = relative.components();
-
-    let Some(Component::Normal(first)) = components.next() else {
-        return false;
-    };
-    if first.to_string_lossy() != ".git" {
-        return false;
-    }
-
-    let Some(Component::Normal(second)) = components.next() else {
-        // Allow top-level .git events.
-        return true;
-    };
-
-    let second_name = second.to_string_lossy();
-    match second_name.as_ref() {
-        "HEAD" | "index" | "packed-refs" | "FETCH_HEAD" | "ORIG_HEAD" | "MERGE_HEAD"
-        | "CHERRY_PICK_HEAD" | "REVERT_HEAD" => true,
-        "refs" => {
-            let Some(Component::Normal(scope)) = components.next() else {
-                return true;
-            };
-            matches!(
-                scope.to_string_lossy().as_ref(),
-                "heads" | "remotes" | "stash"
-            )
-        }
-        "rebase-merge" | "rebase-apply" => true,
-        _ => false,
-    }
-}
-
-fn is_ignored_watch_path(path: &Path, root: &Path) -> bool {
-    let Ok(relative) = path.strip_prefix(root) else {
-        return false;
-    };
-
-    if is_codeg_edit_temp_path(relative) {
-        return true;
-    }
-
-    let mut components = relative.components();
-    if let Some(Component::Normal(first)) = components.next() {
-        if first.to_string_lossy() == ".git" {
-            return !is_allowed_git_watch_path(relative);
-        }
-    }
-
-    relative.components().any(|component| {
-        let Component::Normal(name) = component else {
-            return false;
-        };
-        let component_name = name.to_string_lossy();
-        WATCH_IGNORED_DIRS
-            .iter()
-            .any(|ignored| *ignored == component_name.as_ref())
-    })
-}
-
-fn should_emit_watch_event(kind: &EventKind) -> bool {
-    matches!(
-        kind,
-        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
-    )
-}
-
-#[derive(Default)]
-struct WatchEventBatch {
-    changed_paths: HashSet<String>,
-    has_create: bool,
-    has_remove: bool,
-    overflowed: bool,
-}
-
-impl WatchEventBatch {
-    fn clear(&mut self) {
-        self.changed_paths.clear();
-        self.has_create = false;
-        self.has_remove = false;
-        self.overflowed = false;
-    }
-
-    fn is_empty(&self) -> bool {
-        !self.overflowed && self.changed_paths.is_empty()
-    }
-
-    fn ingest_event(&mut self, root_canonical: &Path, event: notify::Event) {
-        if !should_emit_watch_event(&event.kind) {
-            return;
-        }
-
-        if self.overflowed {
-            return;
-        }
-
-        let mut has_relevant_path = false;
-        for path in event.paths {
-            if is_ignored_watch_path(&path, root_canonical) {
-                continue;
-            }
-
-            let relative = if let Ok(relative) = path.strip_prefix(root_canonical) {
-                normalize_slash_path(relative)
-            } else {
-                normalize_slash_path(&path)
-            };
-
-            if relative.is_empty() {
-                continue;
-            }
-
-            self.changed_paths.insert(relative);
-            has_relevant_path = true;
-            if self.changed_paths.len() > FILE_WATCH_MAX_CHANGED_PATHS {
-                self.overflowed = true;
-                self.changed_paths.clear();
-                break;
-            }
-        }
-
-        if !has_relevant_path {
-            return;
-        }
-
-        match event.kind {
-            EventKind::Create(_) => self.has_create = true,
-            EventKind::Remove(_) => self.has_remove = true,
-            _ => {}
-        }
-    }
-
-    fn emit(&self, emitter: &EventEmitter, root_display: &str, root_canonical: &Path) {
-        if self.is_empty() {
-            return;
-        }
-
-        let changed_paths = if self.overflowed {
-            Vec::new()
-        } else {
-            let mut paths = self.changed_paths.iter().cloned().collect::<Vec<_>>();
-            paths.sort();
-            paths
-        };
-
-        // On macOS, Finder trash (move-to-trash) may be reported as a rename
-        // (`Modify(Name)`) instead of `Remove`, so `has_remove` is never set.
-        // Detect this by checking whether any changed path no longer exists on
-        // disk and promote the event kind to "remove" accordingly.
-        let has_missing_path = !self.has_remove
-            && !self.overflowed
-            && self
-                .changed_paths
-                .iter()
-                .any(|p| !root_canonical.join(p).exists());
-        let kind = if self.has_remove || has_missing_path {
-            "remove"
-        } else if self.has_create {
-            "create"
-        } else {
-            "modify"
-        };
-
-        let payload = FileTreeChangedEvent {
-            root_path: root_display.to_string(),
-            refresh_git_status: if self.overflowed {
-                true
-            } else {
-                should_refresh_git_status_for_paths(root_display, &changed_paths)
-            },
-            changed_paths,
-            kind: kind.to_string(),
-            full_reload: self.overflowed,
-        };
-
-        crate::web::event_bridge::emit_event(emitter, "folder://file-tree-changed", payload);
-    }
-}
-
-fn run_file_watch_event_loop(
-    event_rx: mpsc::Receiver<notify::Event>,
-    emitter: EventEmitter,
-    root_display: String,
-    root_canonical: PathBuf,
-) {
-    let debounce = Duration::from_millis(FILE_WATCH_DEBOUNCE_MS);
-    let max_batch_window = Duration::from_millis(FILE_WATCH_MAX_BATCH_WINDOW_MS);
-    let mut batch = WatchEventBatch::default();
-    let mut batch_started_at: Option<Instant> = None;
-
-    loop {
-        match event_rx.recv_timeout(debounce) {
-            Ok(event) => {
-                batch.ingest_event(&root_canonical, event);
-                if !batch.is_empty() && batch_started_at.is_none() {
-                    batch_started_at = Some(Instant::now());
-                }
-
-                while let Ok(next_event) = event_rx.try_recv() {
-                    batch.ingest_event(&root_canonical, next_event);
-                    if !batch.is_empty() && batch_started_at.is_none() {
-                        batch_started_at = Some(Instant::now());
-                    }
-                }
-
-                let should_flush = if batch.overflowed {
-                    true
-                } else {
-                    batch_started_at
-                        .map(|started| started.elapsed() >= max_batch_window)
-                        .unwrap_or(false)
-                };
-
-                if should_flush {
-                    batch.emit(&emitter, &root_display, &root_canonical);
-                    batch.clear();
-                    batch_started_at = None;
-                }
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if !batch.is_empty() {
-                    batch.emit(&emitter, &root_display, &root_canonical);
-                    batch.clear();
-                    batch_started_at = None;
-                }
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                if !batch.is_empty() {
-                    batch.emit(&emitter, &root_display, &root_canonical);
-                }
-                break;
-            }
-        }
     }
 }
 
@@ -2650,164 +2297,6 @@ fn validate_new_name(new_name: &str) -> Result<&str, AppCommandError> {
         ));
     }
     Ok(trimmed)
-}
-
-pub(crate) async fn start_file_tree_watch_core(
-    emitter: EventEmitter,
-    root_path: String,
-) -> Result<(), AppCommandError> {
-    let root = PathBuf::from(&root_path);
-    if !root.exists() || !root.is_dir() {
-        return Err(AppCommandError::not_found("Folder does not exist"));
-    }
-
-    let (root_canonical, key) = canonicalize_watch_root(&root)?;
-
-    {
-        let mut watchers = FILE_WATCHERS.lock().map_err(|_| {
-            AppCommandError::task_execution_failed("Failed to lock file watcher registry")
-        })?;
-        if let Some(entry) = watchers.get_mut(&key) {
-            entry.ref_count += 1;
-            return Ok(());
-        }
-    }
-
-    let root_display_for_worker = root_path.clone();
-    let root_display_for_error = root_path.clone();
-    let root_canonical_for_worker = root_canonical.clone();
-    let emitter_for_worker = emitter;
-    let (event_tx, event_rx) = mpsc::channel::<notify::Event>();
-    let mut worker = Some(std::thread::spawn(move || {
-        run_file_watch_event_loop(
-            event_rx,
-            emitter_for_worker,
-            root_display_for_worker,
-            root_canonical_for_worker,
-        )
-    }));
-
-    let mut watcher = Some(
-        notify::recommended_watcher(
-            move |result: Result<notify::Event, notify::Error>| match result {
-                Ok(event) => {
-                    let _ = event_tx.send(event);
-                }
-                Err(err) => {
-                    eprintln!(
-                        "[file-watch] failed event for {}: {}",
-                        root_display_for_error, err
-                    );
-                }
-            },
-        )
-        .map_err(|e| {
-            AppCommandError::io_error("Failed to create file watcher").with_detail(e.to_string())
-        })?,
-    );
-
-    watcher
-        .as_mut()
-        .ok_or_else(|| AppCommandError::task_execution_failed("Failed to create file watcher"))?
-        .watch(&root_canonical, RecursiveMode::Recursive)
-        .map_err(|e| {
-            AppCommandError::io_error("Failed to start file watcher").with_detail(e.to_string())
-        })?;
-
-    let should_cleanup_new_watcher = {
-        let mut watchers = FILE_WATCHERS.lock().map_err(|_| {
-            AppCommandError::task_execution_failed("Failed to lock file watcher registry")
-        })?;
-        if let Some(entry) = watchers.get_mut(&key) {
-            entry.ref_count += 1;
-            true
-        } else {
-            watchers.insert(
-                key,
-                FileWatchEntry {
-                    root_canonical,
-                    root_display: root_path,
-                    watcher: watcher.take().ok_or_else(|| {
-                        AppCommandError::task_execution_failed(
-                            "Failed to initialize file watcher state",
-                        )
-                    })?,
-                    worker: worker.take(),
-                    ref_count: 1,
-                },
-            );
-            false
-        }
-    };
-
-    if !should_cleanup_new_watcher {
-        return Ok(());
-    }
-
-    drop(watcher.take());
-    if let Some(handle) = worker.take() {
-        let _ = handle.join();
-    }
-
-    Ok(())
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn start_file_tree_watch(
-    app: tauri::AppHandle,
-    root_path: String,
-) -> Result<(), AppCommandError> {
-    let emitter = EventEmitter::Tauri(app);
-    start_file_tree_watch_core(emitter, root_path).await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn stop_file_tree_watch(root_path: String) -> Result<(), AppCommandError> {
-    let root = PathBuf::from(&root_path);
-    let key = canonicalize_watch_root(&root)
-        .map(|(_, key)| key)
-        .unwrap_or_else(|_| normalize_slash_path(&root));
-
-    let mut watchers = FILE_WATCHERS.lock().map_err(|_| {
-        AppCommandError::task_execution_failed("Failed to lock file watcher registry")
-    })?;
-
-    let target_key = if watchers.contains_key(&key) {
-        Some(key)
-    } else {
-        watchers.iter().find_map(|(candidate_key, entry)| {
-            if entry.root_display == root_path {
-                Some(candidate_key.clone())
-            } else {
-                None
-            }
-        })
-    };
-
-    let Some(target_key) = target_key else {
-        return Ok(());
-    };
-
-    if let Some(entry) = watchers.get_mut(&target_key) {
-        if entry.ref_count > 1 {
-            entry.ref_count -= 1;
-            return Ok(());
-        }
-    }
-
-    let mut removed_entry = watchers.remove(&target_key);
-    drop(watchers);
-
-    if let Some(mut entry) = removed_entry.take() {
-        let _ = entry.watcher.unwatch(&entry.root_canonical);
-        drop(entry.watcher);
-        if let Some(worker) = entry.worker.take() {
-            let _ = worker.join();
-        }
-    }
-
-    Ok(())
 }
 
 fn file_mtime_ms(metadata: &std::fs::Metadata) -> Option<i64> {
@@ -2875,11 +2364,7 @@ fn read_text_full(target: &Path, hard_limit: usize) -> Result<String, AppCommand
     if metadata.len() > hard_limit as u64 {
         return Err(
             AppCommandError::invalid_input("File is too large to open in editor")
-                .with_detail(format!(
-                    "size={}, limit={}",
-                    metadata.len(),
-                    hard_limit
-                )),
+                .with_detail(format!("size={}, limit={}", metadata.len(), hard_limit)),
         );
     }
 
@@ -3030,13 +2515,10 @@ pub struct DirectoryEntry {
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn list_directory_entries(
-    path: String,
-) -> Result<Vec<DirectoryEntry>, AppCommandError> {
+pub async fn list_directory_entries(path: String) -> Result<Vec<DirectoryEntry>, AppCommandError> {
     let root = PathBuf::from(&path);
     if !root.is_dir() {
-        return Err(AppCommandError::io_error("Path is not a directory")
-            .with_detail(path));
+        return Err(AppCommandError::io_error("Path is not a directory").with_detail(path));
     }
 
     let mut entries: Vec<DirectoryEntry> = Vec::new();
@@ -3071,23 +2553,21 @@ pub async fn list_directory_entries(
 
         // Peek into subdirectory to check if it has child directories
         let has_children = match std::fs::read_dir(entry.path()) {
-            Ok(sub) => sub
-                .filter_map(|e| e.ok())
-                .any(|e| {
-                    let ft = e.file_type().ok();
-                    let is_sub_dir = ft.is_some_and(|ft| {
-                        if ft.is_symlink() {
-                            e.path().is_dir()
-                        } else {
-                            ft.is_dir()
-                        }
-                    });
-                    if !is_sub_dir {
-                        return false;
+            Ok(sub) => sub.filter_map(|e| e.ok()).any(|e| {
+                let ft = e.file_type().ok();
+                let is_sub_dir = ft.is_some_and(|ft| {
+                    if ft.is_symlink() {
+                        e.path().is_dir()
+                    } else {
+                        ft.is_dir()
                     }
-                    let sub_name = e.file_name().to_string_lossy().to_string();
-                    !sub_name.starts_with('.')
-                }),
+                });
+                if !is_sub_dir {
+                    return false;
+                }
+                let sub_name = e.file_name().to_string_lossy().to_string();
+                !sub_name.starts_with('.')
+            }),
             Err(_) => false,
         };
 
@@ -3644,10 +3124,9 @@ pub async fn create_file_tree_entry(
             return Err(AppCommandError::not_found("Parent path does not exist"));
         }
         if resolved.is_file() {
-            resolved
-                .parent()
-                .map(|p| p.to_path_buf())
-                .ok_or_else(|| AppCommandError::invalid_input("Cannot determine parent directory"))?
+            resolved.parent().map(|p| p.to_path_buf()).ok_or_else(|| {
+                AppCommandError::invalid_input("Cannot determine parent directory")
+            })?
         } else {
             resolved
         }
@@ -3699,9 +3178,7 @@ pub async fn git_log(
     let mut args = vec![
         "log".to_string(),
         limit_str,
-        format!(
-            "--format=__COMMIT__%x00%h%x00%H%x00%an%x00%aI%n%B%n{MESSAGE_END_MARKER}"
-        ),
+        format!("--format=__COMMIT__%x00%h%x00%H%x00%an%x00%aI%n%B%n{MESSAGE_END_MARKER}"),
         "--raw".to_string(),
         "--numstat".to_string(),
         "--no-renames".to_string(),
@@ -4057,8 +3534,7 @@ async fn get_unpushed_hashes(
             .current_dir(path)
             .output()
             .await;
-        let remote_branch_exists = verify_output
-            .is_ok_and(|o| o.status.success());
+        let remote_branch_exists = verify_output.is_ok_and(|o| o.status.success());
 
         if remote_branch_exists {
             let range = format!("{}/{}..{}", remote, branch_name, local_ref);

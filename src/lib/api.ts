@@ -42,6 +42,7 @@ import type {
   FilePreviewContent,
   FileEditContent,
   FileSaveResult,
+  WorkspaceSnapshotResponse,
   GitLogResult,
   SystemLanguageSettings,
   SystemProxySettings,
@@ -1267,12 +1268,26 @@ export async function getFileTree(
   })
 }
 
-export async function startFileTreeWatch(rootPath: string): Promise<void> {
-  return getTransport().call("start_file_tree_watch", { rootPath })
+export async function startWorkspaceStateStream(
+  rootPath: string
+): Promise<WorkspaceSnapshotResponse> {
+  return getTransport().call("start_workspace_state_stream", { rootPath })
 }
 
-export async function stopFileTreeWatch(rootPath: string): Promise<void> {
-  return getTransport().call("stop_file_tree_watch", { rootPath })
+export async function stopWorkspaceStateStream(
+  rootPath: string
+): Promise<void> {
+  return getTransport().call("stop_workspace_state_stream", { rootPath })
+}
+
+export async function getWorkspaceSnapshot(
+  rootPath: string,
+  sinceSeq?: number
+): Promise<WorkspaceSnapshotResponse> {
+  return getTransport().call("get_workspace_snapshot", {
+    rootPath,
+    sinceSeq: sinceSeq ?? null,
+  })
 }
 
 export async function readFileBase64(
