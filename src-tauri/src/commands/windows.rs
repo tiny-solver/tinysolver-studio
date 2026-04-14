@@ -96,7 +96,7 @@ fn is_system_dark_mode() -> bool {
     use std::sync::OnceLock;
     static CACHED: OnceLock<bool> = OnceLock::new();
     *CACHED.get_or_init(|| {
-        std::process::Command::new("defaults")
+        crate::process::std_command("defaults")
             .args(["read", "-g", "AppleInterfaceStyle"])
             .output()
             .map(|o| o.status.success()) // key exists only in dark mode
@@ -104,9 +104,86 @@ fn is_system_dark_mode() -> bool {
     })
 }
 
+/// Detect Windows system dark mode via registry query.
+/// `AppsUseLightTheme`: 0 = dark, 1 = light.
+/// Uses `crate::process::std_command` to avoid flashing a console window.
+/// On pre-1809 Windows where the key is absent, defaults to light mode.
+#[cfg(target_os = "windows")]
+fn is_system_dark_mode() -> bool {
+    use std::sync::OnceLock;
+    static CACHED: OnceLock<bool> = OnceLock::new();
+    *CACHED.get_or_init(|| {
+        crate::process::std_command("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ])
+            .output()
+            .ok()
+            .and_then(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                // Output: "    AppsUseLightTheme    REG_DWORD    0x0"
+                // Extract the last token on the matching line to avoid
+                // substring false-positives (e.g. "0x00000001" contains "0x0").
+                stdout.lines().find(|l| l.contains("AppsUseLightTheme")).map(|line| {
+                    line.split_whitespace()
+                        .last()
+                        .map(|val| val == "0x0" || val == "0x00000000")
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false)
+    })
+}
+
+/// Detect Linux system dark mode via desktop environment settings.
+/// Covers GNOME (gsettings) and KDE Plasma (kreadconfig5/6).
+/// Falls back to light mode on unsupported desktops (XFCE, etc.).
+#[cfg(target_os = "linux")]
+fn is_system_dark_mode() -> bool {
+    use std::sync::OnceLock;
+    static CACHED: OnceLock<bool> = OnceLock::new();
+    *CACHED.get_or_init(|| {
+        // GNOME 42+: color-scheme = 'prefer-dark'
+        if let Ok(output) = crate::process::std_command("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+            .output()
+        {
+            let s = String::from_utf8_lossy(&output.stdout);
+            if s.contains("prefer-dark") {
+                return true;
+            }
+        }
+        // Older GNOME / GTK: theme name contains "dark"
+        if let Ok(output) = crate::process::std_command("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "gtk-theme"])
+            .output()
+        {
+            let s = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            if s.contains("dark") {
+                return true;
+            }
+        }
+        // KDE Plasma 5/6: ColorScheme name contains "dark"
+        for cmd in ["kreadconfig6", "kreadconfig5"] {
+            if let Ok(output) = crate::process::std_command(cmd)
+                .args(["--group", "General", "--key", "ColorScheme"])
+                .output()
+            {
+                let s = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                if s.contains("dark") {
+                    return true;
+                }
+            }
+        }
+        false
+    })
+}
+
 /// Determine whether the window should use a dark background, considering
 /// both the user's explicit preference (from DB) and the OS appearance.
-#[cfg(target_os = "macos")]
 fn should_use_dark_background() -> bool {
     match CACHED_APPEARANCE_MODE.load(AtomicOrdering::Relaxed) {
         MODE_DARK => true,
@@ -138,12 +215,21 @@ where
 
     #[cfg(target_os = "windows")]
     {
+        let builder = if should_use_dark_background() {
+            builder.background_color(tauri::window::Color(9, 9, 11, 255))
+        } else {
+            builder
+        };
         return builder.decorations(false);
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        builder
+        if should_use_dark_background() {
+            builder.background_color(tauri::window::Color(9, 9, 11, 255))
+        } else {
+            builder
+        }
     }
 }
 
