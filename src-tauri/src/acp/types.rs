@@ -47,6 +47,12 @@ pub enum AcpEvent {
     ContentDelta { connection_id: String, text: String },
     /// Agent thinking/reasoning
     Thinking { connection_id: String, text: String },
+    /// Raw SDK message forwarded from Claude ACP extension notification
+    ClaudeSdkMessage {
+        connection_id: String,
+        session_id: String,
+        message: serde_json::Value,
+    },
     /// Agent initiated a tool call
     ToolCall {
         connection_id: String,

@@ -1449,7 +1449,17 @@
         "toolFallbackTitle": "ツール",
         "eventErrorTitle": "エージェントエラー",
         "notificationTurnComplete": "{agent} の応答が完了しました",
-        "notificationError": "{agent} エラー：{message}"
+        "notificationError": "{agent} エラー：{message}",
+        "claudeApiRetry": {
+          "fallbackError": "authentication_failed",
+          "retryingWithMax": "再試行中 {attempt}/{max}",
+          "retryingAttempt": "再試行中（{attempt} 回目）",
+          "retrying": "再試行中",
+          "nextRetryIn": "{seconds}秒後に再試行",
+          "line": "{error}{status} · {retry}",
+          "lineWithDelay": "{error}{status} · {retry}、{delay}",
+          "httpStatus": " (HTTP {status})"
+        }
       },
       "connectionLifecycle": {
         "tasks": {

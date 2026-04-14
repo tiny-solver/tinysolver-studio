@@ -77,6 +77,15 @@ export interface PendingQuestion {
   question: string
 }
 
+export interface ClaudeApiRetryState {
+  sessionId: string
+  attempt: number | null
+  maxRetries: number | null
+  error: string | null
+  errorStatus: number | null
+  retryDelayMs: number | null
+}
+
 export type LiveContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; text: string }
@@ -108,6 +117,7 @@ export interface ConnectionState {
   liveMessage: LiveMessage | null
   pendingPermission: PendingPermission | null
   pendingQuestion: PendingQuestion | null
+  claudeApiRetry: ClaudeApiRetryState | null
   error: string | null
 }
 
@@ -221,6 +231,11 @@ type Action =
       contextKey: string
       entries: PlanEntryInfo[]
     }
+  | {
+      type: "CLAUDE_API_RETRY"
+      contextKey: string
+      retry: ClaudeApiRetryState | null
+    }
   | { type: "ERROR"; contextKey: string; message: string }
   | {
       type: "AVAILABLE_COMMANDS"
@@ -262,6 +277,37 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return null
   }
   return value as Record<string, unknown>
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function parseClaudeApiRetryEvent(
+  event: Extract<AcpEvent, { type: "claude_sdk_message" }>
+): ClaudeApiRetryState | null {
+  const message = asRecord(event.message)
+  if (!message) return null
+  if (message.type !== "system" || message.subtype !== "api_retry") return null
+
+  return {
+    sessionId:
+      typeof message.session_id === "string"
+        ? message.session_id
+        : event.session_id,
+    attempt: asFiniteNumber(message.attempt),
+    maxRetries: asFiniteNumber(message.max_retries),
+    error: typeof message.error === "string" ? message.error : null,
+    errorStatus: asFiniteNumber(message.error_status),
+    retryDelayMs: asFiniteNumber(message.retry_delay_ms),
+  }
 }
 
 function extractPermissionToolCallId(toolCall: unknown): string | null {
@@ -554,6 +600,7 @@ function connectionsReducer(
         liveMessage: null,
         pendingPermission: null,
         pendingQuestion: null,
+        claudeApiRetry: null,
         error: null,
       })
       return next
@@ -581,7 +628,11 @@ function connectionsReducer(
           startedAt: Date.now(),
         }
         updated.pendingQuestion = null
+        updated.claudeApiRetry = null
         updated.error = null
+      } else if (conn.status === "prompting") {
+        // Prompt cycle ended: clear in-flight Claude API retry banner.
+        updated.claudeApiRetry = null
       }
       next.set(action.contextKey, updated)
       return next
@@ -1086,12 +1137,24 @@ function connectionsReducer(
       return next
     }
 
+    case "CLAUDE_API_RETRY": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        claudeApiRetry: action.retry,
+      })
+      return next
+    }
+
     case "ERROR": {
       const conn = state.get(action.contextKey)
       if (!conn) return state
       const next = new Map(state)
       next.set(action.contextKey, {
         ...conn,
+        claudeApiRetry: null,
         error: action.message,
       })
       return next
@@ -1581,6 +1644,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           break
         case "thinking":
           enqueueStreamingAction({ type: "THINKING", contextKey, text: e.text })
+          break
+        case "claude_sdk_message":
+          flushStreamingQueue()
+          dispatch({
+            type: "CLAUDE_API_RETRY",
+            contextKey,
+            retry: parseClaudeApiRetryEvent(e),
+          })
           break
         case "tool_call":
           flushStreamingQueue()

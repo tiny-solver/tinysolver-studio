@@ -1449,7 +1449,17 @@
         "toolFallbackTitle": "工具",
         "eventErrorTitle": "Agent 错误",
         "notificationTurnComplete": "{agent} 已完成响应",
-        "notificationError": "{agent} 错误：{message}"
+        "notificationError": "{agent} 错误：{message}",
+        "claudeApiRetry": {
+          "fallbackError": "authentication_failed",
+          "retryingWithMax": "正在重试 {attempt}/{max}",
+          "retryingAttempt": "正在重试（第 {attempt} 次）",
+          "retrying": "正在重试",
+          "nextRetryIn": "{seconds} 秒后重试",
+          "line": "{error}{status} · {retry}",
+          "lineWithDelay": "{error}{status} · {retry}，{delay}",
+          "httpStatus": "（HTTP {status}）"
+        }
       },
       "connectionLifecycle": {
         "tasks": {

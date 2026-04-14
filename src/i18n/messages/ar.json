@@ -1449,7 +1449,17 @@
         "toolFallbackTitle": "أداة",
         "eventErrorTitle": "خطأ الوكيل",
         "notificationTurnComplete": "{agent} أنهى الاستجابة",
-        "notificationError": "{agent} خطأ: {message}"
+        "notificationError": "{agent} خطأ: {message}",
+        "claudeApiRetry": {
+          "fallbackError": "authentication_failed",
+          "retryingWithMax": "إعادة المحاولة {attempt}/{max}",
+          "retryingAttempt": "إعادة المحاولة رقم {attempt}",
+          "retrying": "جاري إعادة المحاولة",
+          "nextRetryIn": "المحاولة التالية خلال {seconds}ث",
+          "line": "{error}{status} · {retry}",
+          "lineWithDelay": "{error}{status} · {retry}، {delay}",
+          "httpStatus": " (HTTP {status})"
+        }
       },
       "connectionLifecycle": {
         "tasks": {

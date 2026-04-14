@@ -5,6 +5,7 @@ import {
   useAcpActions,
   useConnectionStore,
   getCachedSelectors,
+  type ClaudeApiRetryState,
   type ConnectionState,
   type LiveMessage,
   type PendingPermission,
@@ -40,6 +41,7 @@ export interface UseConnectionReturn {
   liveMessage: LiveMessage | null
   pendingPermission: PendingPermission | null
   pendingQuestion: PendingQuestion | null
+  claudeApiRetry: ClaudeApiRetryState | null
   error: string | null
   connect: (
     agentType: AgentType,
@@ -91,6 +93,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const liveMessage = connection?.liveMessage ?? null
   const pendingPermission = connection?.pendingPermission ?? null
   const pendingQuestion = connection?.pendingQuestion ?? null
+  const claudeApiRetry = connection?.claudeApiRetry ?? null
   const error = connection?.error ?? null
 
   const connect = useCallback(
@@ -146,6 +149,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       liveMessage,
       pendingPermission,
       pendingQuestion,
+      claudeApiRetry,
       error,
       connect,
       disconnect,
@@ -169,6 +173,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       liveMessage,
       pendingPermission,
       pendingQuestion,
+      claudeApiRetry,
       error,
       connect,
       disconnect,

@@ -363,6 +363,12 @@ export type AcpEvent =
   | { type: "content_delta"; connection_id: string; text: string }
   | { type: "thinking"; connection_id: string; text: string }
   | {
+      type: "claude_sdk_message"
+      connection_id: string
+      session_id: string
+      message: unknown
+    }
+  | {
       type: "tool_call"
       connection_id: string
       tool_call_id: string

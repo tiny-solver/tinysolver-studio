@@ -1449,7 +1449,17 @@
         "toolFallbackTitle": "Werkzeug",
         "eventErrorTitle": "Agentenfehler",
         "notificationTurnComplete": "{agent} hat die Antwort abgeschlossen",
-        "notificationError": "{agent} Fehler: {message}"
+        "notificationError": "{agent} Fehler: {message}",
+        "claudeApiRetry": {
+          "fallbackError": "authentication_failed",
+          "retryingWithMax": "erneuter Versuch {attempt}/{max}",
+          "retryingAttempt": "erneuter Versuch {attempt}",
+          "retrying": "erneuter Versuch",
+          "nextRetryIn": "nächster in {seconds}s",
+          "line": "{error}{status} · {retry}",
+          "lineWithDelay": "{error}{status} · {retry}, {delay}",
+          "httpStatus": " (HTTP {status})"
+        }
       },
       "connectionLifecycle": {
         "tasks": {

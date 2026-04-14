@@ -1449,7 +1449,17 @@
         "toolFallbackTitle": "도구",
         "eventErrorTitle": "에이전트 오류",
         "notificationTurnComplete": "{agent} 응답이 완료되었습니다",
-        "notificationError": "{agent} 오류: {message}"
+        "notificationError": "{agent} 오류: {message}",
+        "claudeApiRetry": {
+          "fallbackError": "authentication_failed",
+          "retryingWithMax": "재시도 중 {attempt}/{max}",
+          "retryingAttempt": "{attempt}번째 재시도 중",
+          "retrying": "재시도 중",
+          "nextRetryIn": "{seconds}초 후 재시도",
+          "line": "{error}{status} · {retry}",
+          "lineWithDelay": "{error}{status} · {retry}, {delay}",
+          "httpStatus": " (HTTP {status})"
+        }
       },
       "connectionLifecycle": {
         "tasks": {
