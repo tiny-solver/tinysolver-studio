@@ -1300,6 +1300,7 @@ function isAlertedError(error: unknown): error is AlertedError {
 
 export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const t = useTranslations("Folder.chat.acpConnections")
+  const tChat = useTranslations("Folder.chat")
   const { pushAlert } = useAlertContext()
   const { folder } = useFolderContext()
   const folderNameRef = useRef(folder?.name)
@@ -1694,6 +1695,19 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             fallback_kind: "tool",
             options: e.options,
           })
+          // Send OS notification when permission approval is needed
+          {
+            const nc = storeRef.current.connections.get(contextKey)
+            if (nc) {
+              const agentLabel = AGENT_LABELS[nc.agentType]
+              const fn = folderNameRef.current
+              const title = fn ? `${fn} - Codeg` : "Codeg"
+              sendSystemNotification(
+                title,
+                `${agentLabel}: ${tChat("permissionDialog.subtitle")}`
+              ).catch(() => {})
+            }
+          }
           break
         case "session_started":
           flushStreamingQueue()
@@ -1970,6 +1984,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       flushStreamingQueue,
       scheduleToolCallUpdateFlush,
       t,
+      tChat,
     ]
   )
 
