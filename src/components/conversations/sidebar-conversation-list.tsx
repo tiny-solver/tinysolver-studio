@@ -478,61 +478,63 @@ export function SidebarConversationList({
       ) : (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <ScrollArea
-              className={cn("flex-1 min-h-0 px-2", "[overflow-anchor:none]")}
-            >
-              <Virtualizer ref={virtualizerRef} itemSize={CARD_HEIGHT}>
-                {flatItems.map((item) => {
-                  const key =
-                    item.type === "header"
-                      ? `header-${item.status}`
-                      : `conv-${item.conversation.id}`
-                  return (
-                    <div key={key}>
-                      {item.type === "header" ? (
-                        item.status === "pending_review" ? (
-                          <PendingReviewHeader
-                            count={item.count}
-                            isOpen={groupExpanded[item.status]}
-                            onToggle={toggleGroup}
-                            reviewConversationCount={reviewConversationCount}
-                            completingReview={completingReview}
-                            onCompleteReview={handleOpenCompleteReview}
-                            tStatus={tStatus}
-                            t={t}
-                          />
+            <div className="flex-1 min-h-0">
+              <ScrollArea
+                className={cn("h-full min-h-0 px-2", "[overflow-anchor:none]")}
+              >
+                <Virtualizer ref={virtualizerRef} itemSize={CARD_HEIGHT}>
+                  {flatItems.map((item) => {
+                    const key =
+                      item.type === "header"
+                        ? `header-${item.status}`
+                        : `conv-${item.conversation.id}`
+                    return (
+                      <div key={key}>
+                        {item.type === "header" ? (
+                          item.status === "pending_review" ? (
+                            <PendingReviewHeader
+                              count={item.count}
+                              isOpen={groupExpanded[item.status]}
+                              onToggle={toggleGroup}
+                              reviewConversationCount={reviewConversationCount}
+                              completingReview={completingReview}
+                              onCompleteReview={handleOpenCompleteReview}
+                              tStatus={tStatus}
+                              t={t}
+                            />
+                          ) : (
+                            <GroupHeader
+                              status={item.status}
+                              count={item.count}
+                              isOpen={groupExpanded[item.status]}
+                              onToggle={toggleGroup}
+                              tStatus={tStatus}
+                            />
+                          )
                         ) : (
-                          <GroupHeader
-                            status={item.status}
-                            count={item.count}
-                            isOpen={groupExpanded[item.status]}
-                            onToggle={toggleGroup}
-                            tStatus={tStatus}
+                          <SidebarConversationCard
+                            conversation={item.conversation}
+                            isSelected={
+                              selectedConversation?.agentType ===
+                                item.conversation.agent_type &&
+                              selectedConversation?.id === item.conversation.id
+                            }
+                            onSelect={handleSelect}
+                            onDoubleClick={handleDoubleClick}
+                            onRename={handleRename}
+                            onDelete={handleDelete}
+                            onStatusChange={handleStatusChange}
+                            onNewConversation={handleNewConversation}
+                            onImport={handleImport}
+                            importing={importing}
                           />
-                        )
-                      ) : (
-                        <SidebarConversationCard
-                          conversation={item.conversation}
-                          isSelected={
-                            selectedConversation?.agentType ===
-                              item.conversation.agent_type &&
-                            selectedConversation?.id === item.conversation.id
-                          }
-                          onSelect={handleSelect}
-                          onDoubleClick={handleDoubleClick}
-                          onRename={handleRename}
-                          onDelete={handleDelete}
-                          onStatusChange={handleStatusChange}
-                          onNewConversation={handleNewConversation}
-                          onImport={handleImport}
-                          importing={importing}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
-              </Virtualizer>
-            </ScrollArea>
+                        )}
+                      </div>
+                    )
+                  })}
+                </Virtualizer>
+              </ScrollArea>
+            </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
             <ContextMenuItem onSelect={handleNewConversation}>
