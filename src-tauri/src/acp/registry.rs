@@ -116,8 +116,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Claude Code",
             description: "ACP wrapper for Anthropic's Claude",
             distribution: AgentDistribution::Npx {
-                version: "0.26.0",
-                package: "@agentclientprotocol/claude-agent-acp@0.26.0",
+                version: "0.27.0",
+                package: "@agentclientprotocol/claude-agent-acp@0.27.0",
                 cmd: "claude-agent-acp",
                 args: &[],
                 env: &[],
@@ -166,8 +166,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
             distribution: AgentDistribution::Npx {
-                version: "0.37.1",
-                package: "@google/gemini-cli@0.37.1",
+                version: "0.37.2",
+                package: "@google/gemini-cli@0.37.2",
                 cmd: "gemini",
                 args: &["--acp"],
                 env: &[],
