@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { useTranslations } from "next-intl"
 import type {
   AgentType,
@@ -104,50 +104,48 @@ export function ConversationShell({
   onForkSend,
 }: ConversationShellProps) {
   const tAcp = useTranslations("Folder.chat.acpConnections")
-  const retry = claudeApiRetry
-  const retryAttemptRaw = retry?.attempt
-  const retryMaxRaw = retry?.maxRetries
-  const retryDelayMsRaw = retry?.retryDelayMs
-  const retryErrorStatusRaw = retry?.errorStatus
+  const retryLineText = useMemo(() => {
+    const retry = claudeApiRetry
+    if (!retry) return null
 
-  const retryAttempt =
-    retryAttemptRaw !== null && retryAttemptRaw !== undefined
-      ? Math.trunc(retryAttemptRaw)
-      : null
-  const retryMax =
-    retryMaxRaw !== null && retryMaxRaw !== undefined
-      ? Math.trunc(retryMaxRaw)
-      : null
-  const retryDelaySeconds =
-    retryDelayMsRaw !== null && retryDelayMsRaw !== undefined
-      ? (retryDelayMsRaw / 1000).toFixed(1)
-      : null
-  const errorLabel = retry?.error ?? tAcp("claudeApiRetry.fallbackError")
-  const statusLabel =
-    retryErrorStatusRaw !== null && retryErrorStatusRaw !== undefined
-      ? tAcp("claudeApiRetry.httpStatus", {
-          status: Math.trunc(retryErrorStatusRaw),
-        })
-      : ""
-  const retryLabel =
-    retryAttempt !== null && retryMax !== null
-      ? tAcp("claudeApiRetry.retryingWithMax", {
-          attempt: retryAttempt,
-          max: retryMax,
-        })
-      : retryAttempt !== null
-        ? tAcp("claudeApiRetry.retryingAttempt", {
-            attempt: retryAttempt,
+    const retryAttempt =
+      retry.attempt !== null && retry.attempt !== undefined
+        ? Math.trunc(retry.attempt)
+        : null
+    const retryMax =
+      retry.maxRetries !== null && retry.maxRetries !== undefined
+        ? Math.trunc(retry.maxRetries)
+        : null
+    const retryDelaySeconds =
+      retry.retryDelayMs !== null && retry.retryDelayMs !== undefined
+        ? (retry.retryDelayMs / 1000).toFixed(1)
+        : null
+    const errorLabel = retry.error ?? tAcp("claudeApiRetry.fallbackError")
+    const statusLabel =
+      retry.errorStatus !== null && retry.errorStatus !== undefined
+        ? tAcp("claudeApiRetry.httpStatus", {
+            status: Math.trunc(retry.errorStatus),
           })
-        : tAcp("claudeApiRetry.retrying")
-  const delayLabel =
-    retryDelaySeconds !== null
-      ? tAcp("claudeApiRetry.nextRetryIn", {
-          seconds: retryDelaySeconds,
-        })
-      : null
-  const retryLineText =
-    delayLabel !== null
+        : ""
+    const retryLabel =
+      retryAttempt !== null && retryMax !== null
+        ? tAcp("claudeApiRetry.retryingWithMax", {
+            attempt: retryAttempt,
+            max: retryMax,
+          })
+        : retryAttempt !== null
+          ? tAcp("claudeApiRetry.retryingAttempt", {
+              attempt: retryAttempt,
+            })
+          : tAcp("claudeApiRetry.retrying")
+    const delayLabel =
+      retryDelaySeconds !== null
+        ? tAcp("claudeApiRetry.nextRetryIn", {
+            seconds: retryDelaySeconds,
+          })
+        : null
+
+    return delayLabel !== null
       ? tAcp("claudeApiRetry.lineWithDelay", {
           error: errorLabel,
           status: statusLabel,
@@ -159,6 +157,7 @@ export function ConversationShell({
           status: statusLabel,
           retry: retryLabel,
         })
+  }, [claudeApiRetry, tAcp])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -207,7 +206,7 @@ export function ConversationShell({
         />
       )}
 
-      {claudeApiRetry && (
+      {retryLineText && (
         <div className="border-t border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive">
           <div className="flex items-center gap-2 font-medium">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

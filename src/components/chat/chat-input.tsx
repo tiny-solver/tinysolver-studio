@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useTranslations } from "next-intl"
 import type {
   AgentType,
@@ -48,7 +49,7 @@ interface ChatInputProps {
   onForkSend?: (draft: PromptDraft, modeId?: string | null) => void
 }
 
-export function ChatInput({
+export const ChatInput = memo(function ChatInput({
   status,
   promptCapabilities,
   defaultPath,
@@ -138,4 +139,6 @@ export function ChatInput({
       />
     </div>
   )
-}
+})
+
+ChatInput.displayName = "ChatInput"
