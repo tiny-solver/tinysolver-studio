@@ -280,14 +280,22 @@ function MobileFolderWorkspaceShell({
 }: {
   children: React.ReactNode
 }) {
-  const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarContext()
-  const { isOpen: auxOpen, toggle: toggleAux } = useAuxPanelContext()
+  const {
+    isOpen: sidebarOpen,
+    restored: sidebarRestored,
+    toggle: toggleSidebar,
+  } = useSidebarContext()
+  const {
+    isOpen: auxOpen,
+    restored: auxRestored,
+    toggle: toggleAux,
+  } = useAuxPanelContext()
   const { isOpen: terminalOpen, toggle: toggleTerminal } = useTerminalContext()
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Sidebar Sheet (left) */}
-      <Sheet open={sidebarOpen} onOpenChange={toggleSidebar}>
+      <Sheet open={sidebarRestored && sidebarOpen} onOpenChange={toggleSidebar}>
         <SheetContent
           side="left"
           showCloseButton={false}
@@ -304,7 +312,7 @@ function MobileFolderWorkspaceShell({
       </main>
 
       {/* Aux panel Sheet (right) */}
-      <Sheet open={auxOpen} onOpenChange={toggleAux}>
+      <Sheet open={auxRestored && auxOpen} onOpenChange={toggleAux}>
         <SheetContent
           side="right"
           showCloseButton={false}

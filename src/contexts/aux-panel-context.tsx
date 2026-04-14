@@ -23,6 +23,7 @@ const DEFAULT_IS_OPEN = false
 
 interface AuxPanelContextValue {
   isOpen: boolean
+  restored: boolean
   width: number
   minWidth: number
   maxWidth: number
@@ -94,9 +95,11 @@ export function AuxPanelProvider({
 
   useEffect(() => {
     const stored = loadPersistedPanelState(storageKey)
+    const isMobileViewport = window.innerWidth < 768
+    const defaultOpen = isMobileViewport ? false : DEFAULT_IS_OPEN
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsOpen(stored?.isOpen ?? DEFAULT_IS_OPEN)
+    setIsOpen(isMobileViewport ? false : (stored?.isOpen ?? defaultOpen))
     setWidthState(clampWidth(stored?.width ?? DEFAULT_WIDTH))
     setRestored(true)
   }, [storageKey])
@@ -109,6 +112,7 @@ export function AuxPanelProvider({
   const value = useMemo(
     () => ({
       isOpen,
+      restored,
       width,
       minWidth: MIN_WIDTH,
       maxWidth: MAX_WIDTH,
@@ -123,6 +127,7 @@ export function AuxPanelProvider({
     }),
     [
       isOpen,
+      restored,
       width,
       activeTab,
       toggle,

@@ -21,6 +21,7 @@ const DEFAULT_IS_OPEN = true
 
 interface SidebarContextValue {
   isOpen: boolean
+  restored: boolean
   width: number
   minWidth: number
   maxWidth: number
@@ -82,13 +83,14 @@ export function SidebarProvider({ children, folderId }: SidebarProviderProps) {
   const value = useMemo(
     () => ({
       isOpen,
+      restored,
       width,
       minWidth: MIN_WIDTH,
       maxWidth: MAX_WIDTH,
       toggle,
       setWidth,
     }),
-    [isOpen, width, toggle, setWidth]
+    [isOpen, restored, width, toggle, setWidth]
   )
 
   return (
