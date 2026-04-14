@@ -615,7 +615,22 @@ export function GitChangesTab() {
     if (!rootPath || !isChangesTabActive) return
 
     let unlisten: (() => void) | null = null
+    let disposed = false
+    let watchStarted = false
+    let watchReleased = false
     const normalizedRootPath = normalizeComparePath(rootPath)
+
+    const releaseWatch = () => {
+      if (watchReleased) return
+      watchReleased = true
+      if (unlisten) {
+        unlisten()
+        unlisten = null
+      }
+      if (watchStarted) {
+        void stopFileTreeWatch(rootPath)
+      }
+    }
 
     const scheduleRefresh = () => {
       if (refreshTimerRef.current) {
@@ -629,12 +644,17 @@ export function GitChangesTab() {
     const setup = async () => {
       try {
         await startFileTreeWatch(rootPath)
+        watchStarted = true
       } catch {
         // ignore watch startup errors
       }
+      if (disposed) {
+        releaseWatch()
+        return
+      }
 
       try {
-        unlisten = await subscribe<FileTreeChangedEvent>(
+        const subscribedUnlisten = await subscribe<FileTreeChangedEvent>(
           "folder://file-tree-changed",
           (payload) => {
             if (
@@ -646,6 +666,12 @@ export function GitChangesTab() {
             scheduleRefresh()
           }
         )
+        if (disposed) {
+          subscribedUnlisten()
+          releaseWatch()
+          return
+        }
+        unlisten = subscribedUnlisten
       } catch {
         // ignore listen errors
       }
@@ -654,12 +680,12 @@ export function GitChangesTab() {
     void setup()
 
     return () => {
+      disposed = true
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current)
         refreshTimerRef.current = null
       }
-      unlisten?.()
-      void stopFileTreeWatch(rootPath)
+      releaseWatch()
     }
   }, [fetchChanges, folder?.path, isChangesTabActive])
 

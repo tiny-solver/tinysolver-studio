@@ -1895,7 +1895,22 @@ export function FileTreeTab() {
     if (!rootPath) return
 
     let unlisten: (() => void) | null = null
+    let disposed = false
+    let watchStarted = false
+    let watchReleased = false
     const normalizedRootPath = normalizeComparePath(rootPath)
+
+    const releaseWatch = () => {
+      if (watchReleased) return
+      watchReleased = true
+      if (unlisten) {
+        unlisten()
+        unlisten = null
+      }
+      if (watchStarted) {
+        void stopFileTreeWatch(rootPath)
+      }
+    }
 
     const scheduleTreeRefresh = (refreshGitStatus: boolean) => {
       if (!isFileTreeTabActiveRef.current) {
@@ -2027,13 +2042,18 @@ export function FileTreeTab() {
     const setup = async () => {
       try {
         await startFileTreeWatch(rootPath)
+        watchStarted = true
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         toast.error(t("toasts.watchStartFailed"), { description: message })
       }
+      if (disposed) {
+        releaseWatch()
+        return
+      }
 
       try {
-        unlisten = await subscribe<FileTreeChangedEvent>(
+        const subscribedUnlisten = await subscribe<FileTreeChangedEvent>(
           "folder://file-tree-changed",
           (payload) => {
             if (
@@ -2109,6 +2129,12 @@ export function FileTreeTab() {
             })()
           }
         )
+        if (disposed) {
+          subscribedUnlisten()
+          releaseWatch()
+          return
+        }
+        unlisten = subscribedUnlisten
       } catch (error) {
         console.error("[FileTreeTab] failed to listen file watch event:", error)
       }
@@ -2117,6 +2143,7 @@ export function FileTreeTab() {
     void setup()
 
     return () => {
+      disposed = true
       if (treeRefreshTimerRef.current) {
         clearTimeout(treeRefreshTimerRef.current)
         treeRefreshTimerRef.current = null
@@ -2129,8 +2156,7 @@ export function FileTreeTab() {
       pendingTreeRefreshRef.current = false
       pendingTreeRefreshNeedsStatusRef.current = false
       pendingStatusRefreshRef.current = false
-      unlisten?.()
-      void stopFileTreeWatch(rootPath)
+      releaseWatch()
     }
   }, [fetchTree, folder?.path, openFilePreview, t])
 
