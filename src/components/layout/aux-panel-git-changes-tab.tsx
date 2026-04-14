@@ -115,19 +115,6 @@ interface MutableChangeTreeDirNode {
 const TRACKED_ROOT_PATH = "__working_tree_tracked_root__"
 const UNTRACKED_ROOT_PATH = "__working_tree_untracked_root__"
 const UNTRACKED_STATUS = "??"
-const GIT_CHANGES_DEBUG_LOG = process.env.NODE_ENV === "development"
-
-function logGitChangesDebug(
-  message: string,
-  payload?: Record<string, unknown>
-) {
-  if (!GIT_CHANGES_DEBUG_LOG) return
-  if (payload) {
-    console.info(`[GitChangesTab/workspace] ${message}`, payload)
-    return
-  }
-  console.info(`[GitChangesTab/workspace] ${message}`)
-}
 
 type GitFileState =
   | "untracked"
@@ -544,24 +531,6 @@ export function GitChangesTab() {
     () => untrackedTreeNodes.length > 0 && expandedUntrackedPaths.size > 0,
     [expandedUntrackedPaths.size, untrackedTreeNodes.length]
   )
-
-  useEffect(() => {
-    logGitChangesDebug("workspace state consumed", {
-      rootPath: folder?.path ?? "",
-      seq: workspaceState.seq,
-      health: workspaceState.health,
-      gitEntries: workspaceState.git.length,
-      trackedChanges: trackedChanges.length,
-      untrackedChanges: untrackedChanges.length,
-    })
-  }, [
-    folder?.path,
-    trackedChanges.length,
-    untrackedChanges.length,
-    workspaceState.git.length,
-    workspaceState.health,
-    workspaceState.seq,
-  ])
 
   const toggleTrackedExpanded = useCallback(() => {
     if (trackedCanExpand) {

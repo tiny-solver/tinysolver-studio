@@ -35,7 +35,6 @@ export interface WorkspaceStateResult extends WorkspaceStateView {
 const WORKSPACE_PROTOCOL_VERSION = 1
 const STORE_EVICT_DELAY_MS = 120_000
 const STORE_SHUTDOWN_GRACE_MS = 600
-const WORKSPACE_DEBUG_LOG = process.env.NODE_ENV === "development"
 
 const EMPTY_STATE: WorkspaceStateView = {
   rootPath: "",
@@ -54,38 +53,6 @@ function normalizeComparePath(path: string): string {
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return String(error)
-}
-
-function logWorkspaceDebug(message: string, payload?: Record<string, unknown>) {
-  if (!WORKSPACE_DEBUG_LOG) return
-  if (payload) {
-    console.info(`[WorkspaceStateStore] ${message}`, payload)
-    return
-  }
-  console.info(`[WorkspaceStateStore] ${message}`)
-}
-
-function summarizeSnapshot(snapshot: WorkspaceSnapshotResponse) {
-  return {
-    rootPath: snapshot.root_path,
-    seq: snapshot.seq,
-    full: snapshot.full,
-    deltas: snapshot.deltas.length,
-    treeRoots: snapshot.tree_snapshot?.length ?? 0,
-    gitEntries: snapshot.git_snapshot?.length ?? 0,
-  }
-}
-
-function summarizeEvent(event: WorkspaceStateEvent, localSeq: number) {
-  return {
-    rootPath: event.root_path,
-    kind: event.kind,
-    eventSeq: event.seq,
-    localSeq,
-    requiresResync: event.requires_resync,
-    payloadKinds: event.payload.map((delta) => delta.kind),
-    payloadCount: event.payload.length,
-  }
 }
 
 function applyDeltaToState(
@@ -198,11 +165,6 @@ class WorkspaceStateStore {
     this.cancelPendingShutdown()
     this.cancelEviction()
     this.refCount += 1
-    logWorkspaceDebug("acquire", {
-      rootPath: this.rootPath,
-      refCount: this.refCount,
-      started: this.started,
-    })
     if (this.refCount === 1) {
       const canReuseLifecycle =
         this.lifecycleId > 0 &&
@@ -218,11 +180,6 @@ class WorkspaceStateStore {
   release = () => {
     if (this.refCount === 0) return
     this.refCount -= 1
-    logWorkspaceDebug("release", {
-      rootPath: this.rootPath,
-      refCount: this.refCount,
-      started: this.started,
-    })
     if (this.refCount === 0) {
       const lifecycleId = this.lifecycleId
       this.scheduleShutdown(lifecycleId)
@@ -231,16 +188,9 @@ class WorkspaceStateStore {
 
   requestResync = async (reason?: string) => {
     void reason
-    if (this.resyncInFlight) {
-      logWorkspaceDebug("requestResync skip in-flight", {
-        rootPath: this.rootPath,
-        reason: reason ?? "unknown",
-      })
-      return this.resyncInFlight
-    }
+    if (this.resyncInFlight) return this.resyncInFlight
 
     const run = async () => {
-      const startedAt = performance.now()
       this.patchState((prev) => ({
         ...prev,
         health: "resyncing",
@@ -248,33 +198,17 @@ class WorkspaceStateStore {
 
       try {
         const sinceSeq = this.hasBaselineSnapshot ? this.state.seq : undefined
-        logWorkspaceDebug("requestResync start", {
-          rootPath: this.rootPath,
-          reason: reason ?? "unknown",
-          sinceSeq: sinceSeq ?? null,
-        })
         const snapshot = await getWorkspaceSnapshot(this.rootPath, sinceSeq)
         this.patchState((prev) => applySnapshot(prev, snapshot))
         if (snapshot.full) {
           this.hasBaselineSnapshot = true
         }
-        logWorkspaceDebug("requestResync success", {
-          ...summarizeSnapshot(snapshot),
-          reason: reason ?? "unknown",
-          durationMs: Math.round(performance.now() - startedAt),
-        })
       } catch (error) {
         this.patchState((prev) => ({
           ...prev,
           health: "degraded",
           error: toErrorMessage(error),
         }))
-        logWorkspaceDebug("requestResync failed", {
-          rootPath: this.rootPath,
-          reason: reason ?? "unknown",
-          durationMs: Math.round(performance.now() - startedAt),
-          error: toErrorMessage(error),
-        })
       }
     }
 
@@ -305,27 +239,13 @@ class WorkspaceStateStore {
       }
 
       try {
-        const streamStartedAt = performance.now()
-        logWorkspaceDebug("ensureStarted start stream", {
-          rootPath: this.rootPath,
-          lifecycleId,
-        })
         const initialSnapshot = await startWorkspaceStateStream(this.rootPath)
         if (!this.isLifecycleActive(lifecycleId)) {
           await stopWorkspaceStateStream(this.rootPath).catch(() => {})
-          logWorkspaceDebug("ensureStarted aborted after initial snapshot", {
-            rootPath: this.rootPath,
-            lifecycleId,
-          })
           return
         }
         this.patchState((prev) => applySnapshot(prev, initialSnapshot))
         this.hasBaselineSnapshot = true
-        logWorkspaceDebug("ensureStarted initial snapshot", {
-          ...summarizeSnapshot(initialSnapshot),
-          lifecycleId,
-          durationMs: Math.round(performance.now() - streamStartedAt),
-        })
 
         const unlisten = await subscribe<WorkspaceStateEvent>(
           "folder://workspace-state-event",
@@ -338,10 +258,6 @@ class WorkspaceStateStore {
             this.handleEvent(event)
           }
         )
-        logWorkspaceDebug("ensureStarted subscribe ready", {
-          rootPath: this.rootPath,
-          lifecycleId,
-        })
 
         if (!this.isLifecycleActive(lifecycleId)) {
           unlisten()
@@ -351,35 +267,18 @@ class WorkspaceStateStore {
 
         this.unlisten = unlisten
         this.started = true
-        const catchUpStartedAt = performance.now()
         const catchUpSnapshot = await getWorkspaceSnapshot(
           this.rootPath,
           this.state.seq
         )
-        if (!this.isLifecycleActive(lifecycleId)) {
-          logWorkspaceDebug("ensureStarted aborted after catch-up snapshot", {
-            rootPath: this.rootPath,
-            lifecycleId,
-          })
-          return
-        }
+        if (!this.isLifecycleActive(lifecycleId)) return
         this.patchState((prev) => applySnapshot(prev, catchUpSnapshot))
-        logWorkspaceDebug("ensureStarted catch-up snapshot", {
-          ...summarizeSnapshot(catchUpSnapshot),
-          lifecycleId,
-          durationMs: Math.round(performance.now() - catchUpStartedAt),
-        })
       } catch (error) {
         this.patchState((prev) => ({
           ...prev,
           health: "degraded",
           error: toErrorMessage(error),
         }))
-        logWorkspaceDebug("ensureStarted failed", {
-          rootPath: this.rootPath,
-          lifecycleId,
-          error: toErrorMessage(error),
-        })
       }
     }
 
@@ -393,10 +292,6 @@ class WorkspaceStateStore {
   private shutdown = async (lifecycleId: number) => {
     void lifecycleId
     this.started = false
-    logWorkspaceDebug("shutdown", {
-      rootPath: this.rootPath,
-      lifecycleId,
-    })
     const unlisten = this.unlisten
     this.unlisten = null
     if (unlisten) {
@@ -415,14 +310,7 @@ class WorkspaceStateStore {
     this.cancelPendingShutdown()
     this.shutdownTimer = setTimeout(() => {
       this.shutdownTimer = null
-      if (this.refCount !== 0) {
-        logWorkspaceDebug("shutdown grace canceled by new acquire", {
-          rootPath: this.rootPath,
-          lifecycleId,
-          refCount: this.refCount,
-        })
-        return
-      }
+      if (this.refCount !== 0) return
       const dispose = async () => {
         await this.shutdown(lifecycleId)
       }
@@ -465,26 +353,12 @@ class WorkspaceStateStore {
   }
 
   private handleEvent = (event: WorkspaceStateEvent) => {
-    logWorkspaceDebug("event received", summarizeEvent(event, this.state.seq))
-
     if (event.version !== WORKSPACE_PROTOCOL_VERSION) {
-      logWorkspaceDebug("event version mismatch", {
-        rootPath: this.rootPath,
-        eventVersion: event.version,
-        expectedVersion: WORKSPACE_PROTOCOL_VERSION,
-      })
       void this.requestResync("version_mismatch")
       return
     }
 
     if (event.requires_resync || event.seq !== this.state.seq + 1) {
-      logWorkspaceDebug("event requires resync", {
-        rootPath: this.rootPath,
-        kind: event.kind,
-        eventSeq: event.seq,
-        localSeq: this.state.seq,
-        requiresResync: event.requires_resync,
-      })
       void this.requestResync("seq_gap_or_hint")
       return
     }
@@ -502,13 +376,6 @@ class WorkspaceStateStore {
       health: "healthy",
       error: null,
     }))
-
-    logWorkspaceDebug("event applied", {
-      rootPath: event.root_path,
-      seq: event.seq,
-      treeRoots: next.tree.length,
-      gitEntries: next.git.length,
-    })
   }
 
   private patchState = (

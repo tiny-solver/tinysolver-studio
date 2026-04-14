@@ -94,7 +94,6 @@ function baseName(path: string): string {
 
 const FILE_TREE_ROOT_PATH = "__workspace_root__"
 const GITIGNORE_MUTED_CLASS = "text-muted-foreground/55"
-const FILE_TREE_LAZY_DEBUG_LOG = process.env.NODE_ENV === "development"
 
 interface FileActionTarget {
   kind: "file" | "dir"
@@ -127,30 +126,6 @@ function normalizeGitStatusPath(path: string): string {
 
 function normalizeComparePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "")
-}
-
-function logFileTreeLazyDebug(
-  message: string,
-  payload?: Record<string, unknown>
-) {
-  if (!FILE_TREE_LAZY_DEBUG_LOG) return
-  if (payload) {
-    console.info(`[FileTreeTab/lazy] ${message}`, payload)
-    return
-  }
-  console.info(`[FileTreeTab/lazy] ${message}`)
-}
-
-function logFileTreeWorkspaceDebug(
-  message: string,
-  payload?: Record<string, unknown>
-) {
-  if (!FILE_TREE_LAZY_DEBUG_LOG) return
-  if (payload) {
-    console.info(`[FileTreeTab/workspace] ${message}`, payload)
-    return
-  }
-  console.info(`[FileTreeTab/workspace] ${message}`)
 }
 
 function prefixFileTreeNodePaths(
@@ -1013,15 +988,6 @@ export function FileTreeTab() {
       workspaceState.health === "resyncing" && workspaceState.seq === 0
     )
     setError(workspaceState.health === "degraded" ? workspaceState.error : null)
-
-    logFileTreeWorkspaceDebug("workspace state consumed", {
-      rootPath: folder?.path ?? "",
-      seq: workspaceState.seq,
-      health: workspaceState.health,
-      treeRoots: workspaceState.tree.length,
-      gitEntries: workspaceState.git.length,
-      lazyOverrideDirs: lazyLoadedChildrenByPathRef.current.size,
-    })
   }, [
     folder?.path,
     workspaceState.error,
@@ -1037,20 +1003,8 @@ export function FileTreeTab() {
       if (!rootPath) return
       const normalizedDirPath = normalizeComparePath(dirPath)
       if (!normalizedDirPath) return
-      if (lazyLoadedChildrenByPathRef.current.has(normalizedDirPath)) {
-        logFileTreeLazyDebug("skip cached", {
-          rootPath,
-          dirPath: normalizedDirPath,
-        })
-        return
-      }
-      if (lazyLoadingDirPathsRef.current.has(normalizedDirPath)) {
-        logFileTreeLazyDebug("skip in-flight", {
-          rootPath,
-          dirPath: normalizedDirPath,
-        })
-        return
-      }
+      if (lazyLoadedChildrenByPathRef.current.has(normalizedDirPath)) return
+      if (lazyLoadingDirPathsRef.current.has(normalizedDirPath)) return
 
       const existingChildren = findDirectoryChildren(nodes, normalizedDirPath)
       if (existingChildren && existingChildren.length > 0) {
@@ -1058,20 +1012,10 @@ export function FileTreeTab() {
           normalizedDirPath,
           existingChildren
         )
-        logFileTreeLazyDebug("skip use existing children", {
-          rootPath,
-          dirPath: normalizedDirPath,
-          childrenCount: existingChildren.length,
-        })
         return
       }
 
       lazyLoadingDirPathsRef.current.add(normalizedDirPath)
-      const startedAt = performance.now()
-      logFileTreeLazyDebug("request start", {
-        rootPath,
-        dirPath: normalizedDirPath,
-      })
       try {
         const subtree = await getFileTree(
           joinFsPath(rootPath, normalizedDirPath),
@@ -1082,19 +1026,8 @@ export function FileTreeTab() {
         setNodes((prev) =>
           applyLazyTreeOverrides(prev, lazyLoadedChildrenByPathRef.current)
         )
-        logFileTreeLazyDebug("request success", {
-          rootPath,
-          dirPath: normalizedDirPath,
-          childrenCount: prefixed.length,
-          durationMs: Math.round(performance.now() - startedAt),
-        })
       } catch {
         // Ignore lazy load failures and keep current collapsed/empty state.
-        logFileTreeLazyDebug("request failed", {
-          rootPath,
-          dirPath: normalizedDirPath,
-          durationMs: Math.round(performance.now() - startedAt),
-        })
       } finally {
         lazyLoadingDirPathsRef.current.delete(normalizedDirPath)
       }
@@ -1107,10 +1040,6 @@ export function FileTreeTab() {
     for (const path of expandedPaths) {
       if (path === FILE_TREE_ROOT_PATH) continue
       if (previousExpanded.has(path)) continue
-      logFileTreeLazyDebug("expanded path detected", {
-        rootPath: folder?.path ?? "",
-        dirPath: path,
-      })
       void loadDirectoryChildren(path)
     }
     previousExpandedPathsRef.current = new Set(expandedPaths)
