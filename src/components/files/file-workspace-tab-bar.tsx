@@ -103,7 +103,7 @@ export function FileWorkspaceTabBar() {
   }
 
   return (
-    <div className="flex items-stretch border-b border-border">
+    <div className="flex items-stretch">
       <Reorder.Group
         as="div"
         ref={scrollRef}
@@ -115,7 +115,7 @@ export function FileWorkspaceTabBar() {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "h-10 pt-1.5 px-1.5 flex-1 min-w-0 flex items-stretch gap-1.5",
+          "h-10 pt-1.5 px-1.5 flex-1 min-w-0 flex items-stretch gap-1.5 border-b border-border",
           "overflow-x-scroll",
           isHovered
             ? [
@@ -205,7 +205,7 @@ export function FileWorkspaceTabBar() {
           type="button"
           onClick={() => toggleFileTabPreview(activeFileTabId)}
           className={cn(
-            "shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors",
+            "shrink-0 flex items-center justify-center w-10 border-b border-border hover:bg-primary/8 transition-colors",
             isPreviewActive && "text-primary"
           )}
           aria-label={isPreviewActive ? t("editSource") : t("preview")}
@@ -224,7 +224,7 @@ export function FileWorkspaceTabBar() {
           onClick={() => {
             openPath(`${folder.path}/${activeTab.path}`).catch(() => {})
           }}
-          className="shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors"
+          className="shrink-0 flex items-center justify-center w-10 border-b border-border hover:bg-primary/8 transition-colors"
           aria-label={t("preview")}
           title={t("preview")}
         >
