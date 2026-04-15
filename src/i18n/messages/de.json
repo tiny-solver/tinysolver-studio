@@ -1181,6 +1181,8 @@
       "loadingBranches": "Branches werden geladen...",
       "noContainingBranches": "Keine enthaltenen Branches gefunden.",
       "newBranch": "Neuer Branch...",
+      "resetToHere": "Auf diesen Stand zurücksetzen",
+      "resetDisabledReasonNotCurrentBranchView": "Nur in der Ansicht des aktuellen Branches verfügbar",
       "viewCommitDiffAria": "Diff für Commit {hash} anzeigen",
       "copyFullCommitHashAria": "Vollständigen Commit-Hash {hash} kopieren",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "Neuen Branch erstellt und gewechselt",
         "newBranchFromCommit": "{name} (aus {shortHash})",
         "createBranchFailed": "Branch konnte nicht erstellt werden",
-        "openPushWindowFailed": "Push-Fenster konnte nicht geöffnet werden"
+        "openPushWindowFailed": "Push-Fenster konnte nicht geöffnet werden",
+        "resetSuccess": "Zurücksetzen erfolgreich",
+        "resetSuccessDescription": "{branch} wurde mit {mode} auf {shortHash} zurückgesetzt",
+        "resetFailed": "Zurücksetzen fehlgeschlagen"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Branch auswählen...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "Neuer Branch",
         "newBranchDescription": "Erstelle einen neuen Branch mit Commit {shortHash} als letztem Commit.",
-        "branchNamePlaceholder": "Branch-Name"
+        "branchNamePlaceholder": "Branch-Name",
+        "reset": {
+          "title": "Aktuellen Branch auf diesen Commit zurücksetzen",
+          "branchLabel": "Branch",
+          "targetLabel": "Ziel-Commit",
+          "messageLabel": "Nachricht",
+          "modeLabel": "Reset-Modus",
+          "confirmButton": "Zurücksetzen",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "Verschiebt HEAD und den Zeiger des aktuellen Branches auf den Ziel-Commit.\nIndex und Working Tree bleiben unverändert.\nÄnderungen aus den entfernten Commits bleiben staged."
+            },
+            "mixed": {
+              "label": "--mixed (Standard)",
+              "description": "Verschiebt HEAD auf den Ziel-Commit.\nSetzt den Index auf den Ziel-Commit zurück und behält Änderungen im Working Tree.\nÄnderungen wechseln von staged zu unstaged."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "Verschiebt HEAD und setzt sowohl Index als auch Working Tree auf den Ziel-Commit zurück.\nLokale verfolgte Änderungen nach dem Ziel-Commit werden verworfen.\nDies ist eine destruktive Operation."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "Verschiebt HEAD auf den Ziel-Commit und versucht lokale Änderungen zu behalten.\nNur nicht-konfliktierende Änderungen bleiben erhalten.\nBei Konflikten wird der Reset zum Schutz der Änderungen abgebrochen."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

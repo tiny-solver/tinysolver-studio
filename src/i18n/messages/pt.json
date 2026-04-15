@@ -1181,6 +1181,8 @@
       "loadingBranches": "Carregando branches...",
       "noContainingBranches": "Nenhuma branch contendo este commit foi encontrada.",
       "newBranch": "Nova branch...",
+      "resetToHere": "Resetar para aqui",
+      "resetDisabledReasonNotCurrentBranchView": "Disponível somente ao visualizar a branch atual",
       "viewCommitDiffAria": "Ver diff do commit {hash}",
       "copyFullCommitHashAria": "Copiar hash completo do commit {hash}",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "Nova branch criada e selecionada",
         "newBranchFromCommit": "{name} (de {shortHash})",
         "createBranchFailed": "Falha ao criar branch",
-        "openPushWindowFailed": "Falha ao abrir a janela de push"
+        "openPushWindowFailed": "Falha ao abrir a janela de push",
+        "resetSuccess": "Reset concluído",
+        "resetSuccessDescription": "{branch} foi resetada para {shortHash} com {mode}",
+        "resetFailed": "Falha no reset"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Selecionar branch...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "Nova branch",
         "newBranchDescription": "Criar uma nova branch com o commit {shortHash} como commit mais recente.",
-        "branchNamePlaceholder": "Nome da branch"
+        "branchNamePlaceholder": "Nome da branch",
+        "reset": {
+          "title": "Resetar a branch atual para este commit",
+          "branchLabel": "Branch",
+          "targetLabel": "Commit alvo",
+          "messageLabel": "Mensagem",
+          "modeLabel": "Modo de reset",
+          "confirmButton": "Resetar",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "Move o HEAD e o ponteiro da branch atual para o commit alvo.\nMantém Index e Working Tree sem alterações.\nAs mudanças dos commits removidos permanecem staged."
+            },
+            "mixed": {
+              "label": "--mixed (padrão)",
+              "description": "Move o HEAD para o commit alvo.\nReseta o Index para o commit alvo e mantém as mudanças no Working Tree.\nAs mudanças passam de staged para unstaged."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "Move o HEAD e reseta tanto Index quanto Working Tree para o commit alvo.\nAs mudanças locais rastreadas após o commit alvo são descartadas.\nEsta é uma operação destrutiva."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "Move o HEAD para o commit alvo e tenta preservar alterações locais.\nSomente alterações sem conflito são mantidas.\nSe houver conflito, o reset é abortado para proteger seu trabalho."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

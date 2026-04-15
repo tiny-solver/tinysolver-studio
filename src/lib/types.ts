@@ -736,6 +736,8 @@ export interface GitStatusEntry {
   file: string
 }
 
+export type GitResetMode = "soft" | "mixed" | "hard" | "keep"
+
 export interface GitBranchList {
   local: string[]
   remote: string[]

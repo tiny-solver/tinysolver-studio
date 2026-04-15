@@ -252,6 +252,21 @@ pub async fn git_checkout(
     Ok(Json(()))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitResetParams {
+    pub path: String,
+    pub commit: String,
+    pub mode: String,
+}
+
+pub async fn git_reset(
+    Json(params): Json<GitResetParams>,
+) -> Result<Json<()>, AppCommandError> {
+    folder_commands::git_reset(params.path, params.commit, params.mode).await?;
+    Ok(Json(()))
+}
+
 pub async fn git_list_branches(
     Json(params): Json<PathParams>,
 ) -> Result<Json<Vec<String>>, AppCommandError> {

@@ -1181,6 +1181,8 @@
       "loadingBranches": "Cargando ramas...",
       "noContainingBranches": "No se encontraron ramas contenedoras.",
       "newBranch": "Nueva rama...",
+      "resetToHere": "Resetear aquí",
+      "resetDisabledReasonNotCurrentBranchView": "Disponible solo al ver la rama actual",
       "viewCommitDiffAria": "Ver diff del commit {hash}",
       "copyFullCommitHashAria": "Copiar hash completo del commit {hash}",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "Nueva rama creada y activada",
         "newBranchFromCommit": "{name} (desde {shortHash})",
         "createBranchFailed": "No se pudo crear la rama",
-        "openPushWindowFailed": "No se pudo abrir la ventana de envío"
+        "openPushWindowFailed": "No se pudo abrir la ventana de envío",
+        "resetSuccess": "Reset completado",
+        "resetSuccessDescription": "{branch} se reseteó a {shortHash} con {mode}",
+        "resetFailed": "Falló el reset"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Seleccionar rama...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "Nueva rama",
         "newBranchDescription": "Crea una nueva rama con el commit {shortHash} como último commit.",
-        "branchNamePlaceholder": "Nombre de la rama"
+        "branchNamePlaceholder": "Nombre de la rama",
+        "reset": {
+          "title": "Resetear la rama actual hasta aquí",
+          "branchLabel": "Rama",
+          "targetLabel": "Commit objetivo",
+          "messageLabel": "Mensaje",
+          "modeLabel": "Modo de reset",
+          "confirmButton": "Resetear",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "Mueve HEAD y el puntero de la rama actual al commit objetivo.\nMantiene Index y Working Tree sin cambios.\nLos cambios de los commits retirados permanecen en estado staged."
+            },
+            "mixed": {
+              "label": "--mixed (predeterminado)",
+              "description": "Mueve HEAD al commit objetivo.\nResetea Index al commit objetivo y mantiene los cambios en Working Tree.\nLos cambios pasan de staged a unstaged."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "Mueve HEAD y resetea tanto Index como Working Tree al commit objetivo.\nSe descartan los cambios locales rastreados posteriores al commit objetivo.\nEs una operación destructiva."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "Mueve HEAD al commit objetivo e intenta conservar los cambios locales.\nSolo se conservan cambios que no entren en conflicto.\nSi hay conflictos, el reset se aborta para proteger tu trabajo."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

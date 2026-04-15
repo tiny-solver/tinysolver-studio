@@ -1181,6 +1181,8 @@
       "loadingBranches": "جارٍ تحميل الفروع...",
       "noContainingBranches": "لم يتم العثور على فروع تحتوي هذا الالتزام.",
       "newBranch": "فرع جديد...",
+      "resetToHere": "إعادة الضبط إلى هنا",
+      "resetDisabledReasonNotCurrentBranchView": "متاح فقط عند عرض الفرع الحالي",
       "viewCommitDiffAria": "عرض diff للالتزام {hash}",
       "copyFullCommitHashAria": "نسخ hash الكامل للالتزام {hash}",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "تم إنشاء فرع جديد والتبديل إليه",
         "newBranchFromCommit": "{name} (من {shortHash})",
         "createBranchFailed": "فشل إنشاء الفرع",
-        "openPushWindowFailed": "فشل فتح نافذة الدفع"
+        "openPushWindowFailed": "فشل فتح نافذة الدفع",
+        "resetSuccess": "تمت إعادة الضبط بنجاح",
+        "resetSuccessDescription": "تمت إعادة ضبط {branch} إلى {shortHash} باستخدام {mode}",
+        "resetFailed": "فشلت إعادة الضبط"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "اختر فرعًا...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "فرع جديد",
         "newBranchDescription": "إنشاء فرع جديد مع الالتزام {shortHash} كأحدث التزام.",
-        "branchNamePlaceholder": "اسم الفرع"
+        "branchNamePlaceholder": "اسم الفرع",
+        "reset": {
+          "title": "إعادة ضبط الفرع الحالي إلى هذا الالتزام",
+          "branchLabel": "الفرع",
+          "targetLabel": "الالتزام الهدف",
+          "messageLabel": "الرسالة",
+          "modeLabel": "وضع إعادة الضبط",
+          "confirmButton": "إعادة الضبط",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "ينقل HEAD ومؤشر الفرع الحالي إلى الالتزام الهدف.\nيبقي Index و Working Tree بدون تغيير.\nتظل تغييرات الالتزامات التي تمت إزالتها في حالة staged."
+            },
+            "mixed": {
+              "label": "--mixed (الافتراضي)",
+              "description": "ينقل HEAD إلى الالتزام الهدف.\nيعيد ضبط Index إلى الالتزام الهدف مع الإبقاء على تغييرات Working Tree.\nتتحول التغييرات من staged إلى unstaged."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "ينقل HEAD ويعيد ضبط كل من Index و Working Tree إلى الالتزام الهدف.\nسيتم حذف التغييرات المحلية المتتبعة بعد الالتزام الهدف.\nهذه عملية تدميرية."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "ينقل HEAD إلى الالتزام الهدف مع محاولة الاحتفاظ بالتغييرات المحلية.\nيتم الاحتفاظ فقط بالتغييرات غير المتعارضة.\nعند وجود تعارض، يتم إيقاف العملية لحماية عملك."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

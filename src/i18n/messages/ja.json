@@ -1181,6 +1181,8 @@
       "loadingBranches": "ブランチを読み込み中...",
       "noContainingBranches": "含まれるブランチが見つかりません。",
       "newBranch": "新規ブランチ...",
+      "resetToHere": "ここにリセット",
+      "resetDisabledReasonNotCurrentBranchView": "現在のブランチ表示時のみ利用できます",
       "viewCommitDiffAria": "コミット {hash} の差分を表示",
       "copyFullCommitHashAria": "完全なコミットハッシュ {hash} をコピー",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "新しいブランチを作成して切り替えました",
         "newBranchFromCommit": "{name}（{shortHash} から）",
         "createBranchFailed": "ブランチ作成に失敗しました",
-        "openPushWindowFailed": "プッシュウィンドウを開けませんでした"
+        "openPushWindowFailed": "プッシュウィンドウを開けませんでした",
+        "resetSuccess": "リセットが完了しました",
+        "resetSuccessDescription": "{branch} を {mode} で {shortHash} にリセットしました",
+        "resetFailed": "リセットに失敗しました"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "ブランチを選択...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "新規ブランチ",
         "newBranchDescription": "コミット {shortHash} を最新コミットとして新しいブランチを作成します。",
-        "branchNamePlaceholder": "ブランチ名"
+        "branchNamePlaceholder": "ブランチ名",
+        "reset": {
+          "title": "現在のブランチをこのコミットへリセット",
+          "branchLabel": "ブランチ",
+          "targetLabel": "対象コミット",
+          "messageLabel": "コミットメッセージ",
+          "modeLabel": "リセットモード",
+          "confirmButton": "リセット",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "HEAD と現在のブランチ参照を対象コミットへ移動します。\nIndex と Working Tree は変更しません。\n取り消されたコミットの変更は staged のまま残ります。"
+            },
+            "mixed": {
+              "label": "--mixed（デフォルト）",
+              "description": "HEAD を対象コミットへ移動します。\nIndex を対象コミットに戻し、Working Tree の変更は維持します。\n変更は staged から unstaged に戻ります。"
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "HEAD を移動し、Index と Working Tree を対象コミットに戻します。\n対象コミット以降の追跡中ローカル変更は破棄されます。\n破壊的な操作です。"
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "HEAD を対象コミットへ移動し、可能な限りローカル変更を保持します。\n競合しない変更のみ保持されます。\n競合がある場合は保護のため処理を中止します。"
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

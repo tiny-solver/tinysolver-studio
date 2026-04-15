@@ -20,6 +20,7 @@ import {
   GitBranchPlus,
   GitCompare,
   RefreshCw,
+  RotateCcw,
   Upload,
 } from "lucide-react"
 import {
@@ -63,6 +64,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Popover,
   PopoverContent,
@@ -83,12 +85,27 @@ import {
   gitListAllBranches,
   gitLog,
   gitNewBranch,
+  gitReset,
   openPushWindow,
 } from "@/lib/api"
-import type { GitBranchList, GitLogEntry, GitLogFileChange } from "@/lib/types"
+import type {
+  GitBranchList,
+  GitLogEntry,
+  GitLogFileChange,
+  GitResetMode,
+} from "@/lib/types"
 import { toast } from "sonner"
 import { toErrorMessage } from "@/lib/app-error"
 import { ScrollArea } from "@/components/ui/scroll-area"
+
+const emitEvent = async (event: string, payload?: unknown) => {
+  try {
+    const { emit } = await import("@tauri-apps/api/event")
+    await emit(event, payload)
+  } catch {
+    // not in Tauri
+  }
+}
 
 function formatRelativeTime(
   dateStr: string,
@@ -209,6 +226,12 @@ type CommitFileTreeNode = CommitFileTreeDirNode | CommitFileTreeFileNode
 interface CommitBranchTarget {
   fullHash: string
   shortHash: string
+}
+
+interface CommitResetTarget {
+  fullHash: string
+  shortHash: string
+  message: string
 }
 
 interface MutableCommitFileTreeDirNode {
@@ -695,6 +718,9 @@ export function GitLogTab() {
     useState<CommitBranchTarget | null>(null)
   const [newBranchName, setNewBranchName] = useState("")
   const [creatingBranch, setCreatingBranch] = useState(false)
+  const [resetTarget, setResetTarget] = useState<CommitResetTarget | null>(null)
+  const [resetMode, setResetMode] = useState<GitResetMode>("mixed")
+  const [resetting, setResetting] = useState(false)
 
   const hasBranches =
     branchList.local.length > 0 || branchList.remote.length > 0
@@ -856,6 +882,71 @@ export function GitLogTab() {
     newBranchName,
     newBranchTarget,
     refreshBranches,
+    t,
+  ])
+
+  const isResetAllowed = useMemo(() => {
+    return (
+      !!currentBranch && !!selectedBranch && currentBranch === selectedBranch
+    )
+  }, [currentBranch, selectedBranch])
+
+  const handleOpenResetDialog = useCallback((entry: GitLogEntry) => {
+    setResetMode("mixed")
+    setResetTarget({
+      fullHash: entry.full_hash,
+      shortHash: entry.hash,
+      message: entry.message,
+    })
+  }, [])
+
+  const handleResetCurrentBranchToCommit = useCallback(async () => {
+    if (
+      !folder?.path ||
+      !currentBranch ||
+      !resetTarget ||
+      !isResetAllowed ||
+      resetting
+    ) {
+      return
+    }
+
+    setResetting(true)
+    try {
+      await gitReset(folder.path, resetTarget.fullHash, resetMode)
+      await refreshBranches(currentBranch)
+      await fetchLog({ inline: true })
+      if (folder.id) {
+        void emitEvent("folder://git-branch-changed", {
+          folder_id: folder.id,
+        })
+      }
+      toast.success(t("toasts.resetSuccess"), {
+        description: t("toasts.resetSuccessDescription", {
+          branch: currentBranch,
+          shortHash: resetTarget.shortHash,
+          mode: t(`dialogs.reset.modes.${resetMode}.label`),
+        }),
+      })
+      setResetTarget(null)
+      setResetMode("mixed")
+    } catch (error) {
+      toast.error(t("toasts.resetFailed"), {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setResetting(false)
+    }
+  }, [
+    currentBranch,
+    fetchLog,
+    folder?.path,
+    folder?.id,
+    isResetAllowed,
+    refreshBranches,
+    resetMode,
+    resetTarget,
+    resetting,
     t,
   ])
 
@@ -1211,6 +1302,20 @@ export function GitLogTab() {
                         {tCommon("viewDiff")}
                       </ContextMenuItem>
                       <ContextMenuItem
+                        disabled={!isResetAllowed}
+                        onSelect={() => {
+                          handleOpenResetDialog(entry)
+                        }}
+                      >
+                        <RotateCcw className="size-3.5" />
+                        {t("resetToHere")}
+                      </ContextMenuItem>
+                      {!isResetAllowed && (
+                        <ContextMenuItem disabled>
+                          {t("resetDisabledReasonNotCurrentBranchView")}
+                        </ContextMenuItem>
+                      )}
+                      <ContextMenuItem
                         onSelect={() => {
                           void fetchLog()
                         }}
@@ -1317,6 +1422,103 @@ export function GitLogTab() {
               }}
             >
               {tCommon("createAndSwitch")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={resetTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !resetting) {
+            setResetTarget(null)
+            setResetMode("mixed")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("dialogs.reset.title")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-xs">
+              <span className="text-muted-foreground">
+                {t("dialogs.reset.branchLabel")}
+              </span>
+              <code className="block min-w-0 break-all font-mono">
+                {currentBranch ?? "-"}
+              </code>
+              <span className="text-muted-foreground">
+                {t("dialogs.reset.targetLabel")}
+              </span>
+              <code className="block min-w-0 break-all font-mono">
+                {resetTarget?.shortHash ?? "-"}
+              </code>
+              <span className="text-muted-foreground">
+                {t("dialogs.reset.messageLabel")}
+              </span>
+              <p className="min-w-0 whitespace-pre-wrap break-words">
+                {resetTarget?.message || "-"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {t("dialogs.reset.modeLabel")}
+              </p>
+              <RadioGroup
+                value={resetMode}
+                onValueChange={(value) => {
+                  setResetMode(value as GitResetMode)
+                }}
+                className="space-y-2"
+                disabled={resetting}
+              >
+                {(["soft", "mixed", "hard", "keep"] as const).map((mode) => {
+                  const optionId = `git-reset-mode-${mode}`
+                  return (
+                    <label
+                      key={mode}
+                      htmlFor={optionId}
+                      className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2"
+                    >
+                      <RadioGroupItem
+                        id={optionId}
+                        value={mode}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium leading-tight">
+                          {t(`dialogs.reset.modes.${mode}.label`)}
+                        </p>
+                        <p className="mt-0.5 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                          {t(`dialogs.reset.modes.${mode}.description`)}
+                        </p>
+                      </div>
+                    </label>
+                  )
+                })}
+              </RadioGroup>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={resetting}
+              onClick={() => {
+                setResetTarget(null)
+                setResetMode("mixed")
+              }}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              disabled={resetting || !isResetAllowed || !resetTarget}
+              onClick={() => {
+                void handleResetCurrentBranchToCommit()
+              }}
+            >
+              {t("dialogs.reset.confirmButton")}
             </Button>
           </DialogFooter>
         </DialogContent>

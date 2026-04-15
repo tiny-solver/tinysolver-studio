@@ -1181,6 +1181,8 @@
       "loadingBranches": "正在加载分支...",
       "noContainingBranches": "未找到包含此提交的分支。",
       "newBranch": "新建分支...",
+      "resetToHere": "重置到此处",
+      "resetDisabledReasonNotCurrentBranchView": "仅在查看当前分支时可用",
       "viewCommitDiffAria": "查看提交 {hash} 的差异",
       "copyFullCommitHashAria": "复制完整提交哈希 {hash}",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "已创建并切换到新分支",
         "newBranchFromCommit": "{name}（来自 {shortHash}）",
         "createBranchFailed": "新建分支失败",
-        "openPushWindowFailed": "打开推送窗口失败"
+        "openPushWindowFailed": "打开推送窗口失败",
+        "resetSuccess": "重置成功",
+        "resetSuccessDescription": "已将 {branch} 以 {mode} 重置到 {shortHash}",
+        "resetFailed": "重置失败"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "选择分支...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "新建分支",
         "newBranchDescription": "以提交 {shortHash} 作为最后提交创建新分支。",
-        "branchNamePlaceholder": "分支名称"
+        "branchNamePlaceholder": "分支名称",
+        "reset": {
+          "title": "将当前分支重置到此提交",
+          "branchLabel": "分支",
+          "targetLabel": "目标提交",
+          "messageLabel": "提交信息",
+          "modeLabel": "重置模式",
+          "confirmButton": "重置",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "将 HEAD 和当前分支指针移动到目标提交。\n暂存区（Index）和工作区（Working Tree）保持不变。\n被回退提交对应的改动会保留为“已暂存”状态。"
+            },
+            "mixed": {
+              "label": "--mixed（默认）",
+              "description": "将 HEAD 移动到目标提交。\n把暂存区重置为目标提交状态，但保留工作区改动。\n这些改动会从“已暂存”变为“未暂存”。"
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "将 HEAD、暂存区和工作区全部重置到目标提交。\n目标提交之后的本地已跟踪改动会被直接丢弃。\n这是破坏性操作。"
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "将 HEAD 移动到目标提交，并尽量保留本地改动。\n仅当本地改动与目标提交不冲突时才会保留。\n若存在冲突，操作会中止以避免覆盖你的修改。"
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

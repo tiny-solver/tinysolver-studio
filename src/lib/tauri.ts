@@ -27,6 +27,7 @@ import type {
   GitPushInfo,
   GitMergeResult,
   GitRebaseResult,
+  GitResetMode,
   GitConflictFileVersions,
   GitCommitResult,
   GitRemote,
@@ -1123,6 +1124,14 @@ export async function gitCommitBranches(
   commit: string
 ): Promise<string[]> {
   return invoke("git_commit_branches", { path, commit })
+}
+
+export async function gitReset(
+  path: string,
+  commit: string,
+  mode: GitResetMode
+): Promise<void> {
+  return invoke("git_reset", { path, commit, mode })
 }
 
 // Terminal commands

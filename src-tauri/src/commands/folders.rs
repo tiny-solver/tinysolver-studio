@@ -1155,6 +1155,36 @@ pub async fn git_checkout(path: String, branch_name: String) -> Result<(), AppCo
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn git_reset(
+    path: String,
+    commit: String,
+    mode: String,
+) -> Result<(), AppCommandError> {
+    let mode = mode.trim().to_lowercase();
+    let mode_flag = match mode.as_str() {
+        "soft" | "mixed" | "hard" | "keep" => format!("--{mode}"),
+        _ => {
+            return Err(AppCommandError::invalid_input(
+                "Reset mode must be one of: soft, mixed, hard, keep",
+            ))
+        }
+    };
+
+    let output = crate::process::tokio_command("git")
+        .args(["reset", mode_flag.as_str(), commit.as_str()])
+        .current_dir(&path)
+        .output()
+        .await
+        .map_err(AppCommandError::io)?;
+
+    if !output.status.success() {
+        return Err(git_command_error("reset", &output.stderr));
+    }
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_branches(path: String) -> Result<Vec<String>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["branch", "--format=%(refname:short)"])

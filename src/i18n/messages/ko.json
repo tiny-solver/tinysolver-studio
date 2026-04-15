@@ -1181,6 +1181,8 @@
       "loadingBranches": "브랜치 로딩 중...",
       "noContainingBranches": "포함하는 브랜치를 찾을 수 없습니다.",
       "newBranch": "새 브랜치...",
+      "resetToHere": "여기로 리셋",
+      "resetDisabledReasonNotCurrentBranchView": "현재 브랜치 보기에서만 사용할 수 있습니다",
       "viewCommitDiffAria": "커밋 {hash}의 diff 보기",
       "copyFullCommitHashAria": "전체 커밋 해시 {hash} 복사",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "새 브랜치를 생성하고 전환했습니다",
         "newBranchFromCommit": "{name} ({shortHash}에서 생성)",
         "createBranchFailed": "브랜치 생성에 실패했습니다",
-        "openPushWindowFailed": "푸시 창을 열지 못했습니다"
+        "openPushWindowFailed": "푸시 창을 열지 못했습니다",
+        "resetSuccess": "리셋 완료",
+        "resetSuccessDescription": "{branch}을(를) {mode}로 {shortHash}에 리셋했습니다",
+        "resetFailed": "리셋 실패"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "브랜치 선택...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "새 브랜치",
         "newBranchDescription": "커밋 {shortHash}를 최신 커밋으로 하여 새 브랜치를 생성합니다.",
-        "branchNamePlaceholder": "브랜치 이름"
+        "branchNamePlaceholder": "브랜치 이름",
+        "reset": {
+          "title": "현재 브랜치를 이 커밋으로 리셋",
+          "branchLabel": "브랜치",
+          "targetLabel": "대상 커밋",
+          "messageLabel": "커밋 메시지",
+          "modeLabel": "리셋 모드",
+          "confirmButton": "리셋",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "HEAD와 현재 브랜치 포인터를 대상 커밋으로 이동합니다.\nIndex와 Working Tree는 변경하지 않습니다.\n되돌려진 커밋의 변경 사항은 staged 상태로 유지됩니다."
+            },
+            "mixed": {
+              "label": "--mixed (기본값)",
+              "description": "HEAD를 대상 커밋으로 이동합니다.\nIndex를 대상 커밋으로 되돌리고 Working Tree 변경은 유지합니다.\n변경 사항은 staged에서 unstaged로 바뀝니다."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "HEAD를 이동하고 Index와 Working Tree를 모두 대상 커밋으로 되돌립니다.\n대상 커밋 이후의 추적된 로컬 변경은 삭제됩니다.\n파괴적인 작업입니다."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "HEAD를 대상 커밋으로 이동하면서 가능한 한 로컬 변경을 유지합니다.\n충돌하지 않는 변경만 보존됩니다.\n충돌이 감지되면 작업 보호를 위해 리셋이 중단됩니다."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

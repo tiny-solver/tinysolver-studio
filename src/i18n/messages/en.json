@@ -1181,6 +1181,8 @@
       "loadingBranches": "Loading branches...",
       "noContainingBranches": "No containing branches found.",
       "newBranch": "New branch...",
+      "resetToHere": "Reset to Here",
+      "resetDisabledReasonNotCurrentBranchView": "Available only when viewing current branch",
       "viewCommitDiffAria": "View diff for commit {hash}",
       "copyFullCommitHashAria": "Copy full commit hash {hash}",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "Created and switched to new branch",
         "newBranchFromCommit": "{name} (from {shortHash})",
         "createBranchFailed": "Failed to create branch",
-        "openPushWindowFailed": "Failed to open push window"
+        "openPushWindowFailed": "Failed to open push window",
+        "resetSuccess": "Reset successful",
+        "resetSuccessDescription": "{branch} reset to {shortHash} with {mode}",
+        "resetFailed": "Reset failed"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Select branch...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "New branch",
         "newBranchDescription": "Create a new branch with commit {shortHash} as the latest commit.",
-        "branchNamePlaceholder": "Branch name"
+        "branchNamePlaceholder": "Branch name",
+        "reset": {
+          "title": "Reset Current Branch to Here",
+          "branchLabel": "Branch",
+          "targetLabel": "Target",
+          "messageLabel": "Message",
+          "modeLabel": "Reset mode",
+          "confirmButton": "Reset",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "Move HEAD and the current branch pointer to the target commit.\nKeep Index and Working Tree unchanged.\nChanges from the removed commits stay staged."
+            },
+            "mixed": {
+              "label": "--mixed (default)",
+              "description": "Move HEAD to the target commit.\nReset Index to the target commit while keeping Working Tree changes.\nThose changes become unstaged."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "Move HEAD and reset both Index and Working Tree to the target commit.\nLocal tracked changes after the target commit are discarded.\nThis is a destructive operation."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "Move HEAD to the target commit and keep local changes when possible.\nOnly non-conflicting local changes are preserved.\nIf conflicts are detected, reset aborts to protect your work."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

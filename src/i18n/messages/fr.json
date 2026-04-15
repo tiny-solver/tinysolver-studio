@@ -1181,6 +1181,8 @@
       "loadingBranches": "Chargement des branches...",
       "noContainingBranches": "Aucune branche contenant ce commit.",
       "newBranch": "Nouvelle branche...",
+      "resetToHere": "Réinitialiser ici",
+      "resetDisabledReasonNotCurrentBranchView": "Disponible uniquement en affichant la branche actuelle",
       "viewCommitDiffAria": "Voir le diff du commit {hash}",
       "copyFullCommitHashAria": "Copier le hash complet du commit {hash}",
       "pushStatus": {
@@ -1199,7 +1201,10 @@
         "createdAndSwitchedNewBranch": "Nouvelle branche créée et activée",
         "newBranchFromCommit": "{name} (depuis {shortHash})",
         "createBranchFailed": "Échec de la création de la branche",
-        "openPushWindowFailed": "Échec de l'ouverture de la fenêtre de push"
+        "openPushWindowFailed": "Échec de l'ouverture de la fenêtre de push",
+        "resetSuccess": "Réinitialisation réussie",
+        "resetSuccessDescription": "{branch} a été réinitialisée sur {shortHash} avec {mode}",
+        "resetFailed": "Échec de la réinitialisation"
       },
       "branchSelector": {
         "selectBranchPlaceholder": "Sélectionner une branche...",
@@ -1211,7 +1216,33 @@
       "dialogs": {
         "newBranchTitle": "Nouvelle branche",
         "newBranchDescription": "Créer une nouvelle branche avec le commit {shortHash} comme dernier commit.",
-        "branchNamePlaceholder": "Nom de la branche"
+        "branchNamePlaceholder": "Nom de la branche",
+        "reset": {
+          "title": "Réinitialiser la branche actuelle jusqu’ici",
+          "branchLabel": "Branche",
+          "targetLabel": "Commit cible",
+          "messageLabel": "Message",
+          "modeLabel": "Mode de réinitialisation",
+          "confirmButton": "Réinitialiser",
+          "modes": {
+            "soft": {
+              "label": "--soft",
+              "description": "Déplace HEAD et le pointeur de la branche actuelle vers le commit cible.\nConserve Index et Working Tree inchangés.\nLes changements des commits retirés restent staged."
+            },
+            "mixed": {
+              "label": "--mixed (par défaut)",
+              "description": "Déplace HEAD vers le commit cible.\nRéinitialise Index au commit cible tout en conservant les changements du Working Tree.\nLes changements passent de staged à unstaged."
+            },
+            "hard": {
+              "label": "--hard",
+              "description": "Déplace HEAD et réinitialise à la fois Index et Working Tree au commit cible.\nLes changements locaux suivis après le commit cible sont supprimés.\nC’est une opération destructive."
+            },
+            "keep": {
+              "label": "--keep",
+              "description": "Déplace HEAD vers le commit cible en conservant les changements locaux quand c’est possible.\nSeuls les changements sans conflit sont conservés.\nEn cas de conflit, la réinitialisation est annulée pour protéger votre travail."
+            }
+          }
+        }
       }
     },
     "gitChangesTab": {

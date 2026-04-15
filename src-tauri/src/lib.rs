@@ -288,6 +288,7 @@ mod tauri_app {
                 folders::git_new_branch,
                 folders::git_worktree_add,
                 folders::git_checkout,
+                folders::git_reset,
                 folders::git_list_branches,
                 folders::git_stash_push,
                 folders::git_stash_pop,
