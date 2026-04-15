@@ -146,7 +146,6 @@ export function BranchDropdown({
   const [localOpen, setLocalOpen] = useState(false)
   const [remoteOpen, setRemoteOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
-  const [expandedBranch, setExpandedBranch] = useState<string | null>(null)
   const [worktreeOpen, setWorktreeOpen] = useState(false)
   const [worktreeBranchName, setWorktreeBranchName] = useState("")
   const [worktreePath, setWorktreePath] = useState("")
@@ -299,7 +298,6 @@ export function BranchDropdown({
     if (!open) {
       setLocalOpen(false)
       setRemoteOpen(false)
-      setExpandedBranch(null)
     }
   }
 
@@ -512,27 +510,10 @@ export function BranchDropdown({
     }
 
     return (
-      <DropdownMenuSub
-        key={b}
-        open={expandedBranch === b}
-        onOpenChange={(open) => {
-          if (!open) setExpandedBranch(null)
-        }}
-      >
+      <DropdownMenuSub key={b}>
         <DropdownMenuSubTrigger
           className="hover:bg-accent hover:text-accent-foreground"
           disabled={loading}
-          onClick={() => setExpandedBranch(expandedBranch === b ? null : b)}
-          onPointerMove={(e) => {
-            e.preventDefault()
-            if (expandedBranch !== null && expandedBranch !== b) {
-              setExpandedBranch(null)
-              if (document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur()
-              }
-            }
-          }}
-          onPointerLeave={(e) => e.preventDefault()}
         >
           <BranchIcon className="h-3.5 w-3.5" />
           {label}
