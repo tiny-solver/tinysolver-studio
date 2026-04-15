@@ -557,7 +557,21 @@
       "enableFast": "Fast 활성화",
       "enableFastAria": "Codex용 Fast 서비스 계층 활성화",
       "authJsonNative": "auth.json (네이티브)",
-      "configTomlNative": "config.toml (네이티브)"
+      "configTomlNative": "config.toml (네이티브)",
+      "loginButton": "ChatGPT로 로그인",
+      "loginRequesting": "로그인 코드 요청 중...",
+      "loginStep1": "브라우저에서 다음 URL을 열어주세요:",
+      "loginStep2": "아래 코드를 입력하세요:",
+      "loginPolling": "인증 대기 중...",
+      "loginCancel": "취소",
+      "loginSuccess": "로그인 성공, 설정이 저장되었습니다!",
+      "loginFailed": "로그인 실패: {message}",
+      "loginRetry": "재시도",
+      "loginCodeCopied": "코드가 복사되었습니다",
+      "loggedIn": "계정 로그인됨",
+      "loginRelogin": "재로그인 / 계정 전환",
+      "loginTimeout": "로그인 시간 초과, 다시 시도해 주세요",
+      "loginSaveFailed": "로그인 성공했지만 설정 저장 실패"
     },
     "gemini": {
       "authConfig": "Gemini 인증 설정",

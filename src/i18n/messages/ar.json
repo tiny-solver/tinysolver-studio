@@ -557,7 +557,21 @@
       "enableFast": "تفعيل Fast",
       "enableFastAria": "تفعيل مستوى خدمة Fast لـ Codex",
       "authJsonNative": "auth.json (أصلي)",
-      "configTomlNative": "config.toml (أصلي)"
+      "configTomlNative": "config.toml (أصلي)",
+      "loginButton": "تسجيل الدخول باستخدام ChatGPT",
+      "loginRequesting": "جارٍ طلب رمز تسجيل الدخول...",
+      "loginStep1": "افتح الرابط التالي في متصفحك:",
+      "loginStep2": "أدخل الرمز أدناه:",
+      "loginPolling": "في انتظار التفويض...",
+      "loginCancel": "إلغاء",
+      "loginSuccess": "تم تسجيل الدخول بنجاح، تم حفظ الإعدادات!",
+      "loginFailed": "فشل تسجيل الدخول: {message}",
+      "loginRetry": "إعادة المحاولة",
+      "loginCodeCopied": "تم نسخ الرمز",
+      "loggedIn": "تم تسجيل الدخول",
+      "loginRelogin": "إعادة تسجيل الدخول / تبديل الحساب",
+      "loginTimeout": "انتهت مهلة تسجيل الدخول، يرجى المحاولة مرة أخرى",
+      "loginSaveFailed": "تم تسجيل الدخول بنجاح ولكن فشل حفظ الإعدادات"
     },
     "gemini": {
       "authConfig": "إعداد مصادقة Gemini",

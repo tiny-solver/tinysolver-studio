@@ -557,7 +557,21 @@
       "enableFast": "启用 Fast",
       "enableFastAria": "Codex 启用 Fast 服务等级",
       "authJsonNative": "auth.json（原生）",
-      "configTomlNative": "config.toml（原生）"
+      "configTomlNative": "config.toml（原生）",
+      "loginButton": "使用 ChatGPT 登录",
+      "loginRequesting": "正在请求登录码...",
+      "loginStep1": "在浏览器中打开以下链接：",
+      "loginStep2": "输入以下代码：",
+      "loginPolling": "等待授权中...",
+      "loginCancel": "取消",
+      "loginSuccess": "登录成功，配置已保存！",
+      "loginFailed": "登录失败：{message}",
+      "loginRetry": "重试",
+      "loginCodeCopied": "已复制代码",
+      "loggedIn": "账号已登录",
+      "loginRelogin": "重新登录 / 切换账号",
+      "loginTimeout": "登录超时，请重试",
+      "loginSaveFailed": "登录成功但配置保存失败"
     },
     "gemini": {
       "authConfig": "Gemini 认证配置",

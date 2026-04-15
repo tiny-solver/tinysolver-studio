@@ -3077,3 +3077,219 @@ pub async fn opencode_uninstall_plugin(
 ) -> Result<PluginCheckSummary, AcpError> {
     opencode_uninstall_plugin_core(name).await
 }
+
+// ─── Codex Device Code OAuth ───
+
+const CODEX_OAUTH_ISSUER: &str = "https://auth.openai.com";
+const CODEX_OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceCodeResponse {
+    pub user_code: String,
+    pub verification_url: String,
+    pub device_auth_id: String,
+    pub interval: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceCodePollResult {
+    pub status: String,
+    pub message: Option<String>,
+    pub id_token: Option<String>,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub account_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct DeviceCodeUserCodeResp {
+    device_auth_id: String,
+    #[serde(alias = "usercode")]
+    user_code: String,
+    #[serde(default = "default_interval", deserialize_with = "deserialize_interval")]
+    interval: u64,
+}
+
+fn default_interval() -> u64 {
+    5
+}
+
+fn extract_jwt_account_id(jwt: &str) -> Option<String> {
+    let payload = jwt.split('.').nth(1)?;
+    let decoded = base64::Engine::decode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        payload,
+    )
+    .ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
+    value
+        .get("https://api.openai.com/auth")
+        .and_then(|auth| auth.get("chatgpt_account_id"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+fn deserialize_interval<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match &value {
+        serde_json::Value::Number(n) => n.as_u64().ok_or_else(|| {
+            de::Error::custom(format!("invalid interval number: {n}"))
+        }),
+        serde_json::Value::String(s) => s.trim().parse::<u64>().map_err(de::Error::custom),
+        _ => Err(de::Error::custom(format!("unexpected interval type: {value}"))),
+    }
+}
+
+#[derive(Deserialize)]
+struct DeviceCodeTokenResp {
+    authorization_code: String,
+    #[allow(dead_code)]
+    code_challenge: String,
+    code_verifier: String,
+}
+
+#[derive(Deserialize)]
+struct OAuthTokenResp {
+    id_token: String,
+    access_token: String,
+    refresh_token: String,
+}
+
+pub(crate) async fn codex_request_device_code_core()
+    -> Result<CodexDeviceCodeResponse, AcpError>
+{
+    let client = reqwest::Client::new();
+    let url = format!("{CODEX_OAUTH_ISSUER}/api/accounts/deviceauth/usercode");
+    let body = serde_json::json!({ "client_id": CODEX_OAUTH_CLIENT_ID });
+
+    let resp = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AcpError::protocol(format!("device code request failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(AcpError::protocol(format!(
+            "device code request returned {status}: {text}"
+        )));
+    }
+
+    let raw_body = resp
+        .text()
+        .await
+        .map_err(|e| AcpError::protocol(format!("read device code response failed: {e}")))?;
+    let uc: DeviceCodeUserCodeResp = serde_json::from_str(&raw_body)
+        .map_err(|e| AcpError::protocol(format!("parse device code response failed: {e} | body: {raw_body}")))?;
+
+    Ok(CodexDeviceCodeResponse {
+        user_code: uc.user_code,
+        verification_url: format!("{CODEX_OAUTH_ISSUER}/codex/device"),
+        device_auth_id: uc.device_auth_id,
+        interval: uc.interval,
+    })
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn codex_request_device_code()
+    -> Result<CodexDeviceCodeResponse, AcpError>
+{
+    codex_request_device_code_core().await
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn codex_poll_device_code(
+    device_auth_id: String,
+    user_code: String,
+) -> Result<CodexDeviceCodePollResult, AcpError> {
+    codex_poll_device_code_core(device_auth_id, user_code).await
+}
+
+pub(crate) async fn codex_poll_device_code_core(
+    device_auth_id: String,
+    user_code: String,
+) -> Result<CodexDeviceCodePollResult, AcpError> {
+    let client = reqwest::Client::new();
+    let poll_url = format!("{CODEX_OAUTH_ISSUER}/api/accounts/deviceauth/token");
+    let poll_body = serde_json::json!({
+        "device_auth_id": device_auth_id,
+        "user_code": user_code,
+    });
+
+    let resp = client
+        .post(&poll_url)
+        .json(&poll_body)
+        .send()
+        .await
+        .map_err(|e| AcpError::protocol(format!("device code poll failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        return Ok(CodexDeviceCodePollResult {
+            status: "pending".into(),
+            message: None,
+            id_token: None,
+            access_token: None,
+            refresh_token: None,
+            account_id: None,
+        });
+    }
+
+    let code_resp: DeviceCodeTokenResp = resp
+        .json()
+        .await
+        .map_err(|e| AcpError::protocol(format!("parse poll response failed: {e}")))?;
+
+    let redirect_uri = format!("{CODEX_OAUTH_ISSUER}/deviceauth/callback");
+    let token_url = format!("{CODEX_OAUTH_ISSUER}/oauth/token");
+
+    let token_resp = client
+        .post(&token_url)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!(
+            "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&code_verifier={}",
+            urlencoding::encode(&code_resp.authorization_code),
+            urlencoding::encode(&redirect_uri),
+            urlencoding::encode(CODEX_OAUTH_CLIENT_ID),
+            urlencoding::encode(&code_resp.code_verifier),
+        ))
+        .send()
+        .await
+        .map_err(|e| AcpError::protocol(format!("token exchange failed: {e}")))?;
+
+    if !token_resp.status().is_success() {
+        let status = token_resp.status();
+        let text = token_resp.text().await.unwrap_or_default();
+        return Ok(CodexDeviceCodePollResult {
+            status: "error".into(),
+            message: Some(format!("token exchange returned {status}: {text}")),
+            id_token: None,
+            access_token: None,
+            refresh_token: None,
+            account_id: None,
+        });
+    }
+
+    let tokens: OAuthTokenResp = token_resp
+        .json()
+        .await
+        .map_err(|e| AcpError::protocol(format!("parse token response failed: {e}")))?;
+
+    let account_id = extract_jwt_account_id(&tokens.id_token).unwrap_or_default();
+
+    Ok(CodexDeviceCodePollResult {
+        status: "success".into(),
+        message: None,
+        id_token: Some(tokens.id_token),
+        access_token: Some(tokens.access_token),
+        refresh_token: Some(tokens.refresh_token),
+        account_id: Some(account_id),
+    })
+}

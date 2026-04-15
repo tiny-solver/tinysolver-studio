@@ -557,7 +557,21 @@
       "enableFast": "Enable Fast",
       "enableFastAria": "Enable Fast service tier for Codex",
       "authJsonNative": "auth.json (native)",
-      "configTomlNative": "config.toml (native)"
+      "configTomlNative": "config.toml (native)",
+      "loginButton": "Log in with ChatGPT",
+      "loginRequesting": "Requesting login code...",
+      "loginStep1": "Open the following URL in your browser:",
+      "loginStep2": "Enter the code below:",
+      "loginPolling": "Waiting for authorization...",
+      "loginCancel": "Cancel",
+      "loginSuccess": "Logged in successfully, config saved!",
+      "loginFailed": "Login failed: {message}",
+      "loginRetry": "Retry",
+      "loginCodeCopied": "Code copied",
+      "loggedIn": "Account logged in",
+      "loginRelogin": "Re-login / Switch account",
+      "loginTimeout": "Login timed out, please try again",
+      "loginSaveFailed": "Login succeeded but failed to save config"
     },
     "gemini": {
       "authConfig": "Gemini Auth Config",
