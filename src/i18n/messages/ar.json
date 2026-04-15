@@ -626,7 +626,13 @@
       "reasoningModel": "نموذج الاستدلال (thinking)",
       "haikuDefaultModel": "نموذج Haiku الافتراضي",
       "sonnetDefaultModel": "نموذج Sonnet الافتراضي",
-      "opusDefaultModel": "نموذج Opus الافتراضي"
+      "opusDefaultModel": "نموذج Opus الافتراضي",
+      "effortLevel": "مستوى الاستدلال",
+      "effortLevelDefault": "المستوى الافتراضي",
+      "effortLevel_low": "منخفض",
+      "effortLevel_medium": "متوسط",
+      "effortLevel_high": "مرتفع",
+      "effortLevelMax": "الأقصى (Opus فقط)"
     },
     "dialogs": {
       "confirmDeleteProvider": "حذف المزود {providerId}؟",

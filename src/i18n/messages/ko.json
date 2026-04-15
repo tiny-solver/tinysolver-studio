@@ -626,7 +626,13 @@
       "reasoningModel": "추론 모델 (thinking)",
       "haikuDefaultModel": "기본 Haiku 모델",
       "sonnetDefaultModel": "기본 Sonnet 모델",
-      "opusDefaultModel": "기본 Opus 모델"
+      "opusDefaultModel": "기본 Opus 모델",
+      "effortLevel": "추론 수준",
+      "effortLevelDefault": "기본 수준",
+      "effortLevel_low": "낮음",
+      "effortLevel_medium": "중간",
+      "effortLevel_high": "높음",
+      "effortLevelMax": "최고 (Opus만 지원)"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId}를 삭제하시겠습니까?",

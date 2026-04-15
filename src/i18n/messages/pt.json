@@ -626,7 +626,13 @@
       "reasoningModel": "Modelo de raciocínio (thinking)",
       "haikuDefaultModel": "Modelo Haiku padrão",
       "sonnetDefaultModel": "Modelo Sonnet padrão",
-      "opusDefaultModel": "Modelo Opus padrão"
+      "opusDefaultModel": "Modelo Opus padrão",
+      "effortLevel": "Nível de raciocínio",
+      "effortLevelDefault": "Nível padrão",
+      "effortLevel_low": "Baixo",
+      "effortLevel_medium": "Médio",
+      "effortLevel_high": "Alto",
+      "effortLevelMax": "Máximo (apenas Opus)"
     },
     "dialogs": {
       "confirmDeleteProvider": "Excluir o provedor {providerId}?",

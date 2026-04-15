@@ -127,6 +127,7 @@ interface AgentDraft {
   claudeDefaultHaikuModel: string
   claudeDefaultSonnetModel: string
   claudeDefaultOpusModel: string
+  claudeEffortLevel: ClaudeEffortLevel
   codexAuthJsonText: string
   codexConfigTomlText: string
   openCodeAuthJsonText: string
@@ -250,6 +251,28 @@ const CLAUDE_MODEL_ENV_KEYS = {
   claudeDefaultSonnetModel: "ANTHROPIC_DEFAULT_SONNET_MODEL",
   claudeDefaultOpusModel: "ANTHROPIC_DEFAULT_OPUS_MODEL",
 } as const
+
+const CLAUDE_EFFORT_LEVEL_CONFIG_KEY = "effortLevel"
+
+type ClaudeEffortLevel = "" | "low" | "medium" | "high" | "max"
+
+const CLAUDE_EFFORT_LEVEL_VALUES: ReadonlyArray<
+  Exclude<ClaudeEffortLevel, "">
+> = ["low", "medium", "high", "max"]
+
+function normalizeClaudeEffortLevel(value: unknown): ClaudeEffortLevel {
+  if (typeof value !== "string") return ""
+  const normalized = value.trim().toLowerCase()
+  if (
+    normalized === "low" ||
+    normalized === "medium" ||
+    normalized === "high" ||
+    normalized === "max"
+  ) {
+    return normalized
+  }
+  return ""
+}
 
 const GEMINI_AUTH_MODES = [
   "custom",
@@ -473,6 +496,7 @@ function extractImportantConfigValues(
   claudeDefaultHaikuModel: string
   claudeDefaultSonnetModel: string
   claudeDefaultOpusModel: string
+  claudeEffortLevel: ClaudeEffortLevel
   configError: string | null
 } {
   const parseResult = parseConfigJsonText(configText)
@@ -507,6 +531,11 @@ function extractImportantConfigValues(
     CLAUDE_MODEL_ENV_KEYS.claudeDefaultOpusModel,
   ])
 
+  const claudeEffortLevel: ClaudeEffortLevel =
+    agentType === "claude_code"
+      ? normalizeClaudeEffortLevel(config[CLAUDE_EFFORT_LEVEL_CONFIG_KEY])
+      : ""
+
   return {
     apiBaseUrl: apiBaseUrl ?? "",
     apiKey: apiKey ?? "",
@@ -520,6 +549,7 @@ function extractImportantConfigValues(
       agentType === "claude_code" ? claudeDefaultSonnetModel : "",
     claudeDefaultOpusModel:
       agentType === "claude_code" ? claudeDefaultOpusModel : "",
+    claudeEffortLevel,
     configError: parseResult.error,
   }
 }
@@ -2318,6 +2348,7 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     claudeDefaultHaikuModel: important.claudeDefaultHaikuModel,
     claudeDefaultSonnetModel: important.claudeDefaultSonnetModel,
     claudeDefaultOpusModel: important.claudeDefaultOpusModel,
+    claudeEffortLevel: important.claudeEffortLevel,
     codexAuthJsonText,
     codexConfigTomlText,
     openCodeAuthJsonText,
@@ -3569,6 +3600,7 @@ export function AcpAgentSettings() {
         claudeDefaultHaikuModel: important.claudeDefaultHaikuModel,
         claudeDefaultSonnetModel: important.claudeDefaultSonnetModel,
         claudeDefaultOpusModel: important.claudeDefaultOpusModel,
+        claudeEffortLevel: important.claudeEffortLevel,
       }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
@@ -3603,6 +3635,41 @@ export function AcpAgentSettings() {
           configText: nextJson.configText,
         }
       })
+    },
+    [selectedAgent, selectedDraft, t, updateSelectedDraft]
+  )
+
+  const handleClaudeEffortLevelChange = useCallback(
+    (nextValue: ClaudeEffortLevel) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "claude_code"
+      )
+        return
+      const parsed = parseConfigJsonText(selectedDraft.configText)
+      if (parsed.error) {
+        toast.warning(t("warnings.nativeJsonRecoveredStructured"))
+      }
+      const config: Record<string, unknown> = parsed.error
+        ? {}
+        : { ...parsed.config }
+      if (nextValue) {
+        config[CLAUDE_EFFORT_LEVEL_CONFIG_KEY] = nextValue
+      } else {
+        delete config[CLAUDE_EFFORT_LEVEL_CONFIG_KEY]
+      }
+      const nextConfigText =
+        Object.keys(config).length === 0 ? "" : JSON.stringify(config, null, 2)
+      setConfigErrors((prev) => ({
+        ...prev,
+        [selectedAgent.agent_type]: null,
+      }))
+      updateSelectedDraft((current) => ({
+        ...current,
+        claudeEffortLevel: nextValue,
+        configText: nextConfigText,
+      }))
     },
     [selectedAgent, selectedDraft, t, updateSelectedDraft]
   )
@@ -7111,6 +7178,39 @@ supports_websockets = true`}
                         <p className="text-[11px] text-muted-foreground">
                           {t("modelHintDefault")}
                         </p>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("claude.effortLevel")}
+                          </label>
+                          <Select
+                            value={selectedDraft.claudeEffortLevel || "default"}
+                            onValueChange={(nextValue) => {
+                              handleClaudeEffortLevelChange(
+                                nextValue === "default"
+                                  ? ""
+                                  : (nextValue as ClaudeEffortLevel)
+                              )
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("claude.effortLevelDefault")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              <SelectItem value="default">
+                                {t("claude.effortLevelDefault")}
+                              </SelectItem>
+                              {CLAUDE_EFFORT_LEVEL_VALUES.map((value) => (
+                                <SelectItem key={value} value={value}>
+                                  {value === "max"
+                                    ? t("claude.effortLevelMax")
+                                    : t(`claude.effortLevel_${value}`)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-1.5">

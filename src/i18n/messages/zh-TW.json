@@ -626,7 +626,13 @@
       "reasoningModel": "推理模型（thinking）",
       "haikuDefaultModel": "Haiku 預設模型",
       "sonnetDefaultModel": "Sonnet 預設模型",
-      "opusDefaultModel": "Opus 預設模型"
+      "opusDefaultModel": "Opus 預設模型",
+      "effortLevel": "推理等級",
+      "effortLevelDefault": "預設等級",
+      "effortLevel_low": "低",
+      "effortLevel_medium": "中",
+      "effortLevel_high": "高",
+      "effortLevelMax": "最高（僅 Opus 支援）"
     },
     "dialogs": {
       "confirmDeleteProvider": "確認刪除 Provider {providerId}？",

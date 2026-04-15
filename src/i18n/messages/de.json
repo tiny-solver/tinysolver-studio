@@ -626,7 +626,13 @@
       "reasoningModel": "Reasoning-Modell (thinking)",
       "haikuDefaultModel": "Standard-Haiku-Modell",
       "sonnetDefaultModel": "Standard-Sonnet-Modell",
-      "opusDefaultModel": "Standard-Opus-Modell"
+      "opusDefaultModel": "Standard-Opus-Modell",
+      "effortLevel": "Reasoning-Stufe",
+      "effortLevelDefault": "Standardstufe",
+      "effortLevel_low": "Niedrig",
+      "effortLevel_medium": "Mittel",
+      "effortLevel_high": "Hoch",
+      "effortLevelMax": "Maximum (nur Opus)"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId} löschen?",

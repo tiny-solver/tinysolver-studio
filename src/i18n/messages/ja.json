@@ -626,7 +626,13 @@
       "reasoningModel": "推論モデル（thinking）",
       "haikuDefaultModel": "デフォルト Haiku モデル",
       "sonnetDefaultModel": "デフォルト Sonnet モデル",
-      "opusDefaultModel": "デフォルト Opus モデル"
+      "opusDefaultModel": "デフォルト Opus モデル",
+      "effortLevel": "推論レベル",
+      "effortLevelDefault": "デフォルトレベル",
+      "effortLevel_low": "低",
+      "effortLevel_medium": "中",
+      "effortLevel_high": "高",
+      "effortLevelMax": "最大（Opus のみ対応）"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId} を削除しますか？",
