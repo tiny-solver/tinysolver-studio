@@ -15,6 +15,7 @@ import {
   shortcutFromKeyboardEvent,
 } from "@/lib/keyboard-shortcuts"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 const SHARED_SHORTCUT_PAIRS: Array<[ShortcutActionId, ShortcutActionId]> = [
   ["new_terminal_tab", "new_conversation"],
@@ -98,7 +99,7 @@ export function ShortcutSettings() {
   }, [actionTitle, recordingAction, shortcuts, t, updateShortcut])
 
   return (
-    <div className="h-full overflow-auto">
+    <ScrollArea className="h-full">
       <div className="w-full space-y-4">
         <section className="rounded-xl border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -162,6 +163,6 @@ export function ShortcutSettings() {
           </div>
         </section>
       </div>
-    </div>
+    </ScrollArea>
   )
 }

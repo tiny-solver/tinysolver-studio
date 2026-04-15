@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -344,7 +345,7 @@ export function VersionControlSettings() {
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <ScrollArea className="h-full">
       <div className="w-full space-y-4">
         <section className="space-y-1">
           <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
@@ -551,6 +552,6 @@ export function VersionControlSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </ScrollArea>
   )
 }

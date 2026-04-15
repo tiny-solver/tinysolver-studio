@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -91,7 +92,7 @@ export function ModelProviderSettings() {
   }, [deleteTarget, loadProviders, t])
 
   return (
-    <div className="h-full overflow-auto">
+    <ScrollArea className="h-full">
       <section className="space-y-3">
         <div>
           <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
@@ -225,6 +226,6 @@ export function ModelProviderSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </ScrollArea>
   )
 }

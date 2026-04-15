@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl"
 
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChannelListTab } from "./channel-list-tab"
 import { ChannelCommandsTab } from "./channel-commands-tab"
@@ -12,7 +13,7 @@ export function ChatChannelSettings() {
   const t = useTranslations("ChatChannelSettings")
 
   return (
-    <div className="h-full overflow-auto">
+    <ScrollArea className="h-full">
       <Tabs defaultValue="channels" className="w-full space-y-4">
         <section className="space-y-3">
           <div>
@@ -42,6 +43,6 @@ export function ChatChannelSettings() {
           <ChannelOtherTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </ScrollArea>
   )
 }

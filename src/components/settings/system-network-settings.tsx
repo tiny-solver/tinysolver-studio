@@ -17,6 +17,7 @@ import { toast } from "sonner"
 import { useAppI18n } from "@/components/i18n-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -339,7 +340,7 @@ export function SystemNetworkSettings() {
   }
 
   return (
-    <div className="h-full overflow-auto">
+    <ScrollArea className="h-full">
       <div className="w-full space-y-4">
         <section className="space-y-1">
           <div className="flex items-center justify-between">
@@ -588,6 +589,6 @@ export function SystemNetworkSettings() {
           </div>
         </section>
       </div>
-    </div>
+    </ScrollArea>
   )
 }

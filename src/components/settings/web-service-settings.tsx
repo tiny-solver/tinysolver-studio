@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Check, Copy, ExternalLink, Eye, EyeOff } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   startWebServer,
   stopWebServer,
@@ -145,64 +146,70 @@ export function WebServiceSettings() {
   const isRunning = status !== null
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium">{t("sectionTitle")}</h3>
-        <p className="text-sm text-muted-foreground">
-          {t("sectionDescription")}
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        {/* Port config */}
-        <div className="flex items-center gap-4">
-          <label className="w-20 text-sm font-medium">{t("port")}</label>
-          <input
-            type="number"
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-            disabled={isRunning}
-            min={1024}
-            max={65535}
-            className="flex h-9 w-32 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          />
+    <ScrollArea className="h-full">
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-medium">{t("sectionTitle")}</h3>
+          <p className="text-sm text-muted-foreground">
+            {t("sectionDescription")}
+          </p>
         </div>
 
-        {/* Start/Stop button */}
-        <div className="flex items-center gap-4">
-          <label className="w-20 text-sm font-medium">{t("status")}</label>
-          <div className="flex items-center gap-3">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${
-                isRunning ? "bg-green-500" : "bg-muted-foreground/30"
-              }`}
+        <div className="space-y-4">
+          {/* Port config */}
+          <div className="flex items-center gap-4">
+            <label className="w-20 text-sm font-medium">{t("port")}</label>
+            <input
+              type="number"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              disabled={isRunning}
+              min={1024}
+              max={65535}
+              className="flex h-9 w-32 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             />
-            <span className="text-sm">
-              {isRunning ? t("running") : t("stopped")}
-            </span>
-            <button
-              onClick={isRunning ? handleStop : handleStart}
-              disabled={loading}
-              className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-            >
-              {loading ? t("processing") : isRunning ? t("stop") : t("start")}
-            </button>
           </div>
+
+          {/* Start/Stop button */}
+          <div className="flex items-center gap-4">
+            <label className="w-20 text-sm font-medium">{t("status")}</label>
+            <div className="flex items-center gap-3">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  isRunning ? "bg-green-500" : "bg-muted-foreground/30"
+                }`}
+              />
+              <span className="text-sm">
+                {isRunning ? t("running") : t("stopped")}
+              </span>
+              <button
+                onClick={isRunning ? handleStop : handleStart}
+                disabled={loading}
+                className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              >
+                {loading ? t("processing") : isRunning ? t("stop") : t("start")}
+              </button>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {/* Connection info */}
+          {isRunning && (
+            <div className="space-y-3">
+              {status.addresses.map((addr) => (
+                <AddressCard
+                  key={addr}
+                  label={t("addressLabel")}
+                  value={addr}
+                />
+              ))}
+              <TokenCard label={t("tokenLabel")} value={status.token} />
+              <p className="text-xs text-muted-foreground">{t("tokenHint")}</p>
+            </div>
+          )}
         </div>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        {/* Connection info */}
-        {isRunning && (
-          <div className="space-y-3">
-            {status.addresses.map((addr) => (
-              <AddressCard key={addr} label={t("addressLabel")} value={addr} />
-            ))}
-            <TokenCard label={t("tokenLabel")} value={status.token} />
-            <p className="text-xs text-muted-foreground">{t("tokenHint")}</p>
-          </div>
-        )}
       </div>
-    </div>
+    </ScrollArea>
   )
 }
