@@ -1282,7 +1282,7 @@
       "openInFileManager": "파일 관리자에서 열기",
       "openInFinder": "Finder에서 열기",
       "openInExplorer": "Explorer에서 열기",
-      "attachToCurrentSession": "현재 세션에 연결",
+      "attachToCurrentSession": "세션에 추가",
       "compareWithBranch": "브랜치와 비교...",
       "reloadFromDisk": "디스크에서 다시 불러오기",
       "new": "새로 만들기",

@@ -1282,7 +1282,7 @@
       "openInFileManager": "在檔案管理器開啟",
       "openInFinder": "在 Finder 開啟",
       "openInExplorer": "在檔案總管開啟",
-      "attachToCurrentSession": "附加到目前會話",
+      "attachToCurrentSession": "添加到會話",
       "compareWithBranch": "與分支比較...",
       "reloadFromDisk": "從磁碟重新載入",
       "new": "新建",

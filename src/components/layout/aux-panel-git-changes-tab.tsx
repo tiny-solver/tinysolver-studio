@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/context-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFolderContext } from "@/contexts/folder-context"
+import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import {
@@ -44,6 +45,8 @@ import {
   gitStatus,
   openCommitWindow,
 } from "@/lib/api"
+import { joinFsPath } from "@/lib/path-utils"
+import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import type { GitStatusEntry } from "@/lib/types"
 import {
   AlertDialog,
@@ -373,7 +376,9 @@ function canOpenFile(status: string): boolean {
 export function GitChangesTab() {
   const t = useTranslations("Folder.gitChangesTab")
   const tCommon = useTranslations("Folder.common")
+  const tFileTree = useTranslations("Folder.fileTreeTab")
   const { folder } = useFolderContext()
+  const { tabs, activeTabId } = useTabContext()
   const { openFilePreview, openWorkingTreeDiff } = useWorkspaceContext()
   const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
 
@@ -413,6 +418,12 @@ export function GitChangesTab() {
     const parts = path.split(/[\\/]/).filter(Boolean)
     return (parts[parts.length - 1] ?? path) || t("workspace")
   }, [folder?.path, t])
+  const activeSessionTabId = useMemo(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId)
+    if (!activeTab || activeTab.kind !== "conversation") return null
+    return activeTab.id
+  }, [activeTabId, tabs])
+  const canAttachToSession = Boolean(activeSessionTabId && folder?.path)
 
   const changes = useMemo<WorkingTreeChange[]>(() => {
     return [...workspaceState.git]
@@ -557,6 +568,16 @@ export function GitChangesTab() {
       })
     })
   }, [folder, t])
+  const handleAttachToSession = useCallback(
+    (relativePath: string) => {
+      if (!activeSessionTabId || !folder?.path) return
+      emitAttachFileToSession({
+        tabId: activeSessionTabId,
+        path: joinFsPath(folder.path, relativePath),
+      })
+    },
+    [activeSessionTabId, folder?.path]
+  )
 
   const resetDirectoryGitActionDialog = useCallback(() => {
     setDirectoryGitActionType(null)
@@ -838,14 +859,22 @@ export function GitChangesTab() {
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => {
+                  handleAttachToSession(node.path)
+                }}
+                disabled={!canAttachToSession}
+              >
+                {tFileTree("attachToCurrentSession")}
+              </ContextMenuItem>
+              <ContextMenuItem disabled>
+                {t("actions.addToVcs")}
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => {
                   handleRequestRollback(target)
                 }}
                 variant="destructive"
               >
                 {t("actions.rollback")}
-              </ContextMenuItem>
-              <ContextMenuItem disabled>
-                {t("actions.addToVcs")}
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => {
@@ -922,13 +951,21 @@ export function GitChangesTab() {
             </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
+                handleAttachToSession(file.path)
+              }}
+              disabled={!canAttachToSession}
+            >
+              {tFileTree("attachToCurrentSession")}
+            </ContextMenuItem>
+            <ContextMenuItem disabled>{t("actions.addToVcs")}</ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => {
                 handleRequestRollback(target)
               }}
               variant="destructive"
             >
               {t("actions.rollback")}
             </ContextMenuItem>
-            <ContextMenuItem disabled>{t("actions.addToVcs")}</ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
                 handleRequestDelete(target, "tracked")
@@ -942,6 +979,8 @@ export function GitChangesTab() {
       )
     },
     [
+      canAttachToSession,
+      handleAttachToSession,
       handleOpenCommitWindow,
       handleRequestDelete,
       handleRequestRollback,
@@ -949,6 +988,7 @@ export function GitChangesTab() {
       openWorkingTreeDiff,
       t,
       tCommon,
+      tFileTree,
     ]
   )
 
@@ -991,11 +1031,11 @@ export function GitChangesTab() {
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => {
-                  handleRequestRollback(target)
+                  handleAttachToSession(node.path)
                 }}
-                variant="destructive"
+                disabled={!canAttachToSession}
               >
-                {t("actions.rollback")}
+                {tFileTree("attachToCurrentSession")}
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => {
@@ -1003,6 +1043,14 @@ export function GitChangesTab() {
                 }}
               >
                 {t("actions.addToVcs")}
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => {
+                  handleRequestRollback(target)
+                }}
+                variant="destructive"
+              >
+                {t("actions.rollback")}
               </ContextMenuItem>
               <ContextMenuItem
                 onSelect={() => {
@@ -1069,11 +1117,11 @@ export function GitChangesTab() {
             </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
-                handleRequestRollback(target)
+                handleAttachToSession(file.path)
               }}
-              variant="destructive"
+              disabled={!canAttachToSession}
             >
-              {t("actions.rollback")}
+              {tFileTree("attachToCurrentSession")}
             </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
@@ -1081,6 +1129,14 @@ export function GitChangesTab() {
               }}
             >
               {t("actions.addToVcs")}
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => {
+                handleRequestRollback(target)
+              }}
+              variant="destructive"
+            >
+              {t("actions.rollback")}
             </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
@@ -1095,6 +1151,8 @@ export function GitChangesTab() {
       )
     },
     [
+      canAttachToSession,
+      handleAttachToSession,
       handleOpenCommitWindow,
       handleAddToVcs,
       handleRequestDelete,
@@ -1103,6 +1161,7 @@ export function GitChangesTab() {
       openWorkingTreeDiff,
       t,
       tCommon,
+      tFileTree,
     ]
   )
 
@@ -1202,6 +1261,17 @@ export function GitChangesTab() {
                       </ContextMenuItem>
                       <ContextMenuItem
                         onSelect={() => {
+                          handleAttachToSession("")
+                        }}
+                        disabled={!canAttachToSession}
+                      >
+                        {tFileTree("attachToCurrentSession")}
+                      </ContextMenuItem>
+                      <ContextMenuItem disabled>
+                        {t("actions.addToVcs")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
                           handleRequestRollback({
                             kind: "dir",
                             path: "",
@@ -1211,9 +1281,6 @@ export function GitChangesTab() {
                         variant="destructive"
                       >
                         {t("actions.rollback")}
-                      </ContextMenuItem>
-                      <ContextMenuItem disabled>
-                        {t("actions.addToVcs")}
                       </ContextMenuItem>
 
                       <ContextMenuItem
@@ -1303,15 +1370,11 @@ export function GitChangesTab() {
                       </ContextMenuItem>
                       <ContextMenuItem
                         onSelect={() => {
-                          handleRequestRollback({
-                            kind: "dir",
-                            path: "",
-                            name: folderName,
-                          })
+                          handleAttachToSession("")
                         }}
-                        variant="destructive"
+                        disabled={!canAttachToSession}
                       >
-                        {t("actions.rollback")}
+                        {tFileTree("attachToCurrentSession")}
                       </ContextMenuItem>
                       <ContextMenuItem
                         onSelect={() => {
@@ -1323,6 +1386,18 @@ export function GitChangesTab() {
                         }}
                       >
                         {t("actions.addToVcs")}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onSelect={() => {
+                          handleRequestRollback({
+                            kind: "dir",
+                            path: "",
+                            name: folderName,
+                          })
+                        }}
+                        variant="destructive"
+                      >
+                        {t("actions.rollback")}
                       </ContextMenuItem>
                       <ContextMenuItem
                         onSelect={() => {

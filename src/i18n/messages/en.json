@@ -1282,7 +1282,7 @@
       "openInFileManager": "Open in file manager",
       "openInFinder": "Open in Finder",
       "openInExplorer": "Open in Explorer",
-      "attachToCurrentSession": "Attach to current session",
+      "attachToCurrentSession": "Add to session",
       "compareWithBranch": "Compare with branch...",
       "reloadFromDisk": "Reload from disk",
       "new": "New",

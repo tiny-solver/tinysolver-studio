@@ -1282,7 +1282,7 @@
       "openInFileManager": "ファイルマネージャーで開く",
       "openInFinder": "Finderで開く",
       "openInExplorer": "エクスプローラーで開く",
-      "attachToCurrentSession": "現在のセッションに添付",
+      "attachToCurrentSession": "セッションに追加",
       "compareWithBranch": "ブランチと比較...",
       "reloadFromDisk": "ディスクから再読み込み",
       "new": "新規作成",
