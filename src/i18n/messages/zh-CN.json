@@ -554,6 +554,8 @@
       "enableWebsocketAria": "Codex Provider 启用 WebSocket",
       "enableSkills": "启用 Skills",
       "enableSkillsAria": "Codex 启用 Skills",
+      "enableFast": "启用 Fast",
+      "enableFastAria": "Codex 启用 Fast 服务等级",
       "authJsonNative": "auth.json（原生）",
       "configTomlNative": "config.toml（原生）"
     },

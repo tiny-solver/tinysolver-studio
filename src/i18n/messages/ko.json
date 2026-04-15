@@ -554,6 +554,8 @@
       "enableWebsocketAria": "Codex Provider용 WebSocket 활성화",
       "enableSkills": "Skills 활성화",
       "enableSkillsAria": "Codex용 Skills 활성화",
+      "enableFast": "Fast 활성화",
+      "enableFastAria": "Codex용 Fast 서비스 계층 활성화",
       "authJsonNative": "auth.json (네이티브)",
       "configTomlNative": "config.toml (네이티브)"
     },

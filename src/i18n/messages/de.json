@@ -554,6 +554,8 @@
       "enableWebsocketAria": "WebSocket für Codex Provider aktivieren",
       "enableSkills": "Skills aktivieren",
       "enableSkillsAria": "Skills für Codex aktivieren",
+      "enableFast": "Fast aktivieren",
+      "enableFastAria": "Fast-Servicestufe für Codex aktivieren",
       "authJsonNative": "auth.json (nativ)",
       "configTomlNative": "config.toml (nativ)"
     },
