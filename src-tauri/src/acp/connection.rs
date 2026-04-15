@@ -607,24 +607,6 @@ fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
     });
 }
 
-/// Claude Code does not support the "auto" value for config options.
-/// Strip any option whose value is "auto" from the flat and grouped lists,
-/// and update `current_value` to the first remaining option when it was "auto".
-fn strip_auto_config_values(options: &mut Vec<SessionConfigOptionInfo>) {
-    for opt in options.iter_mut() {
-        let SessionConfigKindInfo::Select(ref mut select) = opt.kind;
-        select.options.retain(|o| o.value != "auto");
-        for group in &mut select.groups {
-            group.options.retain(|o| o.value != "auto");
-        }
-        if select.current_value == "auto" {
-            if let Some(first) = select.options.first() {
-                select.current_value = first.value.clone();
-            }
-        }
-    }
-}
-
 fn emit_session_config_options_values(
     connection_id: &str,
     emitter: &EventEmitter,
@@ -634,9 +616,6 @@ fn emit_session_config_options_values(
     let mut mapped = map_session_config_options(&config_options);
     if agent_type == AgentType::Codex {
         ensure_codex_mode_option(&mut mapped);
-    }
-    if agent_type == AgentType::ClaudeCode {
-        strip_auto_config_values(&mut mapped);
     }
     crate::web::event_bridge::emit_event(
         emitter,
@@ -1330,9 +1309,6 @@ async fn set_session_config_option(
     config_id: String,
     value_id: String,
 ) -> Result<(), sacp::Error> {
-    if agent_type == AgentType::ClaudeCode && value_id == "auto" {
-        return Ok(());
-    }
     let req = SetSessionConfigOptionRequest::new(session_id.clone(), config_id, value_id);
     let untyped_req = UntypedMessage::new("session/set_config_option", req).map_err(|e| {
         sacp::util::internal_error(format!("Failed to build config option request: {e}"))
