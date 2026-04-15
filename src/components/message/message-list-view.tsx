@@ -292,13 +292,22 @@ export function MessageListView({
   const { threadItems, nonStreamingAdapted } = useMemo(() => {
     const allTurns = timelineTurns.map((item) => item.turn)
     const streamingIndices = new Set<number>()
+    const inProgressToolCallIdsByIndex = new Map<number, Set<string>>()
     timelineTurns.forEach((item, i) => {
-      if (item.phase === "streaming") streamingIndices.add(i)
+      if (item.phase === "streaming") {
+        streamingIndices.add(i)
+        if (item.inProgressToolCallIds && item.inProgressToolCallIds.size > 0) {
+          inProgressToolCallIdsByIndex.set(i, item.inProgressToolCallIds)
+        }
+      }
     })
     const allAdapted = adaptMessageTurns(
       allTurns,
       adapterText,
-      streamingIndices.size > 0 ? streamingIndices : undefined
+      streamingIndices.size > 0 ? streamingIndices : undefined,
+      inProgressToolCallIdsByIndex.size > 0
+        ? inProgressToolCallIdsByIndex
+        : undefined
     )
 
     // Collect non-streaming adapted messages for plan extraction

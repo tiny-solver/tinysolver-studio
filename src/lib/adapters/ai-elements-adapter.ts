@@ -600,11 +600,19 @@ function buildToolResultMap(
 /**
  * Transform a MessageTurn (from backend) to AdaptedMessage format.
  * Same correlation logic as adaptUnifiedMessage but operates on turn.blocks.
+ *
+ * `inProgressToolCallIds` lets streaming consumers expose partial tool output
+ * (e.g. terminal stdout streamed during execution) without flipping the tool
+ * into a "completed" visual state. When a tool_use's id is in this set, the
+ * adapter emits state="input-available" with the partial output attached, so
+ * the renderer can keep showing the running spinner while the live output
+ * streams in.
  */
 export function adaptMessageTurn(
   turn: MessageTurn,
   text: AdapterMessageText,
-  isStreaming: boolean = false
+  isStreaming: boolean = false,
+  inProgressToolCallIds?: Set<string>
 ): AdaptedMessage {
   const adaptedContent: AdaptedContentPart[] = []
   const resultMap = buildToolResultMap(turn.blocks)
@@ -635,6 +643,9 @@ export function adaptMessageTurn(
         ? resultMap.get(block.tool_use_id)
         : undefined
 
+      const isToolStillRunning =
+        !!block.tool_use_id && !!inProgressToolCallIds?.has(block.tool_use_id)
+
       if (matchedResult) {
         matchedResultIds.add(block.tool_use_id!)
         adaptedContent.push({
@@ -642,7 +653,11 @@ export function adaptMessageTurn(
           toolCallId,
           toolName: block.tool_name,
           input: block.input_preview,
-          state: matchedResult.is_error ? "output-error" : "output-available",
+          state: isToolStillRunning
+            ? "input-available"
+            : matchedResult.is_error
+              ? "output-error"
+              : "output-available",
           output: matchedResult.output_preview,
           errorText: matchedResult.is_error
             ? matchedResult.output_preview || undefined
@@ -736,13 +751,24 @@ export function adaptMessageTurn(
 /**
  * Transform all turns in a conversation to AdaptedMessage[].
  * Internally computes completedToolIds so callers don't need to.
+ *
+ * `inProgressToolCallIdsByIndex` carries the set of tool_call_ids that are
+ * still streaming for each streaming-phase turn (keyed by turn index). The
+ * adapter forwards this to adaptMessageTurn so partial output renders without
+ * flipping the tool out of the running visual state.
  */
 export function adaptMessageTurns(
   turns: MessageTurn[],
   text: AdapterMessageText,
-  streamingIndices?: Set<number>
+  streamingIndices?: Set<number>,
+  inProgressToolCallIdsByIndex?: Map<number, Set<string>>
 ): AdaptedMessage[] {
   return turns.map((turn, i) =>
-    adaptMessageTurn(turn, text, streamingIndices?.has(i) ?? false)
+    adaptMessageTurn(
+      turn,
+      text,
+      streamingIndices?.has(i) ?? false,
+      inProgressToolCallIdsByIndex?.get(i)
+    )
   )
 }

@@ -27,6 +27,9 @@ export interface ConversationTimelineTurn {
   key: string
   turn: MessageTurn
   phase: ConversationTimelinePhase
+  // Tool call IDs whose results are still streaming (only set for streaming-phase items).
+  // The adapter uses this to keep the tool in "running" state while exposing partial output.
+  inProgressToolCallIds?: Set<string>
 }
 
 export interface ConversationRuntimeSession {
@@ -161,16 +164,38 @@ function formatLivePlanEntries(
   return `Plan updated:\n${lines.join("\n")}`
 }
 
+interface BuiltStreamingTurns {
+  turns: MessageTurn[]
+  inProgressToolCallIds: Set<string>
+}
+
+// Cache joined chunk output keyed by chunks-array identity. The ACP reducer
+// creates a new chunks array only when streaming output actually changes, so
+// a WeakMap keyed on the array reference lets repeated renders reuse the
+// joined string without re-running O(n) concatenation.
+const joinedOutputCache = new WeakMap<readonly string[], string>()
+
+function getJoinedChunks(chunks: readonly string[]): string {
+  if (chunks.length === 0) return ""
+  if (chunks.length === 1) return chunks[0]
+  const cached = joinedOutputCache.get(chunks)
+  if (cached !== undefined) return cached
+  const joined = chunks.join("")
+  joinedOutputCache.set(chunks, joined)
+  return joined
+}
+
 function buildStreamingTurnsFromLiveMessage(
   conversationId: number,
   liveMessage: LiveMessage
-): MessageTurn[] {
+): BuiltStreamingTurns {
   // Split streaming content into multiple turns matching the historical
   // pattern: each "round" (text/thinking + tool calls + tool results) is a
   // separate turn. A new turn starts when a text/thinking/plan block appears
   // after completed tool calls in the current group.
   const groups: MessageTurn["blocks"][] = [[]]
   let currentGroupHasCompletedTool = false
+  const inProgressToolCallIds = new Set<string>()
 
   for (const block of liveMessage.content) {
     const isContentBlock =
@@ -217,17 +242,35 @@ function buildStreamingTurnsFromLiveMessage(
         })
         const isFinalState =
           block.info.status === "completed" || block.info.status === "failed"
+        // Output precedence: raw_output_chunks (terminal polling / SDK
+        // raw_output field) wins over content. Some agents stream bash output
+        // via raw_output with raw_output_append, others via content-only
+        // tool_call_update notifications — we support both.
+        const resolvedOutput =
+          block.info.raw_output_chunks.length > 0
+            ? getJoinedChunks(block.info.raw_output_chunks)
+            : block.info.content
         if (isFinalState) {
           currentBlocks.push({
             type: "tool_result",
             tool_use_id: block.info.tool_call_id,
-            output_preview:
-              block.info.raw_output_chunks.length > 0
-                ? block.info.raw_output_chunks.join("")
-                : block.info.content,
+            output_preview: resolvedOutput,
             is_error: block.info.status === "failed",
           })
           currentGroupHasCompletedTool = true
+        } else if (resolvedOutput) {
+          // In-progress tool that already produced partial output. Emit the
+          // running result so the renderer can display live output, and flag
+          // the tool_call so the adapter keeps state="input-available" (the
+          // spinner/running visual and 24KB tail truncation both depend on
+          // this state).
+          currentBlocks.push({
+            type: "tool_result",
+            tool_use_id: block.info.tool_call_id,
+            output_preview: resolvedOutput,
+            is_error: false,
+          })
+          inProgressToolCallIds.add(block.info.tool_call_id)
         }
         break
       }
@@ -235,7 +278,7 @@ function buildStreamingTurnsFromLiveMessage(
   }
 
   const timestamp = new Date(liveMessage.startedAt).toISOString()
-  return groups
+  const turns = groups
     .filter((blocks) => blocks.length > 0)
     .map((blocks, i) => ({
       id:
@@ -246,6 +289,8 @@ function buildStreamingTurnsFromLiveMessage(
       blocks,
       timestamp,
     }))
+
+  return { turns, inProgressToolCallIds }
 }
 
 function upsertExternalIdIndex(
@@ -345,7 +390,7 @@ function reducer(
         ? buildStreamingTurnsFromLiveMessage(
             current.conversationId,
             current.liveMessage
-          )
+          ).turns
         : []
 
       // Promote: optimisticTurns + streamingTurns → localTurns
@@ -636,18 +681,21 @@ export function ConversationRuntimeProvider({
 
       // Phase 4: Streaming turns (live agent response, split into rounds)
       const streamingMessage = session.liveMessage
-      const streamingTurns = streamingMessage
+      const built = streamingMessage
         ? buildStreamingTurnsFromLiveMessage(conversationId, streamingMessage)
-        : []
+        : null
 
       const result = [...persisted, ...local, ...optimistic]
 
-      for (const [i, turn] of streamingTurns.entries()) {
-        result.push({
-          key: `streaming-${conversationId}-${streamingMessage?.id ?? "unknown"}-${i}`,
-          turn,
-          phase: "streaming",
-        })
+      if (built) {
+        for (const [i, turn] of built.turns.entries()) {
+          result.push({
+            key: `streaming-${conversationId}-${streamingMessage?.id ?? "unknown"}-${i}`,
+            turn,
+            phase: "streaming",
+            inProgressToolCallIds: built.inProgressToolCallIds,
+          })
+        }
       }
 
       return result
