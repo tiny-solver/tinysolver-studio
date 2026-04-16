@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -234,6 +235,65 @@ impl AgentParser for CodexParser {
     }
 }
 
+fn parse_codex_json_arg(payload: &serde_json::Value) -> Option<serde_json::Value> {
+    let args = payload.get("arguments").or_else(|| payload.get("input"))?;
+    if let Some(s) = args.as_str() {
+        serde_json::from_str(s).ok()
+    } else if args.is_object() || args.is_array() {
+        Some(args.clone())
+    } else {
+        None
+    }
+}
+
+fn parse_codex_json_output(payload: &serde_json::Value) -> Option<serde_json::Value> {
+    let output = payload.get("output")?;
+    if let Some(s) = output.as_str() {
+        serde_json::from_str(s).ok()
+    } else if output.is_object() || output.is_array() {
+        Some(output.clone())
+    } else {
+        None
+    }
+}
+
+fn clean_codex_exec_output(text: &str) -> String {
+    let mut cmd_line: Option<&str> = None;
+    let mut in_output = false;
+    let mut output_lines = Vec::new();
+
+    for line in text.lines() {
+        if cmd_line.is_none() && line.starts_with("$ ") {
+            cmd_line = Some(line);
+            continue;
+        }
+        if line == "Output:" || line == "Output: " {
+            in_output = true;
+            continue;
+        }
+        if in_output {
+            output_lines.push(line);
+        }
+    }
+
+    let mut result = String::new();
+    if let Some(cmd) = cmd_line {
+        result.push_str(cmd);
+    }
+    if !output_lines.is_empty() {
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        result.push_str(&output_lines.join("\n"));
+    }
+
+    if result.is_empty() {
+        text.to_string()
+    } else {
+        result
+    }
+}
+
 fn value_to_preview(value: Option<&serde_json::Value>) -> Option<String> {
     let v = value?;
     if v.is_null() {
@@ -414,6 +474,173 @@ fn infer_tool_call_output_is_error(
         .unwrap_or(false)
 }
 
+fn parse_codex_subagent_stats(
+    session_dir: &std::path::Path,
+    agent_id: &str,
+) -> Option<AgentExecutionStats> {
+    if agent_id.len() > 64 || agent_id.contains("..") || agent_id.contains('/') {
+        return None;
+    }
+
+    let session_file = fs::read_dir(session_dir).ok()?.find_map(|entry| {
+        let path = entry.ok()?.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("jsonl")
+            && path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .contains(agent_id)
+        {
+            Some(path)
+        } else {
+            None
+        }
+    })?;
+
+    let file = fs::File::open(&session_file).ok()?;
+    let reader = BufReader::new(file);
+
+    let mut tool_calls = Vec::new();
+    let mut pending_calls: HashMap<String, AgentToolCall> = HashMap::new();
+    let mut first_ts: Option<DateTime<Utc>> = None;
+    let mut last_ts: Option<DateTime<Utc>> = None;
+
+    for line in reader.lines().map_while(Result::ok) {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if let Some(ts) = parse_codex_timestamp(&value) {
+            if first_ts.is_none() {
+                first_ts = Some(ts);
+            }
+            last_ts = Some(ts);
+        }
+
+        if value.get("type").and_then(|t| t.as_str()) != Some("response_item") {
+            continue;
+        }
+        let payload = match value.get("payload") {
+            Some(p) => p,
+            None => continue,
+        };
+        let payload_type = payload.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+        match payload_type {
+            "function_call" | "custom_tool_call" => {
+                let call_id = payload
+                    .get("call_id")
+                    .or_else(|| payload.get("tool_call_id"))
+                    .or_else(|| payload.get("id"))
+                    .and_then(|id| id.as_str())
+                    .map(|s| s.to_string());
+                let tool_name = payload
+                    .get("name")
+                    .or_else(|| payload.get("tool_name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                let input_preview = if tool_name == "exec_command" {
+                    parse_codex_json_arg(payload)
+                        .and_then(|a| {
+                            a.get("cmd")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                        })
+                        .or_else(|| {
+                            value_to_preview(
+                                payload
+                                    .get("arguments")
+                                    .or_else(|| payload.get("input")),
+                            )
+                        })
+                } else {
+                    value_to_preview(
+                        payload
+                            .get("arguments")
+                            .or_else(|| payload.get("input")),
+                    )
+                };
+
+                let tc = AgentToolCall {
+                    tool_name,
+                    input_preview,
+                    output_preview: None,
+                    is_error: false,
+                };
+                if let Some(id) = call_id {
+                    pending_calls.insert(id, tc);
+                } else {
+                    tool_calls.push(tc);
+                }
+            }
+            "function_call_output" | "custom_tool_call_output" => {
+                let call_id = payload
+                    .get("call_id")
+                    .or_else(|| payload.get("tool_call_id"))
+                    .or_else(|| payload.get("id"))
+                    .and_then(|id| id.as_str());
+
+                if let Some(id) = call_id {
+                    if let Some(mut tc) = pending_calls.remove(id) {
+                        let output_value = payload.get("output");
+                        let raw_output = value_to_preview(output_value);
+                        if tc.tool_name == "exec_command" {
+                            tc.output_preview =
+                                raw_output.map(|s| clean_codex_exec_output(&s));
+                        } else {
+                            tc.output_preview = raw_output;
+                        }
+                        tc.is_error = infer_tool_call_output_is_error(
+                            payload,
+                            output_value,
+                            tc.output_preview.as_deref(),
+                        );
+                        tool_calls.push(tc);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    tool_calls.extend(pending_calls.into_values());
+
+    let total_duration_ms = match (first_ts, last_ts) {
+        (Some(f), Some(l)) => {
+            let dur = (l - f).num_milliseconds();
+            if dur > 0 { Some(dur as u64) } else { None }
+        }
+        _ => None,
+    };
+
+    let tool_count = tool_calls.len() as u32;
+    Some(AgentExecutionStats {
+        agent_type: None,
+        status: None,
+        total_duration_ms,
+        total_tokens: None,
+        total_tool_use_count: if tool_count > 0 {
+            Some(tool_count)
+        } else {
+            None
+        },
+        read_count: None,
+        search_count: None,
+        bash_count: None,
+        edit_file_count: None,
+        lines_added: None,
+        lines_removed: None,
+        other_tool_count: None,
+        tool_calls,
+    })
+}
+
 impl CodexParser {
     fn parse_conversation_detail(
         &self,
@@ -436,6 +663,15 @@ impl CodexParser {
 
         let mut first_timestamp: Option<DateTime<Utc>> = None;
         let mut last_timestamp: Option<DateTime<Utc>> = None;
+
+        // Agent subagent tracking (spawn_agent / wait_agent / close_agent)
+        let mut spawn_agent_call_ids: HashSet<String> = HashSet::new();
+        let mut agent_id_to_spawn_call_id: HashMap<String, String> = HashMap::new();
+        let mut agent_final_results: HashMap<String, String> = HashMap::new();
+        let mut wait_agent_call_ids: HashSet<String> = HashSet::new();
+        let mut close_agent_targets: HashMap<String, String> = HashMap::new();
+        let mut active_agent_count: u32 = 0;
+        let mut call_id_tool_names: HashMap<String, String> = HashMap::new();
 
         for line in reader.lines() {
             let line = match line {
@@ -502,6 +738,7 @@ impl CodexParser {
                                 }
                             }
                             "user_message" => {
+                                active_agent_count = 0;
                                 let text = payload
                                     .get("message")
                                     .and_then(|m| m.as_str())
@@ -558,37 +795,41 @@ impl CodexParser {
                                 });
                             }
                             "agent_message" => {
-                                let text = payload
-                                    .get("message")
-                                    .and_then(|m| m.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                messages.push(UnifiedMessage {
-                                    id: format!("assistant-{}", messages.len()),
-                                    role: MessageRole::Assistant,
-                                    content: vec![ContentBlock::Text { text }],
-                                    timestamp,
-                                    usage: None,
-                                    duration_ms: None,
-                                    model: None,
-                                });
-                            }
-                            "agent_reasoning" => {
-                                let text = payload
-                                    .get("text")
-                                    .and_then(|t| t.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                if !text.is_empty() {
+                                if active_agent_count == 0 {
+                                    let text = payload
+                                        .get("message")
+                                        .and_then(|m| m.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
                                     messages.push(UnifiedMessage {
-                                        id: format!("thinking-{}", messages.len()),
+                                        id: format!("assistant-{}", messages.len()),
                                         role: MessageRole::Assistant,
-                                        content: vec![ContentBlock::Thinking { text }],
+                                        content: vec![ContentBlock::Text { text }],
                                         timestamp,
                                         usage: None,
                                         duration_ms: None,
                                         model: None,
                                     });
+                                }
+                            }
+                            "agent_reasoning" => {
+                                if active_agent_count == 0 {
+                                    let text = payload
+                                        .get("text")
+                                        .and_then(|t| t.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    if !text.is_empty() {
+                                        messages.push(UnifiedMessage {
+                                            id: format!("thinking-{}", messages.len()),
+                                            role: MessageRole::Assistant,
+                                            content: vec![ContentBlock::Thinking { text }],
+                                            timestamp,
+                                            usage: None,
+                                            duration_ms: None,
+                                            model: None,
+                                        });
+                                    }
                                 }
                             }
                             "token_count" => {
@@ -675,28 +916,118 @@ impl CodexParser {
                                     .or_else(|| payload.get("id"))
                                     .and_then(|id| id.as_str())
                                     .map(|s| s.to_string());
-                                let tool_name = payload
+                                let raw_tool_name = payload
                                     .get("name")
                                     .or_else(|| payload.get("tool_name"))
                                     .and_then(|n| n.as_str())
-                                    .unwrap_or("unknown")
-                                    .to_string();
-                                let input_preview = value_to_preview(
-                                    payload.get("arguments").or_else(|| payload.get("input")),
-                                );
-                                messages.push(UnifiedMessage {
-                                    id: format!("tool-{}", messages.len()),
-                                    role: MessageRole::Assistant,
-                                    content: vec![ContentBlock::ToolUse {
-                                        tool_use_id,
-                                        tool_name,
-                                        input_preview,
-                                    }],
-                                    timestamp,
-                                    usage: None,
-                                    duration_ms: None,
-                                    model: None,
-                                });
+                                    .unwrap_or("unknown");
+
+                                match raw_tool_name {
+                                    "spawn_agent" => {
+                                        let args = parse_codex_json_arg(payload);
+                                        let agent_type = args
+                                            .as_ref()
+                                            .and_then(|a| a.get("agent_type"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("agent");
+                                        let message = args
+                                            .as_ref()
+                                            .and_then(|a| a.get("message"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let description = truncate_str(
+                                            message.lines().next().unwrap_or(""),
+                                            60,
+                                        );
+
+                                        if let Some(ref id) = tool_use_id {
+                                            spawn_agent_call_ids.insert(id.clone());
+                                        }
+                                        active_agent_count += 1;
+
+                                        let agent_input = serde_json::json!({
+                                            "subagent_type": agent_type,
+                                            "prompt": message,
+                                            "description": description,
+                                        });
+
+                                        messages.push(UnifiedMessage {
+                                            id: format!("tool-{}", messages.len()),
+                                            role: MessageRole::Assistant,
+                                            content: vec![ContentBlock::ToolUse {
+                                                tool_use_id,
+                                                tool_name: "Agent".to_string(),
+                                                input_preview: Some(agent_input.to_string()),
+                                            }],
+                                            timestamp,
+                                            usage: None,
+                                            duration_ms: None,
+                                            model: None,
+                                        });
+                                    }
+                                    "wait_agent" => {
+                                        if let Some(ref id) = tool_use_id {
+                                            wait_agent_call_ids.insert(id.clone());
+                                        }
+                                    }
+                                    "close_agent" => {
+                                        if let Some(ref id) = tool_use_id {
+                                            let target = parse_codex_json_arg(payload)
+                                                .and_then(|a| {
+                                                    a.get("target")
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string())
+                                                });
+                                            if let Some(target) = target {
+                                                close_agent_targets
+                                                    .insert(id.clone(), target);
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        if let Some(ref id) = tool_use_id {
+                                            call_id_tool_names.insert(
+                                                id.clone(),
+                                                raw_tool_name.to_string(),
+                                            );
+                                        }
+                                        let input_preview =
+                                            if raw_tool_name == "exec_command" {
+                                                parse_codex_json_arg(payload)
+                                                    .and_then(|a| {
+                                                        a.get("cmd")
+                                                            .and_then(|v| v.as_str())
+                                                            .map(|s| s.to_string())
+                                                    })
+                                                    .or_else(|| {
+                                                        value_to_preview(
+                                                            payload.get("arguments").or_else(
+                                                                || payload.get("input"),
+                                                            ),
+                                                        )
+                                                    })
+                                            } else {
+                                                value_to_preview(
+                                                    payload
+                                                        .get("arguments")
+                                                        .or_else(|| payload.get("input")),
+                                                )
+                                            };
+                                        messages.push(UnifiedMessage {
+                                            id: format!("tool-{}", messages.len()),
+                                            role: MessageRole::Assistant,
+                                            content: vec![ContentBlock::ToolUse {
+                                                tool_use_id,
+                                                tool_name: raw_tool_name.to_string(),
+                                                input_preview,
+                                            }],
+                                            timestamp,
+                                            usage: None,
+                                            duration_ms: None,
+                                            model: None,
+                                        });
+                                    }
+                                }
                             }
                             "function_call_output" | "custom_tool_call_output" => {
                                 let tool_use_id = payload
@@ -705,32 +1036,119 @@ impl CodexParser {
                                     .or_else(|| payload.get("id"))
                                     .and_then(|id| id.as_str())
                                     .map(|s| s.to_string());
-                                let output_value = payload.get("output");
-                                let output = value_to_preview(output_value);
-                                let is_error = infer_tool_call_output_is_error(
-                                    payload,
-                                    output_value,
-                                    output.as_deref(),
-                                );
-                                messages.push(UnifiedMessage {
-                                    id: format!("tool-result-{}", messages.len()),
-                                    role: MessageRole::Tool,
-                                    content: vec![ContentBlock::ToolResult {
-                                        tool_use_id,
-                                        output_preview: output,
-                                        is_error,
-                                        agent_stats: None,
-                                    }],
-                                    timestamp,
-                                    usage: None,
-                                    duration_ms: None,
-                                    model: None,
-                                });
+
+                                let is_spawn = tool_use_id
+                                    .as_ref()
+                                    .is_some_and(|id| spawn_agent_call_ids.contains(id));
+                                let is_wait = tool_use_id
+                                    .as_ref()
+                                    .is_some_and(|id| wait_agent_call_ids.contains(id));
+                                let is_close = tool_use_id
+                                    .as_ref()
+                                    .is_some_and(|id| close_agent_targets.contains_key(id));
+
+                                if is_spawn {
+                                    if let Some(output_obj) = parse_codex_json_output(payload) {
+                                        if let (Some(agent_id), Some(call_id)) = (
+                                            output_obj
+                                                .get("agent_id")
+                                                .and_then(|v| v.as_str()),
+                                            tool_use_id.as_ref(),
+                                        ) {
+                                            agent_id_to_spawn_call_id.insert(
+                                                agent_id.to_string(),
+                                                call_id.clone(),
+                                            );
+                                        }
+                                    }
+                                    messages.push(UnifiedMessage {
+                                        id: format!("tool-result-{}", messages.len()),
+                                        role: MessageRole::Tool,
+                                        content: vec![ContentBlock::ToolResult {
+                                            tool_use_id,
+                                            output_preview: None,
+                                            is_error: false,
+                                            agent_stats: None,
+                                        }],
+                                        timestamp,
+                                        usage: None,
+                                        duration_ms: None,
+                                        model: None,
+                                    });
+                                } else if is_wait {
+                                    if let Some(output_obj) = parse_codex_json_output(payload) {
+                                        if let Some(status) = output_obj
+                                            .get("status")
+                                            .and_then(|s| s.as_object())
+                                        {
+                                            for (agent_id, result) in status {
+                                                if let Some(text) = result
+                                                    .get("completed")
+                                                    .and_then(|v| v.as_str())
+                                                {
+                                                    agent_final_results
+                                                        .entry(agent_id.clone())
+                                                        .or_insert_with(|| text.to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if is_close {
+                                    active_agent_count =
+                                        active_agent_count.saturating_sub(1);
+                                    if let Some(output_obj) = parse_codex_json_output(payload) {
+                                        if let Some(agent_id) = tool_use_id
+                                            .as_ref()
+                                            .and_then(|id| close_agent_targets.get(id))
+                                        {
+                                            if let Some(text) = output_obj
+                                                .get("previous_status")
+                                                .and_then(|s| s.get("completed"))
+                                                .and_then(|v| v.as_str())
+                                            {
+                                                agent_final_results
+                                                    .entry(agent_id.clone())
+                                                    .or_insert_with(|| text.to_string());
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    let is_exec = tool_use_id.as_ref().is_some_and(|id| {
+                                        call_id_tool_names.get(id).is_some_and(|n| n == "exec_command")
+                                    });
+                                    let output_value = payload.get("output");
+                                    let raw_output = value_to_preview(output_value);
+                                    let output = if is_exec {
+                                        raw_output.map(|s| clean_codex_exec_output(&s))
+                                    } else {
+                                        raw_output
+                                    };
+                                    let is_error = infer_tool_call_output_is_error(
+                                        payload,
+                                        output_value,
+                                        output.as_deref(),
+                                    );
+                                    messages.push(UnifiedMessage {
+                                        id: format!("tool-result-{}", messages.len()),
+                                        role: MessageRole::Tool,
+                                        content: vec![ContentBlock::ToolResult {
+                                            tool_use_id,
+                                            output_preview: output,
+                                            is_error,
+                                            agent_stats: None,
+                                        }],
+                                        timestamp,
+                                        usage: None,
+                                        duration_ms: None,
+                                        model: None,
+                                    });
+                                }
                             }
                             "message" => {
                                 let role =
                                     payload.get("role").and_then(|r| r.as_str()).unwrap_or("");
                                 if role == "user" {
+                                    active_agent_count = 0;
                                     if let Some(blocks) =
                                         extract_response_item_user_image_blocks(payload)
                                     {
@@ -766,6 +1184,46 @@ impl CodexParser {
                     }
                 }
                 _ => {}
+            }
+        }
+
+        // Fill in agent final results and subagent tool call stats
+        if !agent_id_to_spawn_call_id.is_empty() {
+            let spawn_call_to_agent: HashMap<&str, &str> = agent_id_to_spawn_call_id
+                .iter()
+                .map(|(agent_id, call_id)| (call_id.as_str(), agent_id.as_str()))
+                .collect();
+
+            let session_dir = path.parent();
+            let mut agent_stats_cache: HashMap<String, Option<AgentExecutionStats>> =
+                HashMap::new();
+
+            for msg in &mut messages {
+                for block in &mut msg.content {
+                    if let ContentBlock::ToolResult {
+                        tool_use_id: Some(ref id),
+                        ref mut output_preview,
+                        ref mut agent_stats,
+                        ..
+                    } = block
+                    {
+                        if let Some(&agent_id) = spawn_call_to_agent.get(id.as_str()) {
+                            if let Some(result) = agent_final_results.get(agent_id) {
+                                *output_preview = Some(result.clone());
+                            }
+                            if let Some(dir) = session_dir {
+                                let stats = agent_stats_cache
+                                    .entry(agent_id.to_string())
+                                    .or_insert_with(|| {
+                                        parse_codex_subagent_stats(dir, agent_id)
+                                    });
+                                if stats.is_some() {
+                                    *agent_stats = stats.clone();
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
