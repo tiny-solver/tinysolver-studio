@@ -558,7 +558,7 @@ impl ClaudeParser {
                         MessageRole::User
                     };
 
-                    // Check toolUseResult.structuredPatch for real line numbers
+                    // Check toolUseResult for structured patch and agent execution stats
                     if let Some(tur) = value.get("toolUseResult") {
                         if let Some(sp) = tur.get("structuredPatch") {
                             let fp = tur
@@ -578,6 +578,41 @@ impl ClaudeParser {
                                         *output_preview = Some(diff.clone());
                                         break;
                                     }
+                                }
+                            }
+                        }
+
+                        // Extract agent execution stats from toolUseResult
+                        if tur.get("agentType").is_some() {
+                            let mut stats = extract_agent_execution_stats(tur);
+                            // Load tool calls from subagent's own JSONL transcript
+                            if let Some(agent_id) =
+                                tur.get("agentId").and_then(|v| v.as_str())
+                            {
+                                // Reject path traversal: agentId must be alphanumeric
+                                if !agent_id.is_empty()
+                                    && !agent_id.contains('/')
+                                    && !agent_id.contains('\\')
+                                    && !agent_id.contains("..")
+                                {
+                                    let subagent_dir =
+                                        path.with_extension("").join("subagents");
+                                    let subagent_path = subagent_dir
+                                        .join(format!("agent-{}.jsonl", agent_id));
+                                    if subagent_path.exists() {
+                                        stats.tool_calls =
+                                            parse_subagent_tool_calls(&subagent_path);
+                                    }
+                                }
+                            }
+                            for block in content.iter_mut() {
+                                if let ContentBlock::ToolResult {
+                                    ref mut agent_stats,
+                                    ..
+                                } = block
+                                {
+                                    *agent_stats = Some(stats);
+                                    break;
                                 }
                             }
                         }
@@ -776,6 +811,7 @@ impl ClaudeParser {
                             tool_use_id: matching_id,
                             output_preview,
                             is_error,
+                            agent_stats: None,
                         });
                     } else {
                         messages.push(UnifiedMessage {
@@ -785,6 +821,7 @@ impl ClaudeParser {
                                 tool_use_id: matching_id,
                                 output_preview,
                                 is_error,
+                                agent_stats: None,
                             }],
                             timestamp: parse_timestamp(&value).unwrap_or_else(Utc::now),
                             usage: None,
@@ -912,6 +949,7 @@ fn extract_user_content(value: &serde_json::Value) -> Vec<ContentBlock> {
                         tool_use_id,
                         output_preview: output,
                         is_error,
+                        agent_stats: None,
                     });
                 }
                 _ => {}
@@ -1051,6 +1089,161 @@ fn extract_usage(value: &serde_json::Value) -> Option<TurnUsage> {
             .and_then(|v| v.as_u64())
             .unwrap_or(0),
     })
+}
+
+fn extract_agent_execution_stats(tur: &serde_json::Value) -> AgentExecutionStats {
+    let tool_stats = tur.get("toolStats");
+    AgentExecutionStats {
+        agent_type: tur
+            .get("agentType")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        status: tur
+            .get("status")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        total_duration_ms: tur.get("totalDurationMs").and_then(|v| v.as_u64()),
+        total_tokens: tur.get("totalTokens").and_then(|v| v.as_u64()),
+        total_tool_use_count: tur
+            .get("totalToolUseCount")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        read_count: tool_stats
+            .and_then(|s| s.get("readCount"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        search_count: tool_stats
+            .and_then(|s| s.get("searchCount"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        bash_count: tool_stats
+            .and_then(|s| s.get("bashCount"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        edit_file_count: tool_stats
+            .and_then(|s| s.get("editFileCount"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        lines_added: tool_stats
+            .and_then(|s| s.get("linesAdded"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        lines_removed: tool_stats
+            .and_then(|s| s.get("linesRemoved"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        other_tool_count: tool_stats
+            .and_then(|s| s.get("otherToolCount"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        tool_calls: Vec::new(),
+    }
+}
+
+/// Parse a subagent's JSONL transcript and extract its tool calls.
+///
+/// The subagent JSONL has the same format as the main session:
+/// assistant messages with tool_use blocks, followed by user messages
+/// with tool_result blocks. We pair them by tool_use_id and produce
+/// a compact list of `AgentToolCall` records.
+fn parse_subagent_tool_calls(path: &PathBuf) -> Vec<AgentToolCall> {
+    let file = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return Vec::new(),
+    };
+    let reader = BufReader::new(file);
+
+    // Collect tool_use entries and build a result map
+    let mut calls: Vec<(String, String, Option<String>)> = Vec::new(); // (id, name, input)
+    let mut results: std::collections::HashMap<String, (Option<String>, bool)> =
+        std::collections::HashMap::new();
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let msg_type = value.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+        if msg_type == "assistant" {
+            if let Some(content) = value
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())
+            {
+                for item in content {
+                    let block_type = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    if block_type == "tool_use" || block_type == "server_tool_use" {
+                        let id = item
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let name = item
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let input = item.get("input").map(|v| {
+                            truncate_str(&v.to_string(), 500)
+                        });
+                        if !id.is_empty() {
+                            calls.push((id, name, input));
+                        }
+                    }
+                }
+            }
+        } else if msg_type == "user" {
+            if let Some(content) = value
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())
+            {
+                for item in content {
+                    let block_type = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    if block_type == "tool_result" || block_type == "server_tool_result" {
+                        let id = item
+                            .get("tool_use_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let is_error = item
+                            .get("is_error")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let output = extract_tool_result_text(item)
+                            .map(|s| truncate_str(&s, 500));
+                        if !id.is_empty() {
+                            results.insert(id, (output, is_error));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    calls
+        .into_iter()
+        .map(|(id, name, input)| {
+            let (output, is_error) = results
+                .remove(&id)
+                .unwrap_or((None, false));
+            AgentToolCall {
+                tool_name: name,
+                input_preview: input,
+                output_preview: output,
+                is_error,
+            }
+        })
+        .collect()
 }
 
 fn extract_tool_result_text(item: &serde_json::Value) -> Option<String> {

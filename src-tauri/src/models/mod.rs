@@ -15,7 +15,10 @@ pub use conversation::{
     SidebarData,
 };
 pub use folder::{FolderCommandInfo, FolderDetail, FolderHistoryEntry, OpenedConversation};
-pub use message::{ContentBlock, MessageRole, MessageTurn, TurnRole, TurnUsage, UnifiedMessage};
+pub use message::{
+    AgentExecutionStats, AgentToolCall, ContentBlock, MessageRole, MessageTurn, TurnRole,
+    TurnUsage, UnifiedMessage,
+};
 pub use system::{
     GitCredentials, GitDetectResult, GitHubAccountsSettings, GitHubTokenValidation, GitSettings,
     SystemLanguageSettings, SystemProxySettings,

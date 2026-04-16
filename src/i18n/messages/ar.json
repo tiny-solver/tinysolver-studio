@@ -1703,6 +1703,13 @@
         "subjectLabel": "الموضوع",
         "taskLabel": "المهمة",
         "nameLabel": "الاسم:",
+        "agentPromptLabel": "المطالبة",
+        "agentModelLabel": "النموذج",
+        "agentStatsBash": "الأوامر",
+        "agentStatsRead": "الملفات المقروءة",
+        "agentStatsSearch": "عمليات البحث",
+        "agentStatsEdit": "التعديلات",
+        "agentStatsOther": "أخرى",
         "field": {
           "file": "ملف",
           "notebook": "دفتر",

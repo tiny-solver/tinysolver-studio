@@ -1703,6 +1703,13 @@
         "subjectLabel": "제목",
         "taskLabel": "작업",
         "nameLabel": "이름:",
+        "agentPromptLabel": "프롬프트",
+        "agentModelLabel": "모델",
+        "agentStatsBash": "명령",
+        "agentStatsRead": "파일 읽기",
+        "agentStatsSearch": "검색",
+        "agentStatsEdit": "편집",
+        "agentStatsOther": "기타",
         "field": {
           "file": "파일",
           "notebook": "노트북",

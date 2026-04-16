@@ -1053,6 +1053,7 @@ fn extract_tool_result_content(value: &serde_json::Value) -> Vec<ContentBlock> {
         tool_use_id,
         output_preview: output,
         is_error,
+        agent_stats: None,
     });
 
     blocks
@@ -1238,7 +1239,7 @@ mod tests {
         assert_eq!(blocks.len(), 1);
         assert!(matches!(
             &blocks[0],
-            ContentBlock::ToolResult { tool_use_id, output_preview, is_error }
+            ContentBlock::ToolResult { tool_use_id, output_preview, is_error, .. }
             if tool_use_id.as_deref() == Some("call_123")
                 && output_preview.as_deref() == Some("file contents here")
                 && !is_error

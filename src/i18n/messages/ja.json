@@ -1703,6 +1703,13 @@
         "subjectLabel": "件名",
         "taskLabel": "タスク",
         "nameLabel": "名前:",
+        "agentPromptLabel": "プロンプト",
+        "agentModelLabel": "モデル",
+        "agentStatsBash": "コマンド",
+        "agentStatsRead": "ファイル読取",
+        "agentStatsSearch": "検索",
+        "agentStatsEdit": "編集",
+        "agentStatsOther": "その他",
         "field": {
           "file": "ファイル",
           "notebook": "ノートブック",

@@ -370,6 +370,7 @@ fn parse_user_message_parts(content: &serde_json::Value) -> UserMessageParts {
                 tool_use_id: None,
                 output_preview: Some(truncate_str(&output, 2000)),
                 is_error,
+                agent_stats: None,
             });
 
             // If the tool result also contains <feedback>, extract it
@@ -565,6 +566,7 @@ fn parse_content_blocks(content: &serde_json::Value) -> Vec<ContentBlock> {
                             tool_use_id,
                             output_preview,
                             is_error,
+                            agent_stats: None,
                         });
                     }
                     "thinking" => {

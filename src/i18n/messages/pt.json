@@ -1703,6 +1703,13 @@
         "subjectLabel": "Assunto",
         "taskLabel": "Tarefa",
         "nameLabel": "Nome:",
+        "agentPromptLabel": "Instrução",
+        "agentModelLabel": "Modelo",
+        "agentStatsBash": "Comandos",
+        "agentStatsRead": "Arquivos lidos",
+        "agentStatsSearch": "Pesquisas",
+        "agentStatsEdit": "Edições",
+        "agentStatsOther": "Outros",
         "field": {
           "file": "Arquivo",
           "notebook": "Caderno",

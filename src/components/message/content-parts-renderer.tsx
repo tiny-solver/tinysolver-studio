@@ -23,6 +23,7 @@ import {
   ReasoningTrigger,
   ReasoningContent,
 } from "@/components/ai-elements/reasoning"
+import { AgentToolCallPart } from "./agent-tool-call"
 import {
   FileTextIcon,
   FilePenLineIcon,
@@ -45,7 +46,7 @@ import {
 // ── helpers ────────────────────────────────────────────────────────────
 
 /** Try JSON.parse; return null on failure. */
-function tryParseJson(s: string): Record<string, unknown> | null {
+export function tryParseJson(s: string): Record<string, unknown> | null {
   try {
     const v = JSON.parse(s)
     return typeof v === "object" && v !== null && !Array.isArray(v) ? v : null
@@ -55,7 +56,7 @@ function tryParseJson(s: string): Record<string, unknown> | null {
 }
 
 /** Regex-extract a JSON string value for a given key (works on truncated JSON). */
-function extractJsonField(input: string, key: string): string | null {
+export function extractJsonField(input: string, key: string): string | null {
   const re = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`)
   const m = input.match(re)
   return m?.[1]?.replace(/\\"/g, '"').replace(/\\\\/g, "\\") ?? null
@@ -191,7 +192,7 @@ function shortPath(p: string): string {
 }
 
 /** Truncate text to maxLen, appending "…" if truncated. */
-function ellipsis(s: string, maxLen: number): string {
+export function ellipsis(s: string, maxLen: number): string {
   return s.length > maxLen ? s.slice(0, maxLen - 1) + "…" : s
 }
 
@@ -2240,6 +2241,19 @@ const ToolCallPart = memo(function ToolCallPart({
       toolNameLower === "exitplanmode" ||
       isFileTool) &&
     !part.errorText
+  // Agent/subagent tools get a dedicated container rendering
+  if (toolNameLower === "agent") {
+    return (
+      <AgentToolCallPart
+        part={part}
+        renderToolCall={(p, key) => (
+          // Strip agentStats to prevent recursive Agent nesting
+          <ToolCallPart key={key} part={{ ...p, agentStats: undefined }} />
+        )}
+      />
+    )
+  }
+
   // Cline: attempt_completion — render as an expanded card with result + progress
   if (toolNameLower === "attempt_completion") {
     const parsedCompletion = tryParseJson(part.input ?? "")
@@ -2297,8 +2311,7 @@ const ToolCallPart = memo(function ToolCallPart({
             output={part.output}
           />
         )}
-        {(toolNameLower === "task" || toolNameLower === "agent") &&
-        part.output ? (
+        {toolNameLower === "task" && part.output ? (
           <div className="text-sm prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside">
             <MessageResponse>{part.output}</MessageResponse>
           </div>

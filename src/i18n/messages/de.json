@@ -1703,6 +1703,13 @@
         "subjectLabel": "Betreff",
         "taskLabel": "Aufgabe",
         "nameLabel": "Bezeichnung:",
+        "agentPromptLabel": "Eingabe",
+        "agentModelLabel": "Modell",
+        "agentStatsBash": "Befehle",
+        "agentStatsRead": "Dateien gelesen",
+        "agentStatsSearch": "Suchen",
+        "agentStatsEdit": "Bearbeitungen",
+        "agentStatsOther": "Sonstige",
         "field": {
           "file": "Datei",
           "notebook": "Notizbuch",

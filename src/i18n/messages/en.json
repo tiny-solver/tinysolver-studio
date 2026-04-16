@@ -1703,6 +1703,13 @@
         "subjectLabel": "Subject",
         "taskLabel": "Task",
         "nameLabel": "Name:",
+        "agentPromptLabel": "Prompt",
+        "agentModelLabel": "Model",
+        "agentStatsBash": "Commands",
+        "agentStatsRead": "Files read",
+        "agentStatsSearch": "Searches",
+        "agentStatsEdit": "Edits",
+        "agentStatsOther": "Other",
         "field": {
           "file": "File",
           "notebook": "Notebook",

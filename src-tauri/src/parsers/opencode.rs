@@ -393,6 +393,7 @@ impl OpenCodeParser {
                         tool_use_id: call_id,
                         output_preview,
                         is_error: is_error_status(status) || has_error_field,
+                        agent_stats: None,
                     });
                 }
                 "file" => {

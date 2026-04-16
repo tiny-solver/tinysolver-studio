@@ -44,6 +44,29 @@ export interface ConversationSummary {
 
 export type MessageRole = "user" | "assistant" | "system" | "tool"
 
+export interface AgentToolCall {
+  tool_name: string
+  input_preview?: string | null
+  output_preview?: string | null
+  is_error: boolean
+}
+
+export interface AgentExecutionStats {
+  agent_type?: string | null
+  status?: string | null
+  total_duration_ms?: number | null
+  total_tokens?: number | null
+  total_tool_use_count?: number | null
+  read_count?: number | null
+  search_count?: number | null
+  bash_count?: number | null
+  edit_file_count?: number | null
+  lines_added?: number | null
+  lines_removed?: number | null
+  other_tool_count?: number | null
+  tool_calls?: AgentToolCall[]
+}
+
 export type ContentBlock =
   | { type: "text"; text: string }
   | {
@@ -63,6 +86,7 @@ export type ContentBlock =
       tool_use_id: string | null
       output_preview: string | null
       is_error: boolean
+      agent_stats?: AgentExecutionStats | null
     }
   | { type: "thinking"; text: string }
 

@@ -3,6 +3,7 @@ import type {
   ContentBlock,
   MessageRole,
   TurnUsage,
+  AgentExecutionStats,
 } from "@/lib/types"
 
 /**
@@ -25,6 +26,7 @@ export type AdaptedContentPart =
       state: ToolCallState
       output?: string | null
       errorText?: string
+      agentStats?: AgentExecutionStats | null
     }
   | {
       type: "tool-result"
@@ -662,6 +664,7 @@ export function adaptMessageTurn(
           errorText: matchedResult.is_error
             ? matchedResult.output_preview || undefined
             : undefined,
+          agentStats: matchedResult.agent_stats ?? undefined,
         })
       } else {
         // Position-based matching: if this tool_use has no ID, check next block
@@ -687,6 +690,7 @@ export function adaptMessageTurn(
             errorText: positionalResult.is_error
               ? positionalResult.output_preview || undefined
               : undefined,
+            agentStats: positionalResult.agent_stats ?? undefined,
           })
         } else {
           // For live streaming, unmatched tools are still running.

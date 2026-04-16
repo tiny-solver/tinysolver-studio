@@ -1703,6 +1703,13 @@
         "subjectLabel": "主题",
         "taskLabel": "任务",
         "nameLabel": "名称：",
+        "agentPromptLabel": "提示词",
+        "agentModelLabel": "模型",
+        "agentStatsBash": "命令",
+        "agentStatsRead": "读取文件",
+        "agentStatsSearch": "搜索",
+        "agentStatsEdit": "编辑",
+        "agentStatsOther": "其他",
         "field": {
           "file": "文件",
           "notebook": "笔记本",

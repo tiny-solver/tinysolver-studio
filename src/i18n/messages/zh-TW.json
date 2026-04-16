@@ -1703,6 +1703,13 @@
         "subjectLabel": "主題",
         "taskLabel": "任務",
         "nameLabel": "名稱：",
+        "agentPromptLabel": "提示詞",
+        "agentModelLabel": "模型",
+        "agentStatsBash": "命令",
+        "agentStatsRead": "讀取檔案",
+        "agentStatsSearch": "搜尋",
+        "agentStatsEdit": "編輯",
+        "agentStatsOther": "其他",
         "field": {
           "file": "檔案",
           "notebook": "筆記本",

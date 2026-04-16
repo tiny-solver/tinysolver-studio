@@ -719,6 +719,7 @@ impl CodexParser {
                                         tool_use_id,
                                         output_preview: output,
                                         is_error,
+                                        agent_stats: None,
                                     }],
                                     timestamp,
                                     usage: None,

@@ -434,6 +434,7 @@ impl GeminiParser {
                     tool_use_id,
                     output_preview,
                     is_error,
+                    agent_stats: None,
                 });
             }
         }
