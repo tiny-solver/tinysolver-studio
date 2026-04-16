@@ -192,7 +192,7 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
 
         {/* Collapsible body */}
         <CollapsibleContent>
-          <div className="space-y-3 px-4 pb-4">
+          <div className="max-h-[32rem] overflow-y-auto space-y-3 px-4 pb-4">
             {/* Model + duration summary */}
             {(model || durationSuffix) && (
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -219,9 +219,9 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
                   {t("agentPromptLabel")}
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-                    {prompt}
-                  </pre>
+                  <div className="mt-2 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside">
+                    <MessageResponse>{prompt}</MessageResponse>
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             )}
