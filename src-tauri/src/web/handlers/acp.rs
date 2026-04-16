@@ -591,3 +591,30 @@ pub async fn opencode_uninstall_plugin(
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
 }
+
+pub async fn codex_request_device_code(
+) -> Result<Json<acp_commands::CodexDeviceCodeResponse>, AppCommandError> {
+    let result = acp_commands::codex_request_device_code_core()
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexPollDeviceCodeParams {
+    pub device_auth_id: String,
+    pub user_code: String,
+}
+
+pub async fn codex_poll_device_code(
+    Json(params): Json<CodexPollDeviceCodeParams>,
+) -> Result<Json<acp_commands::CodexDeviceCodePollResult>, AppCommandError> {
+    let result = acp_commands::codex_poll_device_code_core(
+        params.device_auth_id,
+        params.user_code,
+    )
+    .await
+    .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}

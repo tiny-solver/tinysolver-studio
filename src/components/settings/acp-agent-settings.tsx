@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Copy,
   Download,
   Eye,
   EyeOff,
@@ -75,6 +76,8 @@ import {
   acpUninstallAgent,
   acpUpdateAgentConfig,
   acpUpdateAgentEnv,
+  codexPollDeviceCode,
+  codexRequestDeviceCode,
   listModelProviders,
 } from "@/lib/api"
 import type {
@@ -1549,6 +1552,18 @@ function inferCodexAuthMode(authJsonText: string): CodexAuthMode {
   return "api_key"
 }
 
+function hasCodexChatgptTokens(authJsonText: string): boolean {
+  const { authObject } = parseCodexAuthJsonObject(authJsonText)
+  if (!authObject) return false
+  const tokens = authObject.tokens as Record<string, unknown> | undefined
+  if (tokens && typeof tokens === "object") {
+    return (
+      typeof tokens.access_token === "string" && tokens.access_token.length > 0
+    )
+  }
+  return false
+}
+
 function extractCodexImportantValues(
   authJsonText: string,
   configTomlText: string
@@ -2685,6 +2700,17 @@ export function AcpAgentSettings() {
   const installStream = useAgentInstallStream()
   const [streamAgentType, setStreamAgentType] = useState<AgentType | null>(null)
   const installLogEndRef = useRef<HTMLDivElement | null>(null)
+  const [codexDeviceCode, setCodexDeviceCode] = useState<{
+    userCode: string
+    verificationUrl: string
+    deviceAuthId: string
+    interval: number
+  } | null>(null)
+  const [codexLoginStatus, setCodexLoginStatus] = useState<
+    "idle" | "requesting" | "polling" | "success" | "error"
+  >("idle")
+  const [codexLoginError, setCodexLoginError] = useState<string | null>(null)
+  const codexPollCancelledRef = useRef(false)
 
   const sortedAgents = useMemo(
     () =>
@@ -3426,13 +3452,8 @@ export function AcpAgentSettings() {
 
   const selectedMissingModelProvider =
     selectedNeedsModelProvider && selectedDraft?.modelProviderId == null
-  const selectedCodexAuthJsonText = selectedDraft?.codexAuthJsonText ?? ""
   const selectedConfigText = selectedDraft?.configText ?? ""
   const selectedOpenCodeAuthJsonText = selectedDraft?.openCodeAuthJsonText ?? ""
-  const selectedCodexAuthError = useMemo(() => {
-    if (selectedAgentKind !== "codex" || !locale) return null
-    return parseCodexAuthJsonText(selectedCodexAuthJsonText)
-  }, [locale, selectedAgentKind, selectedCodexAuthJsonText])
   const selectedCodexReasoningEffortOption =
     selectedAgent?.agent_type === "codex" && selectedDraft
       ? (CODEX_REASONING_EFFORT_OPTIONS.find(
@@ -4593,31 +4614,6 @@ export function AcpAgentSettings() {
     [handleOpenCodeConfigPatch]
   )
 
-  const handleCodexAuthJsonTextChange = useCallback(
-    (nextText: string) => {
-      if (!selectedAgent || selectedAgent.agent_type !== "codex") return
-      const important = extractCodexImportantValues(
-        nextText,
-        selectedDraft?.codexConfigTomlText ?? ""
-      )
-      updateSelectedDraft((current) => ({
-        ...current,
-        codexAuthMode: inferCodexAuthMode(nextText),
-        codexAuthJsonText: nextText,
-        apiBaseUrl: important.apiBaseUrl,
-        apiKey: important.apiKey ?? current.apiKey,
-        model: important.model,
-        codexModelProvider: important.modelProvider,
-        codexProviderOptions: important.providerOptions,
-        codexReasoningEffort: important.reasoningEffort,
-        codexSupportsWebsockets: important.supportsWebsockets,
-        codexSkills: important.skills,
-        codexServiceTierFast: important.serviceTierFast,
-      }))
-    },
-    [selectedAgent, selectedDraft, updateSelectedDraft]
-  )
-
   const handleCodexConfigTomlTextChange = useCallback(
     (nextText: string) => {
       if (!selectedAgent || selectedAgent.agent_type !== "codex") return
@@ -4899,6 +4895,138 @@ export function AcpAgentSettings() {
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
+
+  const handleCodexDeviceLogin = useCallback(async () => {
+    setCodexLoginStatus("requesting")
+    setCodexLoginError(null)
+    setCodexDeviceCode(null)
+    codexPollCancelledRef.current = false
+    try {
+      const resp = await codexRequestDeviceCode()
+      setCodexDeviceCode(resp)
+      setCodexLoginStatus("polling")
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setCodexLoginError(msg)
+      setCodexLoginStatus("error")
+    }
+  }, [])
+
+  const cancelCodexDeviceLogin = useCallback(() => {
+    codexPollCancelledRef.current = true
+    setCodexLoginStatus("idle")
+    setCodexDeviceCode(null)
+    setCodexLoginError(null)
+  }, [])
+
+  useEffect(() => {
+    if (codexLoginStatus !== "polling" || !codexDeviceCode) return
+    codexPollCancelledRef.current = false
+    const pollInterval = (codexDeviceCode.interval || 5) * 1000
+    const deadline = Date.now() + 15 * 60 * 1000
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let active = true
+
+    const poll = async () => {
+      if (!active || codexPollCancelledRef.current) return
+      if (Date.now() > deadline) {
+        setCodexLoginError(t("codex.loginTimeout"))
+        setCodexLoginStatus("error")
+        setCodexDeviceCode(null)
+        return
+      }
+      try {
+        const result = await codexPollDeviceCode({
+          deviceAuthId: codexDeviceCode.deviceAuthId,
+          userCode: codexDeviceCode.userCode,
+        })
+        if (!active || codexPollCancelledRef.current) return
+        if (result.status === "success") {
+          setCodexLoginStatus("success")
+          setCodexDeviceCode(null)
+          const authJson = JSON.stringify(
+            {
+              auth_mode: "chatgpt",
+              OPENAI_API_KEY: null,
+              tokens: {
+                id_token: result.idToken,
+                access_token: result.accessToken,
+                refresh_token: result.refreshToken,
+                account_id: result.accountId ?? "",
+              },
+              last_refresh: new Date().toISOString(),
+            },
+            null,
+            2
+          )
+          updateSelectedDraft((current) => ({
+            ...current,
+            codexAuthJsonText: authJson,
+          }))
+          const draft = drafts.codex
+          if (draft) {
+            const codexEnvText =
+              draft.codexAuthMode === "chatgpt_subscription"
+                ? patchEnvText(draft.envText, {
+                    OPENAI_API_KEY: "",
+                    OPENAI_BASE_URL: "",
+                  })
+                : draft.envText
+            try {
+              await Promise.all([
+                persistEnv(
+                  "codex",
+                  draft.enabled,
+                  codexEnvText,
+                  draft.modelProviderId
+                ),
+                persistConfig("codex", draft.configText, {
+                  codexAuthJsonText: authJson,
+                  codexConfigTomlText: draft.codexConfigTomlText,
+                }),
+              ])
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              toast.error(t("codex.loginSaveFailed"), {
+                description: msg,
+              })
+            }
+          }
+          return
+        }
+        if (result.status === "error") {
+          setCodexLoginError(result.message ?? "Unknown error")
+          setCodexLoginStatus("error")
+          setCodexDeviceCode(null)
+          return
+        }
+        timer = setTimeout(poll, pollInterval)
+      } catch {
+        if (!active || codexPollCancelledRef.current) return
+        timer = setTimeout(poll, pollInterval)
+      }
+    }
+
+    timer = setTimeout(poll, pollInterval)
+    return () => {
+      active = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [
+    codexLoginStatus,
+    codexDeviceCode,
+    drafts.codex,
+    persistConfig,
+    persistEnv,
+    updateSelectedDraft,
+    t,
+  ])
+
+  useEffect(() => {
+    if (selectedAgent?.agent_type !== "codex" && codexLoginStatus !== "idle") {
+      cancelCodexDeviceLogin()
+    }
+  }, [selectedAgent, codexLoginStatus, cancelCodexDeviceLogin])
 
   if (loadingAgents) {
     return (
@@ -5303,6 +5431,108 @@ export function AcpAgentSettings() {
                       </p>
                     </div>
 
+                    {selectedDraft.codexAuthMode === "chatgpt_subscription" && (
+                      <div className="space-y-2">
+                        {hasCodexChatgptTokens(
+                          selectedDraft.codexAuthJsonText
+                        ) &&
+                          codexLoginStatus !== "polling" &&
+                          codexLoginStatus !== "requesting" && (
+                            <div className="flex items-center gap-1.5 text-xs text-green-600">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {t("codex.loggedIn")}
+                            </div>
+                          )}
+                        {codexLoginStatus === "idle" && (
+                          <Button
+                            onClick={handleCodexDeviceLogin}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {hasCodexChatgptTokens(
+                              selectedDraft.codexAuthJsonText
+                            )
+                              ? t("codex.loginRelogin")
+                              : t("codex.loginButton")}
+                          </Button>
+                        )}
+                        {codexLoginStatus === "requesting" && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {t("codex.loginRequesting")}
+                          </div>
+                        )}
+                        {codexLoginStatus === "polling" && codexDeviceCode && (
+                          <div className="space-y-2 rounded-md border p-3">
+                            <p className="text-xs">{t("codex.loginStep1")}</p>
+                            <button
+                              type="button"
+                              className="text-xs text-primary underline cursor-pointer"
+                              onClick={() =>
+                                openUrl(codexDeviceCode.verificationUrl)
+                              }
+                            >
+                              {codexDeviceCode.verificationUrl}
+                            </button>
+                            <p className="text-xs mt-1">
+                              {t("codex.loginStep2")}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <code className="rounded bg-muted px-2 py-1 text-sm font-mono font-bold tracking-widest">
+                                {codexDeviceCode.userCode}
+                              </code>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(
+                                    codexDeviceCode.userCode
+                                  )
+                                  toast.success(t("codex.loginCodeCopied"))
+                                }}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              {t("codex.loginPolling")}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={cancelCodexDeviceLogin}
+                            >
+                              {t("codex.loginCancel")}
+                            </Button>
+                          </div>
+                        )}
+                        {codexLoginStatus === "success" && (
+                          <div className="flex items-center gap-1.5 text-xs text-green-600">
+                            <CheckCircle2 className="h-3 w-3" />
+                            {t("codex.loginSuccess")}
+                          </div>
+                        )}
+                        {codexLoginStatus === "error" && (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-destructive">
+                              {t("codex.loginFailed", {
+                                message: codexLoginError ?? "Unknown error",
+                              })}
+                            </p>
+                            <Button
+                              onClick={handleCodexDeviceLogin}
+                              size="sm"
+                              variant="outline"
+                            >
+                              {t("codex.loginRetry")}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {selectedDraft.codexAuthMode === "model_provider" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
@@ -5495,27 +5725,6 @@ export function AcpAgentSettings() {
                           aria-label={t("codex.enableFastAria")}
                         />
                       </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        {t("codex.authJsonNative")}
-                      </label>
-                      <Textarea
-                        value={selectedDraft.codexAuthJsonText}
-                        onChange={(event) => {
-                          handleCodexAuthJsonTextChange(event.target.value)
-                        }}
-                        placeholder={`{
-  "OPENAI_API_KEY": "sk-..."
-}`}
-                        className="min-h-28 max-h-60 font-mono text-xs"
-                      />
-                      {selectedCodexAuthError && (
-                        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
-                          {selectedCodexAuthError}
-                        </div>
-                      )}
                     </div>
 
                     <div className="space-y-1.5">

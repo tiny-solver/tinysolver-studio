@@ -277,6 +277,32 @@ export async function acpReorderAgents(agentTypes: AgentType[]): Promise<void> {
   return getTransport().call("acp_reorder_agents", { agentTypes })
 }
 
+export async function codexRequestDeviceCode(): Promise<{
+  userCode: string
+  verificationUrl: string
+  deviceAuthId: string
+  interval: number
+}> {
+  return getTransport().call("codex_request_device_code", {})
+}
+
+export async function codexPollDeviceCode(params: {
+  deviceAuthId: string
+  userCode: string
+}): Promise<{
+  status: "pending" | "success" | "error"
+  message?: string
+  idToken?: string
+  accessToken?: string
+  refreshToken?: string
+  accountId?: string
+}> {
+  return getTransport().call("codex_poll_device_code", {
+    deviceAuthId: params.deviceAuthId,
+    userCode: params.userCode,
+  })
+}
+
 export async function acpPreflight(
   agentType: AgentType,
   forceRefresh?: boolean

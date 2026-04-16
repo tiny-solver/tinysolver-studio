@@ -393,6 +393,8 @@ mod tauri_app {
                 acp_commands::opencode_list_plugins,
                 acp_commands::opencode_install_plugins,
                 acp_commands::opencode_uninstall_plugin,
+                acp_commands::codex_request_device_code,
+                acp_commands::codex_poll_device_code,
                 experts_commands::experts_list,
                 experts_commands::experts_list_for_agent,
                 experts_commands::experts_get_install_status,

@@ -459,6 +459,14 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
             "/opencode_uninstall_plugin",
             post(handlers::acp::opencode_uninstall_plugin),
         )
+        .route(
+            "/codex_request_device_code",
+            post(handlers::acp::codex_request_device_code),
+        )
+        .route(
+            "/codex_poll_device_code",
+            post(handlers::acp::codex_poll_device_code),
+        )
         // ─── Experts ───
         .route("/experts_list", post(handlers::experts::experts_list))
         .route(
