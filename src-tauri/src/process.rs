@@ -133,7 +133,8 @@ where
 ///   `std::env::set_var` is not thread-safe (`unsafe` in Rust edition 2024);
 ///   calling it while other threads may read `PATH` is a data race.
 /// * In the Tauri desktop binary: call from `run()` before `tauri::Builder`.
-/// * In the standalone server binary: call from `main()` before `#[tokio::main]`.
+/// * In the standalone server binary: call from `main()` before building the
+///   tokio runtime (do **not** use `#[tokio::main]` which spawns threads first).
 /// * In Docker / systemd services: typically a no-op — `which("node")`
 ///   succeeds because `node` is installed to a standard PATH directory.
 pub fn ensure_node_in_path() {
@@ -142,15 +143,12 @@ pub fn ensure_node_in_path() {
         return;
     }
 
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => {
-            eprintln!("[PATH] node not in PATH and HOME not set; cannot search for Node.js");
-            return;
-        }
-    };
+    let home = dirs::home_dir();
+    if home.is_none() {
+        eprintln!("[PATH] HOME not set; env-var-only Node.js search (no home-relative paths)");
+    }
 
-    if let Some(bin_dir) = find_node_bin_dir(&home) {
+    if let Some(bin_dir) = find_node_bin_dir(home.as_deref()) {
         prepend_to_path(&bin_dir);
         eprintln!("[PATH] node not in PATH, prepended {}", bin_dir.display());
     }
@@ -158,6 +156,11 @@ pub fn ensure_node_in_path() {
 
 /// Search common Node.js version manager directories for a `node` binary and
 /// return the containing bin directory.
+///
+/// `home` may be `None` in minimal environments (Docker, systemd without HOME).
+/// When `None`, only version managers whose location is determined by an
+/// explicit environment variable are searched; home-relative default paths
+/// (e.g. `~/.nvm`) are skipped.
 ///
 /// Supported version managers / installation methods:
 /// - **nvm** (Unix) — `$NVM_DIR` or `~/.nvm`
@@ -169,59 +172,82 @@ pub fn ensure_node_in_path() {
 /// - **n** (Unix) — `$N_PREFIX` or `/usr/local`
 /// - **Homebrew** (macOS) — `/opt/homebrew/opt/node` or `/usr/local/opt/node`
 /// - **Scoop** (Windows) — `%SCOOP%\apps\nodejs*\current`
-fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
+fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     let node_bin = if cfg!(windows) { "node.exe" } else { "node" };
 
+    /// Try each `(env_var, suffix_segments)` in order; return as soon as one
+    /// env var is set.  If none match, fall back to `home / home_relative`.
+    /// Returns `None` when no env var is set **and** `home` is `None` —
+    /// the caller should skip that version manager entirely.
+    fn resolve_dir(
+        env_chain: &[(&str, &[&str])],
+        home: Option<&std::path::Path>,
+        home_relative: &[&str],
+    ) -> Option<PathBuf> {
+        for (key, suffixes) in env_chain {
+            if let Ok(val) = std::env::var(key) {
+                return Some(suffixes.iter().fold(PathBuf::from(val), |p, s| p.join(s)));
+            }
+        }
+        home.map(|h| home_relative.iter().fold(h.to_path_buf(), |p, s| p.join(s)))
+    }
+
     // ── nvm (Unix) ───────────────────────────────────────────────────────
     // Standard nvm for macOS/Linux. nvm-windows is a separate tool (below).
     if cfg!(not(windows)) {
-        let nvm_dir = std::env::var("NVM_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join(".nvm"));
-        if nvm_dir.is_dir() {
-            let versions_dir = nvm_dir.join("versions").join("node");
-            let mut alias_matched = false;
+        if let Some(nvm_dir) = resolve_dir(&[("NVM_DIR", &[])], home, &[".nvm"]) {
+            if nvm_dir.is_dir() {
+                let versions_dir = nvm_dir.join("versions").join("node");
+                let mut alias_matched = false;
 
-            // Try to match the "default" alias to a concrete version.
-            // The alias may be a partial version (e.g. "18", "20.11"), a full
-            // version, or a symbolic name ("lts/*", "lts/hydrogen", "node").
-            // We only attempt matching for numeric prefixes — symbolic aliases
-            // require full nvm resolution which we cannot replicate here.
-            let default_alias = nvm_dir.join("alias").join("default");
-            if let Ok(raw_alias) = std::fs::read_to_string(&default_alias) {
-                let alias = raw_alias.trim();
-                let is_numeric = alias
-                    .trim_start_matches('v')
-                    .starts_with(|c: char| c.is_ascii_digit());
-                if is_numeric {
-                    let alias_stripped = alias.trim_start_matches('v');
-                    if let Ok(entries) = std::fs::read_dir(&versions_dir) {
-                        for entry in entries.flatten() {
-                            let name = entry.file_name().to_string_lossy().to_string();
-                            let stripped = name.trim_start_matches('v');
-                            if stripped.starts_with(alias_stripped) {
-                                candidates.push(entry.path().join("bin"));
+                // Try to match the "default" alias to a concrete version.
+                // The alias may be a partial version (e.g. "18", "20.11"),
+                // a full version, or a symbolic name ("lts/*", "node").
+                // We only attempt matching for numeric prefixes — symbolic
+                // aliases require full nvm resolution we cannot replicate.
+                let default_alias = nvm_dir.join("alias").join("default");
+                if let Ok(raw_alias) = std::fs::read_to_string(&default_alias) {
+                    let alias = raw_alias.trim();
+                    let is_numeric = alias
+                        .trim_start_matches('v')
+                        .starts_with(|c: char| c.is_ascii_digit());
+                    if is_numeric {
+                        let alias_stripped = alias.trim_start_matches('v');
+                        if let Ok(entries) = std::fs::read_dir(&versions_dir) {
+                            let mut matched: Vec<PathBuf> = entries
+                                .flatten()
+                                .filter(|e| {
+                                    let name = e.file_name().to_string_lossy().to_string();
+                                    let stripped = name.trim_start_matches('v');
+                                    stripped.starts_with(alias_stripped)
+                                })
+                                .map(|e| e.path().join("bin"))
+                                .collect();
+                            if !matched.is_empty() {
+                                matched.sort();
+                                matched.reverse();
                                 alias_matched = true;
+                                candidates.append(&mut matched);
                             }
                         }
                     }
                 }
-            }
 
-            // Fall back: all installed versions, newest first.
-            // Skipped when alias resolution already produced candidates.
-            // NOTE: lexicographic sort is imperfect for semver (v8 > v18),
-            // but acceptable for a best-effort heuristic.
-            if !alias_matched {
-                if let Ok(mut entries) = std::fs::read_dir(&versions_dir)
-                    .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
-                {
-                    entries.sort();
-                    entries.reverse();
-                    for entry in entries {
-                        candidates.push(entry.join("bin"));
+                // Fall back: all installed versions, newest first.
+                // Skipped when alias resolution already produced candidates.
+                // NOTE: lexicographic sort is imperfect for semver (v8 > v18),
+                // but acceptable for a best-effort heuristic.
+                if !alias_matched {
+                    if let Ok(mut entries) = std::fs::read_dir(&versions_dir)
+                        .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
+                    {
+                        entries.sort();
+                        entries.reverse();
+                        for entry in entries {
+                            candidates.push(entry.join("bin"));
+                        }
                     }
                 }
             }
@@ -243,12 +269,9 @@ fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
 
         // All installed versions, newest first (lexicographic — see note
         // in the nvm section about semver edge cases).
-        let nvm_home = std::env::var("NVM_HOME")
-            .map(PathBuf::from)
-            .or_else(|_| {
-                std::env::var("APPDATA").map(|appdata| PathBuf::from(appdata).join("nvm"))
-            });
-        if let Ok(nvm_home) = nvm_home {
+        if let Some(nvm_home) =
+            resolve_dir(&[("NVM_HOME", &[]), ("APPDATA", &["nvm"])], None, &[])
+        {
             if nvm_home.is_dir() {
                 if let Ok(mut entries) = std::fs::read_dir(&nvm_home).map(|rd| {
                     rd.flatten()
@@ -280,32 +303,32 @@ fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
     }
 
     // Platform-specific default for FNM_DIR:
-    //   Unix: $XDG_DATA_HOME/fnm or ~/.local/share/fnm
-    //   Windows: %APPDATA%/fnm
-    let fnm_dir = std::env::var("FNM_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-        if cfg!(windows) {
-            std::env::var("APPDATA")
-                .map(|appdata| PathBuf::from(appdata).join("fnm"))
-                .unwrap_or_else(|_| home.join(".fnm"))
-        } else {
-            std::env::var("XDG_DATA_HOME")
-                .map(|xdg| PathBuf::from(xdg).join("fnm"))
-                .unwrap_or_else(|_| home.join(".local").join("share").join("fnm"))
-        }
-    });
-    let fnm_versions = fnm_dir.join("node-versions");
-    if fnm_versions.is_dir() {
-        if let Ok(mut entries) = std::fs::read_dir(&fnm_versions)
-            .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
-        {
-            entries.sort();
-            entries.reverse();
-            for entry in entries {
-                let installation = entry.join("installation");
-                // On Unix fnm places binaries under installation/bin;
-                // on Windows they sit directly in the installation dir.
-                let bin = installation.join("bin");
-                candidates.push(if bin.is_dir() { bin } else { installation });
+    //   Unix:    $FNM_DIR → $XDG_DATA_HOME/fnm → ~/.local/share/fnm
+    //   Windows: $FNM_DIR → %APPDATA%/fnm      → ~/.fnm
+    let fnm_dir = if cfg!(windows) {
+        resolve_dir(&[("FNM_DIR", &[]), ("APPDATA", &["fnm"])], home, &[".fnm"])
+    } else {
+        resolve_dir(
+            &[("FNM_DIR", &[]), ("XDG_DATA_HOME", &["fnm"])],
+            home,
+            &[".local", "share", "fnm"],
+        )
+    };
+    if let Some(fnm_dir) = fnm_dir {
+        let fnm_versions = fnm_dir.join("node-versions");
+        if fnm_versions.is_dir() {
+            if let Ok(mut entries) = std::fs::read_dir(&fnm_versions)
+                .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
+            {
+                entries.sort();
+                entries.reverse();
+                for entry in entries {
+                    let installation = entry.join("installation");
+                    // On Unix fnm places binaries under installation/bin;
+                    // on Windows they sit directly in the installation dir.
+                    let bin = installation.join("bin");
+                    candidates.push(if bin.is_dir() { bin } else { installation });
+                }
             }
         }
     }
@@ -316,70 +339,73 @@ fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
     // shim directory when at least one concrete Node image is present,
     // otherwise downstream `node` invocations would get a cryptic Volta
     // error instead of a clean "node not found".
-    let volta_home = std::env::var("VOLTA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home.join(".volta"));
-    let volta_node_images = volta_home.join("tools").join("image").join("node");
-    let has_volta_node = volta_node_images
-        .is_dir()
-        .then(|| std::fs::read_dir(&volta_node_images).ok())
-        .flatten()
-        .is_some_and(|mut rd| rd.next().is_some());
-    if has_volta_node {
-        let volta_bin = volta_home.join("bin");
-        if volta_bin.is_dir() {
-            candidates.push(volta_bin);
+    if let Some(volta_home) = resolve_dir(&[("VOLTA_HOME", &[])], home, &[".volta"]) {
+        let volta_node_images = volta_home.join("tools").join("image").join("node");
+        let has_volta_node = volta_node_images
+            .is_dir()
+            .then(|| std::fs::read_dir(&volta_node_images).ok())
+            .flatten()
+            .is_some_and(|mut rd| rd.next().is_some());
+        if has_volta_node {
+            let volta_bin = volta_home.join("bin");
+            if volta_bin.is_dir() {
+                candidates.push(volta_bin);
+            }
         }
     }
 
     // ── asdf (Unix) ──────────────────────────────────────────────────────
     // asdf does not officially support Windows.
     if cfg!(not(windows)) {
-        let asdf_dir = std::env::var("ASDF_DATA_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join(".asdf"));
-        let asdf_nodejs = asdf_dir.join("installs").join("nodejs");
-        if asdf_nodejs.is_dir() {
-            if let Ok(mut entries) = std::fs::read_dir(&asdf_nodejs)
-                .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
-            {
-                entries.sort();
-                entries.reverse();
-                for entry in entries {
-                    candidates.push(entry.join("bin"));
+        if let Some(asdf_dir) = resolve_dir(&[("ASDF_DATA_DIR", &[])], home, &[".asdf"]) {
+            let asdf_nodejs = asdf_dir.join("installs").join("nodejs");
+            if asdf_nodejs.is_dir() {
+                if let Ok(mut entries) = std::fs::read_dir(&asdf_nodejs)
+                    .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
+                {
+                    entries.sort();
+                    entries.reverse();
+                    for entry in entries {
+                        candidates.push(entry.join("bin"));
+                    }
                 }
             }
         }
     }
 
     // ── mise / rtx (cross-platform) ─────────────────────────────────────
-    // mise respects MISE_DATA_DIR > XDG_DATA_HOME > platform data dir.
-    let mise_dir = std::env::var("MISE_DATA_DIR")
-        .or_else(|_| std::env::var("XDG_DATA_HOME").map(|xdg| format!("{}/mise", xdg)))
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::data_dir()
-                .unwrap_or_else(|| home.join(".local").join("share"))
-                .join("mise")
-        });
-    let mise_node = mise_dir.join("installs").join("node");
-    if mise_node.is_dir() {
-        if let Ok(mut entries) = std::fs::read_dir(&mise_node)
-            .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
-        {
-            entries.sort();
-            entries.reverse();
-            for entry in entries {
-                // mise on Unix places binaries under <version>/bin/;
-                // on Windows they may sit directly in the version dir.
-                let bin = entry.join("bin");
-                candidates.push(if bin.is_dir() { bin } else { entry });
+    // mise respects MISE_DATA_DIR > XDG_DATA_HOME > dirs::data_dir() > home.
+    let mise_dir = resolve_dir(
+        &[("MISE_DATA_DIR", &[]), ("XDG_DATA_HOME", &["mise"])],
+        None,
+        &[],
+    )
+    .or_else(|| {
+        dirs::data_dir()
+            .or_else(|| home.map(|h| h.join(".local").join("share")))
+            .map(|d| d.join("mise"))
+    });
+    if let Some(mise_dir) = mise_dir {
+        let mise_node = mise_dir.join("installs").join("node");
+        if mise_node.is_dir() {
+            if let Ok(mut entries) = std::fs::read_dir(&mise_node)
+                .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
+            {
+                entries.sort();
+                entries.reverse();
+                for entry in entries {
+                    // mise on Unix places binaries under <version>/bin/;
+                    // on Windows they may sit directly in the version dir.
+                    let bin = entry.join("bin");
+                    candidates.push(if bin.is_dir() { bin } else { entry });
+                }
             }
         }
     }
 
     // ── n (Unix) ─────────────────────────────────────────────────────────
     // `n` stores versions under $N_PREFIX/n/versions/node/<version>/bin/.
+    // N_PREFIX defaults to /usr/local (no home dependency).
     if cfg!(not(windows)) {
         let n_prefix = std::env::var("N_PREFIX")
             .map(PathBuf::from)
@@ -411,14 +437,13 @@ fn find_node_bin_dir(home: &std::path::Path) -> Option<PathBuf> {
 
     // ── Scoop (Windows) ─────────────────────────────────────────────────
     if cfg!(windows) {
-        let scoop_dir = std::env::var("SCOOP")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join("scoop"));
-        // Scoop may install as "nodejs-lts" or "nodejs".
-        for app_name in &["nodejs-lts", "nodejs"] {
-            let scoop_node = scoop_dir.join("apps").join(app_name).join("current");
-            if scoop_node.is_dir() {
-                candidates.push(scoop_node);
+        if let Some(scoop_dir) = resolve_dir(&[("SCOOP", &[])], home, &["scoop"]) {
+            // Scoop may install as "nodejs-lts" or "nodejs".
+            for app_name in &["nodejs-lts", "nodejs"] {
+                let scoop_node = scoop_dir.join("apps").join(app_name).join("current");
+                if scoop_node.is_dir() {
+                    candidates.push(scoop_node);
+                }
             }
         }
     }

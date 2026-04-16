@@ -7,8 +7,7 @@ use codeg_lib::web::{
     find_static_dir_standalone, generate_random_token, get_local_addresses, WebServerState,
 };
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // Support --version flag
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--version" || a == "-V") {
@@ -16,9 +15,20 @@ async fn main() {
         return;
     }
 
+    // PATH initialisation MUST happen before the tokio runtime is created.
+    // std::env::set_var is not thread-safe (unsafe in Rust edition 2024);
+    // #[tokio::main] would spawn worker threads before we reach this point.
     codeg_lib::process::ensure_node_in_path();
     codeg_lib::process::ensure_user_npm_prefix_in_path();
 
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to build tokio runtime")
+        .block_on(async_main());
+}
+
+async fn async_main() {
     let port: u16 = std::env::var("CODEG_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
