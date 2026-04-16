@@ -354,47 +354,145 @@ impl OpenCodeParser {
                     }
                 }
                 "tool" => {
-                    let tool_name = value
+                    let raw_tool_name = value
                         .get("tool")
                         .and_then(|t| t.as_str())
-                        .unwrap_or("unknown")
-                        .to_string();
+                        .unwrap_or("unknown");
 
                     let call_id = value
                         .get("callID")
                         .and_then(|c| c.as_str())
                         .map(|s| s.to_string());
 
-                    let status = value
-                        .get("state")
+                    let state = value.get("state");
+                    let status = state
                         .and_then(|s| s.get("status"))
                         .and_then(|s| s.as_str())
                         .unwrap_or("");
 
-                    let input_preview = value
-                        .get("state")
-                        .and_then(|s| s.get("input"))
-                        .and_then(|v| value_to_preview(Some(v)));
+                    let state_input = state.and_then(|s| s.get("input"));
+                    let is_agent_task = raw_tool_name == "task"
+                        && state_input
+                            .and_then(|i| i.get("subagent_type"))
+                            .and_then(|v| v.as_str())
+                            .is_some();
 
-                    blocks.push(ContentBlock::ToolUse {
-                        tool_use_id: call_id.clone(),
-                        tool_name,
-                        input_preview,
-                    });
+                    if is_agent_task {
+                        // Transform task tool into Agent card
+                        let subagent_type = state_input
+                            .and_then(|i| i.get("subagent_type"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("agent");
+                        let prompt = state_input
+                            .and_then(|i| i.get("prompt"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let description = state
+                            .and_then(|s| s.get("title"))
+                            .and_then(|v| v.as_str())
+                            .or_else(|| {
+                                state_input
+                                    .and_then(|i| i.get("description"))
+                                    .and_then(|v| v.as_str())
+                            })
+                            .unwrap_or("");
 
-                    let output_preview = value
-                        .get("state")
-                        .and_then(|s| s.get("output"))
-                        .and_then(|v| value_to_preview(Some(v)));
+                        let metadata = state.and_then(|s| s.get("metadata"));
+                        let model_id = metadata
+                            .and_then(|m| m.get("model"))
+                            .and_then(|m| m.get("modelID"))
+                            .and_then(|v| v.as_str());
+                        let session_id = metadata
+                            .and_then(|m| m.get("sessionId"))
+                            .and_then(|v| v.as_str());
 
-                    let has_error_field = value.get("state").and_then(|s| s.get("error")).is_some();
+                        let mut agent_input = serde_json::json!({
+                            "subagent_type": subagent_type,
+                            "description": description,
+                            "prompt": prompt,
+                        });
+                        if let Some(model) = model_id {
+                            agent_input["model"] = serde_json::Value::String(model.to_string());
+                        }
 
-                    blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: call_id,
-                        output_preview,
-                        is_error: is_error_status(status) || has_error_field,
-                        agent_stats: None,
-                    });
+                        blocks.push(ContentBlock::ToolUse {
+                            tool_use_id: call_id.clone(),
+                            tool_name: "Agent".to_string(),
+                            input_preview: Some(agent_input.to_string()),
+                        });
+
+                        let output_preview = state
+                            .and_then(|s| s.get("output"))
+                            .and_then(|v| value_to_preview(Some(v)))
+                            .map(|s| extract_task_result_content(&s));
+
+                        // Compute duration from time fields
+                        let time = state.and_then(|s| s.get("time"));
+                        let start_ms = time.and_then(|t| t.get("start")).and_then(|v| v.as_i64());
+                        let end_ms = time.and_then(|t| t.get("end")).and_then(|v| v.as_i64());
+                        let duration_ms = match (start_ms, end_ms) {
+                            (Some(s), Some(e)) if e > s => Some((e - s) as u64),
+                            _ => None,
+                        };
+
+                        // Load sub-agent tool calls from the sub-agent session
+                        let tool_calls = if let Some(sid) = session_id {
+                            load_subagent_tool_calls(conn, sid).await
+                        } else {
+                            Vec::new()
+                        };
+
+                        let tool_count = tool_calls.len() as u32;
+                        let agent_stats = Some(AgentExecutionStats {
+                            agent_type: Some(subagent_type.to_string()),
+                            status: Some(status.to_string()),
+                            total_duration_ms: duration_ms,
+                            total_tokens: None,
+                            total_tool_use_count: if tool_count > 0 {
+                                Some(tool_count)
+                            } else {
+                                None
+                            },
+                            read_count: None,
+                            search_count: None,
+                            bash_count: None,
+                            edit_file_count: None,
+                            lines_added: None,
+                            lines_removed: None,
+                            other_tool_count: None,
+                            tool_calls,
+                        });
+
+                        let has_error_field = state.and_then(|s| s.get("error")).is_some();
+                        blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: call_id,
+                            output_preview,
+                            is_error: is_error_status(status) || has_error_field,
+                            agent_stats,
+                        });
+                    } else {
+                        let input_preview = state_input
+                            .and_then(|v| value_to_preview(Some(v)));
+
+                        blocks.push(ContentBlock::ToolUse {
+                            tool_use_id: call_id.clone(),
+                            tool_name: raw_tool_name.to_string(),
+                            input_preview,
+                        });
+
+                        let output_preview = state
+                            .and_then(|s| s.get("output"))
+                            .and_then(|v| value_to_preview(Some(v)));
+
+                        let has_error_field = state.and_then(|s| s.get("error")).is_some();
+
+                        blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: call_id,
+                            output_preview,
+                            is_error: is_error_status(status) || has_error_field,
+                            agent_stats: None,
+                        });
+                    }
                 }
                 "file" => {
                     if let Some(image_block) = extract_opencode_file_image(&value) {
@@ -702,6 +800,104 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
     }
 
     turns
+}
+
+/// Extract the content inside `<task_result>…</task_result>` tags from OpenCode
+/// task output, stripping the `task_id:` preamble and the wrapper tags.
+/// Returns the original string unchanged if no tags are found.
+fn extract_task_result_content(raw: &str) -> String {
+    if let Some(start) = raw.find("<task_result>") {
+        let content_start = start + "<task_result>".len();
+        let content_end = raw[content_start..]
+            .find("</task_result>")
+            .map(|i| content_start + i)
+            .unwrap_or(raw.len());
+        let extracted = raw[content_start..content_end].trim();
+        if !extracted.is_empty() {
+            return extracted.to_string();
+        }
+    }
+    raw.to_string()
+}
+
+/// Load tool calls from a sub-agent's session in the OpenCode SQLite database.
+///
+/// Queries all messages and their parts in the given session, extracts tool-type
+/// parts, and returns a compact list of `AgentToolCall` records for display
+/// inside the parent Agent card.
+async fn load_subagent_tool_calls(
+    conn: &DatabaseConnection,
+    session_id: &str,
+) -> Vec<AgentToolCall> {
+    let rows = match conn
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            r#"
+            SELECT p.data
+            FROM part p
+            INNER JOIN message m ON m.id = p.message_id
+            WHERE m.session_id = ?
+              AND json_extract(p.data, '$.type') = 'tool'
+            ORDER BY p.time_created ASC, p.id ASC
+            "#,
+            [session_id.into()],
+        ))
+        .await
+    {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut tool_calls = Vec::new();
+    for row in rows {
+        let data_raw: String = match row.try_get("", "data") {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let value: serde_json::Value = match serde_json::from_str(&data_raw) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let tool_name = value
+            .get("tool")
+            .and_then(|t| t.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Skip nested task calls to avoid recursion
+        let is_nested_task = tool_name == "task"
+            && value
+                .get("state")
+                .and_then(|s| s.get("input"))
+                .and_then(|i| i.get("subagent_type"))
+                .is_some();
+        if is_nested_task {
+            continue;
+        }
+
+        let state = value.get("state");
+        let input_preview = state
+            .and_then(|s| s.get("input"))
+            .and_then(|v| value_to_preview(Some(v)));
+        let output_preview = state
+            .and_then(|s| s.get("output"))
+            .and_then(|v| value_to_preview(Some(v)));
+        let status = state
+            .and_then(|s| s.get("status"))
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+        let has_error_field = state.and_then(|s| s.get("error")).is_some();
+
+        tool_calls.push(AgentToolCall {
+            tool_name,
+            input_preview,
+            output_preview,
+            is_error: is_error_status(status) || has_error_field,
+        });
+    }
+
+    tool_calls
 }
 
 #[cfg(test)]
