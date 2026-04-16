@@ -256,7 +256,7 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
             )}
 
             {/* Final output */}
-            {part.output && (
+            {part.output && !isError && (
               <div className="text-sm prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside">
                 <MessageResponse>{part.output}</MessageResponse>
               </div>
