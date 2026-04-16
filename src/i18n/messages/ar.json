@@ -631,8 +631,7 @@
       "effortLevelDefault": "المستوى الافتراضي",
       "effortLevel_low": "منخفض",
       "effortLevel_medium": "متوسط",
-      "effortLevel_high": "مرتفع",
-      "effortLevelMax": "الأقصى (Opus فقط)"
+      "effortLevel_high": "مرتفع"
     },
     "dialogs": {
       "confirmDeleteProvider": "حذف المزود {providerId}؟",

@@ -631,8 +631,7 @@
       "effortLevelDefault": "Standardstufe",
       "effortLevel_low": "Niedrig",
       "effortLevel_medium": "Mittel",
-      "effortLevel_high": "Hoch",
-      "effortLevelMax": "Maximum (nur Opus)"
+      "effortLevel_high": "Hoch"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId} löschen?",

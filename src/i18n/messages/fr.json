@@ -631,8 +631,7 @@
       "effortLevelDefault": "Niveau par défaut",
       "effortLevel_low": "Bas",
       "effortLevel_medium": "Moyen",
-      "effortLevel_high": "Élevé",
-      "effortLevelMax": "Maximum (Opus uniquement)"
+      "effortLevel_high": "Élevé"
     },
     "dialogs": {
       "confirmDeleteProvider": "Supprimer le provider {providerId} ?",
