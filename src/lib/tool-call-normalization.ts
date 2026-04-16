@@ -50,6 +50,9 @@ const EXACT_TOOL_NAME_ALIASES: Record<string, string> = {
   browser_action: "webfetch",
   use_mcp_tool: "tool",
   // Codex
+  spawn_agent: "agent",
+  wait_agent: "task",
+  close_agent: "task",
   update_plan: "task",
   request_user_input: "question",
   // OpenCode
@@ -197,7 +200,10 @@ function inferFromInput(
 
   if (hasAnyKey(parsed, ["question"])) return "question"
 
-  if (hasAnyKey(parsed, ["subagent_type", "taskId", "task_id", "subject"])) {
+  if (hasAnyKey(parsed, ["subagent_type"])) {
+    return "agent"
+  }
+  if (hasAnyKey(parsed, ["taskId", "task_id", "subject"])) {
     return "task"
   }
 

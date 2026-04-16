@@ -9,9 +9,13 @@ import {
   useRef,
   type ReactNode,
 } from "react"
-import type { LiveMessage } from "@/contexts/acp-connections-context"
+import type {
+  LiveMessage,
+  ToolCallInfo,
+} from "@/contexts/acp-connections-context"
 import { getFolderConversation } from "@/lib/api"
 import type {
+  AgentExecutionStats,
   DbConversationDetail,
   MessageTurn,
   SessionStats,
@@ -185,10 +189,123 @@ function getJoinedChunks(chunks: readonly string[]): string {
   return joined
 }
 
+/**
+ * Clean raw Agent tool output that may be JSON or XML wrapped.
+ *
+ * Streaming Agent results often arrive as raw JSON (e.g. content block
+ * arrays from Claude Code, or status wrappers from Codex) or with
+ * `<task_result>` XML tags (OpenCode). This function extracts the human-
+ * readable text so the Agent card displays clean output.
+ */
+function cleanAgentOutput(output: string | null): string | null {
+  if (!output) return null
+  const trimmed = output.trim()
+  if (!trimmed) return null
+
+  // JSON array of content blocks: [{"type":"text","text":"..."},...]
+  if (trimmed.startsWith("[")) {
+    try {
+      const arr = JSON.parse(trimmed)
+      if (Array.isArray(arr)) {
+        const texts: string[] = []
+        for (const item of arr) {
+          if (
+            item &&
+            typeof item === "object" &&
+            typeof item.text === "string"
+          ) {
+            texts.push(item.text)
+          }
+        }
+        if (texts.length > 0) return texts.join("\n")
+      }
+    } catch {
+      /* not valid JSON */
+    }
+  }
+
+  // JSON object with common result fields
+  if (trimmed.startsWith("{")) {
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>
+      for (const key of ["result", "output", "text", "content", "completed"]) {
+        if (typeof obj[key] === "string") return obj[key] as string
+      }
+    } catch {
+      /* not valid JSON */
+    }
+  }
+
+  // <task_result> XML wrapper (OpenCode)
+  const tagStart = trimmed.indexOf("<task_result>")
+  if (tagStart !== -1) {
+    const contentStart = tagStart + "<task_result>".length
+    const contentEnd = trimmed.indexOf("</task_result>", contentStart)
+    const extracted = trimmed
+      .substring(contentStart, contentEnd === -1 ? undefined : contentEnd)
+      .trim()
+    if (extracted) return extracted
+  }
+
+  return output
+}
+
 function buildStreamingTurnsFromLiveMessage(
   conversationId: number,
   liveMessage: LiveMessage
 ): BuiltStreamingTurns {
+  // ── Phase 1: Identify agent → child relationships ──────────────────
+  // Position-based grouping: non-agent tool_calls after agent N (until
+  // the next agent or a content boundary) belong to agent N. When a new
+  // "agent" tool_call appears it starts a new capture region, so children
+  // between agent N and agent N+1 go to N. For concurrent agents (both
+  // starting before any children) the last agent receives all children —
+  // imperfect, but the DB-backed parser corrects it on the next refresh.
+  const agentChildren = new Map<
+    string,
+    Array<{ info: ToolCallInfo; toolName: string }>
+  >()
+  const childToolCallIds = new Set<string>()
+
+  // NOTE: The ACP SDK does not provide parent-child relationships between
+  // tool calls — there is no parent_id or context_id. When multiple agents
+  // run concurrently, all their child tool calls appear AFTER both agent
+  // blocks in the content array, making it impossible to determine which
+  // child belongs to which agent during streaming. The position-based
+  // heuristic below assigns children to the most recent preceding agent.
+  // The DB-backed parser corrects the grouping on the next data refresh.
+  let activeAgentId: string | null = null
+  let activeAgentCompleted = false
+
+  for (const block of liveMessage.content) {
+    if (block.type === "tool_call") {
+      const toolName = inferLiveToolName({
+        title: block.info.title,
+        kind: block.info.kind,
+        rawInput: block.info.raw_input,
+      })
+
+      if (toolName === "agent") {
+        // New agent boundary — starts a new capture region
+        activeAgentId = block.info.tool_call_id
+        if (!agentChildren.has(activeAgentId)) {
+          agentChildren.set(activeAgentId, [])
+        }
+        activeAgentCompleted =
+          block.info.status === "completed" || block.info.status === "failed"
+      } else if (activeAgentId) {
+        childToolCallIds.add(block.info.tool_call_id)
+        agentChildren.get(activeAgentId)!.push({ info: block.info, toolName })
+      }
+    } else if (activeAgentId && activeAgentCompleted) {
+      // A text/thinking/plan block after a completed agent means the main
+      // agent is producing new content — stop capturing children.
+      activeAgentId = null
+      activeAgentCompleted = false
+    }
+  }
+
+  // ── Phase 2: Build turns, nesting children inside Agent results ────
   // Split streaming content into multiple turns matching the historical
   // pattern: each "round" (text/thinking + tool calls + tool results) is a
   // separate turn. A new turn starts when a text/thinking/plan block appears
@@ -229,6 +346,9 @@ function buildStreamingTurnsFromLiveMessage(
         break
       }
       case "tool_call": {
+        // Skip child tool calls — they are nested inside Agent cards
+        if (childToolCallIds.has(block.info.tool_call_id)) break
+
         const toolName = inferLiveToolName({
           title: block.info.title,
           kind: block.info.kind,
@@ -250,25 +370,55 @@ function buildStreamingTurnsFromLiveMessage(
           block.info.raw_output_chunks.length > 0
             ? getJoinedChunks(block.info.raw_output_chunks)
             : block.info.content
+
+        // For agent tool calls, build agent_stats from collected children
+        const isAgent = toolName === "agent"
+        const children = isAgent
+          ? (agentChildren.get(block.info.tool_call_id) ?? [])
+          : []
+        const agentStats: AgentExecutionStats | undefined = isAgent
+          ? {
+              tool_calls: children.map(({ info: ci, toolName: cn }) => {
+                const cFinal =
+                  ci.status === "completed" || ci.status === "failed"
+                const cOutput =
+                  ci.raw_output_chunks.length > 0
+                    ? getJoinedChunks(ci.raw_output_chunks)
+                    : ci.content
+                return {
+                  tool_name: cn,
+                  input_preview: ci.raw_input?.substring(0, 500) ?? null,
+                  output_preview: cFinal
+                    ? (cOutput?.substring(0, 500) ?? null)
+                    : null,
+                  is_error: ci.status === "failed",
+                }
+              }),
+            }
+          : undefined
+
         if (isFinalState) {
           currentBlocks.push({
             type: "tool_result",
             tool_use_id: block.info.tool_call_id,
-            output_preview: resolvedOutput,
+            output_preview: isAgent
+              ? cleanAgentOutput(resolvedOutput)
+              : resolvedOutput,
             is_error: block.info.status === "failed",
+            ...(agentStats ? { agent_stats: agentStats } : {}),
           })
           currentGroupHasCompletedTool = true
-        } else if (resolvedOutput) {
-          // In-progress tool that already produced partial output. Emit the
-          // running result so the renderer can display live output, and flag
-          // the tool_call so the adapter keeps state="input-available" (the
-          // spinner/running visual and 24KB tail truncation both depend on
-          // this state).
+        } else if (resolvedOutput || (isAgent && children.length > 0)) {
+          // In-progress tool that already produced partial output (or an
+          // agent with child calls). Emit the running result so the renderer
+          // can display live output / nested tool calls, and flag the
+          // tool_call so the adapter keeps state="input-available".
           currentBlocks.push({
             type: "tool_result",
             tool_use_id: block.info.tool_call_id,
-            output_preview: resolvedOutput,
+            output_preview: resolvedOutput ?? null,
             is_error: false,
+            ...(agentStats ? { agent_stats: agentStats } : {}),
           })
           inProgressToolCallIds.add(block.info.tool_call_id)
         }
