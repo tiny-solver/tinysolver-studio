@@ -177,6 +177,24 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
 
     let node_bin = if cfg!(windows) { "node.exe" } else { "node" };
 
+    /// Extract a (major, minor, patch) tuple from a version directory name
+    /// like `v20.11.1` or `20.11.1` for correct numeric sorting.
+    /// Falls back to (0,0,0) for unparseable names so they sort last.
+    fn semver_key(path: &std::path::Path) -> (u32, u32, u32) {
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .trim_start_matches('v')
+            .to_string();
+        let mut parts = name.split('.').filter_map(|s| s.parse::<u32>().ok());
+        (
+            parts.next().unwrap_or(0),
+            parts.next().unwrap_or(0),
+            parts.next().unwrap_or(0),
+        )
+    }
+
     /// Try each `(env_var, suffix_segments)` in order; return as soon as one
     /// env var is set.  If none match, fall back to `home / home_relative`.
     /// Returns `None` when no env var is set **and** `home` is `None` —
@@ -223,13 +241,13 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
                                     let stripped = name.trim_start_matches('v');
                                     stripped.starts_with(alias_stripped)
                                 })
-                                .map(|e| e.path().join("bin"))
+                                .map(|e| e.path())
                                 .collect();
                             if !matched.is_empty() {
-                                matched.sort();
+                                matched.sort_by_key(|p| semver_key(p));
                                 matched.reverse();
                                 alias_matched = true;
-                                candidates.append(&mut matched);
+                                candidates.extend(matched.into_iter().map(|p| p.join("bin")));
                             }
                         }
                     }
@@ -237,13 +255,11 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
 
                 // Fall back: all installed versions, newest first.
                 // Skipped when alias resolution already produced candidates.
-                // NOTE: lexicographic sort is imperfect for semver (v8 > v18),
-                // but acceptable for a best-effort heuristic.
                 if !alias_matched {
                     if let Ok(mut entries) = std::fs::read_dir(&versions_dir)
                         .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
                     {
-                        entries.sort();
+                        entries.sort_by_key(|p| semver_key(p));
                         entries.reverse();
                         for entry in entries {
                             candidates.push(entry.join("bin"));
@@ -267,8 +283,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
             }
         }
 
-        // All installed versions, newest first (lexicographic — see note
-        // in the nvm section about semver edge cases).
+        // All installed versions, newest first.
         if let Some(nvm_home) =
             resolve_dir(&[("NVM_HOME", &[]), ("APPDATA", &["nvm"])], None, &[])
         {
@@ -280,7 +295,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
                         .map(|e| e.path())
                         .collect::<Vec<_>>()
                 }) {
-                    entries.sort();
+                    entries.sort_by_key(|p| semver_key(p));
                     entries.reverse();
                     // nvm-windows places node.exe directly in the version dir
                     candidates.extend(entries);
@@ -320,7 +335,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
             if let Ok(mut entries) = std::fs::read_dir(&fnm_versions)
                 .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
             {
-                entries.sort();
+                entries.sort_by_key(|p| semver_key(p));
                 entries.reverse();
                 for entry in entries {
                     let installation = entry.join("installation");
@@ -363,7 +378,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
                 if let Ok(mut entries) = std::fs::read_dir(&asdf_nodejs)
                     .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
                 {
-                    entries.sort();
+                    entries.sort_by_key(|p| semver_key(p));
                     entries.reverse();
                     for entry in entries {
                         candidates.push(entry.join("bin"));
@@ -391,7 +406,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
             if let Ok(mut entries) = std::fs::read_dir(&mise_node)
                 .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
             {
-                entries.sort();
+                entries.sort_by_key(|p| semver_key(p));
                 entries.reverse();
                 for entry in entries {
                     // mise on Unix places binaries under <version>/bin/;
@@ -415,7 +430,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
             if let Ok(mut entries) = std::fs::read_dir(&n_versions)
                 .map(|rd| rd.flatten().map(|e| e.path()).collect::<Vec<_>>())
             {
-                entries.sort();
+                entries.sort_by_key(|p| semver_key(p));
                 entries.reverse();
                 for entry in entries {
                     candidates.push(entry.join("bin"));
