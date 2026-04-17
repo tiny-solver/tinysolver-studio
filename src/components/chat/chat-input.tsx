@@ -88,7 +88,10 @@ export const ChatInput = memo(function ChatInput({
   const isConnecting = status === "connecting"
 
   return (
-    <div className="p-4 pt-0">
+    <div
+      className="p-4 pt-0"
+      onContextMenu={(event) => event.stopPropagation()}
+    >
       {queue &&
         queue.length > 0 &&
         onQueueReorder &&

@@ -1,7 +1,16 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react"
+import {
+  Copy,
   Download,
   FileCode,
   FileImage,
@@ -1221,6 +1230,72 @@ export function ConversationDetailPanel() {
     }))
   }, [activeConversationTab])
 
+  const [contextMenuSelectedText, setContextMenuSelectedText] = useState("")
+  const savedSelectionRangeRef = useRef<Range | null>(null)
+  const isContextMenuOpenRef = useRef(false)
+
+  const handleContextMenuOpenChange = useCallback((open: boolean) => {
+    isContextMenuOpenRef.current = open
+    if (!open) {
+      savedSelectionRangeRef.current = null
+      return
+    }
+    const selection = window.getSelection()
+    const text = selection?.toString() ?? ""
+    setContextMenuSelectedText(text)
+    savedSelectionRangeRef.current =
+      selection && selection.rangeCount > 0 && !selection.isCollapsed
+        ? selection.getRangeAt(0).cloneRange()
+        : null
+  }, [])
+
+  const handleContextMenuTriggerPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 2) return
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed) {
+        event.preventDefault()
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    const handler = () => {
+      if (!isContextMenuOpenRef.current) return
+      const range = savedSelectionRangeRef.current
+      if (!range) return
+      if (
+        !document.contains(range.startContainer) ||
+        !document.contains(range.endContainer)
+      ) {
+        savedSelectionRangeRef.current = null
+        return
+      }
+      const selection = window.getSelection()
+      if (!selection) return
+      if (selection.toString().length > 0) return
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+    document.addEventListener("selectionchange", handler)
+    return () => document.removeEventListener("selectionchange", handler)
+  }, [])
+
+  const handleCopySelectedText = useCallback(async () => {
+    if (!contextMenuSelectedText) return
+    if (!navigator.clipboard?.writeText) {
+      toast.error(t("copyTextFailed"))
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(contextMenuSelectedText)
+      toast.success(t("copyTextSuccess"))
+    } catch {
+      toast.error(t("copyTextFailed"))
+    }
+  }, [contextMenuSelectedText, t])
+
   const handleNewConversation = useCallback(() => {
     if (!folder) return
     openNewConversationTab(folder.path)
@@ -1309,13 +1384,14 @@ export function ConversationDetailPanel() {
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={handleContextMenuOpenChange}>
       <ContextMenuTrigger asChild>
         <div
           className={cn(
             "relative h-full min-h-0 overflow-hidden",
             canTile && "flex flex-row"
           )}
+          onPointerDown={handleContextMenuTriggerPointerDown}
         >
           {tabs.map((tab, index) => {
             const active = tab.id === activeTabId
@@ -1352,6 +1428,14 @@ export function ConversationDetailPanel() {
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuItem
+          disabled={!contextMenuSelectedText}
+          onSelect={handleCopySelectedText}
+        >
+          <Copy className="h-4 w-4" />
+          {t("copyText")}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem
           disabled={!canReloadActiveConversation}
           onSelect={handleReloadActiveConversation}
