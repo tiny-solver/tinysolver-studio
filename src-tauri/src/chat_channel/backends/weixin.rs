@@ -483,13 +483,24 @@ impl ChatChannelBackend for WeixinBackend {
                 ChatChannelError::ConnectionFailed(format!("JSON parse failed: {e}"))
             })?;
 
-        let ret = verify_result
-            .get("ret")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(-1);
+        // iLink API auth failures come back as `{"errcode":-14,"errmsg":"session timeout"}`
+        // (no `ret` field). Treat any non-zero errcode as authentication failure.
+        if let Some(errcode) = verify_result.get("errcode").and_then(|v| v.as_i64()) {
+            if errcode != 0 {
+                let errmsg = verify_result
+                    .get("errmsg")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown error");
+                return Err(ChatChannelError::AuthenticationFailed(format!(
+                    "Weixin verification failed (errcode={errcode}): {errmsg}"
+                )));
+            }
+        }
+
+        let ret = verify_result.get("ret").and_then(|v| v.as_i64());
 
         // Check for known auth-failure codes
-        if ret == -14 {
+        if ret == Some(-14) {
             return Err(ChatChannelError::AuthenticationFailed(
                 "Session expired (ret=-14), please re-authenticate".into(),
             ));
@@ -503,11 +514,13 @@ impl ChatChannelBackend for WeixinBackend {
             .unwrap_or("")
             .to_string();
 
-        if ret != 0 {
-            eprintln!(
-                "[Weixin] verify returned ret={ret}, but got cursor len={}",
-                initial_cursor.len()
-            );
+        if let Some(r) = ret {
+            if r != 0 {
+                eprintln!(
+                    "[Weixin] verify returned ret={r}, but got cursor len={}",
+                    initial_cursor.len()
+                );
+            }
         }
 
         *self.status.lock().await = ChannelConnectionStatus::Connected;
