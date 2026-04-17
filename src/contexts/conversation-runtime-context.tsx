@@ -448,12 +448,15 @@ function buildStreamingTurnsFromLiveMessage(
           // agent with child calls). Emit the running result so the renderer
           // can display live output / nested tool calls, and flag the
           // tool_call so the adapter keeps state="input-available".
+          //
+          // For Agents specifically, partial `content` from Claude Code's
+          // Task tool echoes the prompt (and subagent message fragments)
+          // before the real result arrives — suppress it so the Agent card
+          // doesn't duplicate the prompt already shown in the collapsible.
           currentBlocks.push({
             type: "tool_result",
             tool_use_id: block.info.tool_call_id,
-            output_preview: isAgent
-              ? cleanAgentOutput(resolvedOutput)
-              : (resolvedOutput ?? null),
+            output_preview: isAgent ? null : (resolvedOutput ?? null),
             is_error: false,
             ...(agentStats ? { agent_stats: agentStats } : {}),
           })
