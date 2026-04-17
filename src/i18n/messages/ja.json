@@ -1911,6 +1911,7 @@
     "weixinRefreshQrcode": "更新",
     "weixinWaitingScan": "スキャン待ち...",
     "weixinPollError": "接続が不安定です。再試行中...",
+    "weixinReconnectNotice": "iLink プロトコルの制限により、再接続のたびにまずボットにメッセージを送信しないとイベントトリガーが有効になりません。",
     "connect": "接続",
     "disconnect": "切断",
     "test": "接続テスト",

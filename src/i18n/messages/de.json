@@ -1911,6 +1911,7 @@
     "weixinRefreshQrcode": "Aktualisieren",
     "weixinWaitingScan": "Warten auf Scan...",
     "weixinPollError": "Verbindung instabil, erneuter Versuch...",
+    "weixinReconnectNotice": "Aufgrund von Einschränkungen des iLink-Protokolls müssen Sie nach jeder erneuten Verbindung dem Bot eine Nachricht senden, damit Ereignisauslöser wirksam werden.",
     "connect": "Verbinden",
     "disconnect": "Trennen",
     "test": "Verbindung testen",

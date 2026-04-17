@@ -1911,6 +1911,7 @@
     "weixinRefreshQrcode": "刷新二维码",
     "weixinWaitingScan": "等待扫码...",
     "weixinPollError": "连接不稳定，正在重试...",
+    "weixinReconnectNotice": "因 iLink 协议限制，每次重新连接后需先主动向机器人发送一条消息，事件触发才会生效。",
     "connect": "连接",
     "disconnect": "断开",
     "test": "测试连接",

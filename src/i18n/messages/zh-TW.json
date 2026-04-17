@@ -1911,6 +1911,7 @@
     "weixinRefreshQrcode": "重新整理",
     "weixinWaitingScan": "等待掃碼...",
     "weixinPollError": "連接不穩定，正在重試...",
+    "weixinReconnectNotice": "因 iLink 協議限制，每次重新連接後需先主動向機器人發送一條訊息，事件觸發才會生效。",
     "connect": "連線",
     "disconnect": "斷開",
     "test": "測試連線",

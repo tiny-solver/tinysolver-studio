@@ -1911,6 +1911,7 @@
     "weixinRefreshQrcode": "새로고침",
     "weixinWaitingScan": "스캔 대기 중...",
     "weixinPollError": "연결이 불안정합니다. 재시도 중...",
+    "weixinReconnectNotice": "iLink 프로토콜 제한으로 인해, 재연결할 때마다 먼저 봇에게 메시지를 보내야 이벤트 트리거가 활성화됩니다.",
     "connect": "연결",
     "disconnect": "연결 해제",
     "test": "연결 테스트",

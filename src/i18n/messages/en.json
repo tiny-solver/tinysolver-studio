@@ -1911,6 +1911,7 @@
     "weixinRefreshQrcode": "Refresh",
     "weixinWaitingScan": "Waiting for scan...",
     "weixinPollError": "Connection unstable, retrying...",
+    "weixinReconnectNotice": "Due to iLink protocol limitations, after each reconnection you must send a message to the bot before event triggers take effect.",
     "connect": "Connect",
     "disconnect": "Disconnect",
     "test": "Test Connection",
