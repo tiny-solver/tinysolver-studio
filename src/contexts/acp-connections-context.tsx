@@ -583,6 +583,10 @@ function applyStreamingAction(
   return {
     ...conn,
     liveMessage: { ...prev, content: newContent },
+    // Streaming content implies the SDK has recovered from any in-flight
+    // Claude API retry, so hide the retry banner immediately instead of
+    // waiting for the prompt cycle to end.
+    claudeApiRetry: null,
   }
 }
 
@@ -763,6 +767,7 @@ function connectionsReducer(
       next.set(action.contextKey, {
         ...conn,
         liveMessage: { ...prev, content: newContent },
+        claudeApiRetry: null,
       })
       return next
     }
@@ -865,6 +870,7 @@ function connectionsReducer(
       next.set(action.contextKey, {
         ...conn,
         liveMessage: { ...prev, content: newContent },
+        claudeApiRetry: null,
       })
       return next
     }
@@ -1154,6 +1160,7 @@ function connectionsReducer(
       next.set(action.contextKey, {
         ...conn,
         liveMessage: { ...prev, content: newContent },
+        claudeApiRetry: null,
       })
       return next
     }
