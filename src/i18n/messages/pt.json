@@ -645,7 +645,8 @@
       "effortLevelDefault": "Nível padrão",
       "effortLevel_low": "Baixo",
       "effortLevel_medium": "Médio",
-      "effortLevel_high": "Alto"
+      "effortLevel_high": "Alto",
+      "effortLevel_xhigh": "Extra Alto"
     },
     "dialogs": {
       "confirmDeleteProvider": "Excluir o provedor {providerId}?",

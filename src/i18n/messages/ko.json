@@ -645,7 +645,8 @@
       "effortLevelDefault": "기본 수준",
       "effortLevel_low": "낮음",
       "effortLevel_medium": "중간",
-      "effortLevel_high": "높음"
+      "effortLevel_high": "높음",
+      "effortLevel_xhigh": "매우 높음"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId}를 삭제하시겠습니까?",

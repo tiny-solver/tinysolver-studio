@@ -645,7 +645,8 @@
       "effortLevelDefault": "デフォルトレベル",
       "effortLevel_low": "低",
       "effortLevel_medium": "中",
-      "effortLevel_high": "高"
+      "effortLevel_high": "高",
+      "effortLevel_xhigh": "超高"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId} を削除しますか？",

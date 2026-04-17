@@ -645,7 +645,8 @@
       "effortLevelDefault": "المستوى الافتراضي",
       "effortLevel_low": "منخفض",
       "effortLevel_medium": "متوسط",
-      "effortLevel_high": "مرتفع"
+      "effortLevel_high": "مرتفع",
+      "effortLevel_xhigh": "مرتفع جداً"
     },
     "dialogs": {
       "confirmDeleteProvider": "حذف المزود {providerId}؟",

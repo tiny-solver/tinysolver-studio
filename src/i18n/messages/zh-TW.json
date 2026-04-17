@@ -645,7 +645,8 @@
       "effortLevelDefault": "預設等級",
       "effortLevel_low": "低",
       "effortLevel_medium": "中",
-      "effortLevel_high": "高"
+      "effortLevel_high": "高",
+      "effortLevel_xhigh": "超高"
     },
     "dialogs": {
       "confirmDeleteProvider": "確認刪除 Provider {providerId}？",
