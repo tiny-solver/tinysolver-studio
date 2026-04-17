@@ -199,13 +199,14 @@ function getJoinedChunks(chunks: readonly string[]): string {
  */
 function cleanAgentOutput(output: string | null): string | null {
   if (!output) return null
-  const trimmed = output.trim()
-  if (!trimmed) return null
+  let text = output.trim()
+  if (!text) return null
 
+  // Step 1: Unwrap JSON containers (no recursion — single-level unwrap)
   // JSON array of content blocks: [{"type":"text","text":"..."},...]
-  if (trimmed.startsWith("[")) {
+  if (text.startsWith("[")) {
     try {
-      const arr = JSON.parse(trimmed)
+      const arr = JSON.parse(text)
       if (Array.isArray(arr)) {
         const texts: string[] = []
         for (const item of arr) {
@@ -217,37 +218,43 @@ function cleanAgentOutput(output: string | null): string | null {
             texts.push(item.text)
           }
         }
-        if (texts.length > 0) return texts.join("\n")
+        if (texts.length > 0) text = texts.join("\n")
       }
     } catch {
       /* not valid JSON */
     }
-  }
-
-  // JSON object with common result fields
-  if (trimmed.startsWith("{")) {
+  } else if (text.startsWith("{")) {
+    // JSON object with common result fields
     try {
-      const obj = JSON.parse(trimmed) as Record<string, unknown>
+      const obj = JSON.parse(text) as Record<string, unknown>
       for (const key of ["result", "output", "text", "content", "completed"]) {
-        if (typeof obj[key] === "string") return obj[key] as string
+        if (typeof obj[key] === "string") {
+          text = (obj[key] as string).trim()
+          break
+        }
       }
     } catch {
       /* not valid JSON */
     }
   }
 
-  // <task_result> XML wrapper (OpenCode)
-  const tagStart = trimmed.indexOf("<task_result>")
+  // Step 2: Strip leading session / task_id lines that some agents prepend
+  // before the actual result (e.g. "task_id: ses_xxx (for resuming ...)").
+  text = text.replace(/^task_id:\s*\S+[^\n]*\n+/, "").trim()
+  if (!text) return null
+
+  // Step 3: Extract from <task_result> XML wrapper (OpenCode)
+  const tagStart = text.indexOf("<task_result>")
   if (tagStart !== -1) {
     const contentStart = tagStart + "<task_result>".length
-    const contentEnd = trimmed.indexOf("</task_result>", contentStart)
-    const extracted = trimmed
+    const contentEnd = text.indexOf("</task_result>", contentStart)
+    const extracted = text
       .substring(contentStart, contentEnd === -1 ? undefined : contentEnd)
       .trim()
     if (extracted) return extracted
   }
 
-  return output
+  return text
 }
 
 function buildStreamingTurnsFromLiveMessage(
@@ -441,7 +448,9 @@ function buildStreamingTurnsFromLiveMessage(
           currentBlocks.push({
             type: "tool_result",
             tool_use_id: block.info.tool_call_id,
-            output_preview: resolvedOutput ?? null,
+            output_preview: isAgent
+              ? cleanAgentOutput(resolvedOutput)
+              : (resolvedOutput ?? null),
             is_error: false,
             ...(agentStats ? { agent_stats: agentStats } : {}),
           })
