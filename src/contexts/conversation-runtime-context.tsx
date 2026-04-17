@@ -295,18 +295,20 @@ function buildStreamingTurnsFromLiveMessage(
     }
   }
 
-  // Second pass: assign children using parentToolUseId or position fallback
+  // Second pass: assign children using parentToolUseId or position fallback.
+  // Positional fallback only captures while the agent is still in-progress;
+  // once it completes/fails, subsequent tool calls are treated as top-level.
   let positionalAgentId: string | null = null
-  let positionalAgentCompleted = false
 
   for (const block of liveMessage.content) {
     if (block.type === "tool_call") {
       const toolName = getToolName(block.info)
 
       if (toolName === "agent") {
-        positionalAgentId = block.info.tool_call_id
-        positionalAgentCompleted =
+        const isFinal =
           block.info.status === "completed" || block.info.status === "failed"
+        // Only capture children while the agent is still running
+        positionalAgentId = isFinal ? null : block.info.tool_call_id
       } else {
         // Extract parentToolUseId from ACP meta (Claude Code embeds this
         // under meta.claudeCode.parentToolUseId). Guard each access level
@@ -321,21 +323,22 @@ function buildStreamingTurnsFromLiveMessage(
           }
         }
 
+        // Use explicit parentToolUseId when available, positional fallback
+        // only for in-progress agents
         const resolvedParent =
-          parentId && agentIds.has(parentId) ? parentId : positionalAgentId // fallback
+          parentId && agentIds.has(parentId) ? parentId : positionalAgentId
 
         if (resolvedParent) {
           childToolCallIds.add(block.info.tool_call_id)
           agentChildren
-            .get(resolvedParent)!
-            .push({ info: block.info, toolName })
+            .get(resolvedParent)
+            ?.push({ info: block.info, toolName })
         }
       }
-    } else if (positionalAgentId && positionalAgentCompleted) {
-      // A text/thinking/plan block after a completed agent means the main
-      // agent is producing new content — stop position-based capture.
+    } else if (positionalAgentId) {
+      // A non-tool block (text/thinking/plan) means the main agent is
+      // producing new content — stop position-based capture.
       positionalAgentId = null
-      positionalAgentCompleted = false
     }
   }
 

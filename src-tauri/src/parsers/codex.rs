@@ -482,20 +482,37 @@ fn parse_codex_subagent_stats(
         return None;
     }
 
-    let session_file = fs::read_dir(session_dir).ok()?.find_map(|entry| {
-        let path = entry.ok()?.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("jsonl")
-            && path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .contains(agent_id)
-        {
-            Some(path)
-        } else {
-            None
-        }
-    })?;
+    // Try exact filename first (e.g., "agent-{agent_id}.jsonl"), then fall
+    // back to files whose stem ends with the agent_id. Collect and sort
+    // candidates to ensure deterministic selection across platforms.
+    let exact_path = session_dir.join(format!("agent-{}.jsonl", agent_id));
+    let session_file = if exact_path.is_file() {
+        exact_path
+    } else {
+        let mut candidates: Vec<_> = fs::read_dir(session_dir)
+            .ok()?
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                    return None;
+                }
+                let stem = path.file_stem()?.to_string_lossy().into_owned();
+                // Match only if the stem ends with the agent_id after a separator
+                // (e.g., "session-abc123" matches agent_id "abc123")
+                if stem == agent_id
+                    || stem
+                        .strip_suffix(agent_id)
+                        .is_some_and(|prefix| prefix.ends_with('-') || prefix.ends_with('_'))
+                {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        candidates.sort();
+        candidates.into_iter().next()?
+    };
 
     let file = fs::File::open(&session_file).ok()?;
     let reader = BufReader::new(file);
@@ -569,7 +586,7 @@ fn parse_codex_subagent_stats(
 
                 let tc = AgentToolCall {
                     tool_name,
-                    input_preview,
+                    input_preview: input_preview.map(|s| truncate_str(&s, 500)),
                     output_preview: None,
                     is_error: false,
                 };
@@ -592,9 +609,9 @@ fn parse_codex_subagent_stats(
                         let raw_output = value_to_preview(output_value);
                         if tc.tool_name == "exec_command" {
                             tc.output_preview =
-                                raw_output.map(|s| clean_codex_exec_output(&s));
+                                raw_output.map(|s| truncate_str(&clean_codex_exec_output(&s), 500));
                         } else {
-                            tc.output_preview = raw_output;
+                            tc.output_preview = raw_output.map(|s| truncate_str(&s, 500));
                         }
                         tc.is_error = infer_tool_call_output_is_error(
                             payload,
@@ -669,6 +686,7 @@ impl CodexParser {
         let mut agent_id_to_spawn_call_id: HashMap<String, String> = HashMap::new();
         let mut agent_final_results: HashMap<String, String> = HashMap::new();
         let mut wait_agent_call_ids: HashSet<String> = HashSet::new();
+        let mut close_agent_call_ids: HashSet<String> = HashSet::new();
         let mut close_agent_targets: HashMap<String, String> = HashMap::new();
         let mut active_agent_count: u32 = 0;
         let mut call_id_tool_names: HashMap<String, String> = HashMap::new();
@@ -713,6 +731,8 @@ impl CodexParser {
                     }
                 }
                 "turn_context" => {
+                    // A new API turn means any prior agent lifecycle is complete.
+                    active_agent_count = 0;
                     if model.is_none() {
                         model = value
                             .get("payload")
@@ -972,6 +992,7 @@ impl CodexParser {
                                     }
                                     "close_agent" => {
                                         if let Some(ref id) = tool_use_id {
+                                            close_agent_call_ids.insert(id.clone());
                                             let target = parse_codex_json_arg(payload)
                                                 .and_then(|a| {
                                                     a.get("target")
@@ -1045,7 +1066,7 @@ impl CodexParser {
                                     .is_some_and(|id| wait_agent_call_ids.contains(id));
                                 let is_close = tool_use_id
                                     .as_ref()
-                                    .is_some_and(|id| close_agent_targets.contains_key(id));
+                                    .is_some_and(|id| close_agent_call_ids.contains(id));
 
                                 if is_spawn {
                                     if let Some(output_obj) = parse_codex_json_output(payload) {

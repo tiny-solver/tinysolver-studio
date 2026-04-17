@@ -1369,7 +1369,7 @@ mod tests {
     fn defaults_context_limit_for_claude_models() {
         assert_eq!(
             claude_context_window_max_tokens_for_model(Some("claude-sonnet-4-6")),
-            Some(200_000)
+            Some(1_000_000)
         );
         assert_eq!(
             claude_context_window_max_tokens_for_model(Some("custom-model-x")),
@@ -1472,11 +1472,11 @@ mod tests {
 
         let stats = detail.session_stats.expect("session stats");
         assert_eq!(stats.context_window_used_tokens, Some(1700));
-        assert_eq!(stats.context_window_max_tokens, Some(200_000));
+        assert_eq!(stats.context_window_max_tokens, Some(1_000_000));
         let percent = stats
             .context_window_usage_percent
             .expect("context window usage percent");
-        assert!((percent - 0.85).abs() < f64::EPSILON);
+        assert!((percent - 0.17).abs() < 0.01);
     }
 
     #[test]
@@ -1586,7 +1586,7 @@ mod tests {
         // Stats should reflect only the real assistant usage
         let stats = detail.session_stats.expect("session stats");
         assert_eq!(stats.context_window_used_tokens, Some(1700));
-        assert_eq!(stats.context_window_max_tokens, Some(200_000));
+        assert_eq!(stats.context_window_max_tokens, Some(1_000_000));
         let total = stats.total_tokens.expect("total tokens");
         assert_eq!(total, 1900); // 1000 + 200 + 300 + 400
     }

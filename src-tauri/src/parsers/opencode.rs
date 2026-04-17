@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -9,7 +10,7 @@ use sea_orm::{
 };
 
 use crate::models::*;
-use crate::parsers::{folder_name_from_path, AgentParser, ParseError};
+use crate::parsers::{folder_name_from_path, truncate_str, AgentParser, ParseError};
 
 pub struct OpenCodeParser {
     base_dir: PathBuf,
@@ -225,6 +226,13 @@ impl OpenCodeParser {
             ))
             .await?;
 
+        // Pre-scan: collect all subagent session IDs from task tool parts so we
+        // can batch-load their tool calls in a single query instead of N queries.
+        let subagent_session_ids = self
+            .scan_subagent_session_ids(conn, conversation_id)
+            .await;
+        let subagent_tools = batch_load_subagent_tool_calls(conn, &subagent_session_ids).await;
+
         let mut messages = Vec::with_capacity(rows.len());
 
         for row in rows {
@@ -263,7 +271,7 @@ impl OpenCodeParser {
             };
 
             let (content_blocks, usage_from_step_finish) =
-                self.load_sqlite_parts(conn, &msg_id).await?;
+                self.load_sqlite_parts(conn, &msg_id, &subagent_tools).await?;
 
             let usage = if is_assistant {
                 extract_opencode_usage(&value).or(usage_from_step_finish)
@@ -298,10 +306,43 @@ impl OpenCodeParser {
         Ok(messages)
     }
 
+    /// Scan all tool parts in this conversation to extract subagent session IDs.
+    async fn scan_subagent_session_ids(
+        &self,
+        conn: &DatabaseConnection,
+        conversation_id: &str,
+    ) -> Vec<String> {
+        let rows = match conn
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"
+                SELECT DISTINCT json_extract(p.data, '$.state.metadata.sessionId') AS sid
+                FROM part p
+                INNER JOIN message m ON m.id = p.message_id
+                WHERE m.session_id = ?
+                  AND json_extract(p.data, '$.type') = 'tool'
+                  AND json_extract(p.data, '$.tool') = 'task'
+                  AND json_extract(p.data, '$.state.input.subagent_type') IS NOT NULL
+                  AND sid IS NOT NULL
+                "#,
+                [conversation_id.into()],
+            ))
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+
+        rows.iter()
+            .filter_map(|row| row.try_get::<String>("", "sid").ok())
+            .collect()
+    }
+
     async fn load_sqlite_parts(
         &self,
         conn: &DatabaseConnection,
         message_id: &str,
+        subagent_tools: &HashMap<String, Vec<AgentToolCall>>,
     ) -> Result<(Vec<ContentBlock>, Option<TurnUsage>), ParseError> {
         let rows = conn
             .query_all(Statement::from_sql_and_values(
@@ -435,12 +476,11 @@ impl OpenCodeParser {
                             _ => None,
                         };
 
-                        // Load sub-agent tool calls from the sub-agent session
-                        let tool_calls = if let Some(sid) = session_id {
-                            load_subagent_tool_calls(conn, sid).await
-                        } else {
-                            Vec::new()
-                        };
+                        // Look up pre-fetched sub-agent tool calls
+                        let tool_calls = session_id
+                            .and_then(|sid| subagent_tools.get(sid))
+                            .cloned()
+                            .unwrap_or_default();
 
                         let tool_count = tool_calls.len() as u32;
                         let agent_stats = Some(AgentExecutionStats {
@@ -820,36 +860,47 @@ fn extract_task_result_content(raw: &str) -> String {
     raw.to_string()
 }
 
-/// Load tool calls from a sub-agent's session in the OpenCode SQLite database.
+/// Batch-load tool calls from multiple sub-agent sessions in a single query.
 ///
-/// Queries all messages and their parts in the given session, extracts tool-type
-/// parts, and returns a compact list of `AgentToolCall` records for display
-/// inside the parent Agent card.
-async fn load_subagent_tool_calls(
+/// Returns a map from session_id to its list of `AgentToolCall` records.
+/// This avoids N+1 queries when a conversation has many agent tasks.
+async fn batch_load_subagent_tool_calls(
     conn: &DatabaseConnection,
-    session_id: &str,
-) -> Vec<AgentToolCall> {
+    session_ids: &[String],
+) -> HashMap<String, Vec<AgentToolCall>> {
+    if session_ids.is_empty() {
+        return HashMap::new();
+    }
+
+    // Build parameterized IN clause
+    let placeholders: Vec<&str> = session_ids.iter().map(|_| "?").collect();
+    let sql = format!(
+        r#"
+        SELECT m.session_id, p.data
+        FROM part p
+        INNER JOIN message m ON m.id = p.message_id
+        WHERE m.session_id IN ({})
+          AND json_extract(p.data, '$.type') = 'tool'
+        ORDER BY m.session_id, p.time_created ASC, p.id ASC
+        "#,
+        placeholders.join(", ")
+    );
+    let values: Vec<sea_orm::Value> = session_ids.iter().map(|s| s.as_str().into()).collect();
+
     let rows = match conn
-        .query_all(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            r#"
-            SELECT p.data
-            FROM part p
-            INNER JOIN message m ON m.id = p.message_id
-            WHERE m.session_id = ?
-              AND json_extract(p.data, '$.type') = 'tool'
-            ORDER BY p.time_created ASC, p.id ASC
-            "#,
-            [session_id.into()],
-        ))
+        .query_all(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, values))
         .await
     {
         Ok(r) => r,
-        Err(_) => return Vec::new(),
+        Err(_) => return HashMap::new(),
     };
 
-    let mut tool_calls = Vec::new();
+    let mut result: HashMap<String, Vec<AgentToolCall>> = HashMap::new();
     for row in rows {
+        let sid: String = match row.try_get("", "session_id") {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
         let data_raw: String = match row.try_get("", "data") {
             Ok(d) => d,
             Err(_) => continue,
@@ -879,17 +930,19 @@ async fn load_subagent_tool_calls(
         let state = value.get("state");
         let input_preview = state
             .and_then(|s| s.get("input"))
-            .and_then(|v| value_to_preview(Some(v)));
+            .and_then(|v| value_to_preview(Some(v)))
+            .map(|s| truncate_str(&s, 500));
         let output_preview = state
             .and_then(|s| s.get("output"))
-            .and_then(|v| value_to_preview(Some(v)));
+            .and_then(|v| value_to_preview(Some(v)))
+            .map(|s| truncate_str(&s, 500));
         let status = state
             .and_then(|s| s.get("status"))
             .and_then(|s| s.as_str())
             .unwrap_or("");
         let has_error_field = state.and_then(|s| s.get("error")).is_some();
 
-        tool_calls.push(AgentToolCall {
+        result.entry(sid).or_default().push(AgentToolCall {
             tool_name,
             input_preview,
             output_preview,
@@ -897,7 +950,7 @@ async fn load_subagent_tool_calls(
         });
     }
 
-    tool_calls
+    result
 }
 
 #[cfg(test)]
