@@ -1554,6 +1554,8 @@ fn emit_terminal_output_update(
             raw_input: None,
             raw_output: Some(output),
             raw_output_append: Some(append),
+            locations: None,
+            meta: None,
         },
     );
 }
@@ -2501,6 +2503,12 @@ fn emit_conversation_update(
                 .map(|text| resolve_live_tool_input(&text, cwd));
             let raw_output = json_value_to_text(&tc.raw_output)
                 .map(|text| structurize_live_output(&text));
+            let locations = if tc.locations.is_empty() {
+                None
+            } else {
+                serde_json::to_value(&tc.locations).ok()
+            };
+            let meta = tc.meta.map(serde_json::Value::Object);
             crate::web::event_bridge::emit_event(
                 emitter,
                 "acp://event",
@@ -2513,6 +2521,8 @@ fn emit_conversation_update(
                     content,
                     raw_input,
                     raw_output,
+                    locations,
+                    meta,
                 },
             );
         }
@@ -2526,6 +2536,13 @@ fn emit_conversation_update(
                 .map(|text| resolve_live_tool_input(&text, cwd));
             let raw_output = json_value_to_text(&tcu.fields.raw_output)
                 .map(|text| structurize_live_output(&text));
+            let locations = tcu
+                .fields
+                .locations
+                .as_ref()
+                .filter(|l| !l.is_empty())
+                .and_then(|l| serde_json::to_value(l).ok());
+            let meta = tcu.meta.clone().map(serde_json::Value::Object);
             crate::web::event_bridge::emit_event(
                 emitter,
                 "acp://event",
@@ -2538,6 +2555,8 @@ fn emit_conversation_update(
                     raw_input,
                     raw_output,
                     raw_output_append: None,
+                    locations,
+                    meta,
                 },
             );
         }

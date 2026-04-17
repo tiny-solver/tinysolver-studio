@@ -63,6 +63,10 @@ pub enum AcpEvent {
         content: Option<String>,
         raw_input: Option<String>,
         raw_output: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        locations: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        meta: Option<serde_json::Value>,
     },
     /// Tool call status/content updated
     ToolCallUpdate {
@@ -75,6 +79,10 @@ pub enum AcpEvent {
         raw_output: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         raw_output_append: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        locations: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        meta: Option<serde_json::Value>,
     },
     /// Agent requests permission
     PermissionRequest {

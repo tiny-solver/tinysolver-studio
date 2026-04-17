@@ -255,53 +255,80 @@ function buildStreamingTurnsFromLiveMessage(
   liveMessage: LiveMessage
 ): BuiltStreamingTurns {
   // ── Phase 1: Identify agent → child relationships ──────────────────
-  // Position-based grouping: non-agent tool_calls after agent N (until
-  // the next agent or a content boundary) belong to agent N. When a new
-  // "agent" tool_call appears it starts a new capture region, so children
-  // between agent N and agent N+1 go to N. For concurrent agents (both
-  // starting before any children) the last agent receives all children —
-  // imperfect, but the DB-backed parser corrects it on the next refresh.
+  // Uses meta.claudeCode.parentToolUseId when available (precise), with
+  // position-based fallback for agents that don't provide it.
   const agentChildren = new Map<
     string,
     Array<{ info: ToolCallInfo; toolName: string }>
   >()
   const childToolCallIds = new Set<string>()
 
-  // NOTE: The ACP SDK does not provide parent-child relationships between
-  // tool calls — there is no parent_id or context_id. When multiple agents
-  // run concurrently, all their child tool calls appear AFTER both agent
-  // blocks in the content array, making it impossible to determine which
-  // child belongs to which agent during streaming. The position-based
-  // heuristic below assigns children to the most recent preceding agent.
-  // The DB-backed parser corrects the grouping on the next data refresh.
-  let activeAgentId: string | null = null
-  let activeAgentCompleted = false
+  // Cache inferred tool names — inferLiveToolName is called per tool_call
+  // in both Phase 1 and Phase 2; caching avoids redundant computation.
+  const inferredNames = new Map<string, string>()
+  const getToolName = (info: ToolCallInfo): string => {
+    const cached = inferredNames.get(info.tool_call_id)
+    if (cached !== undefined) return cached
+    const name = inferLiveToolName({
+      title: info.title,
+      kind: info.kind,
+      rawInput: info.raw_input,
+    })
+    inferredNames.set(info.tool_call_id, name)
+    return name
+  }
+
+  // First pass: register all agent tool_call IDs
+  const agentIds = new Set<string>()
+  for (const block of liveMessage.content) {
+    if (block.type !== "tool_call") continue
+    if (getToolName(block.info) === "agent") {
+      agentIds.add(block.info.tool_call_id)
+      agentChildren.set(block.info.tool_call_id, [])
+    }
+  }
+
+  // Second pass: assign children using parentToolUseId or position fallback
+  let positionalAgentId: string | null = null
+  let positionalAgentCompleted = false
 
   for (const block of liveMessage.content) {
     if (block.type === "tool_call") {
-      const toolName = inferLiveToolName({
-        title: block.info.title,
-        kind: block.info.kind,
-        rawInput: block.info.raw_input,
-      })
+      const toolName = getToolName(block.info)
 
       if (toolName === "agent") {
-        // New agent boundary — starts a new capture region
-        activeAgentId = block.info.tool_call_id
-        if (!agentChildren.has(activeAgentId)) {
-          agentChildren.set(activeAgentId, [])
-        }
-        activeAgentCompleted =
+        positionalAgentId = block.info.tool_call_id
+        positionalAgentCompleted =
           block.info.status === "completed" || block.info.status === "failed"
-      } else if (activeAgentId) {
-        childToolCallIds.add(block.info.tool_call_id)
-        agentChildren.get(activeAgentId)!.push({ info: block.info, toolName })
+      } else {
+        // Extract parentToolUseId from ACP meta (Claude Code embeds this
+        // under meta.claudeCode.parentToolUseId). Guard each access level
+        // to avoid crashes on unexpected shapes from other agents.
+        const meta = block.info.meta
+        let parentId: string | undefined
+        if (meta && typeof meta === "object" && "claudeCode" in meta) {
+          const cc = (meta as Record<string, unknown>).claudeCode
+          if (cc && typeof cc === "object" && "parentToolUseId" in cc) {
+            const pid = (cc as Record<string, unknown>).parentToolUseId
+            if (typeof pid === "string") parentId = pid
+          }
+        }
+
+        const resolvedParent =
+          parentId && agentIds.has(parentId) ? parentId : positionalAgentId // fallback
+
+        if (resolvedParent) {
+          childToolCallIds.add(block.info.tool_call_id)
+          agentChildren
+            .get(resolvedParent)!
+            .push({ info: block.info, toolName })
+        }
       }
-    } else if (activeAgentId && activeAgentCompleted) {
+    } else if (positionalAgentId && positionalAgentCompleted) {
       // A text/thinking/plan block after a completed agent means the main
-      // agent is producing new content — stop capturing children.
-      activeAgentId = null
-      activeAgentCompleted = false
+      // agent is producing new content — stop position-based capture.
+      positionalAgentId = null
+      positionalAgentCompleted = false
     }
   }
 
@@ -349,11 +376,7 @@ function buildStreamingTurnsFromLiveMessage(
         // Skip child tool calls — they are nested inside Agent cards
         if (childToolCallIds.has(block.info.tool_call_id)) break
 
-        const toolName = inferLiveToolName({
-          title: block.info.title,
-          kind: block.info.kind,
-          rawInput: block.info.raw_input,
-        })
+        const toolName = getToolName(block.info)
         currentBlocks.push({
           type: "tool_use",
           tool_use_id: block.info.tool_call_id,
@@ -376,26 +399,28 @@ function buildStreamingTurnsFromLiveMessage(
         const children = isAgent
           ? (agentChildren.get(block.info.tool_call_id) ?? [])
           : []
-        const agentStats: AgentExecutionStats | undefined = isAgent
-          ? {
-              tool_calls: children.map(({ info: ci, toolName: cn }) => {
-                const cFinal =
-                  ci.status === "completed" || ci.status === "failed"
-                const cOutput =
-                  ci.raw_output_chunks.length > 0
-                    ? getJoinedChunks(ci.raw_output_chunks)
-                    : ci.content
-                return {
-                  tool_name: cn,
-                  input_preview: ci.raw_input?.substring(0, 500) ?? null,
-                  output_preview: cFinal
-                    ? (cOutput?.substring(0, 500) ?? null)
-                    : null,
-                  is_error: ci.status === "failed",
-                }
-              }),
-            }
-          : undefined
+        // Lazy: only construct agentStats when there are children to show
+        const agentStats: AgentExecutionStats | undefined =
+          isAgent && children.length > 0
+            ? {
+                tool_calls: children.map(({ info: ci, toolName: cn }) => {
+                  const cFinal =
+                    ci.status === "completed" || ci.status === "failed"
+                  const cOutput =
+                    ci.raw_output_chunks.length > 0
+                      ? getJoinedChunks(ci.raw_output_chunks)
+                      : ci.content
+                  return {
+                    tool_name: cn,
+                    input_preview: ci.raw_input?.substring(0, 500) ?? null,
+                    output_preview: cFinal
+                      ? (cOutput?.substring(0, 500) ?? null)
+                      : null,
+                    is_error: ci.status === "failed",
+                  }
+                }),
+              }
+            : undefined
 
         if (isFinalState) {
           currentBlocks.push({

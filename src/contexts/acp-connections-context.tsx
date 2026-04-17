@@ -55,6 +55,9 @@ import { useFolderContext } from "@/contexts/folder-context"
 
 // ── Shared types (re-exported for consumers) ──
 
+/** ACP extensibility metadata attached to tool calls. */
+export type ToolCallMeta = Record<string, unknown> | null
+
 export interface ToolCallInfo {
   tool_call_id: string
   title: string
@@ -64,6 +67,8 @@ export interface ToolCallInfo {
   raw_input: string | null
   raw_output_chunks: string[]
   raw_output_total_bytes: number
+  locations: unknown
+  meta: ToolCallMeta
 }
 
 export interface PendingPermission {
@@ -149,6 +154,8 @@ type Action =
       content: string | null
       raw_input: string | null
       raw_output: string | null
+      locations: unknown
+      meta: ToolCallMeta
     }
   | {
       type: "TOOL_CALL_UPDATE"
@@ -162,6 +169,8 @@ type Action =
       raw_input: string | null
       raw_output: string | null
       raw_output_append?: boolean
+      locations: unknown
+      meta: ToolCallMeta
     }
   | {
       type: "BATCH_TOOL_CALL_UPDATES"
@@ -176,6 +185,10 @@ type Action =
         raw_input: string | null
         raw_output: string | null
         raw_output_append?: boolean
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        locations: any | null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        meta: any | null
       }>
     }
   | {
@@ -740,6 +753,8 @@ function connectionsReducer(
               raw_output_chunks:
                 action.raw_output !== null ? [action.raw_output] : [],
               raw_output_total_bytes: action.raw_output?.length ?? 0,
+              locations: action.locations ?? null,
+              meta: action.meta ?? null,
             },
           },
         ]
@@ -781,6 +796,8 @@ function connectionsReducer(
               raw_input: action.raw_input,
               raw_output_chunks: initialChunks,
               raw_output_total_bytes: initialBytes,
+              locations: action.locations ?? null,
+              meta: action.meta ?? null,
             },
           },
         ]
@@ -835,6 +852,8 @@ function connectionsReducer(
               content: action.content ?? block.info.content,
               raw_input: action.raw_input ?? block.info.raw_input,
               raw_output_chunks: newChunks,
+              locations: action.locations ?? block.info.locations,
+              meta: action.meta ?? block.info.meta,
               raw_output_total_bytes: newTotalBytes,
             },
           },
@@ -919,6 +938,8 @@ function connectionsReducer(
                   raw_input: permissionToolInput,
                   raw_output_chunks: [],
                   raw_output_total_bytes: 0,
+                  locations: null,
+                  meta: null,
                 },
               },
             ],
@@ -1598,6 +1619,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       raw_input: string | null
       raw_output: string | null
       raw_output_append?: boolean
+      locations: unknown
+      meta: ToolCallMeta
     }>
   >([])
   const toolCallUpdateRafId = useRef<number | null>(null)
@@ -1666,6 +1689,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             content: e.content,
             raw_input: e.raw_input,
             raw_output: e.raw_output,
+            locations: e.locations ?? null,
+            meta: (e.meta as ToolCallMeta) ?? null,
           })
           break
         case "tool_call_update":
@@ -1681,6 +1706,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             raw_input: e.raw_input,
             raw_output: e.raw_output,
             raw_output_append: e.raw_output_append,
+            locations: e.locations ?? null,
+            meta: (e.meta as ToolCallMeta) ?? null,
           })
           scheduleToolCallUpdateFlush()
           break

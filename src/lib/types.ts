@@ -402,6 +402,8 @@ export type AcpEvent =
       content: string | null
       raw_input: string | null
       raw_output: string | null
+      locations?: unknown
+      meta?: unknown
     }
   | {
       type: "tool_call_update"
@@ -413,6 +415,8 @@ export type AcpEvent =
       raw_input: string | null
       raw_output: string | null
       raw_output_append?: boolean
+      locations?: unknown
+      meta?: unknown
     }
   | {
       type: "permission_request"
