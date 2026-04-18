@@ -14,7 +14,7 @@
 //! Bare repositories are intentionally not supported — they have no working
 //! tree, which makes them an unusual target for a workspace-oriented editor.
 
-use std::path::Path;
+use std::{fs, io::ErrorKind, path::Path};
 
 use crate::app_error::AppCommandError;
 
@@ -30,11 +30,40 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// when the target path is not a git working tree, so callers avoid locale-
 /// dependent stderr parsing for the most common "wrong folder" failure.
 pub fn ensure_git_repo(path: &str) -> Result<(), AppCommandError> {
-    if is_git_repo(Path::new(path)) {
-        Ok(())
-    } else {
-        Err(AppCommandError::not_a_git_repository(format!(
-            "Not a Git repository: {path}"
-        )))
+    let root = Path::new(path);
+
+    let root_meta = fs::metadata(root).map_err(|err| match err.kind() {
+        ErrorKind::NotFound => {
+            AppCommandError::not_found(format!("Workspace path does not exist: {path}"))
+        }
+        ErrorKind::PermissionDenied => {
+            AppCommandError::permission_denied(format!("Cannot access workspace path: {path}"))
+                .with_detail(err.to_string())
+        }
+        _ => AppCommandError::io(err)
+            .with_detail(format!("Failed to inspect workspace path: {path}")),
+    })?;
+
+    if !root_meta.is_dir() {
+        return Err(AppCommandError::invalid_input(format!(
+            "Workspace path is not a directory: {path}"
+        )));
+    }
+
+    let git_path = root.join(".git");
+    match fs::metadata(&git_path) {
+        Ok(_) => Ok(()),
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => Err(AppCommandError::not_a_git_repository(format!(
+                "Not a Git repository: {path}"
+            ))),
+            ErrorKind::PermissionDenied => Err(AppCommandError::permission_denied(format!(
+                "Cannot access Git metadata: {}",
+                git_path.display()
+            ))
+            .with_detail(err.to_string())),
+            _ => Err(AppCommandError::io(err)
+                .with_detail(format!("Failed to inspect Git metadata: {}", git_path.display()))),
+        },
     }
 }

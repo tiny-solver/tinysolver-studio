@@ -699,6 +699,7 @@ export function GitLogTab() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notAGitRepo, setNotAGitRepo] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [openByCommit, setOpenByCommit] = useState<Record<string, boolean>>({})
   const [branchesByCommit, setBranchesByCommit] = useState<
@@ -767,9 +768,9 @@ export function GitLogTab() {
   // check in `git_list_all_branches` would short-circuit on non-git folders
   // anyway, but skipping the call saves an unnecessary round trip.
   useEffect(() => {
-    if (!isGitRepo) return
+    if (!isGitRepo || notAGitRepo) return
     void refreshBranches()
-  }, [isGitRepo, refreshBranches])
+  }, [isGitRepo, notAGitRepo, refreshBranches])
 
   const fetchCommitBranches = useCallback(
     async (fullHash: string) => {
@@ -814,6 +815,7 @@ export function GitLogTab() {
         setBranchesError({})
       }
       setError(null)
+      setNotAGitRepo(false)
       try {
         const result = await gitLog(folder.path, 100, branch ?? undefined)
         setEntries(result.entries)
@@ -836,6 +838,7 @@ export function GitLogTab() {
         }
       } catch (e) {
         if (isNotAGitRepoError(e)) {
+          setNotAGitRepo(true)
           // Workspace state will flip isGitRepo within the next watch flush;
           // clear entries so stale log data does not linger while we wait.
           setEntries([])
@@ -852,6 +855,10 @@ export function GitLogTab() {
     },
     [folder?.path, selectedBranch]
   )
+
+  useEffect(() => {
+    setNotAGitRepo(false)
+  }, [folder?.path])
 
   const handleRefresh = useCallback(() => {
     void fetchLog({ inline: true })
@@ -969,6 +976,7 @@ export function GitLogTab() {
     // and either re-fetches or clears the log to stay aligned with the other
     // workspace panels.
     if (!isGitRepo) {
+      setNotAGitRepo(false)
       setEntries([])
       setError(null)
       setLoading(false)
@@ -1042,7 +1050,7 @@ export function GitLogTab() {
     )
   }
 
-  if (!isGitRepo) {
+  if (!isGitRepo || notAGitRepo) {
     return (
       <ScrollArea className="h-full px-3 py-3">
         <div className="flex flex-col items-center justify-center min-h-full gap-1 p-6 text-center">
@@ -1051,6 +1059,18 @@ export function GitLogTab() {
           <p className="text-xs text-muted-foreground">
             {t("notAGitRepoHint")}
           </p>
+          {isGitRepo && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="mt-2"
+              onClick={() => {
+                void fetchLog()
+              }}
+            >
+              {t("retry")}
+            </Button>
+          )}
         </div>
       </ScrollArea>
     )
