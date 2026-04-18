@@ -16,7 +16,8 @@ impl IntoResponse for AppCommandError {
             AppErrorCode::AuthenticationFailed => StatusCode::UNAUTHORIZED,
             AppErrorCode::ConfigurationMissing
             | AppErrorCode::ConfigurationInvalid
-            | AppErrorCode::DependencyMissing => StatusCode::UNPROCESSABLE_ENTITY,
+            | AppErrorCode::DependencyMissing
+            | AppErrorCode::NotAGitRepository => StatusCode::UNPROCESSABLE_ENTITY,
             AppErrorCode::NetworkError
             | AppErrorCode::DatabaseError
             | AppErrorCode::IoError

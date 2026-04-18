@@ -307,6 +307,8 @@ fn git_command_error(operation: &str, stderr: &[u8]) -> AppCommandError {
     AppCommandError::external_command(format!("git {operation} failed"), stderr)
 }
 
+use crate::git_repo::ensure_git_repo;
+
 async fn detect_conflicts(path: &str) -> Result<Vec<String>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["-c", "core.quotePath=false"])
@@ -902,6 +904,8 @@ pub async fn git_fetch(
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_push_info(path: String) -> Result<GitPushInfo, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     // Get current branch name
     let branch_output = crate::process::tokio_command("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -1186,6 +1190,8 @@ pub async fn git_reset(
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_branches(path: String) -> Result<Vec<String>, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let output = crate::process::tokio_command("git")
         .args(["branch", "--format=%(refname:short)"])
         .current_dir(&path)
@@ -1401,6 +1407,8 @@ pub async fn git_status(
     path: String,
     show_all_untracked: Option<bool>,
 ) -> Result<Vec<GitStatusEntry>, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let untracked_mode = if show_all_untracked.unwrap_or(false) {
         "-uall"
     } else {
@@ -1446,6 +1454,8 @@ pub async fn git_is_tracked(path: String, file: String) -> Result<bool, AppComma
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_diff(path: String, file: Option<String>) -> Result<String, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let literal_file = file.as_deref().map(to_git_literal_pathspec);
     let mut args = vec!["diff".to_string(), "HEAD".to_string()];
     if let Some(ref f) = literal_file {
@@ -1485,6 +1495,8 @@ pub async fn git_diff_with_branch(
     branch: String,
     file: Option<String>,
 ) -> Result<String, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let target_branch = branch.trim();
     if target_branch.is_empty() {
         return Err(AppCommandError::invalid_input(
@@ -1527,6 +1539,8 @@ pub async fn git_show_diff(
     commit: String,
     file: Option<String>,
 ) -> Result<String, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let literal_file = file.as_deref().map(to_git_literal_pathspec);
     let mut args = vec![
         "show".to_string(),
@@ -1559,6 +1573,8 @@ pub async fn git_show_file(
     file: String,
     ref_name: Option<String>,
 ) -> Result<String, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let git_ref = ref_name.unwrap_or_else(|| "HEAD".to_string());
     let file_spec = format!("{}:{}", git_ref, file);
 
@@ -1783,6 +1799,8 @@ pub async fn git_add_files(path: String, files: Vec<String>) -> Result<(), AppCo
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let local_fut = crate::process::tokio_command("git")
         .args(["branch", "--format=%(refname:short)"])
         .current_dir(&path)
@@ -1857,6 +1875,8 @@ pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCom
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let output = crate::process::tokio_command("git")
         .args(["remote", "-v"])
         .current_dir(&path)
@@ -3201,6 +3221,8 @@ pub async fn git_log(
     branch: Option<String>,
     remote: Option<String>,
 ) -> Result<GitLogResult, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     const COMMIT_META_PREFIX: &str = "__COMMIT__\0";
     const MESSAGE_END_MARKER: &str = "__COMMIT_MESSAGE_END__";
 
@@ -3317,6 +3339,8 @@ pub async fn git_commit_branches(
     path: String,
     commit: String,
 ) -> Result<Vec<String>, AppCommandError> {
+    ensure_git_repo(&path)?;
+
     let contains_arg = format!("--contains={commit}");
     let output = crate::process::tokio_command("git")
         .args([

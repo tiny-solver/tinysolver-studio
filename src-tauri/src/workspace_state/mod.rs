@@ -13,6 +13,7 @@ use tokio::sync::mpsc::error::TrySendError;
 
 use crate::app_error::AppCommandError;
 use crate::commands::folders::{self, FileTreeNode};
+use crate::git_repo::is_git_repo;
 use crate::web::event_bridge::{emit_event, EventEmitter};
 
 pub const WORKSPACE_STATE_PROTOCOL_VERSION: u16 = 1;
@@ -578,10 +579,6 @@ async fn git_numstat_map(path: &str) -> HashMap<String, (i32, i32)> {
     run_numstat(path, &["diff", "--numstat", "--cached"])
         .await
         .unwrap_or_default()
-}
-
-fn is_git_repo(root: &Path) -> bool {
-    root.join(".git").exists()
 }
 
 async fn collect_git_snapshot(path: &str) -> Result<Vec<WorkspaceGitEntry>, AppCommandError> {

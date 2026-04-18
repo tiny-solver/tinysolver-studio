@@ -9,6 +9,7 @@ pub enum AppErrorCode {
     ConfigurationMissing,
     ConfigurationInvalid,
     NotFound,
+    NotAGitRepository,
     AlreadyExists,
     PermissionDenied,
     DependencyMissing,
@@ -63,6 +64,10 @@ impl AppCommandError {
 
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(AppErrorCode::NotFound, message)
+    }
+
+    pub fn not_a_git_repository(message: impl Into<String>) -> Self {
+        Self::new(AppErrorCode::NotAGitRepository, message)
     }
 
     pub fn already_exists(message: impl Into<String>) -> Self {

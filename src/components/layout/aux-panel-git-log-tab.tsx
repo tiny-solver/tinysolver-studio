@@ -79,6 +79,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { subscribe } from "@/lib/platform"
 import { useFolderContext } from "@/contexts/folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
+import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import {
   getGitBranch,
   gitCommitBranches,
@@ -692,11 +693,12 @@ export function GitLogTab() {
   const tCommon = useTranslations("Folder.common")
   const { folder } = useFolderContext()
   const { openCommitDiff, openFilePreview } = useWorkspaceContext()
+  const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
+  const isGitRepo = workspaceState.isGitRepo
   const [entries, setEntries] = useState<GitLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notAGitRepo, setNotAGitRepo] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [openByCommit, setOpenByCommit] = useState<Record<string, boolean>>({})
   const [branchesByCommit, setBranchesByCommit] = useState<
@@ -761,10 +763,13 @@ export function GitLogTab() {
     [folder?.path]
   )
 
-  // Fetch branches on mount
+  // Fetch branches on mount and when git presence flips — the preflight
+  // check in `git_list_all_branches` would short-circuit on non-git folders
+  // anyway, but skipping the call saves an unnecessary round trip.
   useEffect(() => {
+    if (!isGitRepo) return
     void refreshBranches()
-  }, [refreshBranches])
+  }, [isGitRepo, refreshBranches])
 
   const fetchCommitBranches = useCallback(
     async (fullHash: string) => {
@@ -809,7 +814,6 @@ export function GitLogTab() {
         setBranchesError({})
       }
       setError(null)
-      setNotAGitRepo(false)
       try {
         const result = await gitLog(folder.path, 100, branch ?? undefined)
         setEntries(result.entries)
@@ -832,7 +836,8 @@ export function GitLogTab() {
         }
       } catch (e) {
         if (isNotAGitRepoError(e)) {
-          setNotAGitRepo(true)
+          // Workspace state will flip isGitRepo within the next watch flush;
+          // clear entries so stale log data does not linger while we wait.
           setEntries([])
         } else {
           setError(toErrorMessage(e))
@@ -958,8 +963,19 @@ export function GitLogTab() {
   ])
 
   useEffect(() => {
+    if (!folder?.path) return
+    // Only fetch when workspaceState says we're in a git repo. When it flips
+    // (user runs `git init` / deletes `.git` externally), this effect re-runs
+    // and either re-fetches or clears the log to stay aligned with the other
+    // workspace panels.
+    if (!isGitRepo) {
+      setEntries([])
+      setError(null)
+      setLoading(false)
+      return
+    }
     void fetchLog()
-  }, [fetchLog])
+  }, [folder?.path, isGitRepo, fetchLog])
 
   // Refresh branches & log on branch change, commit, or push
   useEffect(() => {
@@ -1026,7 +1042,7 @@ export function GitLogTab() {
     )
   }
 
-  if (notAGitRepo) {
+  if (!isGitRepo) {
     return (
       <ScrollArea className="h-full px-3 py-3">
         <div className="flex flex-col items-center justify-center min-h-full gap-1 p-6 text-center">

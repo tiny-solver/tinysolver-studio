@@ -5,6 +5,7 @@ pub mod chat_channel;
 pub mod commands;
 pub mod db;
 pub mod git_credential;
+pub mod git_repo;
 pub mod keyring_store;
 mod models;
 mod network;

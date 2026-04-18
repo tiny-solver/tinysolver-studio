@@ -1,3 +1,4 @@
+import { NOT_A_GIT_REPO_PATTERNS } from "@/i18n/git-error-patterns"
 import type { AppCommandError } from "@/lib/types"
 
 type ObjectLike = Record<string, unknown>
@@ -46,11 +47,19 @@ export function extractAppCommandError(error: unknown): AppCommandError | null {
   }
 }
 
+// Must mirror `AppErrorCode::NotAGitRepository` in src-tauri/src/app_error.rs.
+// If the backend enum ever renames, both sides must change together.
+export const NOT_A_GIT_REPO_CODE = "not_a_git_repository"
+
 export function isNotAGitRepoError(error: unknown): boolean {
   const appError = extractAppCommandError(error)
+  if (appError?.code === NOT_A_GIT_REPO_CODE) return true
+
   const candidates = [appError?.detail, appError?.message]
   return candidates.some(
-    (text) => typeof text === "string" && /not a git repository/i.test(text)
+    (text) =>
+      typeof text === "string" &&
+      NOT_A_GIT_REPO_PATTERNS.some((pattern) => pattern.test(text))
   )
 }
 
