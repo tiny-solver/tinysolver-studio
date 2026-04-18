@@ -1857,7 +1857,17 @@
     "copy": "Kopieren",
     "addressLabel": "Zugriffsadresse",
     "tokenLabel": "Zugriffstoken",
-    "tokenHint": "Geben Sie dieses Token beim ersten Zugriff auf den Web-Client ein"
+    "tokenHint": "Geben Sie dieses Token beim ersten Zugriff auf den Web-Client ein",
+    "tokenPlaceholder": "Leer lassen für automatische Generierung",
+    "regenerate": "Neu generieren",
+    "errors": {
+      "alreadyRunning": "Der Web-Dienst läuft bereits",
+      "invalidAddress": "Host- oder Portformat ungültig",
+      "portInUse": "Port {port} wird bereits verwendet. Beenden Sie den Prozess oder wählen Sie einen anderen Port.",
+      "permissionDenied": "Zugriff verweigert. Verwenden Sie einen Port über 1024 oder starten Sie mit höheren Rechten.",
+      "addressUnavailable": "Die Adresse ist auf diesem Computer nicht verfügbar",
+      "bindFailed": "Adresse konnte nicht gebunden werden"
+    }
   },
   "DirectoryBrowser": {
     "title": "Verzeichnis durchsuchen",

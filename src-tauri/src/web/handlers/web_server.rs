@@ -18,6 +18,7 @@ pub async fn get_web_server_status(
 pub struct StartWebServerParams {
     pub port: Option<u16>,
     pub host: Option<String>,
+    pub token: Option<String>,
 }
 
 pub async fn start_web_server(

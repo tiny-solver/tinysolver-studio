@@ -1857,7 +1857,17 @@
     "copy": "复制",
     "addressLabel": "访问地址",
     "tokenLabel": "访问 Token",
-    "tokenHint": "Web 客户端首次访问时需输入此 Token"
+    "tokenHint": "Web 客户端首次访问时需输入此 Token",
+    "tokenPlaceholder": "留空则自动生成",
+    "regenerate": "重新生成",
+    "errors": {
+      "alreadyRunning": "Web 服务已在运行",
+      "invalidAddress": "主机或端口格式无效",
+      "portInUse": "端口 {port} 已被占用，请关闭占用该端口的程序或更换其他端口",
+      "permissionDenied": "权限不足，请使用 1024 以上的端口，或以更高权限运行",
+      "addressUnavailable": "该地址在本机不可用",
+      "bindFailed": "绑定地址失败"
+    }
   },
   "DirectoryBrowser": {
     "title": "浏览目录",

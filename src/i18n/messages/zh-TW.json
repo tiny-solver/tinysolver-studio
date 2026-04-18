@@ -1857,7 +1857,17 @@
     "copy": "複製",
     "addressLabel": "存取位址",
     "tokenLabel": "存取 Token",
-    "tokenHint": "Web 用戶端首次存取時需輸入此 Token"
+    "tokenHint": "Web 用戶端首次存取時需輸入此 Token",
+    "tokenPlaceholder": "留空則自動產生",
+    "regenerate": "重新產生",
+    "errors": {
+      "alreadyRunning": "Web 服務已在執行",
+      "invalidAddress": "主機或連接埠格式無效",
+      "portInUse": "連接埠 {port} 已被佔用，請關閉佔用的程式或改用其他連接埠",
+      "permissionDenied": "權限不足，請使用 1024 以上的連接埠，或以更高權限執行",
+      "addressUnavailable": "該位址在本機不可用",
+      "bindFailed": "綁定位址失敗"
+    }
   },
   "DirectoryBrowser": {
     "title": "瀏覽目錄",

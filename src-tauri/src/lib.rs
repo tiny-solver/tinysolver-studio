@@ -449,6 +449,7 @@ mod tauri_app {
                 web::start_web_server,
                 web::stop_web_server,
                 web::get_web_server_status,
+                web::get_web_service_config,
             ])
             .build(tauri::generate_context!())
             .expect("error while building tauri application")

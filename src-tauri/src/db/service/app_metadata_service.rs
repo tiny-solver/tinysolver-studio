@@ -1,13 +1,13 @@
 use chrono::Utc;
 use sea_orm::sea_query::OnConflict;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseConnection};
 use sea_orm::{ActiveValue::NotSet, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::db::entities::app_metadata;
 use crate::db::error::DbError;
 
-pub async fn upsert_value(
-    conn: &DatabaseConnection,
+pub async fn upsert_value<C: ConnectionTrait>(
+    conn: &C,
     key: &str,
     value: &str,
 ) -> Result<(), DbError> {

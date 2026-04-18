@@ -1857,7 +1857,17 @@
     "copy": "Copier",
     "addressLabel": "Adresse d'accès",
     "tokenLabel": "Token d'accès",
-    "tokenHint": "Entrez ce token lors du premier accès au client Web"
+    "tokenHint": "Entrez ce token lors du premier accès au client Web",
+    "tokenPlaceholder": "Laisser vide pour générer automatiquement",
+    "regenerate": "Régénérer",
+    "errors": {
+      "alreadyRunning": "Le service Web est déjà en cours d'exécution",
+      "invalidAddress": "Format d'hôte ou de port non valide",
+      "portInUse": "Le port {port} est déjà utilisé. Fermez le processus qui l'utilise ou choisissez un autre port.",
+      "permissionDenied": "Permission refusée. Utilisez un port supérieur à 1024 ou exécutez avec des privilèges plus élevés.",
+      "addressUnavailable": "Cette adresse n'est pas disponible sur cette machine",
+      "bindFailed": "Échec de la liaison à l'adresse"
+    }
   },
   "DirectoryBrowser": {
     "title": "Parcourir le répertoire",

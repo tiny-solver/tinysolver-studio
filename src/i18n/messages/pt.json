@@ -1857,7 +1857,17 @@
     "copy": "Copiar",
     "addressLabel": "Endereço de acesso",
     "tokenLabel": "Token de acesso",
-    "tokenHint": "Insira este token ao acessar o cliente Web pela primeira vez"
+    "tokenHint": "Insira este token ao acessar o cliente Web pela primeira vez",
+    "tokenPlaceholder": "Deixe em branco para gerar automaticamente",
+    "regenerate": "Regenerar",
+    "errors": {
+      "alreadyRunning": "O serviço Web já está em execução",
+      "invalidAddress": "Formato de host ou porta inválido",
+      "portInUse": "A porta {port} já está em uso. Feche o processo que a utiliza ou escolha outra porta.",
+      "permissionDenied": "Permissão negada. Use uma porta acima de 1024 ou execute com privilégios mais altos.",
+      "addressUnavailable": "O endereço não está disponível nesta máquina",
+      "bindFailed": "Falha ao vincular o endereço"
+    }
   },
   "DirectoryBrowser": {
     "title": "Explorar diretório",

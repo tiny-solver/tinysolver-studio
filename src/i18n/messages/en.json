@@ -1857,7 +1857,17 @@
     "copy": "Copy",
     "addressLabel": "Access Address",
     "tokenLabel": "Access Token",
-    "tokenHint": "Enter this token when accessing the Web client for the first time"
+    "tokenHint": "Enter this token when accessing the Web client for the first time",
+    "tokenPlaceholder": "Leave empty to auto-generate",
+    "regenerate": "Regenerate",
+    "errors": {
+      "alreadyRunning": "Web service is already running",
+      "invalidAddress": "Invalid host or port format",
+      "portInUse": "Port {port} is already in use. Close the process using it or choose another port.",
+      "permissionDenied": "Permission denied. Try a port above 1024 or run with higher privileges.",
+      "addressUnavailable": "The address is not available on this machine",
+      "bindFailed": "Failed to bind address"
+    }
   },
   "DirectoryBrowser": {
     "title": "Browse Directory",

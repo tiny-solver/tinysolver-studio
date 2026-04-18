@@ -1857,7 +1857,17 @@
     "copy": "복사",
     "addressLabel": "접속 주소",
     "tokenLabel": "접속 토큰",
-    "tokenHint": "웹 클라이언트 첫 접속 시 이 토큰을 입력하세요"
+    "tokenHint": "웹 클라이언트 첫 접속 시 이 토큰을 입력하세요",
+    "tokenPlaceholder": "비워두면 자동 생성",
+    "regenerate": "재생성",
+    "errors": {
+      "alreadyRunning": "웹 서비스가 이미 실행 중입니다",
+      "invalidAddress": "호스트 또는 포트 형식이 올바르지 않습니다",
+      "portInUse": "포트 {port}가 이미 사용 중입니다. 해당 포트를 사용 중인 프로세스를 종료하거나 다른 포트를 선택하세요",
+      "permissionDenied": "권한이 부족합니다. 1024 이상의 포트를 사용하거나 더 높은 권한으로 실행하세요",
+      "addressUnavailable": "이 주소는 현재 시스템에서 사용할 수 없습니다",
+      "bindFailed": "주소 바인딩에 실패했습니다"
+    }
   },
   "DirectoryBrowser": {
     "title": "디렉토리 찾아보기",

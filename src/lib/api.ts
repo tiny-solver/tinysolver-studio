@@ -1477,10 +1477,12 @@ export interface WebServerInfo {
 export async function startWebServer(params?: {
   port?: number
   host?: string
+  token?: string | null
 }): Promise<WebServerInfo> {
   return getTransport().call("start_web_server", {
     port: params?.port ?? null,
     host: params?.host ?? null,
+    token: params?.token ?? null,
   })
 }
 
@@ -1490,6 +1492,15 @@ export async function stopWebServer(): Promise<void> {
 
 export async function getWebServerStatus(): Promise<WebServerInfo | null> {
   return getTransport().call("get_web_server_status")
+}
+
+export interface WebServiceConfig {
+  token: string | null
+  port: number | null
+}
+
+export async function getWebServiceConfig(): Promise<WebServiceConfig> {
+  return getTransport().call("get_web_service_config")
 }
 
 // ─── Chat Channels ───
