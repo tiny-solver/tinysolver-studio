@@ -116,8 +116,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Claude Code",
             description: "ACP wrapper for Anthropic's Claude",
             distribution: AgentDistribution::Npx {
-                version: "0.29.1",
-                package: "@agentclientprotocol/claude-agent-acp@0.29.1",
+                version: "0.29.2",
+                package: "@agentclientprotocol/claude-agent-acp@0.29.2",
                 cmd: "claude-agent-acp",
                 args: &[],
                 env: &[],
@@ -166,8 +166,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
             distribution: AgentDistribution::Npx {
-                version: "0.38.1",
-                package: "@google/gemini-cli@0.38.1",
+                version: "0.38.2",
+                package: "@google/gemini-cli@0.38.2",
                 cmd: "gemini",
                 args: &["--acp"],
                 env: &[],
@@ -179,8 +179,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "OpenClaw",
             description: "OpenClaw is a personal AI assistant you run on your own devices.",
             distribution: AgentDistribution::Npx {
-                version: "2026.4.14",
-                package: "openclaw@2026.4.14",
+                version: "2026.4.15",
+                package: "openclaw@2026.4.15",
                 cmd: "openclaw",
                 args: &["acp"],
                 env: &[],
@@ -192,8 +192,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Cline",
             description: "Autonomous coding agent CLI",
             distribution: AgentDistribution::Npx {
-                version: "2.14.0",
-                package: "cline@2.14.0",
+                version: "2.15.0",
+                package: "cline@2.15.0",
                 cmd: "cline",
                 args: &["--acp"],
                 env: &[],
@@ -205,34 +205,34 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "OpenCode",
             description: "The open source coding agent",
             distribution: AgentDistribution::Binary {
-                version: "1.4.8",
+                version: "1.4.11",
                 cmd: "opencode",
                 args: &["acp"],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.8/opencode-darwin-arm64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.11/opencode-darwin-arm64.zip",
                     },
                     PlatformBinary {
                         platform: "darwin-x86_64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.8/opencode-darwin-x64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.11/opencode-darwin-x64.zip",
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.8/opencode-linux-arm64.tar.gz",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.11/opencode-linux-arm64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.8/opencode-linux-x64.tar.gz",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.11/opencode-linux-x64.tar.gz",
                     },
                     PlatformBinary {
                         platform: "windows-aarch64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.8/opencode-windows-arm64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.11/opencode-windows-arm64.zip",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.8/opencode-windows-x64.zip",
+                        url: "https://github.com/anomalyco/opencode/releases/download/v1.4.11/opencode-windows-x64.zip",
                     },
                 ],
             },
