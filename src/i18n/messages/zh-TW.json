@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "套用遠端"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "即時更新不可用",
+      "degradedHint": "監聽器啟動失敗（如目錄無讀取權限）。請手動重新整理以取得最新變更。",
+      "retry": "重試",
+      "retrying": "重試中..."
+    },
     "common": {
       "all": "全部",
       "cancel": "取消",
@@ -1205,6 +1211,8 @@
       "workspace": "工作區",
       "retry": "重試",
       "noCommitsFound": "未找到提交記錄",
+      "notAGitRepoTitle": "不是 Git 儲存庫",
+      "notAGitRepoHint": "可從上方分支選單初始化 Git，或開啟已有的 Git 儲存庫。",
       "hash": "Hash",
       "copyHash": "複製雜湊",
       "copyMessage": "複製提交訊息",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "工作區",
       "noChanges": "暫無本地變更",
+      "notAGitRepoTitle": "不是 Git 儲存庫",
+      "notAGitRepoHint": "可從上方分支選單初始化 Git，或開啟已有的 Git 儲存庫。",
       "trackedChanges": "本地已追蹤變更 ({count})",
       "untrackedFiles": "本地未追蹤檔案 ({count})",
       "expandTracked": "展開已追蹤變更",

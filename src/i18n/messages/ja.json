@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "リモートを適用"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "リアルタイム更新は利用できません",
+      "degradedHint": "ウォッチャーの起動に失敗しました（アクセス権限エラーなど）。最新の変更を反映するには手動で更新してください。",
+      "retry": "再試行",
+      "retrying": "再試行中..."
+    },
     "common": {
       "all": "すべて",
       "cancel": "キャンセル",
@@ -1205,6 +1211,8 @@
       "workspace": "ワークスペース",
       "retry": "再試行",
       "noCommitsFound": "コミットが見つかりません",
+      "notAGitRepoTitle": "Git リポジトリではありません",
+      "notAGitRepoHint": "上のブランチメニューから Git を初期化するか、既存のリポジトリを開いてください。",
       "hash": "ハッシュ",
       "copyHash": "ハッシュをコピー",
       "copyMessage": "メッセージをコピー",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "ワークスペース",
       "noChanges": "ローカルの変更はありません",
+      "notAGitRepoTitle": "Git リポジトリではありません",
+      "notAGitRepoHint": "上のブランチメニューから Git を初期化するか、既存のリポジトリを開いてください。",
       "trackedChanges": "追跡中の変更 ({count})",
       "untrackedFiles": "未追跡ファイル ({count})",
       "expandTracked": "追跡中の変更を展開",

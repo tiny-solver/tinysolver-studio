@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "应用远程"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "实时更新不可用",
+      "degradedHint": "监听器启动失败（如目录无读取权限）。请手动刷新以获取最新变更。",
+      "retry": "重试",
+      "retrying": "重试中..."
+    },
     "common": {
       "all": "全部",
       "cancel": "取消",
@@ -1205,6 +1211,8 @@
       "workspace": "工作区",
       "retry": "重试",
       "noCommitsFound": "未找到提交记录",
+      "notAGitRepoTitle": "不是 Git 仓库",
+      "notAGitRepoHint": "可从上方分支菜单初始化 Git，或打开已有的 Git 仓库。",
       "hash": "Hash",
       "copyHash": "复制哈希",
       "copyMessage": "复制提交消息",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "工作区",
       "noChanges": "暂无本地改动",
+      "notAGitRepoTitle": "不是 Git 仓库",
+      "notAGitRepoHint": "可从上方分支菜单初始化 Git，或打开已有的 Git 仓库。",
       "trackedChanges": "本地已跟踪改动 ({count})",
       "untrackedFiles": "本地未跟踪文件 ({count})",
       "expandTracked": "展开已跟踪改动",

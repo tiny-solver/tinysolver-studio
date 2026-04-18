@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "Apply Remote"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "Live updates unavailable",
+      "degradedHint": "Watcher failed to start (e.g. permission denied). Refresh manually to see changes.",
+      "retry": "Retry",
+      "retrying": "Retrying..."
+    },
     "common": {
       "all": "All",
       "cancel": "Cancel",
@@ -1205,6 +1211,8 @@
       "workspace": "workspace",
       "retry": "Retry",
       "noCommitsFound": "No commits found",
+      "notAGitRepoTitle": "Not a Git repository",
+      "notAGitRepoHint": "Initialize Git from the branch menu above, or open a folder that is already tracked.",
       "hash": "Hash",
       "copyHash": "Copy hash",
       "copyMessage": "Copy message",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "workspace",
       "noChanges": "No local changes",
+      "notAGitRepoTitle": "Not a Git repository",
+      "notAGitRepoHint": "Initialize Git from the branch menu above, or open a folder that is already tracked.",
       "trackedChanges": "Tracked changes ({count})",
       "untrackedFiles": "Untracked files ({count})",
       "expandTracked": "Expand tracked changes",

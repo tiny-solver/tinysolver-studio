@@ -26,10 +26,13 @@ export interface WorkspaceStateView {
   tree: FileTreeNode[]
   git: WorkspaceGitEntry[]
   error: string | null
+  degraded: boolean
+  isGitRepo: boolean
 }
 
 export interface WorkspaceStateResult extends WorkspaceStateView {
   requestResync: (reason?: string) => Promise<void>
+  restart: () => Promise<void>
 }
 
 const WORKSPACE_PROTOCOL_VERSION = 1
@@ -44,6 +47,8 @@ const EMPTY_STATE: WorkspaceStateView = {
   tree: [],
   git: [],
   error: null,
+  degraded: false,
+  isGitRepo: true,
 }
 
 function normalizeComparePath(path: string): string {
@@ -102,6 +107,8 @@ function applySnapshot(
       tree: snapshot.tree_snapshot ?? [],
       git: snapshot.git_snapshot ?? [],
       error: null,
+      degraded: snapshot.degraded,
+      isGitRepo: snapshot.is_git_repo,
     }
   }
 
@@ -124,6 +131,8 @@ function applySnapshot(
     version: snapshot.version,
     health: "healthy",
     error: null,
+    degraded: snapshot.degraded,
+    isGitRepo: snapshot.is_git_repo,
   }
 }
 
@@ -138,6 +147,7 @@ class WorkspaceStateStore {
   private stopping: Promise<void> | null = null
   private unlisten: (() => void) | null = null
   private resyncInFlight: Promise<void> | null = null
+  private restarting: Promise<void> | null = null
   private lifecycleId = 0
   private evictionTimer: ReturnType<typeof setTimeout> | null = null
   private shutdownTimer: ReturnType<typeof setTimeout> | null = null
@@ -217,6 +227,38 @@ class WorkspaceStateStore {
     })
 
     return this.resyncInFlight
+  }
+
+  restart = async (): Promise<void> => {
+    if (this.restarting) return this.restarting
+
+    const run = async () => {
+      const prevLifecycleId = this.lifecycleId
+      this.cancelPendingShutdown()
+      this.cancelEviction()
+
+      this.patchState((prev) => ({
+        ...prev,
+        health: "resyncing",
+      }))
+
+      await this.shutdown(prevLifecycleId)
+
+      this.lifecycleId += 1
+      const nextLifecycleId = this.lifecycleId
+      this.hasBaselineSnapshot = false
+      this.resyncInFlight = null
+
+      if (this.refCount > 0) {
+        await this.ensureStarted(nextLifecycleId)
+      }
+    }
+
+    this.restarting = run().finally(() => {
+      this.restarting = null
+    })
+
+    return this.restarting
   }
 
   private ensureStarted = async (lifecycleId: number) => {
@@ -462,15 +504,22 @@ export function useWorkspaceStateStore(
     [store]
   )
 
+  const restart = useCallback(async () => {
+    if (!store) return
+    await store.restart()
+  }, [store])
+
   if (!rootPath) {
     return {
       ...EMPTY_STATE,
       requestResync,
+      restart,
     }
   }
 
   return {
     ...snapshot,
     requestResync,
+    restart,
   }
 }

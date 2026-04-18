@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "Aplicar remoto"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "Actualizaciones en vivo no disponibles",
+      "degradedHint": "El observador no pudo iniciarse (por ejemplo, permiso denegado). Actualiza manualmente para ver los cambios.",
+      "retry": "Reintentar",
+      "retrying": "Reintentando..."
+    },
     "common": {
       "all": "Todo",
       "cancel": "Cancelar",
@@ -1205,6 +1211,8 @@
       "workspace": "espacio de trabajo",
       "retry": "Reintentar",
       "noCommitsFound": "No se encontraron commits",
+      "notAGitRepoTitle": "No es un repositorio Git",
+      "notAGitRepoHint": "Inicializa Git desde el menú de ramas superior, o abre un repositorio existente.",
       "hash": "Hash del commit",
       "copyHash": "Copiar hash",
       "copyMessage": "Copiar mensaje",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "espacio de trabajo",
       "noChanges": "No hay cambios locales",
+      "notAGitRepoTitle": "No es un repositorio Git",
+      "notAGitRepoHint": "Inicializa Git desde el menú de ramas superior, o abre un repositorio existente.",
       "trackedChanges": "Cambios rastreados ({count})",
       "untrackedFiles": "Archivos no rastreados ({count})",
       "expandTracked": "Expandir cambios rastreados",

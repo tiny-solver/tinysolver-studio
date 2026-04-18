@@ -46,6 +46,14 @@ export function extractAppCommandError(error: unknown): AppCommandError | null {
   }
 }
 
+export function isNotAGitRepoError(error: unknown): boolean {
+  const appError = extractAppCommandError(error)
+  const candidates = [appError?.detail, appError?.message]
+  return candidates.some(
+    (text) => typeof text === "string" && /not a git repository/i.test(text)
+  )
+}
+
 export function toErrorMessage(error: unknown): string {
   const appError = extractAppCommandError(error)
   if (appError) {

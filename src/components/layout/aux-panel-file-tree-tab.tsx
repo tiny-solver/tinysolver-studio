@@ -19,6 +19,7 @@ import { useTabContext } from "@/contexts/tab-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
+import { WorkspaceDegradedBanner } from "@/components/layout/workspace-degraded-banner"
 import {
   createFileTreeEntry,
   deleteFileTreeEntry,
@@ -2001,6 +2002,9 @@ export function FileTreeTab() {
 
   return (
     <div className="flex flex-col h-full">
+      {workspaceState.degraded && (
+        <WorkspaceDegradedBanner onRetry={workspaceState.restart} />
+      )}
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <ScrollArea className="flex-1 min-h-0 pb-1" x="scroll">

@@ -116,14 +116,35 @@ export function FolderTitleBar() {
     if (!folderPath) return
     let cancelled = false
 
+    const clearPoll = () => {
+      if (intervalRef.current !== undefined) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = undefined
+      }
+    }
+
+    const armPoll = () => {
+      if (intervalRef.current !== undefined) return
+      intervalRef.current = setInterval(() => {
+        void doFetch()
+      }, 10_000)
+    }
+
     async function doFetch() {
       if (document.visibilityState !== "visible") return
 
       try {
         const b = await getGitBranch(folderPath)
-        if (!cancelled) setBranch(b)
+        if (cancelled) return
+        setBranch(b)
+        if (b === null) {
+          clearPoll()
+        } else {
+          armPoll()
+        }
       } catch {
         if (!cancelled) setBranch(null)
+        clearPoll()
       }
     }
 
@@ -134,14 +155,11 @@ export function FolderTitleBar() {
     }
 
     void doFetch()
-    intervalRef.current = setInterval(() => {
-      void doFetch()
-    }, 10_000)
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     return () => {
       cancelled = true
-      clearInterval(intervalRef.current)
+      clearPoll()
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
   }, [folderPath])

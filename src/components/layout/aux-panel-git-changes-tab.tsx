@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { ChevronsDownUp, ChevronsUpDown } from "lucide-react"
+import { ChevronsDownUp, ChevronsUpDown, GitBranch } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import {
@@ -38,6 +38,7 @@ import { useFolderContext } from "@/contexts/folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
+import { WorkspaceDegradedBanner } from "@/components/layout/workspace-degraded-banner"
 import {
   deleteFileTreeEntry,
   gitAddFiles,
@@ -1185,14 +1186,30 @@ export function GitChangesTab() {
   }
 
   return (
-    <>
-      <ScrollArea className="h-full min-h-0" x="scroll">
+    <div className="flex flex-col h-full min-h-0">
+      {workspaceState.degraded && (
+        <WorkspaceDegradedBanner onRetry={workspaceState.restart} />
+      )}
+      <ScrollArea className="flex-1 min-h-0" x="scroll">
         {trackedChanges.length === 0 && untrackedChanges.length === 0 ? (
-          <div className="flex items-center justify-center h-full p-4">
-            <p className="text-xs text-muted-foreground text-center">
-              {t("noChanges")}
-            </p>
-          </div>
+          !workspaceState.isGitRepo ? (
+            <div className="flex flex-col items-center justify-center h-full gap-1 p-6 text-center">
+              <GitBranch
+                className="size-5 text-muted-foreground/60"
+                aria-hidden
+              />
+              <p className="text-sm font-medium">{t("notAGitRepoTitle")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("notAGitRepoHint")}
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full p-4">
+              <p className="text-xs text-muted-foreground text-center">
+                {t("noChanges")}
+              </p>
+            </div>
+          )
         ) : (
           <div className="space-y-2 pb-2">
             {trackedChanges.length > 0 && (
@@ -1644,6 +1661,6 @@ export function GitChangesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   )
 }

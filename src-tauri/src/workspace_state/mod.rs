@@ -68,6 +68,8 @@ pub struct WorkspaceSnapshotResponse {
     pub tree_snapshot: Option<Vec<FileTreeNode>>,
     pub git_snapshot: Option<Vec<WorkspaceGitEntry>>,
     pub deltas: Vec<WorkspaceDeltaEnvelope>,
+    pub degraded: bool,
+    pub is_git_repo: bool,
 }
 
 struct WorkspaceStateCore {
@@ -77,6 +79,8 @@ struct WorkspaceStateCore {
     git_snapshot: Vec<WorkspaceGitEntry>,
     recent_events: VecDeque<WorkspaceDeltaEnvelope>,
     recent_capacity: usize,
+    degraded: bool,
+    is_git_repo: bool,
 }
 
 impl WorkspaceStateCore {
@@ -84,6 +88,7 @@ impl WorkspaceStateCore {
         root_path: String,
         tree_snapshot: Vec<FileTreeNode>,
         git_snapshot: Vec<WorkspaceGitEntry>,
+        is_git_repo: bool,
     ) -> Self {
         Self {
             root_path,
@@ -92,6 +97,8 @@ impl WorkspaceStateCore {
             git_snapshot,
             recent_events: VecDeque::new(),
             recent_capacity: RECENT_EVENT_CAPACITY,
+            degraded: false,
+            is_git_repo,
         }
     }
 
@@ -143,6 +150,8 @@ impl WorkspaceStateCore {
                     tree_snapshot: None,
                     git_snapshot: None,
                     deltas,
+                    degraded: self.degraded,
+                    is_git_repo: self.is_git_repo,
                 };
             }
         }
@@ -155,6 +164,8 @@ impl WorkspaceStateCore {
             tree_snapshot: Some(self.tree_snapshot.clone()),
             git_snapshot: Some(self.git_snapshot.clone()),
             deltas: Vec::new(),
+            degraded: self.degraded,
+            is_git_repo: self.is_git_repo,
         }
     }
 
@@ -212,8 +223,8 @@ impl WorkspaceStateCore {
 struct WorkspaceStreamEntry {
     root_canonical: PathBuf,
     root_display: String,
-    watcher: RecommendedWatcher,
-    task: tokio::task::JoinHandle<()>,
+    watcher: Option<RecommendedWatcher>,
+    task: Option<tokio::task::JoinHandle<()>>,
     ref_count: usize,
     state: Arc<Mutex<WorkspaceStateCore>>,
 }
@@ -569,6 +580,10 @@ async fn git_numstat_map(path: &str) -> HashMap<String, (i32, i32)> {
         .unwrap_or_default()
 }
 
+fn is_git_repo(root: &Path) -> bool {
+    root.join(".git").exists()
+}
+
 async fn collect_git_snapshot(path: &str) -> Result<Vec<WorkspaceGitEntry>, AppCommandError> {
     let status_entries = folders::git_status(path.to_string(), Some(true)).await?;
 
@@ -622,36 +637,39 @@ async fn flush_watch_batch(
     };
 
     let should_refresh_tree = batch.overflowed || event_kind_hint != "modify";
-    let should_refresh_git = if batch.overflowed {
-        true
-    } else {
-        should_refresh_git_status_for_paths(root_display, &changed_paths).await
-    };
+    let is_git = is_git_repo(root_canonical);
+    let should_refresh_git = is_git
+        && (batch.overflowed
+            || should_refresh_git_status_for_paths(root_display, &changed_paths).await);
 
     let mut payload = Vec::new();
-    let mut requires_resync = false;
     let mut refreshed_tree: Option<Vec<FileTreeNode>> = None;
     let mut refreshed_git: Option<Vec<WorkspaceGitEntry>> = None;
 
+    // Refresh failures are logged and silently skipped. Emitting a
+    // `resync_hint` on every failure creates a feedback loop when the
+    // failure is persistent (e.g. tree enum hits a permission-denied
+    // subdir, git is unreachable), because the frontend would re-fetch
+    // the same stored resync_hint event on every watch tick.
     if should_refresh_tree {
         match folders::get_file_tree(root_display.to_string(), Some(WORKSPACE_TREE_MAX_DEPTH)).await
         {
             Ok(tree) => refreshed_tree = Some(tree),
-            Err(_) => requires_resync = true,
+            Err(err) => eprintln!(
+                "[workspace-state-watch] tree refresh failed for {}: {}",
+                root_display, err
+            ),
         }
     }
 
     if should_refresh_git {
         match collect_git_snapshot(root_display).await {
             Ok(git_snapshot) => refreshed_git = Some(git_snapshot),
-            Err(_) => requires_resync = true,
+            Err(err) => eprintln!(
+                "[workspace-state-watch] git refresh failed for {}: {}",
+                root_display, err
+            ),
         }
-    }
-
-    if requires_resync {
-        payload = vec![WorkspaceDelta::Meta {
-            reason: format!("watch_refresh_failed:{event_kind_hint}"),
-        }];
     }
 
     let event = {
@@ -660,28 +678,24 @@ async fn flush_watch_batch(
             Err(_) => return,
         };
 
-        if !requires_resync {
-            if let Some(tree) = refreshed_tree {
-                if tree != guard.tree_snapshot {
-                    payload.push(WorkspaceDelta::TreeReplace { nodes: tree });
-                }
+        if let Some(tree) = refreshed_tree {
+            if tree != guard.tree_snapshot {
+                payload.push(WorkspaceDelta::TreeReplace { nodes: tree });
             }
-            if let Some(git_snapshot) = refreshed_git {
-                if git_snapshot != guard.git_snapshot {
-                    payload.push(WorkspaceDelta::GitReplace {
-                        entries: git_snapshot,
-                    });
-                }
-            }
-
-            if payload.is_empty() {
-                return;
+        }
+        if let Some(git_snapshot) = refreshed_git {
+            if git_snapshot != guard.git_snapshot {
+                payload.push(WorkspaceDelta::GitReplace {
+                    entries: git_snapshot,
+                });
             }
         }
 
-        let kind = if requires_resync {
-            "resync_hint".to_string()
-        } else if payload
+        if payload.is_empty() {
+            return;
+        }
+
+        let kind = if payload
             .iter()
             .any(|delta| matches!(delta, WorkspaceDelta::TreeReplace { .. }))
         {
@@ -695,7 +709,7 @@ async fn flush_watch_batch(
             "meta".to_string()
         };
 
-        guard.append_event(kind, payload, requires_resync)
+        guard.append_event(kind, payload, false)
     };
 
     emit_event(emitter, "folder://workspace-state-event", event);
@@ -806,12 +820,18 @@ pub async fn start_workspace_state_stream_core(
     let initial_tree = folders::get_file_tree(root_path.clone(), Some(WORKSPACE_TREE_MAX_DEPTH))
         .await
         .unwrap_or_default();
-    let initial_git = collect_git_snapshot(&root_path).await.unwrap_or_default();
+    let initial_is_git_repo = is_git_repo(&root_canonical);
+    let initial_git = if initial_is_git_repo {
+        collect_git_snapshot(&root_path).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
 
     let state = Arc::new(Mutex::new(WorkspaceStateCore::new(
         root_path.clone(),
         initial_tree,
         initial_git,
+        initial_is_git_repo,
     )));
 
     let (event_tx, event_rx) = mpsc::channel::<notify::Event>(WATCH_EVENT_CHANNEL_CAPACITY);
@@ -862,14 +882,26 @@ pub async fn start_workspace_state_stream_core(
         })?,
     );
 
-    watcher
+    let watch_result = watcher
         .as_mut()
         .ok_or_else(|| AppCommandError::task_execution_failed("Failed to create watcher"))?
-        .watch(&root_canonical, RecursiveMode::Recursive)
-        .map_err(|e| {
-            AppCommandError::io_error("Failed to start workspace state watcher")
-                .with_detail(e.to_string())
-        })?;
+        .watch(&root_canonical, RecursiveMode::Recursive);
+
+    if let Err(err) = watch_result {
+        eprintln!(
+            "[workspace-state-watch] degraded (no realtime updates) for {}: {}",
+            root_path, err
+        );
+        if let Some(mut created_watcher) = watcher.take() {
+            let _ = created_watcher.unwatch(&root_canonical);
+        }
+        if let Some(created_task) = task.take() {
+            created_task.abort();
+        }
+        if let Ok(mut guard) = state.lock() {
+            guard.degraded = true;
+        }
+    }
 
     let (should_cleanup_new_stream, start_snapshot) = {
         let mut streams = WORKSPACE_STREAMS.lock().map_err(|_| {
@@ -896,16 +928,8 @@ pub async fn start_workspace_state_stream_core(
                 WorkspaceStreamEntry {
                     root_canonical: root_canonical.clone(),
                     root_display: root_path,
-                    watcher: watcher.take().ok_or_else(|| {
-                        AppCommandError::task_execution_failed(
-                            "Failed to initialize workspace state watcher",
-                        )
-                    })?,
-                    task: task.take().ok_or_else(|| {
-                        AppCommandError::task_execution_failed(
-                            "Failed to initialize workspace state task",
-                        )
-                    })?,
+                    watcher: watcher.take(),
+                    task: task.take(),
                     ref_count: 1,
                     state: Arc::clone(&state),
                 },
@@ -963,9 +987,13 @@ pub async fn stop_workspace_state_stream_core(root_path: String) -> Result<(), A
     drop(streams);
 
     if let Some(mut entry) = removed_entry.take() {
-        let _ = entry.watcher.unwatch(&entry.root_canonical);
-        drop(entry.watcher);
-        entry.task.abort();
+        if let Some(mut watcher) = entry.watcher.take() {
+            let _ = watcher.unwatch(&entry.root_canonical);
+            drop(watcher);
+        }
+        if let Some(task) = entry.task.take() {
+            task.abort();
+        }
     }
 
     Ok(())
@@ -1014,7 +1042,7 @@ mod tests {
 
     #[test]
     fn workspace_state_core_seq_is_monotonic() {
-        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new());
+        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
 
         let e1 = core.append_event(
             "meta".to_string(),
@@ -1037,7 +1065,7 @@ mod tests {
 
     #[test]
     fn workspace_state_core_snapshot_incremental_when_since_available() {
-        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new());
+        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
 
         let e1 = core.append_event(
             "meta".to_string(),
@@ -1064,7 +1092,7 @@ mod tests {
 
     #[test]
     fn workspace_state_core_snapshot_full_when_since_too_old() {
-        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new());
+        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
         core.recent_capacity = 1;
 
         core.append_event(

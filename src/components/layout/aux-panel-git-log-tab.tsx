@@ -95,7 +95,7 @@ import type {
   GitResetMode,
 } from "@/lib/types"
 import { toast } from "sonner"
-import { toErrorMessage } from "@/lib/app-error"
+import { isNotAGitRepoError, toErrorMessage } from "@/lib/app-error"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 const emitEvent = async (event: string, payload?: unknown) => {
@@ -696,6 +696,7 @@ export function GitLogTab() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notAGitRepo, setNotAGitRepo] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [openByCommit, setOpenByCommit] = useState<Record<string, boolean>>({})
   const [branchesByCommit, setBranchesByCommit] = useState<
@@ -808,6 +809,7 @@ export function GitLogTab() {
         setBranchesError({})
       }
       setError(null)
+      setNotAGitRepo(false)
       try {
         const result = await gitLog(folder.path, 100, branch ?? undefined)
         setEntries(result.entries)
@@ -829,7 +831,12 @@ export function GitLogTab() {
           )
         }
       } catch (e) {
-        setError(toErrorMessage(e))
+        if (isNotAGitRepoError(e)) {
+          setNotAGitRepo(true)
+          setEntries([])
+        } else {
+          setError(toErrorMessage(e))
+        }
       } finally {
         if (inline) {
           setRefreshing(false)
@@ -1014,6 +1021,20 @@ export function GitLogTab() {
               <Skeleton className="h-3 w-24" />
             </div>
           ))}
+        </div>
+      </ScrollArea>
+    )
+  }
+
+  if (notAGitRepo) {
+    return (
+      <ScrollArea className="h-full px-3 py-3">
+        <div className="flex flex-col items-center justify-center min-h-full gap-1 p-6 text-center">
+          <GitBranch className="size-5 text-muted-foreground/60" aria-hidden />
+          <p className="text-sm font-medium">{t("notAGitRepoTitle")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("notAGitRepoHint")}
+          </p>
         </div>
       </ScrollArea>
     )

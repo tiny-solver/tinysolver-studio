@@ -897,6 +897,8 @@ export interface WorkspaceSnapshotResponse {
   tree_snapshot: FileTreeNode[] | null
   git_snapshot: WorkspaceGitEntry[] | null
   deltas: WorkspaceDeltaEnvelope[]
+  degraded: boolean
+  is_git_repo: boolean
 }
 
 export interface GitLogResult {

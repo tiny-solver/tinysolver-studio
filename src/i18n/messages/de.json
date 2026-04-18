@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "Remote anwenden"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "Live-Aktualisierungen nicht verfügbar",
+      "degradedHint": "Beobachter konnte nicht gestartet werden (z. B. Berechtigung verweigert). Aktualisiere manuell, um Änderungen zu sehen.",
+      "retry": "Wiederholen",
+      "retrying": "Wird wiederholt..."
+    },
     "common": {
       "all": "Alle",
       "cancel": "Abbrechen",
@@ -1205,6 +1211,8 @@
       "workspace": "Arbeitsbereich",
       "retry": "Erneut versuchen",
       "noCommitsFound": "Keine Commits gefunden",
+      "notAGitRepoTitle": "Kein Git-Repository",
+      "notAGitRepoHint": "Initialisiere Git über das Branch-Menü oben oder öffne ein bestehendes Repository.",
       "hash": "Hash-Wert",
       "copyHash": "Hash kopieren",
       "copyMessage": "Nachricht kopieren",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "Arbeitsbereich",
       "noChanges": "Keine lokalen Änderungen",
+      "notAGitRepoTitle": "Kein Git-Repository",
+      "notAGitRepoHint": "Initialisiere Git über das Branch-Menü oben oder öffne ein bestehendes Repository.",
       "trackedChanges": "Verfolgte Änderungen ({count})",
       "untrackedFiles": "Nicht verfolgte Dateien ({count})",
       "expandTracked": "Verfolgte Änderungen ausklappen",

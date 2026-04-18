@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "Appliquer distant"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "Mises à jour en temps réel indisponibles",
+      "degradedHint": "L’observateur n’a pas pu démarrer (par ex. permission refusée). Actualisez manuellement pour voir les modifications.",
+      "retry": "Réessayer",
+      "retrying": "Nouvelle tentative..."
+    },
     "common": {
       "all": "Tout",
       "cancel": "Annuler",
@@ -1205,6 +1211,8 @@
       "workspace": "espace de travail",
       "retry": "Réessayer",
       "noCommitsFound": "Aucun commit trouvé",
+      "notAGitRepoTitle": "Pas un dépôt Git",
+      "notAGitRepoHint": "Initialisez Git depuis le menu des branches ci-dessus, ou ouvrez un dépôt existant.",
       "hash": "Empreinte",
       "copyHash": "Copier le hash",
       "copyMessage": "Copier le message",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "espace de travail",
       "noChanges": "Aucun changement local",
+      "notAGitRepoTitle": "Pas un dépôt Git",
+      "notAGitRepoHint": "Initialisez Git depuis le menu des branches ci-dessus, ou ouvrez un dépôt existant.",
       "trackedChanges": "Changements suivis ({count})",
       "untrackedFiles": "Fichiers non suivis ({count})",
       "expandTracked": "Développer les changements suivis",

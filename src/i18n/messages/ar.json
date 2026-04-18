@@ -769,6 +769,12 @@
     "applyRightNonConflicting": "تطبيق البعيد"
   },
   "Folder": {
+    "workspaceStatus": {
+      "degradedTitle": "التحديثات الفورية غير متاحة",
+      "degradedHint": "فشل تشغيل المراقب (مثل رفض الإذن). قم بالتحديث يدويًا لرؤية التغييرات.",
+      "retry": "إعادة المحاولة",
+      "retrying": "جارٍ إعادة المحاولة..."
+    },
     "common": {
       "all": "الكل",
       "cancel": "إلغاء",
@@ -1205,6 +1211,8 @@
       "workspace": "مساحة العمل",
       "retry": "إعادة المحاولة",
       "noCommitsFound": "لم يتم العثور على التزامات",
+      "notAGitRepoTitle": "ليس مستودع Git",
+      "notAGitRepoHint": "قم بتهيئة Git من قائمة الفروع أعلاه، أو افتح مستودعًا موجودًا.",
       "hash": "بصمة الالتزام",
       "copyHash": "نسخ الـ hash",
       "copyMessage": "نسخ الرسالة",
@@ -1281,6 +1289,8 @@
     "gitChangesTab": {
       "workspace": "مساحة العمل",
       "noChanges": "لا توجد تغييرات محلية",
+      "notAGitRepoTitle": "ليس مستودع Git",
+      "notAGitRepoHint": "قم بتهيئة Git من قائمة الفروع أعلاه، أو افتح مستودعًا موجودًا.",
       "trackedChanges": "التغييرات المتعقبة ({count})",
       "untrackedFiles": "الملفات غير المتعقبة ({count})",
       "expandTracked": "توسيع التغييرات المتعقبة",
