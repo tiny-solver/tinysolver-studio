@@ -48,12 +48,14 @@ async fn list_folders(
 ) -> RichMessage {
     let folders = match folder_service::list_folders(db).await {
         Ok(f) => f,
-        Err(e) => return RichMessage::error(format!("Failed to list folders: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_list_folders_label(lang)));
+        }
     };
 
     if folders.is_empty() {
-        return RichMessage::info(t(lang, "No folders found.", "没有找到项目目录。"))
-            .with_title(t(lang, "Working Folder", "工作目录"));
+        return RichMessage::info(i18n::no_folders_found(lang))
+            .with_title(i18n::folder_title(lang));
     }
 
     let ctx = sender_context_service::get_or_create(db, channel_id, sender_id)
@@ -77,18 +79,9 @@ async fn list_folders(
         ));
     }
 
-    body.push_str(&format!(
-        "\n{}",
-        tp(
-            lang,
-            prefix,
-            "Reply {prefix}folder <number> to select.",
-            "回复 {prefix}folder <数字> 选择目录。"
-        )
-    ));
+    body.push_str(&format!("\n{}", i18n::folder_select_hint(lang, prefix)));
 
-    RichMessage::info(body.trim_end())
-        .with_title(t(lang, "Working Folder", "工作目录"))
+    RichMessage::info(body.trim_end()).with_title(i18n::folder_title(lang))
 }
 
 async fn select_folder_by_index(
@@ -100,28 +93,25 @@ async fn select_folder_by_index(
     prefix: &str,
 ) -> RichMessage {
     if idx == 0 {
-        return RichMessage::info(t(lang, "Index starts from 1.", "序号从 1 开始。"));
+        return RichMessage::info(i18n::index_starts_from_one(lang));
     }
 
     let folders = match folder_service::list_folders(db).await {
         Ok(f) => f,
-        Err(e) => return RichMessage::error(format!("Failed to list folders: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_list_folders_label(lang)));
+        }
     };
 
     let Some(folder) = folders.get(idx - 1) else {
-        return RichMessage::info(tp(
-            lang,
-            prefix,
-            "Index out of range. Use {prefix}folder to list.",
-            "序号超出范围，请使用 {prefix}folder 查看列表。",
-        ));
+        return RichMessage::info(i18n::folder_index_out_of_range(lang, prefix));
     };
 
     let _ = sender_context_service::update_folder(db, channel_id, sender_id, Some(folder.id))
         .await;
 
     RichMessage::info(format!("{} ({})", folder.name, folder.path))
-        .with_title(t(lang, "Folder Selected", "已选择目录"))
+        .with_title(i18n::folder_selected_title(lang))
 }
 
 async fn select_folder_by_path(
@@ -133,14 +123,16 @@ async fn select_folder_by_path(
 ) -> RichMessage {
     let entry = match folder_service::add_folder(db, path).await {
         Ok(e) => e,
-        Err(e) => return RichMessage::error(format!("Failed to add folder: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_add_folder_label(lang)));
+        }
     };
 
     let _ =
         sender_context_service::update_folder(db, channel_id, sender_id, Some(entry.id)).await;
 
     RichMessage::info(format!("{} ({})", entry.name, entry.path))
-        .with_title(t(lang, "Folder Selected", "已选择目录"))
+        .with_title(i18n::folder_selected_title(lang))
 }
 
 // ── /agent ──
@@ -190,18 +182,9 @@ async fn list_agents(
         body.push_str(&format!("{}. {}{}\n", i + 1, at, marker));
     }
 
-    body.push_str(&format!(
-        "\n{}",
-        tp(
-            lang,
-            prefix,
-            "Reply {prefix}agent <number> or {prefix}agent <name> to select.",
-            "回复 {prefix}agent <数字> 或 {prefix}agent <名称> 选择。"
-        )
-    ));
+    body.push_str(&format!("\n{}", i18n::agent_select_hint(lang, prefix)));
 
-    RichMessage::info(body.trim_end())
-        .with_title(t(lang, "Agent Selection", "选择 Agent"))
+    RichMessage::info(body.trim_end()).with_title(i18n::agent_title(lang))
 }
 
 async fn select_agent_by_index(
@@ -214,20 +197,14 @@ async fn select_agent_by_index(
 ) -> RichMessage {
     let agents = all_acp_agents();
     if idx == 0 || idx > agents.len() {
-        return RichMessage::info(tp(
-            lang,
-            prefix,
-            "Index out of range. Use {prefix}agent to list.",
-            "序号超出范围，请使用 {prefix}agent 查看列表。",
-        ));
+        return RichMessage::info(i18n::agent_index_out_of_range(lang, prefix));
     }
 
     let at = agents[idx - 1];
     let at_str = agent_type_to_string(at);
     let _ = sender_context_service::update_agent(db, channel_id, sender_id, Some(at_str)).await;
 
-    RichMessage::info(at.to_string())
-        .with_title(t(lang, "Agent Selected", "已选择 Agent"))
+    RichMessage::info(at.to_string()).with_title(i18n::agent_selected_title(lang))
 }
 
 async fn select_agent_by_name(
@@ -240,19 +217,14 @@ async fn select_agent_by_name(
     let at = match parse_agent_type(name) {
         Some(a) => a,
         None => {
-            return RichMessage::info(format!(
-                "{}{}",
-                t(lang, "Unknown agent: ", "未知 Agent: "),
-                name
-            ));
+            return RichMessage::info(format!("{}{}", i18n::unknown_agent_label(lang), name));
         }
     };
 
     let at_str = agent_type_to_string(at);
     let _ = sender_context_service::update_agent(db, channel_id, sender_id, Some(at_str)).await;
 
-    RichMessage::info(at.to_string())
-        .with_title(t(lang, "Agent Selected", "已选择 Agent"))
+    RichMessage::info(at.to_string()).with_title(i18n::agent_selected_title(lang))
 }
 
 // ── /task ──
@@ -270,29 +242,21 @@ pub async fn handle_task(
     prefix: &str,
 ) -> RichMessage {
     if task_description.is_empty() {
-        return RichMessage::info(tp(
-            lang,
-            prefix,
-            "Usage: {prefix}task <description>",
-            "用法: {prefix}task <任务描述>",
-        ));
+        return RichMessage::info(i18n::task_usage(lang, prefix));
     }
 
     // 1. Load sender context
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to load context: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_load_context_label(lang)));
+        }
     };
 
     let folder_id = match ctx.current_folder_id {
         Some(id) => id,
         None => {
-            return RichMessage::info(tp(
-                lang,
-                prefix,
-                "No folder selected. Use {prefix}folder first.",
-                "未选择工作目录，请先使用 {prefix}folder 选择。",
-            ));
+            return RichMessage::info(i18n::no_folder_selected(lang, prefix));
         }
     };
 
@@ -300,17 +264,17 @@ pub async fn handle_task(
     let folder = match folder_service::get_folder_by_id(db, folder_id).await {
         Ok(Some(f)) => f,
         _ => {
-            return RichMessage::info(tp(
-                lang,
-                prefix,
-                "Folder not found. Use {prefix}folder to select.",
-                "目录不存在，请使用 {prefix}folder 重新选择。",
-            ));
+            return RichMessage::info(i18n::folder_not_found_with_hint(lang, prefix));
         }
     };
 
     // 3. Resolve agent type
-    let agent_type = resolve_agent_type(&ctx.current_agent_type, &folder.default_agent_type);
+    let agent_type = match resolve_agent_type(&ctx.current_agent_type, &folder.default_agent_type) {
+        Some(at) => at,
+        None => {
+            return RichMessage::info(i18n::no_agent_selected(lang, prefix));
+        }
+    };
 
     // 4. Create conversation record
     let conv = match conversation_service::create(
@@ -323,7 +287,12 @@ pub async fn handle_task(
     .await
     {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to create conversation: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!(
+                "{}{e}",
+                i18n::failed_to_create_conversation_label(lang)
+            ));
+        }
     };
 
     // 5. Spawn ACP agent
@@ -350,7 +319,7 @@ pub async fn handle_task(
             .await;
             return RichMessage::error(format!(
                 "{}{e}",
-                t(lang, "Failed to start agent: ", "启动 Agent 失败: ")
+                i18n::failed_to_start_agent_label(lang)
             ));
         }
     };
@@ -362,6 +331,7 @@ pub async fn handle_task(
             sender_id: sender_id.to_string(),
             conversation_id: conv.id,
             connection_id: connection_id.clone(),
+            agent_type,
             content_buffer: String::new(),
             tool_calls: Vec::new(),
             tool_call_inputs: std::collections::HashMap::new(),
@@ -386,7 +356,7 @@ pub async fn handle_task(
         "[{}] #{} @ {}",
         agent_type, conv.id, folder.name,
     ))
-    .with_title(t(lang, "Task Started", "任务已启动"))
+    .with_title(i18n::task_started_title(lang))
 }
 
 // ── /sessions ──
@@ -400,29 +370,22 @@ pub async fn handle_sessions(
 ) -> RichMessage {
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to load context: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_load_context_label(lang)));
+        }
     };
 
     let folder_id = match ctx.current_folder_id {
         Some(id) => id,
         None => {
-            return RichMessage::info(tp(
-                lang,
-                prefix,
-                "No folder selected. Use {prefix}folder first.",
-                "未选择工作目录，请先使用 {prefix}folder 选择。",
-            ));
+            return RichMessage::info(i18n::no_folder_selected(lang, prefix));
         }
     };
 
     let folder = match folder_service::get_folder_by_id(db, folder_id).await {
         Ok(Some(f)) => f,
         _ => {
-            return RichMessage::info(t(
-                lang,
-                "Folder not found.",
-                "目录不存在。",
-            ));
+            return RichMessage::info(i18n::folder_not_found(lang));
         }
     };
 
@@ -437,20 +400,17 @@ pub async fn handle_sessions(
     .await
     {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to list sessions: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!(
+                "{}{e}",
+                i18n::failed_to_list_sessions_label(lang)
+            ));
+        }
     };
 
     if convs.is_empty() {
-        return RichMessage::info(t(
-            lang,
-            "No active sessions in this folder.",
-            "当前目录没有进行中的会话。",
-        ))
-        .with_title(format!(
-            "{} - {}",
-            t(lang, "Sessions", "会话列表"),
-            folder.name
-        ));
+        return RichMessage::info(i18n::no_active_sessions_in_folder(lang))
+            .with_title(format!("{} - {}", i18n::sessions_title(lang), folder.name));
     }
 
     let mut body = String::new();
@@ -471,21 +431,10 @@ pub async fn handle_sessions(
         ));
     }
 
-    body.push_str(&format!(
-        "\n{}",
-        tp(
-            lang,
-            prefix,
-            "Reply {prefix}resume <id> to continue.",
-            "回复 {prefix}resume <会话ID> 继续会话。"
-        )
-    ));
+    body.push_str(&format!("\n{}", i18n::sessions_resume_hint(lang, prefix)));
 
-    RichMessage::info(body.trim_end()).with_title(format!(
-        "{} - {}",
-        t(lang, "Sessions", "会话列表"),
-        folder.name
-    ))
+    RichMessage::info(body.trim_end())
+        .with_title(format!("{} - {}", i18n::sessions_title(lang), folder.name))
 }
 
 // ── /resume ──
@@ -516,18 +465,14 @@ pub async fn handle_resume(
     let conv = match conversation_service::get_by_id(db, conversation_id).await {
         Ok(c) => c,
         Err(_) => {
-            return RichMessage::info(t(
-                lang,
-                "Conversation not found.",
-                "会话不存在。",
-            ));
+            return RichMessage::info(i18n::conversation_not_found(lang));
         }
     };
 
     let folder = match folder_service::get_folder_by_id(db, conv.folder_id).await {
         Ok(Some(f)) => f,
         _ => {
-            return RichMessage::info(t(lang, "Folder not found.", "目录不存在。"));
+            return RichMessage::info(i18n::folder_not_found(lang));
         }
     };
 
@@ -548,7 +493,7 @@ pub async fn handle_resume(
         Err(e) => {
             return RichMessage::error(format!(
                 "{}{e}",
-                t(lang, "Failed to start agent: ", "启动 Agent 失败: ")
+                i18n::failed_to_start_agent_label(lang)
             ));
         }
     };
@@ -560,6 +505,7 @@ pub async fn handle_resume(
             sender_id: sender_id.to_string(),
             conversation_id: conv.id,
             connection_id: connection_id.clone(),
+            agent_type: conv.agent_type,
             content_buffer: String::new(),
             tool_calls: Vec::new(),
             tool_call_inputs: std::collections::HashMap::new(),
@@ -587,7 +533,7 @@ pub async fn handle_resume(
         "[{}] #{} {} @ {}",
         conv.agent_type, conv.id, title, folder.name,
     ))
-    .with_title(t(lang, "Session Resumed", "会话已恢复"))
+    .with_title(i18n::session_resumed_title(lang))
 }
 
 // ── /cancel ──
@@ -602,17 +548,15 @@ pub async fn handle_cancel(
 ) -> RichMessage {
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to load context: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_load_context_label(lang)));
+        }
     };
 
     let connection_id = match &ctx.current_connection_id {
         Some(id) => id.clone(),
         None => {
-            return RichMessage::info(t(
-                lang,
-                "No active session to cancel.",
-                "没有进行中的任务可取消。",
-            ));
+            return RichMessage::info(i18n::no_active_session_to_cancel(lang));
         }
     };
 
@@ -635,12 +579,8 @@ pub async fn handle_cancel(
     // Clear session from context
     let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
 
-    RichMessage::info(t(
-        lang,
-        "Current task has been cancelled.",
-        "当前任务已取消。",
-    ))
-    .with_title(t(lang, "Task Cancelled", "任务已取消"))
+    RichMessage::info(i18n::task_cancelled_body(lang))
+        .with_title(i18n::task_cancelled_title(lang))
 }
 
 // ── /approve, /deny ──
@@ -658,17 +598,15 @@ pub async fn handle_permission_response(
 ) -> RichMessage {
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to load context: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_load_context_label(lang)));
+        }
     };
 
     let connection_id = match &ctx.current_connection_id {
         Some(id) => id.clone(),
         None => {
-            return RichMessage::info(t(
-                lang,
-                "No active session.",
-                "没有活跃的会话。",
-            ));
+            return RichMessage::info(i18n::no_active_session(lang));
         }
     };
 
@@ -677,11 +615,7 @@ pub async fn handle_permission_response(
         let session = match bridge_guard.get_mut(&connection_id) {
             Some(s) => s,
             None => {
-                return RichMessage::info(t(
-                    lang,
-                    "No active session found.",
-                    "未找到活跃的会话。",
-                ));
+                return RichMessage::info(i18n::no_active_session_found(lang));
             }
         };
         session.permission_pending.take()
@@ -690,11 +624,7 @@ pub async fn handle_permission_response(
     let pending = match pending {
         Some(p) => p,
         None => {
-            return RichMessage::info(t(
-                lang,
-                "No pending permission request.",
-                "没有待处理的权限请求。",
-            ));
+            return RichMessage::info(i18n::no_pending_permission(lang));
         }
     };
 
@@ -716,11 +646,7 @@ pub async fn handle_permission_response(
     };
 
     let Some(option_id) = option_id else {
-        return RichMessage::info(t(
-            lang,
-            "No valid permission option found.",
-            "未找到有效的权限选项。",
-        ));
+        return RichMessage::info(i18n::no_valid_permission_option(lang));
     };
 
     if let Err(e) = conn_mgr
@@ -729,11 +655,7 @@ pub async fn handle_permission_response(
     {
         return RichMessage::error(format!(
             "{}{e}",
-            t(
-                lang,
-                "Failed to respond to permission: ",
-                "权限响应失败: "
-            )
+            i18n::failed_permission_response_label(lang)
         ));
     }
 
@@ -744,23 +666,16 @@ pub async fn handle_permission_response(
     }
 
     let action = if approve {
-        t(lang, "Approved", "已批准")
+        i18n::approved_label(lang)
     } else {
-        t(lang, "Denied", "已拒绝")
+        i18n::denied_label(lang)
     };
 
     let mut msg = RichMessage::info(format!("{}: {}", action, pending.tool_description));
     if always && approve {
-        msg = msg.with_field(
-            "",
-            t(
-                lang,
-                "Auto-approve enabled for this session.",
-                "已启用自动批准。",
-            ),
-        );
+        msg = msg.with_field("", i18n::auto_approve_enabled(lang));
     }
-    msg.with_title(t(lang, "Permission Response", "权限响应"))
+    msg.with_title(i18n::permission_response_title(lang))
 }
 
 // ── follow-up (non-command text) ──
@@ -777,18 +692,15 @@ pub async fn handle_followup(
 ) -> RichMessage {
     let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
         Ok(c) => c,
-        Err(e) => return RichMessage::error(format!("Failed to load context: {e}")),
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_load_context_label(lang)));
+        }
     };
 
     let connection_id = match &ctx.current_connection_id {
         Some(id) => id.clone(),
         None => {
-            return RichMessage::info(tp(
-                lang,
-                prefix,
-                "No active session. Use {prefix}task to start one.",
-                "没有活跃的会话，请使用 {prefix}task 开始新任务。",
-            ));
+            return RichMessage::info(i18n::no_active_session_use_task(lang, prefix));
         }
     };
 
@@ -799,12 +711,7 @@ pub async fn handle_followup(
             // Connection lost, clear context
             drop(bridge_guard);
             let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
-            return RichMessage::info(tp(
-                lang,
-                prefix,
-                "Session connection lost. Use {prefix}task to start a new one.",
-                "会话连接已断开，请使用 {prefix}task 开始新任务。",
-            ));
+            return RichMessage::info(i18n::session_connection_lost(lang, prefix));
         }
     }
 
@@ -819,11 +726,11 @@ pub async fn handle_followup(
         let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
         return RichMessage::error(format!(
             "{}{e}",
-            t(lang, "Failed to send message: ", "发送消息失败: ")
+            i18n::failed_to_send_message_label(lang)
         ));
     }
 
-    RichMessage::info(t(lang, "Message sent.", "消息已发送。"))
+    RichMessage::info(i18n::message_sent(lang))
 }
 
 // ── /resume (list recent) ──
@@ -852,12 +759,8 @@ async fn list_recent_sessions(
     };
 
     if recent.is_empty() {
-        return RichMessage::info(t(
-            lang,
-            "No conversations found.",
-            "暂无会话记录。",
-        ))
-        .with_title(t(lang, "Recent Conversations", "最近会话"));
+        return RichMessage::info(i18n::no_conversations_found(lang))
+            .with_title(i18n::recent_conversations_title(lang));
     }
 
     let mut body = String::new();
@@ -871,36 +774,12 @@ async fn list_recent_sessions(
         ));
     }
 
-    body.push_str(&format!(
-        "\n{}",
-        tp(
-            lang,
-            prefix,
-            "Reply {prefix}resume <id> to resume a session.",
-            "回复 {prefix}resume <会话ID> 恢复会话。"
-        )
-    ));
+    body.push_str(&format!("\n{}", i18n::recent_resume_hint(lang, prefix)));
 
-    RichMessage::info(body.trim_end()).with_title(t(
-        lang,
-        "Recent Conversations",
-        "最近会话",
-    ))
+    RichMessage::info(body.trim_end()).with_title(i18n::recent_conversations_title(lang))
 }
 
 // ── Helpers ──
-
-fn t(lang: Lang, en: &str, zh: &str) -> String {
-    match lang {
-        Lang::ZhCn | Lang::ZhTw => zh.to_string(),
-        _ => en.to_string(),
-    }
-}
-
-/// Like `t()` but replaces `{prefix}` placeholders with the actual command prefix.
-fn tp(lang: Lang, prefix: &str, en: &str, zh: &str) -> String {
-    t(lang, en, zh).replace("{prefix}", prefix)
-}
 
 fn agent_type_to_string(at: AgentType) -> String {
     serde_json::to_value(at)
@@ -917,16 +796,13 @@ fn parse_agent_type(name: &str) -> Option<AgentType> {
 fn resolve_agent_type(
     sender_agent: &Option<String>,
     folder_default: &Option<AgentType>,
-) -> AgentType {
+) -> Option<AgentType> {
     if let Some(ref at_str) = sender_agent {
         if let Some(at) = parse_agent_type(at_str) {
-            return at;
+            return Some(at);
         }
     }
-    if let Some(at) = folder_default {
-        return *at;
-    }
-    AgentType::ClaudeCode
+    folder_default.as_ref().copied()
 }
 
 fn truncate_title(s: &str) -> String {

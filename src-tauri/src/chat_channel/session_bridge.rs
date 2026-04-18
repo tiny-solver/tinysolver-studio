@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use crate::acp::types::PermissionOptionInfo;
 use crate::chat_channel::types::SentMessageId;
+use crate::models::agent::AgentType;
 
 pub struct PendingPermission {
     pub request_id: String,
@@ -16,6 +17,7 @@ pub struct ActiveSession {
     pub sender_id: String,
     pub conversation_id: i32,
     pub connection_id: String,
+    pub agent_type: AgentType,
     pub content_buffer: String,
     pub tool_calls: Vec<String>,
     /// Stores raw_input by tool_call_id for detail extraction on completion.

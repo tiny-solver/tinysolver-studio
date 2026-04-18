@@ -99,8 +99,18 @@ pub async fn soft_delete(conn: &DatabaseConnection, conversation_id: i32) -> Res
 }
 
 fn parse_agent_type(s: &str) -> AgentType {
-    serde_json::from_value(serde_json::Value::String(s.to_string()))
-        .unwrap_or(AgentType::ClaudeCode)
+    match serde_json::from_value(serde_json::Value::String(s.to_string())) {
+        Ok(at) => at,
+        Err(_) => {
+            // DB has a value the enum does not recognise (manual edit or removed variant).
+            // Fall back to ClaudeCode so the row stays readable, but log so resume-as-wrong-agent
+            // regressions are traceable.
+            eprintln!(
+                "[conversation_service] unknown agent_type {s:?} in DB, falling back to ClaudeCode"
+            );
+            AgentType::ClaudeCode
+        }
+    }
 }
 
 fn conv_to_summary(r: conversation::Model) -> DbConversationSummary {

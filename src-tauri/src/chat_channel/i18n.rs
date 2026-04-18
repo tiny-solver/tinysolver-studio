@@ -715,19 +715,737 @@ pub fn unknown_command_title(lang: Lang) -> &'static str {
     }
 }
 
+// ── Session command messages ──
+
+// Folder (/folder)
+pub fn folder_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "工作目录",
+        Lang::ZhTw => "工作目錄",
+        Lang::Ja => "作業フォルダ",
+        Lang::Ko => "작업 폴더",
+        Lang::Es => "Carpeta de trabajo",
+        Lang::De => "Arbeitsordner",
+        Lang::Fr => "Dossier de travail",
+        Lang::Pt => "Pasta de trabalho",
+        Lang::Ar => "مجلد العمل",
+        Lang::En => "Working Folder",
+    }
+}
+
+pub fn no_folders_found(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "没有找到项目目录。",
+        Lang::ZhTw => "沒有找到專案目錄。",
+        Lang::Ja => "フォルダが見つかりません。",
+        Lang::Ko => "폴더를 찾을 수 없습니다.",
+        Lang::Es => "No se encontraron carpetas.",
+        Lang::De => "Keine Ordner gefunden.",
+        Lang::Fr => "Aucun dossier trouvé.",
+        Lang::Pt => "Nenhuma pasta encontrada.",
+        Lang::Ar => "لم يتم العثور على مجلدات.",
+        Lang::En => "No folders found.",
+    }
+}
+
+pub fn folder_select_hint(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("回复 {prefix}folder <数字> 选择目录。"),
+        Lang::ZhTw => format!("回覆 {prefix}folder <數字> 選擇目錄。"),
+        Lang::Ja => format!("{prefix}folder <番号> で選択してください。"),
+        Lang::Ko => format!("{prefix}folder <번호>로 선택하세요."),
+        Lang::Es => format!("Responde {prefix}folder <número> para seleccionar."),
+        Lang::De => format!("Antworte {prefix}folder <Nummer> zur Auswahl."),
+        Lang::Fr => format!("Répondez {prefix}folder <numéro> pour sélectionner."),
+        Lang::Pt => format!("Responda {prefix}folder <número> para selecionar."),
+        Lang::Ar => format!("أجب بـ {prefix}folder <رقم> للاختيار."),
+        Lang::En => format!("Reply {prefix}folder <number> to select."),
+    }
+}
+
+pub fn index_starts_from_one(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "序号从 1 开始。",
+        Lang::ZhTw => "序號從 1 開始。",
+        Lang::Ja => "インデックスは 1 から始まります。",
+        Lang::Ko => "인덱스는 1부터 시작합니다.",
+        Lang::Es => "El índice empieza desde 1.",
+        Lang::De => "Index beginnt bei 1.",
+        Lang::Fr => "L'index commence à 1.",
+        Lang::Pt => "O índice começa em 1.",
+        Lang::Ar => "يبدأ الفهرس من 1.",
+        Lang::En => "Index starts from 1.",
+    }
+}
+
+pub fn folder_index_out_of_range(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("序号超出范围，请使用 {prefix}folder 查看列表。"),
+        Lang::ZhTw => format!("序號超出範圍，請使用 {prefix}folder 查看列表。"),
+        Lang::Ja => format!("インデックスが範囲外です。{prefix}folder でリストを確認してください。"),
+        Lang::Ko => format!("인덱스가 범위를 벗어났습니다. {prefix}folder로 목록을 확인하세요."),
+        Lang::Es => format!("Índice fuera de rango. Usa {prefix}folder para ver la lista."),
+        Lang::De => format!("Index außerhalb des Bereichs. {prefix}folder verwenden, um aufzulisten."),
+        Lang::Fr => format!("Index hors limites. Utilisez {prefix}folder pour lister."),
+        Lang::Pt => format!("Índice fora de intervalo. Use {prefix}folder para listar."),
+        Lang::Ar => format!("الفهرس خارج النطاق. استخدم {prefix}folder لعرض القائمة."),
+        Lang::En => format!("Index out of range. Use {prefix}folder to list."),
+    }
+}
+
+pub fn folder_selected_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "已选择目录",
+        Lang::ZhTw => "已選擇目錄",
+        Lang::Ja => "フォルダを選択しました",
+        Lang::Ko => "폴더 선택됨",
+        Lang::Es => "Carpeta seleccionada",
+        Lang::De => "Ordner ausgewählt",
+        Lang::Fr => "Dossier sélectionné",
+        Lang::Pt => "Pasta selecionada",
+        Lang::Ar => "تم اختيار المجلد",
+        Lang::En => "Folder Selected",
+    }
+}
+
+pub fn folder_not_found(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "目录不存在。",
+        Lang::ZhTw => "目錄不存在。",
+        Lang::Ja => "フォルダが見つかりません。",
+        Lang::Ko => "폴더를 찾을 수 없습니다.",
+        Lang::Es => "Carpeta no encontrada.",
+        Lang::De => "Ordner nicht gefunden.",
+        Lang::Fr => "Dossier introuvable.",
+        Lang::Pt => "Pasta não encontrada.",
+        Lang::Ar => "المجلد غير موجود.",
+        Lang::En => "Folder not found.",
+    }
+}
+
+pub fn folder_not_found_with_hint(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("目录不存在，请使用 {prefix}folder 重新选择。"),
+        Lang::ZhTw => format!("目錄不存在，請使用 {prefix}folder 重新選擇。"),
+        Lang::Ja => format!("フォルダが見つかりません。{prefix}folder で選択してください。"),
+        Lang::Ko => format!("폴더를 찾을 수 없습니다. {prefix}folder로 선택하세요."),
+        Lang::Es => format!("Carpeta no encontrada. Usa {prefix}folder para seleccionar."),
+        Lang::De => format!("Ordner nicht gefunden. {prefix}folder verwenden, um auszuwählen."),
+        Lang::Fr => format!("Dossier introuvable. Utilisez {prefix}folder pour sélectionner."),
+        Lang::Pt => format!("Pasta não encontrada. Use {prefix}folder para selecionar."),
+        Lang::Ar => format!("المجلد غير موجود. استخدم {prefix}folder للاختيار."),
+        Lang::En => format!("Folder not found. Use {prefix}folder to select."),
+    }
+}
+
+pub fn no_folder_selected(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("未选择工作目录，请先使用 {prefix}folder 选择。"),
+        Lang::ZhTw => format!("未選擇工作目錄，請先使用 {prefix}folder 選擇。"),
+        Lang::Ja => format!("フォルダが選択されていません。先に {prefix}folder を使用してください。"),
+        Lang::Ko => format!("폴더가 선택되지 않았습니다. 먼저 {prefix}folder를 사용하세요."),
+        Lang::Es => format!("Ninguna carpeta seleccionada. Usa {prefix}folder primero."),
+        Lang::De => format!("Kein Ordner ausgewählt. Zuerst {prefix}folder verwenden."),
+        Lang::Fr => format!("Aucun dossier sélectionné. Utilisez d'abord {prefix}folder."),
+        Lang::Pt => format!("Nenhuma pasta selecionada. Use {prefix}folder primeiro."),
+        Lang::Ar => format!("لم يتم اختيار مجلد. استخدم {prefix}folder أولاً."),
+        Lang::En => format!("No folder selected. Use {prefix}folder first."),
+    }
+}
+
+// Agent (/agent)
+pub fn agent_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "选择 Agent",
+        Lang::ZhTw => "選擇 Agent",
+        Lang::Ja => "エージェント選択",
+        Lang::Ko => "에이전트 선택",
+        Lang::Es => "Selección de agente",
+        Lang::De => "Agent-Auswahl",
+        Lang::Fr => "Sélection d'agent",
+        Lang::Pt => "Seleção de agente",
+        Lang::Ar => "اختيار الوكيل",
+        Lang::En => "Agent Selection",
+    }
+}
+
+pub fn agent_select_hint(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("回复 {prefix}agent <数字> 或 {prefix}agent <名称> 选择。"),
+        Lang::ZhTw => format!("回覆 {prefix}agent <數字> 或 {prefix}agent <名稱> 選擇。"),
+        Lang::Ja => format!("{prefix}agent <番号> または {prefix}agent <名前> で選択してください。"),
+        Lang::Ko => format!("{prefix}agent <번호> 또는 {prefix}agent <이름>으로 선택하세요."),
+        Lang::Es => format!("Responde {prefix}agent <número> o {prefix}agent <nombre> para seleccionar."),
+        Lang::De => format!("Antworte {prefix}agent <Nummer> oder {prefix}agent <Name> zur Auswahl."),
+        Lang::Fr => format!("Répondez {prefix}agent <numéro> ou {prefix}agent <nom> pour sélectionner."),
+        Lang::Pt => format!("Responda {prefix}agent <número> ou {prefix}agent <nome> para selecionar."),
+        Lang::Ar => format!("أجب بـ {prefix}agent <رقم> أو {prefix}agent <اسم> للاختيار."),
+        Lang::En => format!("Reply {prefix}agent <number> or {prefix}agent <name> to select."),
+    }
+}
+
+pub fn agent_index_out_of_range(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("序号超出范围，请使用 {prefix}agent 查看列表。"),
+        Lang::ZhTw => format!("序號超出範圍，請使用 {prefix}agent 查看列表。"),
+        Lang::Ja => format!("インデックスが範囲外です。{prefix}agent でリストを確認してください。"),
+        Lang::Ko => format!("인덱스가 범위를 벗어났습니다. {prefix}agent로 목록을 확인하세요."),
+        Lang::Es => format!("Índice fuera de rango. Usa {prefix}agent para ver la lista."),
+        Lang::De => format!("Index außerhalb des Bereichs. {prefix}agent verwenden, um aufzulisten."),
+        Lang::Fr => format!("Index hors limites. Utilisez {prefix}agent pour lister."),
+        Lang::Pt => format!("Índice fora de intervalo. Use {prefix}agent para listar."),
+        Lang::Ar => format!("الفهرس خارج النطاق. استخدم {prefix}agent لعرض القائمة."),
+        Lang::En => format!("Index out of range. Use {prefix}agent to list."),
+    }
+}
+
+pub fn agent_selected_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "已选择 Agent",
+        Lang::ZhTw => "已選擇 Agent",
+        Lang::Ja => "エージェントを選択しました",
+        Lang::Ko => "에이전트 선택됨",
+        Lang::Es => "Agente seleccionado",
+        Lang::De => "Agent ausgewählt",
+        Lang::Fr => "Agent sélectionné",
+        Lang::Pt => "Agente selecionado",
+        Lang::Ar => "تم اختيار الوكيل",
+        Lang::En => "Agent Selected",
+    }
+}
+
+pub fn unknown_agent_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "未知 Agent: ",
+        Lang::ZhTw => "未知 Agent: ",
+        Lang::Ja => "不明なエージェント: ",
+        Lang::Ko => "알 수 없는 에이전트: ",
+        Lang::Es => "Agente desconocido: ",
+        Lang::De => "Unbekannter Agent: ",
+        Lang::Fr => "Agent inconnu : ",
+        Lang::Pt => "Agente desconhecido: ",
+        Lang::Ar => "وكيل غير معروف: ",
+        Lang::En => "Unknown agent: ",
+    }
+}
+
+// Task (/task)
+pub fn task_usage(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("用法: {prefix}task <任务描述>"),
+        Lang::ZhTw => format!("用法: {prefix}task <任務描述>"),
+        Lang::Ja => format!("使い方: {prefix}task <タスク説明>"),
+        Lang::Ko => format!("사용법: {prefix}task <작업 설명>"),
+        Lang::Es => format!("Uso: {prefix}task <descripción>"),
+        Lang::De => format!("Verwendung: {prefix}task <Beschreibung>"),
+        Lang::Fr => format!("Usage : {prefix}task <description>"),
+        Lang::Pt => format!("Uso: {prefix}task <descrição>"),
+        Lang::Ar => format!("الاستخدام: {prefix}task <الوصف>"),
+        Lang::En => format!("Usage: {prefix}task <description>"),
+    }
+}
+
+pub fn no_agent_selected(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("未选择 Agent，请先使用 {prefix}agent 选择，或在工作目录上设置默认 Agent。"),
+        Lang::ZhTw => format!("未選擇 Agent，請先使用 {prefix}agent 選擇，或在工作目錄上設定預設 Agent。"),
+        Lang::Ja => format!("エージェントが選択されていません。{prefix}agent で選択するか、フォルダにデフォルトエージェントを設定してください。"),
+        Lang::Ko => format!("에이전트가 선택되지 않았습니다. {prefix}agent로 선택하거나 폴더에 기본 에이전트를 설정하세요."),
+        Lang::Es => format!("Ningún agente seleccionado. Usa {prefix}agent para elegir uno o define uno por defecto en la carpeta."),
+        Lang::De => format!("Kein Agent ausgewählt. {prefix}agent verwenden oder Standard im Ordner festlegen."),
+        Lang::Fr => format!("Aucun agent sélectionné. Utilisez {prefix}agent ou définissez un agent par défaut sur le dossier."),
+        Lang::Pt => format!("Nenhum agente selecionado. Use {prefix}agent para escolher ou defina um padrão na pasta."),
+        Lang::Ar => format!("لم يتم اختيار وكيل. استخدم {prefix}agent لاختيار واحد أو حدد وكيلًا افتراضيًا للمجلد."),
+        Lang::En => format!("No agent selected. Use {prefix}agent to pick one or set a default on the folder."),
+    }
+}
+
+pub fn failed_to_start_agent_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "启动 Agent 失败: ",
+        Lang::ZhTw => "啟動 Agent 失敗: ",
+        Lang::Ja => "エージェントの起動に失敗しました: ",
+        Lang::Ko => "에이전트 시작 실패: ",
+        Lang::Es => "Error al iniciar el agente: ",
+        Lang::De => "Agent konnte nicht gestartet werden: ",
+        Lang::Fr => "Échec du démarrage de l'agent : ",
+        Lang::Pt => "Falha ao iniciar o agente: ",
+        Lang::Ar => "فشل بدء الوكيل: ",
+        Lang::En => "Failed to start agent: ",
+    }
+}
+
+pub fn task_started_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "任务已启动",
+        Lang::ZhTw => "任務已啟動",
+        Lang::Ja => "タスク開始",
+        Lang::Ko => "작업 시작됨",
+        Lang::Es => "Tarea iniciada",
+        Lang::De => "Aufgabe gestartet",
+        Lang::Fr => "Tâche démarrée",
+        Lang::Pt => "Tarefa iniciada",
+        Lang::Ar => "تم بدء المهمة",
+        Lang::En => "Task Started",
+    }
+}
+
+// Sessions (/sessions)
+pub fn sessions_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "会话列表",
+        Lang::ZhTw => "對話列表",
+        Lang::Ja => "セッション一覧",
+        Lang::Ko => "세션 목록",
+        Lang::Es => "Sesiones",
+        Lang::De => "Sitzungen",
+        Lang::Fr => "Sessions",
+        Lang::Pt => "Sessões",
+        Lang::Ar => "الجلسات",
+        Lang::En => "Sessions",
+    }
+}
+
+pub fn no_active_sessions_in_folder(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "当前目录没有进行中的会话。",
+        Lang::ZhTw => "當前目錄沒有進行中的對話。",
+        Lang::Ja => "このフォルダにアクティブなセッションはありません。",
+        Lang::Ko => "이 폴더에 활성 세션이 없습니다.",
+        Lang::Es => "No hay sesiones activas en esta carpeta.",
+        Lang::De => "Keine aktiven Sitzungen in diesem Ordner.",
+        Lang::Fr => "Aucune session active dans ce dossier.",
+        Lang::Pt => "Nenhuma sessão ativa nesta pasta.",
+        Lang::Ar => "لا توجد جلسات نشطة في هذا المجلد.",
+        Lang::En => "No active sessions in this folder.",
+    }
+}
+
+pub fn sessions_resume_hint(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("回复 {prefix}resume <会话ID> 继续会话。"),
+        Lang::ZhTw => format!("回覆 {prefix}resume <對話ID> 繼續對話。"),
+        Lang::Ja => format!("{prefix}resume <ID> で続行してください。"),
+        Lang::Ko => format!("{prefix}resume <ID>로 계속하세요."),
+        Lang::Es => format!("Responde {prefix}resume <id> para continuar."),
+        Lang::De => format!("Antworte {prefix}resume <ID> zum Fortfahren."),
+        Lang::Fr => format!("Répondez {prefix}resume <id> pour continuer."),
+        Lang::Pt => format!("Responda {prefix}resume <id> para continuar."),
+        Lang::Ar => format!("أجب بـ {prefix}resume <المعرف> للاستمرار."),
+        Lang::En => format!("Reply {prefix}resume <id> to continue."),
+    }
+}
+
+// Resume (/resume)
+pub fn conversation_not_found(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "会话不存在。",
+        Lang::ZhTw => "對話不存在。",
+        Lang::Ja => "会話が見つかりません。",
+        Lang::Ko => "대화를 찾을 수 없습니다.",
+        Lang::Es => "Conversación no encontrada.",
+        Lang::De => "Konversation nicht gefunden.",
+        Lang::Fr => "Conversation introuvable.",
+        Lang::Pt => "Conversa não encontrada.",
+        Lang::Ar => "المحادثة غير موجودة.",
+        Lang::En => "Conversation not found.",
+    }
+}
+
+pub fn session_resumed_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "会话已恢复",
+        Lang::ZhTw => "對話已恢復",
+        Lang::Ja => "セッション再開",
+        Lang::Ko => "세션 재개됨",
+        Lang::Es => "Sesión reanudada",
+        Lang::De => "Sitzung fortgesetzt",
+        Lang::Fr => "Session reprise",
+        Lang::Pt => "Sessão retomada",
+        Lang::Ar => "تم استئناف الجلسة",
+        Lang::En => "Session Resumed",
+    }
+}
+
+pub fn no_conversations_found(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "暂无会话记录。",
+        Lang::ZhTw => "暫無對話記錄。",
+        Lang::Ja => "会話記録がありません。",
+        Lang::Ko => "대화 기록이 없습니다.",
+        Lang::Es => "No hay conversaciones.",
+        Lang::De => "Keine Konversationen vorhanden.",
+        Lang::Fr => "Aucune conversation trouvée.",
+        Lang::Pt => "Nenhuma conversa encontrada.",
+        Lang::Ar => "لا توجد محادثات.",
+        Lang::En => "No conversations found.",
+    }
+}
+
+pub fn recent_conversations_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "最近会话",
+        Lang::ZhTw => "最近對話",
+        Lang::Ja => "最近の会話",
+        Lang::Ko => "최근 대화",
+        Lang::Es => "Conversaciones recientes",
+        Lang::De => "Letzte Konversationen",
+        Lang::Fr => "Conversations récentes",
+        Lang::Pt => "Conversas recentes",
+        Lang::Ar => "المحادثات الأخيرة",
+        Lang::En => "Recent Conversations",
+    }
+}
+
+pub fn recent_resume_hint(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("回复 {prefix}resume <会话ID> 恢复会话。"),
+        Lang::ZhTw => format!("回覆 {prefix}resume <對話ID> 恢復對話。"),
+        Lang::Ja => format!("{prefix}resume <ID> でセッションを再開してください。"),
+        Lang::Ko => format!("{prefix}resume <ID>로 세션을 재개하세요."),
+        Lang::Es => format!("Responde {prefix}resume <id> para reanudar una sesión."),
+        Lang::De => format!("Antworte {prefix}resume <ID> zum Fortsetzen einer Sitzung."),
+        Lang::Fr => format!("Répondez {prefix}resume <id> pour reprendre une session."),
+        Lang::Pt => format!("Responda {prefix}resume <id> para retomar uma sessão."),
+        Lang::Ar => format!("أجب بـ {prefix}resume <المعرف> لاستئناف الجلسة."),
+        Lang::En => format!("Reply {prefix}resume <id> to resume a session."),
+    }
+}
+
+// Cancel (/cancel)
+pub fn no_active_session_to_cancel(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "没有进行中的任务可取消。",
+        Lang::ZhTw => "沒有進行中的任務可取消。",
+        Lang::Ja => "キャンセルできるアクティブなセッションはありません。",
+        Lang::Ko => "취소할 활성 세션이 없습니다.",
+        Lang::Es => "No hay sesión activa para cancelar.",
+        Lang::De => "Keine aktive Sitzung zum Abbrechen.",
+        Lang::Fr => "Aucune session active à annuler.",
+        Lang::Pt => "Nenhuma sessão ativa para cancelar.",
+        Lang::Ar => "لا توجد جلسة نشطة للإلغاء.",
+        Lang::En => "No active session to cancel.",
+    }
+}
+
+pub fn task_cancelled_body(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "当前任务已取消。",
+        Lang::ZhTw => "當前任務已取消。",
+        Lang::Ja => "現在のタスクをキャンセルしました。",
+        Lang::Ko => "현재 작업이 취소되었습니다.",
+        Lang::Es => "La tarea actual ha sido cancelada.",
+        Lang::De => "Aktuelle Aufgabe wurde abgebrochen.",
+        Lang::Fr => "La tâche en cours a été annulée.",
+        Lang::Pt => "A tarefa atual foi cancelada.",
+        Lang::Ar => "تم إلغاء المهمة الحالية.",
+        Lang::En => "Current task has been cancelled.",
+    }
+}
+
+pub fn task_cancelled_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "任务已取消",
+        Lang::ZhTw => "任務已取消",
+        Lang::Ja => "タスクをキャンセルしました",
+        Lang::Ko => "작업 취소됨",
+        Lang::Es => "Tarea cancelada",
+        Lang::De => "Aufgabe abgebrochen",
+        Lang::Fr => "Tâche annulée",
+        Lang::Pt => "Tarefa cancelada",
+        Lang::Ar => "تم إلغاء المهمة",
+        Lang::En => "Task Cancelled",
+    }
+}
+
+// Permission (/approve, /deny)
+pub fn no_active_session(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "没有活跃的会话。",
+        Lang::ZhTw => "沒有活躍的對話。",
+        Lang::Ja => "アクティブなセッションがありません。",
+        Lang::Ko => "활성 세션이 없습니다.",
+        Lang::Es => "No hay sesión activa.",
+        Lang::De => "Keine aktive Sitzung.",
+        Lang::Fr => "Aucune session active.",
+        Lang::Pt => "Nenhuma sessão ativa.",
+        Lang::Ar => "لا توجد جلسة نشطة.",
+        Lang::En => "No active session.",
+    }
+}
+
+pub fn no_active_session_found(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "未找到活跃的会话。",
+        Lang::ZhTw => "未找到活躍的對話。",
+        Lang::Ja => "アクティブなセッションが見つかりません。",
+        Lang::Ko => "활성 세션을 찾을 수 없습니다.",
+        Lang::Es => "No se encontró sesión activa.",
+        Lang::De => "Keine aktive Sitzung gefunden.",
+        Lang::Fr => "Aucune session active trouvée.",
+        Lang::Pt => "Nenhuma sessão ativa encontrada.",
+        Lang::Ar => "لم يتم العثور على جلسة نشطة.",
+        Lang::En => "No active session found.",
+    }
+}
+
+pub fn no_pending_permission(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "没有待处理的权限请求。",
+        Lang::ZhTw => "沒有待處理的權限請求。",
+        Lang::Ja => "保留中の権限要求はありません。",
+        Lang::Ko => "대기 중인 권한 요청이 없습니다.",
+        Lang::Es => "No hay solicitudes de permiso pendientes.",
+        Lang::De => "Keine ausstehende Berechtigungsanfrage.",
+        Lang::Fr => "Aucune demande d'autorisation en attente.",
+        Lang::Pt => "Nenhuma solicitação de permissão pendente.",
+        Lang::Ar => "لا توجد طلبات أذونات معلقة.",
+        Lang::En => "No pending permission request.",
+    }
+}
+
+pub fn no_valid_permission_option(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "未找到有效的权限选项。",
+        Lang::ZhTw => "未找到有效的權限選項。",
+        Lang::Ja => "有効な権限オプションが見つかりません。",
+        Lang::Ko => "유효한 권한 옵션을 찾을 수 없습니다.",
+        Lang::Es => "No se encontró una opción de permiso válida.",
+        Lang::De => "Keine gültige Berechtigungsoption gefunden.",
+        Lang::Fr => "Aucune option d'autorisation valide trouvée.",
+        Lang::Pt => "Nenhuma opção de permissão válida encontrada.",
+        Lang::Ar => "لم يتم العثور على خيار أذونات صالح.",
+        Lang::En => "No valid permission option found.",
+    }
+}
+
+pub fn failed_permission_response_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "权限响应失败: ",
+        Lang::ZhTw => "權限回應失敗: ",
+        Lang::Ja => "権限応答に失敗しました: ",
+        Lang::Ko => "권한 응답 실패: ",
+        Lang::Es => "Error al responder al permiso: ",
+        Lang::De => "Berechtigungsantwort fehlgeschlagen: ",
+        Lang::Fr => "Échec de la réponse à l'autorisation : ",
+        Lang::Pt => "Falha ao responder à permissão: ",
+        Lang::Ar => "فشل الاستجابة للإذن: ",
+        Lang::En => "Failed to respond to permission: ",
+    }
+}
+
+pub fn approved_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "已批准",
+        Lang::ZhTw => "已批准",
+        Lang::Ja => "承認済み",
+        Lang::Ko => "승인됨",
+        Lang::Es => "Aprobado",
+        Lang::De => "Genehmigt",
+        Lang::Fr => "Approuvé",
+        Lang::Pt => "Aprovado",
+        Lang::Ar => "تمت الموافقة",
+        Lang::En => "Approved",
+    }
+}
+
+pub fn denied_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "已拒绝",
+        Lang::ZhTw => "已拒絕",
+        Lang::Ja => "拒否",
+        Lang::Ko => "거부됨",
+        Lang::Es => "Denegado",
+        Lang::De => "Abgelehnt",
+        Lang::Fr => "Refusé",
+        Lang::Pt => "Negado",
+        Lang::Ar => "تم الرفض",
+        Lang::En => "Denied",
+    }
+}
+
+pub fn auto_approve_enabled(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "已启用自动批准。",
+        Lang::ZhTw => "已啟用自動批准。",
+        Lang::Ja => "このセッションで自動承認を有効にしました。",
+        Lang::Ko => "이 세션에 자동 승인을 활성화했습니다.",
+        Lang::Es => "Aprobación automática activada para esta sesión.",
+        Lang::De => "Automatische Genehmigung für diese Sitzung aktiviert.",
+        Lang::Fr => "Approbation automatique activée pour cette session.",
+        Lang::Pt => "Aprovação automática ativada para esta sessão.",
+        Lang::Ar => "تم تفعيل الموافقة التلقائية لهذه الجلسة.",
+        Lang::En => "Auto-approve enabled for this session.",
+    }
+}
+
+pub fn permission_response_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "权限响应",
+        Lang::ZhTw => "權限回應",
+        Lang::Ja => "権限応答",
+        Lang::Ko => "권한 응답",
+        Lang::Es => "Respuesta de permiso",
+        Lang::De => "Berechtigungsantwort",
+        Lang::Fr => "Réponse d'autorisation",
+        Lang::Pt => "Resposta de permissão",
+        Lang::Ar => "استجابة الإذن",
+        Lang::En => "Permission Response",
+    }
+}
+
+// Follow-up
+pub fn no_active_session_use_task(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("没有活跃的会话，请使用 {prefix}task 开始新任务。"),
+        Lang::ZhTw => format!("沒有活躍的對話，請使用 {prefix}task 開始新任務。"),
+        Lang::Ja => format!("アクティブなセッションがありません。{prefix}task で開始してください。"),
+        Lang::Ko => format!("활성 세션이 없습니다. {prefix}task로 시작하세요."),
+        Lang::Es => format!("No hay sesión activa. Usa {prefix}task para iniciar una."),
+        Lang::De => format!("Keine aktive Sitzung. {prefix}task zum Starten verwenden."),
+        Lang::Fr => format!("Aucune session active. Utilisez {prefix}task pour en démarrer une."),
+        Lang::Pt => format!("Nenhuma sessão ativa. Use {prefix}task para iniciar uma."),
+        Lang::Ar => format!("لا توجد جلسة نشطة. استخدم {prefix}task لبدء واحدة."),
+        Lang::En => format!("No active session. Use {prefix}task to start one."),
+    }
+}
+
+pub fn session_connection_lost(lang: Lang, prefix: &str) -> String {
+    match lang {
+        Lang::ZhCn => format!("会话连接已断开，请使用 {prefix}task 开始新任务。"),
+        Lang::ZhTw => format!("對話連線已斷開，請使用 {prefix}task 開始新任務。"),
+        Lang::Ja => format!("セッション接続が切断されました。{prefix}task で新しく開始してください。"),
+        Lang::Ko => format!("세션 연결이 끊어졌습니다. {prefix}task로 새로 시작하세요."),
+        Lang::Es => format!("Conexión de sesión perdida. Usa {prefix}task para iniciar una nueva."),
+        Lang::De => format!("Sitzungsverbindung verloren. {prefix}task für neue Sitzung verwenden."),
+        Lang::Fr => format!("Connexion de session perdue. Utilisez {prefix}task pour en démarrer une nouvelle."),
+        Lang::Pt => format!("Conexão da sessão perdida. Use {prefix}task para iniciar uma nova."),
+        Lang::Ar => format!("انقطع اتصال الجلسة. استخدم {prefix}task لبدء جلسة جديدة."),
+        Lang::En => format!("Session connection lost. Use {prefix}task to start a new one."),
+    }
+}
+
+pub fn failed_to_send_message_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "发送消息失败: ",
+        Lang::ZhTw => "發送訊息失敗: ",
+        Lang::Ja => "メッセージの送信に失敗しました: ",
+        Lang::Ko => "메시지 전송 실패: ",
+        Lang::Es => "Error al enviar el mensaje: ",
+        Lang::De => "Nachricht konnte nicht gesendet werden: ",
+        Lang::Fr => "Échec de l'envoi du message : ",
+        Lang::Pt => "Falha ao enviar mensagem: ",
+        Lang::Ar => "فشل إرسال الرسالة: ",
+        Lang::En => "Failed to send message: ",
+    }
+}
+
+pub fn message_sent(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "消息已发送。",
+        Lang::ZhTw => "訊息已發送。",
+        Lang::Ja => "メッセージを送信しました。",
+        Lang::Ko => "메시지를 보냈습니다.",
+        Lang::Es => "Mensaje enviado.",
+        Lang::De => "Nachricht gesendet.",
+        Lang::Fr => "Message envoyé.",
+        Lang::Pt => "Mensagem enviada.",
+        Lang::Ar => "تم إرسال الرسالة.",
+        Lang::En => "Message sent.",
+    }
+}
+
+// Internal error labels
+pub fn failed_to_list_folders_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "列出目录失败: ",
+        Lang::ZhTw => "列出目錄失敗: ",
+        Lang::Ja => "フォルダ一覧の取得に失敗しました: ",
+        Lang::Ko => "폴더 목록 조회 실패: ",
+        Lang::Es => "Error al listar carpetas: ",
+        Lang::De => "Auflisten der Ordner fehlgeschlagen: ",
+        Lang::Fr => "Échec de la liste des dossiers : ",
+        Lang::Pt => "Falha ao listar pastas: ",
+        Lang::Ar => "فشل عرض المجلدات: ",
+        Lang::En => "Failed to list folders: ",
+    }
+}
+
+pub fn failed_to_add_folder_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "添加目录失败: ",
+        Lang::ZhTw => "新增目錄失敗: ",
+        Lang::Ja => "フォルダの追加に失敗しました: ",
+        Lang::Ko => "폴더 추가 실패: ",
+        Lang::Es => "Error al agregar carpeta: ",
+        Lang::De => "Ordner konnte nicht hinzugefügt werden: ",
+        Lang::Fr => "Échec de l'ajout du dossier : ",
+        Lang::Pt => "Falha ao adicionar pasta: ",
+        Lang::Ar => "فشل إضافة المجلد: ",
+        Lang::En => "Failed to add folder: ",
+    }
+}
+
+pub fn failed_to_load_context_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "加载上下文失败: ",
+        Lang::ZhTw => "載入上下文失敗: ",
+        Lang::Ja => "コンテキストの読み込みに失敗しました: ",
+        Lang::Ko => "컨텍스트 로드 실패: ",
+        Lang::Es => "Error al cargar contexto: ",
+        Lang::De => "Kontext konnte nicht geladen werden: ",
+        Lang::Fr => "Échec du chargement du contexte : ",
+        Lang::Pt => "Falha ao carregar contexto: ",
+        Lang::Ar => "فشل تحميل السياق: ",
+        Lang::En => "Failed to load context: ",
+    }
+}
+
+pub fn failed_to_create_conversation_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "创建会话失败: ",
+        Lang::ZhTw => "建立對話失敗: ",
+        Lang::Ja => "会話の作成に失敗しました: ",
+        Lang::Ko => "대화 생성 실패: ",
+        Lang::Es => "Error al crear conversación: ",
+        Lang::De => "Konversation konnte nicht erstellt werden: ",
+        Lang::Fr => "Échec de la création de la conversation : ",
+        Lang::Pt => "Falha ao criar conversa: ",
+        Lang::Ar => "فشل إنشاء المحادثة: ",
+        Lang::En => "Failed to create conversation: ",
+    }
+}
+
+pub fn failed_to_list_sessions_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "列出会话失败: ",
+        Lang::ZhTw => "列出對話失敗: ",
+        Lang::Ja => "セッション一覧の取得に失敗しました: ",
+        Lang::Ko => "세션 목록 조회 실패: ",
+        Lang::Es => "Error al listar sesiones: ",
+        Lang::De => "Auflisten der Sitzungen fehlgeschlagen: ",
+        Lang::Fr => "Échec de la liste des sessions : ",
+        Lang::Pt => "Falha ao listar sessões: ",
+        Lang::Ar => "فشل عرض الجلسات: ",
+        Lang::En => "Failed to list sessions: ",
+    }
+}
+
 // ── Session progress messages ──
 
-pub fn agent_responding(lang: Lang) -> &'static str {
+pub fn agent_responding(lang: Lang, agent_label: &str) -> String {
     match lang {
-        Lang::ZhCn => "Claude Code 正在响应中...",
-        Lang::ZhTw => "Claude Code 正在回應中...",
-        Lang::Ja => "Claude Code が応答中...",
-        Lang::Ko => "Claude Code 응답 중...",
-        Lang::Es => "Claude Code respondiendo...",
-        Lang::De => "Claude Code antwortet...",
-        Lang::Fr => "Claude Code en cours de reponse...",
-        Lang::Pt => "Claude Code respondendo...",
-        Lang::Ar => "...Claude Code يستجيب",
-        Lang::En => "Claude Code is responding...",
+        Lang::ZhCn => format!("{agent_label} 正在响应中..."),
+        Lang::ZhTw => format!("{agent_label} 正在回應中..."),
+        Lang::Ja => format!("{agent_label} が応答中..."),
+        Lang::Ko => format!("{agent_label} 응답 중..."),
+        Lang::Es => format!("{agent_label} respondiendo..."),
+        Lang::De => format!("{agent_label} antwortet..."),
+        Lang::Fr => format!("{agent_label} en cours de réponse..."),
+        Lang::Pt => format!("{agent_label} respondendo..."),
+        // FSI/PDI (U+2068/U+2069) isolate Latin agent name inside the Arabic RTL run so
+        // bidi reordering stays predictable across Telegram/Lark/WeiXin clients.
+        Lang::Ar => format!("\u{2068}{agent_label}\u{2069} يستجيب..."),
+        Lang::En => format!("{agent_label} is responding..."),
     }
 }

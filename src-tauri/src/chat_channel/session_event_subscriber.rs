@@ -137,27 +137,37 @@ async fn handle_acp_event_payload(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
-            let mut guard = bridge.lock().await;
-            if let Some(session) = guard.get_mut(connection_id) {
-                session.content_buffer.push_str(text);
-
-                if session.content_buffer.len() >= BUFFER_FLUSH_THRESHOLD
-                    && session.last_flushed.elapsed() >= Duration::from_secs(2)
-                {
-                    let channel_id = session.channel_id;
-                    let last_tool = session.tool_calls.last().cloned();
-                    session.last_flushed = Instant::now();
-
-                    let lang = get_lang(db).await;
-                    let mut status = super::i18n::agent_responding(lang).to_string();
-                    if let Some(tool) = last_tool {
-                        status.push_str(&format!(" | {tool}"));
+            // Collect flush info under the lock, then release before any IO.
+            let flush_info: Option<(i32, String, Option<String>)> = {
+                let mut guard = bridge.lock().await;
+                match guard.get_mut(connection_id) {
+                    Some(session) => {
+                        session.content_buffer.push_str(text);
+                        if session.content_buffer.len() >= BUFFER_FLUSH_THRESHOLD
+                            && session.last_flushed.elapsed() >= Duration::from_secs(2)
+                        {
+                            session.last_flushed = Instant::now();
+                            Some((
+                                session.channel_id,
+                                session.agent_type.to_string(),
+                                session.tool_calls.last().cloned(),
+                            ))
+                        } else {
+                            None
+                        }
                     }
-                    drop(guard);
-
-                    let msg = RichMessage::info(status);
-                    let _ = manager.send_to_channel(channel_id, &msg).await;
+                    None => None,
                 }
+            };
+
+            if let Some((channel_id, agent_label, last_tool)) = flush_info {
+                let lang = get_lang(db).await;
+                let mut status = super::i18n::agent_responding(lang, &agent_label);
+                if let Some(tool) = last_tool {
+                    status.push_str(&format!(" | {tool}"));
+                }
+                let msg = RichMessage::info(status);
+                let _ = manager.send_to_channel(channel_id, &msg).await;
             }
         }
 
@@ -430,6 +440,7 @@ async fn flush_progress(
     manager: &ChatChannelManager,
     db: &DatabaseConnection,
 ) {
+    let lang = get_lang(db).await;
     let updates: Vec<(i32, String)> = {
         let mut guard = bridge.lock().await;
         let mut out = Vec::new();
@@ -439,8 +450,8 @@ async fn flush_progress(
             {
                 session.last_flushed = Instant::now();
                 let last_tool = session.tool_calls.last().cloned();
-                let lang = get_lang(db).await;
-                let mut status = super::i18n::agent_responding(lang).to_string();
+                let agent_label = session.agent_type.to_string();
+                let mut status = super::i18n::agent_responding(lang, &agent_label);
                 if let Some(tool) = last_tool {
                     status.push_str(&format!(" | {tool}"));
                 }
