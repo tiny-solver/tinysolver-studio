@@ -17,6 +17,7 @@ import {
   opencodeUninstallPlugin,
 } from "@/lib/api"
 import { usePluginInstallStream } from "@/hooks/use-plugin-install-stream"
+import { randomUUID } from "@/lib/utils"
 import type { PluginCheckSummary, PluginInfo } from "@/lib/types"
 
 interface OpencodePluginsModalProps {
@@ -74,7 +75,7 @@ export function OpencodePluginsModal({
   }, [stream.status])
 
   const handleInstallAll = useCallback(async () => {
-    const taskId = crypto.randomUUID()
+    const taskId = randomUUID()
     await stream.start(taskId)
     try {
       await opencodeInstallPlugins(taskId)
@@ -85,7 +86,7 @@ export function OpencodePluginsModal({
 
   const handleInstallOne = useCallback(
     async (name: string) => {
-      const taskId = crypto.randomUUID()
+      const taskId = randomUUID()
       await stream.start(taskId)
       try {
         await opencodeInstallPlugins(taskId, [name])

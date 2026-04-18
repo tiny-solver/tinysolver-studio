@@ -64,7 +64,7 @@ import {
   ComboboxLabel,
   ComboboxList,
 } from "@/components/ui/combobox"
-import { cn } from "@/lib/utils"
+import { cn, randomUUID } from "@/lib/utils"
 import {
   acpClearBinaryCache,
   acpDetectAgentLocalVersion,
@@ -3052,7 +3052,7 @@ export function AcpAgentSettings() {
         [agent.agent_type]:
           kind ?? (mode === "download" ? "download_binary" : "upgrade_binary"),
       }))
-      const taskId = crypto.randomUUID()
+      const taskId = randomUUID()
       setStreamAgentType(agent.agent_type)
       await installStream.start(taskId)
       try {
@@ -3118,7 +3118,7 @@ export function AcpAgentSettings() {
         ...prev,
         [agent.agent_type]: mode === "install" ? "install_npx" : "upgrade_npx",
       }))
-      const taskId = crypto.randomUUID()
+      const taskId = randomUUID()
       setStreamAgentType(agent.agent_type)
       await installStream.start(taskId)
       try {
@@ -3198,7 +3198,7 @@ export function AcpAgentSettings() {
             ? "uninstall_binary"
             : "uninstall_npx",
       }))
-      const taskId = crypto.randomUUID()
+      const taskId = randomUUID()
       setStreamAgentType(agent.agent_type)
       await installStream.start(taskId)
       try {
