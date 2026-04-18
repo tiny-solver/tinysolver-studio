@@ -10,10 +10,21 @@ pub async fn require_token(
     next: Next,
     token: String,
 ) -> Response {
-    // Allow WebSocket upgrade requests to authenticate via query param
+    // Allow WebSocket upgrade requests to authenticate via query param.
+    // The token value is URL-encoded by the client, so decode before comparing.
     if let Some(query) = request.uri().query() {
-        if query.contains(&format!("token={}", token)) {
-            return next.run(request).await;
+        for pair in query.split('&') {
+            let Some((key, value)) = pair.split_once('=') else {
+                continue;
+            };
+            if key != "token" {
+                continue;
+            }
+            if let Ok(decoded) = urlencoding::decode(value) {
+                if decoded == token {
+                    return next.run(request).await;
+                }
+            }
         }
     }
 
