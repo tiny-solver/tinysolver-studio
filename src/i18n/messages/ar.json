@@ -1719,6 +1719,7 @@
         "nameLabel": "الاسم:",
         "agentPromptLabel": "المطالبة",
         "agentModelLabel": "النموذج",
+        "agentRunning": "قيد التشغيل...",
         "agentStatsBash": "الأوامر",
         "agentStatsRead": "الملفات المقروءة",
         "agentStatsSearch": "عمليات البحث",

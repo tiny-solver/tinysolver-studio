@@ -1719,6 +1719,7 @@
         "nameLabel": "Nome:",
         "agentPromptLabel": "Instrução",
         "agentModelLabel": "Modelo",
+        "agentRunning": "Em execução...",
         "agentStatsBash": "Comandos",
         "agentStatsRead": "Arquivos lidos",
         "agentStatsSearch": "Pesquisas",

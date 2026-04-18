@@ -1719,6 +1719,7 @@
         "nameLabel": "名稱：",
         "agentPromptLabel": "提示詞",
         "agentModelLabel": "模型",
+        "agentRunning": "執行中...",
         "agentStatsBash": "命令",
         "agentStatsRead": "讀取檔案",
         "agentStatsSearch": "搜尋",

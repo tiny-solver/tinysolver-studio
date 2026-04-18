@@ -1719,6 +1719,7 @@
         "nameLabel": "名前:",
         "agentPromptLabel": "プロンプト",
         "agentModelLabel": "モデル",
+        "agentRunning": "実行中...",
         "agentStatsBash": "コマンド",
         "agentStatsRead": "ファイル読取",
         "agentStatsSearch": "検索",

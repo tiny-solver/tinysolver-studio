@@ -15,6 +15,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CompassIcon,
+  Loader2,
   MapIcon,
   TerminalIcon,
   WrenchIcon,
@@ -192,7 +193,7 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
 
         {/* Collapsible body */}
         <CollapsibleContent>
-          <div className="max-h-[32rem] overflow-y-auto space-y-3 px-4 pb-4">
+          <div className="max-h-72 overflow-y-auto space-y-3 px-4 pb-4">
             {/* Model + duration summary */}
             {(model || durationSuffix) && (
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -241,9 +242,12 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
 
             {/* Running indicator */}
             {isRunning && !part.output && (
-              <Shimmer className="text-sm" duration={2}>
-                Running...
-              </Shimmer>
+              <div className="flex items-center gap-2">
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                <Shimmer className="text-sm" duration={2}>
+                  {t("agentRunning")}
+                </Shimmer>
+              </div>
             )}
 
             {/* Error output */}
