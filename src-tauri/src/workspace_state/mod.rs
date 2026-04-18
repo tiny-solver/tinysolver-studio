@@ -19,8 +19,8 @@ use crate::web::event_bridge::{emit_event, EventEmitter};
 pub const WORKSPACE_STATE_PROTOCOL_VERSION: u16 = 1;
 
 const WATCH_IGNORED_DIRS: &[&str] = &["__pycache__"];
-const WATCH_DEBOUNCE_MS: u64 = 2_000;
-const WATCH_MAX_BATCH_WINDOW_MS: u64 = 5_000;
+const WATCH_DEBOUNCE_MS: u64 = 1_000;
+const WATCH_MAX_BATCH_WINDOW_MS: u64 = 3_000;
 const WATCH_MAX_CHANGED_PATHS: usize = 2_000;
 const WATCH_EVENT_CHANNEL_CAPACITY: usize = 2_048;
 const RECENT_EVENT_CAPACITY: usize = 24;
