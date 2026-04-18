@@ -16,14 +16,14 @@ const ICON_CENTER = 8
 const ICON_VIEWBOX = 16
 const ICON_CIRCUMFERENCE = 2 * Math.PI * ICON_RADIUS
 
-function formatNumber(n: number): string {
-  return n.toLocaleString()
-}
-
 function formatTokenCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+  }
+  if (n >= 1_000) {
+    return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`
+  }
+  return n.toLocaleString()
 }
 
 function formatPercent(percent: number | null): string {
@@ -192,7 +192,7 @@ export function StatusBarTokens() {
               <span className="tabular-nums">
                 {contextUsed == null || contextMax == null
                   ? "--"
-                  : `${formatNumber(contextUsed)} / ${formatNumber(contextMax)}`}
+                  : `${formatTokenCount(contextUsed)} / ${formatTokenCount(contextMax)}`}
               </span>
             </div>
           </div>
@@ -214,7 +214,7 @@ export function StatusBarTokens() {
                 >
                   <span>{t(row.key)}</span>
                   <span className="tabular-nums">
-                    {formatNumber(row.value)}
+                    {formatTokenCount(row.value)}
                   </span>
                 </div>
               ))}
