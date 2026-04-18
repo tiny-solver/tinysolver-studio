@@ -13,9 +13,8 @@ pub fn configure_std_command(command: &mut Command) -> &mut Command {
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(CREATE_NO_WINDOW);
-        set_utf8_env(command);
     }
-
+    set_utf8_env(command);
     command
 }
 
@@ -34,41 +33,38 @@ pub fn configure_tokio_command(
     #[cfg(windows)]
     {
         command.creation_flags(CREATE_NO_WINDOW);
-        set_utf8_env(command);
     }
-
+    set_utf8_env(command);
     command
 }
 
-/// Hint child processes to produce UTF-8 output on Windows.
+/// Force child processes to emit English, UTF-8 output.
 ///
-/// Sets environment variables recognised by common runtimes (Python, MSYS2/Git
-/// Bash, .NET console apps).  Not all programs honour these, but they cover the
-/// most frequent sources of mojibake in practice.
-#[cfg(windows)]
+/// Why: downstream code classifies errors by substring-matching English
+/// git/coreutils stderr (e.g. "unknown revision or path not in the working
+/// tree"). Without pinning the locale, those matches silently fail under
+/// non-English system locales and legitimate empty-repo cases bubble up as
+/// red error banners.
 fn set_utf8_env<C: SetEnv>(command: &mut C) {
     // Python
     command.env("PYTHONUTF8", "1");
     command.env("PYTHONIOENCODING", "utf-8");
-    // MSYS2 / Git-for-Windows / POSIX-layer tools
+    // POSIX locale — honored by git, coreutils, MSYS2/Git-for-Windows.
     command.env("LANG", "C.UTF-8");
     command.env("LC_ALL", "C.UTF-8");
 }
 
 /// Abstraction over the `.env()` method shared by std and tokio Command types.
-#[cfg(windows)]
 trait SetEnv {
     fn env(&mut self, key: &str, val: &str) -> &mut Self;
 }
 
-#[cfg(windows)]
 impl SetEnv for Command {
     fn env(&mut self, key: &str, val: &str) -> &mut Self {
         Command::env(self, key, val)
     }
 }
 
-#[cfg(windows)]
 impl SetEnv for tokio::process::Command {
     fn env(&mut self, key: &str, val: &str) -> &mut Self {
         tokio::process::Command::env(self, key, val)
