@@ -6,7 +6,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { DiffOnMount } from "@monaco-editor/react"
 import type { editor as MonacoEditorNs } from "monaco-editor"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
+import { useZoomLevel } from "@/hooks/use-appearance"
 import { cn } from "@/lib/utils"
+
+const EDITOR_BASE_FONT_SIZE = 13
 
 import "@/lib/monaco-local"
 
@@ -36,6 +39,7 @@ export function DiffViewer({
   className,
 }: DiffViewerProps) {
   const editorTheme = useMonacoThemeSync()
+  const { zoomLevel } = useZoomLevel()
   const diffEditorRef = useRef<MonacoEditorNs.IStandaloneDiffEditor | null>(
     null
   )
@@ -187,7 +191,7 @@ export function DiffViewer({
             renderSideBySide: true,
             renderSideBySideInlineBreakpoint: 0,
             automaticLayout: true,
-            fontSize: 13,
+            fontSize: (EDITOR_BASE_FONT_SIZE * zoomLevel) / 100,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             renderOverviewRuler: false,

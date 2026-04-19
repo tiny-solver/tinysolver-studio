@@ -7,7 +7,10 @@ import type { editor as MonacoEditorNs, IRange } from "monaco-editor"
 import { ArrowLeft, ArrowRight, CheckCheck } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
+import { useZoomLevel } from "@/hooks/use-appearance"
 import { cn } from "@/lib/utils"
+
+const EDITOR_BASE_FONT_SIZE = 13
 import { Button } from "@/components/ui/button"
 import {
   ResizableHandle,
@@ -55,6 +58,7 @@ export function ThreePaneMergeEditor({
 }: ThreePaneMergeEditorProps) {
   const t = useTranslations("MergePage")
   const editorTheme = useMonacoThemeSync()
+  const { zoomLevel } = useZoomLevel()
   const { registerEditor } = useSyncScroll()
 
   const leftEditorRef = useRef<MonacoEditorNs.IStandaloneCodeEditor | null>(
@@ -497,23 +501,30 @@ export function ThreePaneMergeEditor({
   // ---------------------------------------------------------------------------
   // Editor options
   // ---------------------------------------------------------------------------
-  const editorOptions: MonacoEditorNs.IStandaloneEditorConstructionOptions = {
-    fontSize: 13,
-    minimap: { enabled: false },
-    scrollBeyondLastLine: false,
-    automaticLayout: true,
-    lineNumbers: "on",
-    glyphMargin: true,
-    folding: false,
-    wordWrap: "off",
-    overviewRulerLanes: 0,
-  }
+  const editorOptions =
+    useMemo<MonacoEditorNs.IStandaloneEditorConstructionOptions>(
+      () => ({
+        fontSize: (EDITOR_BASE_FONT_SIZE * zoomLevel) / 100,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        lineNumbers: "on",
+        glyphMargin: true,
+        folding: false,
+        wordWrap: "off",
+        overviewRulerLanes: 0,
+      }),
+      [zoomLevel]
+    )
 
-  const readonlyOptions = {
-    ...editorOptions,
-    readOnly: true,
-    domReadOnly: true,
-  }
+  const readonlyOptions = useMemo(
+    () => ({
+      ...editorOptions,
+      readOnly: true,
+      domReadOnly: true,
+    }),
+    [editorOptions]
+  )
 
   const loadingEl = (
     <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
