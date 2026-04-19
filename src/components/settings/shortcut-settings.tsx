@@ -100,7 +100,7 @@ export function ShortcutSettings() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="w-full space-y-4">
+      <div className="w-full space-y-4 p-3 md:p-4">
         <section className="rounded-xl border bg-card p-4 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">

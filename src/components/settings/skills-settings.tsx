@@ -775,7 +775,7 @@ export function SkillsSettings() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col p-3 md:p-4">
       <div className="flex items-center justify-between gap-3 pb-4">
         <div>
           <h2 className="text-base font-semibold">{t("title")}</h2>

@@ -343,7 +343,7 @@ export function SystemNetworkSettings() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="w-full space-y-4">
+      <div className="w-full space-y-4 p-3 md:p-4">
         <section className="space-y-1">
           <div className="flex items-center justify-between">
             <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>

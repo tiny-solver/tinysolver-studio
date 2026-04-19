@@ -14,7 +14,7 @@ export function ChatChannelSettings() {
 
   return (
     <ScrollArea className="h-full">
-      <Tabs defaultValue="channels" className="w-full space-y-4">
+      <Tabs defaultValue="channels" className="w-full space-y-4 p-3 md:p-4">
         <section className="space-y-3">
           <div>
             <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>

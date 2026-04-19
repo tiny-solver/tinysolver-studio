@@ -93,7 +93,7 @@ export function ModelProviderSettings() {
 
   return (
     <ScrollArea className="h-full">
-      <section className="space-y-3">
+      <section className="space-y-3 px-3 pt-3 md:px-4 md:pt-4">
         <div>
           <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ export function ModelProviderSettings() {
         </div>
       </section>
 
-      <section className="mt-4 space-y-2">
+      <section className="mt-4 space-y-2 px-3 pb-3 md:px-4 md:pb-4">
         <div className="flex items-center justify-between gap-2">
           <Select
             value={filter ?? "__all__"}

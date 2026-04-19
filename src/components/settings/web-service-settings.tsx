@@ -218,7 +218,7 @@ export function WebServiceSettings() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-6">
+      <div className="space-y-6 p-3 md:p-4">
         <div>
           <h3 className="text-lg font-medium">{t("sectionTitle")}</h3>
           <p className="text-sm text-muted-foreground">

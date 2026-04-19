@@ -236,12 +236,7 @@ export function SettingsShell({ children }: SettingsShellProps) {
           </Sheet>
         )}
 
-        <section
-          className={cn(
-            "flex-1 min-w-0 min-h-0 overflow-auto",
-            isMobile ? "p-3" : "p-4"
-          )}
-        >
+        <section className="flex-1 min-w-0 min-h-0 overflow-hidden">
           {children}
         </section>
       </div>

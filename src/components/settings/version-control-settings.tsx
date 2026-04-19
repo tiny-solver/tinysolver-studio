@@ -346,7 +346,7 @@ export function VersionControlSettings() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="w-full space-y-4">
+      <div className="w-full space-y-4 p-3 md:p-4">
         <section className="space-y-1">
           <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
           <p className="text-xs text-muted-foreground">
