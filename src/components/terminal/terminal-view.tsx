@@ -9,6 +9,7 @@ import {
   terminalKill,
 } from "@/lib/api"
 import { useZoomLevel } from "@/hooks/use-appearance"
+import { detectPlatform } from "@/hooks/use-platform"
 import type { TerminalEvent } from "@/lib/types"
 import type { ITheme, Terminal as XTermTerminal } from "@xterm/xterm"
 
@@ -161,6 +162,43 @@ export function TerminalView({
 
       fitAddonRef.current = fitAddon
       termRef.current = term
+
+      // Shell line-editing shortcuts. Sends readline/zle bindings so they
+      // work regardless of terminfo.
+      //   Alt/Option + ←/→ / Backspace: word-level moves & delete
+      //   macOS Cmd + ←/→ / Backspace : line-level moves & clear
+      // Uses `e.code` (physical key) to be robust against dead-key layouts on
+      // macOS where Option can turn some keys into `key: "Dead"`.
+      // AltGr on Windows/Linux is reported as ctrlKey+altKey and is excluded
+      // by the `!ctrlKey` guard below.
+      const isMac = detectPlatform() === "macos"
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type !== "keydown") return true
+        // Skip during IME composition to avoid corrupting candidate buffer.
+        if (e.isComposing) return true
+
+        const { code, altKey, metaKey, ctrlKey, shiftKey } = e
+
+        const writeSeq = (seq: string) => {
+          terminalWrite(terminalId, seq).catch(() => {})
+          e.preventDefault()
+          return false
+        }
+
+        if (altKey && !ctrlKey && !metaKey && !shiftKey) {
+          if (code === "ArrowLeft") return writeSeq("\x1bb")
+          if (code === "ArrowRight") return writeSeq("\x1bf")
+          if (code === "Backspace") return writeSeq("\x1b\x7f")
+        }
+
+        if (isMac && metaKey && !altKey && !ctrlKey && !shiftKey) {
+          if (code === "ArrowLeft") return writeSeq("\x01")
+          if (code === "ArrowRight") return writeSeq("\x05")
+          if (code === "Backspace") return writeSeq("\x15")
+        }
+
+        return true
+      })
 
       // Watch <html> class changes for theme switching
       const themeObserver = new MutationObserver(() => {

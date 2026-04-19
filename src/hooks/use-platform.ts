@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 
 export type PlatformType = "macos" | "windows" | "linux" | "unknown"
 
-function detectPlatform(): PlatformType {
+export function detectPlatform(): PlatformType {
   if (typeof navigator === "undefined") return "unknown"
 
   const platform = navigator.platform.toLowerCase()
