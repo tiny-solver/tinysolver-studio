@@ -30,9 +30,16 @@ export interface WorkspaceStateView {
   isGitRepo: boolean
 }
 
+export type WorkspaceEnvelopeListener = (envelope: {
+  seq: number
+  kind: string
+  changed_paths: string[]
+}) => void
+
 export interface WorkspaceStateResult extends WorkspaceStateView {
   requestResync: (reason?: string) => Promise<void>
   restart: () => Promise<void>
+  subscribeEnvelopes: (listener: WorkspaceEnvelopeListener) => () => void
 }
 
 const WORKSPACE_PROTOCOL_VERSION = 1
@@ -140,6 +147,7 @@ class WorkspaceStateStore {
   private readonly rootPath: string
   private readonly normalizedRootPath: string
   private listeners = new Set<() => void>()
+  private envelopeListeners = new Set<WorkspaceEnvelopeListener>()
   private state: WorkspaceStateView
   private refCount = 0
   private started = false
@@ -168,6 +176,13 @@ class WorkspaceStateStore {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
+    }
+  }
+
+  subscribeEnvelopes = (listener: WorkspaceEnvelopeListener): (() => void) => {
+    this.envelopeListeners.add(listener)
+    return () => {
+      this.envelopeListeners.delete(listener)
     }
   }
 
@@ -212,6 +227,16 @@ class WorkspaceStateStore {
         this.patchState((prev) => applySnapshot(prev, snapshot))
         if (snapshot.full) {
           this.hasBaselineSnapshot = true
+        } else {
+          // Forward replayed envelopes so downstream cache-invalidation
+          // hooks catch up on FS activity that happened while disconnected.
+          for (const envelope of snapshot.deltas) {
+            this.notifyEnvelope({
+              seq: envelope.seq,
+              kind: envelope.kind,
+              changed_paths: envelope.changed_paths ?? [],
+            })
+          }
         }
       } catch (error) {
         this.patchState((prev) => ({
@@ -315,6 +340,15 @@ class WorkspaceStateStore {
         )
         if (!this.isLifecycleActive(lifecycleId)) return
         this.patchState((prev) => applySnapshot(prev, catchUpSnapshot))
+        if (!catchUpSnapshot.full) {
+          for (const envelope of catchUpSnapshot.deltas) {
+            this.notifyEnvelope({
+              seq: envelope.seq,
+              kind: envelope.kind,
+              changed_paths: envelope.changed_paths ?? [],
+            })
+          }
+        }
       } catch (error) {
         this.patchState((prev) => ({
           ...prev,
@@ -418,6 +452,26 @@ class WorkspaceStateStore {
       health: "healthy",
       error: null,
     }))
+
+    this.notifyEnvelope({
+      seq: event.seq,
+      kind: event.kind,
+      changed_paths: event.changed_paths ?? [],
+    })
+  }
+
+  private notifyEnvelope = (envelope: {
+    seq: number
+    kind: string
+    changed_paths: string[]
+  }) => {
+    for (const listener of this.envelopeListeners) {
+      try {
+        listener(envelope)
+      } catch (error) {
+        console.error("[workspace-state] envelope listener failed", error)
+      }
+    }
   }
 
   private patchState = (
@@ -509,11 +563,20 @@ export function useWorkspaceStateStore(
     await store.restart()
   }, [store])
 
+  const subscribeEnvelopes = useCallback(
+    (listener: WorkspaceEnvelopeListener) => {
+      if (!store) return () => {}
+      return store.subscribeEnvelopes(listener)
+    },
+    [store]
+  )
+
   if (!rootPath) {
     return {
       ...EMPTY_STATE,
       requestResync,
       restart,
+      subscribeEnvelopes,
     }
   }
 
@@ -521,5 +584,6 @@ export function useWorkspaceStateStore(
     ...snapshot,
     requestResync,
     restart,
+    subscribeEnvelopes,
   }
 }
