@@ -21,7 +21,7 @@ import type {
   FolderDetail,
   DbConversationSummary,
   ImportResult,
-  OpenedConversation,
+  OpenedTab,
   GitStatusEntry,
   GitBranchList,
   GitPullResult,
@@ -598,20 +598,46 @@ export async function getFolder(folderId: number): Promise<FolderDetail> {
   return getTransport().call("get_folder", { folderId })
 }
 
-export async function listFolderConversations(params: {
-  folder_id: number
+export async function listAllConversations(params?: {
+  folder_ids?: number[] | null
   agent_type?: AgentType | null
   search?: string | null
   sort_by?: string | null
   status?: string | null
 }): Promise<DbConversationSummary[]> {
-  return getTransport().call("list_folder_conversations", {
-    folderId: params.folder_id,
-    agentType: params.agent_type ?? null,
-    search: params.search ?? null,
-    sortBy: params.sort_by ?? null,
-    status: params.status ?? null,
+  return getTransport().call("list_all_conversations", {
+    folderIds: params?.folder_ids ?? null,
+    agentType: params?.agent_type ?? null,
+    search: params?.search ?? null,
+    sortBy: params?.sort_by ?? null,
+    status: params?.status ?? null,
   })
+}
+
+export async function listOpenedTabs(): Promise<OpenedTab[]> {
+  return getTransport().call("list_opened_tabs")
+}
+
+export async function saveOpenedTabs(items: OpenedTab[]): Promise<void> {
+  return getTransport().call("save_opened_tabs", { items })
+}
+
+export async function listOpenFolderDetails(): Promise<FolderDetail[]> {
+  return getTransport().call("list_open_folder_details")
+}
+
+export async function listAllFolderDetails(): Promise<FolderDetail[]> {
+  return getTransport().call("list_all_folder_details")
+}
+
+export async function openFolderById(folderId: number): Promise<FolderDetail> {
+  return getTransport().call("open_folder_by_id", { folderId })
+}
+
+export async function removeFolderFromWorkspace(
+  folderId: number
+): Promise<void> {
+  return getTransport().call("remove_folder_from_workspace", { folderId })
 }
 
 export async function importLocalConversations(
@@ -624,16 +650,6 @@ export async function getFolderConversation(
   conversationId: number
 ): Promise<DbConversationDetail> {
   return getTransport().call("get_folder_conversation", { conversationId })
-}
-
-export async function saveFolderOpenedConversations(
-  folderId: number,
-  items: OpenedConversation[]
-): Promise<void> {
-  return getTransport().call("save_folder_opened_conversations", {
-    folderId,
-    items,
-  })
 }
 
 export async function setFolderParentBranch(
@@ -1053,23 +1069,8 @@ export async function gitAddFiles(
 
 // Window management commands
 
-export async function openFolderWindow(
-  path: string,
-  options?: { newWindow?: boolean }
-): Promise<void> {
-  if (getTransport().isDesktop()) {
-    return getTransport().call("open_folder_window", { path })
-  }
-  const entry = await getTransport().call<{ id: number }>(
-    "open_folder_window",
-    { path }
-  )
-  const url = `/folder?id=${entry.id}`
-  if (options?.newWindow) {
-    window.open(url, `folder-${entry.id}`)
-  } else {
-    window.location.href = url
-  }
+export async function openFolder(path: string): Promise<FolderDetail> {
+  return getTransport().call("open_folder", { path })
 }
 
 export async function openCommitWindow(folderId: number): Promise<void> {
@@ -1120,7 +1121,9 @@ export async function openProjectBootWindow(source?: string): Promise<void> {
   if (getTransport().isDesktop()) {
     return getTransport().call("open_project_boot_window", { source })
   }
-  window.open("/project-boot", "project-boot")
+  if (typeof window !== "undefined") {
+    window.open("/project-boot", "project-boot")
+  }
 }
 
 export async function detectPackageManager(
@@ -1143,27 +1146,6 @@ export async function createShadcnProject(params: {
     packageManager: params.packageManager,
     targetDir: params.targetDir,
   })
-}
-
-export async function listOpenFolders(): Promise<FolderHistoryEntry[]> {
-  return getTransport().call("list_open_folders")
-}
-
-export async function focusFolderWindow(folderId: number): Promise<void> {
-  if (getTransport().isDesktop()) {
-    return getTransport().call("focus_folder_window", { folderId })
-  }
-  // Web mode: open empty string to focus existing named window without reload.
-  // If the window doesn't exist (was closed), open the folder page.
-  const win = window.open("", `folder-${folderId}`)
-  if (
-    !win ||
-    win.closed ||
-    !win.location.href ||
-    win.location.href === "about:blank"
-  ) {
-    window.open(`/folder?id=${folderId}`, `folder-${folderId}`)
-  }
 }
 
 // Conversation CRUD commands

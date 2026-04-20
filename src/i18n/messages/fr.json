@@ -825,7 +825,24 @@
         "noNewSessionsFound": "Aucune nouvelle session trouvée ({skipped} ignorée(s))",
         "importFailed": "Échec de l’import : {message}",
         "reviewCompleted": "{count, plural, one {# session en revue} other {# sessions en revue}} marquée(s) comme terminée(s)",
-        "completeReviewFailed": "Échec de la finalisation des sessions en revue : {message}"
+        "completeReviewFailed": "Échec de la finalisation des sessions en revue : {message}",
+        "folderOpened": "Dossier {name} ouvert",
+        "folderRemoved": "Dossier {name} retiré",
+        "openFolderFailed": "Échec de l'ouverture du dossier",
+        "removeFolderFailed": "Échec de la suppression du dossier : {message}"
+      },
+      "statsLabel": "{folders} dossiers · {convos} conversations",
+      "openFolder": "Ouvrir le dossier",
+      "searchPlaceholder": "Rechercher des conversations...",
+      "viewFlat": "Vue à plat",
+      "viewGrouped": "Grouper par dossier",
+      "noMatchingConversations": "Aucune conversation correspondante",
+      "removeFolderConfirmTitle": "Retirer le dossier de l'espace de travail ?",
+      "removeFolderConfirmDescription": "Retirer \"{name}\" de l'espace de travail ? Les onglets et terminaux associés seront fermés.",
+      "folderHeaderMenu": {
+        "focus": "Focaliser",
+        "closeFolderTabs": "Fermer tous les onglets de ce dossier",
+        "removeFromWorkspace": "Retirer de l'espace de travail"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "Fermer les autres",
       "closeAll": "Tout fermer",
       "tileDisplay": "Affichage en mosaïque",
-      "untileDisplay": "Quitter la mosaïque"
+      "untileDisplay": "Quitter la mosaïque",
+      "closeFolderTabs": "Fermer tous les onglets de {folder}",
+      "revealInSidebar": "Afficher dans la barre latérale"
     },
     "fileWorkspace": {
       "files": "Fichiers",
@@ -976,7 +995,8 @@
       "close": "Fermer",
       "closeOthers": "Fermer les autres",
       "closeAll": "Tout fermer",
-      "hideTerminal": "Masquer le terminal ({shortcut})"
+      "hideTerminal": "Masquer le terminal ({shortcut})",
+      "openFolderFirst": "Ouvrez d'abord un dossier"
     },
     "sessionFiles": {
       "currentResponse": "Réponse actuelle",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "Bloc {index}",
       "loadingHunk": "Chargement du hunk...",
       "noDiffData": "Aucune donnée diff"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

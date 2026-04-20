@@ -825,7 +825,24 @@
         "noNewSessionsFound": "没有新会话（已跳过 {skipped} 个）",
         "importFailed": "导入失败：{message}",
         "reviewCompleted": "已将 {count} 个复查会话标记为已完成",
-        "completeReviewFailed": "批量完成复查会话失败：{message}"
+        "completeReviewFailed": "批量完成复查会话失败：{message}",
+        "folderOpened": "已打开文件夹 {name}",
+        "folderRemoved": "已移除文件夹 {name}",
+        "openFolderFailed": "打开文件夹失败",
+        "removeFolderFailed": "移除文件夹失败：{message}"
+      },
+      "statsLabel": "{folders} 个文件夹 · {convos} 个会话",
+      "openFolder": "打开文件夹",
+      "searchPlaceholder": "搜索会话...",
+      "viewFlat": "平铺视图",
+      "viewGrouped": "按文件夹分组",
+      "noMatchingConversations": "未找到匹配的会话",
+      "removeFolderConfirmTitle": "从工作区移除该文件夹？",
+      "removeFolderConfirmDescription": "从工作区移除 \"{name}\"？其相关 Tab 与终端将会关闭。",
+      "folderHeaderMenu": {
+        "focus": "聚焦到此",
+        "closeFolderTabs": "关闭此文件夹的所有 Tab",
+        "removeFromWorkspace": "从工作区移除"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "关闭其它",
       "closeAll": "关闭所有",
       "tileDisplay": "平铺显示",
-      "untileDisplay": "取消平铺"
+      "untileDisplay": "取消平铺",
+      "closeFolderTabs": "关闭 {folder} 的所有标签",
+      "revealInSidebar": "在侧边栏中定位"
     },
     "fileWorkspace": {
       "files": "文件",
@@ -976,7 +995,8 @@
       "close": "关闭",
       "closeOthers": "关闭其它",
       "closeAll": "关闭所有",
-      "hideTerminal": "隐藏终端（{shortcut}）"
+      "hideTerminal": "隐藏终端（{shortcut}）",
+      "openFolderFirst": "请先打开一个文件夹"
     },
     "sessionFiles": {
       "currentResponse": "当前响应",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "代码块 {index}",
       "loadingHunk": "正在加载代码块...",
       "noDiffData": "无差异数据"
+    },
+    "conversationContextBar": {
+      "searchFolder": "搜索文件夹...",
+      "searchBranch": "搜索分支...",
+      "noFolders": "暂无文件夹",
+      "noBranches": "暂无分支",
+      "noBranch": "（无分支）",
+      "openNewFolder": "从磁盘打开文件夹...",
+      "cancel": "取消",
+      "create": "创建",
+      "commit": "提交",
+      "push": "推送",
+      "merge": "合并",
+      "toasts": {
+        "folderChanged": "已切换到 {name}",
+        "openFolderFailed": "打开文件夹失败",
+        "openStashFailed": "打开贮藏窗口失败",
+        "openMergeFailed": "打开合并窗口失败"
+      }
     }
   },
   "ProjectBoot": {

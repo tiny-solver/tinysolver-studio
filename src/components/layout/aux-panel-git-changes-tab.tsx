@@ -34,7 +34,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
@@ -378,7 +378,7 @@ export function GitChangesTab() {
   const t = useTranslations("Folder.gitChangesTab")
   const tCommon = useTranslations("Folder.common")
   const tFileTree = useTranslations("Folder.fileTreeTab")
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const { tabs, activeTabId } = useTabContext()
   const { openFilePreview, openWorkingTreeDiff } = useWorkspaceContext()
   const workspaceState = useWorkspaceStateStore(folder?.path ?? null)

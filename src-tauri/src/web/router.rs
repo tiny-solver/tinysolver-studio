@@ -34,12 +34,20 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
             post(handlers::conversations::get_conversation),
         )
         .route(
-            "/list_folder_conversations",
-            post(handlers::conversations::list_folder_conversations),
+            "/list_all_conversations",
+            post(handlers::conversations::list_all_conversations),
         )
         .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
+        )
+        .route(
+            "/list_opened_tabs",
+            post(handlers::conversations::list_opened_tabs),
+        )
+        .route(
+            "/save_opened_tabs",
+            post(handlers::conversations::save_opened_tabs),
         )
         .route(
             "/import_local_conversations",
@@ -81,13 +89,22 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
             post(handlers::folders::list_open_folders),
         )
         .route(
-            "/close_folder_window",
-            post(handlers::folders::close_folder_window),
+            "/list_open_folder_details",
+            post(handlers::folders::list_open_folder_details),
+        )
+        .route(
+            "/list_all_folder_details",
+            post(handlers::folders::list_all_folder_details),
         )
         .route("/get_folder", post(handlers::folders::get_folder))
+        .route("/open_folder", post(handlers::folders::open_folder))
         .route(
-            "/open_folder_window",
-            post(handlers::folders::open_folder_window),
+            "/open_folder_by_id",
+            post(handlers::folders::open_folder_by_id),
+        )
+        .route(
+            "/remove_folder_from_workspace",
+            post(handlers::folders::remove_folder_from_workspace),
         )
         .route(
             "/add_folder_to_history",
@@ -104,10 +121,6 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route(
             "/create_folder_directory",
             post(handlers::folders::create_folder_directory),
-        )
-        .route(
-            "/save_folder_opened_conversations",
-            post(handlers::folders::save_folder_opened_conversations),
         )
         .route("/get_git_branch", post(handlers::folders::get_git_branch))
         .route(

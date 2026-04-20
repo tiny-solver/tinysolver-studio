@@ -19,15 +19,38 @@ use crate::parsers::{path_eq_for_matching, AgentParser, ParseError};
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn list_folder_conversations(
+pub async fn list_all_conversations(
     db: tauri::State<'_, AppDatabase>,
-    folder_id: i32,
+    folder_ids: Option<Vec<i32>>,
     agent_type: Option<AgentType>,
     search: Option<String>,
     sort_by: Option<String>,
     status: Option<String>,
 ) -> Result<Vec<DbConversationSummary>, AppCommandError> {
-    conversation_service::list_by_folder(&db.conn, folder_id, agent_type, search, sort_by, status)
+    conversation_service::list_all(&db.conn, folder_ids, agent_type, search, sort_by, status)
+        .await
+        .map_err(AppCommandError::from)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn list_opened_tabs(
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<Vec<OpenedTab>, AppCommandError> {
+    use crate::db::service::tab_service;
+    tab_service::list_all_tabs(&db.conn)
+        .await
+        .map_err(AppCommandError::from)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn save_opened_tabs(
+    db: tauri::State<'_, AppDatabase>,
+    items: Vec<OpenedTab>,
+) -> Result<(), AppCommandError> {
+    use crate::db::service::tab_service;
+    tab_service::save_all_tabs(&db.conn, items)
         .await
         .map_err(AppCommandError::from)
 }

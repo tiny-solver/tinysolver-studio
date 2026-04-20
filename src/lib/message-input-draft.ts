@@ -90,9 +90,9 @@ export function buildConversationDraftStorageKey(
 }
 
 export function buildNewConversationDraftStorageKey(params: {
-  folderId: number
+  tabId: string
 }): string {
-  return `new:${params.folderId}`
+  return `new:${params.tabId}`
 }
 
 export function loadMessageInputDraft(draftKey: string): string | null {

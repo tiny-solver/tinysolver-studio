@@ -23,7 +23,8 @@ import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import { useAcpActions } from "@/contexts/acp-connections-context"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useSessionStats } from "@/contexts/session-stats-context"
 import { useTaskContext } from "@/contexts/task-context"
@@ -159,8 +160,9 @@ const ConversationTabView = memo(function ConversationTabView({
   const t = useTranslations("Folder.conversation")
   const tWelcome = useTranslations("Folder.chat.welcomeInputPanel")
   const sharedT = useTranslations("Folder.chat.shared")
-  const { folder, folderId, refreshConversations, updateConversationLocal } =
-    useFolderContext()
+  const { activeFolder: folder, activeFolderId } = useActiveFolder()
+  const { refreshConversations, updateConversationLocal } = useAppWorkspace()
+  const folderId = activeFolderId ?? 0
   const { tabs, bindConversationTab, setTabRuntimeConversationId, pinTab } =
     useTabContext()
   const { setSessionStats } = useSessionStats()
@@ -267,8 +269,8 @@ const ConversationTabView = memo(function ConversationTabView({
     if (dbConversationId != null) {
       return buildConversationDraftStorageKey(selectedAgent, dbConversationId)
     }
-    return buildNewConversationDraftStorageKey({ folderId })
-  }, [dbConversationId, folderId, selectedAgent])
+    return buildNewConversationDraftStorageKey({ tabId })
+  }, [dbConversationId, tabId, selectedAgent])
   const workingDirForConnection = useMemo(() => {
     if (dbConversationId != null) {
       return detailLoading ? undefined : folder?.path
@@ -624,7 +626,7 @@ const ConversationTabView = memo(function ConversationTabView({
             effectiveConversationId
           )
           moveMessageInputDraft(
-            buildNewConversationDraftStorageKey({ folderId }),
+            buildNewConversationDraftStorageKey({ tabId }),
             buildConversationDraftStorageKey(selectedAgent, newConversationId)
           )
           statusUpdatedRef.current = false
@@ -1034,13 +1036,9 @@ export function ConversationDetailPanel() {
     getSession,
     removeConversation: runtimeRemoveConversation,
   } = useConversationRuntime()
-  const {
-    folder,
-    newConversation,
-    conversations,
-    refreshConversations,
-    updateConversationLocal,
-  } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
+  const { conversations, refreshConversations, updateConversationLocal } =
+    useAppWorkspace()
   const {
     tabs,
     activeTabId,
@@ -1050,6 +1048,13 @@ export function ConversationDetailPanel() {
     switchTab,
     onPreviewTabReplaced,
   } = useTabContext()
+  const newConversation = useMemo(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId)
+    if (!activeTab || activeTab.conversationId != null) return null
+    const workingDir = activeTab.workingDir ?? folder?.path
+    if (!workingDir) return null
+    return { workingDir, folderId: activeTab.folderId }
+  }, [tabs, activeTabId, folder?.path])
   const { disconnect: disconnectByKey } = useAcpActions()
   const { addTask, updateTask } = useTaskContext()
   const [reloadByTabId, setReloadByTabId] = useState<Record<string, number>>({})
@@ -1298,7 +1303,7 @@ export function ConversationDetailPanel() {
 
   const handleNewConversation = useCallback(() => {
     if (!folder) return
-    openNewConversationTab(folder.path)
+    openNewConversationTab(folder.id, folder.path)
   }, [folder, openNewConversationTab])
 
   const handleCloseActiveTab = useCallback(() => {
@@ -1372,7 +1377,10 @@ export function ConversationDetailPanel() {
     if (!folder) return
 
     if (hasNoTabs) {
-      openNewConversationTab(newConversation?.workingDir ?? folder.path)
+      openNewConversationTab(
+        folder.id,
+        newConversation?.workingDir ?? folder.path
+      )
     }
   }, [folder, hasNoTabs, newConversation?.workingDir, openNewConversationTab])
 

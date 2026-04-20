@@ -20,10 +20,14 @@ interface TabItemProps {
   tab: TabItemData
   isActive: boolean
   isTileMode: boolean
+  folderName: string | null
+  folderBranch: string | null
   onSwitch: (tabId: string) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseAll: () => void
+  onCloseFolderTabs: (folderId: number) => void
+  onRevealInSidebar: (folderId: number) => void
   onPin: (tabId: string) => void
   onToggleTile: () => void
 }
@@ -32,16 +36,33 @@ export const TabItem = memo(function TabItem({
   tab,
   isActive,
   isTileMode,
+  folderName,
+  folderBranch,
   onSwitch,
   onClose,
   onCloseOthers,
   onCloseAll,
+  onCloseFolderTabs,
+  onRevealInSidebar,
   onPin,
   onToggleTile,
 }: TabItemProps) {
   const t = useTranslations("Folder.tabs")
   const isDragging = useRef(false)
   const itemRef = useRef<HTMLDivElement>(null)
+
+  const resolvedFolderName = folderName ?? String(tab.folderId)
+  const tooltip = folderBranch
+    ? `${resolvedFolderName} · ${folderBranch}  —  ${tab.title}`
+    : `${resolvedFolderName}  —  ${tab.title}`
+
+  const handleCloseFolderTabs = useCallback(() => {
+    onCloseFolderTabs(tab.folderId)
+  }, [onCloseFolderTabs, tab.folderId])
+
+  const handleRevealInSidebar = useCallback(() => {
+    onRevealInSidebar(tab.folderId)
+  }, [onRevealInSidebar, tab.folderId])
 
   const clearResidualStyles = useCallback(() => {
     const el = itemRef.current
@@ -119,7 +140,7 @@ export const TabItem = memo(function TabItem({
                 "truncate max-w-[140px]",
                 !tab.isPinned && "[font-style:oblique]"
               )}
-              title={tab.title}
+              title={tooltip}
             >
               {tab.title}
             </span>
@@ -146,7 +167,13 @@ export const TabItem = memo(function TabItem({
           <ContextMenuItem onSelect={handleCloseOthers}>
             {t("closeOthers")}
           </ContextMenuItem>
+          <ContextMenuItem onSelect={handleCloseFolderTabs}>
+            {t("closeFolderTabs", { folder: resolvedFolderName })}
+          </ContextMenuItem>
           <ContextMenuSeparator />
+          <ContextMenuItem onSelect={handleRevealInSidebar}>
+            {t("revealInSidebar")}
+          </ContextMenuItem>
           <ContextMenuItem onSelect={onToggleTile}>
             {isTileMode ? t("untileDisplay") : t("tileDisplay")}
           </ContextMenuItem>

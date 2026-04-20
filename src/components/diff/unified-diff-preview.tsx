@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { useTranslations } from "next-intl"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
@@ -529,7 +529,7 @@ export function UnifiedDiffPreview({
   className?: string
 }) {
   const t = useTranslations("Folder.diffPreview")
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const files = useMemo(() => parseUnifiedDiff(diffText), [diffText])
 
   if (!diffText.trim()) {

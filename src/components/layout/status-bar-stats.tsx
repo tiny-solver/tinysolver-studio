@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { BarChart3 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { AGENT_LABELS } from "@/lib/types"
 import { AgentIcon } from "@/components/agent-icon"
 import {
@@ -14,7 +14,7 @@ import {
 
 export function StatusBarStats() {
   const t = useTranslations("Folder.statusBar.stats")
-  const { stats } = useFolderContext()
+  const { stats } = useAppWorkspace()
 
   const activeAgents = useMemo(
     () => stats?.by_agent.filter((a) => a.conversation_count > 0) ?? [],

@@ -825,7 +825,24 @@
         "noNewSessionsFound": "No se encontraron sesiones nuevas (omitidas {skipped})",
         "importFailed": "Error al importar: {message}",
         "reviewCompleted": "Se marcaron como completadas {count, plural, one {# sesión en revisión} other {# sesiones en revisión}}",
-        "completeReviewFailed": "Error al completar sesiones en revisión: {message}"
+        "completeReviewFailed": "Error al completar sesiones en revisión: {message}",
+        "folderOpened": "Carpeta {name} abierta",
+        "folderRemoved": "Carpeta {name} eliminada",
+        "openFolderFailed": "Error al abrir carpeta",
+        "removeFolderFailed": "Error al eliminar carpeta: {message}"
+      },
+      "statsLabel": "{folders} carpetas · {convos} conversaciones",
+      "openFolder": "Abrir carpeta",
+      "searchPlaceholder": "Buscar conversaciones...",
+      "viewFlat": "Vista plana",
+      "viewGrouped": "Agrupar por carpeta",
+      "noMatchingConversations": "No hay conversaciones coincidentes",
+      "removeFolderConfirmTitle": "¿Eliminar carpeta del espacio de trabajo?",
+      "removeFolderConfirmDescription": "¿Eliminar \"{name}\" del espacio de trabajo? Sus pestañas y terminales se cerrarán.",
+      "folderHeaderMenu": {
+        "focus": "Enfocar",
+        "closeFolderTabs": "Cerrar todas las pestañas de esta carpeta",
+        "removeFromWorkspace": "Quitar del espacio de trabajo"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "Cerrar otros",
       "closeAll": "Cerrar todo",
       "tileDisplay": "Vista en mosaico",
-      "untileDisplay": "Salir de mosaico"
+      "untileDisplay": "Salir de mosaico",
+      "closeFolderTabs": "Cerrar todas las pestañas de {folder}",
+      "revealInSidebar": "Mostrar en la barra lateral"
     },
     "fileWorkspace": {
       "files": "Archivos",
@@ -976,7 +995,8 @@
       "close": "Cerrar",
       "closeOthers": "Cerrar otros",
       "closeAll": "Cerrar todo",
-      "hideTerminal": "Ocultar terminal ({shortcut})"
+      "hideTerminal": "Ocultar terminal ({shortcut})",
+      "openFolderFirst": "Abre primero una carpeta"
     },
     "sessionFiles": {
       "currentResponse": "Respuesta actual",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "Bloque {index}",
       "loadingHunk": "Cargando hunk...",
       "noDiffData": "Sin datos de diff"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

@@ -12,12 +12,13 @@ import {
 } from "react"
 import { terminalKill } from "@/lib/api"
 import { randomUUID } from "@/lib/utils"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 
 export interface TerminalTab {
   id: string
+  folderId: number
   title: string
   workingDir: string
   initialCommand?: string
@@ -65,7 +66,7 @@ export function useTerminalContext() {
 }
 
 export function TerminalProvider({ children }: { children: ReactNode }) {
-  const { folder } = useFolderContext()
+  const { activeFolder, activeFolderId } = useActiveFolder()
   const { shortcuts } = useShortcutSettings()
   const [isOpen, setIsOpen] = useState(false)
   const [height, setHeightState] = useState(DEFAULT_HEIGHT)
@@ -80,7 +81,8 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     tabsRef.current = tabs
   }, [tabs])
 
-  const folderPath = folder?.path ?? ""
+  const folderPath = activeFolder?.path ?? ""
+  const currentFolderId = activeFolderId ?? 0
 
   const markTerminalExited = useCallback((id: string) => {
     setExitedTerminals((prev) => {
@@ -122,6 +124,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       return [
         {
           id: autoId,
+          folderId: currentFolderId,
           title: `Terminal ${nextCounter}`,
           workingDir: folderPath,
         },
@@ -133,7 +136,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       if (!folderPath) return null
       return autoId
     })
-  }, [folderPath])
+  }, [folderPath, currentFolderId])
 
   const createTerminalWithCommand = useCallback(
     async (title: string, command: string) => {
@@ -145,13 +148,19 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       tabCounterRef.current += 1
       setTabs((prev) => [
         ...prev,
-        { id, title, workingDir: folderPath, initialCommand: command },
+        {
+          id,
+          folderId: currentFolderId,
+          title,
+          workingDir: folderPath,
+          initialCommand: command,
+        },
       ])
       setActiveTabId(id)
 
       return id
     },
-    [folderPath]
+    [folderPath, currentFolderId]
   )
 
   const createTerminalInDirectory = useCallback(
@@ -165,13 +174,18 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       const defaultTitle = `Terminal ${tabCounterRef.current}`
       setTabs((prev) => [
         ...prev,
-        { id, title: title ?? defaultTitle, workingDir },
+        {
+          id,
+          folderId: currentFolderId,
+          title: title ?? defaultTitle,
+          workingDir,
+        },
       ])
       setActiveTabId(id)
 
       return id
     },
-    []
+    [currentFolderId]
   )
 
   const createTerminal = useCallback(async () => {

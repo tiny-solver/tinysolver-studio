@@ -8,12 +8,15 @@ import {
   useRef,
   useState,
 } from "react"
-import { useSearchParams } from "next/navigation"
 import type { ImperativePanelGroupHandle } from "react-resizable-panels"
 import { FolderTitleBar } from "@/components/layout/folder-title-bar"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StatusBar } from "@/components/layout/status-bar"
-import { FolderProvider } from "@/contexts/folder-context"
+import { AppWorkspaceProvider } from "@/contexts/app-workspace-context"
+import {
+  ActiveFolderProvider,
+  useActiveFolder,
+} from "@/contexts/active-folder-context"
 import { TaskProvider } from "@/contexts/task-context"
 import { AlertProvider } from "@/contexts/alert-context"
 import {
@@ -43,23 +46,22 @@ import { AuxPanel } from "@/components/layout/aux-panel"
 import { FileWorkspaceTabBar } from "@/components/files/file-workspace-tab-bar"
 import { FileWorkspacePanel } from "@/components/files/file-workspace-panel"
 import { AppToaster } from "@/components/ui/app-toaster"
+import { DeepLinkBootstrap } from "@/components/workspace/deep-link-bootstrap"
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
-import type { AgentType } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { useFolderContext } from "@/contexts/folder-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 
-function FolderDocumentTitle() {
-  const { folder } = useFolderContext()
+function WorkspaceDocumentTitle() {
+  const { activeFolder } = useActiveFolder()
 
   useEffect(() => {
-    document.title = folder ? `${folder.name} - codeg` : "codeg"
-  }, [folder])
+    document.title = activeFolder ? `${activeFolder.name} - codeg` : "codeg"
+  }, [activeFolder])
 
   return null
 }
@@ -80,7 +82,6 @@ const MIN_CENTER_WIDTH_PX = 420
 const MIN_WORKSPACE_HEIGHT_PX = 220
 const LAYOUT_EPSILON = 0.25
 
-/** Syncs open tab keys from TabProvider to AcpConnectionsProvider */
 function TabKeysSync() {
   const { tabs } = useTabContext()
   const { registerOpenTabKeys } = useAcpActions()
@@ -149,8 +150,7 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
       panelGroup.setLayout(layout)
       appliedLayoutRef.current = layout
     } catch {
-      // The group can be transiently unavailable while registering panels.
-      // onLayout will retry once registration completes.
+      /* retry via onLayout */
     }
   }, [])
 
@@ -158,9 +158,6 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
     if (mode === "fusion") {
       applyLayout(fusionLayoutRef.current)
     }
-    // Non-fusion modes keep panels at their current sizes to preserve
-    // scroll positions. CSS overlay on the active section provides
-    // full-width display (see absolute inset-0 below).
   }, [applyLayout, mode])
 
   const handleLayout = useCallback(
@@ -251,7 +248,6 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
 function MobileWorkspaceContent({ children }: { children: React.ReactNode }) {
   const { mode } = useWorkspaceContext()
 
-  // On mobile, fusion mode falls back to conversation view
   const showConversation = mode === "conversation" || mode === "fusion"
 
   return (
@@ -294,7 +290,6 @@ function MobileFolderWorkspaceShell({
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Sidebar Sheet (left) */}
       <Sheet open={sidebarRestored && sidebarOpen} onOpenChange={toggleSidebar}>
         <SheetContent
           side="left"
@@ -306,12 +301,10 @@ function MobileFolderWorkspaceShell({
         </SheetContent>
       </Sheet>
 
-      {/* Main workspace */}
       <main className="flex h-full min-h-0 w-full flex-col overflow-hidden">
         <MobileWorkspaceContent>{children}</MobileWorkspaceContent>
       </main>
 
-      {/* Aux panel Sheet (right) */}
       <Sheet open={auxRestored && auxOpen} onOpenChange={toggleAux}>
         <SheetContent
           side="right"
@@ -323,7 +316,6 @@ function MobileFolderWorkspaceShell({
         </SheetContent>
       </Sheet>
 
-      {/* Terminal Sheet (bottom) */}
       <Sheet open={terminalOpen} onOpenChange={toggleTerminal}>
         <SheetContent
           side="bottom"
@@ -495,8 +487,7 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
       shellGroup.setLayout(layout)
       shellAppliedLayoutRef.current = layout
     } catch {
-      // The group can be transiently unavailable while registering panels.
-      // onLayout will retry once registration completes.
+      /* retry via onLayout */
     }
   }, [])
 
@@ -516,8 +507,7 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
       mainGroup.setLayout(layout)
       mainAppliedLayoutRef.current = layout
     } catch {
-      // The group can be transiently unavailable while registering panels.
-      // onLayout will retry once registration completes.
+      /* retry via onLayout */
     }
   }, [])
 
@@ -776,62 +766,49 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function FolderLayoutInner({ children }: { children: React.ReactNode }) {
-  const searchParams = useSearchParams()
-  const folderId = Number(searchParams.get("id") ?? "0")
-  const normalizedFolderId = Number.isFinite(folderId) ? folderId : 0
-  const conversationId = searchParams.get("conversationId")
-  const agentType = searchParams.get("agent") as AgentType | null
-
+function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
   return (
-    <FolderProvider
-      folderId={normalizedFolderId}
-      initialConversationId={conversationId ? Number(conversationId) : null}
-      initialAgentType={agentType}
-    >
-      <FolderDocumentTitle />
-      <AlertProvider>
-        <GitCredentialProvider>
-          <TaskProvider>
-            <AcpConnectionsProvider>
-              <ConversationRuntimeProvider>
-                <WorkspaceProvider key={`workspace-${normalizedFolderId}`}>
-                  <TabProvider>
-                    <TabKeysSync />
-                    <SessionStatsProvider>
-                      <SidebarProvider
-                        key={`left-sidebar-${normalizedFolderId}`}
-                        folderId={normalizedFolderId}
-                      >
-                        <AuxPanelProvider
-                          key={`right-sidebar-${normalizedFolderId}`}
-                          folderId={normalizedFolderId}
-                        >
-                          <TerminalProvider>
-                            <FolderLayoutShell>{children}</FolderLayoutShell>
-                          </TerminalProvider>
-                        </AuxPanelProvider>
-                      </SidebarProvider>
-                    </SessionStatsProvider>
-                  </TabProvider>
-                </WorkspaceProvider>
-              </ConversationRuntimeProvider>
-            </AcpConnectionsProvider>
-          </TaskProvider>
-        </GitCredentialProvider>
-      </AlertProvider>
-    </FolderProvider>
+    <AppWorkspaceProvider>
+      <ActiveFolderProvider>
+        <AlertProvider>
+          <GitCredentialProvider>
+            <TaskProvider>
+              <AcpConnectionsProvider>
+                <ConversationRuntimeProvider>
+                  <WorkspaceProvider>
+                    <TabProvider>
+                      <WorkspaceDocumentTitle />
+                      <TabKeysSync />
+                      <DeepLinkBootstrap />
+                      <SessionStatsProvider>
+                        <SidebarProvider>
+                          <AuxPanelProvider>
+                            <TerminalProvider>
+                              <FolderLayoutShell>{children}</FolderLayoutShell>
+                            </TerminalProvider>
+                          </AuxPanelProvider>
+                        </SidebarProvider>
+                      </SessionStatsProvider>
+                    </TabProvider>
+                  </WorkspaceProvider>
+                </ConversationRuntimeProvider>
+              </AcpConnectionsProvider>
+            </TaskProvider>
+          </GitCredentialProvider>
+        </AlertProvider>
+      </ActiveFolderProvider>
+    </AppWorkspaceProvider>
   )
 }
 
-export default function FolderLayout({
+export default function WorkspaceLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
     <Suspense>
-      <FolderLayoutInner>{children}</FolderLayoutInner>
+      <WorkspaceLayoutInner>{children}</WorkspaceLayoutInner>
     </Suspense>
   )
 }

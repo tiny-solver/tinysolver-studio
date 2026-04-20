@@ -3,8 +3,9 @@
 import { useState, useMemo } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { cloneRepository, openFolderWindow } from "@/lib/api"
+import { cloneRepository } from "@/lib/api"
 import { isDesktop, openFileDialog } from "@/lib/platform"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useGitCredential } from "@/contexts/git-credential-context"
 import {
   Dialog,
@@ -17,7 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { FolderOpen, Loader2 } from "lucide-react"
-import { resolveCloneError } from "@/components/welcome/error-utils"
+import { resolveCloneError } from "@/components/workspace-empty/error-utils"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 
 interface CloneDialogProps {
@@ -28,6 +29,7 @@ interface CloneDialogProps {
 export function CloneDialog({ open: isOpen, onOpenChange }: CloneDialogProps) {
   const t = useTranslations("WelcomePage")
   const { withCredentialRetry } = useGitCredential()
+  const { openFolder } = useAppWorkspace()
   const [url, setUrl] = useState("")
   const [targetDir, setTargetDir] = useState("")
   const [cloning, setCloning] = useState(false)
@@ -73,7 +75,7 @@ export function CloneDialog({ open: isOpen, onOpenChange }: CloneDialogProps) {
         (creds) => cloneRepository(url, fullPath, creds),
         { remoteUrl: url }
       )
-      await openFolderWindow(fullPath)
+      await openFolder(fullPath)
       onOpenChange(false)
       resetForm()
     } catch (err) {

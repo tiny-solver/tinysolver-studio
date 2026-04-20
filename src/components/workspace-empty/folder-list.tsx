@@ -6,10 +6,11 @@ import { formatDistanceToNow } from "date-fns"
 import { enUS, zhCN, zhTW } from "date-fns/locale"
 import { useLocale, useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { openFolderWindow, removeFolderFromHistory } from "@/lib/api"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { removeFolderFromHistory } from "@/lib/api"
 import type { FolderHistoryEntry } from "@/lib/types"
 import { Input } from "@/components/ui/input"
-import { resolveWelcomeError } from "@/components/welcome/error-utils"
+import { resolveWelcomeError } from "@/components/workspace-empty/error-utils"
 
 interface FolderListProps {
   history: FolderHistoryEntry[]
@@ -20,6 +21,7 @@ interface FolderListProps {
 export function FolderList({ history, loading, onRefresh }: FolderListProps) {
   const t = useTranslations("WelcomePage")
   const locale = useLocale()
+  const { openFolder } = useAppWorkspace()
   const [search, setSearch] = useState("")
   const dateFnsLocale =
     locale === "zh-CN" ? zhCN : locale === "zh-TW" ? zhTW : enUS
@@ -37,7 +39,7 @@ export function FolderList({ history, loading, onRefresh }: FolderListProps) {
 
   const handleOpen = async (path: string) => {
     try {
-      await openFolderWindow(path)
+      await openFolder(path)
     } catch (err) {
       console.error("Failed to open folder:", err)
       const resolvedError = resolveWelcomeError(err)

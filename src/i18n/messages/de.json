@@ -825,7 +825,24 @@
         "noNewSessionsFound": "Keine neuen Sitzungen gefunden ({skipped} übersprungen)",
         "importFailed": "Import fehlgeschlagen: {message}",
         "reviewCompleted": "{count, plural, one {# Review-Sitzung} other {# Review-Sitzungen}} als abgeschlossen markiert",
-        "completeReviewFailed": "Review-Sitzungen konnten nicht abgeschlossen werden: {message}"
+        "completeReviewFailed": "Review-Sitzungen konnten nicht abgeschlossen werden: {message}",
+        "folderOpened": "Ordner {name} geöffnet",
+        "folderRemoved": "Ordner {name} entfernt",
+        "openFolderFailed": "Ordner konnte nicht geöffnet werden",
+        "removeFolderFailed": "Ordner konnte nicht entfernt werden: {message}"
+      },
+      "statsLabel": "{folders} Ordner · {convos} Konversationen",
+      "openFolder": "Ordner öffnen",
+      "searchPlaceholder": "Konversationen suchen...",
+      "viewFlat": "Flache Ansicht",
+      "viewGrouped": "Nach Ordner gruppieren",
+      "noMatchingConversations": "Keine passenden Konversationen",
+      "removeFolderConfirmTitle": "Ordner aus Arbeitsbereich entfernen?",
+      "removeFolderConfirmDescription": "\"{name}\" aus dem Arbeitsbereich entfernen? Zugehörige Tabs und Terminals werden geschlossen.",
+      "folderHeaderMenu": {
+        "focus": "Fokussieren",
+        "closeFolderTabs": "Alle Tabs dieses Ordners schließen",
+        "removeFromWorkspace": "Aus Arbeitsbereich entfernen"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "Andere schließen",
       "closeAll": "Alle schließen",
       "tileDisplay": "Kachelansicht",
-      "untileDisplay": "Kachel beenden"
+      "untileDisplay": "Kachel beenden",
+      "closeFolderTabs": "Alle Tabs von {folder} schließen",
+      "revealInSidebar": "In Seitenleiste anzeigen"
     },
     "fileWorkspace": {
       "files": "Dateien",
@@ -976,7 +995,8 @@
       "close": "Schließen",
       "closeOthers": "Andere schließen",
       "closeAll": "Alle schließen",
-      "hideTerminal": "Terminal ausblenden ({shortcut})"
+      "hideTerminal": "Terminal ausblenden ({shortcut})",
+      "openFolderFirst": "Öffnen Sie zuerst einen Ordner"
     },
     "sessionFiles": {
       "currentResponse": "Aktuelle Antwort",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "Block {index}",
       "loadingHunk": "Hunk wird geladen...",
       "noDiffData": "Keine Diff-Daten"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

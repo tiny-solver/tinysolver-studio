@@ -23,8 +23,8 @@ pub enum Relation {
     #[sea_orm(has_many = "super::conversation::Entity")]
     Conversations,
 
-    #[sea_orm(has_many = "super::folder_opened_conversation::Entity")]
-    OpenedConversations,
+    #[sea_orm(has_many = "super::opened_tab::Entity")]
+    OpenedTabs,
 
     #[sea_orm(has_many = "super::folder_command::Entity")]
     FolderCommands,
@@ -36,9 +36,9 @@ impl Related<super::conversation::Entity> for Entity {
     }
 }
 
-impl Related<super::folder_opened_conversation::Entity> for Entity {
+impl Related<super::opened_tab::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::OpenedConversations.def()
+        Relation::OpenedTabs.def()
     }
 }
 

@@ -825,7 +825,24 @@
         "noNewSessionsFound": "No new sessions found (skipped {skipped})",
         "importFailed": "Import failed: {message}",
         "reviewCompleted": "Marked {count, plural, one {# review session} other {# review sessions}} as completed",
-        "completeReviewFailed": "Failed to complete review sessions: {message}"
+        "completeReviewFailed": "Failed to complete review sessions: {message}",
+        "folderOpened": "Opened folder {name}",
+        "folderRemoved": "Removed folder {name}",
+        "openFolderFailed": "Failed to open folder",
+        "removeFolderFailed": "Failed to remove folder: {message}"
+      },
+      "statsLabel": "{folders} folders · {convos} conversations",
+      "openFolder": "Open Folder",
+      "searchPlaceholder": "Search conversations...",
+      "viewFlat": "Flat view",
+      "viewGrouped": "Grouped by folder",
+      "noMatchingConversations": "No matching conversations",
+      "removeFolderConfirmTitle": "Remove folder from workspace?",
+      "removeFolderConfirmDescription": "Remove \"{name}\" from the workspace? Its tabs and terminals will close.",
+      "folderHeaderMenu": {
+        "focus": "Focus",
+        "closeFolderTabs": "Close all tabs of this folder",
+        "removeFromWorkspace": "Remove from workspace"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "Close Others",
       "closeAll": "Close All",
       "tileDisplay": "Tile Display",
-      "untileDisplay": "Exit Tile"
+      "untileDisplay": "Exit Tile",
+      "closeFolderTabs": "Close all tabs of {folder}",
+      "revealInSidebar": "Reveal in sidebar"
     },
     "fileWorkspace": {
       "files": "Files",
@@ -976,7 +995,8 @@
       "close": "Close",
       "closeOthers": "Close Others",
       "closeAll": "Close All",
-      "hideTerminal": "Hide Terminal ({shortcut})"
+      "hideTerminal": "Hide Terminal ({shortcut})",
+      "openFolderFirst": "Open a folder first"
     },
     "sessionFiles": {
       "currentResponse": "Current response",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "Hunk {index}",
       "loadingHunk": "Loading hunk...",
       "noDiffData": "No diff data"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

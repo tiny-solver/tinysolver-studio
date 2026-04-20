@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { ChevronRight, FileIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
@@ -58,7 +58,7 @@ function SessionFilesContent({ conversationId }: { conversationId: number }) {
   const { loading } = useConversationDetail(conversationId)
   const { getTimelineTurns } = useConversationRuntime()
   const { openSessionFileDiff } = useWorkspaceContext()
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
   const turns = useMemo(

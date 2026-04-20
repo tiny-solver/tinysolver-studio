@@ -20,9 +20,10 @@ import {
   SquareTerminal,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { getGitBranch, openFolderWindow, openSettingsWindow } from "@/lib/api"
+import { openSettingsWindow } from "@/lib/api"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { isDesktop, openFileDialog } from "@/lib/platform"
-import { useFolderContext } from "@/contexts/folder-context"
 import { Button } from "@/components/ui/button"
 import { useSidebarContext } from "@/contexts/sidebar-context"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
@@ -36,8 +37,6 @@ import {
   matchShortcutEvent,
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
-import { FolderNameDropdown } from "./folder-name-dropdown"
-import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
@@ -71,7 +70,8 @@ const MODE_TABS = [
 export function FolderTitleBar() {
   const tModes = useTranslations("Folder.modes")
   const tTitleBar = useTranslations("Folder.folderTitleBar")
-  const { folder } = useFolderContext()
+  const { openFolder } = useAppWorkspace()
+  const { activeFolder } = useActiveFolder()
   const { isOpen, toggle } = useSidebarContext()
   const { isOpen: auxPanelOpen, toggle: toggleAuxPanel } = useAuxPanelContext()
   const { isOpen: terminalOpen, toggle: toggleTerminal } = useTerminalContext()
@@ -79,14 +79,8 @@ export function FolderTitleBar() {
   const { mode, setMode } = useWorkspaceContext()
   const isMac = useIsMac()
   const { shortcuts } = useShortcutSettings()
-  const [branch, setBranch] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [browserOpen, setBrowserOpen] = useState(false)
-  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined
-  )
-
-  const folderPath = folder?.path ?? ""
 
   const handleOpenFolder = useCallback(async () => {
     if (isDesktop()) {
@@ -97,77 +91,20 @@ export function FolderTitleBar() {
         })
         if (!result) return
         const selected = Array.isArray(result) ? result[0] : result
-        await openFolderWindow(selected, { newWindow: true })
+        await openFolder(selected)
       } catch (err) {
         console.error("[FolderTitleBar] failed to open folder:", err)
       }
     } else {
       setBrowserOpen(true)
     }
-  }, [])
+  }, [openFolder])
 
   const handleOpenSettings = useCallback(() => {
     openSettingsWindow().catch((err) => {
       console.error("[FolderTitleBar] failed to open settings:", err)
     })
   }, [])
-
-  useEffect(() => {
-    if (!folderPath) return
-    let cancelled = false
-
-    // 10s when we have a branch, 60s when we don't. The slow poll still
-    // discovers a branch created externally (e.g. `git init` in a terminal)
-    // without hammering the backend when there is nothing to find.
-    const POLL_FAST_MS = 10_000
-    const POLL_SLOW_MS = 60_000
-
-    const clearPoll = () => {
-      if (pollTimerRef.current !== undefined) {
-        clearTimeout(pollTimerRef.current)
-        pollTimerRef.current = undefined
-      }
-    }
-
-    const scheduleNext = (delayMs: number) => {
-      clearPoll()
-      pollTimerRef.current = setTimeout(() => {
-        pollTimerRef.current = undefined
-        void doFetch()
-      }, delayMs)
-    }
-
-    async function doFetch() {
-      if (document.visibilityState !== "visible") return
-
-      let nextDelayMs = POLL_FAST_MS
-      try {
-        const b = await getGitBranch(folderPath)
-        if (cancelled) return
-        setBranch(b)
-        if (b === null) nextDelayMs = POLL_SLOW_MS
-      } catch {
-        if (!cancelled) setBranch(null)
-        nextDelayMs = POLL_SLOW_MS
-      }
-      if (!cancelled) scheduleNext(nextDelayMs)
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        void doFetch()
-      }
-    }
-
-    void doFetch()
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-
-    return () => {
-      cancelled = true
-      clearPoll()
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [folderPath])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -192,9 +129,9 @@ export function FolderTitleBar() {
         return
       }
       if (matchShortcutEvent(e, shortcuts.new_conversation)) {
-        if (!folderPath) return
+        if (!activeFolder) return
         e.preventDefault()
-        openNewConversationTab(folderPath)
+        openNewConversationTab(activeFolder.id, activeFolder.path)
         return
       }
       if (matchShortcutEvent(e, shortcuts.open_folder)) {
@@ -210,7 +147,7 @@ export function FolderTitleBar() {
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [
-    folderPath,
+    activeFolder,
     handleOpenFolder,
     handleOpenSettings,
     openNewConversationTab,
@@ -220,14 +157,6 @@ export function FolderTitleBar() {
     toggleTerminal,
   ])
 
-  const refreshBranch = useCallback(async () => {
-    if (!folderPath) return
-    try {
-      setBranch(await getGitBranch(folderPath))
-    } catch {
-      setBranch(null)
-    }
-  }, [folderPath])
   const isMobile = useIsMobile()
   const modeContainerRef = useRef<HTMLDivElement>(null)
   const modeItemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -326,7 +255,6 @@ export function FolderTitleBar() {
               className="block h-3 w-3 shrink-0"
               shapeRendering="geometricPrecision"
             />
-            {/* Hide text labels on mobile to save space */}
             {!isMobile && (
               <span
                 className={cn(
@@ -365,23 +293,9 @@ export function FolderTitleBar() {
               >
                 <Menu className="h-4 w-4" />
               </Button>
-              <FolderNameDropdown />
-              <BranchDropdown
-                branch={branch}
-                parentBranch={folder?.parent_branch ?? null}
-                onBranchChange={refreshBranch}
-              />
             </div>
           ) : (
-            <div className="flex min-w-0 items-center gap-4">
-              <FolderNameDropdown />
-              <BranchDropdown
-                branch={branch}
-                parentBranch={folder?.parent_branch ?? null}
-                onBranchChange={refreshBranch}
-              />
-              <div data-tauri-drag-region className="h-8 flex-1" />
-            </div>
+            <div data-tauri-drag-region className="h-8 flex-1" />
           )
         }
         center={isMobile ? undefined : modeTabsElement}
@@ -511,7 +425,7 @@ export function FolderTitleBar() {
         open={browserOpen}
         onOpenChange={setBrowserOpen}
         onSelect={(path) => {
-          openFolderWindow(path, { newWindow: true }).catch((err) => {
+          openFolder(path).catch((err) => {
             console.error("[FolderTitleBar] failed to open folder:", err)
           })
         }}

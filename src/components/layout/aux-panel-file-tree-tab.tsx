@@ -13,7 +13,7 @@ import ignore from "ignore"
 import { Check, ChevronRight } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
@@ -797,7 +797,7 @@ export function FileTreeTab() {
   const t = useTranslations("Folder.fileTreeTab")
   const tCommon = useTranslations("Folder.common")
   const { pendingRevealPath, consumePendingRevealPath } = useAuxPanelContext()
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const { tabs, activeTabId } = useTabContext()
   const { createTerminalInDirectory } = useTerminalContext()
   const {

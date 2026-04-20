@@ -13,8 +13,11 @@ import {
   loadPersistedPanelState,
   savePersistedPanelState,
 } from "@/lib/panel-state-storage"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 
 export type AuxPanelTab = "file_tree" | "changes" | "git_log" | "session_files"
+
+const STORAGE_KEY = "workspace:right-sidebar"
 
 const DEFAULT_WIDTH = 320
 const MIN_WIDTH = 200
@@ -53,17 +56,11 @@ function clampWidth(width: number) {
 
 interface AuxPanelProviderProps {
   children: ReactNode
-  folderId: number
 }
 
-export function AuxPanelProvider({
-  children,
-  folderId,
-}: AuxPanelProviderProps) {
-  const storageKey = useMemo(
-    () => `folder:${folderId}:right-sidebar`,
-    [folderId]
-  )
+export function AuxPanelProvider({ children }: AuxPanelProviderProps) {
+  const storageKey = STORAGE_KEY
+  const { activeFolderId } = useActiveFolder()
   const [isOpen, setIsOpen] = useState(DEFAULT_IS_OPEN)
   const [width, setWidthState] = useState(DEFAULT_WIDTH)
   const [restored, setRestored] = useState(false)
@@ -108,6 +105,14 @@ export function AuxPanelProvider({
     if (!restored) return
     savePersistedPanelState(storageKey, { isOpen, width })
   }, [isOpen, restored, storageKey, width])
+
+  // Reset pending reveal path when the active folder changes; file tree
+  // state is content-driven by `useWorkspaceContext` and will refetch
+  // naturally via its folder-path dependency.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPendingRevealPath(null)
+  }, [activeFolderId])
 
   const value = useMemo(
     () => ({

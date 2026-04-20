@@ -77,7 +77,7 @@ import {
 } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { subscribe } from "@/lib/platform"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import {
@@ -691,7 +691,7 @@ function BranchSelector({
 export function GitLogTab() {
   const t = useTranslations("Folder.gitLogTab")
   const tCommon = useTranslations("Folder.common")
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const { openCommitDiff, openFilePreview } = useWorkspaceContext()
   const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
   const isGitRepo = workspaceState.isGitRepo

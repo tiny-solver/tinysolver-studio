@@ -5,7 +5,7 @@ import { Unplug } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useConnectionStore } from "@/contexts/acp-connections-context"
 import { useTabContext } from "@/contexts/tab-context"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { AgentIcon } from "@/components/agent-icon"
 import {
   Tooltip,
@@ -42,7 +42,7 @@ export function StatusBarConnection() {
   const t = useTranslations("Folder.statusBar.connection")
   const store = useConnectionStore()
   const { tabs, activeTabId } = useTabContext()
-  const { conversations } = useFolderContext()
+  const { conversations } = useAppWorkspace()
 
   // Subscribe to activeKey changes
   const subscribeActiveKey = useCallback(

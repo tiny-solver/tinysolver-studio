@@ -4,7 +4,7 @@ use sea_orm::{
     QueryFilter, QueryOrder, Set,
 };
 
-use crate::db::entities::conversation;
+use crate::db::entities::{conversation, folder};
 use crate::db::error::DbError;
 use crate::models::{AgentType, DbConversationSummary};
 
@@ -194,4 +194,69 @@ pub async fn list_by_folder(
     let summaries: Vec<DbConversationSummary> = rows.into_iter().map(conv_to_summary).collect();
 
     Ok(summaries)
+}
+
+/// List conversations across folders. When `folder_ids` is `None`, queries all
+/// When `folder_ids` is provided, results are scoped to that set. Otherwise
+/// returns conversations across every non-deleted folder (open or not).
+pub async fn list_all(
+    conn: &DatabaseConnection,
+    folder_ids: Option<Vec<i32>>,
+    agent_type: Option<AgentType>,
+    search: Option<String>,
+    sort_by: Option<String>,
+    status: Option<String>,
+) -> Result<Vec<DbConversationSummary>, DbError> {
+    let mut query = conversation::Entity::find()
+        .filter(conversation::Column::DeletedAt.is_null());
+
+    match folder_ids {
+        Some(ids) if !ids.is_empty() => {
+            query = query.filter(conversation::Column::FolderId.is_in(ids));
+        }
+        _ => {
+            // Exclude conversations whose folder was soft-deleted.
+            let active_folder_ids: Vec<i32> = folder::Entity::find()
+                .filter(folder::Column::DeletedAt.is_null())
+                .all(conn)
+                .await?
+                .into_iter()
+                .map(|m| m.id)
+                .collect();
+            if active_folder_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            query = query.filter(conversation::Column::FolderId.is_in(active_folder_ids));
+        }
+    }
+
+    if let Some(ref at) = agent_type {
+        let at_str = serde_json::to_value(at)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        query = query.filter(conversation::Column::AgentType.eq(at_str));
+    }
+
+    if let Some(ref s) = search {
+        if !s.is_empty() {
+            query = query.filter(conversation::Column::Title.contains(s));
+        }
+    }
+
+    if let Some(ref st) = status {
+        if let Ok(status_enum) = serde_json::from_value::<conversation::ConversationStatus>(
+            serde_json::Value::String(st.clone()),
+        ) {
+            query = query.filter(conversation::Column::Status.eq(status_enum));
+        }
+    }
+
+    query = match sort_by.as_deref() {
+        Some("oldest") => query.order_by_asc(conversation::Column::UpdatedAt),
+        _ => query.order_by_desc(conversation::Column::UpdatedAt),
+    };
+
+    let rows = query.all(conn).await?;
+    Ok(rows.into_iter().map(conv_to_summary).collect())
 }

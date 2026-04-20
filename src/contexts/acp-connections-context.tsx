@@ -51,7 +51,7 @@ import {
   clearStalePrefs,
 } from "@/lib/selector-prefs-storage"
 import { useAlertContext, type AlertAction } from "@/contexts/alert-context"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 
 // ── Shared types (re-exported for consumers) ──
 
@@ -1330,7 +1330,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const t = useTranslations("Folder.chat.acpConnections")
   const tChat = useTranslations("Folder.chat")
   const { pushAlert } = useAlertContext()
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const folderNameRef = useRef(folder?.name)
   useEffect(() => {
     folderNameRef.current = folder?.name

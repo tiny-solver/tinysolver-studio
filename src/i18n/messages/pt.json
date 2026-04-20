@@ -825,7 +825,24 @@
         "noNewSessionsFound": "Nenhuma nova sessão encontrada (ignoradas {skipped})",
         "importFailed": "Falha na importação: {message}",
         "reviewCompleted": "Marcadas {count, plural, one {# sessão em revisão} other {# sessões em revisão}} como concluídas",
-        "completeReviewFailed": "Falha ao concluir sessões em revisão: {message}"
+        "completeReviewFailed": "Falha ao concluir sessões em revisão: {message}",
+        "folderOpened": "Pasta {name} aberta",
+        "folderRemoved": "Pasta {name} removida",
+        "openFolderFailed": "Falha ao abrir pasta",
+        "removeFolderFailed": "Falha ao remover pasta: {message}"
+      },
+      "statsLabel": "{folders} pastas · {convos} conversas",
+      "openFolder": "Abrir pasta",
+      "searchPlaceholder": "Buscar conversas...",
+      "viewFlat": "Visualização plana",
+      "viewGrouped": "Agrupar por pasta",
+      "noMatchingConversations": "Nenhuma conversa correspondente",
+      "removeFolderConfirmTitle": "Remover pasta do espaço de trabalho?",
+      "removeFolderConfirmDescription": "Remover \"{name}\" do espaço de trabalho? As abas e terminais relacionados serão fechados.",
+      "folderHeaderMenu": {
+        "focus": "Focar",
+        "closeFolderTabs": "Fechar todas as abas desta pasta",
+        "removeFromWorkspace": "Remover do espaço de trabalho"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "Fechar outros",
       "closeAll": "Fechar tudo",
       "tileDisplay": "Exibição em mosaico",
-      "untileDisplay": "Sair do mosaico"
+      "untileDisplay": "Sair do mosaico",
+      "closeFolderTabs": "Fechar todas as abas de {folder}",
+      "revealInSidebar": "Mostrar na barra lateral"
     },
     "fileWorkspace": {
       "files": "Arquivos",
@@ -976,7 +995,8 @@
       "close": "Fechar",
       "closeOthers": "Fechar outros",
       "closeAll": "Fechar tudo",
-      "hideTerminal": "Ocultar terminal ({shortcut})"
+      "hideTerminal": "Ocultar terminal ({shortcut})",
+      "openFolderFirst": "Abra primeiro uma pasta"
     },
     "sessionFiles": {
       "currentResponse": "Resposta atual",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "Bloco {index}",
       "loadingHunk": "Carregando hunk...",
       "noDiffData": "Sem dados de diff"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

@@ -53,45 +53,71 @@ pub struct AddFolderParams {
     pub path: String,
 }
 
-/// Web equivalent of `open_folder_window`: adds the folder to DB and returns its ID.
-/// The web client then navigates to `/folder?id=N` itself.
-pub async fn open_folder_window(
+/// Add the folder to the workspace (upsert + set is_open=true) and return its full detail.
+/// Previously this spawned a new window; the new single-window workspace model
+/// simply returns the folder info so the client can update its local state.
+pub async fn open_folder(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AddFolderParams>,
-) -> Result<Json<FolderHistoryEntry>, AppCommandError> {
+) -> Result<Json<FolderDetail>, AppCommandError> {
     let db = &state.db;
     let entry = folder_service::add_folder(&db.conn, &params.path)
         .await
         .map_err(AppCommandError::from)?;
-    Ok(Json(entry))
+    let folder = folder_service::get_folder_by_id(&db.conn, entry.id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found("Folder not found after add"))?;
+    Ok(Json(folder))
 }
 
-pub async fn close_folder_window(
+// --- New workspace handlers ---
+
+pub async fn list_open_folder_details(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<Vec<FolderDetail>>, AppCommandError> {
+    let db = &state.db;
+    let result = folder_service::list_open_folder_details(&db.conn)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}
+
+pub async fn list_all_folder_details(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<Vec<FolderDetail>>, AppCommandError> {
+    let db = &state.db;
+    let result = folder_service::list_all_folder_details(&db.conn)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}
+
+pub async fn open_folder_by_id(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<FolderIdParams>,
+) -> Result<Json<FolderDetail>, AppCommandError> {
+    let db = &state.db;
+    folder_service::set_folder_open(&db.conn, params.folder_id, true)
+        .await
+        .map_err(AppCommandError::from)?;
+    let folder = folder_service::get_folder_by_id(&db.conn, params.folder_id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found("Folder not found"))?;
+    Ok(Json(folder))
+}
+
+pub async fn remove_folder_from_workspace(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<FolderIdParams>,
 ) -> Result<Json<()>, AppCommandError> {
+    use crate::db::service::tab_service;
     let db = &state.db;
-    folder_service::set_folder_open(&db.conn, params.folder_id, false)
+    tab_service::delete_tabs_for_folder(&db.conn, params.folder_id)
         .await
         .map_err(AppCommandError::from)?;
-    Ok(Json(()))
-}
-
-// --- New handlers below ---
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveFolderOpenedConversationsParams {
-    pub folder_id: i32,
-    pub items: Vec<OpenedConversation>,
-}
-
-pub async fn save_folder_opened_conversations(
-    Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<SaveFolderOpenedConversationsParams>,
-) -> Result<Json<()>, AppCommandError> {
-    let db = &state.db;
-    folder_service::save_opened_conversations(&db.conn, params.folder_id, params.items)
+    folder_service::set_folder_open(&db.conn, params.folder_id, false)
         .await
         .map_err(AppCommandError::from)?;
     Ok(Json(()))

@@ -3,11 +3,11 @@
 import { useMemo } from "react"
 import { GitBranch } from "lucide-react"
 import { useTabContext } from "@/contexts/tab-context"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 
 export function StatusBarSessionInfo() {
   const { tabs, activeTabId } = useTabContext()
-  const { conversations } = useFolderContext()
+  const { conversations } = useAppWorkspace()
 
   const activeTab = useMemo(
     () => tabs.find((t) => t.id === activeTabId) ?? null,

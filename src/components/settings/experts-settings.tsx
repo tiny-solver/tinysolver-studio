@@ -44,7 +44,7 @@ import {
   expertsOpenCentralDir,
   expertsReadContent,
   expertsUnlinkFromAgent,
-  openFolderWindow,
+  openFolder,
 } from "@/lib/api"
 import { invalidateAgentExpertsCache } from "@/hooks/use-agent-experts"
 import type {
@@ -369,7 +369,7 @@ export function ExpertsSettings() {
   const handleOpenCentralDir = useCallback(async () => {
     try {
       const path = await expertsOpenCentralDir()
-      await openFolderWindow(path)
+      await openFolder(path)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       toast.error(t("toasts.openFolderFailed"), { description: message })

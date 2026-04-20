@@ -4,15 +4,17 @@ import { useState } from "react"
 import { FolderOpen, GitBranch, Rocket } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { openFolderWindow, openProjectBootWindow } from "@/lib/api"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { openProjectBootWindow } from "@/lib/api"
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import { Button } from "@/components/ui/button"
 import { CloneDialog } from "./clone-dialog"
-import { resolveWelcomeError } from "@/components/welcome/error-utils"
+import { resolveWelcomeError } from "@/components/workspace-empty/error-utils"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 
 export function FolderActions() {
   const t = useTranslations("WelcomePage")
+  const { openFolder } = useAppWorkspace()
   const [cloneOpen, setCloneOpen] = useState(false)
   const [browserOpen, setBrowserOpen] = useState(false)
 
@@ -25,7 +27,7 @@ export function FolderActions() {
       if (!result) return
       const selected = Array.isArray(result) ? result[0] : result
       try {
-        await openFolderWindow(selected)
+        await openFolder(selected)
       } catch (err) {
         console.error("[FolderActions] failed to open folder:", err)
         const resolvedError = resolveWelcomeError(err)
@@ -40,7 +42,7 @@ export function FolderActions() {
 
   const handleBrowserSelect = async (path: string) => {
     try {
-      await openFolderWindow(path)
+      await openFolder(path)
     } catch (err) {
       console.error("[FolderActions] failed to open folder:", err)
       const resolvedError = resolveWelcomeError(err)

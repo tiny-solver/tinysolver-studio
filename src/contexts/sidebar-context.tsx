@@ -14,6 +14,8 @@ import {
   savePersistedPanelState,
 } from "@/lib/panel-state-storage"
 
+const STORAGE_KEY = "workspace:left-sidebar"
+
 const DEFAULT_WIDTH = 320
 const MIN_WIDTH = 200
 const MAX_WIDTH = 600
@@ -45,14 +47,10 @@ function clampWidth(width: number) {
 
 interface SidebarProviderProps {
   children: ReactNode
-  folderId: number
 }
 
-export function SidebarProvider({ children, folderId }: SidebarProviderProps) {
-  const storageKey = useMemo(
-    () => `folder:${folderId}:left-sidebar`,
-    [folderId]
-  )
+export function SidebarProvider({ children }: SidebarProviderProps) {
+  const storageKey = STORAGE_KEY
   const [isOpen, setIsOpen] = useState(DEFAULT_IS_OPEN)
   const [width, setWidthState] = useState(DEFAULT_WIDTH)
   const [restored, setRestored] = useState(false)

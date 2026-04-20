@@ -6,10 +6,11 @@ import { enUS, zhCN, zhTW } from "date-fns/locale"
 import { File, Folder } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
-import { listFolderConversations } from "@/lib/api"
+import { listAllConversations } from "@/lib/api"
 import type {
   AgentType,
   ConversationStatus,
@@ -43,7 +44,16 @@ export function SearchCommandDialog({
   const locale = useLocale()
   const dateFnsLocale =
     locale === "zh-CN" ? zhCN : locale === "zh-TW" ? zhTW : enUS
-  const { folderId, folder, conversations } = useFolderContext()
+  const { activeFolder: folder, activeFolderId } = useActiveFolder()
+  const { conversations: allConversations } = useAppWorkspace()
+  const folderId = activeFolderId ?? 0
+  const conversations = useMemo(
+    () =>
+      activeFolderId == null
+        ? []
+        : allConversations.filter((c) => c.folder_id === activeFolderId),
+    [allConversations, activeFolderId]
+  )
   const { openTab } = useTabContext()
   const { openFilePreview } = useWorkspaceContext()
   const { revealInFileTree } = useAuxPanelContext()
@@ -96,8 +106,8 @@ export function SearchCommandDialog({
       }
       setSearching(true)
       try {
-        const data = await listFolderConversations({
-          folder_id: folderId,
+        const data = await listAllConversations({
+          folder_ids: folderId > 0 ? [folderId] : null,
           search: q.trim() || null,
           agent_type: agent,
         })
@@ -136,7 +146,7 @@ export function SearchCommandDialog({
 
   const handleSelectConversation = useCallback(
     (conv: DbConversationSummary) => {
-      openTab(conv.id, conv.agent_type, true)
+      openTab(conv.folder_id, conv.id, conv.agent_type, true)
       onOpenChange(false)
     },
     [openTab, onOpenChange]

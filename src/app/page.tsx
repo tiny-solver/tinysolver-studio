@@ -8,7 +8,7 @@ export default function Page() {
   const router = useRouter()
   useEffect(() => {
     if (isDesktop()) {
-      router.replace("/welcome")
+      router.replace("/workspace")
       return
     }
     // Web mode: validate token before entering app
@@ -28,7 +28,7 @@ export default function Page() {
     })
       .then((res) => {
         if (res.ok) {
-          router.replace("/welcome")
+          router.replace("/workspace")
         } else {
           localStorage.removeItem("codeg_token")
           router.replace("/login")

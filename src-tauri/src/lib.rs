@@ -34,14 +34,6 @@ mod tauri_app {
 
     static APP_QUITTING: AtomicBool = AtomicBool::new(false);
 
-    fn get_folder_id_from_url(window: &tauri::Window) -> Option<i32> {
-        let webview = window.get_webview_window(window.label())?;
-        let url = webview.url().ok()?;
-        url.query_pairs()
-            .find(|(key, _)| key == "id")
-            .and_then(|(_, value)| value.parse::<i32>().ok())
-    }
-
     #[cfg_attr(mobile, tauri::mobile_entry_point)]
     pub fn run() {
         if let Err(err) = fix_path_env::fix() {
@@ -128,26 +120,18 @@ mod tauri_app {
                     });
                 }
 
-                // Restore previously open folders or show welcome
-                let db = app.state::<db::AppDatabase>();
-                let open_folders = tauri::async_runtime::block_on(
-                    db::service::folder_service::list_open_folders(&db.conn),
-                )
-                .unwrap_or_default();
-
-                if open_folders.is_empty() {
-                    let _ = windows::open_welcome_window(app.handle());
-                } else {
-                    for entry in &open_folders {
-                        let label = windows::folder_window_label(entry.id);
-                        let url = tauri::WebviewUrl::App(format!("folder?id={}", entry.id).into());
-                        let builder = tauri::WebviewWindowBuilder::new(app, &label, url)
-                            .title(&entry.name)
-                            .inner_size(1260.0, 860.0)
-                            .min_inner_size(900.0, 600.0);
-                        if let Ok(w) = windows::apply_platform_window_style(builder).build() {
-                            windows::post_window_setup(&w);
-                        }
+                // Single-window workspace: ensure the main window exists.
+                // Workspace state (open folders, opened tabs, active tab) is
+                // restored by the frontend via `list_open_folder_details` /
+                // `list_opened_tabs` inside the main window.
+                if app.get_webview_window("main").is_none() {
+                    let url = tauri::WebviewUrl::App("workspace".into());
+                    let builder = tauri::WebviewWindowBuilder::new(app, "main", url)
+                        .title("Codeg")
+                        .inner_size(1260.0, 860.0)
+                        .min_inner_size(900.0, 600.0);
+                    if let Ok(w) = windows::apply_platform_window_style(builder).build() {
+                        windows::post_window_setup(&w);
                     }
                 }
 
@@ -197,70 +181,31 @@ mod tauri_app {
                     });
                 }
 
-                if label == "project-boot"
-                    && matches!(
-                        event,
-                        tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
-                    )
+                if label == "main"
+                    && matches!(event, tauri::WindowEvent::CloseRequested { .. })
                 {
                     let app = window.app_handle();
-                    if !APP_QUITTING.load(Ordering::Relaxed) {
-                        let has_other = app
-                            .webview_windows()
-                            .keys()
-                            .any(|l| *l != label && *l != "settings");
-                        if !has_other {
-                            let _ = windows::open_welcome_window(app);
-                        }
+                    if let Some(cm) = app.try_state::<ConnectionManager>() {
+                        let disconnected = tauri::async_runtime::block_on(
+                            cm.disconnect_by_owner_window(&label),
+                        );
+                        eprintln!(
+                            "[ACP] main window closing disconnected_connections={}",
+                            disconnected
+                        );
                     }
-                }
-
-                if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    if label.starts_with("folder-") {
-                        let app = window.app_handle();
-                        if let Some(cm) = app.try_state::<ConnectionManager>() {
-                            let disconnected = tauri::async_runtime::block_on(
-                                cm.disconnect_by_owner_window(&label),
-                            );
-                            eprintln!(
-                                "[ACP] folder window closing label={} disconnected_connections={}",
-                                label, disconnected
-                            );
-                        }
-
-                        if !APP_QUITTING.load(Ordering::Relaxed) {
-                            if let Some(folder_id) = get_folder_id_from_url(window) {
-                                if let Some(db) = app.try_state::<db::AppDatabase>() {
-                                    let _ = tauri::async_runtime::block_on(
-                                        db::service::folder_service::set_folder_open(
-                                            &db.conn, folder_id, false,
-                                        ),
-                                    );
-                                }
-                            }
-                        }
-
-                        if let Some(tm) = app.try_state::<TerminalManager>() {
-                            let killed = tm.kill_by_owner_window(&label);
-                            eprintln!(
-                                "[TERM] folder window closing label={} killed_terminals={}",
-                                label, killed
-                            );
-                        }
-                        let has_other_folder = app
-                            .webview_windows()
-                            .keys()
-                            .any(|l| l.starts_with("folder-") && *l != label);
-                        if !has_other_folder && !APP_QUITTING.load(Ordering::Relaxed) {
-                            let _ = windows::open_welcome_window(app);
-                        }
+                    if let Some(tm) = app.try_state::<TerminalManager>() {
+                        let killed = tm.kill_by_owner_window(&label);
+                        eprintln!("[TERM] main window closing killed_terminals={}", killed);
                     }
                 }
             })
             .invoke_handler(tauri::generate_handler![
                 conversations::list_conversations,
                 conversations::get_conversation,
-                conversations::list_folder_conversations,
+                conversations::list_all_conversations,
+                conversations::list_opened_tabs,
+                conversations::save_opened_tabs,
                 conversations::import_local_conversations,
                 conversations::get_folder_conversation,
                 conversations::list_folders,
@@ -273,6 +218,10 @@ mod tauri_app {
                 conversations::delete_conversation,
                 folders::load_folder_history,
                 folders::get_folder,
+                folders::list_open_folder_details,
+                folders::list_all_folder_details,
+                folders::open_folder_by_id,
+                folders::remove_folder_from_workspace,
                 folders::add_folder_to_history,
                 folders::set_folder_parent_branch,
                 folders::remove_folder_from_history,
@@ -322,7 +271,6 @@ mod tauri_app {
                 folders::git_resolve_conflict,
                 folders::git_abort_operation,
                 folders::git_continue_operation,
-                folders::save_folder_opened_conversations,
                 workspace_state_commands::start_workspace_state_stream,
                 workspace_state_commands::stop_workspace_state_stream,
                 workspace_state_commands::get_workspace_snapshot,
@@ -342,8 +290,6 @@ mod tauri_app {
                 windows::open_folder_window,
                 windows::open_commit_window,
                 windows::open_settings_window,
-                windows::list_open_folders,
-                windows::focus_folder_window,
                 windows::open_merge_window,
                 windows::open_stash_window,
                 windows::open_push_window,

@@ -13,8 +13,16 @@ import {
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
-import { CheckCheck, ChevronRight, Download, Loader2, Plus } from "lucide-react"
-import { useFolderContext } from "@/contexts/folder-context"
+import {
+  CheckCheck,
+  ChevronRight,
+  Download,
+  Loader2,
+  Plus,
+  XCircle,
+} from "lucide-react"
+import { useActiveFolder } from "@/contexts/active-folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTaskContext } from "@/contexts/task-context"
 import {
@@ -25,6 +33,11 @@ import {
 } from "@/lib/api"
 import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
 import { STATUS_ORDER, STATUS_COLORS } from "@/lib/types"
+import {
+  loadFolderExpanded,
+  saveFolderExpanded,
+  type SidebarViewMode,
+} from "@/lib/sidebar-view-mode-storage"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -69,12 +82,99 @@ function compareByUpdatedAtDesc(
 }
 
 type FlatItem =
-  | { type: "header"; status: ConversationStatus; count: number }
+  | {
+      type: "folder_header"
+      folderId: number
+      folderName: string
+      branch: string | null
+      count: number
+      expanded: boolean
+    }
+  | {
+      type: "status_header"
+      status: ConversationStatus
+      count: number
+      parentFolderId?: number
+    }
   | { type: "conversation"; conversation: DbConversationSummary }
 
 const CARD_HEIGHT = 62
 
-const GroupHeader = memo(function GroupHeader({
+const FolderHeader = memo(function FolderHeader({
+  folderId,
+  folderName,
+  branch,
+  count,
+  expanded,
+  onToggle,
+  onFocus,
+  onCloseFolderTabs,
+  onRemoveFromWorkspace,
+  highlighted,
+  t,
+}: {
+  folderId: number
+  folderName: string
+  branch: string | null
+  count: number
+  expanded: boolean
+  onToggle: (folderId: number) => void
+  onFocus: (folderId: number) => void
+  onCloseFolderTabs: (folderId: number) => void
+  onRemoveFromWorkspace: (folderId: number) => void
+  highlighted: boolean
+  t: ReturnType<typeof useTranslations>
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          data-folder-id={folderId}
+          onClick={() => onToggle(folderId)}
+          className={cn(
+            "flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium cursor-pointer transition-all",
+            "text-foreground hover:bg-accent/50 rounded-sm",
+            highlighted && "ring-2 ring-primary ring-offset-1"
+          )}
+        >
+          <ChevronRight
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 transition-transform text-muted-foreground",
+              expanded && "rotate-90"
+            )}
+          />
+          <span className="truncate flex-1 text-left">{folderName}</span>
+          {branch && (
+            <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+              {branch}
+            </span>
+          )}
+          <span className="text-muted-foreground/60 tabular-nums text-[10px]">
+            ({count})
+          </span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onFocus(folderId)}>
+          {t("folderHeaderMenu.focus")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onCloseFolderTabs(folderId)}>
+          {t("folderHeaderMenu.closeFolderTabs")}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onSelect={() => onRemoveFromWorkspace(folderId)}
+        >
+          <XCircle className="h-4 w-4" />
+          {t("folderHeaderMenu.removeFromWorkspace")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+})
+
+const StatusHeader = memo(function StatusHeader({
   status,
   count,
   isOpen,
@@ -168,31 +268,61 @@ export interface SidebarConversationListHandle {
   scrollToActive: () => void
   expandAll: () => void
   collapseAll: () => void
+  revealFolder: (folderId: number) => void
+}
+
+export interface SidebarConversationListProps {
+  viewMode?: SidebarViewMode
+  searchQuery?: string
 }
 
 export function SidebarConversationList({
   ref,
-}: {
+  viewMode = "flat",
+  searchQuery = "",
+}: SidebarConversationListProps & {
   ref?: Ref<SidebarConversationListHandle>
 }) {
   const t = useTranslations("Folder.sidebar")
   const tStatus = useTranslations("Folder.statusLabels")
   const tCommon = useTranslations("Folder.common")
   const {
-    folder,
+    allFolders,
     conversations,
-    loading,
-    refreshing,
-    error,
-    selectedConversation,
-    folderId,
+    conversationsLoading: loading,
+    conversationsError: error,
     refreshConversations,
     updateConversationLocal,
-  } = useFolderContext()
+    branches,
+    removeFolderFromWorkspace,
+  } = useAppWorkspace()
+  const refreshing = loading
+  const { activeFolder } = useActiveFolder()
 
-  const { openTab, closeConversationTab, openNewConversationTab } =
-    useTabContext()
+  const {
+    openTab,
+    closeConversationTab,
+    closeTabsByFolder,
+    openNewConversationTab,
+    activeTabId,
+    tabs,
+  } = useTabContext()
   const { addTask, updateTask } = useTaskContext()
+
+  const folderIndex = useMemo(() => {
+    const map = new Map<number, { name: string; path: string }>()
+    for (const f of allFolders) map.set(f.id, { name: f.name, path: f.path })
+    return map
+  }, [allFolders])
+
+  const selectedConversation = useMemo(() => {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId)
+    if (!activeTab || activeTab.conversationId == null) return null
+    return {
+      id: activeTab.conversationId,
+      agentType: activeTab.agentType,
+    }
+  }, [tabs, activeTabId])
 
   const [importing, setImporting] = useState(false)
   const [completeReviewOpen, setCompleteReviewOpen] = useState(false)
@@ -205,10 +335,160 @@ export function SidebarConversationList({
     completed: false,
     cancelled: false,
   })
+  const [folderExpanded, setFolderExpanded] = useState<Record<number, boolean>>(
+    {}
+  )
+  const [highlightedFolder, setHighlightedFolder] = useState<number | null>(
+    null
+  )
+  const [removeConfirm, setRemoveConfirm] = useState<{
+    folderId: number
+    folderName: string
+  } | null>(null)
+
+  useEffect(() => {
+    // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
+
+    setFolderExpanded(loadFolderExpanded())
+  }, [])
 
   const scrollToActiveRef = useRef<() => void>(() => {})
   const pendingScrollRef = useRef(false)
   const virtualizerRef = useRef<VirtualizerHandle>(null)
+  const highlightTimerRef = useRef<number | null>(null)
+
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+  const filteredConversations = useMemo(() => {
+    if (!normalizedSearch) return conversations
+    return conversations.filter((c) => {
+      const title = (c.title ?? "").toLowerCase()
+      return title.includes(normalizedSearch)
+    })
+  }, [conversations, normalizedSearch])
+
+  const byStatus = useMemo(() => {
+    const map = new Map<ConversationStatus, DbConversationSummary[]>()
+    for (const conv of filteredConversations) {
+      const status = conv.status as ConversationStatus
+      const list = map.get(status)
+      if (list) list.push(conv)
+      else map.set(status, [conv])
+    }
+    for (const list of map.values()) list.sort(compareByUpdatedAtDesc)
+    return map
+  }, [filteredConversations])
+
+  const byFolder = useMemo(() => {
+    const map = new Map<
+      number,
+      Map<ConversationStatus, DbConversationSummary[]>
+    >()
+    for (const conv of filteredConversations) {
+      const folderId = conv.folder_id
+      let inner = map.get(folderId)
+      if (!inner) {
+        inner = new Map<ConversationStatus, DbConversationSummary[]>()
+        map.set(folderId, inner)
+      }
+      const status = conv.status as ConversationStatus
+      const list = inner.get(status)
+      if (list) list.push(conv)
+      else inner.set(status, [conv])
+    }
+    for (const inner of map.values()) {
+      for (const list of inner.values()) list.sort(compareByUpdatedAtDesc)
+    }
+    return map
+  }, [filteredConversations])
+
+  const orderedFolderIds = useMemo(() => {
+    // Show every folder in the workspace DB, even ones without conversations.
+    // Folders that only have orphan conversations still appear via byFolder.
+    const seen = new Set<number>()
+    const ids: number[] = []
+    for (const f of allFolders) {
+      if (!seen.has(f.id)) {
+        seen.add(f.id)
+        ids.push(f.id)
+      }
+    }
+    for (const id of byFolder.keys()) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        ids.push(id)
+      }
+    }
+    return ids
+  }, [allFolders, byFolder])
+
+  const flatItems = useMemo<FlatItem[]>(() => {
+    const items: FlatItem[] = []
+    if (viewMode === "grouped") {
+      for (const folderId of orderedFolderIds) {
+        const inner = byFolder.get(folderId)
+        const totalCount = inner
+          ? Array.from(inner.values()).reduce(
+              (sum, list) => sum + list.length,
+              0
+            )
+          : 0
+        const folderName = folderIndex.get(folderId)?.name ?? String(folderId)
+        const branch = branches.get(folderId) ?? null
+        const expanded = folderExpanded[folderId] ?? true
+        items.push({
+          type: "folder_header",
+          folderId,
+          folderName,
+          branch,
+          count: totalCount,
+          expanded,
+        })
+        if (!expanded || !inner) continue
+        for (const status of STATUS_ORDER) {
+          const list = inner.get(status)
+          if (!list || list.length === 0) continue
+          items.push({
+            type: "status_header",
+            status,
+            count: list.length,
+            parentFolderId: folderId,
+          })
+          if (groupExpanded[status]) {
+            for (const conv of list) {
+              items.push({ type: "conversation", conversation: conv })
+            }
+          }
+        }
+      }
+    } else {
+      for (const status of STATUS_ORDER) {
+        const list = byStatus.get(status)
+        if (!list || list.length === 0) continue
+        items.push({ type: "status_header", status, count: list.length })
+        if (groupExpanded[status]) {
+          for (const conv of list) {
+            items.push({ type: "conversation", conversation: conv })
+          }
+        }
+      }
+    }
+    return items
+  }, [
+    viewMode,
+    orderedFolderIds,
+    byFolder,
+    folderIndex,
+    branches,
+    folderExpanded,
+    byStatus,
+    groupExpanded,
+  ])
+
+  const reviewConversations = useMemo(
+    () => byStatus.get("pending_review") ?? [],
+    [byStatus]
+  )
+  const reviewConversationCount = reviewConversations.length
 
   useImperativeHandle(ref, () => ({
     scrollToActive() {
@@ -230,45 +510,42 @@ export function SidebarConversationList({
         cancelled: false,
       })
     },
+    revealFolder(folderId: number) {
+      setFolderExpanded((prev) => {
+        if (prev[folderId] === true) return prev
+        const next = { ...prev, [folderId]: true }
+        saveFolderExpanded(next)
+        return next
+      })
+      setHighlightedFolder(folderId)
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current)
+      }
+      highlightTimerRef.current = window.setTimeout(() => {
+        setHighlightedFolder(null)
+        highlightTimerRef.current = null
+      }, 1200)
+      requestAnimationFrame(() => {
+        const idx = flatItems.findIndex(
+          (item) => item.type === "folder_header" && item.folderId === folderId
+        )
+        if (idx >= 0) {
+          virtualizerRef.current?.scrollToIndex(idx, {
+            align: "start",
+            smooth: true,
+          })
+        }
+      })
+    },
   }))
 
-  const grouped = useMemo(() => {
-    const map = new Map<ConversationStatus, DbConversationSummary[]>()
-    for (const conv of conversations) {
-      const status = conv.status as ConversationStatus
-      const list = map.get(status)
-      if (list) {
-        list.push(conv)
-      } else {
-        map.set(status, [conv])
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current)
       }
     }
-    for (const list of map.values()) {
-      list.sort(compareByUpdatedAtDesc)
-    }
-    return map
-  }, [conversations])
-
-  const flatItems = useMemo<FlatItem[]>(() => {
-    const items: FlatItem[] = []
-    for (const status of STATUS_ORDER) {
-      const list = grouped.get(status)
-      if (!list || list.length === 0) continue
-      items.push({ type: "header", status, count: list.length })
-      if (groupExpanded[status]) {
-        for (const conv of list) {
-          items.push({ type: "conversation", conversation: conv })
-        }
-      }
-    }
-    return items
-  }, [grouped, groupExpanded])
-
-  const reviewConversations = useMemo(
-    () => grouped.get("pending_review") ?? [],
-    [grouped]
-  )
-  const reviewConversationCount = reviewConversations.length
+  }, [])
 
   useEffect(() => {
     scrollToActiveRef.current = () => {
@@ -282,6 +559,15 @@ export function SidebarConversationList({
       const status = conv.status as ConversationStatus
       if (!groupExpanded[status]) {
         setGroupExpanded((prev) => ({ ...prev, [status]: true }))
+        pendingScrollRef.current = true
+        return
+      }
+      if (viewMode === "grouped" && !(folderExpanded[conv.folder_id] ?? true)) {
+        setFolderExpanded((prev) => {
+          const next = { ...prev, [conv.folder_id]: true }
+          saveFolderExpanded(next)
+          return next
+        })
         pendingScrollRef.current = true
         return
       }
@@ -303,11 +589,71 @@ export function SidebarConversationList({
       pendingScrollRef.current = false
       scrollToActiveRef.current()
     }
-  }, [selectedConversation, flatItems, conversations, groupExpanded])
+  }, [
+    selectedConversation,
+    flatItems,
+    conversations,
+    groupExpanded,
+    folderExpanded,
+    viewMode,
+  ])
 
   const toggleGroup = useCallback((status: ConversationStatus) => {
     setGroupExpanded((prev) => ({ ...prev, [status]: !prev[status] }))
   }, [])
+
+  const toggleFolder = useCallback((folderId: number) => {
+    setFolderExpanded((prev) => {
+      const next = { ...prev, [folderId]: !(prev[folderId] ?? true) }
+      saveFolderExpanded(next)
+      return next
+    })
+  }, [])
+
+  const focusFolder = useCallback(
+    (folderId: number) => {
+      const idx = flatItems.findIndex(
+        (item) => item.type === "folder_header" && item.folderId === folderId
+      )
+      if (idx >= 0) {
+        virtualizerRef.current?.scrollToIndex(idx, {
+          align: "start",
+          smooth: true,
+        })
+      }
+    },
+    [flatItems]
+  )
+
+  const handleCloseFolderTabs = useCallback(
+    (folderId: number) => {
+      closeTabsByFolder(folderId)
+    },
+    [closeTabsByFolder]
+  )
+
+  const handleRemoveFolder = useCallback(
+    (folderId: number) => {
+      const name = folderIndex.get(folderId)?.name ?? String(folderId)
+      setRemoveConfirm({ folderId, folderName: name })
+    },
+    [folderIndex]
+  )
+
+  const handleRemoveFolderConfirm = useCallback(async () => {
+    if (!removeConfirm) return
+    const { folderId, folderName } = removeConfirm
+    try {
+      closeTabsByFolder(folderId)
+      await removeFolderFromWorkspace(folderId)
+      toast.success(t("toasts.folderRemoved", { name: folderName }))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      toast.error(t("toasts.removeFolderFailed", { message: msg }))
+    } finally {
+      setRemoveConfirm(null)
+    }
+  }, [removeConfirm, closeTabsByFolder, removeFolderFromWorkspace, t])
 
   const handleOpenCompleteReview = useCallback(
     () => setCompleteReviewOpen(true),
@@ -316,16 +662,34 @@ export function SidebarConversationList({
 
   const handleSelect = useCallback(
     (id: number, agentType: string) => {
-      openTab(id, agentType as Parameters<typeof openTab>[1], false)
+      const conv = conversations.find(
+        (c) => c.id === id && c.agent_type === agentType
+      )
+      if (!conv) return
+      openTab(
+        conv.folder_id,
+        id,
+        agentType as Parameters<typeof openTab>[2],
+        false
+      )
     },
-    [openTab]
+    [openTab, conversations]
   )
 
   const handleDoubleClick = useCallback(
     (id: number, agentType: string) => {
-      openTab(id, agentType as Parameters<typeof openTab>[1], true)
+      const conv = conversations.find(
+        (c) => c.id === id && c.agent_type === agentType
+      )
+      if (!conv) return
+      openTab(
+        conv.folder_id,
+        id,
+        agentType as Parameters<typeof openTab>[2],
+        true
+      )
     },
-    [openTab]
+    [openTab, conversations]
   )
 
   const handleRename = useCallback(
@@ -338,11 +702,20 @@ export function SidebarConversationList({
 
   const handleDelete = useCallback(
     async (id: number, agentType: string) => {
+      const conv = conversations.find(
+        (c) => c.id === id && c.agent_type === agentType
+      )
       await deleteConversation(id)
-      closeConversationTab(id, agentType as Parameters<typeof openTab>[1])
+      if (conv) {
+        closeConversationTab(
+          conv.folder_id,
+          id,
+          agentType as Parameters<typeof openTab>[2]
+        )
+      }
       refreshConversations()
     },
-    [closeConversationTab, refreshConversations]
+    [closeConversationTab, refreshConversations, conversations]
   )
 
   const handleStatusChange = useCallback(
@@ -354,18 +727,19 @@ export function SidebarConversationList({
   )
 
   const handleNewConversation = useCallback(() => {
-    if (!folder) return
-    openNewConversationTab(folder.path)
-  }, [folder, openNewConversationTab])
+    if (!activeFolder) return
+    openNewConversationTab(activeFolder.id, activeFolder.path)
+  }, [activeFolder, openNewConversationTab])
 
   const handleImport = useCallback(async () => {
     if (importing) return
+    if (!activeFolder) return
     setImporting(true)
-    const taskId = `import-${folderId}-${Date.now()}`
+    const taskId = `import-${activeFolder.id}-${Date.now()}`
     addTask(taskId, t("importLocalSessions"))
     updateTask(taskId, { status: "running" })
     try {
-      const result = await importLocalConversations(folderId)
+      const result = await importLocalConversations(activeFolder.id)
       updateTask(taskId, { status: "completed" })
       refreshConversations()
       if (result.imported > 0) {
@@ -385,13 +759,12 @@ export function SidebarConversationList({
     } finally {
       setImporting(false)
     }
-  }, [importing, folderId, addTask, updateTask, refreshConversations, t])
+  }, [importing, activeFolder, addTask, updateTask, refreshConversations, t])
 
   const handleCompleteAllReview = useCallback(async () => {
     if (completingReview || reviewConversationCount === 0) return
     setCompletingReview(true)
     try {
-      // Optimistic: update all locally first
       for (const conversation of reviewConversations) {
         updateConversationLocal(conversation.id, { status: "completed" })
       }
@@ -407,7 +780,6 @@ export function SidebarConversationList({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       toast.error(t("toasts.completeReviewFailed", { message: msg }))
-      // Revert on error — refetch from server
       refreshConversations()
     } finally {
       setCompletingReview(false)
@@ -420,6 +792,9 @@ export function SidebarConversationList({
     updateConversationLocal,
     t,
   ])
+
+  const emptyAfterSearch =
+    filteredConversations.length === 0 && normalizedSearch.length > 0
 
   return (
     <div className="relative flex flex-col flex-1 min-h-0">
@@ -451,7 +826,7 @@ export function SidebarConversationList({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={importing}
+                disabled={importing || !activeFolder}
                 onClick={handleImport}
               >
                 {importing ? (
@@ -464,17 +839,29 @@ export function SidebarConversationList({
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
-            <ContextMenuItem onSelect={handleNewConversation}>
+            <ContextMenuItem
+              onSelect={handleNewConversation}
+              disabled={!activeFolder}
+            >
               <Plus className="h-4 w-4" />
               {t("newConversation")}
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem disabled={importing} onSelect={handleImport}>
+            <ContextMenuItem
+              disabled={importing || !activeFolder}
+              onSelect={handleImport}
+            >
               <Download className="h-4 w-4" />
               {importing ? t("importing") : t("importLocalSessions")}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
+      ) : emptyAfterSearch ? (
+        <div className="flex-1 flex items-center justify-center px-3">
+          <p className="text-muted-foreground text-xs text-center">
+            {t("noMatchingConversations")}
+          </p>
+        </div>
       ) : (
         <ContextMenu>
           <ContextMenuTrigger asChild>
@@ -483,53 +870,87 @@ export function SidebarConversationList({
                 className={cn("h-full min-h-0 px-2", "[overflow-anchor:none]")}
               >
                 <Virtualizer ref={virtualizerRef} itemSize={CARD_HEIGHT}>
-                  {flatItems.map((item) => {
-                    const key =
-                      item.type === "header"
-                        ? `header-${item.status}`
-                        : `conv-${item.conversation.id}`
-                    return (
-                      <div key={key}>
-                        {item.type === "header" ? (
-                          item.status === "pending_review" ? (
-                            <PendingReviewHeader
-                              count={item.count}
-                              isOpen={groupExpanded[item.status]}
-                              onToggle={toggleGroup}
-                              reviewConversationCount={reviewConversationCount}
-                              completingReview={completingReview}
-                              onCompleteReview={handleOpenCompleteReview}
-                              tStatus={tStatus}
-                              t={t}
-                            />
-                          ) : (
-                            <GroupHeader
-                              status={item.status}
-                              count={item.count}
-                              isOpen={groupExpanded[item.status]}
-                              onToggle={toggleGroup}
-                              tStatus={tStatus}
-                            />
-                          )
-                        ) : (
-                          <SidebarConversationCard
-                            conversation={item.conversation}
-                            isSelected={
-                              selectedConversation?.agentType ===
-                                item.conversation.agent_type &&
-                              selectedConversation?.id === item.conversation.id
-                            }
-                            onSelect={handleSelect}
-                            onDoubleClick={handleDoubleClick}
-                            onRename={handleRename}
-                            onDelete={handleDelete}
-                            onStatusChange={handleStatusChange}
-                            onNewConversation={handleNewConversation}
-                            onImport={handleImport}
-                            importing={importing}
+                  {flatItems.map((item, index) => {
+                    if (item.type === "folder_header") {
+                      return (
+                        <FolderHeader
+                          key={`folder-${item.folderId}`}
+                          folderId={item.folderId}
+                          folderName={item.folderName}
+                          branch={item.branch}
+                          count={item.count}
+                          expanded={item.expanded}
+                          onToggle={toggleFolder}
+                          onFocus={focusFolder}
+                          onCloseFolderTabs={handleCloseFolderTabs}
+                          onRemoveFromWorkspace={handleRemoveFolder}
+                          highlighted={highlightedFolder === item.folderId}
+                          t={t}
+                        />
+                      )
+                    }
+                    const indented =
+                      viewMode === "grouped" &&
+                      (item.type === "status_header"
+                        ? item.parentFolderId != null
+                        : true)
+                    if (item.type === "status_header") {
+                      const key = `status-${item.parentFolderId ?? "root"}-${item.status}-${index}`
+                      const headerNode =
+                        item.status === "pending_review" ? (
+                          <PendingReviewHeader
+                            key={key}
+                            count={item.count}
+                            isOpen={groupExpanded[item.status]}
+                            onToggle={toggleGroup}
+                            reviewConversationCount={reviewConversationCount}
+                            completingReview={completingReview}
+                            onCompleteReview={handleOpenCompleteReview}
+                            tStatus={tStatus}
+                            t={t}
                           />
-                        )}
+                        ) : (
+                          <StatusHeader
+                            key={key}
+                            status={item.status}
+                            count={item.count}
+                            isOpen={groupExpanded[item.status]}
+                            onToggle={toggleGroup}
+                            tStatus={tStatus}
+                          />
+                        )
+                      return indented ? (
+                        <div key={key} className="pl-4">
+                          {headerNode}
+                        </div>
+                      ) : (
+                        headerNode
+                      )
+                    }
+                    const conv = item.conversation
+                    const cardNode = (
+                      <SidebarConversationCard
+                        conversation={conv}
+                        isSelected={
+                          selectedConversation?.agentType === conv.agent_type &&
+                          selectedConversation?.id === conv.id
+                        }
+                        onSelect={handleSelect}
+                        onDoubleClick={handleDoubleClick}
+                        onRename={handleRename}
+                        onDelete={handleDelete}
+                        onStatusChange={handleStatusChange}
+                        onNewConversation={handleNewConversation}
+                        onImport={handleImport}
+                        importing={importing}
+                      />
+                    )
+                    return indented ? (
+                      <div key={`conv-${conv.id}`} className="pl-4">
+                        {cardNode}
                       </div>
+                    ) : (
+                      <div key={`conv-${conv.id}`}>{cardNode}</div>
                     )
                   })}
                 </Virtualizer>
@@ -537,12 +958,18 @@ export function SidebarConversationList({
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
-            <ContextMenuItem onSelect={handleNewConversation}>
+            <ContextMenuItem
+              onSelect={handleNewConversation}
+              disabled={!activeFolder}
+            >
               <Plus className="h-4 w-4" />
               {t("newConversation")}
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem disabled={importing} onSelect={handleImport}>
+            <ContextMenuItem
+              disabled={importing || !activeFolder}
+              onSelect={handleImport}
+            >
               <Download className="h-4 w-4" />
               {importing ? t("importing") : t("importLocalSessions")}
             </ContextMenuItem>
@@ -573,6 +1000,28 @@ export function SidebarConversationList({
               onClick={handleCompleteAllReview}
             >
               {completingReview ? t("completing") : tCommon("confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={removeConfirm !== null}
+        onOpenChange={(open) => !open && setRemoveConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("removeFolderConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("removeFolderConfirmDescription", {
+                name: removeConfirm?.folderName ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRemoveFolderConfirm}>
+              {tCommon("confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

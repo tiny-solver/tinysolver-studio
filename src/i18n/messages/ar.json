@@ -825,7 +825,24 @@
         "noNewSessionsFound": "لم يتم العثور على جلسات جديدة (تم تخطي {skipped})",
         "importFailed": "فشل الاستيراد: {message}",
         "reviewCompleted": "تم وضع علامة مكتمل على {count, plural, one {# جلسة مراجعة} other {# جلسات مراجعة}}",
-        "completeReviewFailed": "فشل إكمال جلسات المراجعة: {message}"
+        "completeReviewFailed": "فشل إكمال جلسات المراجعة: {message}",
+        "folderOpened": "تم فتح المجلد {name}",
+        "folderRemoved": "تمت إزالة المجلد {name}",
+        "openFolderFailed": "فشل فتح المجلد",
+        "removeFolderFailed": "فشل إزالة المجلد: {message}"
+      },
+      "statsLabel": "{folders} مجلدات · {convos} محادثة",
+      "openFolder": "فتح مجلد",
+      "searchPlaceholder": "بحث عن محادثات...",
+      "viewFlat": "عرض مسطح",
+      "viewGrouped": "تجميع حسب المجلد",
+      "noMatchingConversations": "لا توجد محادثات مطابقة",
+      "removeFolderConfirmTitle": "إزالة المجلد من مساحة العمل؟",
+      "removeFolderConfirmDescription": "إزالة \"{name}\" من مساحة العمل؟ سيتم إغلاق علامات التبويب والمحطات المرتبطة.",
+      "folderHeaderMenu": {
+        "focus": "تركيز",
+        "closeFolderTabs": "إغلاق جميع علامات تبويب هذا المجلد",
+        "removeFromWorkspace": "إزالة من مساحة العمل"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "إغلاق البقية",
       "closeAll": "إغلاق الكل",
       "tileDisplay": "عرض متجانب",
-      "untileDisplay": "إلغاء التجانب"
+      "untileDisplay": "إلغاء التجانب",
+      "closeFolderTabs": "إغلاق جميع علامات التبويب لـ {folder}",
+      "revealInSidebar": "إظهار في الشريط الجانبي"
     },
     "fileWorkspace": {
       "files": "الملفات",
@@ -976,7 +995,8 @@
       "close": "إغلاق",
       "closeOthers": "إغلاق البقية",
       "closeAll": "إغلاق الكل",
-      "hideTerminal": "إخفاء الطرفية ({shortcut})"
+      "hideTerminal": "إخفاء الطرفية ({shortcut})",
+      "openFolderFirst": "افتح مجلدا أولا"
     },
     "sessionFiles": {
       "currentResponse": "الاستجابة الحالية",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "مقطع {index}",
       "loadingHunk": "جارٍ تحميل hunk...",
       "noDiffData": "لا توجد بيانات diff"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

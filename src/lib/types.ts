@@ -163,11 +163,12 @@ export interface FolderDetail {
   parent_branch: string | null
   default_agent_type: AgentType | null
   last_opened_at: string
-  opened_conversations: OpenedConversation[]
 }
 
-export interface OpenedConversation {
-  conversation_id: number
+export interface OpenedTab {
+  id: number
+  folder_id: number
+  conversation_id: number | null
   agent_type: AgentType
   position: number
   is_active: boolean

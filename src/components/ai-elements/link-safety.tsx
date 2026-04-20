@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl"
 import { openUrl } from "@/lib/platform"
 import type { LinkSafetyConfig, LinkSafetyModalProps } from "streamdown"
 import { toast } from "sonner"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import {
   AlertDialog,
@@ -223,7 +223,7 @@ function LinkSafetyModal({
 
 export function useStreamdownLinkSafety(): LinkSafetyConfig {
   const t = useTranslations("Folder.chat.linkSafety")
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const folderPath = folder?.path
   const { openFilePreview } = useWorkspaceContext()
 

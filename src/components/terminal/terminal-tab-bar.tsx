@@ -1,8 +1,10 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Minus, Plus, X } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useActiveFolder } from "@/contexts/active-folder-context"
+import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { useIsMac } from "@/hooks/use-is-mac"
@@ -15,6 +17,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { FolderBadge } from "@/components/ui/folder-badge"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 export function TerminalTabBar() {
   const t = useTranslations("Folder.terminal")
@@ -31,6 +40,16 @@ export function TerminalTabBar() {
     createTerminal,
     toggle,
   } = useTerminalContext()
+  const { activeFolderId } = useActiveFolder()
+  const { folders } = useAppWorkspace()
+
+  const folderIndex = useMemo(() => {
+    const map = new Map<number, string>()
+    for (const f of folders) map.set(f.id, f.name)
+    return map
+  }, [folders])
+
+  const canCreateTerminal = activeFolderId != null
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
@@ -62,6 +81,13 @@ export function TerminalTabBar() {
               }`}
               onClick={() => switchTerminal(tab.id)}
             >
+              <FolderBadge
+                folderId={tab.folderId}
+                folderName={
+                  folderIndex.get(tab.folderId) ?? String(tab.folderId)
+                }
+                size="sm"
+              />
               {editingId === tab.id ? (
                 <input
                   ref={inputRef}
@@ -108,14 +134,26 @@ export function TerminalTabBar() {
           </ContextMenuContent>
         </ContextMenu>
       ))}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 shrink-0"
-        onClick={() => createTerminal()}
-      >
-        <Plus className="h-3 w-3" />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={() => createTerminal()}
+                disabled={!canCreateTerminal}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {!canCreateTerminal && (
+            <TooltipContent side="top">{t("openFolderFirst")}</TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
       <Button
         variant="ghost"
         size="icon"

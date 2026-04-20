@@ -53,7 +53,7 @@ import {
   acpListAgents,
   acpListAgentSkills,
   loadFolderHistory,
-  openFolderWindow,
+  openFolder,
   acpReadAgentSkill,
   acpSaveAgentSkill,
 } from "@/lib/api"
@@ -475,7 +475,7 @@ export function SkillsSettings() {
     async (skill: AgentSkillItem) => {
       const dirPath = skillDirectoryPath(skill)
       try {
-        await openFolderWindow(dirPath)
+        await openFolder(dirPath)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         toast.error(t("toasts.openFolderFailed"), { description: message })

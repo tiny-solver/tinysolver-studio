@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { useTranslations } from "next-intl"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import {
   gitDiff,
   gitDiffWithBranch,
@@ -208,12 +208,11 @@ interface WorkspaceProviderProps {
 
 export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const t = useTranslations("Folder.workspaceContext")
-  const { folder, folderId } = useFolderContext()
-  const folderPath = folder?.path
-  const storageKey = useMemo(
-    () => `folder:${folderId}:workspace-mode`,
-    [folderId]
-  )
+  const { activeFolder, activeFolderId } = useActiveFolder()
+  const folderPath = activeFolder?.path
+  const storageKey = "workspace:mode"
+  /* activeFolderId used in effect below to reset file tabs on folder switch */
+  void activeFolderId
   const [mode, setModeState] = useState<WorkspaceMode>(DEFAULT_WORKSPACE_MODE)
   const [activePane, setActivePaneState] =
     useState<WorkspacePane>("conversation")
@@ -246,6 +245,17 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     }
     setRestored(true)
   }, [storageKey])
+
+  // Clear file tabs when the active folder changes — files are not persisted
+  // across folder switches in the workspace model.
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setFileTabs([])
+    setActiveFileTabId(null)
+    setPreviewFileTabIds(new Set())
+    setPendingFileReveal(null)
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [activeFolderId])
 
   useEffect(() => {
     if (!restored) return

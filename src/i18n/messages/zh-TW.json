@@ -825,7 +825,24 @@
         "noNewSessionsFound": "沒有新會話（已跳過 {skipped} 個）",
         "importFailed": "匯入失敗：{message}",
         "reviewCompleted": "已將 {count} 個複查會話標記為已完成",
-        "completeReviewFailed": "批次完成複查會話失敗：{message}"
+        "completeReviewFailed": "批次完成複查會話失敗：{message}",
+        "folderOpened": "已開啟資料夾 {name}",
+        "folderRemoved": "已移除資料夾 {name}",
+        "openFolderFailed": "開啟資料夾失敗",
+        "removeFolderFailed": "移除資料夾失敗：{message}"
+      },
+      "statsLabel": "{folders} 個資料夾 · {convos} 個對話",
+      "openFolder": "開啟資料夾",
+      "searchPlaceholder": "搜尋對話...",
+      "viewFlat": "平鋪視圖",
+      "viewGrouped": "依資料夾分組",
+      "noMatchingConversations": "找不到符合的對話",
+      "removeFolderConfirmTitle": "從工作區移除此資料夾？",
+      "removeFolderConfirmDescription": "從工作區移除 \"{name}\"？相關分頁與終端機將會關閉。",
+      "folderHeaderMenu": {
+        "focus": "聚焦至此",
+        "closeFolderTabs": "關閉此資料夾的所有分頁",
+        "removeFromWorkspace": "從工作區移除"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "關閉其它",
       "closeAll": "關閉所有",
       "tileDisplay": "平鋪顯示",
-      "untileDisplay": "取消平鋪"
+      "untileDisplay": "取消平鋪",
+      "closeFolderTabs": "關閉 {folder} 的所有標籤",
+      "revealInSidebar": "在側邊欄中定位"
     },
     "fileWorkspace": {
       "files": "檔案",
@@ -976,7 +995,8 @@
       "close": "關閉",
       "closeOthers": "關閉其它",
       "closeAll": "關閉所有",
-      "hideTerminal": "隱藏終端（{shortcut}）"
+      "hideTerminal": "隱藏終端（{shortcut}）",
+      "openFolderFirst": "請先開啟一個資料夾"
     },
     "sessionFiles": {
       "currentResponse": "目前回應",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "區塊 {index}",
       "loadingHunk": "正在載入區塊...",
       "noDiffData": "無差異資料"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

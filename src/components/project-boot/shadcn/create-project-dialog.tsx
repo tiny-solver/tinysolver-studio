@@ -37,7 +37,7 @@ import {
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import {
   createShadcnProject,
-  openFolderWindow,
+  openFolder,
   detectPackageManager,
 } from "@/lib/api"
 import { extractAppCommandError, toErrorMessage } from "@/lib/app-error"
@@ -122,7 +122,7 @@ export function CreateProjectDialog({
       toast.success(t("toasts.createSuccess"))
       onOpenChange(false)
       resetForm()
-      await openFolderWindow(projectPath)
+      await openFolder(projectPath)
     } catch (err) {
       const appErr = extractAppCommandError(err)
       const message =

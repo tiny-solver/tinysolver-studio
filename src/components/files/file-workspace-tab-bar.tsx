@@ -5,7 +5,7 @@ import { Reorder } from "motion/react"
 import { Code, Eye, ExternalLink, FileText, GitCompare, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { openPath } from "@/lib/platform"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
@@ -33,7 +33,7 @@ export function FileWorkspaceTabBar() {
     previewFileTabIds,
     toggleFileTabPreview,
   } = useWorkspaceContext()
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const { shortcuts } = useShortcutSettings()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)

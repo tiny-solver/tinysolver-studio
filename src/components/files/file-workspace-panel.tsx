@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 import { ChevronDown, ChevronRight, FileCode2, FileIcon } from "lucide-react"
 import type { editor as MonacoEditorNs } from "monaco-editor"
 import { useTranslations } from "next-intl"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { ImagePreview } from "@/components/files/image-preview"
 import { DiffViewer } from "@/components/diff/diff-viewer"
@@ -766,7 +766,7 @@ export function FileWorkspacePanel() {
     saveActiveFile,
     updateActiveFileContent,
   } = useWorkspaceContext()
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const folderPath = folder?.path ?? null
   const activeScope = activeFileTab?.id ?? "__default__"
   const editorRef = useRef<MonacoEditorNs.IStandaloneCodeEditor | null>(null)

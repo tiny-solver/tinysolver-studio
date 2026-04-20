@@ -23,7 +23,7 @@ use crate::db::service::folder_service;
 use crate::db::AppDatabase;
 use crate::models::GitCredentials;
 #[cfg(feature = "tauri-runtime")]
-use crate::models::{FolderDetail, FolderHistoryEntry, OpenedConversation};
+use crate::models::{FolderDetail, FolderHistoryEntry};
 use crate::web::event_bridge::EventEmitter;
 
 /// Configure a git command for remote operations:
@@ -526,12 +526,52 @@ pub async fn remove_folder_from_history(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn save_folder_opened_conversations(
+pub async fn list_open_folder_details(
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<Vec<FolderDetail>, AppCommandError> {
+    folder_service::list_open_folder_details(&db.conn)
+        .await
+        .map_err(AppCommandError::from)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn list_all_folder_details(
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<Vec<FolderDetail>, AppCommandError> {
+    folder_service::list_all_folder_details(&db.conn)
+        .await
+        .map_err(AppCommandError::from)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn open_folder_by_id(
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
-    items: Vec<OpenedConversation>,
-) -> Result<(), DbError> {
-    folder_service::save_opened_conversations(&db.conn, folder_id, items).await
+) -> Result<FolderDetail, AppCommandError> {
+    folder_service::set_folder_open(&db.conn, folder_id, true)
+        .await
+        .map_err(AppCommandError::from)?;
+    folder_service::get_folder_by_id(&db.conn, folder_id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found(format!("Folder {folder_id} not found")))
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn remove_folder_from_workspace(
+    db: tauri::State<'_, AppDatabase>,
+    folder_id: i32,
+) -> Result<(), AppCommandError> {
+    use crate::db::service::tab_service;
+    tab_service::delete_tabs_for_folder(&db.conn, folder_id)
+        .await
+        .map_err(AppCommandError::from)?;
+    folder_service::set_folder_open(&db.conn, folder_id, false)
+        .await
+        .map_err(AppCommandError::from)
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]

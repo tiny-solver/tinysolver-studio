@@ -6,6 +6,6 @@ pub mod chat_channel_sender_context;
 pub mod conversation;
 pub mod folder;
 pub mod folder_command;
-pub mod folder_opened_conversation;
 pub mod model_provider;
+pub mod opened_tab;
 pub mod prelude;

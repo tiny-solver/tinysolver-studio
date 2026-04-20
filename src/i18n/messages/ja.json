@@ -825,7 +825,24 @@
         "noNewSessionsFound": "新しいセッションは見つかりませんでした（{skipped} 件をスキップ）",
         "importFailed": "インポートに失敗しました: {message}",
         "reviewCompleted": "{count, plural, one {# 件のレビューセッション} other {# 件のレビューセッション}} を完了にしました",
-        "completeReviewFailed": "レビューセッションの完了処理に失敗しました: {message}"
+        "completeReviewFailed": "レビューセッションの完了処理に失敗しました: {message}",
+        "folderOpened": "フォルダ {name} を開きました",
+        "folderRemoved": "フォルダ {name} を削除しました",
+        "openFolderFailed": "フォルダを開けませんでした",
+        "removeFolderFailed": "フォルダの削除に失敗しました: {message}"
+      },
+      "statsLabel": "{folders} フォルダ · {convos} 会話",
+      "openFolder": "フォルダを開く",
+      "searchPlaceholder": "会話を検索...",
+      "viewFlat": "フラット表示",
+      "viewGrouped": "フォルダでグループ化",
+      "noMatchingConversations": "一致する会話がありません",
+      "removeFolderConfirmTitle": "このフォルダをワークスペースから削除しますか？",
+      "removeFolderConfirmDescription": "\"{name}\" をワークスペースから削除しますか？関連するタブとターミナルが閉じられます。",
+      "folderHeaderMenu": {
+        "focus": "フォーカス",
+        "closeFolderTabs": "このフォルダのすべてのタブを閉じる",
+        "removeFromWorkspace": "ワークスペースから削除"
       }
     },
     "conversation": {
@@ -960,7 +977,9 @@
       "closeOthers": "他を閉じる",
       "closeAll": "すべて閉じる",
       "tileDisplay": "タイル表示",
-      "untileDisplay": "タイル解除"
+      "untileDisplay": "タイル解除",
+      "closeFolderTabs": "{folder} のすべてのタブを閉じる",
+      "revealInSidebar": "サイドバーで表示"
     },
     "fileWorkspace": {
       "files": "ファイル",
@@ -976,7 +995,8 @@
       "close": "閉じる",
       "closeOthers": "他を閉じる",
       "closeAll": "すべて閉じる",
-      "hideTerminal": "ターミナルを隠す ({shortcut})"
+      "hideTerminal": "ターミナルを隠す ({shortcut})",
+      "openFolderFirst": "先にフォルダを開いてください"
     },
     "sessionFiles": {
       "currentResponse": "現在の応答",
@@ -1792,6 +1812,25 @@
       "hunkLabel": "ハンク {index}",
       "loadingHunk": "Hunk を読み込み中...",
       "noDiffData": "Diff データがありません"
+    },
+    "conversationContextBar": {
+      "searchFolder": "Search folder...",
+      "searchBranch": "Search branch...",
+      "noFolders": "No folders",
+      "noBranches": "No branches",
+      "noBranch": "(no branch)",
+      "openNewFolder": "Open folder from disk...",
+      "cancel": "Cancel",
+      "create": "Create",
+      "commit": "Commit",
+      "push": "Push",
+      "merge": "Merge",
+      "toasts": {
+        "folderChanged": "Switched to {name}",
+        "openFolderFailed": "Failed to open folder",
+        "openStashFailed": "Failed to open stash window",
+        "openMergeFailed": "Failed to open merge window"
+      }
     }
   },
   "ProjectBoot": {

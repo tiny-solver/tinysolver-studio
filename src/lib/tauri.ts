@@ -19,7 +19,7 @@ import type {
   FolderDetail,
   DbConversationSummary,
   ImportResult,
-  OpenedConversation,
+  OpenedTab,
   GitStatusEntry,
   GitBranchList,
   GitPullResult,
@@ -470,20 +470,42 @@ export async function getFolder(folderId: number): Promise<FolderDetail> {
   return invoke("get_folder", { folderId })
 }
 
-export async function listFolderConversations(params: {
-  folder_id: number
+export async function listAllConversations(params?: {
+  folder_ids?: number[] | null
   agent_type?: AgentType | null
   search?: string | null
   sort_by?: string | null
   status?: string | null
 }): Promise<DbConversationSummary[]> {
-  return invoke("list_folder_conversations", {
-    folderId: params.folder_id,
-    agentType: params.agent_type ?? null,
-    search: params.search ?? null,
-    sortBy: params.sort_by ?? null,
-    status: params.status ?? null,
+  return invoke("list_all_conversations", {
+    folderIds: params?.folder_ids ?? null,
+    agentType: params?.agent_type ?? null,
+    search: params?.search ?? null,
+    sortBy: params?.sort_by ?? null,
+    status: params?.status ?? null,
   })
+}
+
+export async function listOpenedTabs(): Promise<OpenedTab[]> {
+  return invoke("list_opened_tabs")
+}
+
+export async function saveOpenedTabs(items: OpenedTab[]): Promise<void> {
+  return invoke("save_opened_tabs", { items })
+}
+
+export async function listOpenFolderDetails(): Promise<FolderDetail[]> {
+  return invoke("list_open_folder_details")
+}
+
+export async function openFolderById(folderId: number): Promise<FolderDetail> {
+  return invoke("open_folder_by_id", { folderId })
+}
+
+export async function removeFolderFromWorkspace(
+  folderId: number
+): Promise<void> {
+  return invoke("remove_folder_from_workspace", { folderId })
 }
 
 export async function importLocalConversations(
@@ -496,13 +518,6 @@ export async function getFolderConversation(
   conversationId: number
 ): Promise<DbConversationDetail> {
   return invoke("get_folder_conversation", { conversationId })
-}
-
-export async function saveFolderOpenedConversations(
-  folderId: number,
-  items: OpenedConversation[]
-): Promise<void> {
-  return invoke("save_folder_opened_conversations", { folderId, items })
 }
 
 export async function setFolderParentBranch(
@@ -858,8 +873,8 @@ export async function gitAddFiles(
 
 // Window management commands
 
-export async function openFolderWindow(path: string): Promise<void> {
-  return invoke("open_folder_window", { path })
+export async function openFolder(path: string): Promise<FolderDetail> {
+  return invoke("open_folder", { path })
 }
 
 export async function openCommitWindow(folderId: number): Promise<void> {
@@ -886,14 +901,6 @@ export async function openSettingsWindow(
     section: section ?? null,
     agentType: options?.agentType ?? null,
   })
-}
-
-export async function listOpenFolders(): Promise<FolderHistoryEntry[]> {
-  return invoke("list_open_folders")
-}
-
-export async function focusFolderWindow(folderId: number): Promise<void> {
-  return invoke("focus_folder_window", { folderId })
 }
 
 // Conversation CRUD commands

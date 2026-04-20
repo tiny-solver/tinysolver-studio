@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useFolderContext } from "@/contexts/folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import {
   bootstrapFolderCommandsFromPackageJson,
@@ -40,7 +40,7 @@ function setSelectedCommandId(folderId: number, cmdId: number) {
 
 export function CommandDropdown() {
   const t = useTranslations("Folder.commandDropdown")
-  const { folder } = useFolderContext()
+  const { activeFolder: folder } = useActiveFolder()
   const {
     createTerminalWithCommand,
     exitedTerminals,

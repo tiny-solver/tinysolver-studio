@@ -9,24 +9,24 @@ use crate::commands::conversations as conv_commands;
 use crate::db::service::{conversation_service, folder_service, import_service};
 use crate::models::*;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct ListFolderConversationsParams {
-    pub folder_id: i32,
+pub struct ListAllConversationsParams {
+    pub folder_ids: Option<Vec<i32>>,
     pub agent_type: Option<AgentType>,
     pub search: Option<String>,
     pub sort_by: Option<String>,
     pub status: Option<String>,
 }
 
-pub async fn list_folder_conversations(
+pub async fn list_all_conversations(
     Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<ListFolderConversationsParams>,
+    Json(params): Json<ListAllConversationsParams>,
 ) -> Result<Json<Vec<DbConversationSummary>>, AppCommandError> {
     let db = &state.db;
-    let result = conversation_service::list_by_folder(
+    let result = conversation_service::list_all(
         &db.conn,
-        params.folder_id,
+        params.folder_ids,
         params.agent_type,
         params.search,
         params.sort_by,
@@ -35,6 +35,35 @@ pub async fn list_folder_conversations(
     .await
     .map_err(AppCommandError::from)?;
     Ok(Json(result))
+}
+
+pub async fn list_opened_tabs(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<Vec<OpenedTab>>, AppCommandError> {
+    use crate::db::service::tab_service;
+    let db = &state.db;
+    let result = tab_service::list_all_tabs(&db.conn)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveOpenedTabsParams {
+    pub items: Vec<OpenedTab>,
+}
+
+pub async fn save_opened_tabs(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<SaveOpenedTabsParams>,
+) -> Result<Json<()>, AppCommandError> {
+    use crate::db::service::tab_service;
+    let db = &state.db;
+    tab_service::save_all_tabs(&db.conn, params.items)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(()))
 }
 
 #[derive(Deserialize)]
