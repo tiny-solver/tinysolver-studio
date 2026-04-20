@@ -1573,7 +1573,9 @@
         "forkAndSend": "分叉發送",
         "slashCommands": "斜線命令",
         "expertSkills": "專家技能",
-        "expertsEmptyForAgent": "該智慧代理沒有啟用任何專家。請在「設定 > 專家」中啟用。"
+        "expertsEmptyForAgent": "該智慧代理沒有啟用任何專家。請在「設定 > 專家」中啟用。",
+        "slashSearchPlaceholder": "搜尋命令...",
+        "slashSearchEmpty": "沒有符合的指令"
       },
       "messageQueue": {
         "addToQueue": "加入佇列",

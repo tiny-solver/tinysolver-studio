@@ -1573,7 +1573,9 @@
         "forkAndSend": "Fork y Enviar",
         "slashCommands": "Comandos de barra",
         "expertSkills": "Habilidades de expertos",
-        "expertsEmptyForAgent": "Este agente no tiene expertos habilitados. Actívalos en Configuración > Expertos."
+        "expertsEmptyForAgent": "Este agente no tiene expertos habilitados. Actívalos en Configuración > Expertos.",
+        "slashSearchPlaceholder": "Buscar comandos...",
+        "slashSearchEmpty": "Sin comandos coincidentes"
       },
       "messageQueue": {
         "addToQueue": "Agregar a la cola",

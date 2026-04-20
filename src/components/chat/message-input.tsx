@@ -20,6 +20,7 @@ import {
   GitFork,
   ListPlus,
   Plus,
+  Search,
   Send,
   Command,
   Sparkles,
@@ -543,19 +544,58 @@ export function MessageInput({
     () => (availableCommands ?? []).filter((cmd) => !expertIdSet.has(cmd.name)),
     [availableCommands, expertIdSet]
   )
+  const [slashDropdownOpen, setSlashDropdownOpen] = useState(false)
+  const [slashDropdownSearch, setSlashDropdownSearch] = useState("")
+  const slashDropdownInputRef = useRef<HTMLInputElement>(null)
+  const filteredSlashDropdownCommands = useMemo(() => {
+    const q = slashDropdownSearch.toLowerCase().trim()
+    if (!q) return slashCommands
+    const nameMatches: typeof slashCommands = []
+    const descOnlyMatches: typeof slashCommands = []
+    for (const cmd of slashCommands) {
+      if (cmd.name.toLowerCase().includes(q)) {
+        nameMatches.push(cmd)
+      } else if (cmd.description?.toLowerCase().includes(q)) {
+        descOnlyMatches.push(cmd)
+      }
+    }
+    return [...nameMatches, ...descOnlyMatches]
+  }, [slashCommands, slashDropdownSearch])
+  const handleSlashDropdownOpenChange = useCallback((open: boolean) => {
+    setSlashDropdownOpen(open)
+    if (!open) setSlashDropdownSearch("")
+  }, [])
+  // Radix composes this handler with its own content-focus via
+  // composeEventHandlers (default `checkForDefaultPrevented: true`), so
+  // calling preventDefault here skips radix's autofocus entirely. The prop
+  // is accepted at runtime but omitted from DropdownMenuContent's public
+  // TypeScript surface, so it has to be passed through an untyped spread.
+  const slashDropdownFocusProps = useMemo(
+    () => ({
+      onOpenAutoFocus: (event: Event) => {
+        event.preventDefault()
+        slashDropdownInputRef.current?.focus()
+      },
+    }),
+    []
+  )
+  const slashFilterText = useMemo(() => {
+    if (!slashMenuOpen || slashTriggerPos == null) return ""
+    const trigger = text[slashTriggerPos]
+    if (trigger !== "/" && trigger !== "$") return ""
+    const afterTrigger = text.slice(slashTriggerPos + 1)
+    const endIdx = afterTrigger.search(/\s/)
+    return endIdx === -1 ? afterTrigger : afterTrigger.slice(0, endIdx)
+  }, [slashMenuOpen, text, slashTriggerPos])
   const filteredSlashCommands = useMemo(() => {
     if (!slashMenuOpen || slashCommands.length === 0 || slashTriggerPos == null)
       return []
     if (text[slashTriggerPos] !== "/") return []
-    const afterTrigger = text.slice(slashTriggerPos + 1)
-    const endIdx = afterTrigger.search(/\s/)
-    const filter = (
-      endIdx === -1 ? afterTrigger : afterTrigger.slice(0, endIdx)
-    ).toLowerCase()
+    const filter = slashFilterText.toLowerCase()
     return slashCommands.filter((cmd) =>
-      cmd.name.toLowerCase().startsWith(filter)
+      cmd.name.toLowerCase().includes(filter)
     )
-  }, [slashMenuOpen, slashCommands, text, slashTriggerPos])
+  }, [slashMenuOpen, slashCommands, text, slashTriggerPos, slashFilterText])
   const filteredSlashSkills = useMemo(() => {
     // Skills autocomplete is Codex-only and triggered by `$`.
     if (agentType !== "codex") return []
@@ -566,15 +606,26 @@ export function MessageInput({
     )
       return []
     if (text[slashTriggerPos] !== "$") return []
-    const afterTrigger = text.slice(slashTriggerPos + 1)
-    const endIdx = afterTrigger.search(/\s/)
-    const filter = (
-      endIdx === -1 ? afterTrigger : afterTrigger.slice(0, endIdx)
-    ).toLowerCase()
-    return nonExpertSkills.filter((skill) =>
-      skill.id.toLowerCase().startsWith(filter)
-    )
-  }, [slashMenuOpen, nonExpertSkills, text, agentType, slashTriggerPos])
+    const filter = slashFilterText.toLowerCase()
+    if (!filter) return nonExpertSkills
+    const nameMatches: typeof nonExpertSkills = []
+    const idOnlyMatches: typeof nonExpertSkills = []
+    for (const skill of nonExpertSkills) {
+      if (skill.name.toLowerCase().includes(filter)) {
+        nameMatches.push(skill)
+      } else if (skill.id.toLowerCase().includes(filter)) {
+        idOnlyMatches.push(skill)
+      }
+    }
+    return [...nameMatches, ...idOnlyMatches]
+  }, [
+    slashMenuOpen,
+    nonExpertSkills,
+    text,
+    agentType,
+    slashTriggerPos,
+    slashFilterText,
+  ])
   const slashAutocompleteCount =
     filteredSlashCommands.length + filteredSlashSkills.length
 
@@ -950,6 +1001,25 @@ export function MessageInput({
     [onModeChange]
   )
 
+  const handleSlashSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const pos = slashTriggerPosRef.current
+      const current = textRef.current
+      if (pos == null || pos < 0 || pos >= current.length) return
+      const trigger = current[pos]
+      if (trigger !== "/" && trigger !== "$") return
+      const afterTrigger = current.slice(pos + 1)
+      const endIdx = afterTrigger.search(/\s/)
+      const tokenEnd = endIdx === -1 ? current.length : pos + 1 + endIdx
+      const before = current.slice(0, pos + 1)
+      const rest = current.slice(tokenEnd)
+      const sanitized = e.target.value.replace(/\s+/g, "")
+      setText(before + sanitized + rest)
+      setSlashSelectedIndex(0)
+    },
+    []
+  )
+
   const handleSlashSelect = useCallback((cmd: AvailableCommandInfo) => {
     const pos = slashTriggerPosRef.current
     const current = textRef.current
@@ -1044,6 +1114,49 @@ export function MessageInput({
       })
     },
     [expertPrefix]
+  )
+
+  const handleSlashSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const total = filteredSlashCommands.length + filteredSlashSkills.length
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        if (total === 0) return
+        setSlashSelectedIndex((i) => (i < total - 1 ? i + 1 : 0))
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        if (total === 0) return
+        setSlashSelectedIndex((i) => (i > 0 ? i - 1 : total - 1))
+        return
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (total === 0) return
+        e.preventDefault()
+        if (slashSelectedIndex < filteredSlashCommands.length) {
+          handleSlashSelect(filteredSlashCommands[slashSelectedIndex])
+        } else {
+          const skillIndex = slashSelectedIndex - filteredSlashCommands.length
+          const skill = filteredSlashSkills[skillIndex]
+          if (skill) handleSkillAutocompleteSelect(skill)
+        }
+        return
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        setSlashMenuOpen(false)
+        setSlashTriggerPos(null)
+        requestAnimationFrame(() => textareaRef.current?.focus())
+      }
+    },
+    [
+      filteredSlashCommands,
+      filteredSlashSkills,
+      slashSelectedIndex,
+      handleSlashSelect,
+      handleSkillAutocompleteSelect,
+    ]
   )
 
   // Experts always inject `prefix + expert-id ` at the very front of the
@@ -1719,63 +1832,77 @@ export function MessageInput({
       onDrop={handleContainerDrop}
     >
       {slashMenuOpen && slashAutocompleteCount > 0 && (
-        <div
-          ref={slashMenuListRef}
-          className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-[min(16rem,40dvh)] overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-lg"
-        >
-          {filteredSlashCommands.map((cmd, i) => (
-            <button
-              key={`cmd-${cmd.name}`}
-              type="button"
-              className={cn(
-                "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm",
-                i === slashSelectedIndex
-                  ? "bg-accent text-accent-foreground"
-                  : "hover:bg-muted"
-              )}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                handleSlashSelect(cmd)
-              }}
-            >
-              <span className="shrink-0 font-mono text-primary">
-                /{cmd.name}
-              </span>
-              <span className="truncate text-xs text-muted-foreground">
-                {cmd.description}
-              </span>
-            </button>
-          ))}
-          {filteredSlashSkills.map((skill, i) => {
-            const absoluteIndex = filteredSlashCommands.length + i
-            return (
+        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 flex max-h-[min(16rem,40dvh)] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
+            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <input
+              type="text"
+              role="searchbox"
+              aria-label={t("slashSearchPlaceholder")}
+              value={slashFilterText}
+              onChange={handleSlashSearchChange}
+              onKeyDown={handleSlashSearchKeyDown}
+              placeholder={t("slashSearchPlaceholder")}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <div ref={slashMenuListRef} className="flex-1 overflow-y-auto p-1">
+            {filteredSlashCommands.map((cmd, i) => (
               <button
-                key={`skill-${skill.scope}-${skill.id}`}
+                key={`cmd-${cmd.name}`}
                 type="button"
                 className={cn(
                   "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm",
-                  absoluteIndex === slashSelectedIndex
+                  i === slashSelectedIndex
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-muted"
                 )}
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  handleSkillAutocompleteSelect(skill)
+                  handleSlashSelect(cmd)
                 }}
               >
-                <BookOpenText className="mt-0.5 size-4 shrink-0 text-primary/80" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate font-medium">{skill.name}</span>
-                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                      {expertPrefix}
-                      {skill.id}
-                    </span>
-                  </div>
-                </div>
+                <span className="shrink-0 font-mono text-primary">
+                  /{cmd.name}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {cmd.description}
+                </span>
               </button>
-            )
-          })}
+            ))}
+            {filteredSlashSkills.map((skill, i) => {
+              const absoluteIndex = filteredSlashCommands.length + i
+              return (
+                <button
+                  key={`skill-${skill.scope}-${skill.id}`}
+                  type="button"
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm",
+                    absoluteIndex === slashSelectedIndex
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-muted"
+                  )}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    handleSkillAutocompleteSelect(skill)
+                  }}
+                >
+                  <BookOpenText className="mt-0.5 size-4 shrink-0 text-primary/80" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium">{skill.name}</span>
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                        {expertPrefix}
+                        {skill.id}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
       {atMenuOpen && filteredAtFiles.length > 0 && (
@@ -1946,7 +2073,10 @@ export function MessageInput({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
+            <DropdownMenu
+              open={slashDropdownOpen}
+              onOpenChange={handleSlashDropdownOpenChange}
+            >
               <DropdownMenuTrigger asChild>
                 <Button
                   disabled={disabled || slashCommands.length === 0}
@@ -1965,23 +2095,82 @@ export function MessageInput({
               <DropdownMenuContent
                 side="top"
                 align="start"
-                className="min-w-72 overflow-y-auto"
+                className="flex min-w-72 flex-col overflow-hidden p-0"
                 style={{
                   maxHeight:
                     "min(32rem, var(--radix-dropdown-menu-content-available-height))",
                 }}
+                {...slashDropdownFocusProps}
               >
-                {slashCommands.map((cmd) => (
-                  <DropdownMenuItem
-                    key={cmd.name}
-                    onClick={() => handleSlashPopoverSelect(cmd)}
-                  >
-                    <DropdownRadioItemContent
-                      label={`/${cmd.name}`}
-                      description={cmd.description}
-                    />
-                  </DropdownMenuItem>
-                ))}
+                <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <input
+                    ref={slashDropdownInputRef}
+                    type="text"
+                    role="searchbox"
+                    aria-label={t("slashSearchPlaceholder")}
+                    value={slashDropdownSearch}
+                    onChange={(e) => setSlashDropdownSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault()
+                        const container = e.currentTarget.closest(
+                          '[data-slot="dropdown-menu-content"]'
+                        )
+                        const firstItem =
+                          container?.querySelector<HTMLElement>(
+                            '[role="menuitem"]'
+                          )
+                        firstItem?.focus()
+                        return
+                      }
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        const first = filteredSlashDropdownCommands[0]
+                        if (first) {
+                          handleSlashPopoverSelect(first)
+                          setSlashDropdownOpen(false)
+                        }
+                        return
+                      }
+                      if (e.key === "Escape" || e.key === "Tab") return
+                      // Prevent radix DropdownMenu's built-in typeahead from
+                      // hijacking letter keys while the user is typing.
+                      e.stopPropagation()
+                    }}
+                    placeholder={t("slashSearchPlaceholder")}
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="flex-1 overflow-y-auto p-1">
+                  {filteredSlashDropdownCommands.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      {t("slashSearchEmpty")}
+                    </div>
+                  ) : (
+                    filteredSlashDropdownCommands.map((cmd) => (
+                      <DropdownMenuItem
+                        key={cmd.name}
+                        onClick={() => handleSlashPopoverSelect(cmd)}
+                        // Radix focuses the item on pointermove, which fires
+                        // while scrolling (items slide under the cursor) and
+                        // steals focus from the search input. Short-circuit
+                        // that default with preventDefault so the search
+                        // keeps focus until the user explicitly clicks.
+                        onPointerMove={(e) => e.preventDefault()}
+                        onPointerLeave={(e) => e.preventDefault()}
+                        className="hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <DropdownRadioItemContent
+                          label={`/${cmd.name}`}
+                          description={cmd.description}
+                        />
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
             {/* 宽屏内联显示，窄屏（<480px）通过"更多"气泡显示 */}
