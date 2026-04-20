@@ -1107,19 +1107,26 @@ export function FileTreeTab() {
       for (const changed of paths) {
         const normalized = normalizeComparePath(changed)
         if (!normalized) continue
-        // Walk from the changed path up to the root, invalidating the
-        // nearest cached ancestor (or the path itself if a directory of
-        // that name is in the cache). Checking the path itself covers
-        // FS events that report the directory path directly.
+        // When the changed path is itself a cached directory (FS events
+        // that report the directory directly, e.g. a rename or a dir-level
+        // notification), its own entry is stale — invalidate it.
+        if (cache.has(normalized)) {
+          invalidated.add(normalized)
+        }
+        // Independently of the above, walk up to the nearest cached
+        // ancestor: the ancestor's children listing may also be stale
+        // (a child was added, removed, or renamed). Without this, cases
+        // where both a parent and child are cached leave the parent
+        // holding a ghost reference to the old child.
         let cursor = normalized
         while (cursor.length > 0) {
-          if (cache.has(cursor)) {
-            invalidated.add(cursor)
-            break
-          }
           const slash = cursor.lastIndexOf("/")
           const parent = slash === -1 ? "" : cursor.slice(0, slash)
           if (parent.length === 0) break
+          if (cache.has(parent)) {
+            invalidated.add(parent)
+            break
+          }
           cursor = parent
         }
       }
@@ -1129,7 +1136,13 @@ export function FileTreeTab() {
         cache.delete(path)
       }
       if (!loader) return
+      // Skip refetching directories that are no longer expanded — their
+      // cleared cache will be re-hydrated on the next expansion via the
+      // expandedPaths effect. This avoids spurious getFileTree traffic
+      // for collapsed branches under bursty FS activity.
+      const expanded = expandedPathsRef.current
       for (const path of invalidated) {
+        if (!expanded.has(path)) continue
         void loader(path)
       }
     }
