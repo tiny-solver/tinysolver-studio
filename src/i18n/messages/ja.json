@@ -981,9 +981,7 @@
       "closeOthers": "他を閉じる",
       "closeAll": "すべて閉じる",
       "tileDisplay": "タイル表示",
-      "untileDisplay": "タイル解除",
-      "closeFolderTabs": "{folder} のすべてのタブを閉じる",
-      "revealInSidebar": "サイドバーで表示"
+      "untileDisplay": "タイル解除"
     },
     "fileWorkspace": {
       "files": "ファイル",

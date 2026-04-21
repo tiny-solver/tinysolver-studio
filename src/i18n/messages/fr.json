@@ -981,9 +981,7 @@
       "closeOthers": "Fermer les autres",
       "closeAll": "Tout fermer",
       "tileDisplay": "Affichage en mosaïque",
-      "untileDisplay": "Quitter la mosaïque",
-      "closeFolderTabs": "Fermer tous les onglets de {folder}",
-      "revealInSidebar": "Afficher dans la barre latérale"
+      "untileDisplay": "Quitter la mosaïque"
     },
     "fileWorkspace": {
       "files": "Fichiers",

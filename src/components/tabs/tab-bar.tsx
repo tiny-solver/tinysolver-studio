@@ -19,7 +19,6 @@ export function TabBar() {
     closeTab,
     closeOtherTabs,
     closeAllTabs,
-    closeTabsByFolder,
     pinTab,
     toggleTileMode,
     reorderTabs,
@@ -33,11 +32,6 @@ export function TabBar() {
     return map
   }, [allFolders])
 
-  const handleRevealInSidebar = useCallback((folderId: number) => {
-    window.dispatchEvent(
-      new CustomEvent("sidebar:reveal-folder", { detail: { folderId } })
-    )
-  }, [])
   const { shortcuts } = useShortcutSettings()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
@@ -115,8 +109,6 @@ export function TabBar() {
             onClose={closeTab}
             onCloseOthers={closeOtherTabs}
             onCloseAll={closeAllTabs}
-            onCloseFolderTabs={closeTabsByFolder}
-            onRevealInSidebar={handleRevealInSidebar}
             onPin={pinTab}
             onToggleTile={toggleTileMode}
           />

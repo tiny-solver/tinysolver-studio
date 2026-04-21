@@ -71,18 +71,6 @@ export function Sidebar() {
     }
   }, [allExpanded])
 
-  useEffect(() => {
-    const onReveal = (e: Event) => {
-      const detail = (e as CustomEvent<{ folderId: number }>).detail
-      if (!detail) return
-      listRef.current?.revealFolder(detail.folderId)
-    }
-    window.addEventListener("sidebar:reveal-folder", onReveal)
-    return () => {
-      window.removeEventListener("sidebar:reveal-folder", onReveal)
-    }
-  }, [])
-
   if (!isOpen) return null
 
   return (

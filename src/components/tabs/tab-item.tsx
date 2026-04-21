@@ -26,8 +26,6 @@ interface TabItemProps {
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseAll: () => void
-  onCloseFolderTabs: (folderId: number) => void
-  onRevealInSidebar: (folderId: number) => void
   onPin: (tabId: string) => void
   onToggleTile: () => void
 }
@@ -42,8 +40,6 @@ export const TabItem = memo(function TabItem({
   onClose,
   onCloseOthers,
   onCloseAll,
-  onCloseFolderTabs,
-  onRevealInSidebar,
   onPin,
   onToggleTile,
 }: TabItemProps) {
@@ -55,14 +51,6 @@ export const TabItem = memo(function TabItem({
   const tooltip = folderBranch
     ? `${resolvedFolderName} · ${folderBranch}  —  ${tab.title}`
     : `${resolvedFolderName}  —  ${tab.title}`
-
-  const handleCloseFolderTabs = useCallback(() => {
-    onCloseFolderTabs(tab.folderId)
-  }, [onCloseFolderTabs, tab.folderId])
-
-  const handleRevealInSidebar = useCallback(() => {
-    onRevealInSidebar(tab.folderId)
-  }, [onRevealInSidebar, tab.folderId])
 
   const clearResidualStyles = useCallback(() => {
     const el = itemRef.current
@@ -167,13 +155,7 @@ export const TabItem = memo(function TabItem({
           <ContextMenuItem onSelect={handleCloseOthers}>
             {t("closeOthers")}
           </ContextMenuItem>
-          <ContextMenuItem onSelect={handleCloseFolderTabs}>
-            {t("closeFolderTabs", { folder: resolvedFolderName })}
-          </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onSelect={handleRevealInSidebar}>
-            {t("revealInSidebar")}
-          </ContextMenuItem>
           <ContextMenuItem onSelect={onToggleTile}>
             {isTileMode ? t("untileDisplay") : t("tileDisplay")}
           </ContextMenuItem>

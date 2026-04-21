@@ -981,9 +981,7 @@
       "closeOthers": "关闭其它",
       "closeAll": "关闭所有",
       "tileDisplay": "平铺显示",
-      "untileDisplay": "取消平铺",
-      "closeFolderTabs": "关闭 {folder} 的所有标签",
-      "revealInSidebar": "在侧边栏中定位"
+      "untileDisplay": "取消平铺"
     },
     "fileWorkspace": {
       "files": "文件",

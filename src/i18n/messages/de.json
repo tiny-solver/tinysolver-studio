@@ -981,9 +981,7 @@
       "closeOthers": "Andere schließen",
       "closeAll": "Alle schließen",
       "tileDisplay": "Kachelansicht",
-      "untileDisplay": "Kachel beenden",
-      "closeFolderTabs": "Alle Tabs von {folder} schließen",
-      "revealInSidebar": "In Seitenleiste anzeigen"
+      "untileDisplay": "Kachel beenden"
     },
     "fileWorkspace": {
       "files": "Dateien",

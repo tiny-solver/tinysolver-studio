@@ -981,9 +981,7 @@
       "closeOthers": "Fechar outros",
       "closeAll": "Fechar tudo",
       "tileDisplay": "Exibição em mosaico",
-      "untileDisplay": "Sair do mosaico",
-      "closeFolderTabs": "Fechar todas as abas de {folder}",
-      "revealInSidebar": "Mostrar na barra lateral"
+      "untileDisplay": "Sair do mosaico"
     },
     "fileWorkspace": {
       "files": "Arquivos",

@@ -981,9 +981,7 @@
       "closeOthers": "Close Others",
       "closeAll": "Close All",
       "tileDisplay": "Tile Display",
-      "untileDisplay": "Exit Tile",
-      "closeFolderTabs": "Close all tabs of {folder}",
-      "revealInSidebar": "Reveal in sidebar"
+      "untileDisplay": "Exit Tile"
     },
     "fileWorkspace": {
       "files": "Files",

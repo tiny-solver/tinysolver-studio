@@ -114,7 +114,6 @@ const FolderHeader = memo(function FolderHeader({
   onFocus,
   onCloseFolderTabs,
   onRemoveFromWorkspace,
-  highlighted,
   t,
 }: {
   folderId: number
@@ -126,7 +125,6 @@ const FolderHeader = memo(function FolderHeader({
   onFocus: (folderId: number) => void
   onCloseFolderTabs: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
-  highlighted: boolean
   t: ReturnType<typeof useTranslations>
 }) {
   return (
@@ -140,8 +138,7 @@ const FolderHeader = memo(function FolderHeader({
               "flex h-[1.9375rem] w-full items-center gap-[0.5rem] cursor-pointer outline-none",
               "rounded-[0.4375rem] px-2",
               "text-sidebar-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]",
-              "transition-[background-color,color] duration-150",
-              highlighted && "ring-2 ring-sidebar-primary ring-offset-1"
+              "transition-[background-color,color] duration-150"
             )}
           >
             <span
@@ -200,7 +197,6 @@ export interface SidebarConversationListHandle {
   scrollToActive: () => void
   expandAll: () => void
   collapseAll: () => void
-  revealFolder: (folderId: number) => void
 }
 
 export interface SidebarConversationListProps {
@@ -266,9 +262,6 @@ export function SidebarConversationList({
   const [folderExpanded, setFolderExpanded] = useState<Record<number, boolean>>(
     {}
   )
-  const [highlightedFolder, setHighlightedFolder] = useState<number | null>(
-    null
-  )
   const [scrollOffset, setScrollOffset] = useState(0)
   const [removeConfirm, setRemoveConfirm] = useState<{
     folderId: number
@@ -284,7 +277,6 @@ export function SidebarConversationList({
   const scrollToActiveRef = useRef<() => void>(() => {})
   const pendingScrollRef = useRef(false)
   const virtualizerRef = useRef<VirtualizerHandle>(null)
-  const highlightTimerRef = useRef<number | null>(null)
 
   const filteredConversations = useMemo(() => {
     if (showCompleted) return conversations
@@ -403,42 +395,7 @@ export function SidebarConversationList({
         return next
       })
     },
-    revealFolder(folderId: number) {
-      setFolderExpanded((prev) => {
-        if (prev[folderId] === true) return prev
-        const next = { ...prev, [folderId]: true }
-        saveFolderExpanded(next)
-        return next
-      })
-      setHighlightedFolder(folderId)
-      if (highlightTimerRef.current) {
-        window.clearTimeout(highlightTimerRef.current)
-      }
-      highlightTimerRef.current = window.setTimeout(() => {
-        setHighlightedFolder(null)
-        highlightTimerRef.current = null
-      }, 1200)
-      requestAnimationFrame(() => {
-        const idx = flatItems.findIndex(
-          (item) => item.type === "folder_header" && item.folderId === folderId
-        )
-        if (idx >= 0) {
-          virtualizerRef.current?.scrollToIndex(idx, {
-            align: "start",
-            smooth: true,
-          })
-        }
-      })
-    },
   }))
-
-  useEffect(() => {
-    return () => {
-      if (highlightTimerRef.current) {
-        window.clearTimeout(highlightTimerRef.current)
-      }
-    }
-  }, [])
 
   useEffect(() => {
     scrollToActiveRef.current = () => {
@@ -728,9 +685,6 @@ export function SidebarConversationList({
                       onFocus={focusFolder}
                       onCloseFolderTabs={handleCloseFolderTabs}
                       onRemoveFromWorkspace={handleRemoveFolder}
-                      highlighted={
-                        highlightedFolder === stickyFolderItem.folderId
-                      }
                       t={t}
                     />
                   </div>
@@ -761,7 +715,6 @@ export function SidebarConversationList({
                           onFocus={focusFolder}
                           onCloseFolderTabs={handleCloseFolderTabs}
                           onRemoveFromWorkspace={handleRemoveFolder}
-                          highlighted={highlightedFolder === item.folderId}
                           t={t}
                         />
                       )
