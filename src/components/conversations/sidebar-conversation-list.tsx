@@ -31,7 +31,6 @@ import {
   saveFolderExpanded,
 } from "@/lib/sidebar-view-mode-storage"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -96,7 +95,6 @@ type FlatItem =
       type: "folder_header"
       folderId: number
       folderName: string
-      branch: string | null
       count: number
       expanded: boolean
     }
@@ -107,70 +105,102 @@ const CARD_HEIGHT_REM = 2
 const FolderHeader = memo(function FolderHeader({
   folderId,
   folderName,
-  branch,
   count,
   expanded,
   onToggle,
   onFocus,
   onCloseFolderTabs,
   onRemoveFromWorkspace,
+  onNewConversation,
   t,
 }: {
   folderId: number
   folderName: string
-  branch: string | null
   count: number
   expanded: boolean
   onToggle: (folderId: number) => void
   onFocus: (folderId: number) => void
   onCloseFolderTabs: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
+  onNewConversation: (folderId: number) => void
   t: ReturnType<typeof useTranslations>
 }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div className="relative h-[2rem]">
-          <button
-            data-folder-id={folderId}
-            onClick={() => onToggle(folderId)}
+          <div
             className={cn(
-              "flex h-[1.9375rem] w-full items-center gap-[0.5rem] cursor-pointer outline-none",
-              "rounded-[0.4375rem] px-2",
-              "text-sidebar-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]",
-              "transition-[background-color,color] duration-150"
+              "flex h-[1.9375rem] w-full items-center",
+              "rounded-[0.4375rem] border",
+              "transition-[background-color,color,border-color] duration-150",
+              expanded
+                ? "bg-sidebar-primary/15 border-sidebar-primary/25"
+                : "border-transparent hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
             )}
           >
-            <span
+            <button
+              data-folder-id={folderId}
+              onClick={() => onToggle(folderId)}
               className={cn(
-                "flex h-[0.75rem] w-[0.75rem] shrink-0 items-center justify-center text-muted-foreground/75",
-                "transition-transform duration-[180ms] [transition-timing-function:cubic-bezier(.3,.7,.3,1)]",
-                expanded ? "rotate-90" : "rotate-0"
+                "flex h-full min-w-0 flex-1 items-center gap-[0.5rem] px-2 cursor-pointer outline-none",
+                "text-sidebar-foreground"
               )}
             >
-              <ChevronRight className="h-[0.625rem] w-[0.625rem]" />
-            </span>
-            <div className="flex min-w-0 flex-1 items-center gap-[0.375rem]">
-              <span className="min-w-0 flex-shrink truncate text-left text-[0.875rem] font-semibold tracking-[-0.00625rem]">
-                {folderName}
+              <span
+                className={cn(
+                  "flex h-[0.75rem] w-[0.75rem] shrink-0 items-center justify-center text-muted-foreground/75",
+                  "transition-transform duration-[180ms] [transition-timing-function:cubic-bezier(.3,.7,.3,1)]",
+                  expanded ? "rotate-90" : "rotate-0"
+                )}
+              >
+                <ChevronRight className="h-[0.625rem] w-[0.625rem]" />
               </span>
-              {branch && (
-                <Badge
-                  variant="outline"
+              <div className="flex min-w-0 flex-1 items-center gap-[0.375rem]">
+                <span
                   className={cn(
-                    "h-[1rem] max-w-[6.875rem] gap-0 px-[0.375rem] py-0",
-                    "text-[0.6875rem] font-medium leading-none tracking-[0.0125rem]",
-                    "border-sidebar-border text-muted-foreground/80"
+                    "min-w-0 flex-shrink truncate text-left text-[0.875rem] font-semibold tracking-[-0.00625rem]",
+                    "transition-colors duration-150",
+                    expanded && "text-sidebar-primary"
                   )}
                 >
-                  <span className="truncate">{branch}</span>
-                </Badge>
+                  {folderName}
+                </span>
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center justify-center",
+                    "h-[0.9375rem] min-w-[1rem] rounded-[0.3125rem] px-[0.25rem]",
+                    "text-[0.625rem] font-semibold leading-none tabular-nums",
+                    "transition-colors duration-150",
+                    expanded
+                      ? "bg-sidebar-primary/20 text-sidebar-primary"
+                      : "bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_6%)] text-muted-foreground/80"
+                  )}
+                >
+                  {count}
+                </span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onNewConversation(folderId)
+              }}
+              title={t("newConversation")}
+              aria-label={t("newConversation")}
+              className={cn(
+                "mr-[0.25rem] flex h-[1.25rem] w-[1.25rem] shrink-0 items-center justify-center",
+                "rounded-[0.25rem] cursor-pointer outline-none text-muted-foreground/80",
+                "transition-colors duration-150",
+                expanded
+                  ? "hover:text-sidebar-primary"
+                  : "hover:text-sidebar-foreground"
               )}
-            </div>
-            <span className="shrink-0 text-[0.75rem] font-medium tabular-nums text-muted-foreground/70">
-              {count}
-            </span>
-          </button>
+            >
+              <Plus className="h-[0.75rem] w-[0.75rem]" />
+            </button>
+          </div>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -227,7 +257,6 @@ export function SidebarConversationList({
     conversationsError: error,
     refreshConversations,
     updateConversationLocal,
-    branches,
     removeFolderFromWorkspace,
   } = useAppWorkspace()
   const refreshing = loading
@@ -319,13 +348,11 @@ export function SidebarConversationList({
     for (const folderId of orderedFolderIds) {
       const list = byFolder.get(folderId) ?? []
       const folderName = folderIndex.get(folderId)?.name ?? String(folderId)
-      const branch = branches.get(folderId) ?? null
       const expanded = folderExpanded[folderId] ?? true
       items.push({
         type: "folder_header",
         folderId,
         folderName,
-        branch,
         count: list.length,
         expanded,
       })
@@ -335,7 +362,7 @@ export function SidebarConversationList({
       }
     }
     return items
-  }, [orderedFolderIds, byFolder, folderIndex, branches, folderExpanded])
+  }, [orderedFolderIds, byFolder, folderIndex, folderExpanded])
 
   const stickyState = useMemo<{
     folder: Extract<FlatItem, { type: "folder_header" }> | null
@@ -559,6 +586,15 @@ export function SidebarConversationList({
     openNewConversationTab(activeFolder.id, activeFolder.path)
   }, [activeFolder, openNewConversationTab])
 
+  const handleNewConversationForFolder = useCallback(
+    (folderId: number) => {
+      const folder = folderIndex.get(folderId)
+      if (!folder) return
+      openNewConversationTab(folderId, folder.path)
+    },
+    [folderIndex, openNewConversationTab]
+  )
+
   const handleImport = useCallback(async () => {
     if (importing) return
     if (!activeFolder) return
@@ -678,13 +714,13 @@ export function SidebarConversationList({
                       key={`sticky-${stickyFolderItem.folderId}`}
                       folderId={stickyFolderItem.folderId}
                       folderName={stickyFolderItem.folderName}
-                      branch={stickyFolderItem.branch}
                       count={stickyFolderItem.count}
                       expanded={stickyFolderItem.expanded}
                       onToggle={toggleFolder}
                       onFocus={focusFolder}
                       onCloseFolderTabs={handleCloseFolderTabs}
                       onRemoveFromWorkspace={handleRemoveFolder}
+                      onNewConversation={handleNewConversationForFolder}
                       t={t}
                     />
                   </div>
@@ -708,13 +744,13 @@ export function SidebarConversationList({
                           key={`folder-${item.folderId}`}
                           folderId={item.folderId}
                           folderName={item.folderName}
-                          branch={item.branch}
                           count={item.count}
                           expanded={item.expanded}
                           onToggle={toggleFolder}
                           onFocus={focusFolder}
                           onCloseFolderTabs={handleCloseFolderTabs}
                           onRemoveFromWorkspace={handleRemoveFolder}
+                          onNewConversation={handleNewConversationForFolder}
                           t={t}
                         />
                       )

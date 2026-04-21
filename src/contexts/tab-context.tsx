@@ -12,6 +12,7 @@ import {
 } from "react"
 import { useTranslations } from "next-intl"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAcpActions } from "@/contexts/acp-connections-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { listOpenedTabs, saveOpenedTabs } from "@/lib/api"
 import type { AgentType, ConversationStatus, OpenedTab } from "@/lib/types"
@@ -125,6 +126,7 @@ export function TabProvider({ children }: TabProviderProps) {
   const t = useTranslations("Folder.tabContext")
   const { activateConversationPane } = useWorkspaceContext()
   const { conversations, folders, setActiveFolderId } = useAppWorkspace()
+  const { disconnect: acpDisconnect } = useAcpActions()
 
   const [rawTabs, setTabs] = useState<TabItemInternal[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
@@ -530,21 +532,44 @@ export function TabProvider({ children }: TabProviderProps) {
 
   const openNewConversationTab = useCallback(
     (folderId: number, workingDir: string) => {
-      // Reuse existing draft tab for the same folder if present
+      // Singleton: reuse any existing draft tab regardless of folder,
+      // so only one new-conversation tab can exist at a time.
       const existingTab = rawTabsRef.current.find(
-        (t) => t.conversationId == null && t.folderId === folderId
+        (t) => t.conversationId == null
       )
 
       if (existingTab) {
-        if (existingTab.workingDir !== workingDir) {
+        const folderChanged = existingTab.folderId !== folderId
+        const workingDirChanged = existingTab.workingDir !== workingDir
+
+        setActiveTabId(existingTab.id)
+        activateConversationPane()
+
+        if (folderChanged) {
+          // Tear down the old ACP connection (bound to the old
+          // workingDir) before patching the tab's folderId/workingDir.
+          // The connection-lifecycle effect watches workingDir; once
+          // status has settled to disconnected and workingDir flips,
+          // it auto-reconnects against the new folder.
+          void (async () => {
+            try {
+              await acpDisconnect(existingTab.id)
+            } catch (err) {
+              console.error("[TabProvider] disconnect draft tab:", err)
+            }
+            setTabs((prev) =>
+              prev.map((t) =>
+                t.id === existingTab.id ? { ...t, folderId, workingDir } : t
+              )
+            )
+          })()
+        } else if (workingDirChanged) {
           setTabs((prev) =>
             prev.map((t) =>
               t.id === existingTab.id ? { ...t, workingDir } : t
             )
           )
         }
-        setActiveTabId(existingTab.id)
-        activateConversationPane()
         return
       }
 
@@ -565,7 +590,7 @@ export function TabProvider({ children }: TabProviderProps) {
       setActiveTabId(tabId)
       activateConversationPane()
     },
-    [activateConversationPane, t]
+    [acpDisconnect, activateConversationPane, t]
   )
 
   const bindConversationTab = useCallback(

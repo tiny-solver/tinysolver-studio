@@ -145,7 +145,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 "transition-colors duration-[120ms]",
                 "pr-[0.5rem] pl-7",
                 isSelected
-                  ? "bg-sidebar-primary/15"
+                  ? "bg-sidebar-primary/8"
                   : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
               )}
             >
