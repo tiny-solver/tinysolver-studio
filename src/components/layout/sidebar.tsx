@@ -88,7 +88,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none">
       <TooltipProvider>
-        <div className="flex h-10 shrink-0 items-center justify-between gap-2 pl-[1.125rem] pr-2">
+        <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border pl-4 pr-2">
           <div className="flex min-w-0 items-baseline gap-[0.375rem]">
             <h2 className="truncate text-[0.875rem] font-bold tracking-[-0.00625rem] text-sidebar-foreground">
               {t("title")}
@@ -154,7 +154,7 @@ export function Sidebar() {
 
       {/* On mobile, clicking a conversation card auto-closes the Sheet */}
       <div
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className="flex flex-col flex-1 min-h-0 overflow-hidden pt-2"
         onClick={
           isMobile
             ? (e) => {

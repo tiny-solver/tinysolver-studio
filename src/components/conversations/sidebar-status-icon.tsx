@@ -27,7 +27,7 @@ function IconFrame({
         className
       )}
       style={{
-        left: "1rem",
+        left: "0.875rem",
         width: "0.625rem",
         height: "0.625rem",
         transform: "translate(-50%, -50%)",
@@ -141,13 +141,12 @@ export function SidebarStatusIcon({
   return (
     <IconFrame colorClass="text-sidebar-primary/40" className={className}>
       <svg
-        width="0.45rem"
-        height="0.45rem"
-        viewBox="0 0 12 12"
+        width="0.625rem"
+        height="0.625rem"
+        viewBox="0 0 10 10"
         preserveAspectRatio="xMidYMid meet"
-        style={{ overflow: "visible" }}
       >
-        <circle cx="6" cy="6" r="5" fill="currentColor" />
+        <circle cx="5" cy="5" r="3" fill="currentColor" />
       </svg>
     </IconFrame>
   )

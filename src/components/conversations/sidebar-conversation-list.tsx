@@ -709,7 +709,7 @@ export function SidebarConversationList({
                     aria-hidden
                     className="absolute inset-0 right-[0.5rem] bg-sidebar"
                   />
-                  <div className="relative pl-[0.625rem] pr-[0.625rem]">
+                  <div className="relative px-2">
                     <FolderHeader
                       key={`sticky-${stickyFolderItem.folderId}`}
                       folderId={stickyFolderItem.folderId}
@@ -731,7 +731,7 @@ export function SidebarConversationList({
               )}
               <ScrollArea
                 className={cn(
-                  "h-full min-h-0 pl-[0.625rem] pr-[0.625rem] pt-[0.125rem] pb-[1.25rem]",
+                  "h-full min-h-0 px-2 pb-[1.25rem]",
                   "[overflow-anchor:none]"
                 )}
               >

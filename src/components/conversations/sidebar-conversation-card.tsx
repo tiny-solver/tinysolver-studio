@@ -151,10 +151,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute top-0 bottom-0 rounded-[0.125rem] bg-sidebar-primary/5"
+                className="pointer-events-none absolute top-0 bottom-0 rounded-[0.125rem] bg-sidebar-primary/15"
                 style={{
-                  left: "1rem",
-                  width: "0.125rem",
+                  left: "0.875rem",
+                  width: "1px",
                   transform: "translateX(-50%)",
                 }}
               />
