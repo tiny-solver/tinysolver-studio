@@ -295,7 +295,24 @@ export function FolderTitleBar() {
               </Button>
             </div>
           ) : (
-            <div data-tauri-drag-region className="h-8 flex-1" />
+            <div className="flex h-8 flex-1 items-center">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 hover:text-foreground/80"
+                onClick={toggle}
+                title={tTitleBar("withShortcut", {
+                  label: tTitleBar(isOpen ? "hideSidebar" : "showSidebar"),
+                  shortcut: formatShortcutLabel(
+                    shortcuts.toggle_sidebar,
+                    isMac
+                  ),
+                })}
+              >
+                <PanelLeft className="h-3.5 w-3.5" />
+              </Button>
+              <div data-tauri-drag-region className="h-8 flex-1" />
+            </div>
           )
         }
         center={isMobile ? undefined : modeTabsElement}
@@ -343,17 +360,17 @@ export function FolderTitleBar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 hover:text-foreground/80"
-                  onClick={toggle}
+                  className={`h-6 w-6 hover:text-foreground/80 ${terminalOpen ? "bg-accent" : ""}`}
+                  onClick={() => toggleTerminal()}
                   title={tTitleBar("withShortcut", {
-                    label: tTitleBar(isOpen ? "hideSidebar" : "showSidebar"),
+                    label: tTitleBar("toggleTerminal"),
                     shortcut: formatShortcutLabel(
-                      shortcuts.toggle_sidebar,
+                      shortcuts.toggle_terminal,
                       isMac
                     ),
                   })}
                 >
-                  <PanelLeft className="h-3.5 w-3.5" />
+                  <SquareTerminal className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -369,21 +386,6 @@ export function FolderTitleBar() {
                   })}
                 >
                   <PanelRight className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-6 w-6 hover:text-foreground/80 ${terminalOpen ? "bg-accent" : ""}`}
-                  onClick={() => toggleTerminal()}
-                  title={tTitleBar("withShortcut", {
-                    label: tTitleBar("toggleTerminal"),
-                    shortcut: formatShortcutLabel(
-                      shortcuts.toggle_terminal,
-                      isMac
-                    ),
-                  })}
-                >
-                  <SquareTerminal className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
