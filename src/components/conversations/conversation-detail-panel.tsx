@@ -1389,7 +1389,6 @@ export function ConversationDetailPanel() {
 
   const canTile = isTileMode && tabs.length > 1
 
-  // Empty state: no tabs at all — show full-screen welcome
   if (hasNoTabs) {
     return null
   }

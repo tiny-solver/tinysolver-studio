@@ -12,54 +12,6 @@
     "portuguese": "葡萄牙語",
     "arabic": "阿拉伯語"
   },
-  "WelcomePage": {
-    "title": "歡迎使用Codeg",
-    "openSettings": "打開設定",
-    "searchPlaceholder": "搜尋資料夾...",
-    "loading": "載入中...",
-    "emptyFolders": "暫無資料夾",
-    "removeFromHistory": "從歷史中移除",
-    "openFolder": "打開資料夾",
-    "cloneRepository": "複製倉庫",
-    "projectBoot": "專案啟動器",
-    "softwareVersion": "版本 {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "載入資料夾歷史失敗",
-      "openFolderFailed": "打開資料夾失敗",
-      "removeFromHistoryFailed": "移除歷史記錄失敗",
-      "openSettingsFailed": "打開設定失敗",
-      "cloneFailed": "複製倉庫失敗",
-      "openProjectBootFailed": "開啟專案啟動器失敗"
-    },
-    "errors": {
-      "unknown": "發生未知錯誤",
-      "invalidInput": "輸入無效。",
-      "notFound": "資源不存在。",
-      "alreadyExists": "資源已存在。",
-      "dependencyMissing": "缺少必要依賴。",
-      "databaseError": "資料庫操作失敗。",
-      "ioError": "檔案操作失敗。",
-      "externalCommandFailed": "外部指令執行失敗。",
-      "windowOperationFailed": "視窗操作失敗。",
-      "gitNotInstalled": "未檢測到 Git，請先安裝 Git。",
-      "targetDirectoryNotEmpty": "目標目錄已存在且不為空。",
-      "repositoryNotFound": "倉庫不存在，請檢查地址與存取權限。",
-      "networkUnavailable": "網路不可用，請檢查網路連線後重試。",
-      "authenticationFailed": "驗證失敗，請檢查憑證或 SSH Key。",
-      "permissionDenied": "權限不足，請檢查目錄權限。"
-    },
-    "cloneDialog": {
-      "title": "複製倉庫",
-      "repositoryUrl": "倉庫地址",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "目錄",
-      "directoryPlaceholder": "選擇目標目錄...",
-      "browseDirectory": "瀏覽目錄",
-      "cancel": "取消",
-      "clone": "複製",
-      "clonePath": "克隆路徑: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "需要身份驗證",
     "description": "遠端伺服器要求輸入憑據。請輸入使用者名稱和密碼（或個人存取權杖）。",

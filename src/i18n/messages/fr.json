@@ -12,54 +12,6 @@
     "portuguese": "Portugais",
     "arabic": "Arabe"
   },
-  "WelcomePage": {
-    "title": "Bienvenue sur Codeg",
-    "openSettings": "Ouvrir les paramètres",
-    "searchPlaceholder": "Rechercher des dossiers...",
-    "loading": "Chargement...",
-    "emptyFolders": "Aucun dossier pour le moment",
-    "removeFromHistory": "Retirer de l’historique",
-    "openFolder": "Ouvrir un dossier",
-    "cloneRepository": "Cloner un dépôt",
-    "projectBoot": "Lanceur de projet",
-    "softwareVersion": "Version {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "Échec du chargement de l’historique des dossiers",
-      "openFolderFailed": "Échec de l’ouverture du dossier",
-      "removeFromHistoryFailed": "Échec de la suppression du dossier",
-      "openSettingsFailed": "Échec de l’ouverture des paramètres",
-      "cloneFailed": "Échec du clonage du dépôt",
-      "openProjectBootFailed": "Impossible d'ouvrir le lanceur de projet"
-    },
-    "errors": {
-      "unknown": "Erreur inattendue",
-      "invalidInput": "Entrée invalide.",
-      "notFound": "Ressource introuvable.",
-      "alreadyExists": "La ressource existe déjà.",
-      "dependencyMissing": "Une dépendance requise est manquante.",
-      "databaseError": "Échec de l’opération de base de données.",
-      "ioError": "Échec de l’opération de fichier.",
-      "externalCommandFailed": "La commande externe a échoué.",
-      "windowOperationFailed": "Échec de l’opération de fenêtre.",
-      "gitNotInstalled": "Git n’est pas installé. Veuillez installer Git d’abord.",
-      "targetDirectoryNotEmpty": "Le répertoire cible existe déjà et n’est pas vide.",
-      "repositoryNotFound": "Dépôt introuvable. Vérifiez l’URL et les autorisations d’accès.",
-      "networkUnavailable": "Le réseau est indisponible. Vérifiez votre connexion et réessayez.",
-      "authenticationFailed": "Échec de l’authentification. Vérifiez les identifiants ou la clé SSH.",
-      "permissionDenied": "Permission refusée. Vérifiez les autorisations du répertoire."
-    },
-    "cloneDialog": {
-      "title": "Cloner un dépôt",
-      "repositoryUrl": "URL du dépôt",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "Répertoire",
-      "directoryPlaceholder": "Sélectionnez le répertoire cible...",
-      "browseDirectory": "Parcourir le répertoire",
-      "cancel": "Annuler",
-      "clone": "Cloner",
-      "clonePath": "Chemin de clonage : {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "Authentification requise",
     "description": "Le serveur distant nécessite des identifiants. Entrez votre nom d'utilisateur et votre mot de passe (ou jeton d'accès personnel).",

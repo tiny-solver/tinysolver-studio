@@ -12,54 +12,6 @@
     "portuguese": "ポルトガル語",
     "arabic": "アラビア語"
   },
-  "WelcomePage": {
-    "title": "Codegへようこそ",
-    "openSettings": "設定を開く",
-    "searchPlaceholder": "フォルダを検索...",
-    "loading": "読み込み中...",
-    "emptyFolders": "フォルダがありません",
-    "removeFromHistory": "履歴から削除",
-    "openFolder": "フォルダを開く",
-    "cloneRepository": "リポジトリをクローン",
-    "projectBoot": "プロジェクトブート",
-    "softwareVersion": "バージョン {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "フォルダ履歴の読み込みに失敗しました",
-      "openFolderFailed": "フォルダを開けませんでした",
-      "removeFromHistoryFailed": "履歴からの削除に失敗しました",
-      "openSettingsFailed": "設定を開けませんでした",
-      "cloneFailed": "リポジトリのクローンに失敗しました",
-      "openProjectBootFailed": "プロジェクトブートを開けませんでした"
-    },
-    "errors": {
-      "unknown": "予期しないエラーが発生しました",
-      "invalidInput": "入力が無効です。",
-      "notFound": "リソースが見つかりません。",
-      "alreadyExists": "リソースは既に存在します。",
-      "dependencyMissing": "必要な依存関係が不足しています。",
-      "databaseError": "データベース操作に失敗しました。",
-      "ioError": "ファイル操作に失敗しました。",
-      "externalCommandFailed": "外部コマンドの実行に失敗しました。",
-      "windowOperationFailed": "ウィンドウ操作に失敗しました。",
-      "gitNotInstalled": "Git がインストールされていません。先に Git をインストールしてください。",
-      "targetDirectoryNotEmpty": "対象ディレクトリは既に存在し、空ではありません。",
-      "repositoryNotFound": "リポジトリが見つかりません。URL とアクセス権を確認してください。",
-      "networkUnavailable": "ネットワークに接続できません。接続を確認して再試行してください。",
-      "authenticationFailed": "認証に失敗しました。認証情報または SSH キーを確認してください。",
-      "permissionDenied": "権限がありません。ディレクトリ権限を確認してください。"
-    },
-    "cloneDialog": {
-      "title": "リポジトリをクローン",
-      "repositoryUrl": "リポジトリ URL",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "ディレクトリ",
-      "directoryPlaceholder": "保存先ディレクトリを選択...",
-      "browseDirectory": "ディレクトリを参照",
-      "cancel": "キャンセル",
-      "clone": "クローン",
-      "clonePath": "クローンパス: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "認証が必要です",
     "description": "リモートサーバーが認証情報を要求しています。ユーザー名とパスワード（またはアクセストークン）を入力してください。",

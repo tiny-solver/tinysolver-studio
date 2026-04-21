@@ -12,54 +12,6 @@
     "portuguese": "البرتغالية",
     "arabic": "العربية"
   },
-  "WelcomePage": {
-    "title": "مرحبًا بك في Codeg",
-    "openSettings": "فتح الإعدادات",
-    "searchPlaceholder": "ابحث في المجلدات...",
-    "loading": "جارٍ التحميل...",
-    "emptyFolders": "لا توجد مجلدات بعد",
-    "removeFromHistory": "إزالة من السجل",
-    "openFolder": "فتح مجلد",
-    "cloneRepository": "استنساخ المستودع",
-    "projectBoot": "مُنشئ المشروع",
-    "softwareVersion": "الإصدار {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "فشل تحميل سجل المجلدات",
-      "openFolderFailed": "فشل فتح المجلد",
-      "removeFromHistoryFailed": "فشل إزالة المجلد من السجل",
-      "openSettingsFailed": "فشل فتح الإعدادات",
-      "cloneFailed": "فشل استنساخ المستودع",
-      "openProjectBootFailed": "فشل فتح مُنشئ المشروع"
-    },
-    "errors": {
-      "unknown": "حدث خطأ غير متوقع",
-      "invalidInput": "إدخال غير صالح.",
-      "notFound": "المورد غير موجود.",
-      "alreadyExists": "المورد موجود بالفعل.",
-      "dependencyMissing": "هناك اعتماد مطلوب مفقود.",
-      "databaseError": "فشلت عملية قاعدة البيانات.",
-      "ioError": "فشلت عملية الملف.",
-      "externalCommandFailed": "فشل تنفيذ الأمر الخارجي.",
-      "windowOperationFailed": "فشلت عملية النافذة.",
-      "gitNotInstalled": "Git غير مثبت. يرجى تثبيت Git أولًا.",
-      "targetDirectoryNotEmpty": "مجلد الهدف موجود بالفعل وليس فارغًا.",
-      "repositoryNotFound": "المستودع غير موجود. تحقق من الرابط وصلاحيات الوصول.",
-      "networkUnavailable": "الشبكة غير متاحة. تحقق من الاتصال وحاول مرة أخرى.",
-      "authenticationFailed": "فشلت المصادقة. تحقق من بيانات الاعتماد أو مفتاح SSH.",
-      "permissionDenied": "تم رفض الإذن. تحقق من صلاحيات المجلد."
-    },
-    "cloneDialog": {
-      "title": "استنساخ مستودع",
-      "repositoryUrl": "رابط المستودع",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "المجلد",
-      "directoryPlaceholder": "اختر مجلد الهدف...",
-      "browseDirectory": "تصفح المجلد",
-      "cancel": "إلغاء",
-      "clone": "استنساخ",
-      "clonePath": "مسار الاستنساخ: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "المصادقة مطلوبة",
     "description": "يتطلب الخادم البعيد بيانات اعتماد. أدخل اسم المستخدم وكلمة المرور (أو رمز الوصول الشخصي).",

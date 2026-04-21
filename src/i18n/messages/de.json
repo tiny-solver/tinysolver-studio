@@ -12,54 +12,6 @@
     "portuguese": "Portugiesisch",
     "arabic": "Arabisch"
   },
-  "WelcomePage": {
-    "title": "Willkommen bei Codeg",
-    "openSettings": "Einstellungen öffnen",
-    "searchPlaceholder": "Ordner suchen...",
-    "loading": "Wird geladen...",
-    "emptyFolders": "Noch keine Ordner",
-    "removeFromHistory": "Aus Verlauf entfernen",
-    "openFolder": "Ordner öffnen",
-    "cloneRepository": "Repository klonen",
-    "projectBoot": "Projekt-Starter",
-    "softwareVersion": "Version {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "Ordnerverlauf konnte nicht geladen werden",
-      "openFolderFailed": "Ordner konnte nicht geöffnet werden",
-      "removeFromHistoryFailed": "Ordner konnte nicht entfernt werden",
-      "openSettingsFailed": "Einstellungen konnten nicht geöffnet werden",
-      "cloneFailed": "Repository konnte nicht geklont werden",
-      "openProjectBootFailed": "Projekt-Starter konnte nicht geöffnet werden"
-    },
-    "errors": {
-      "unknown": "Unerwarteter Fehler",
-      "invalidInput": "Ungültige Eingabe.",
-      "notFound": "Ressource nicht gefunden.",
-      "alreadyExists": "Ressource existiert bereits.",
-      "dependencyMissing": "Erforderliche Abhängigkeit fehlt.",
-      "databaseError": "Datenbankoperation fehlgeschlagen.",
-      "ioError": "Dateioperation fehlgeschlagen.",
-      "externalCommandFailed": "Externer Befehl fehlgeschlagen.",
-      "windowOperationFailed": "Fensteroperation fehlgeschlagen.",
-      "gitNotInstalled": "Git ist nicht installiert. Bitte installiere zuerst Git.",
-      "targetDirectoryNotEmpty": "Das Zielverzeichnis existiert bereits und ist nicht leer.",
-      "repositoryNotFound": "Repository nicht gefunden. Prüfe URL und Zugriffsrechte.",
-      "networkUnavailable": "Netzwerk ist nicht verfügbar. Prüfe die Verbindung und versuche es erneut.",
-      "authenticationFailed": "Authentifizierung fehlgeschlagen. Prüfe Zugangsdaten oder SSH-Schlüssel.",
-      "permissionDenied": "Zugriff verweigert. Prüfe die Verzeichnisrechte."
-    },
-    "cloneDialog": {
-      "title": "Repository klonen",
-      "repositoryUrl": "Repository-URL",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "Verzeichnis",
-      "directoryPlaceholder": "Zielverzeichnis auswählen...",
-      "browseDirectory": "Verzeichnis durchsuchen",
-      "cancel": "Abbrechen",
-      "clone": "Klonen",
-      "clonePath": "Klonpfad: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "Authentifizierung erforderlich",
     "description": "Der Remote-Server erfordert Anmeldedaten. Geben Sie Ihren Benutzernamen und Ihr Passwort (oder persönliches Zugriffstoken) ein.",

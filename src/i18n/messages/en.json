@@ -12,54 +12,6 @@
     "portuguese": "Portuguese",
     "arabic": "Arabic"
   },
-  "WelcomePage": {
-    "title": "Welcome to Codeg",
-    "openSettings": "Open Settings",
-    "searchPlaceholder": "Search folders...",
-    "loading": "Loading...",
-    "emptyFolders": "No folders yet",
-    "removeFromHistory": "Remove from history",
-    "openFolder": "Open Folder",
-    "cloneRepository": "Clone Repository",
-    "projectBoot": "Project Boot",
-    "softwareVersion": "version {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "Failed to load folder history",
-      "openFolderFailed": "Failed to open folder",
-      "removeFromHistoryFailed": "Failed to remove folder",
-      "openSettingsFailed": "Failed to open settings",
-      "cloneFailed": "Failed to clone repository",
-      "openProjectBootFailed": "Failed to open Project Boot"
-    },
-    "errors": {
-      "unknown": "Unexpected error",
-      "invalidInput": "Invalid input.",
-      "notFound": "Resource not found.",
-      "alreadyExists": "Resource already exists.",
-      "dependencyMissing": "Required dependency is missing.",
-      "databaseError": "Database operation failed.",
-      "ioError": "File operation failed.",
-      "externalCommandFailed": "External command failed.",
-      "windowOperationFailed": "Window operation failed.",
-      "gitNotInstalled": "Git is not installed. Please install Git first.",
-      "targetDirectoryNotEmpty": "Target directory already exists and is not empty.",
-      "repositoryNotFound": "Repository not found. Check URL and access permissions.",
-      "networkUnavailable": "Network is unavailable. Check your connection and try again.",
-      "authenticationFailed": "Authentication failed. Check credentials or SSH key.",
-      "permissionDenied": "Permission denied. Check directory permissions."
-    },
-    "cloneDialog": {
-      "title": "Clone Repository",
-      "repositoryUrl": "Repository URL",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "Directory",
-      "directoryPlaceholder": "Select target directory...",
-      "browseDirectory": "Browse directory",
-      "cancel": "Cancel",
-      "clone": "Clone",
-      "clonePath": "Clone path: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "Authentication Required",
     "description": "The remote server requires credentials. Enter your username and password (or personal access token).",

@@ -12,54 +12,6 @@
     "portuguese": "Português",
     "arabic": "Árabe"
   },
-  "WelcomePage": {
-    "title": "Bem-vindo ao Codeg",
-    "openSettings": "Abrir configurações",
-    "searchPlaceholder": "Pesquisar pastas...",
-    "loading": "Carregando...",
-    "emptyFolders": "Ainda não há pastas",
-    "removeFromHistory": "Remover do histórico",
-    "openFolder": "Abrir pasta",
-    "cloneRepository": "Clonar repositório",
-    "projectBoot": "Inicializador de Projeto",
-    "softwareVersion": "versão {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "Falha ao carregar o histórico de pastas",
-      "openFolderFailed": "Falha ao abrir a pasta",
-      "removeFromHistoryFailed": "Falha ao remover a pasta",
-      "openSettingsFailed": "Falha ao abrir as configurações",
-      "cloneFailed": "Falha ao clonar o repositório",
-      "openProjectBootFailed": "Falha ao abrir o inicializador de projeto"
-    },
-    "errors": {
-      "unknown": "Erro inesperado",
-      "invalidInput": "Entrada inválida.",
-      "notFound": "Recurso não encontrado.",
-      "alreadyExists": "O recurso já existe.",
-      "dependencyMissing": "Dependência obrigatória ausente.",
-      "databaseError": "Falha na operação de banco de dados.",
-      "ioError": "Falha na operação de arquivo.",
-      "externalCommandFailed": "Falha no comando externo.",
-      "windowOperationFailed": "Falha na operação da janela.",
-      "gitNotInstalled": "O Git não está instalado. Instale o Git primeiro.",
-      "targetDirectoryNotEmpty": "O diretório de destino já existe e não está vazio.",
-      "repositoryNotFound": "Repositório não encontrado. Verifique a URL e as permissões de acesso.",
-      "networkUnavailable": "A rede está indisponível. Verifique sua conexão e tente novamente.",
-      "authenticationFailed": "Falha na autenticação. Verifique as credenciais ou a chave SSH.",
-      "permissionDenied": "Permissão negada. Verifique as permissões do diretório."
-    },
-    "cloneDialog": {
-      "title": "Clonar repositório",
-      "repositoryUrl": "URL do repositório",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "Diretório",
-      "directoryPlaceholder": "Selecione o diretório de destino...",
-      "browseDirectory": "Procurar diretório",
-      "cancel": "Cancelar",
-      "clone": "Clonar",
-      "clonePath": "Caminho de clonagem: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "Autenticação necessária",
     "description": "O servidor remoto requer credenciais. Insira seu nome de usuário e senha (ou token de acesso pessoal).",

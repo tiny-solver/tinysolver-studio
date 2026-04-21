@@ -12,54 +12,6 @@
     "portuguese": "葡萄牙语",
     "arabic": "阿拉伯语"
   },
-  "WelcomePage": {
-    "title": "欢迎使用Codeg",
-    "openSettings": "打开设置",
-    "searchPlaceholder": "搜索文件夹...",
-    "loading": "加载中...",
-    "emptyFolders": "暂无文件夹",
-    "removeFromHistory": "从历史中移除",
-    "openFolder": "打开文件夹",
-    "cloneRepository": "克隆仓库",
-    "projectBoot": "项目启动器",
-    "softwareVersion": "版本 {version}",
-    "toasts": {
-      "loadFolderHistoryFailed": "加载文件夹历史失败",
-      "openFolderFailed": "打开文件夹失败",
-      "removeFromHistoryFailed": "移除历史记录失败",
-      "openSettingsFailed": "打开设置失败",
-      "cloneFailed": "克隆仓库失败",
-      "openProjectBootFailed": "打开项目启动器失败"
-    },
-    "errors": {
-      "unknown": "发生未知错误",
-      "invalidInput": "输入无效。",
-      "notFound": "资源不存在。",
-      "alreadyExists": "资源已存在。",
-      "dependencyMissing": "缺少必要依赖。",
-      "databaseError": "数据库操作失败。",
-      "ioError": "文件操作失败。",
-      "externalCommandFailed": "外部命令执行失败。",
-      "windowOperationFailed": "窗口操作失败。",
-      "gitNotInstalled": "未检测到 Git，请先安装 Git。",
-      "targetDirectoryNotEmpty": "目标目录已存在且不为空。",
-      "repositoryNotFound": "仓库不存在，请检查地址和访问权限。",
-      "networkUnavailable": "网络不可用，请检查网络连接后重试。",
-      "authenticationFailed": "认证失败，请检查凭据或 SSH Key。",
-      "permissionDenied": "权限不足，请检查目录权限。"
-    },
-    "cloneDialog": {
-      "title": "克隆仓库",
-      "repositoryUrl": "仓库地址",
-      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
-      "directory": "目录",
-      "directoryPlaceholder": "选择目标目录...",
-      "browseDirectory": "浏览目录",
-      "cancel": "取消",
-      "clone": "克隆",
-      "clonePath": "克隆路径: {path}"
-    }
-  },
   "GitCredentialDialog": {
     "title": "需要身份验证",
     "description": "远程服务器要求输入凭据。请输入用户名和密码（或个人访问令牌）。",
