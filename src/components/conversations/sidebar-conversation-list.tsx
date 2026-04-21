@@ -216,7 +216,14 @@ export function SidebarConversationList({
   const t = useTranslations("Folder.sidebar")
   const tCommon = useTranslations("Folder.common")
   const { zoomLevel } = useZoomLevel()
-  const cardHeightPx = (CARD_HEIGHT_REM * 16 * zoomLevel) / 100
+  const safeZoomLevel =
+    typeof zoomLevel === "number" && Number.isFinite(zoomLevel) && zoomLevel > 0
+      ? zoomLevel
+      : 100
+  const cardHeightPx = Math.max(
+    1,
+    Math.round((CARD_HEIGHT_REM * 16 * safeZoomLevel) / 100)
+  )
   const {
     allFolders,
     conversations,
