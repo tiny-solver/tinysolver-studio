@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   ChevronsDownUp,
   ChevronsUpDown,
@@ -9,7 +9,6 @@ import {
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useSidebarContext } from "@/contexts/sidebar-context"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import {
   SidebarConversationList,
   type SidebarConversationListHandle,
@@ -36,19 +35,11 @@ import {
 export function Sidebar() {
   const t = useTranslations("Folder.sidebar")
   const { isOpen, toggle } = useSidebarContext()
-  const { conversations } = useAppWorkspace()
   const isMobile = useIsMobile()
   const listRef = useRef<SidebarConversationListHandle>(null)
 
   const [showCompleted, setShowCompleted] = useState(false)
   const [allExpanded, setAllExpanded] = useState(true)
-
-  const visibleCount = useMemo(() => {
-    if (showCompleted) return conversations.length
-    return conversations.filter(
-      (c) => c.status !== "completed" && c.status !== "cancelled"
-    ).length
-  }, [conversations, showCompleted])
 
   useEffect(() => {
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
@@ -81,9 +72,6 @@ export function Sidebar() {
             <h2 className="truncate text-[0.875rem] font-bold tracking-[-0.00625rem] text-sidebar-foreground">
               {t("title")}
             </h2>
-            <span className="shrink-0 text-[0.75rem] tabular-nums text-muted-foreground/70">
-              {t("conversationCountUnit", { count: visibleCount })}
-            </span>
           </div>
           <div className="flex items-center gap-0.5">
             <Button

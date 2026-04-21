@@ -17,7 +17,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { FolderBadge } from "@/components/ui/folder-badge"
 import {
   Tooltip,
   TooltipContent,
@@ -80,14 +79,8 @@ export function TerminalTabBar() {
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
               onClick={() => switchTerminal(tab.id)}
+              title={`${folderIndex.get(tab.folderId) ?? String(tab.folderId)}  —  ${tab.title}`}
             >
-              <FolderBadge
-                folderId={tab.folderId}
-                folderName={
-                  folderIndex.get(tab.folderId) ?? String(tab.folderId)
-                }
-                size="sm"
-              />
               {editingId === tab.id ? (
                 <input
                   ref={inputRef}
