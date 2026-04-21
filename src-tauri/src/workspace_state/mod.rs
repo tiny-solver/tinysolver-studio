@@ -48,6 +48,8 @@ pub struct WorkspaceDeltaEnvelope {
     pub kind: String,
     pub payload: Vec<WorkspaceDelta>,
     pub requires_resync: bool,
+    #[serde(default)]
+    pub changed_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -58,6 +60,8 @@ pub struct WorkspaceStateEvent {
     pub kind: String,
     pub payload: Vec<WorkspaceDelta>,
     pub requires_resync: bool,
+    #[serde(default)]
+    pub changed_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -108,6 +112,7 @@ impl WorkspaceStateCore {
         kind: String,
         payload: Vec<WorkspaceDelta>,
         requires_resync: bool,
+        changed_paths: Vec<String>,
     ) -> WorkspaceStateEvent {
         self.seq += 1;
 
@@ -120,6 +125,7 @@ impl WorkspaceStateCore {
             kind: kind.clone(),
             payload: payload.clone(),
             requires_resync,
+            changed_paths: changed_paths.clone(),
         };
         self.push_recent_event(envelope);
 
@@ -130,6 +136,7 @@ impl WorkspaceStateCore {
             kind,
             payload,
             requires_resync,
+            changed_paths,
         }
     }
 
@@ -713,6 +720,17 @@ async fn flush_watch_batch(
             });
         }
 
+        // Surface FS activity that doesn't otherwise change tree/git snapshots
+        // (e.g. files added/removed in a directory beyond WORKSPACE_TREE_MAX_DEPTH,
+        // or gitignored / non-git-repo changes). The envelope's `changed_paths`
+        // lets the frontend invalidate its lazy-loaded overrides for deep
+        // directories without waiting for a manual reload.
+        if payload.is_empty() && !changed_paths.is_empty() {
+            payload.push(WorkspaceDelta::Meta {
+                reason: "fs_events".to_string(),
+            });
+        }
+
         if payload.is_empty() {
             return;
         }
@@ -731,7 +749,7 @@ async fn flush_watch_batch(
             "meta".to_string()
         };
 
-        guard.append_event(kind, payload, git_presence_changed)
+        guard.append_event(kind, payload, git_presence_changed, changed_paths)
     };
 
     emit_event(emitter, "folder://workspace-state-event", event);
@@ -1072,6 +1090,7 @@ mod tests {
                 reason: "boot".to_string(),
             }],
             false,
+            Vec::new(),
         );
 
         let e2 = core.append_event(
@@ -1080,6 +1099,7 @@ mod tests {
                 reason: "tick".to_string(),
             }],
             false,
+            Vec::new(),
         );
 
         assert!(e2.seq > e1.seq);
@@ -1095,6 +1115,7 @@ mod tests {
                 reason: "a".to_string(),
             }],
             false,
+            Vec::new(),
         );
 
         core.append_event(
@@ -1103,6 +1124,7 @@ mod tests {
                 reason: "b".to_string(),
             }],
             false,
+            Vec::new(),
         );
 
         let snapshot = core.snapshot(Some(e1.seq));
@@ -1123,6 +1145,7 @@ mod tests {
                 reason: "a".to_string(),
             }],
             false,
+            Vec::new(),
         );
         core.append_event(
             "meta".to_string(),
@@ -1130,6 +1153,7 @@ mod tests {
                 reason: "b".to_string(),
             }],
             false,
+            Vec::new(),
         );
 
         let snapshot = core.snapshot(Some(0));

@@ -888,6 +888,11 @@ export function FileTreeTab() {
     new Map()
   )
   const lazyLoadingDirPathsRef = useRef<Set<string>>(new Set())
+  const loadDirectoryChildrenRef = useRef<
+    ((dirPath: string) => Promise<void>) | null
+  >(null)
+  const expandedPathsRef = useRef<Set<string>>(new Set([FILE_TREE_ROOT_PATH]))
+  const workspaceTreeRef = useRef<FileTreeNode[]>([])
   const externalConflictSignatureByPathRef = useRef<Map<string, string>>(
     new Map()
   )
@@ -967,36 +972,58 @@ export function FileTreeTab() {
         return
       }
 
+      // Drop the lazy-load override cache so the fresh snapshot is not
+      // masked by stale children (e.g. after deletes / renames / rollbacks
+      // or files the agent just created). Reading expanded paths via a ref
+      // keeps fetchTree's identity stable across expand/collapse so
+      // downstream memoization is not invalidated on every tree interaction.
+      const pathsToReload = Array.from(expandedPathsRef.current).filter(
+        (path) => path !== FILE_TREE_ROOT_PATH
+      )
+      lazyLoadedChildrenByPathRef.current.clear()
       await workspaceState.requestResync("manual_refresh")
+      // Re-hydrate children for directories beyond WORKSPACE_TREE_MAX_DEPTH
+      // that are still expanded — the backend snapshot does not include them.
+      const loader = loadDirectoryChildrenRef.current
+      if (loader) {
+        for (const path of pathsToReload) {
+          void loader(path)
+        }
+      }
     },
     [folder?.path, workspaceState]
   )
 
+  // Tree updates are the only source that should cause a full setNodes.
+  // applyLazyTreeOverrides rebuilds every directory node object, which forces
+  // React to re-render the entire tree. Keeping this effect narrow avoids
+  // wasted work on health / seq / error / git transitions that don't touch
+  // the tree shape (e.g. the intermediate "resyncing" patch during a refresh).
   useEffect(() => {
+    workspaceTreeRef.current = workspaceState.tree
     setNodes(
       applyLazyTreeOverrides(
         workspaceState.tree,
         lazyLoadedChildrenByPathRef.current
       )
     )
+  }, [folder?.path, workspaceState.tree])
+
+  useEffect(() => {
     const nextStatusByPath = new Map<string, string>()
     for (const entry of workspaceState.git) {
       nextStatusByPath.set(entry.path, entry.status)
     }
     setGitStatusByPath(nextStatusByPath)
     setGitEnabled(true)
+  }, [workspaceState.git])
+
+  useEffect(() => {
     setLoading(
       workspaceState.health === "resyncing" && workspaceState.seq === 0
     )
     setError(workspaceState.health === "degraded" ? workspaceState.error : null)
-  }, [
-    folder?.path,
-    workspaceState.error,
-    workspaceState.git,
-    workspaceState.health,
-    workspaceState.seq,
-    workspaceState.tree,
-  ])
+  }, [workspaceState.error, workspaceState.health, workspaceState.seq])
 
   const loadDirectoryChildren = useCallback(
     async (dirPath: string) => {
@@ -1007,12 +1034,19 @@ export function FileTreeTab() {
       if (lazyLoadedChildrenByPathRef.current.has(normalizedDirPath)) return
       if (lazyLoadingDirPathsRef.current.has(normalizedDirPath)) return
 
-      const existingChildren = findDirectoryChildren(nodes, normalizedDirPath)
+      // Check the backend tree (source of truth), not the rendered `nodes`.
+      // `nodes` carries stale lazy-cache overrides that don't invalidate
+      // until a tree_replace delta arrives — but for directories beyond
+      // WORKSPACE_TREE_MAX_DEPTH the backend never emits tree_replace for
+      // changes inside them (their children are not in tree_snapshot, so
+      // the refreshed tree compares equal to the old one). Checking
+      // `nodes` would cause fetchTree's forced reload to short-circuit on
+      // the stale override and miss deletions / creations in deep dirs.
+      const existingChildren = findDirectoryChildren(
+        workspaceTreeRef.current,
+        normalizedDirPath
+      )
       if (existingChildren && existingChildren.length > 0) {
-        lazyLoadedChildrenByPathRef.current.set(
-          normalizedDirPath,
-          existingChildren
-        )
         return
       }
 
@@ -1033,8 +1067,102 @@ export function FileTreeTab() {
         lazyLoadingDirPathsRef.current.delete(normalizedDirPath)
       }
     },
-    [folder?.path, nodes]
+    [folder?.path]
   )
+
+  useEffect(() => {
+    loadDirectoryChildrenRef.current = loadDirectoryChildren
+  }, [loadDirectoryChildren])
+
+  useEffect(() => {
+    expandedPathsRef.current = expandedPaths
+  }, [expandedPaths])
+
+  // Subscribe to workspace envelopes to invalidate lazy-loaded overrides for
+  // directories beyond WORKSPACE_TREE_MAX_DEPTH. Those directories are never
+  // reflected in the backend's depth-2 tree_snapshot, so changes inside them
+  // don't emit a tree_replace delta — the frontend has to target invalidation
+  // by matching each `changed_paths` entry against its cached ancestors.
+  // The backend already debounces raw FS events (1s / 3s max), so we only
+  // need a microtask hop here to merge paths that hit the same cached
+  // ancestor within one envelope (or any synchronous burst of envelopes).
+  const subscribeWorkspaceEnvelopes = workspaceState.subscribeEnvelopes
+  useEffect(() => {
+    if (!subscribeWorkspaceEnvelopes) return
+
+    const pendingPaths = new Set<string>()
+    let flushScheduled = false
+    let disposed = false
+
+    const flushPending = () => {
+      flushScheduled = false
+      if (disposed || pendingPaths.size === 0) return
+      const paths = Array.from(pendingPaths)
+      pendingPaths.clear()
+
+      const loader = loadDirectoryChildrenRef.current
+      const cache = lazyLoadedChildrenByPathRef.current
+      const invalidated = new Set<string>()
+
+      for (const changed of paths) {
+        const normalized = normalizeComparePath(changed)
+        if (!normalized) continue
+        // When the changed path is itself a cached directory (FS events
+        // that report the directory directly, e.g. a rename or a dir-level
+        // notification), its own entry is stale — invalidate it.
+        if (cache.has(normalized)) {
+          invalidated.add(normalized)
+        }
+        // Independently of the above, walk up to the nearest cached
+        // ancestor: the ancestor's children listing may also be stale
+        // (a child was added, removed, or renamed). Without this, cases
+        // where both a parent and child are cached leave the parent
+        // holding a ghost reference to the old child.
+        let cursor = normalized
+        while (cursor.length > 0) {
+          const slash = cursor.lastIndexOf("/")
+          const parent = slash === -1 ? "" : cursor.slice(0, slash)
+          if (parent.length === 0) break
+          if (cache.has(parent)) {
+            invalidated.add(parent)
+            break
+          }
+          cursor = parent
+        }
+      }
+
+      if (invalidated.size === 0) return
+      for (const path of invalidated) {
+        cache.delete(path)
+      }
+      if (!loader) return
+      // Skip refetching directories that are no longer expanded — their
+      // cleared cache will be re-hydrated on the next expansion via the
+      // expandedPaths effect. This avoids spurious getFileTree traffic
+      // for collapsed branches under bursty FS activity.
+      const expanded = expandedPathsRef.current
+      for (const path of invalidated) {
+        if (!expanded.has(path)) continue
+        void loader(path)
+      }
+    }
+
+    const unsubscribe = subscribeWorkspaceEnvelopes(({ changed_paths }) => {
+      if (!changed_paths || changed_paths.length === 0) return
+      for (const path of changed_paths) {
+        pendingPaths.add(path)
+      }
+      if (flushScheduled) return
+      flushScheduled = true
+      queueMicrotask(flushPending)
+    })
+
+    return () => {
+      disposed = true
+      unsubscribe()
+      pendingPaths.clear()
+    }
+  }, [subscribeWorkspaceEnvelopes])
 
   useEffect(() => {
     const previousExpanded = previousExpandedPathsRef.current

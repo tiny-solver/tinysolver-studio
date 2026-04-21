@@ -880,6 +880,7 @@ export interface WorkspaceDeltaEnvelope {
   kind: "fs_delta" | "git_delta" | "meta" | "resync_hint" | string
   payload: WorkspaceDelta[]
   requires_resync: boolean
+  changed_paths?: string[]
 }
 
 export interface WorkspaceStateEvent {
@@ -889,6 +890,7 @@ export interface WorkspaceStateEvent {
   kind: "fs_delta" | "git_delta" | "meta" | "resync_hint" | string
   payload: WorkspaceDelta[]
   requires_resync: boolean
+  changed_paths?: string[]
 }
 
 export interface WorkspaceSnapshotResponse {
