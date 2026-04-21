@@ -1021,7 +1021,8 @@
         "fetchInfo": "Buscar informações",
         "pushCode": "Enviar código",
         "stashChanges": "Fazer stash das alterações",
-        "stashPop": "Aplicar stash"
+        "stashPop": "Aplicar stash",
+        "deleteBranch": "Excluir branch {branchName}"
       },
       "confirm": {
         "mergeTitle": "Mesclar branch",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "Mesclar {branchName} na branch atual {currentBranch}?",
         "rebaseDescription": "Fazer rebase da branch atual {currentBranch} sobre {branchName}?",
         "deleteRemoteTitle": "Excluir branch remoto",
-        "deleteRemoteDescription": "Excluir o branch remoto {branchName}? Isso o removerá do repositório remoto e não poderá ser desfeito."
+        "deleteRemoteDescription": "Excluir o branch remoto {branchName}? Isso o removerá do repositório remoto e não poderá ser desfeito.",
+        "deleteTitle": "Excluir branch",
+        "deleteDescription": "Excluir a branch {branchName}? Esta ação não pode ser desfeita.",
+        "forceDeleteTitle": "Forçar exclusão do branch",
+        "forceDeleteDescription": "O branch {branchName} não está totalmente mesclado. Tem certeza de que deseja forçar a exclusão? Esta ação não pode ser desfeita."
       },
       "current": "Atual",
       "switchToBranch": "Mudar para esta branch",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "Stash eliminado",
         "confirmApply": "Aplicar stash {ref} ao diretório de trabalho?",
         "cancel": "Cancelar"
-      }
+      },
+      "deleteBranch": "Excluir branch"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "Clonar repositório",
+      "repositoryUrl": "URL do repositório",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "Diretório",
+      "directoryPlaceholder": "Selecione o diretório de destino...",
+      "browseDirectory": "Procurar diretório",
+      "cancel": "Cancelar",
+      "clone": "Clonar",
+      "clonePath": "Caminho de clonagem: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "Falha ao clonar o repositório"
     }
   },
   "ProjectBoot": {

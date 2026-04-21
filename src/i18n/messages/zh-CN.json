@@ -1021,7 +1021,8 @@
         "fetchInfo": "获取信息",
         "pushCode": "推送代码",
         "stashChanges": "贮藏更改",
-        "stashPop": "取消贮藏"
+        "stashPop": "取消贮藏",
+        "deleteBranch": "删除分支 {branchName}"
       },
       "confirm": {
         "mergeTitle": "合并分支",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "确定将 {branchName} 合并到当前分支 {currentBranch} 吗？",
         "rebaseDescription": "确定将当前分支 {currentBranch} 变基到 {branchName} 吗？",
         "deleteRemoteTitle": "删除远程分支",
-        "deleteRemoteDescription": "确定删除远程分支 {branchName} 吗？此操作将从远程仓库中移除该分支，且不可恢复。"
+        "deleteRemoteDescription": "确定删除远程分支 {branchName} 吗？此操作将从远程仓库中移除该分支，且不可恢复。",
+        "deleteTitle": "删除分支",
+        "deleteDescription": "确定删除分支 {branchName} 吗？此操作不可恢复。",
+        "forceDeleteTitle": "强制删除分支",
+        "forceDeleteDescription": "分支 {branchName} 尚未完全合并，确定要强制删除吗？此操作不可恢复。"
       },
       "current": "当前",
       "switchToBranch": "切换到此分支",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "贮藏已删除",
         "confirmApply": "将贮藏 {ref} 应用到工作目录？",
         "cancel": "取消"
-      }
+      },
+      "deleteBranch": "删除分支"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "打开贮藏窗口失败",
         "openMergeFailed": "打开合并窗口失败"
       }
+    },
+    "cloneDialog": {
+      "title": "克隆仓库",
+      "repositoryUrl": "仓库地址",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "目录",
+      "directoryPlaceholder": "选择目标目录...",
+      "browseDirectory": "浏览目录",
+      "cancel": "取消",
+      "clone": "克隆",
+      "clonePath": "克隆路径: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "克隆仓库失败"
     }
   },
   "ProjectBoot": {

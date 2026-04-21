@@ -37,7 +37,9 @@ import {
   matchShortcutEvent,
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
+import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
+import { NewFolderDropdown } from "./new-folder-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { cn } from "@/lib/utils"
@@ -293,24 +295,30 @@ export function FolderTitleBar() {
               >
                 <Menu className="h-4 w-4" />
               </Button>
+              <NewFolderDropdown />
+              <BranchDropdown />
             </div>
           ) : (
-            <div className="flex h-8 flex-1 items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 hover:text-foreground/80"
-                onClick={toggle}
-                title={tTitleBar("withShortcut", {
-                  label: tTitleBar(isOpen ? "hideSidebar" : "showSidebar"),
-                  shortcut: formatShortcutLabel(
-                    shortcuts.toggle_sidebar,
-                    isMac
-                  ),
-                })}
-              >
-                <PanelLeft className="h-3.5 w-3.5" />
-              </Button>
+            <div className="flex h-8 flex-1 items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 hover:text-foreground/80"
+                  onClick={toggle}
+                  title={tTitleBar("withShortcut", {
+                    label: tTitleBar(isOpen ? "hideSidebar" : "showSidebar"),
+                    shortcut: formatShortcutLabel(
+                      shortcuts.toggle_sidebar,
+                      isMac
+                    ),
+                  })}
+                >
+                  <PanelLeft className="h-3.5 w-3.5" />
+                </Button>
+                <NewFolderDropdown />
+              </div>
+              <BranchDropdown />
               <div data-tauri-drag-region className="h-8 flex-1" />
             </div>
           )

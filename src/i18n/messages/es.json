@@ -1021,7 +1021,8 @@
         "fetchInfo": "Obtener información",
         "pushCode": "Enviar código",
         "stashChanges": "Guardar cambios en stash",
-        "stashPop": "Aplicar stash"
+        "stashPop": "Aplicar stash",
+        "deleteBranch": "Eliminar rama {branchName}"
       },
       "confirm": {
         "mergeTitle": "Fusionar rama",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "¿Fusionar {branchName} en la rama actual {currentBranch}?",
         "rebaseDescription": "¿Hacer rebase de la rama actual {currentBranch} sobre {branchName}?",
         "deleteRemoteTitle": "Eliminar rama remota",
-        "deleteRemoteDescription": "¿Eliminar la rama remota {branchName}? Esto la eliminará del repositorio remoto y no se puede deshacer."
+        "deleteRemoteDescription": "¿Eliminar la rama remota {branchName}? Esto la eliminará del repositorio remoto y no se puede deshacer.",
+        "deleteTitle": "Eliminar rama",
+        "deleteDescription": "¿Eliminar la rama {branchName}? Esta acción no se puede deshacer.",
+        "forceDeleteTitle": "Forzar eliminación de rama",
+        "forceDeleteDescription": "La rama {branchName} no está completamente fusionada. ¿Estás seguro de que quieres forzar su eliminación? Esta acción no se puede deshacer."
       },
       "current": "Actual",
       "switchToBranch": "Cambiar a esta rama",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "Stash eliminado",
         "confirmApply": "¿Aplicar stash {ref} al directorio de trabajo?",
         "cancel": "Cancelar"
-      }
+      },
+      "deleteBranch": "Eliminar rama"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "Clonar repositorio",
+      "repositoryUrl": "URL del repositorio",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "Directorio",
+      "directoryPlaceholder": "Selecciona el directorio de destino...",
+      "browseDirectory": "Explorar directorio",
+      "cancel": "Cancelar",
+      "clone": "Clonar",
+      "clonePath": "Ruta de clonación: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "No se pudo clonar el repositorio"
     }
   },
   "ProjectBoot": {

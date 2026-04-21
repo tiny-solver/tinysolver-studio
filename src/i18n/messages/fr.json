@@ -1021,7 +1021,8 @@
         "fetchInfo": "Récupérer les infos",
         "pushCode": "Push du code",
         "stashChanges": "Stash des changements",
-        "stashPop": "Appliquer le stash"
+        "stashPop": "Appliquer le stash",
+        "deleteBranch": "Supprimer la branche {branchName}"
       },
       "confirm": {
         "mergeTitle": "Fusionner la branche",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "Fusionner {branchName} dans la branche actuelle {currentBranch} ?",
         "rebaseDescription": "Rebaser la branche actuelle {currentBranch} sur {branchName} ?",
         "deleteRemoteTitle": "Supprimer la branche distante",
-        "deleteRemoteDescription": "Supprimer la branche distante {branchName} ? Cette action la supprimera du dépôt distant et ne pourra pas être annulée."
+        "deleteRemoteDescription": "Supprimer la branche distante {branchName} ? Cette action la supprimera du dépôt distant et ne pourra pas être annulée.",
+        "deleteTitle": "Supprimer la branche",
+        "deleteDescription": "Supprimer la branche {branchName} ? Cette action est irréversible.",
+        "forceDeleteTitle": "Forcer la suppression de la branche",
+        "forceDeleteDescription": "La branche {branchName} n'est pas entièrement fusionnée. Êtes-vous sûr de vouloir la supprimer de force ? Cette action est irréversible."
       },
       "current": "Actuelle",
       "switchToBranch": "Basculer vers cette branche",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "Remise supprimée",
         "confirmApply": "Appliquer la remise {ref} au répertoire de travail ?",
         "cancel": "Annuler"
-      }
+      },
+      "deleteBranch": "Supprimer la branche"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "Cloner un dépôt",
+      "repositoryUrl": "URL du dépôt",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "Répertoire",
+      "directoryPlaceholder": "Sélectionnez le répertoire cible...",
+      "browseDirectory": "Parcourir le répertoire",
+      "cancel": "Annuler",
+      "clone": "Cloner",
+      "clonePath": "Chemin de clonage : {path}"
+    },
+    "toasts": {
+      "cloneFailed": "Échec du clonage du dépôt"
     }
   },
   "ProjectBoot": {

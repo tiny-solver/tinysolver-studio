@@ -1021,7 +1021,8 @@
         "fetchInfo": "정보 fetch",
         "pushCode": "코드 push",
         "stashChanges": "변경 사항 stash",
-        "stashPop": "stash pop"
+        "stashPop": "stash pop",
+        "deleteBranch": "브랜치 {branchName} 삭제"
       },
       "confirm": {
         "mergeTitle": "브랜치 병합",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "{branchName}을(를) 현재 브랜치 {currentBranch}에 병합할까요?",
         "rebaseDescription": "현재 브랜치 {currentBranch}를 {branchName} 위로 리베이스할까요?",
         "deleteRemoteTitle": "원격 브랜치 삭제",
-        "deleteRemoteDescription": "원격 브랜치 {branchName}을(를) 삭제하시겠습니까? 이 작업은 원격 저장소에서 브랜치를 제거하며 되돌릴 수 없습니다."
+        "deleteRemoteDescription": "원격 브랜치 {branchName}을(를) 삭제하시겠습니까? 이 작업은 원격 저장소에서 브랜치를 제거하며 되돌릴 수 없습니다.",
+        "deleteTitle": "브랜치 삭제",
+        "deleteDescription": "브랜치 {branchName}을(를) 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+        "forceDeleteTitle": "브랜치 강제 삭제",
+        "forceDeleteDescription": "브랜치 {branchName}가 완전히 병합되지 않았습니다. 강제 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
       },
       "current": "현재",
       "switchToBranch": "이 브랜치로 전환",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "스태시가 삭제되었습니다",
         "confirmApply": "스태시 {ref}을(를) 작업 디렉토리에 적용하시겠습니까?",
         "cancel": "취소"
-      }
+      },
+      "deleteBranch": "브랜치 삭제"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "저장소 클론",
+      "repositoryUrl": "저장소 URL",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "디렉터리",
+      "directoryPlaceholder": "대상 디렉터리 선택...",
+      "browseDirectory": "디렉터리 찾아보기",
+      "cancel": "취소",
+      "clone": "클론",
+      "clonePath": "클론 경로: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "저장소 클론에 실패했습니다"
     }
   },
   "ProjectBoot": {

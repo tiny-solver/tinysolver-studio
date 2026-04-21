@@ -1021,7 +1021,8 @@
         "fetchInfo": "情報をフェッチ",
         "pushCode": "コードをプッシュ",
         "stashChanges": "変更を stash",
-        "stashPop": "stash を pop"
+        "stashPop": "stash を pop",
+        "deleteBranch": "ブランチ {branchName} を削除"
       },
       "confirm": {
         "mergeTitle": "ブランチをマージ",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "{branchName} を現在のブランチ {currentBranch} にマージしますか？",
         "rebaseDescription": "現在のブランチ {currentBranch} を {branchName} にリベースしますか？",
         "deleteRemoteTitle": "リモートブランチの削除",
-        "deleteRemoteDescription": "リモートブランチ {branchName} を削除しますか？この操作はリモートリポジトリからブランチを削除し、元に戻せません。"
+        "deleteRemoteDescription": "リモートブランチ {branchName} を削除しますか？この操作はリモートリポジトリからブランチを削除し、元に戻せません。",
+        "deleteTitle": "ブランチを削除",
+        "deleteDescription": "ブランチ {branchName} を削除しますか？この操作は元に戻せません。",
+        "forceDeleteTitle": "ブランチを強制削除",
+        "forceDeleteDescription": "ブランチ {branchName} はまだ完全にマージされていません。強制削除してもよろしいですか？この操作は元に戻せません。"
       },
       "current": "現在",
       "switchToBranch": "このブランチに切り替え",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "スタッシュを削除しました",
         "confirmApply": "スタッシュ {ref} を作業ディレクトリに適用しますか？",
         "cancel": "キャンセル"
-      }
+      },
+      "deleteBranch": "ブランチを削除"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "リポジトリをクローン",
+      "repositoryUrl": "リポジトリ URL",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "ディレクトリ",
+      "directoryPlaceholder": "保存先ディレクトリを選択...",
+      "browseDirectory": "ディレクトリを参照",
+      "cancel": "キャンセル",
+      "clone": "クローン",
+      "clonePath": "クローンパス: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "リポジトリのクローンに失敗しました"
     }
   },
   "ProjectBoot": {

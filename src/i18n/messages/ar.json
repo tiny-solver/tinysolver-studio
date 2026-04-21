@@ -1021,7 +1021,8 @@
         "fetchInfo": "جلب المعلومات",
         "pushCode": "دفع الكود",
         "stashChanges": "تخزين التغييرات في stash",
-        "stashPop": "استرجاع stash"
+        "stashPop": "استرجاع stash",
+        "deleteBranch": "حذف الفرع {branchName}"
       },
       "confirm": {
         "mergeTitle": "دمج الفرع",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "دمج {branchName} في الفرع الحالي {currentBranch}؟",
         "rebaseDescription": "إجراء rebase للفرع الحالي {currentBranch} على {branchName}؟",
         "deleteRemoteTitle": "حذف الفرع البعيد",
-        "deleteRemoteDescription": "هل تريد حذف الفرع البعيد {branchName}؟ سيؤدي ذلك إلى إزالته من المستودع البعيد ولا يمكن التراجع عن هذا الإجراء."
+        "deleteRemoteDescription": "هل تريد حذف الفرع البعيد {branchName}؟ سيؤدي ذلك إلى إزالته من المستودع البعيد ولا يمكن التراجع عن هذا الإجراء.",
+        "deleteTitle": "حذف الفرع",
+        "deleteDescription": "حذف الفرع {branchName}؟ لا يمكن التراجع عن هذا الإجراء.",
+        "forceDeleteTitle": "حذف الفرع بالقوة",
+        "forceDeleteDescription": "الفرع {branchName} لم يتم دمجه بالكامل. هل أنت متأكد من أنك تريد حذفه بالقوة؟ لا يمكن التراجع عن هذا الإجراء."
       },
       "current": "الحالي",
       "switchToBranch": "التبديل إلى هذا الفرع",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "تم حذف التخبئة",
         "confirmApply": "تطبيق التخبئة {ref} على دليل العمل؟",
         "cancel": "إلغاء"
-      }
+      },
+      "deleteBranch": "حذف الفرع"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "استنساخ مستودع",
+      "repositoryUrl": "رابط المستودع",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "المجلد",
+      "directoryPlaceholder": "اختر مجلد الهدف...",
+      "browseDirectory": "تصفح المجلد",
+      "cancel": "إلغاء",
+      "clone": "استنساخ",
+      "clonePath": "مسار الاستنساخ: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "فشل استنساخ المستودع"
     }
   },
   "ProjectBoot": {

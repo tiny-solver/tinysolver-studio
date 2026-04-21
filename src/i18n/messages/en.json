@@ -1021,7 +1021,8 @@
         "fetchInfo": "Fetch info",
         "pushCode": "Push code",
         "stashChanges": "Stash changes",
-        "stashPop": "Pop stash"
+        "stashPop": "Pop stash",
+        "deleteBranch": "Delete branch {branchName}"
       },
       "confirm": {
         "mergeTitle": "Merge branch",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "Merge {branchName} into current branch {currentBranch}?",
         "rebaseDescription": "Rebase current branch {currentBranch} onto {branchName}?",
         "deleteRemoteTitle": "Delete Remote Branch",
-        "deleteRemoteDescription": "Delete remote branch {branchName}? This will remove it from the remote repository and cannot be undone."
+        "deleteRemoteDescription": "Delete remote branch {branchName}? This will remove it from the remote repository and cannot be undone.",
+        "deleteTitle": "Delete branch",
+        "deleteDescription": "Delete branch {branchName}? This action cannot be undone.",
+        "forceDeleteTitle": "Force Delete Branch",
+        "forceDeleteDescription": "Branch {branchName} is not fully merged. Are you sure you want to force delete it? This action cannot be undone."
       },
       "current": "Current",
       "switchToBranch": "Switch to this branch",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "Stash dropped",
         "confirmApply": "Apply stash {ref} to working directory?",
         "cancel": "Cancel"
-      }
+      },
+      "deleteBranch": "Delete branch"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "Clone Repository",
+      "repositoryUrl": "Repository URL",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "Directory",
+      "directoryPlaceholder": "Select target directory...",
+      "browseDirectory": "Browse directory",
+      "cancel": "Cancel",
+      "clone": "Clone",
+      "clonePath": "Clone path: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "Failed to clone repository"
     }
   },
   "ProjectBoot": {

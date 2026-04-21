@@ -792,6 +792,18 @@ export async function gitRebase(
   return getTransport().call("git_rebase", { path, branchName })
 }
 
+export async function gitDeleteBranch(
+  path: string,
+  branchName: string,
+  force: boolean = false
+): Promise<string> {
+  return getTransport().call("git_delete_branch", {
+    path,
+    branchName,
+    force,
+  })
+}
+
 export async function gitDeleteRemoteBranch(
   path: string,
   remote: string,

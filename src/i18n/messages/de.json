@@ -1021,7 +1021,8 @@
         "fetchInfo": "Informationen fetchen",
         "pushCode": "Code pushen",
         "stashChanges": "Änderungen stashen",
-        "stashPop": "Stash anwenden"
+        "stashPop": "Stash anwenden",
+        "deleteBranch": "Branch {branchName} löschen"
       },
       "confirm": {
         "mergeTitle": "Branch mergen",
@@ -1029,7 +1030,11 @@
         "mergeDescription": "{branchName} in den aktuellen Branch {currentBranch} mergen?",
         "rebaseDescription": "Aktuellen Branch {currentBranch} auf {branchName} rebasen?",
         "deleteRemoteTitle": "Remote-Branch löschen",
-        "deleteRemoteDescription": "Remote-Branch {branchName} löschen? Dies entfernt ihn aus dem Remote-Repository und kann nicht rückgängig gemacht werden."
+        "deleteRemoteDescription": "Remote-Branch {branchName} löschen? Dies entfernt ihn aus dem Remote-Repository und kann nicht rückgängig gemacht werden.",
+        "deleteTitle": "Branch löschen",
+        "deleteDescription": "Branch {branchName} löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "forceDeleteTitle": "Branch erzwungen löschen",
+        "forceDeleteDescription": "Der Branch {branchName} ist nicht vollständig gemergt. Möchten Sie ihn wirklich erzwungen löschen? Diese Aktion kann nicht rückgängig gemacht werden."
       },
       "current": "Aktuell",
       "switchToBranch": "Zu diesem Branch wechseln",
@@ -1100,7 +1105,8 @@
         "dropSuccess": "Stash gelöscht",
         "confirmApply": "Stash {ref} auf das Arbeitsverzeichnis anwenden?",
         "cancel": "Abbrechen"
-      }
+      },
+      "deleteBranch": "Branch löschen"
     },
     "commitDialog": {
       "toasts": {
@@ -1781,6 +1787,20 @@
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
       }
+    },
+    "cloneDialog": {
+      "title": "Repository klonen",
+      "repositoryUrl": "Repository-URL",
+      "repositoryUrlPlaceholder": "https://github.com/user/repo.git",
+      "directory": "Verzeichnis",
+      "directoryPlaceholder": "Zielverzeichnis auswählen...",
+      "browseDirectory": "Verzeichnis durchsuchen",
+      "cancel": "Abbrechen",
+      "clone": "Klonen",
+      "clonePath": "Klonpfad: {path}"
+    },
+    "toasts": {
+      "cloneFailed": "Repository konnte nicht geklont werden"
     }
   },
   "ProjectBoot": {

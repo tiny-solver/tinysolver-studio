@@ -452,6 +452,23 @@ pub async fn git_rebase(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitDeleteBranchParams {
+    pub path: String,
+    pub branch_name: String,
+    pub force: bool,
+}
+
+pub async fn git_delete_branch(
+    Json(params): Json<GitDeleteBranchParams>,
+) -> Result<Json<String>, AppCommandError> {
+    let result =
+        folder_commands::git_delete_branch(params.path, params.branch_name, params.force)
+            .await?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitDeleteRemoteBranchParams {
     pub path: String,
     pub remote: String,

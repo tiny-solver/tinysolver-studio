@@ -243,6 +243,7 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/git_fetch", post(handlers::git::git_fetch))
         .route("/git_commit", post(handlers::git::git_commit))
         .route("/git_fetch_remote", post(handlers::git::git_fetch_remote))
+        .route("/git_delete_branch", post(handlers::git::git_delete_branch))
         .route(
             "/git_delete_remote_branch",
             post(handlers::git::git_delete_remote_branch),
