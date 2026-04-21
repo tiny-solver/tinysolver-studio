@@ -20,14 +20,14 @@ export function useActiveFolder() {
 }
 
 export function ActiveFolderProvider({ children }: { children: ReactNode }) {
-  const { folders, activeFolderId } = useAppWorkspace()
+  const { allFolders, activeFolderId } = useAppWorkspace()
 
   const activeFolder = useMemo(
     () =>
       activeFolderId != null
-        ? (folders.find((f) => f.id === activeFolderId) ?? null)
+        ? (allFolders.find((f) => f.id === activeFolderId) ?? null)
         : null,
-    [activeFolderId, folders]
+    [activeFolderId, allFolders]
   )
 
   const value = useMemo<ActiveFolderContextValue>(

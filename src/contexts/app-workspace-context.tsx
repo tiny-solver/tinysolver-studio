@@ -135,7 +135,7 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
       setAllFolders(allList)
       setBranches((prev) => {
         const next = new Map(prev)
-        for (const f of openList) {
+        for (const f of allList) {
           if (!next.has(f.id)) {
             next.set(f.id, f.git_branch ?? null)
           }
@@ -175,8 +175,8 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
   }, [fetchFolders, refreshConversations])
 
   const getFolder = useCallback(
-    (id: number) => folders.find((f) => f.id === id),
-    [folders]
+    (id: number) => allFolders.find((f) => f.id === id),
+    [allFolders]
   )
 
   const updateConversationLocal = useCallback(
@@ -290,7 +290,7 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
   useEffect(() => {
     if (activeFolderId == null) return
     const folderId = activeFolderId
-    const folder = folders.find((f) => f.id === folderId)
+    const folder = allFolders.find((f) => f.id === folderId)
     if (!folder) return
 
     let cancelled = false
@@ -322,7 +322,7 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [activeFolderId, folders])
+  }, [activeFolderId, allFolders])
 
   const stats = useMemo(
     () => (conversations.length > 0 ? computeStats(conversations) : null),

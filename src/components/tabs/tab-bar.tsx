@@ -24,14 +24,14 @@ export function TabBar() {
     toggleTileMode,
     reorderTabs,
   } = useTabContext()
-  const { folders, branches } = useAppWorkspace()
+  const { allFolders, branches } = useAppWorkspace()
   const { mode, activePane } = useWorkspaceContext()
 
   const folderIndex = useMemo(() => {
     const map = new Map<number, { name: string }>()
-    for (const f of folders) map.set(f.id, { name: f.name })
+    for (const f of allFolders) map.set(f.id, { name: f.name })
     return map
-  }, [folders])
+  }, [allFolders])
 
   const handleRevealInSidebar = useCallback((folderId: number) => {
     window.dispatchEvent(
