@@ -12,7 +12,6 @@ import type {
   AvailableCommandInfo,
 } from "@/lib/types"
 import type { QueuedMessage } from "@/hooks/use-message-queue"
-import { ConversationContextBar } from "@/components/chat/conversation-context-bar"
 import { MessageInput } from "@/components/chat/message-input"
 import { MessageQueueDisplay } from "@/components/chat/message-queue-display"
 
@@ -93,7 +92,6 @@ export const ChatInput = memo(function ChatInput({
       className="p-4 pt-0"
       onContextMenu={(event) => event.stopPropagation()}
     >
-      <ConversationContextBar />
       {queue &&
         queue.length > 0 &&
         onQueueReorder &&

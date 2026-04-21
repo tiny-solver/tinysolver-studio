@@ -9,13 +9,8 @@ import {
   Folder,
   FolderOpen,
   GitBranch,
-  GitCommit,
-  GitMerge,
   Loader2,
-  MoreHorizontal,
-  Upload,
   Plus,
-  Archive,
   Trash2,
 } from "lucide-react"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
@@ -26,10 +21,6 @@ import {
   gitCheckout,
   gitNewBranch,
   gitDeleteBranch,
-  openCommitWindow,
-  openPushWindow,
-  openStashWindow,
-  openMergeWindow,
 } from "@/lib/api"
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import type { GitBranchList } from "@/lib/types"
@@ -50,13 +41,6 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -69,10 +53,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
-export const ConversationContextBar = memo(function ConversationContextBar() {
+interface ConversationContextBarProps {
+  tabId?: string | null
+}
+
+export const ConversationContextBar = memo(function ConversationContextBar({
+  tabId,
+}: ConversationContextBarProps = {}) {
   const t = useTranslations("Folder.conversationContextBar")
   const tBd = useTranslations("Folder.branchDropdown")
   const { tabs, activeTabId, setTabFolder } = useTabContext()
@@ -87,32 +76,32 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
   } = useAppWorkspace()
   const { addTask, updateTask } = useTaskContext()
 
-  const activeTab = useMemo(
-    () => tabs.find((x) => x.id === activeTabId) ?? null,
-    [tabs, activeTabId]
-  )
+  const ownTab = useMemo(() => {
+    const lookupId = tabId ?? activeTabId
+    return tabs.find((x) => x.id === lookupId) ?? null
+  }, [tabs, tabId, activeTabId])
 
-  const activeFolder = useMemo(
+  const ownFolder = useMemo(
     () =>
-      activeTab
-        ? (allFolders.find((f) => f.id === activeTab.folderId) ?? null)
+      ownTab
+        ? (allFolders.find((f) => f.id === ownTab.folderId) ?? null)
         : null,
-    [activeTab, allFolders]
+    [ownTab, allFolders]
   )
 
-  if (!activeTab || !activeFolder) return null
+  if (!ownTab || !ownFolder) return null
 
-  const isNewConversation = activeTab.conversationId == null
+  const isNewConversation = ownTab.conversationId == null
   const currentBranch =
-    branches.get(activeFolder.id) ?? activeFolder.git_branch ?? null
+    branches.get(ownFolder.id) ?? ownFolder.git_branch ?? null
 
   return (
     <TooltipProvider>
-      <div className="flex items-center gap-1.5 h-9 px-3 border-b border-border/40 bg-muted/20 text-xs">
+      <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 text-xs text-muted-foreground">
         <FolderPicker
           folders={allFolders}
-          currentFolderId={activeFolder.id}
-          currentFolderName={activeFolder.name}
+          currentFolderId={ownFolder.id}
+          currentFolderName={ownFolder.name}
           editable={isNewConversation}
           onSelect={async (folderId) => {
             const target = allFolders.find((f) => f.id === folderId)
@@ -122,7 +111,7 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
               const detail = isOpen
                 ? target
                 : await addFolderToWorkspaceById(folderId)
-              setTabFolder(activeTab.id, detail.id, detail.path)
+              setTabFolder(ownTab.id, detail.id, detail.path)
               toast.success(t("toasts.folderChanged", { name: detail.name }))
             } catch (err) {
               console.error(
@@ -142,7 +131,7 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
                 if (!result) return
                 const selected = Array.isArray(result) ? result[0] : result
                 const detail = await openFolder(selected)
-                setTabFolder(activeTab.id, detail.id, detail.path)
+                setTabFolder(ownTab.id, detail.id, detail.path)
                 toast.success(t("toasts.folderChanged", { name: detail.name }))
               }
             } catch (err) {
@@ -155,20 +144,18 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
           labelSearch={t("searchFolder")}
         />
 
-        <Separator orientation="vertical" className="h-4" />
-
         <BranchPicker
-          folderId={activeFolder.id}
-          folderPath={activeFolder.path}
+          folderId={ownFolder.id}
+          folderPath={ownFolder.path}
           currentBranch={currentBranch}
           onCheckout={async (branchName) => {
-            const taskId = `checkout-${activeFolder.id}-${Date.now()}`
+            const taskId = `checkout-${ownFolder.id}-${Date.now()}`
             addTask(taskId, tBd("tasks.checkoutTo", { branchName }))
             updateTask(taskId, { status: "running" })
             try {
-              await gitCheckout(activeFolder.path, branchName)
-              setBranch(activeFolder.id, branchName)
-              await refreshFolder(activeFolder.id)
+              await gitCheckout(ownFolder.path, branchName)
+              setBranch(ownFolder.id, branchName)
+              await refreshFolder(ownFolder.id)
               updateTask(taskId, { status: "completed" })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
@@ -177,13 +164,13 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
             }
           }}
           onNewBranch={async (branchName, startPoint) => {
-            const taskId = `new-branch-${activeFolder.id}-${Date.now()}`
+            const taskId = `new-branch-${ownFolder.id}-${Date.now()}`
             addTask(taskId, tBd("tasks.newBranch", { name: branchName }))
             updateTask(taskId, { status: "running" })
             try {
-              await gitNewBranch(activeFolder.path, branchName, startPoint)
-              setBranch(activeFolder.id, branchName)
-              await refreshFolder(activeFolder.id)
+              await gitNewBranch(ownFolder.path, branchName, startPoint)
+              setBranch(ownFolder.id, branchName)
+              await refreshFolder(ownFolder.id)
               updateTask(taskId, { status: "completed" })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
@@ -192,11 +179,11 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
             }
           }}
           onDeleteBranch={async (branchName) => {
-            const taskId = `delete-branch-${activeFolder.id}-${Date.now()}`
+            const taskId = `delete-branch-${ownFolder.id}-${Date.now()}`
             addTask(taskId, tBd("tasks.deleteBranch", { branchName }))
             updateTask(taskId, { status: "running" })
             try {
-              await gitDeleteBranch(activeFolder.path, branchName, false)
+              await gitDeleteBranch(ownFolder.path, branchName, false)
               updateTask(taskId, { status: "completed" })
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
@@ -204,13 +191,6 @@ export const ConversationContextBar = memo(function ConversationContextBar() {
               toast.error(msg)
             }
           }}
-        />
-
-        <div className="flex-1" />
-
-        <GitActionButtons
-          folderId={activeFolder.id}
-          currentBranch={currentBranch}
         />
       </div>
     </TooltipProvider>
@@ -250,19 +230,16 @@ const FolderPicker = memo(function FolderPicker({
 
   const trigger = (
     <Button
-      variant="ghost"
-      size="sm"
+      variant="outline"
+      size="xs"
       className={cn(
-        "h-7 px-2 gap-1.5 font-normal",
-        !editable && "cursor-default hover:bg-transparent"
+        "min-w-0 bg-transparent",
+        !editable && "cursor-default opacity-60 hover:bg-transparent"
       )}
-      disabled={!editable && false}
     >
-      <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+      <Folder className="size-3 shrink-0 text-muted-foreground" />
       <span className="max-w-[140px] truncate">{currentFolderName}</span>
-      {editable && (
-        <ChevronsUpDown className="h-3 w-3 text-muted-foreground opacity-60" />
-      )}
+      <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
     </Button>
   )
 
@@ -381,15 +358,15 @@ const BranchPicker = memo(function BranchPicker({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 gap-1.5 font-normal"
+            variant="outline"
+            size="xs"
+            className="min-w-0 bg-transparent"
           >
-            <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+            <GitBranch className="size-3 shrink-0 text-muted-foreground" />
             <span className="max-w-[160px] truncate">
               {currentBranch ?? t("noBranch")}
             </span>
-            <ChevronsUpDown className="h-3 w-3 text-muted-foreground opacity-60" />
+            <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="p-0 w-80">
@@ -515,126 +492,5 @@ const BranchPicker = memo(function BranchPicker({
         </DialogContent>
       </Dialog>
     </>
-  )
-})
-
-// ============================================================================
-// GitActionButtons
-// ============================================================================
-
-interface GitActionButtonsProps {
-  folderId: number
-  currentBranch: string | null
-}
-
-const GitActionButtons = memo(function GitActionButtons({
-  folderId,
-  currentBranch,
-}: GitActionButtonsProps) {
-  const t = useTranslations("Folder.conversationContextBar")
-  const tBd = useTranslations("Folder.branchDropdown")
-
-  const handleCommit = useCallback(async () => {
-    try {
-      await openCommitWindow(folderId)
-    } catch (err) {
-      console.error("[GitActions] commit failed:", err)
-      toast.error(tBd("toasts.openCommitWindowFailed"))
-    }
-  }, [folderId, tBd])
-
-  const handlePush = useCallback(async () => {
-    try {
-      await openPushWindow(folderId)
-    } catch (err) {
-      console.error("[GitActions] push failed:", err)
-      toast.error(tBd("toasts.openPushWindowFailed"))
-    }
-  }, [folderId, tBd])
-
-  const handleStash = useCallback(async () => {
-    try {
-      await openStashWindow(folderId)
-    } catch (err) {
-      console.error("[GitActions] stash failed:", err)
-      toast.error(t("toasts.openStashFailed"))
-    }
-  }, [folderId, t])
-
-  const handleMerge = useCallback(async () => {
-    try {
-      await openMergeWindow(folderId, "merge")
-    } catch (err) {
-      console.error("[GitActions] merge failed:", err)
-      toast.error(t("toasts.openMergeFailed"))
-    }
-  }, [folderId, t])
-
-  return (
-    <div className="flex items-center gap-0.5">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 gap-1.5 font-normal"
-            onClick={handleCommit}
-            disabled={currentBranch == null}
-          >
-            <GitCommit className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t("commit")}</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{tBd("openCommitWindow")}</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 gap-1.5 font-normal"
-            onClick={handlePush}
-            disabled={currentBranch == null}
-          >
-            <Upload className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t("push")}</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{tBd("pushCode")}</TooltipContent>
-      </Tooltip>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            disabled={currentBranch == null}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={handleMerge}>
-            <GitMerge className="h-4 w-4" />
-            {t("merge")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handleStash}>
-            <Archive className="h-4 w-4" />
-            {tBd("stashChanges")}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleCommit}>
-            <GitCommit className="h-4 w-4" />
-            {tBd("openCommitWindow")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={handlePush}>
-            <Upload className="h-4 w-4" />
-            {tBd("pushCode")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
   )
 })

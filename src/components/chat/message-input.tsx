@@ -59,6 +59,7 @@ import {
   type AttachFileToSessionDetail,
   type AppendTextToSessionDetail,
 } from "@/lib/session-attachment-events"
+import { ConversationContextBar } from "@/components/chat/conversation-context-bar"
 import { ModeSelector } from "@/components/chat/mode-selector"
 import { SessionConfigSelector } from "@/components/chat/session-config-selector"
 import {
@@ -1919,6 +1920,7 @@ export function MessageInput({
           className
         )}
       >
+        <ConversationContextBar tabId={attachmentTabId} />
         {(hasImageAttachments || hasResourceAttachments) && (
           <div className="flex shrink-0 flex-col gap-1 px-2 pt-2">
             {hasImageAttachments && (
