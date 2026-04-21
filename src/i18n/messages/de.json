@@ -1015,7 +1015,6 @@
         "checkoutTo": "Zu {branchName} wechseln",
         "mergeBranch": "{branchName} mergen",
         "rebaseTo": "Auf {branchName} rebasen",
-        "deleteBranch": "Branch {branchName} löschen",
         "deleteRemoteBranch": "Remote-Branch {branchName} löschen",
         "initGitRepo": "Git-Repository initialisieren",
         "pullCode": "Code pullen",
@@ -1027,12 +1026,8 @@
       "confirm": {
         "mergeTitle": "Branch mergen",
         "rebaseTitle": "Branch rebasen",
-        "deleteTitle": "Branch löschen",
         "mergeDescription": "{branchName} in den aktuellen Branch {currentBranch} mergen?",
         "rebaseDescription": "Aktuellen Branch {currentBranch} auf {branchName} rebasen?",
-        "deleteDescription": "Branch {branchName} löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
-        "forceDeleteTitle": "Branch erzwungen löschen",
-        "forceDeleteDescription": "Der Branch {branchName} ist nicht vollständig gemergt. Möchten Sie ihn wirklich erzwungen löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
         "deleteRemoteTitle": "Remote-Branch löschen",
         "deleteRemoteDescription": "Remote-Branch {branchName} löschen? Dies entfernt ihn aus dem Remote-Repository und kann nicht rückgängig gemacht werden."
       },
@@ -1040,7 +1035,6 @@
       "switchToBranch": "Zu diesem Branch wechseln",
       "mergeBranchIntoCurrent": "{branchName} in {currentBranch} mergen",
       "rebaseCurrentToBranch": "{currentBranch} auf {branchName} rebasen",
-      "deleteBranch": "Branch löschen",
       "versionControl": "Versionskontrolle",
       "initGitRepo": "Git-Repository initialisieren",
       "pullCode": "Code pullen",

@@ -1015,7 +1015,6 @@
         "checkoutTo": "{branchName} にチェックアウト",
         "mergeBranch": "{branchName} をマージ",
         "rebaseTo": "{branchName} にリベース",
-        "deleteBranch": "ブランチ {branchName} を削除",
         "deleteRemoteBranch": "リモートブランチ {branchName} を削除",
         "initGitRepo": "Git リポジトリを初期化",
         "pullCode": "コードをプル",
@@ -1027,12 +1026,8 @@
       "confirm": {
         "mergeTitle": "ブランチをマージ",
         "rebaseTitle": "ブランチをリベース",
-        "deleteTitle": "ブランチを削除",
         "mergeDescription": "{branchName} を現在のブランチ {currentBranch} にマージしますか？",
         "rebaseDescription": "現在のブランチ {currentBranch} を {branchName} にリベースしますか？",
-        "deleteDescription": "ブランチ {branchName} を削除しますか？この操作は元に戻せません。",
-        "forceDeleteTitle": "ブランチを強制削除",
-        "forceDeleteDescription": "ブランチ {branchName} はまだ完全にマージされていません。強制削除してもよろしいですか？この操作は元に戻せません。",
         "deleteRemoteTitle": "リモートブランチの削除",
         "deleteRemoteDescription": "リモートブランチ {branchName} を削除しますか？この操作はリモートリポジトリからブランチを削除し、元に戻せません。"
       },
@@ -1040,7 +1035,6 @@
       "switchToBranch": "このブランチに切り替え",
       "mergeBranchIntoCurrent": "{branchName} を {currentBranch} にマージ",
       "rebaseCurrentToBranch": "{currentBranch} を {branchName} にリベース",
-      "deleteBranch": "ブランチを削除",
       "versionControl": "バージョン管理",
       "initGitRepo": "Git リポジトリを初期化",
       "pullCode": "コードをプル",

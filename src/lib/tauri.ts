@@ -648,14 +648,6 @@ export async function gitRebase(
   return invoke("git_rebase", { path, branchName })
 }
 
-export async function gitDeleteBranch(
-  path: string,
-  branchName: string,
-  force = false
-): Promise<string> {
-  return invoke("git_delete_branch", { path, branchName, force })
-}
-
 export async function gitListConflicts(path: string): Promise<string[]> {
   return invoke("git_list_conflicts", { path })
 }

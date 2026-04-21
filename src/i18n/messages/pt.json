@@ -1015,7 +1015,6 @@
         "checkoutTo": "Fazer checkout para {branchName}",
         "mergeBranch": "Mesclar {branchName}",
         "rebaseTo": "Rebase para {branchName}",
-        "deleteBranch": "Excluir branch {branchName}",
         "deleteRemoteBranch": "Excluir branch remoto {branchName}",
         "initGitRepo": "Inicializar repositório Git",
         "pullCode": "Fazer pull do código",
@@ -1027,12 +1026,8 @@
       "confirm": {
         "mergeTitle": "Mesclar branch",
         "rebaseTitle": "Rebase da branch",
-        "deleteTitle": "Excluir branch",
         "mergeDescription": "Mesclar {branchName} na branch atual {currentBranch}?",
         "rebaseDescription": "Fazer rebase da branch atual {currentBranch} sobre {branchName}?",
-        "deleteDescription": "Excluir a branch {branchName}? Esta ação não pode ser desfeita.",
-        "forceDeleteTitle": "Forçar exclusão do branch",
-        "forceDeleteDescription": "O branch {branchName} não está totalmente mesclado. Tem certeza de que deseja forçar a exclusão? Esta ação não pode ser desfeita.",
         "deleteRemoteTitle": "Excluir branch remoto",
         "deleteRemoteDescription": "Excluir o branch remoto {branchName}? Isso o removerá do repositório remoto e não poderá ser desfeito."
       },
@@ -1040,7 +1035,6 @@
       "switchToBranch": "Mudar para esta branch",
       "mergeBranchIntoCurrent": "Mesclar {branchName} em {currentBranch}",
       "rebaseCurrentToBranch": "Rebase de {currentBranch} sobre {branchName}",
-      "deleteBranch": "Excluir branch",
       "versionControl": "Controle de versão",
       "initGitRepo": "Inicializar repositório Git",
       "pullCode": "Fazer pull do código",

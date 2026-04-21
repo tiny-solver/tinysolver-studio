@@ -2120,26 +2120,6 @@ pub async fn git_rebase(
     })
 }
 
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_delete_branch(
-    path: String,
-    branch_name: String,
-    force: bool,
-) -> Result<String, AppCommandError> {
-    let flag = if force { "-D" } else { "-d" };
-    let output = crate::process::tokio_command("git")
-        .args(["branch", flag, &branch_name])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error(&format!("branch {flag}"), &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
 pub(crate) async fn git_delete_remote_branch_core(
     path: &str,
     remote: &str,

@@ -11,17 +11,11 @@ import {
   GitBranch,
   Loader2,
   Plus,
-  Trash2,
 } from "lucide-react"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTaskContext } from "@/contexts/task-context"
-import {
-  gitListAllBranches,
-  gitCheckout,
-  gitNewBranch,
-  gitDeleteBranch,
-} from "@/lib/api"
+import { gitListAllBranches, gitCheckout, gitNewBranch } from "@/lib/api"
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import type { GitBranchList } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -178,19 +172,6 @@ export const ConversationContextBar = memo(function ConversationContextBar({
               toast.error(msg)
             }
           }}
-          onDeleteBranch={async (branchName) => {
-            const taskId = `delete-branch-${ownFolder.id}-${Date.now()}`
-            addTask(taskId, tBd("tasks.deleteBranch", { branchName }))
-            updateTask(taskId, { status: "running" })
-            try {
-              await gitDeleteBranch(ownFolder.path, branchName, false)
-              updateTask(taskId, { status: "completed" })
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              updateTask(taskId, { status: "failed", error: msg })
-              toast.error(msg)
-            }
-          }}
         />
       </div>
     </TooltipProvider>
@@ -312,7 +293,6 @@ interface BranchPickerProps {
   currentBranch: string | null
   onCheckout: (branchName: string) => Promise<void>
   onNewBranch: (branchName: string, startPoint?: string) => Promise<void>
-  onDeleteBranch: (branchName: string) => Promise<void>
 }
 
 const BranchPicker = memo(function BranchPicker({
@@ -321,7 +301,6 @@ const BranchPicker = memo(function BranchPicker({
   currentBranch,
   onCheckout,
   onNewBranch,
-  onDeleteBranch,
 }: BranchPickerProps) {
   const t = useTranslations("Folder.conversationContextBar")
   const tBd = useTranslations("Folder.branchDropdown")
@@ -369,8 +348,8 @@ const BranchPicker = memo(function BranchPicker({
             <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="p-0 w-80">
-          <Command>
+        <PopoverContent align="start" className="p-0 w-80 overflow-hidden">
+          <Command className="rounded-2xl">
             <CommandInput placeholder={t("searchBranch")} />
             <CommandList>
               {loading ? (
@@ -380,39 +359,44 @@ const BranchPicker = memo(function BranchPicker({
               ) : (
                 <>
                   <CommandEmpty>{t("noBranches")}</CommandEmpty>
-                  {branchList && branchList.local.length > 0 && (
-                    <CommandGroup
-                      heading={tBd("localBranches", {
-                        count: branchList.local.length,
-                      })}
+                  <CommandGroup>
+                    <CommandItem
+                      onSelect={() => {
+                        setOpen(false)
+                        setNewBranchName("")
+                        setNewBranchOpen(true)
+                      }}
                     >
-                      {branchList.local.map((b) => (
-                        <CommandItem
-                          key={`local-${b}`}
-                          value={`local ${b}`}
-                          onSelect={() => {
-                            setOpen(false)
-                            if (b !== currentBranch) void onCheckout(b)
-                          }}
-                        >
-                          <GitBranch className="h-4 w-4" />
-                          <span className="flex-1 truncate">{b}</span>
-                          {b === currentBranch && (
-                            <Check className="h-4 w-4 shrink-0" />
-                          )}
-                          {b !== currentBranch && (
-                            <Trash2
-                              className="h-3.5 w-3.5 opacity-50 hover:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setOpen(false)
-                                void onDeleteBranch(b)
-                              }}
-                            />
-                          )}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
+                      <Plus className="h-4 w-4" />
+                      {tBd("newBranch")}
+                    </CommandItem>
+                  </CommandGroup>
+                  {branchList && branchList.local.length > 0 && (
+                    <>
+                      <CommandSeparator />
+                      <CommandGroup
+                        heading={tBd("localBranches", {
+                          count: branchList.local.length,
+                        })}
+                      >
+                        {branchList.local.map((b) => (
+                          <CommandItem
+                            key={`local-${b}`}
+                            value={`local ${b}`}
+                            onSelect={() => {
+                              setOpen(false)
+                              if (b !== currentBranch) void onCheckout(b)
+                            }}
+                          >
+                            <GitBranch className="h-4 w-4" />
+                            <span className="flex-1 truncate">{b}</span>
+                            {b === currentBranch && (
+                              <Check className="h-4 w-4 shrink-0" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </>
                   )}
                   {branchList && branchList.remote.length > 0 && (
                     <CommandGroup
@@ -437,19 +421,6 @@ const BranchPicker = memo(function BranchPicker({
                       ))}
                     </CommandGroup>
                   )}
-                  <CommandSeparator />
-                  <CommandGroup>
-                    <CommandItem
-                      onSelect={() => {
-                        setOpen(false)
-                        setNewBranchName("")
-                        setNewBranchOpen(true)
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                      {tBd("newBranch")}
-                    </CommandItem>
-                  </CommandGroup>
                 </>
               )}
             </CommandList>

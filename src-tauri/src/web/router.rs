@@ -195,7 +195,6 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/git_new_branch", post(handlers::git::git_new_branch))
         .route("/git_checkout", post(handlers::git::git_checkout))
         .route("/git_reset", post(handlers::git::git_reset))
-        .route("/git_delete_branch", post(handlers::git::git_delete_branch))
         .route("/git_merge", post(handlers::git::git_merge))
         .route("/git_rebase", post(handlers::git::git_rebase))
         .route("/git_worktree_add", post(handlers::git::git_worktree_add))

@@ -1015,7 +1015,6 @@
         "checkoutTo": "Cambiar a {branchName}",
         "mergeBranch": "Fusionar {branchName}",
         "rebaseTo": "Rebase a {branchName}",
-        "deleteBranch": "Eliminar rama {branchName}",
         "deleteRemoteBranch": "Eliminar rama remota {branchName}",
         "initGitRepo": "Inicializar repositorio Git",
         "pullCode": "Hacer pull del código",
@@ -1027,12 +1026,8 @@
       "confirm": {
         "mergeTitle": "Fusionar rama",
         "rebaseTitle": "Rebase de rama",
-        "deleteTitle": "Eliminar rama",
         "mergeDescription": "¿Fusionar {branchName} en la rama actual {currentBranch}?",
         "rebaseDescription": "¿Hacer rebase de la rama actual {currentBranch} sobre {branchName}?",
-        "deleteDescription": "¿Eliminar la rama {branchName}? Esta acción no se puede deshacer.",
-        "forceDeleteTitle": "Forzar eliminación de rama",
-        "forceDeleteDescription": "La rama {branchName} no está completamente fusionada. ¿Estás seguro de que quieres forzar su eliminación? Esta acción no se puede deshacer.",
         "deleteRemoteTitle": "Eliminar rama remota",
         "deleteRemoteDescription": "¿Eliminar la rama remota {branchName}? Esto la eliminará del repositorio remoto y no se puede deshacer."
       },
@@ -1040,7 +1035,6 @@
       "switchToBranch": "Cambiar a esta rama",
       "mergeBranchIntoCurrent": "Fusionar {branchName} en {currentBranch}",
       "rebaseCurrentToBranch": "Rebase de {currentBranch} sobre {branchName}",
-      "deleteBranch": "Eliminar rama",
       "versionControl": "Control de versiones",
       "initGitRepo": "Inicializar repositorio Git",
       "pullCode": "Hacer pull del código",

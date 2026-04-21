@@ -1015,7 +1015,6 @@
         "checkoutTo": "Basculer vers {branchName}",
         "mergeBranch": "Fusionner {branchName}",
         "rebaseTo": "Rebase vers {branchName}",
-        "deleteBranch": "Supprimer la branche {branchName}",
         "deleteRemoteBranch": "Supprimer la branche distante {branchName}",
         "initGitRepo": "Initialiser le dépôt Git",
         "pullCode": "Pull du code",
@@ -1027,12 +1026,8 @@
       "confirm": {
         "mergeTitle": "Fusionner la branche",
         "rebaseTitle": "Rebase de la branche",
-        "deleteTitle": "Supprimer la branche",
         "mergeDescription": "Fusionner {branchName} dans la branche actuelle {currentBranch} ?",
         "rebaseDescription": "Rebaser la branche actuelle {currentBranch} sur {branchName} ?",
-        "deleteDescription": "Supprimer la branche {branchName} ? Cette action est irréversible.",
-        "forceDeleteTitle": "Forcer la suppression de la branche",
-        "forceDeleteDescription": "La branche {branchName} n'est pas entièrement fusionnée. Êtes-vous sûr de vouloir la supprimer de force ? Cette action est irréversible.",
         "deleteRemoteTitle": "Supprimer la branche distante",
         "deleteRemoteDescription": "Supprimer la branche distante {branchName} ? Cette action la supprimera du dépôt distant et ne pourra pas être annulée."
       },
@@ -1040,7 +1035,6 @@
       "switchToBranch": "Basculer vers cette branche",
       "mergeBranchIntoCurrent": "Fusionner {branchName} dans {currentBranch}",
       "rebaseCurrentToBranch": "Rebaser {currentBranch} sur {branchName}",
-      "deleteBranch": "Supprimer la branche",
       "versionControl": "Contrôle de version",
       "initGitRepo": "Initialiser le dépôt Git",
       "pullCode": "Pull du code",

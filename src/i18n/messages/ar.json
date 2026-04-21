@@ -1015,7 +1015,6 @@
         "checkoutTo": "Checkout إلى {branchName}",
         "mergeBranch": "دمج {branchName}",
         "rebaseTo": "Rebase إلى {branchName}",
-        "deleteBranch": "حذف الفرع {branchName}",
         "deleteRemoteBranch": "حذف الفرع البعيد {branchName}",
         "initGitRepo": "تهيئة مستودع Git",
         "pullCode": "سحب الكود",
@@ -1027,12 +1026,8 @@
       "confirm": {
         "mergeTitle": "دمج الفرع",
         "rebaseTitle": "Rebase للفرع",
-        "deleteTitle": "حذف الفرع",
         "mergeDescription": "دمج {branchName} في الفرع الحالي {currentBranch}؟",
         "rebaseDescription": "إجراء rebase للفرع الحالي {currentBranch} على {branchName}؟",
-        "deleteDescription": "حذف الفرع {branchName}؟ لا يمكن التراجع عن هذا الإجراء.",
-        "forceDeleteTitle": "حذف الفرع بالقوة",
-        "forceDeleteDescription": "الفرع {branchName} لم يتم دمجه بالكامل. هل أنت متأكد من أنك تريد حذفه بالقوة؟ لا يمكن التراجع عن هذا الإجراء.",
         "deleteRemoteTitle": "حذف الفرع البعيد",
         "deleteRemoteDescription": "هل تريد حذف الفرع البعيد {branchName}؟ سيؤدي ذلك إلى إزالته من المستودع البعيد ولا يمكن التراجع عن هذا الإجراء."
       },
@@ -1040,7 +1035,6 @@
       "switchToBranch": "التبديل إلى هذا الفرع",
       "mergeBranchIntoCurrent": "دمج {branchName} في {currentBranch}",
       "rebaseCurrentToBranch": "Rebase لـ {currentBranch} على {branchName}",
-      "deleteBranch": "حذف الفرع",
       "versionControl": "التحكم في الإصدارات",
       "initGitRepo": "تهيئة مستودع Git",
       "pullCode": "سحب الكود",
