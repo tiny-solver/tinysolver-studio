@@ -271,12 +271,11 @@ const ConversationTabView = memo(function ConversationTabView({
     }
     return buildNewConversationDraftStorageKey({ tabId })
   }, [dbConversationId, tabId, selectedAgent])
-  const workingDirForConnection = useMemo(() => {
-    if (dbConversationId != null) {
-      return detailLoading ? undefined : folder?.path
-    }
-    return workingDir ?? folder?.path
-  }, [dbConversationId, detailLoading, folder?.path, workingDir])
+  // Use the per-tab workingDir (derived from the tab's own folderId by the
+  // parent) rather than the active folder's path — otherwise switching tabs
+  // briefly exposes the previous folder's path to the ACP auto-connect
+  // effect, and the connection sticks with the wrong cwd.
+  const workingDirForConnection = workingDir ?? folder?.path
 
   const {
     conn,
@@ -1037,8 +1036,12 @@ export function ConversationDetailPanel() {
     removeConversation: runtimeRemoveConversation,
   } = useConversationRuntime()
   const { activeFolder: folder } = useActiveFolder()
-  const { conversations, refreshConversations, updateConversationLocal } =
-    useAppWorkspace()
+  const {
+    conversations,
+    refreshConversations,
+    updateConversationLocal,
+    getFolder,
+  } = useAppWorkspace()
   const {
     tabs,
     activeTabId,
@@ -1426,7 +1429,7 @@ export function ConversationDetailPanel() {
                   tabId={tab.id}
                   conversationId={tab.conversationId}
                   agentType={tab.agentType}
-                  workingDir={tab.workingDir ?? folder?.path}
+                  workingDir={tab.workingDir ?? getFolder(tab.folderId)?.path}
                   isActive={active}
                   reloadSignal={reloadByTabId[tab.id] ?? 0}
                 />
