@@ -9,44 +9,52 @@ interface SidebarStatusIconProps {
   className?: string
 }
 
+function IconFrame({
+  children,
+  colorClass,
+  className,
+}: {
+  children: React.ReactNode
+  colorClass: string
+  className?: string
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute top-1/2",
+        "flex items-center justify-center",
+        colorClass,
+        className
+      )}
+      style={{
+        left: "1rem",
+        width: "0.625rem",
+        height: "0.625rem",
+        transform: "translate(-50%, -50%)",
+      }}
+      aria-hidden
+    >
+      {children}
+    </div>
+  )
+}
+
 export function SidebarStatusIcon({
   status,
   className,
 }: SidebarStatusIconProps) {
   if (status === "running") {
     return (
-      <div
-        className={cn(
-          "pointer-events-none absolute top-1/2",
-          "flex items-center justify-center",
-          "text-amber-600 dark:text-amber-400",
-          className
-        )}
-        style={{
-          left: "0.625rem",
-          width: "0.75rem",
-          height: "0.75rem",
-          transform: "translateY(-50%)",
-        }}
-        aria-hidden
+      <IconFrame
+        colorClass="text-amber-600 dark:text-amber-400"
+        className={className}
       >
         <svg
-          width="0.75rem"
-          height="0.75rem"
-          viewBox="0 0 12 12"
-          className="absolute inset-0"
+          width="0.625rem"
+          height="0.625rem"
+          viewBox="0 0 10 10"
+          preserveAspectRatio="xMidYMid meet"
         >
-          <circle
-            cx="6"
-            cy="6"
-            r="5.4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1"
-            opacity="0.18"
-          />
-        </svg>
-        <svg width="0.625rem" height="0.625rem" viewBox="0 0 10 10">
           <circle
             cx="5"
             cy="5"
@@ -73,28 +81,19 @@ export function SidebarStatusIcon({
             />
           </path>
         </svg>
-      </div>
+      </IconFrame>
     )
   }
 
   if (status === "failed") {
     return (
-      <div
-        className={cn(
-          "pointer-events-none absolute top-1/2",
-          "flex items-center justify-center",
-          "text-destructive",
-          className
-        )}
-        style={{
-          left: "0.6875rem",
-          width: "0.625rem",
-          height: "0.625rem",
-          transform: "translateY(-50%)",
-        }}
-        aria-hidden
-      >
-        <svg width="0.625rem" height="0.625rem" viewBox="0 0 10 10">
+      <IconFrame colorClass="text-destructive" className={className}>
+        <svg
+          width="0.625rem"
+          height="0.625rem"
+          viewBox="0 0 10 10"
+          preserveAspectRatio="xMidYMid meet"
+        >
           <circle
             cx="5"
             cy="5"
@@ -111,28 +110,19 @@ export function SidebarStatusIcon({
             strokeLinecap="round"
           />
         </svg>
-      </div>
+      </IconFrame>
     )
   }
 
   if (status === "active") {
     return (
-      <div
-        className={cn(
-          "pointer-events-none absolute top-1/2",
-          "flex items-center justify-center",
-          "text-sidebar-primary",
-          className
-        )}
-        style={{
-          left: "0.6875rem",
-          width: "0.625rem",
-          height: "0.625rem",
-          transform: "translateY(-50%)",
-        }}
-        aria-hidden
-      >
-        <svg width="0.625rem" height="0.625rem" viewBox="0 0 10 10">
+      <IconFrame colorClass="text-sidebar-primary" className={className}>
+        <svg
+          width="0.625rem"
+          height="0.625rem"
+          viewBox="0 0 10 10"
+          preserveAspectRatio="xMidYMid meet"
+        >
           <circle
             cx="5"
             cy="5"
@@ -144,24 +134,22 @@ export function SidebarStatusIcon({
           />
           <circle cx="5" cy="5" r="2" fill="currentColor" />
         </svg>
-      </div>
+      </IconFrame>
     )
   }
 
   return (
-    <div
-      className={cn(
-        "pointer-events-none absolute top-1/2 rounded-full bg-sidebar-primary/40",
-        className
-      )}
-      style={{
-        left: "0.8125rem",
-        width: "0.375rem",
-        height: "0.375rem",
-        transform: "translateY(-50%)",
-      }}
-      aria-hidden
-    />
+    <IconFrame colorClass="text-sidebar-primary/40" className={className}>
+      <svg
+        width="0.45rem"
+        height="0.45rem"
+        viewBox="0 0 12 12"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ overflow: "visible" }}
+      >
+        <circle cx="6" cy="6" r="5" fill="currentColor" />
+      </svg>
+    </IconFrame>
   )
 }
 

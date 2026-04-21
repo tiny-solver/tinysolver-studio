@@ -138,7 +138,7 @@ const FolderHeader = memo(function FolderHeader({
             onClick={() => onToggle(folderId)}
             className={cn(
               "flex h-[1.9375rem] w-full items-center gap-[0.5rem] cursor-pointer outline-none",
-              "rounded-[0.4375rem] px-[0.625rem]",
+              "rounded-[0.4375rem] px-2",
               "text-sidebar-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]",
               "transition-[background-color,color] duration-150",
               highlighted && "ring-2 ring-sidebar-primary ring-offset-1"

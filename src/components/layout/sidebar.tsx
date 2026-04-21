@@ -88,7 +88,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none">
       <TooltipProvider>
-        <div className="flex h-10 shrink-0 items-center justify-between gap-2 pl-[1.25rem] pr-2">
+        <div className="flex h-10 shrink-0 items-center justify-between gap-2 pl-[1.125rem] pr-2">
           <div className="flex min-w-0 items-baseline gap-[0.375rem]">
             <h2 className="truncate text-[0.875rem] font-bold tracking-[-0.00625rem] text-sidebar-foreground">
               {t("title")}

@@ -143,7 +143,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 "relative flex h-[1.9375rem] w-full items-center gap-[0.625rem] text-left outline-none",
                 "rounded-[0.375rem] text-sidebar-foreground",
                 "transition-colors duration-[120ms]",
-                "pr-[0.5rem] pl-[1.875rem]",
+                "pr-[0.5rem] pl-7",
                 isSelected
                   ? "bg-sidebar-primary/15"
                   : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
@@ -152,7 +152,11 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               <span
                 aria-hidden
                 className="pointer-events-none absolute top-0 bottom-0 rounded-[0.125rem] bg-sidebar-primary/5"
-                style={{ left: "0.9375rem", width: "0.125rem" }}
+                style={{
+                  left: "1rem",
+                  width: "0.125rem",
+                  transform: "translateX(-50%)",
+                }}
               />
               <SidebarStatusIcon status={beadStatus} />
 
