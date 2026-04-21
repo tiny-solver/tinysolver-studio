@@ -1,14 +1,22 @@
 "use client"
 
-import { memo, useState, useCallback, useMemo } from "react"
-import { formatDistanceToNow } from "date-fns"
-import { enUS, zhCN, zhTW } from "date-fns/locale"
-import { GitBranch, Pencil, Trash2, Circle, Download, Plus } from "lucide-react"
-import { useLocale, useTranslations } from "next-intl"
+import { memo, useState, useCallback } from "react"
+import {
+  Pencil,
+  Trash2,
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Download,
+  Plus,
+  type LucideIcon,
+} from "lucide-react"
+import { useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
-import { STATUS_ORDER, STATUS_COLORS } from "@/lib/types"
+import { STATUS_ORDER } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { AgentIcon } from "@/components/agent-icon"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -38,10 +46,29 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  SidebarStatusIcon,
+  conversationStatusToBead,
+} from "./sidebar-status-icon"
+
+const STATUS_ICONS: Record<ConversationStatus, LucideIcon> = {
+  in_progress: CircleDashed,
+  pending_review: CircleAlert,
+  completed: CircleCheck,
+  cancelled: CircleX,
+}
+
+const STATUS_ICON_COLORS: Record<ConversationStatus, string> = {
+  in_progress: "text-blue-500",
+  pending_review: "text-orange-500",
+  completed: "text-green-500",
+  cancelled: "text-red-500",
+}
 
 interface SidebarConversationCardProps {
   conversation: DbConversationSummary
   isSelected: boolean
+  timeLabel?: string
   onSelect: (id: number, agentType: string) => void
   onDoubleClick?: (id: number, agentType: string) => void
   onRename: (id: number, newTitle: string) => Promise<void>
@@ -55,6 +82,7 @@ interface SidebarConversationCardProps {
 export const SidebarConversationCard = memo(function SidebarConversationCard({
   conversation,
   isSelected,
+  timeLabel,
   onSelect,
   onDoubleClick,
   onRename,
@@ -65,22 +93,11 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   importing,
 }: SidebarConversationCardProps) {
   const t = useTranslations("Folder.conversationCard")
+  const tSidebar = useTranslations("Folder.sidebar")
   const tStatus = useTranslations("Folder.statusLabels")
-  const locale = useLocale()
-  const dateFnsLocale =
-    locale === "zh-CN" ? zhCN : locale === "zh-TW" ? zhTW : enUS
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [renameValue, setRenameValue] = useState("")
-
-  const timeAgo = useMemo(
-    () =>
-      formatDistanceToNow(new Date(conversation.updated_at), {
-        addSuffix: true,
-        locale: dateFnsLocale,
-      }),
-    [conversation.updated_at, dateFnsLocale]
-  )
 
   const handleClick = useCallback(() => {
     onSelect(conversation.id, conversation.agent_type)
@@ -108,40 +125,83 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
     setDeleteOpen(false)
   }, [conversation.id, conversation.agent_type, onDelete])
 
+  const status = conversation.status as ConversationStatus
+  const beadStatus = conversationStatusToBead(conversation.status)
+  const isRunning = status === "in_progress"
+  const isFailed = status === "cancelled"
+
   return (
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <button
-            data-conversation-id={conversation.id}
-            onClick={handleClick}
-            onDoubleClick={handleDblClick}
-            className={cn(
-              "w-full text-left px-3 py-2.5 mb-1 rounded-md transition-colors",
-              isSelected
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "hover:bg-sidebar-accent/50"
-            )}
-          >
-            <div className="flex items-center gap-1.5 min-w-0">
-              <AgentIcon
-                agentType={conversation.agent_type}
-                className="size-4 shrink-0"
+          <div className="relative h-[2rem]">
+            <button
+              data-conversation-id={conversation.id}
+              onClick={handleClick}
+              onDoubleClick={handleDblClick}
+              className={cn(
+                "relative flex h-[1.9375rem] w-full items-center gap-[0.625rem] text-left outline-none",
+                "rounded-[0.375rem] text-sidebar-foreground",
+                "transition-colors duration-[120ms]",
+                "pr-[0.5rem] pl-[1.875rem]",
+                isSelected
+                  ? "bg-sidebar-primary/15"
+                  : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
+              )}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-0 bottom-0 rounded-[0.125rem] bg-sidebar-primary/5"
+                style={{ left: "0.9375rem", width: "0.125rem" }}
               />
-              <span className="text-sm font-medium truncate">
+              <SidebarStatusIcon status={beadStatus} />
+
+              <span
+                className={cn(
+                  "relative min-w-0 flex-1 truncate text-[0.875rem]",
+                  isSelected
+                    ? "font-semibold tracking-[-0.00625rem]"
+                    : "font-normal"
+                )}
+              >
                 {conversation.title || t("untitledConversation")}
               </span>
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-              <span>{timeAgo}</span>
-              {conversation.git_branch && (
-                <span className="flex items-center gap-0.5 truncate">
-                  <GitBranch className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{conversation.git_branch}</span>
+
+              {isRunning ? (
+                <span
+                  className={cn(
+                    "relative shrink-0 rounded-[0.1875rem] px-[0.375rem] py-px",
+                    "text-[0.6875rem] font-semibold tracking-[0.01875rem]",
+                    "bg-amber-500/10 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400"
+                  )}
+                >
+                  {tSidebar("statusRunningBadge")}
                 </span>
-              )}
-            </div>
-          </button>
+              ) : isFailed ? (
+                <span
+                  className={cn(
+                    "relative shrink-0 rounded-[0.1875rem] px-[0.375rem] py-px",
+                    "text-[0.6875rem] font-semibold tracking-[0.01875rem]",
+                    "bg-destructive/10 text-destructive"
+                  )}
+                >
+                  {tSidebar("statusFailedBadge")}
+                </span>
+              ) : timeLabel ? (
+                <span
+                  className={cn(
+                    "relative shrink-0 tabular-nums",
+                    "text-[0.71875rem]",
+                    isSelected
+                      ? "font-medium text-muted-foreground"
+                      : "font-normal text-muted-foreground/70"
+                  )}
+                >
+                  {timeLabel}
+                </span>
+              ) : null}
+            </button>
+          </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
           {onNewConversation && (
@@ -165,20 +225,20 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
               {STATUS_ORDER.filter((s) => s !== conversation.status).map(
-                (s) => (
-                  <ContextMenuItem
-                    key={s}
-                    onSelect={() => onStatusChange(conversation.id, s)}
-                  >
-                    <span
-                      className={cn(
-                        "w-2 h-2 rounded-full shrink-0",
-                        STATUS_COLORS[s]
-                      )}
-                    />
-                    {tStatus(s)}
-                  </ContextMenuItem>
-                )
+                (s) => {
+                  const StatusIcon = STATUS_ICONS[s]
+                  return (
+                    <ContextMenuItem
+                      key={s}
+                      onSelect={() => onStatusChange(conversation.id, s)}
+                    >
+                      <StatusIcon
+                        className={cn("h-4 w-4", STATUS_ICON_COLORS[s])}
+                      />
+                      {tStatus(s)}
+                    </ContextMenuItem>
+                  )
+                }
               )}
             </ContextMenuSubContent>
           </ContextMenuSub>

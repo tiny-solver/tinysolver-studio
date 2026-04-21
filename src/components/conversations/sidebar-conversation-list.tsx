@@ -13,18 +13,12 @@ import {
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
-import {
-  CheckCheck,
-  ChevronRight,
-  Download,
-  Loader2,
-  Plus,
-  XCircle,
-} from "lucide-react"
+import { ChevronRight, Download, Loader2, Plus, XCircle } from "lucide-react"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTaskContext } from "@/contexts/task-context"
+import { useZoomLevel } from "@/hooks/use-appearance"
 import {
   importLocalConversations,
   updateConversationTitle,
@@ -32,13 +26,12 @@ import {
   deleteConversation,
 } from "@/lib/api"
 import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
-import { STATUS_ORDER, STATUS_COLORS } from "@/lib/types"
 import {
   loadFolderExpanded,
   saveFolderExpanded,
-  type SidebarViewMode,
 } from "@/lib/sidebar-view-mode-storage"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -81,6 +74,23 @@ function compareByUpdatedAtDesc(
   return right.id - left.id
 }
 
+function formatRelative(iso: string): string {
+  const ts = parseTimestamp(iso)
+  if (!ts) return ""
+  const diff = Math.max(0, Date.now() - ts)
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return "now"
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}d`
+  const mo = Math.floor(d / 30)
+  if (mo < 12) return `${mo}mo`
+  const y = Math.floor(mo / 12)
+  return `${y}y`
+}
+
 type FlatItem =
   | {
       type: "folder_header"
@@ -90,15 +100,9 @@ type FlatItem =
       count: number
       expanded: boolean
     }
-  | {
-      type: "status_header"
-      status: ConversationStatus
-      count: number
-      parentFolderId?: number
-    }
   | { type: "conversation"; conversation: DbConversationSummary }
 
-const CARD_HEIGHT = 62
+const CARD_HEIGHT_REM = 2
 
 const FolderHeader = memo(function FolderHeader({
   folderId,
@@ -128,31 +132,49 @@ const FolderHeader = memo(function FolderHeader({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <button
-          data-folder-id={folderId}
-          onClick={() => onToggle(folderId)}
-          className={cn(
-            "flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium cursor-pointer transition-all",
-            "text-foreground hover:bg-accent/50 rounded-sm",
-            highlighted && "ring-2 ring-primary ring-offset-1"
-          )}
-        >
-          <ChevronRight
+        <div className="relative h-[2rem]">
+          <button
+            data-folder-id={folderId}
+            onClick={() => onToggle(folderId)}
             className={cn(
-              "h-3.5 w-3.5 shrink-0 transition-transform text-muted-foreground",
-              expanded && "rotate-90"
+              "flex h-[1.9375rem] w-full items-center gap-[0.5rem] cursor-pointer outline-none",
+              "rounded-[0.4375rem] px-[0.625rem]",
+              "text-sidebar-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]",
+              "transition-[background-color,color] duration-150",
+              highlighted && "ring-2 ring-sidebar-primary ring-offset-1"
             )}
-          />
-          <span className="truncate flex-1 text-left">{folderName}</span>
-          {branch && (
-            <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
-              {branch}
+          >
+            <span
+              className={cn(
+                "flex h-[0.75rem] w-[0.75rem] shrink-0 items-center justify-center text-muted-foreground/75",
+                "transition-transform duration-[180ms] [transition-timing-function:cubic-bezier(.3,.7,.3,1)]",
+                expanded ? "rotate-90" : "rotate-0"
+              )}
+            >
+              <ChevronRight className="h-[0.625rem] w-[0.625rem]" />
             </span>
-          )}
-          <span className="text-muted-foreground/60 tabular-nums text-[10px]">
-            ({count})
-          </span>
-        </button>
+            <div className="flex min-w-0 flex-1 items-center gap-[0.375rem]">
+              <span className="min-w-0 flex-shrink truncate text-left text-[0.875rem] font-semibold tracking-[-0.00625rem]">
+                {folderName}
+              </span>
+              {branch && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "h-[1rem] max-w-[6.875rem] gap-0 px-[0.375rem] py-0",
+                    "text-[0.6875rem] font-medium leading-none tracking-[0.0125rem]",
+                    "border-sidebar-border text-muted-foreground/80"
+                  )}
+                >
+                  <span className="truncate">{branch}</span>
+                </Badge>
+              )}
+            </div>
+            <span className="shrink-0 text-[0.75rem] font-medium tabular-nums text-muted-foreground/70">
+              {count}
+            </span>
+          </button>
+        </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => onFocus(folderId)}>
@@ -174,96 +196,6 @@ const FolderHeader = memo(function FolderHeader({
   )
 })
 
-const StatusHeader = memo(function StatusHeader({
-  status,
-  count,
-  isOpen,
-  onToggle,
-  tStatus,
-}: {
-  status: ConversationStatus
-  count: number
-  isOpen: boolean
-  onToggle: (status: ConversationStatus) => void
-  tStatus: ReturnType<typeof useTranslations>
-}) {
-  return (
-    <button
-      onClick={() => onToggle(status)}
-      className="flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-    >
-      <ChevronRight
-        className={cn(
-          "h-3.5 w-3.5 shrink-0 transition-transform",
-          isOpen && "rotate-90"
-        )}
-      />
-      <span
-        className={cn("w-2 h-2 rounded-full shrink-0", STATUS_COLORS[status])}
-      />
-      <span>{tStatus(status)}</span>
-      <span className="text-muted-foreground/60 tabular-nums">({count})</span>
-    </button>
-  )
-})
-
-const PendingReviewHeader = memo(function PendingReviewHeader({
-  count,
-  isOpen,
-  onToggle,
-  reviewConversationCount,
-  completingReview,
-  onCompleteReview,
-  tStatus,
-  t,
-}: {
-  count: number
-  isOpen: boolean
-  onToggle: (status: ConversationStatus) => void
-  reviewConversationCount: number
-  completingReview: boolean
-  onCompleteReview: () => void
-  tStatus: ReturnType<typeof useTranslations>
-  t: ReturnType<typeof useTranslations>
-}) {
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <button
-          onClick={() => onToggle("pending_review")}
-          className="flex items-center gap-1.5 w-full px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        >
-          <ChevronRight
-            className={cn(
-              "h-3.5 w-3.5 shrink-0 transition-transform",
-              isOpen && "rotate-90"
-            )}
-          />
-          <span
-            className={cn(
-              "w-2 h-2 rounded-full shrink-0",
-              STATUS_COLORS.pending_review
-            )}
-          />
-          <span>{tStatus("pending_review")}</span>
-          <span className="text-muted-foreground/60 tabular-nums">
-            ({count})
-          </span>
-        </button>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem
-          disabled={reviewConversationCount === 0 || completingReview}
-          onSelect={onCompleteReview}
-        >
-          <CheckCheck className="h-4 w-4" />
-          {t("completeAllSessions")}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  )
-})
-
 export interface SidebarConversationListHandle {
   scrollToActive: () => void
   expandAll: () => void
@@ -272,20 +204,19 @@ export interface SidebarConversationListHandle {
 }
 
 export interface SidebarConversationListProps {
-  viewMode?: SidebarViewMode
-  searchQuery?: string
+  showCompleted?: boolean
 }
 
 export function SidebarConversationList({
   ref,
-  viewMode = "flat",
-  searchQuery = "",
+  showCompleted = true,
 }: SidebarConversationListProps & {
   ref?: Ref<SidebarConversationListHandle>
 }) {
   const t = useTranslations("Folder.sidebar")
-  const tStatus = useTranslations("Folder.statusLabels")
   const tCommon = useTranslations("Folder.common")
+  const { zoomLevel } = useZoomLevel()
+  const cardHeightPx = (CARD_HEIGHT_REM * 16 * zoomLevel) / 100
   const {
     allFolders,
     conversations,
@@ -325,22 +256,13 @@ export function SidebarConversationList({
   }, [tabs, activeTabId])
 
   const [importing, setImporting] = useState(false)
-  const [completeReviewOpen, setCompleteReviewOpen] = useState(false)
-  const [completingReview, setCompletingReview] = useState(false)
-  const [groupExpanded, setGroupExpanded] = useState<
-    Record<ConversationStatus, boolean>
-  >({
-    in_progress: true,
-    pending_review: true,
-    completed: false,
-    cancelled: false,
-  })
   const [folderExpanded, setFolderExpanded] = useState<Record<number, boolean>>(
     {}
   )
   const [highlightedFolder, setHighlightedFolder] = useState<number | null>(
     null
   )
+  const [scrollOffset, setScrollOffset] = useState(0)
   const [removeConfirm, setRemoveConfirm] = useState<{
     folderId: number
     folderName: string
@@ -357,53 +279,25 @@ export function SidebarConversationList({
   const virtualizerRef = useRef<VirtualizerHandle>(null)
   const highlightTimerRef = useRef<number | null>(null)
 
-  const normalizedSearch = searchQuery.trim().toLowerCase()
   const filteredConversations = useMemo(() => {
-    if (!normalizedSearch) return conversations
-    return conversations.filter((c) => {
-      const title = (c.title ?? "").toLowerCase()
-      return title.includes(normalizedSearch)
-    })
-  }, [conversations, normalizedSearch])
+    if (showCompleted) return conversations
+    return conversations.filter(
+      (c) => c.status !== "completed" && c.status !== "cancelled"
+    )
+  }, [conversations, showCompleted])
 
-  const byStatus = useMemo(() => {
-    const map = new Map<ConversationStatus, DbConversationSummary[]>()
+  const byFolder = useMemo(() => {
+    const map = new Map<number, DbConversationSummary[]>()
     for (const conv of filteredConversations) {
-      const status = conv.status as ConversationStatus
-      const list = map.get(status)
+      const list = map.get(conv.folder_id)
       if (list) list.push(conv)
-      else map.set(status, [conv])
+      else map.set(conv.folder_id, [conv])
     }
     for (const list of map.values()) list.sort(compareByUpdatedAtDesc)
     return map
   }, [filteredConversations])
 
-  const byFolder = useMemo(() => {
-    const map = new Map<
-      number,
-      Map<ConversationStatus, DbConversationSummary[]>
-    >()
-    for (const conv of filteredConversations) {
-      const folderId = conv.folder_id
-      let inner = map.get(folderId)
-      if (!inner) {
-        inner = new Map<ConversationStatus, DbConversationSummary[]>()
-        map.set(folderId, inner)
-      }
-      const status = conv.status as ConversationStatus
-      const list = inner.get(status)
-      if (list) list.push(conv)
-      else inner.set(status, [conv])
-    }
-    for (const inner of map.values()) {
-      for (const list of inner.values()) list.sort(compareByUpdatedAtDesc)
-    }
-    return map
-  }, [filteredConversations])
-
   const orderedFolderIds = useMemo(() => {
-    // Show every folder in the workspace DB, even ones without conversations.
-    // Folders that only have orphan conversations still appear via byFolder.
     const seen = new Set<number>()
     const ids: number[] = []
     for (const f of allFolders) {
@@ -423,91 +317,83 @@ export function SidebarConversationList({
 
   const flatItems = useMemo<FlatItem[]>(() => {
     const items: FlatItem[] = []
-    if (viewMode === "grouped") {
-      for (const folderId of orderedFolderIds) {
-        const inner = byFolder.get(folderId)
-        const totalCount = inner
-          ? Array.from(inner.values()).reduce(
-              (sum, list) => sum + list.length,
-              0
-            )
-          : 0
-        const folderName = folderIndex.get(folderId)?.name ?? String(folderId)
-        const branch = branches.get(folderId) ?? null
-        const expanded = folderExpanded[folderId] ?? true
-        items.push({
-          type: "folder_header",
-          folderId,
-          folderName,
-          branch,
-          count: totalCount,
-          expanded,
-        })
-        if (!expanded || !inner) continue
-        for (const status of STATUS_ORDER) {
-          const list = inner.get(status)
-          if (!list || list.length === 0) continue
-          items.push({
-            type: "status_header",
-            status,
-            count: list.length,
-            parentFolderId: folderId,
-          })
-          if (groupExpanded[status]) {
-            for (const conv of list) {
-              items.push({ type: "conversation", conversation: conv })
-            }
-          }
-        }
-      }
-    } else {
-      for (const status of STATUS_ORDER) {
-        const list = byStatus.get(status)
-        if (!list || list.length === 0) continue
-        items.push({ type: "status_header", status, count: list.length })
-        if (groupExpanded[status]) {
-          for (const conv of list) {
-            items.push({ type: "conversation", conversation: conv })
-          }
-        }
+    for (const folderId of orderedFolderIds) {
+      const list = byFolder.get(folderId) ?? []
+      const folderName = folderIndex.get(folderId)?.name ?? String(folderId)
+      const branch = branches.get(folderId) ?? null
+      const expanded = folderExpanded[folderId] ?? true
+      items.push({
+        type: "folder_header",
+        folderId,
+        folderName,
+        branch,
+        count: list.length,
+        expanded,
+      })
+      if (!expanded) continue
+      for (const conv of list) {
+        items.push({ type: "conversation", conversation: conv })
       }
     }
     return items
-  }, [
-    viewMode,
-    orderedFolderIds,
-    byFolder,
-    folderIndex,
-    branches,
-    folderExpanded,
-    byStatus,
-    groupExpanded,
-  ])
+  }, [orderedFolderIds, byFolder, folderIndex, branches, folderExpanded])
 
-  const reviewConversations = useMemo(
-    () => byStatus.get("pending_review") ?? [],
-    [byStatus]
-  )
-  const reviewConversationCount = reviewConversations.length
+  const stickyState = useMemo<{
+    folder: Extract<FlatItem, { type: "folder_header" }> | null
+    pushOffset: number
+  }>(() => {
+    const vr = virtualizerRef.current
+    const startIdx = vr ? vr.findItemIndex(scrollOffset) : 0
+    let folderIdx = -1
+    for (let i = Math.min(startIdx, flatItems.length - 1); i >= 0; i--) {
+      if (flatItems[i]?.type === "folder_header") {
+        folderIdx = i
+        break
+      }
+    }
+    if (folderIdx < 0) {
+      return { folder: null, pushOffset: 0 }
+    }
+    const folder = flatItems[folderIdx] as Extract<
+      FlatItem,
+      { type: "folder_header" }
+    >
+    let pushOffset = 0
+    if (vr) {
+      const stickyHeight = vr.getItemSize(folderIdx) || cardHeightPx
+      for (let i = folderIdx + 1; i < flatItems.length; i++) {
+        if (flatItems[i].type === "folder_header") {
+          const nextRelativeY = vr.getItemOffset(i) - scrollOffset
+          if (nextRelativeY < stickyHeight) {
+            pushOffset = Math.min(0, nextRelativeY - stickyHeight)
+          }
+          break
+        }
+      }
+    }
+    return { folder, pushOffset }
+  }, [scrollOffset, flatItems, cardHeightPx])
+
+  const stickyFolderItem = stickyState.folder
 
   useImperativeHandle(ref, () => ({
     scrollToActive() {
       scrollToActiveRef.current()
     },
     expandAll() {
-      setGroupExpanded({
-        in_progress: true,
-        pending_review: true,
-        completed: true,
-        cancelled: true,
+      setFolderExpanded((prev) => {
+        const next: Record<number, boolean> = { ...prev }
+        for (const id of orderedFolderIds) next[id] = true
+        saveFolderExpanded(next)
+        return next
       })
     },
     collapseAll() {
-      setGroupExpanded({
-        in_progress: false,
-        pending_review: false,
-        completed: false,
-        cancelled: false,
+      setFolderExpanded((prev) => {
+        const next: Record<number, boolean> = { ...prev }
+        for (const id of orderedFolderIds) next[id] = false
+        saveFolderExpanded(next)
+        return next
       })
     },
     revealFolder(folderId: number) {
@@ -556,13 +442,7 @@ export function SidebarConversationList({
         (c) => c.id === targetId && c.agent_type === targetAgent
       )
       if (!conv) return
-      const status = conv.status as ConversationStatus
-      if (!groupExpanded[status]) {
-        setGroupExpanded((prev) => ({ ...prev, [status]: true }))
-        pendingScrollRef.current = true
-        return
-      }
-      if (viewMode === "grouped" && !(folderExpanded[conv.folder_id] ?? true)) {
+      if (!(folderExpanded[conv.folder_id] ?? true)) {
         setFolderExpanded((prev) => {
           const next = { ...prev, [conv.folder_id]: true }
           saveFolderExpanded(next)
@@ -589,18 +469,7 @@ export function SidebarConversationList({
       pendingScrollRef.current = false
       scrollToActiveRef.current()
     }
-  }, [
-    selectedConversation,
-    flatItems,
-    conversations,
-    groupExpanded,
-    folderExpanded,
-    viewMode,
-  ])
-
-  const toggleGroup = useCallback((status: ConversationStatus) => {
-    setGroupExpanded((prev) => ({ ...prev, [status]: !prev[status] }))
-  }, [])
+  }, [selectedConversation, flatItems, conversations, folderExpanded])
 
   const toggleFolder = useCallback((folderId: number) => {
     setFolderExpanded((prev) => {
@@ -654,11 +523,6 @@ export function SidebarConversationList({
       setRemoveConfirm(null)
     }
   }, [removeConfirm, closeTabsByFolder, removeFolderFromWorkspace, t])
-
-  const handleOpenCompleteReview = useCallback(
-    () => setCompleteReviewOpen(true),
-    []
-  )
 
   const handleSelect = useCallback(
     (id: number, agentType: string) => {
@@ -761,40 +625,8 @@ export function SidebarConversationList({
     }
   }, [importing, activeFolder, addTask, updateTask, refreshConversations, t])
 
-  const handleCompleteAllReview = useCallback(async () => {
-    if (completingReview || reviewConversationCount === 0) return
-    setCompletingReview(true)
-    try {
-      for (const conversation of reviewConversations) {
-        updateConversationLocal(conversation.id, { status: "completed" })
-      }
-      await Promise.all(
-        reviewConversations.map((conversation) =>
-          updateConversationStatus(conversation.id, "completed")
-        )
-      )
-      toast.success(
-        t("toasts.reviewCompleted", { count: reviewConversationCount })
-      )
-      setCompleteReviewOpen(false)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      toast.error(t("toasts.completeReviewFailed", { message: msg }))
-      refreshConversations()
-    } finally {
-      setCompletingReview(false)
-    }
-  }, [
-    completingReview,
-    reviewConversationCount,
-    reviewConversations,
-    refreshConversations,
-    updateConversationLocal,
-    t,
-  ])
-
-  const emptyAfterSearch =
-    filteredConversations.length === 0 && normalizedSearch.length > 0
+  const emptyAfterFilter =
+    filteredConversations.length === 0 && conversations.length > 0
 
   return (
     <div className="relative flex flex-col flex-1 min-h-0">
@@ -856,7 +688,7 @@ export function SidebarConversationList({
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
-      ) : emptyAfterSearch ? (
+      ) : emptyAfterFilter ? (
         <div className="flex-1 flex items-center justify-center px-3">
           <p className="text-muted-foreground text-xs text-center">
             {t("noMatchingConversations")}
@@ -865,12 +697,50 @@ export function SidebarConversationList({
       ) : (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 relative">
+              {stickyFolderItem && (
+                <div
+                  className="absolute top-0 left-0 right-0 z-10"
+                  style={{
+                    transform: `translateY(${stickyState.pushOffset}px)`,
+                  }}
+                >
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 right-[0.5rem] bg-sidebar"
+                  />
+                  <div className="relative pl-[0.625rem] pr-[0.625rem]">
+                    <FolderHeader
+                      key={`sticky-${stickyFolderItem.folderId}`}
+                      folderId={stickyFolderItem.folderId}
+                      folderName={stickyFolderItem.folderName}
+                      branch={stickyFolderItem.branch}
+                      count={stickyFolderItem.count}
+                      expanded={stickyFolderItem.expanded}
+                      onToggle={toggleFolder}
+                      onFocus={focusFolder}
+                      onCloseFolderTabs={handleCloseFolderTabs}
+                      onRemoveFromWorkspace={handleRemoveFolder}
+                      highlighted={
+                        highlightedFolder === stickyFolderItem.folderId
+                      }
+                      t={t}
+                    />
+                  </div>
+                </div>
+              )}
               <ScrollArea
-                className={cn("h-full min-h-0 px-2", "[overflow-anchor:none]")}
+                className={cn(
+                  "h-full min-h-0 pl-[0.625rem] pr-[0.625rem] pt-[0.125rem] pb-[1.25rem]",
+                  "[overflow-anchor:none]"
+                )}
               >
-                <Virtualizer ref={virtualizerRef} itemSize={CARD_HEIGHT}>
-                  {flatItems.map((item, index) => {
+                <Virtualizer
+                  ref={virtualizerRef}
+                  itemSize={cardHeightPx}
+                  onScroll={setScrollOffset}
+                >
+                  {flatItems.map((item) => {
                     if (item.type === "folder_header") {
                       return (
                         <FolderHeader
@@ -889,52 +759,16 @@ export function SidebarConversationList({
                         />
                       )
                     }
-                    const indented =
-                      viewMode === "grouped" &&
-                      (item.type === "status_header"
-                        ? item.parentFolderId != null
-                        : true)
-                    if (item.type === "status_header") {
-                      const key = `status-${item.parentFolderId ?? "root"}-${item.status}-${index}`
-                      const headerNode =
-                        item.status === "pending_review" ? (
-                          <PendingReviewHeader
-                            key={key}
-                            count={item.count}
-                            isOpen={groupExpanded[item.status]}
-                            onToggle={toggleGroup}
-                            reviewConversationCount={reviewConversationCount}
-                            completingReview={completingReview}
-                            onCompleteReview={handleOpenCompleteReview}
-                            tStatus={tStatus}
-                            t={t}
-                          />
-                        ) : (
-                          <StatusHeader
-                            key={key}
-                            status={item.status}
-                            count={item.count}
-                            isOpen={groupExpanded[item.status]}
-                            onToggle={toggleGroup}
-                            tStatus={tStatus}
-                          />
-                        )
-                      return indented ? (
-                        <div key={key} className="pl-4">
-                          {headerNode}
-                        </div>
-                      ) : (
-                        headerNode
-                      )
-                    }
                     const conv = item.conversation
-                    const cardNode = (
+                    return (
                       <SidebarConversationCard
+                        key={`conv-${conv.id}`}
                         conversation={conv}
                         isSelected={
                           selectedConversation?.agentType === conv.agent_type &&
                           selectedConversation?.id === conv.id
                         }
+                        timeLabel={formatRelative(conv.updated_at)}
                         onSelect={handleSelect}
                         onDoubleClick={handleDoubleClick}
                         onRename={handleRename}
@@ -944,13 +778,6 @@ export function SidebarConversationList({
                         onImport={handleImport}
                         importing={importing}
                       />
-                    )
-                    return indented ? (
-                      <div key={`conv-${conv.id}`} className="pl-4">
-                        {cardNode}
-                      </div>
-                    ) : (
-                      <div key={`conv-${conv.id}`}>{cardNode}</div>
                     )
                   })}
                 </Virtualizer>
@@ -976,34 +803,6 @@ export function SidebarConversationList({
           </ContextMenuContent>
         </ContextMenu>
       )}
-      <AlertDialog
-        open={completeReviewOpen}
-        onOpenChange={(open) =>
-          !completingReview && setCompleteReviewOpen(open)
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("completeAllReviewTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("completeAllReviewDescription", {
-                count: reviewConversationCount,
-              })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={completingReview}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={completingReview || reviewConversationCount === 0}
-              onClick={handleCompleteAllReview}
-            >
-              {completingReview ? t("completing") : tCommon("confirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog
         open={removeConfirm !== null}

@@ -1,29 +1,7 @@
 "use client"
 
-export type SidebarViewMode = "flat" | "grouped"
-
-const VIEW_MODE_KEY = "workspace:sidebar-view-mode"
 const FOLDER_EXPANDED_KEY = "workspace:sidebar-folder-expanded"
-
-export function loadSidebarViewMode(): SidebarViewMode {
-  if (typeof window === "undefined") return "flat"
-  try {
-    const raw = localStorage.getItem(VIEW_MODE_KEY)
-    if (raw === "flat" || raw === "grouped") return raw
-  } catch {
-    /* ignore */
-  }
-  return "flat"
-}
-
-export function saveSidebarViewMode(mode: SidebarViewMode): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(VIEW_MODE_KEY, mode)
-  } catch {
-    /* ignore */
-  }
-}
+const SHOW_COMPLETED_KEY = "workspace:sidebar-show-completed"
 
 export function loadFolderExpanded(): Record<number, boolean> {
   if (typeof window === "undefined") return {}
@@ -49,6 +27,26 @@ export function saveFolderExpanded(state: Record<number, boolean>): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(FOLDER_EXPANDED_KEY, JSON.stringify(state))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadShowCompleted(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    const raw = localStorage.getItem(SHOW_COMPLETED_KEY)
+    if (raw === "true") return true
+  } catch {
+    /* ignore */
+  }
+  return false
+}
+
+export function saveShowCompleted(value: boolean): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(SHOW_COMPLETED_KEY, String(value))
   } catch {
     /* ignore */
   }
