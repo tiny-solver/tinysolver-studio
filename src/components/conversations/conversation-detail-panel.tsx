@@ -35,6 +35,7 @@ import { MessageListView } from "@/components/message/message-list-view"
 import { ConversationShell } from "@/components/chat/conversation-shell"
 import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   acpFork,
   createConversation,
@@ -1393,48 +1394,52 @@ export function ConversationDetailPanel() {
     return null
   }
 
+  const tabElements = tabs.map((tab, index) => {
+    const active = tab.id === activeTabId
+    return (
+      <div
+        key={tab.id}
+        className={cn(
+          canTile
+            ? cn(
+                "relative h-full min-w-[420px] flex-1 overflow-hidden",
+                index > 0 && "border-l border-border",
+                active && "bg-gradient-to-b from-muted/50 to-transparent"
+              )
+            : active
+              ? "h-full"
+              : "absolute inset-0 invisible pointer-events-none"
+        )}
+        onPointerDownCapture={
+          canTile && !active ? () => switchTab(tab.id) : undefined
+        }
+      >
+        <ConversationTabView
+          tabId={tab.id}
+          conversationId={tab.conversationId}
+          agentType={tab.agentType}
+          workingDir={tab.workingDir ?? getFolder(tab.folderId)?.path}
+          isActive={active}
+          reloadSignal={reloadByTabId[tab.id] ?? 0}
+        />
+      </div>
+    )
+  })
+
   return (
     <ContextMenu onOpenChange={handleContextMenuOpenChange}>
       <ContextMenuTrigger asChild>
         <div
-          className={cn(
-            "relative h-full min-h-0 overflow-hidden",
-            canTile && "flex flex-row"
-          )}
+          className="relative h-full min-h-0 overflow-hidden"
           onPointerDown={handleContextMenuTriggerPointerDown}
         >
-          {tabs.map((tab, index) => {
-            const active = tab.id === activeTabId
-            return (
-              <div
-                key={tab.id}
-                className={cn(
-                  canTile
-                    ? cn(
-                        "relative h-full min-w-[200px] flex-1 overflow-hidden",
-                        index > 0 && "border-l border-border",
-                        active &&
-                          "bg-gradient-to-b from-muted/50 to-transparent"
-                      )
-                    : active
-                      ? "h-full"
-                      : "absolute inset-0 invisible pointer-events-none"
-                )}
-                onPointerDownCapture={
-                  canTile && !active ? () => switchTab(tab.id) : undefined
-                }
-              >
-                <ConversationTabView
-                  tabId={tab.id}
-                  conversationId={tab.conversationId}
-                  agentType={tab.agentType}
-                  workingDir={tab.workingDir ?? getFolder(tab.folderId)?.path}
-                  isActive={active}
-                  reloadSignal={reloadByTabId[tab.id] ?? 0}
-                />
-              </div>
-            )
-          })}
+          {canTile ? (
+            <ScrollArea x="scroll" y="hidden" className="h-full w-full">
+              <div className="flex h-full flex-row">{tabElements}</div>
+            </ScrollArea>
+          ) : (
+            tabElements
+          )}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
