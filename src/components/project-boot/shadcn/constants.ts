@@ -268,6 +268,6 @@ export const PACKAGE_MANAGER_OPTIONS = [
 // ── URL builders ────────────────────────────────────────────────────
 
 /** Build the preview iframe URL using a preset code. */
-export function buildPreviewUrl(base: string, presetCode: string): string {
-  return `https://ui.shadcn.com/preview/${base}/preview?preset=${presetCode}`
+export function buildPreviewUrl(_base: string, presetCode: string): string {
+  return `https://ui.shadcn.com/preview/radix/preview-02?preset=${presetCode}`
 }
