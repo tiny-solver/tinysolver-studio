@@ -1433,13 +1433,21 @@ export function ConversationDetailPanel() {
           className="relative h-full min-h-0 overflow-hidden"
           onPointerDown={handleContextMenuTriggerPointerDown}
         >
-          {canTile ? (
-            <ScrollArea x="scroll" y="hidden" className="h-full w-full">
-              <div className="flex h-full flex-row">{tabElements}</div>
-            </ScrollArea>
-          ) : (
-            tabElements
-          )}
+          {/* Stable wrapper across canTile flip — otherwise sibling tabs remount and a live streaming response is torn down. */}
+          <ScrollArea
+            x={canTile ? "scroll" : "hidden"}
+            y="hidden"
+            className="h-full w-full"
+          >
+            <div
+              className={cn(
+                "relative h-full",
+                canTile && "flex min-w-full flex-row"
+              )}
+            >
+              {tabElements}
+            </div>
+          </ScrollArea>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
