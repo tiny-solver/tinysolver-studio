@@ -375,20 +375,14 @@ export function SidebarConversationList({
   const orderedFolderIds = useMemo(() => {
     const seen = new Set<number>()
     const ids: number[] = []
-    for (const f of allFolders) {
+    for (const f of folders) {
       if (!seen.has(f.id)) {
         seen.add(f.id)
         ids.push(f.id)
       }
     }
-    for (const id of byFolder.keys()) {
-      if (!seen.has(id)) {
-        seen.add(id)
-        ids.push(id)
-      }
-    }
     return ids
-  }, [allFolders, byFolder])
+  }, [folders])
 
   const flatItems = useMemo<FlatItem[]>(() => {
     const items: FlatItem[] = []
