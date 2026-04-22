@@ -781,9 +781,11 @@
         "folderOpened": "폴더 {name}을(를) 열었습니다",
         "folderRemoved": "폴더 {name}을(를) 제거했습니다",
         "openFolderFailed": "폴더를 열 수 없습니다",
-        "removeFolderFailed": "폴더 제거 실패: {message}"
+        "removeFolderFailed": "폴더 제거 실패: {message}",
+        "reorderFoldersFailed": "폴더 순서 변경 실패: {message}"
       },
       "statsLabel": "{folders}개 폴더 · {convos}개 대화",
+      "reorderHandle": "드래그하여 순서 변경",
       "openFolder": "폴더 열기",
       "searchPlaceholder": "대화 검색...",
       "showCompleted": "완료된 대화 표시",

@@ -781,9 +781,11 @@
         "folderOpened": "フォルダ {name} を開きました",
         "folderRemoved": "フォルダ {name} を削除しました",
         "openFolderFailed": "フォルダを開けませんでした",
-        "removeFolderFailed": "フォルダの削除に失敗しました: {message}"
+        "removeFolderFailed": "フォルダの削除に失敗しました: {message}",
+        "reorderFoldersFailed": "フォルダの並べ替えに失敗しました: {message}"
       },
       "statsLabel": "{folders} フォルダ · {convos} 会話",
+      "reorderHandle": "ドラッグして並べ替え",
       "openFolder": "フォルダを開く",
       "searchPlaceholder": "会話を検索...",
       "showCompleted": "完了した会話を表示",

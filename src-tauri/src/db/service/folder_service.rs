@@ -1,8 +1,8 @@
 use chrono::Utc;
 use sea_orm::DatabaseConnection;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    QueryOrder, Set,
+    ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait,
+    IntoActiveModel, QueryFilter, QueryOrder, Set, Statement,
 };
 
 use crate::db::entities::folder;
@@ -34,6 +34,7 @@ fn to_detail(m: folder::Model) -> FolderDetail {
         parent_branch: m.parent_branch,
         default_agent_type,
         last_opened_at: m.last_opened_at,
+        sort_order: m.sort_order,
     }
 }
 
@@ -73,6 +74,12 @@ pub async fn add_folder(
         active.is_open = Set(true);
         active.update(conn).await?
     } else {
+        let max_order = folder::Entity::find()
+            .order_by_desc(folder::Column::SortOrder)
+            .one(conn)
+            .await?
+            .map(|m| m.sort_order)
+            .unwrap_or(0);
         let active = folder::ActiveModel {
             id: NotSet,
             name: Set(name),
@@ -85,6 +92,7 @@ pub async fn add_folder(
             updated_at: Set(now),
             deleted_at: Set(None),
             is_open: Set(true),
+            sort_order: Set(max_order + 1),
         };
         active.insert(conn).await?
     };
@@ -170,6 +178,7 @@ pub async fn list_open_folder_details(
     let rows = folder::Entity::find()
         .filter(folder::Column::DeletedAt.is_null())
         .filter(folder::Column::IsOpen.eq(true))
+        .order_by_asc(folder::Column::SortOrder)
         .order_by_desc(folder::Column::LastOpenedAt)
         .all(conn)
         .await?;
@@ -182,9 +191,41 @@ pub async fn list_all_folder_details(
 ) -> Result<Vec<FolderDetail>, DbError> {
     let rows = folder::Entity::find()
         .filter(folder::Column::DeletedAt.is_null())
+        .order_by_asc(folder::Column::SortOrder)
         .order_by_desc(folder::Column::LastOpenedAt)
         .all(conn)
         .await?;
 
     Ok(rows.into_iter().map(to_detail).collect())
+}
+
+pub async fn reorder_folders(
+    conn: &DatabaseConnection,
+    ids: Vec<i32>,
+) -> Result<(), DbError> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    let now = Utc::now();
+    let now_str = now.format("%Y-%m-%d %H:%M:%S %:z").to_string();
+    let case_expr = ids
+        .iter()
+        .enumerate()
+        .map(|(idx, id)| format!("WHEN {} THEN {}", id, idx + 1))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let id_list = ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!(
+        "UPDATE folder SET sort_order = CASE id {case_expr} END, updated_at = '{now_str}' WHERE id IN ({id_list})"
+    );
+    conn.execute(Statement::from_string(DbBackend::Sqlite, sql))
+        .await?;
+
+    Ok(())
 }

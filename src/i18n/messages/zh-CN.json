@@ -781,9 +781,11 @@
         "folderOpened": "已打开文件夹 {name}",
         "folderRemoved": "已移除文件夹 {name}",
         "openFolderFailed": "打开文件夹失败",
-        "removeFolderFailed": "移除文件夹失败：{message}"
+        "removeFolderFailed": "移除文件夹失败：{message}",
+        "reorderFoldersFailed": "重新排序文件夹失败：{message}"
       },
       "statsLabel": "{folders} 个文件夹 · {convos} 个会话",
+      "reorderHandle": "拖拽排序",
       "openFolder": "打开文件夹",
       "searchPlaceholder": "搜索会话...",
       "showCompleted": "显示已完成会话",

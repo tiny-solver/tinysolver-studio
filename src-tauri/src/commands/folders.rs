@@ -589,6 +589,17 @@ pub async fn remove_folder_from_workspace(
         .map_err(AppCommandError::from)
 }
 
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn reorder_folders(
+    db: tauri::State<'_, AppDatabase>,
+    ids: Vec<i32>,
+) -> Result<(), AppCommandError> {
+    folder_service::reorder_folders(&db.conn, ids)
+        .await
+        .map_err(AppCommandError::from)
+}
+
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError> {
     std::fs::create_dir_all(&path).map_err(AppCommandError::io)

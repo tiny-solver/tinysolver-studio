@@ -781,9 +781,11 @@
         "folderOpened": "Ordner {name} geöffnet",
         "folderRemoved": "Ordner {name} entfernt",
         "openFolderFailed": "Ordner konnte nicht geöffnet werden",
-        "removeFolderFailed": "Ordner konnte nicht entfernt werden: {message}"
+        "removeFolderFailed": "Ordner konnte nicht entfernt werden: {message}",
+        "reorderFoldersFailed": "Ordner konnten nicht neu sortiert werden: {message}"
       },
       "statsLabel": "{folders} Ordner · {convos} Konversationen",
+      "reorderHandle": "Zum Neuordnen ziehen",
       "openFolder": "Ordner öffnen",
       "searchPlaceholder": "Konversationen suchen...",
       "showCompleted": "Abgeschlossene Konversationen anzeigen",

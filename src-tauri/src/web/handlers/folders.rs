@@ -125,6 +125,23 @@ pub async fn remove_folder_from_workspace(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReorderFoldersParams {
+    pub ids: Vec<i32>,
+}
+
+pub async fn reorder_folders(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<ReorderFoldersParams>,
+) -> Result<Json<()>, AppCommandError> {
+    let db = &state.db;
+    folder_service::reorder_folders(&db.conn, params.ids)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PathParams {
     pub path: String,
 }

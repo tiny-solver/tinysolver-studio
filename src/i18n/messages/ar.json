@@ -781,9 +781,11 @@
         "folderOpened": "تم فتح المجلد {name}",
         "folderRemoved": "تمت إزالة المجلد {name}",
         "openFolderFailed": "فشل فتح المجلد",
-        "removeFolderFailed": "فشل إزالة المجلد: {message}"
+        "removeFolderFailed": "فشل إزالة المجلد: {message}",
+        "reorderFoldersFailed": "فشل إعادة ترتيب المجلدات: {message}"
       },
       "statsLabel": "{folders} مجلدات · {convos} محادثة",
+      "reorderHandle": "اسحب لإعادة الترتيب",
       "openFolder": "فتح مجلد",
       "searchPlaceholder": "بحث عن محادثات...",
       "showCompleted": "عرض المحادثات المكتملة",

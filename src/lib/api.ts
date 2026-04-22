@@ -640,6 +640,10 @@ export async function removeFolderFromWorkspace(
   return getTransport().call("remove_folder_from_workspace", { folderId })
 }
 
+export async function reorderFolders(ids: number[]): Promise<void> {
+  return getTransport().call("reorder_folders", { ids })
+}
+
 export async function importLocalConversations(
   folderId: number
 ): Promise<ImportResult> {

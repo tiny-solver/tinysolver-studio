@@ -223,6 +223,7 @@ mod tauri_app {
                 folders::open_folder,
                 folders::open_folder_by_id,
                 folders::remove_folder_from_workspace,
+                folders::reorder_folders,
                 folders::add_folder_to_history,
                 folders::set_folder_parent_branch,
                 folders::remove_folder_from_history,

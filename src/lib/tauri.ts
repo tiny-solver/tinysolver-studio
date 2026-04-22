@@ -508,6 +508,10 @@ export async function removeFolderFromWorkspace(
   return invoke("remove_folder_from_workspace", { folderId })
 }
 
+export async function reorderFolders(ids: number[]): Promise<void> {
+  return invoke("reorder_folders", { ids })
+}
+
 export async function importLocalConversations(
   folderId: number
 ): Promise<ImportResult> {

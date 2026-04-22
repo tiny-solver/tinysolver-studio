@@ -781,9 +781,11 @@
         "folderOpened": "Carpeta {name} abierta",
         "folderRemoved": "Carpeta {name} eliminada",
         "openFolderFailed": "Error al abrir carpeta",
-        "removeFolderFailed": "Error al eliminar carpeta: {message}"
+        "removeFolderFailed": "Error al eliminar carpeta: {message}",
+        "reorderFoldersFailed": "Error al reordenar carpetas: {message}"
       },
       "statsLabel": "{folders} carpetas · {convos} conversaciones",
+      "reorderHandle": "Arrastrar para reordenar",
       "openFolder": "Abrir carpeta",
       "searchPlaceholder": "Buscar conversaciones...",
       "showCompleted": "Mostrar conversaciones completadas",

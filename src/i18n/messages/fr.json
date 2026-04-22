@@ -781,9 +781,11 @@
         "folderOpened": "Dossier {name} ouvert",
         "folderRemoved": "Dossier {name} retiré",
         "openFolderFailed": "Échec de l'ouverture du dossier",
-        "removeFolderFailed": "Échec de la suppression du dossier : {message}"
+        "removeFolderFailed": "Échec de la suppression du dossier : {message}",
+        "reorderFoldersFailed": "Échec du réordonnancement des dossiers : {message}"
       },
       "statsLabel": "{folders} dossiers · {convos} conversations",
+      "reorderHandle": "Glisser pour réorganiser",
       "openFolder": "Ouvrir le dossier",
       "searchPlaceholder": "Rechercher des conversations...",
       "showCompleted": "Afficher les conversations terminées",

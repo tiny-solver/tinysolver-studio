@@ -781,9 +781,11 @@
         "folderOpened": "Opened folder {name}",
         "folderRemoved": "Removed folder {name}",
         "openFolderFailed": "Failed to open folder",
-        "removeFolderFailed": "Failed to remove folder: {message}"
+        "removeFolderFailed": "Failed to remove folder: {message}",
+        "reorderFoldersFailed": "Failed to reorder folders: {message}"
       },
       "statsLabel": "{folders} folders · {convos} conversations",
+      "reorderHandle": "Drag to reorder",
       "openFolder": "Open Folder",
       "searchPlaceholder": "Search conversations...",
       "showCompleted": "Show completed conversations",

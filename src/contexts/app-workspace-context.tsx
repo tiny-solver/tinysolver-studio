@@ -18,6 +18,7 @@ import {
   openFolder as apiOpenFolder,
   openFolderById as apiOpenFolderById,
   removeFolderFromWorkspace as apiRemoveFolderFromWorkspace,
+  reorderFolders as apiReorderFolders,
   getFolder as apiGetFolder,
 } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
@@ -51,6 +52,7 @@ interface AppWorkspaceContextValue {
   openFolder: (path: string) => Promise<FolderDetail>
   addFolderToWorkspaceById: (folderId: number) => Promise<FolderDetail>
   removeFolderFromWorkspace: (folderId: number) => Promise<void>
+  reorderFolders: (ids: number[]) => Promise<void>
   refreshFolder: (id: number) => Promise<void>
 
   stats: AgentStats | null
@@ -264,6 +266,45 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
     [refreshConversations]
   )
 
+  const reorderFolders = useCallback(async (ids: number[]) => {
+    let prevFoldersSnapshot: FolderDetail[] | null = null
+    let prevAllFoldersSnapshot: FolderDetail[] | null = null
+
+    const reorderByIds = (prev: FolderDetail[]) => {
+      const byId = new Map(prev.map((f) => [f.id, f]))
+      const next: FolderDetail[] = []
+      ids.forEach((id, idx) => {
+        const folder = byId.get(id)
+        if (folder) {
+          next.push({ ...folder, sort_order: idx + 1 })
+          byId.delete(id)
+        }
+      })
+      // Keep folders not included in `ids` at the end, preserving relative order.
+      for (const f of prev) {
+        if (byId.has(f.id)) next.push(f)
+      }
+      return next
+    }
+
+    setFolders((prev) => {
+      prevFoldersSnapshot = prev
+      return reorderByIds(prev)
+    })
+    setAllFolders((prev) => {
+      prevAllFoldersSnapshot = prev
+      return reorderByIds(prev)
+    })
+
+    try {
+      await apiReorderFolders(ids)
+    } catch (err) {
+      if (prevFoldersSnapshot) setFolders(prevFoldersSnapshot)
+      if (prevAllFoldersSnapshot) setAllFolders(prevAllFoldersSnapshot)
+      throw err
+    }
+  }, [])
+
   const refreshFolder = useCallback(async (id: number) => {
     try {
       const detail = await apiGetFolder(id)
@@ -347,6 +388,7 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
       openFolder,
       addFolderToWorkspaceById,
       removeFolderFromWorkspace,
+      reorderFolders,
       refreshFolder,
       stats,
       activeFolderId,
@@ -369,6 +411,7 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
       openFolder,
       addFolderToWorkspaceById,
       removeFolderFromWorkspace,
+      reorderFolders,
       refreshFolder,
       stats,
       activeFolderId,

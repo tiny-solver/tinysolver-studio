@@ -781,9 +781,11 @@
         "folderOpened": "Pasta {name} aberta",
         "folderRemoved": "Pasta {name} removida",
         "openFolderFailed": "Falha ao abrir pasta",
-        "removeFolderFailed": "Falha ao remover pasta: {message}"
+        "removeFolderFailed": "Falha ao remover pasta: {message}",
+        "reorderFoldersFailed": "Falha ao reordenar pastas: {message}"
       },
       "statsLabel": "{folders} pastas · {convos} conversas",
+      "reorderHandle": "Arraste para reordenar",
       "openFolder": "Abrir pasta",
       "searchPlaceholder": "Buscar conversas...",
       "showCompleted": "Mostrar conversas concluídas",

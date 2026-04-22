@@ -781,9 +781,11 @@
         "folderOpened": "已開啟資料夾 {name}",
         "folderRemoved": "已移除資料夾 {name}",
         "openFolderFailed": "開啟資料夾失敗",
-        "removeFolderFailed": "移除資料夾失敗：{message}"
+        "removeFolderFailed": "移除資料夾失敗：{message}",
+        "reorderFoldersFailed": "重新排序資料夾失敗：{message}"
       },
       "statsLabel": "{folders} 個資料夾 · {convos} 個對話",
+      "reorderHandle": "拖拽排序",
       "openFolder": "開啟資料夾",
       "searchPlaceholder": "搜尋對話...",
       "showCompleted": "顯示已完成對話",

@@ -131,7 +131,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="relative h-[2rem]">
+          <div
+            className="relative h-[2rem]"
+            data-conv-key={`${conversation.agent_type}:${conversation.id}`}
+          >
             <button
               data-conversation-id={conversation.id}
               onClick={handleClick}
