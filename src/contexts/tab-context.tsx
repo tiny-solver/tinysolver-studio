@@ -193,7 +193,10 @@ export function TabProvider({ children }: TabProviderProps) {
           folderId: it.folder_id,
           conversationId: it.conversation_id,
           agentType: it.agent_type,
-          title: t("loadingConversation"),
+          title:
+            it.conversation_id != null
+              ? t("loadingConversation")
+              : t("newConversation"),
           isPinned: it.is_pinned,
         }))
         setTabs(restored)
