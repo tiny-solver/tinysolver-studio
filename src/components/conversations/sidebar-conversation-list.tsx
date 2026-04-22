@@ -318,6 +318,16 @@ export function SidebarConversationList({
     }
   }, [tabs, activeTabId])
 
+  const openTabConversationKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const tab of tabs) {
+      if (tab.conversationId != null) {
+        set.add(`${tab.agentType}:${tab.conversationId}`)
+      }
+    }
+    return set
+  }, [tabs])
+
   const [importing, setImporting] = useState(false)
   const [folderExpanded, setFolderExpanded] = useState<Record<number, boolean>>(
     {}
@@ -814,6 +824,9 @@ export function SidebarConversationList({
                           selectedConversation?.agentType === conv.agent_type &&
                           selectedConversation?.id === conv.id
                         }
+                        isOpenInTab={openTabConversationKeys.has(
+                          `${conv.agent_type}:${conv.id}`
+                        )}
                         timeLabel={formatRelative(conv.updated_at)}
                         onSelect={handleSelect}
                         onDoubleClick={handleDoubleClick}

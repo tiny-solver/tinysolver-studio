@@ -67,6 +67,7 @@ const STATUS_ICON_COLORS: Record<ConversationStatus, string> = {
 interface SidebarConversationCardProps {
   conversation: DbConversationSummary
   isSelected: boolean
+  isOpenInTab?: boolean
   timeLabel?: string
   onSelect: (id: number, agentType: string) => void
   onDoubleClick?: (id: number, agentType: string) => void
@@ -79,6 +80,7 @@ interface SidebarConversationCardProps {
 export const SidebarConversationCard = memo(function SidebarConversationCard({
   conversation,
   isSelected,
+  isOpenInTab = false,
   timeLabel,
   onSelect,
   onDoubleClick,
@@ -146,14 +148,18 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute top-0 bottom-0 rounded-[0.125rem] bg-sidebar-primary/15"
+                className={cn(
+                  "pointer-events-none absolute -top-px -bottom-px z-0",
+                  isOpenInTab
+                    ? "bg-sidebar-primary/85"
+                    : "bg-sidebar-primary/30"
+                )}
                 style={{
-                  left: "0.875rem",
+                  left: "calc(0.875rem - 0.5px)",
                   width: "1px",
-                  transform: "translateX(-50%)",
                 }}
               />
-              <SidebarStatusIcon status={beadStatus} />
+              <SidebarStatusIcon status={beadStatus} emphasized={isOpenInTab} />
 
               <span
                 className={cn(
