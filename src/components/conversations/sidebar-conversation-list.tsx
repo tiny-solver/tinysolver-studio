@@ -14,6 +14,7 @@ import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
 import {
+  ChevronDown,
   ChevronRight,
   Download,
   FolderOpen,
@@ -149,11 +150,9 @@ const FolderHeader = memo(function FolderHeader({
           <div
             className={cn(
               "flex h-[1.9375rem] w-full items-center",
-              "rounded-[0.4375rem] border",
-              "transition-[background-color,color,border-color] duration-150",
-              expanded
-                ? "bg-sidebar-primary/15 border-sidebar-primary/25"
-                : "border-transparent hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
+              "rounded-[0.4375rem]",
+              "transition-colors duration-150",
+              "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
             )}
           >
             <button
@@ -166,12 +165,14 @@ const FolderHeader = memo(function FolderHeader({
             >
               <span
                 className={cn(
-                  "flex h-[0.75rem] w-[0.75rem] shrink-0 items-center justify-center text-muted-foreground/75",
-                  "transition-transform duration-[180ms] [transition-timing-function:cubic-bezier(.3,.7,.3,1)]",
-                  expanded ? "rotate-90" : "rotate-0"
+                  "flex h-[0.75rem] w-[0.75rem] shrink-0 items-center justify-center text-muted-foreground/75"
                 )}
               >
-                <ChevronRight className="h-[0.625rem] w-[0.625rem]" />
+                {expanded ? (
+                  <ChevronDown className="h-[0.6875rem] w-[0.6875rem]" />
+                ) : (
+                  <ChevronRight className="h-[0.6875rem] w-[0.6875rem]" />
+                )}
               </span>
               <div className="flex min-w-0 flex-1 items-center gap-[0.375rem]">
                 <span
@@ -404,10 +405,6 @@ export function SidebarConversationList({
     folder: Extract<FlatItem, { type: "folder_header" }> | null
     pushOffset: number
   }>(() => {
-    // All items are uniform height (cardHeightPx). Compute offsets from the
-    // index directly instead of querying virtua — querying it during render
-    // (when flatItems has grown but Virtualizer hasn't re-rendered yet) can
-    // poison its internal size cache and produce NaN for total scroll height.
     if (flatItems.length === 0 || cardHeightPx <= 0) {
       return { folder: null, pushOffset: 0 }
     }
@@ -753,10 +750,8 @@ export function SidebarConversationList({
             <div className="flex-1 min-h-0 relative">
               {stickyFolderItem && (
                 <div
-                  className="absolute top-0 left-0 right-0 z-10"
-                  style={{
-                    transform: `translateY(${stickyState.pushOffset}px)`,
-                  }}
+                  className="absolute left-0 right-0 z-10"
+                  style={{ top: `${Math.round(stickyState.pushOffset)}px` }}
                 >
                   <div
                     aria-hidden
