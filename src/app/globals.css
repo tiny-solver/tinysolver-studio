@@ -1019,6 +1019,7 @@
   --os-handle-perpendicular-size: 100%;
   --os-handle-perpendicular-size-hover: 100%;
   --os-handle-perpendicular-size-active: 100%;
+  z-index: 40;
 }
 
 .os-scrollbar.os-theme-codeg:hover {
