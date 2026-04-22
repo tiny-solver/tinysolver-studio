@@ -344,11 +344,17 @@ export function FolderTitleBar() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={toggleAuxPanel}>
+                  <DropdownMenuItem
+                    onClick={toggleAuxPanel}
+                    disabled={!activeFolder}
+                  >
                     <PanelRight className="h-3.5 w-3.5" />
                     {tTitleBar("toggleAuxPanel")}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => toggleTerminal()}>
+                  <DropdownMenuItem
+                    onClick={() => toggleTerminal()}
+                    disabled={!activeFolder}
+                  >
                     <SquareTerminal className="h-3.5 w-3.5" />
                     {tTitleBar("toggleTerminal")}
                   </DropdownMenuItem>
@@ -370,6 +376,7 @@ export function FolderTitleBar() {
                   size="icon"
                   className={`h-6 w-6 hover:text-foreground/80 ${terminalOpen ? "bg-accent" : ""}`}
                   onClick={() => toggleTerminal()}
+                  disabled={!activeFolder}
                   title={tTitleBar("withShortcut", {
                     label: tTitleBar("toggleTerminal"),
                     shortcut: formatShortcutLabel(
@@ -385,6 +392,7 @@ export function FolderTitleBar() {
                   size="icon"
                   className={`h-6 w-6 hover:text-foreground/80 ${auxPanelOpen ? "bg-accent" : ""}`}
                   onClick={toggleAuxPanel}
+                  disabled={!activeFolder}
                   title={tTitleBar("withShortcut", {
                     label: tTitleBar("toggleAuxPanel"),
                     shortcut: formatShortcutLabel(

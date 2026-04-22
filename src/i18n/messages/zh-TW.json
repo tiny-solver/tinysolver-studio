@@ -935,7 +935,9 @@
         "files": "檔案",
         "changes": "變更",
         "commits": "提交"
-      }
+      },
+      "noFolderTitle": "尚無開啟的資料夾",
+      "noFolderHint": "開啟一個資料夾後可在此查看"
     },
     "windowControls": {
       "minimizeWindow": "最小化視窗",

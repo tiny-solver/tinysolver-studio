@@ -935,7 +935,9 @@
         "files": "Dateien",
         "changes": "Änderungen",
         "commits": "Einträge"
-      }
+      },
+      "noFolderTitle": "Kein Ordner geöffnet",
+      "noFolderHint": "Öffnen Sie einen Ordner, um seinen Inhalt hier zu sehen"
     },
     "windowControls": {
       "minimizeWindow": "Fenster minimieren",

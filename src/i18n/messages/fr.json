@@ -935,7 +935,9 @@
         "files": "Fichiers",
         "changes": "Changements",
         "commits": "Validations"
-      }
+      },
+      "noFolderTitle": "Aucun dossier ouvert",
+      "noFolderHint": "Ouvrez un dossier pour voir son contenu ici"
     },
     "windowControls": {
       "minimizeWindow": "Minimiser la fenêtre",

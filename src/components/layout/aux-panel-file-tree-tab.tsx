@@ -19,6 +19,7 @@ import { useTabContext } from "@/contexts/tab-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
+import { AuxPanelNoFolderEmpty } from "@/components/layout/aux-panel-no-folder-empty"
 import { WorkspaceDegradedBanner } from "@/components/layout/workspace-degraded-banner"
 import {
   createFileTreeEntry,
@@ -2097,6 +2098,10 @@ export function FileTreeTab() {
     resolveActiveFileChangeDecision,
     workspaceState.seq,
   ])
+
+  if (!folder) {
+    return <AuxPanelNoFolderEmpty />
+  }
 
   if (loading && nodes.length === 0) {
     return (

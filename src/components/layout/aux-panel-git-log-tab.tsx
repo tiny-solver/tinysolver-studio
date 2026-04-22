@@ -76,6 +76,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AuxPanelNoFolderEmpty } from "@/components/layout/aux-panel-no-folder-empty"
 import { subscribe } from "@/lib/platform"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
@@ -1023,6 +1024,10 @@ export function GitLogTab() {
     const nextScrolled = target.scrollTop > 0
     setScrolled((prev) => (prev === nextScrolled ? prev : nextScrolled))
   }, [])
+
+  if (!folder) {
+    return <AuxPanelNoFolderEmpty />
+  }
 
   if (loading) {
     return (

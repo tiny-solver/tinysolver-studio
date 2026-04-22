@@ -935,7 +935,9 @@
         "files": "파일",
         "changes": "변경사항",
         "commits": "커밋"
-      }
+      },
+      "noFolderTitle": "열린 폴더 없음",
+      "noFolderHint": "폴더를 열면 여기에 표시됩니다"
     },
     "windowControls": {
       "minimizeWindow": "창 최소화",

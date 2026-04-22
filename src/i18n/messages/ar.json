@@ -935,7 +935,9 @@
         "files": "الملفات",
         "changes": "التغييرات",
         "commits": "الالتزامات"
-      }
+      },
+      "noFolderTitle": "لا يوجد مجلد مفتوح",
+      "noFolderHint": "افتح مجلدا لعرض محتواه هنا"
     },
     "windowControls": {
       "minimizeWindow": "تصغير النافذة",

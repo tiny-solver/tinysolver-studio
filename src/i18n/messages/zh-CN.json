@@ -935,7 +935,9 @@
         "files": "文件",
         "changes": "变更",
         "commits": "提交"
-      }
+      },
+      "noFolderTitle": "暂无打开的文件夹",
+      "noFolderHint": "打开一个文件夹后在这里查看"
     },
     "windowControls": {
       "minimizeWindow": "最小化窗口",

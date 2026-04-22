@@ -935,7 +935,9 @@
         "files": "Arquivos",
         "changes": "Alterações",
         "commits": "Confirmações"
-      }
+      },
+      "noFolderTitle": "Nenhuma pasta aberta",
+      "noFolderHint": "Abra uma pasta para ver seu conteúdo aqui"
     },
     "windowControls": {
       "minimizeWindow": "Minimizar janela",

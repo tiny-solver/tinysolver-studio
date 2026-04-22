@@ -38,6 +38,7 @@ import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
+import { AuxPanelNoFolderEmpty } from "@/components/layout/aux-panel-no-folder-empty"
 import { WorkspaceDegradedBanner } from "@/components/layout/workspace-degraded-banner"
 import {
   deleteFileTreeEntry,
@@ -1165,6 +1166,10 @@ export function GitChangesTab() {
       tFileTree,
     ]
   )
+
+  if (!folder) {
+    return <AuxPanelNoFolderEmpty />
+  }
 
   if (loading) {
     return (

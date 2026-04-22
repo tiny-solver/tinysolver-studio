@@ -935,7 +935,9 @@
         "files": "Files",
         "changes": "Changes",
         "commits": "Commits"
-      }
+      },
+      "noFolderTitle": "No folder open",
+      "noFolderHint": "Open a folder to see its contents here"
     },
     "windowControls": {
       "minimizeWindow": "Minimize window",

@@ -16,9 +16,12 @@ import { Virtualizer, type VirtualizerHandle } from "virtua"
 import {
   ChevronRight,
   Download,
+  FolderOpen,
+  GitBranch,
   ListChecks,
   Loader2,
   Plus,
+  Rocket,
   XCircle,
 } from "lucide-react"
 import { useActiveFolder } from "@/contexts/active-folder-context"
@@ -28,10 +31,12 @@ import { useTaskContext } from "@/contexts/task-context"
 import { useZoomLevel } from "@/hooks/use-appearance"
 import {
   importLocalConversations,
+  openProjectBootWindow,
   updateConversationTitle,
   updateConversationStatus,
   deleteConversation,
 } from "@/lib/api"
+import { isDesktop, openFileDialog } from "@/lib/platform"
 import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
 import {
   loadFolderExpanded,
@@ -39,6 +44,8 @@ import {
 } from "@/lib/sidebar-view-mode-storage"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
 import { ConversationManageDialog } from "./conversation-manage-dialog"
+import { CloneDialog } from "@/components/layout/clone-dialog"
+import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -261,6 +268,7 @@ export function SidebarConversationList({
 }) {
   const t = useTranslations("Folder.sidebar")
   const tCommon = useTranslations("Folder.common")
+  const tFolderDropdown = useTranslations("Folder.folderNameDropdown")
   const { zoomLevel } = useZoomLevel()
   const safeZoomLevel =
     typeof zoomLevel === "number" && Number.isFinite(zoomLevel) && zoomLevel > 0
@@ -271,6 +279,7 @@ export function SidebarConversationList({
     Math.round((CARD_HEIGHT_REM * 16 * safeZoomLevel) / 100)
   )
   const {
+    folders,
     allFolders,
     conversations,
     conversationsLoading: loading,
@@ -278,6 +287,7 @@ export function SidebarConversationList({
     refreshConversations,
     updateConversationLocal,
     removeFolderFromWorkspace,
+    openFolder,
   } = useAppWorkspace()
   const refreshing = loading
   const { activeFolder } = useActiveFolder()
@@ -320,6 +330,8 @@ export function SidebarConversationList({
     folderId: number
     folderName: string
   } | null>(null)
+  const [cloneOpen, setCloneOpen] = useState(false)
+  const [browserOpen, setBrowserOpen] = useState(false)
 
   useEffect(() => {
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
@@ -644,6 +656,45 @@ export function SidebarConversationList({
     await handleImportForFolder(activeFolder.id)
   }, [activeFolder, handleImportForFolder])
 
+  const handleOpenFolderAction = useCallback(async () => {
+    if (isDesktop()) {
+      try {
+        const result = await openFileDialog({
+          directory: true,
+          multiple: false,
+        })
+        if (!result) return
+        const selected = Array.isArray(result) ? result[0] : result
+        await openFolder(selected)
+      } catch (err) {
+        console.error("[SidebarConversationList] failed to open folder:", err)
+      }
+    } else {
+      setBrowserOpen(true)
+    }
+  }, [openFolder])
+
+  const handleBrowserSelect = useCallback(
+    (path: string) => {
+      openFolder(path).catch((err) => {
+        console.error("[SidebarConversationList] failed to open folder:", err)
+      })
+    },
+    [openFolder]
+  )
+
+  const handleProjectBoot = useCallback(() => {
+    openProjectBootWindow().catch((err) => {
+      console.error(
+        "[SidebarConversationList] failed to open project boot:",
+        err
+      )
+    })
+  }, [])
+
+  const showEmptyWorkspaceActions =
+    folders.length === 0 && conversations.length === 0
+
   const emptyAfterFilter =
     filteredConversations.length === 0 && conversations.length > 0
 
@@ -666,6 +717,36 @@ export function SidebarConversationList({
           <p className="text-destructive text-xs">
             {t("error", { message: error })}
           </p>
+        </div>
+      ) : showEmptyWorkspaceActions ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-3 gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full max-w-[14rem] justify-start"
+            onClick={handleOpenFolderAction}
+          >
+            <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+            {tFolderDropdown("openFolder")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full max-w-[14rem] justify-start"
+            onClick={() => setCloneOpen(true)}
+          >
+            <GitBranch className="h-3.5 w-3.5 mr-1.5" />
+            {tFolderDropdown("cloneRepository")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full max-w-[14rem] justify-start"
+            onClick={handleProjectBoot}
+          >
+            <Rocket className="h-3.5 w-3.5 mr-1.5" />
+            {tFolderDropdown("projectBoot")}
+          </Button>
         </div>
       ) : conversations.length === 0 ? (
         <ContextMenu>
@@ -833,6 +914,13 @@ export function SidebarConversationList({
           folderName={manageState.folderName}
         />
       )}
+
+      <CloneDialog open={cloneOpen} onOpenChange={setCloneOpen} />
+      <DirectoryBrowserDialog
+        open={browserOpen}
+        onOpenChange={setBrowserOpen}
+        onSelect={handleBrowserSelect}
+      />
     </div>
   )
 }
