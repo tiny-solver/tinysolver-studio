@@ -41,14 +41,8 @@ export const ConversationContextBar = memo(function ConversationContextBar({
   const t = useTranslations("Folder.conversationContextBar")
   const tBd = useTranslations("Folder.branchDropdown")
   const { tabs, activeTabId, setTabFolder } = useTabContext()
-  const {
-    folders,
-    allFolders,
-    branches,
-    setBranch,
-    addFolderToWorkspaceById,
-    refreshFolder,
-  } = useAppWorkspace()
+  const { folders, allFolders, branches, setBranch, refreshFolder } =
+    useAppWorkspace()
   const { addTask, updateTask } = useTaskContext()
 
   const ownTab = useMemo(() => {
@@ -74,20 +68,16 @@ export const ConversationContextBar = memo(function ConversationContextBar({
     <TooltipProvider>
       <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 text-xs text-muted-foreground">
         <FolderPicker
-          folders={allFolders}
+          folders={folders}
           currentFolderId={ownFolder.id}
           currentFolderName={ownFolder.name}
           editable={isNewConversation}
           onSelect={async (folderId) => {
-            const target = allFolders.find((f) => f.id === folderId)
+            const target = folders.find((f) => f.id === folderId)
             if (!target) return
-            const isOpen = folders.some((f) => f.id === folderId)
             try {
-              const detail = isOpen
-                ? target
-                : await addFolderToWorkspaceById(folderId)
-              setTabFolder(ownTab.id, detail.id, detail.path)
-              toast.success(t("toasts.folderChanged", { name: detail.name }))
+              setTabFolder(ownTab.id, target.id, target.path)
+              toast.success(t("toasts.folderChanged", { name: target.name }))
             } catch (err) {
               console.error(
                 "[ConversationContextBar] switch folder failed:",
