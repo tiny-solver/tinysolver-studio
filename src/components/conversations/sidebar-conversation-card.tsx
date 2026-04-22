@@ -9,7 +9,6 @@ import {
   CircleCheck,
   CircleDashed,
   CircleX,
-  Download,
   Plus,
   type LucideIcon,
 } from "lucide-react"
@@ -75,8 +74,6 @@ interface SidebarConversationCardProps {
   onDelete: (id: number, agentType: string) => Promise<void>
   onStatusChange: (id: number, status: ConversationStatus) => Promise<void>
   onNewConversation?: () => void
-  onImport?: () => void
-  importing?: boolean
 }
 
 export const SidebarConversationCard = memo(function SidebarConversationCard({
@@ -89,8 +86,6 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   onDelete,
   onStatusChange,
   onNewConversation,
-  onImport,
-  importing,
 }: SidebarConversationCardProps) {
   const t = useTranslations("Folder.conversationCard")
   const tSidebar = useTranslations("Folder.sidebar")
@@ -254,15 +249,6 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             <Trash2 className="h-4 w-4" />
             {t("delete")}
           </ContextMenuItem>
-          {onImport && (
-            <>
-              <ContextMenuSeparator />
-              <ContextMenuItem disabled={importing} onSelect={onImport}>
-                <Download className="h-4 w-4" />
-                {importing ? t("importing") : t("importLocalSessions")}
-              </ContextMenuItem>
-            </>
-          )}
         </ContextMenuContent>
       </ContextMenu>
 

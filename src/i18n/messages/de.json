@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "Ordner aus Arbeitsbereich entfernen?",
       "removeFolderConfirmDescription": "\"{name}\" aus dem Arbeitsbereich entfernen? Zugehörige Tabs und Terminals werden geschlossen.",
       "folderHeaderMenu": {
-        "focus": "Fokussieren",
-        "closeFolderTabs": "Alle Tabs dieses Ordners schließen",
         "removeFromWorkspace": "Aus Arbeitsbereich entfernen"
       }
     },

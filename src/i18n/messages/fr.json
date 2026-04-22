@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "Retirer le dossier de l'espace de travail ?",
       "removeFolderConfirmDescription": "Retirer \"{name}\" de l'espace de travail ? Les onglets et terminaux associés seront fermés.",
       "folderHeaderMenu": {
-        "focus": "Focaliser",
-        "closeFolderTabs": "Fermer tous les onglets de ce dossier",
         "removeFromWorkspace": "Retirer de l'espace de travail"
       }
     },

@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "이 폴더를 워크스페이스에서 제거하시겠습니까?",
       "removeFolderConfirmDescription": "워크스페이스에서 \"{name}\"을(를) 제거하시겠습니까? 관련 탭과 터미널이 닫힙니다.",
       "folderHeaderMenu": {
-        "focus": "포커스",
-        "closeFolderTabs": "이 폴더의 모든 탭 닫기",
         "removeFromWorkspace": "워크스페이스에서 제거"
       }
     },

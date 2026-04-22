@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "从工作区移除该文件夹？",
       "removeFolderConfirmDescription": "从工作区移除 \"{name}\"？其相关 Tab 与终端将会关闭。",
       "folderHeaderMenu": {
-        "focus": "聚焦到此",
-        "closeFolderTabs": "关闭此文件夹的所有 Tab",
         "removeFromWorkspace": "从工作区移除"
       }
     },

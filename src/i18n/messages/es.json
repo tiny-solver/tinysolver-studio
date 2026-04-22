@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "¿Eliminar carpeta del espacio de trabajo?",
       "removeFolderConfirmDescription": "¿Eliminar \"{name}\" del espacio de trabajo? Sus pestañas y terminales se cerrarán.",
       "folderHeaderMenu": {
-        "focus": "Enfocar",
-        "closeFolderTabs": "Cerrar todas las pestañas de esta carpeta",
         "removeFromWorkspace": "Quitar del espacio de trabajo"
       }
     },

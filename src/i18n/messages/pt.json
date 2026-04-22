@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "Remover pasta do espaço de trabalho?",
       "removeFolderConfirmDescription": "Remover \"{name}\" do espaço de trabalho? As abas e terminais relacionados serão fechados.",
       "folderHeaderMenu": {
-        "focus": "Focar",
-        "closeFolderTabs": "Fechar todas as abas desta pasta",
         "removeFromWorkspace": "Remover do espaço de trabalho"
       }
     },

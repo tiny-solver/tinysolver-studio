@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "Remove folder from workspace?",
       "removeFolderConfirmDescription": "Remove \"{name}\" from the workspace? Its tabs and terminals will close.",
       "folderHeaderMenu": {
-        "focus": "Focus",
-        "closeFolderTabs": "Close all tabs of this folder",
         "removeFromWorkspace": "Remove from workspace"
       }
     },

@@ -107,22 +107,22 @@ const FolderHeader = memo(function FolderHeader({
   folderName,
   count,
   expanded,
+  importing,
   onToggle,
-  onFocus,
-  onCloseFolderTabs,
   onRemoveFromWorkspace,
   onNewConversation,
+  onImport,
   t,
 }: {
   folderId: number
   folderName: string
   count: number
   expanded: boolean
+  importing: boolean
   onToggle: (folderId: number) => void
-  onFocus: (folderId: number) => void
-  onCloseFolderTabs: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
   onNewConversation: (folderId: number) => void
+  onImport: (folderId: number) => void
   t: ReturnType<typeof useTranslations>
 }) {
   return (
@@ -204,11 +204,16 @@ const FolderHeader = memo(function FolderHeader({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onSelect={() => onFocus(folderId)}>
-          {t("folderHeaderMenu.focus")}
+        <ContextMenuItem onSelect={() => onNewConversation(folderId)}>
+          <Plus className="h-4 w-4" />
+          {t("newConversation")}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onCloseFolderTabs(folderId)}>
-          {t("folderHeaderMenu.closeFolderTabs")}
+        <ContextMenuItem
+          disabled={importing}
+          onSelect={() => onImport(folderId)}
+        >
+          <Download className="h-4 w-4" />
+          {importing ? t("importing") : t("importLocalSessions")}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -470,28 +475,6 @@ export function SidebarConversationList({
     })
   }, [])
 
-  const focusFolder = useCallback(
-    (folderId: number) => {
-      const idx = flatItems.findIndex(
-        (item) => item.type === "folder_header" && item.folderId === folderId
-      )
-      if (idx >= 0) {
-        virtualizerRef.current?.scrollToIndex(idx, {
-          align: "start",
-          smooth: true,
-        })
-      }
-    },
-    [flatItems]
-  )
-
-  const handleCloseFolderTabs = useCallback(
-    (folderId: number) => {
-      closeTabsByFolder(folderId)
-    },
-    [closeTabsByFolder]
-  )
-
   const handleRemoveFolder = useCallback(
     (folderId: number) => {
       const name = folderIndex.get(folderId)?.name ?? String(folderId)
@@ -595,35 +578,44 @@ export function SidebarConversationList({
     [folderIndex, openNewConversationTab]
   )
 
-  const handleImport = useCallback(async () => {
-    if (importing) return
-    if (!activeFolder) return
-    setImporting(true)
-    const taskId = `import-${activeFolder.id}-${Date.now()}`
-    addTask(taskId, t("importLocalSessions"))
-    updateTask(taskId, { status: "running" })
-    try {
-      const result = await importLocalConversations(activeFolder.id)
-      updateTask(taskId, { status: "completed" })
-      refreshConversations()
-      if (result.imported > 0) {
-        toast.success(
-          t("toasts.importedSessions", {
-            imported: result.imported,
-            skipped: result.skipped,
-          })
-        )
-      } else {
-        toast.info(t("toasts.noNewSessionsFound", { skipped: result.skipped }))
+  const handleImportForFolder = useCallback(
+    async (folderId: number) => {
+      if (importing) return
+      setImporting(true)
+      const taskId = `import-${folderId}-${Date.now()}`
+      addTask(taskId, t("importLocalSessions"))
+      updateTask(taskId, { status: "running" })
+      try {
+        const result = await importLocalConversations(folderId)
+        updateTask(taskId, { status: "completed" })
+        refreshConversations()
+        if (result.imported > 0) {
+          toast.success(
+            t("toasts.importedSessions", {
+              imported: result.imported,
+              skipped: result.skipped,
+            })
+          )
+        } else {
+          toast.info(
+            t("toasts.noNewSessionsFound", { skipped: result.skipped })
+          )
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        updateTask(taskId, { status: "failed", error: msg })
+        toast.error(t("toasts.importFailed", { message: msg }))
+      } finally {
+        setImporting(false)
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      updateTask(taskId, { status: "failed", error: msg })
-      toast.error(t("toasts.importFailed", { message: msg }))
-    } finally {
-      setImporting(false)
-    }
-  }, [importing, activeFolder, addTask, updateTask, refreshConversations, t])
+    },
+    [importing, addTask, updateTask, refreshConversations, t]
+  )
+
+  const handleImport = useCallback(async () => {
+    if (!activeFolder) return
+    await handleImportForFolder(activeFolder.id)
+  }, [activeFolder, handleImportForFolder])
 
   const emptyAfterFilter =
     filteredConversations.length === 0 && conversations.length > 0
@@ -678,14 +670,6 @@ export function SidebarConversationList({
               <Plus className="h-4 w-4" />
               {t("newConversation")}
             </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              disabled={importing || !activeFolder}
-              onSelect={handleImport}
-            >
-              <Download className="h-4 w-4" />
-              {importing ? t("importing") : t("importLocalSessions")}
-            </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
       ) : emptyAfterFilter ? (
@@ -716,11 +700,11 @@ export function SidebarConversationList({
                       folderName={stickyFolderItem.folderName}
                       count={stickyFolderItem.count}
                       expanded={stickyFolderItem.expanded}
+                      importing={importing}
                       onToggle={toggleFolder}
-                      onFocus={focusFolder}
-                      onCloseFolderTabs={handleCloseFolderTabs}
                       onRemoveFromWorkspace={handleRemoveFolder}
                       onNewConversation={handleNewConversationForFolder}
+                      onImport={handleImportForFolder}
                       t={t}
                     />
                   </div>
@@ -746,11 +730,11 @@ export function SidebarConversationList({
                           folderName={item.folderName}
                           count={item.count}
                           expanded={item.expanded}
+                          importing={importing}
                           onToggle={toggleFolder}
-                          onFocus={focusFolder}
-                          onCloseFolderTabs={handleCloseFolderTabs}
                           onRemoveFromWorkspace={handleRemoveFolder}
                           onNewConversation={handleNewConversationForFolder}
+                          onImport={handleImportForFolder}
                           t={t}
                         />
                       )
@@ -771,8 +755,6 @@ export function SidebarConversationList({
                         onDelete={handleDelete}
                         onStatusChange={handleStatusChange}
                         onNewConversation={handleNewConversation}
-                        onImport={handleImport}
-                        importing={importing}
                       />
                     )
                   })}
@@ -787,14 +769,6 @@ export function SidebarConversationList({
             >
               <Plus className="h-4 w-4" />
               {t("newConversation")}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              disabled={importing || !activeFolder}
-              onSelect={handleImport}
-            >
-              <Download className="h-4 w-4" />
-              {importing ? t("importing") : t("importLocalSessions")}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>

@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "إزالة المجلد من مساحة العمل؟",
       "removeFolderConfirmDescription": "إزالة \"{name}\" من مساحة العمل؟ سيتم إغلاق علامات التبويب والمحطات المرتبطة.",
       "folderHeaderMenu": {
-        "focus": "تركيز",
-        "closeFolderTabs": "إغلاق جميع علامات تبويب هذا المجلد",
         "removeFromWorkspace": "إزالة من مساحة العمل"
       }
     },

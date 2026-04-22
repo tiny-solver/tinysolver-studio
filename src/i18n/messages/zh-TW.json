@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "從工作區移除此資料夾？",
       "removeFolderConfirmDescription": "從工作區移除 \"{name}\"？相關分頁與終端機將會關閉。",
       "folderHeaderMenu": {
-        "focus": "聚焦至此",
-        "closeFolderTabs": "關閉此資料夾的所有分頁",
         "removeFromWorkspace": "從工作區移除"
       }
     },

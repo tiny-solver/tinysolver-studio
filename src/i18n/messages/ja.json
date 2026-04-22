@@ -796,8 +796,6 @@
       "removeFolderConfirmTitle": "このフォルダをワークスペースから削除しますか？",
       "removeFolderConfirmDescription": "\"{name}\" をワークスペースから削除しますか？関連するタブとターミナルが閉じられます。",
       "folderHeaderMenu": {
-        "focus": "フォーカス",
-        "closeFolderTabs": "このフォルダのすべてのタブを閉じる",
         "removeFromWorkspace": "ワークスペースから削除"
       }
     },
