@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "Remover pasta do espaço de trabalho?",
       "removeFolderConfirmDescription": "Remover \"{name}\" do espaço de trabalho? As abas e terminais relacionados serão fechados.",
       "folderHeaderMenu": {
+        "manageConversations": "Gerenciar conversas…",
         "removeFromWorkspace": "Remover do espaço de trabalho"
+      },
+      "manageConversations": {
+        "title": "Gerenciar conversas — {name}",
+        "searchPlaceholder": "Pesquisar por título…",
+        "agentFilterAll": "Todos os agentes",
+        "statusFilterAll": "Todos os status",
+        "selectAllVisible": "Selecionar tudo",
+        "deselectAll": "Desmarcar tudo",
+        "selectedCount": "{count} selecionada(s)",
+        "matchedCount": "{count} correspondência(s)",
+        "messagesShort": "{count} msg",
+        "untitledConversation": "Conversa sem título",
+        "setStatus": "Definir status…",
+        "deleteSelected": "Excluir",
+        "noConversations": "Sem conversas nesta pasta.",
+        "noMatchingConversations": "Nenhuma conversa corresponde aos filtros.",
+        "confirmDeleteTitle": "Excluir {count} conversa(s)?",
+        "confirmDeleteDescription": "Esta ação não pode ser desfeita.",
+        "toastDeleted": "{count} conversa(s) excluída(s)",
+        "toastStatusUpdated": "Status atualizado para {count} conversa(s)",
+        "toastOpFailed": "Falha na operação: {message}"
       }
     },
     "conversation": {

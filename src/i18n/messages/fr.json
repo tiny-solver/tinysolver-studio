@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "Retirer le dossier de l'espace de travail ?",
       "removeFolderConfirmDescription": "Retirer \"{name}\" de l'espace de travail ? Les onglets et terminaux associés seront fermés.",
       "folderHeaderMenu": {
+        "manageConversations": "Gérer les conversations…",
         "removeFromWorkspace": "Retirer de l'espace de travail"
+      },
+      "manageConversations": {
+        "title": "Gérer les conversations — {name}",
+        "searchPlaceholder": "Rechercher par titre…",
+        "agentFilterAll": "Tous les agents",
+        "statusFilterAll": "Tous les statuts",
+        "selectAllVisible": "Tout sélectionner",
+        "deselectAll": "Tout désélectionner",
+        "selectedCount": "{count} sélectionnée(s)",
+        "matchedCount": "{count} correspondance(s)",
+        "messagesShort": "{count} msg",
+        "untitledConversation": "Conversation sans titre",
+        "setStatus": "Définir le statut…",
+        "deleteSelected": "Supprimer",
+        "noConversations": "Aucune conversation dans ce dossier.",
+        "noMatchingConversations": "Aucune conversation ne correspond aux filtres.",
+        "confirmDeleteTitle": "Supprimer {count} conversation(s) ?",
+        "confirmDeleteDescription": "Cette action est irréversible.",
+        "toastDeleted": "{count} conversation(s) supprimée(s)",
+        "toastStatusUpdated": "Statut mis à jour pour {count} conversation(s)",
+        "toastOpFailed": "Échec de l'opération : {message}"
       }
     },
     "conversation": {

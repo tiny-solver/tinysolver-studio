@@ -13,7 +13,14 @@ import {
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
-import { ChevronRight, Download, Loader2, Plus, XCircle } from "lucide-react"
+import {
+  ChevronRight,
+  Download,
+  ListChecks,
+  Loader2,
+  Plus,
+  XCircle,
+} from "lucide-react"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
@@ -31,6 +38,7 @@ import {
   saveFolderExpanded,
 } from "@/lib/sidebar-view-mode-storage"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
+import { ConversationManageDialog } from "./conversation-manage-dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -112,6 +120,7 @@ const FolderHeader = memo(function FolderHeader({
   onRemoveFromWorkspace,
   onNewConversation,
   onImport,
+  onManageConversations,
   t,
 }: {
   folderId: number
@@ -123,6 +132,7 @@ const FolderHeader = memo(function FolderHeader({
   onRemoveFromWorkspace: (folderId: number) => void
   onNewConversation: (folderId: number) => void
   onImport: (folderId: number) => void
+  onManageConversations: (folderId: number) => void
   t: ReturnType<typeof useTranslations>
 }) {
   return (
@@ -216,6 +226,11 @@ const FolderHeader = memo(function FolderHeader({
           {importing ? t("importing") : t("importLocalSessions")}
         </ContextMenuItem>
         <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => onManageConversations(folderId)}>
+          <ListChecks className="h-4 w-4" />
+          {t("folderHeaderMenu.manageConversations")}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem
           variant="destructive"
           onSelect={() => onRemoveFromWorkspace(folderId)}
@@ -298,6 +313,10 @@ export function SidebarConversationList({
   )
   const [scrollOffset, setScrollOffset] = useState(0)
   const [removeConfirm, setRemoveConfirm] = useState<{
+    folderId: number
+    folderName: string
+  } | null>(null)
+  const [manageState, setManageState] = useState<{
     folderId: number
     folderName: string
   } | null>(null)
@@ -479,6 +498,14 @@ export function SidebarConversationList({
     (folderId: number) => {
       const name = folderIndex.get(folderId)?.name ?? String(folderId)
       setRemoveConfirm({ folderId, folderName: name })
+    },
+    [folderIndex]
+  )
+
+  const handleManageConversations = useCallback(
+    (folderId: number) => {
+      const name = folderIndex.get(folderId)?.name ?? String(folderId)
+      setManageState({ folderId, folderName: name })
     },
     [folderIndex]
   )
@@ -705,6 +732,7 @@ export function SidebarConversationList({
                       onRemoveFromWorkspace={handleRemoveFolder}
                       onNewConversation={handleNewConversationForFolder}
                       onImport={handleImportForFolder}
+                      onManageConversations={handleManageConversations}
                       t={t}
                     />
                   </div>
@@ -735,6 +763,7 @@ export function SidebarConversationList({
                           onRemoveFromWorkspace={handleRemoveFolder}
                           onNewConversation={handleNewConversationForFolder}
                           onImport={handleImportForFolder}
+                          onManageConversations={handleManageConversations}
                           t={t}
                         />
                       )
@@ -795,6 +824,15 @@ export function SidebarConversationList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {manageState && (
+        <ConversationManageDialog
+          open
+          onOpenChange={(o) => !o && setManageState(null)}
+          folderId={manageState.folderId}
+          folderName={manageState.folderName}
+        />
+      )}
     </div>
   )
 }

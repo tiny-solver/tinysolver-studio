@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "Remove folder from workspace?",
       "removeFolderConfirmDescription": "Remove \"{name}\" from the workspace? Its tabs and terminals will close.",
       "folderHeaderMenu": {
+        "manageConversations": "Manage conversations…",
         "removeFromWorkspace": "Remove from workspace"
+      },
+      "manageConversations": {
+        "title": "Manage conversations — {name}",
+        "searchPlaceholder": "Search by title…",
+        "agentFilterAll": "All agents",
+        "statusFilterAll": "All statuses",
+        "selectAllVisible": "Select all",
+        "deselectAll": "Deselect all",
+        "selectedCount": "{count} selected",
+        "matchedCount": "{count} matched",
+        "messagesShort": "{count} msg",
+        "untitledConversation": "Untitled conversation",
+        "setStatus": "Set status…",
+        "deleteSelected": "Delete",
+        "noConversations": "No conversations in this folder.",
+        "noMatchingConversations": "No conversations match the filters.",
+        "confirmDeleteTitle": "Delete {count} conversation(s)?",
+        "confirmDeleteDescription": "This action cannot be undone.",
+        "toastDeleted": "Deleted {count} conversation(s)",
+        "toastStatusUpdated": "Updated status for {count} conversation(s)",
+        "toastOpFailed": "Operation failed: {message}"
       }
     },
     "conversation": {

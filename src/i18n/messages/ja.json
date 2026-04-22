@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "このフォルダをワークスペースから削除しますか？",
       "removeFolderConfirmDescription": "\"{name}\" をワークスペースから削除しますか？関連するタブとターミナルが閉じられます。",
       "folderHeaderMenu": {
+        "manageConversations": "会話の管理…",
         "removeFromWorkspace": "ワークスペースから削除"
+      },
+      "manageConversations": {
+        "title": "会話の管理 — {name}",
+        "searchPlaceholder": "タイトルで検索…",
+        "agentFilterAll": "すべてのエージェント",
+        "statusFilterAll": "すべてのステータス",
+        "selectAllVisible": "すべて選択",
+        "deselectAll": "選択を解除",
+        "selectedCount": "{count} 件選択中",
+        "matchedCount": "{count} 件該当",
+        "messagesShort": "{count} 件",
+        "untitledConversation": "無題の会話",
+        "setStatus": "ステータスを変更…",
+        "deleteSelected": "削除",
+        "noConversations": "このフォルダには会話がありません。",
+        "noMatchingConversations": "条件に一致する会話がありません。",
+        "confirmDeleteTitle": "{count} 件の会話を削除しますか？",
+        "confirmDeleteDescription": "この操作は元に戻せません。",
+        "toastDeleted": "{count} 件の会話を削除しました",
+        "toastStatusUpdated": "{count} 件の会話のステータスを更新しました",
+        "toastOpFailed": "操作に失敗しました: {message}"
       }
     },
     "conversation": {

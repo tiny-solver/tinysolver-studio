@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "¿Eliminar carpeta del espacio de trabajo?",
       "removeFolderConfirmDescription": "¿Eliminar \"{name}\" del espacio de trabajo? Sus pestañas y terminales se cerrarán.",
       "folderHeaderMenu": {
+        "manageConversations": "Gestionar conversaciones…",
         "removeFromWorkspace": "Quitar del espacio de trabajo"
+      },
+      "manageConversations": {
+        "title": "Gestionar conversaciones — {name}",
+        "searchPlaceholder": "Buscar por título…",
+        "agentFilterAll": "Todos los agentes",
+        "statusFilterAll": "Todos los estados",
+        "selectAllVisible": "Seleccionar todo",
+        "deselectAll": "Deseleccionar todo",
+        "selectedCount": "{count} seleccionada(s)",
+        "matchedCount": "{count} coincidencia(s)",
+        "messagesShort": "{count} msg",
+        "untitledConversation": "Conversación sin título",
+        "setStatus": "Cambiar estado…",
+        "deleteSelected": "Eliminar",
+        "noConversations": "No hay conversaciones en esta carpeta.",
+        "noMatchingConversations": "Ninguna conversación coincide con los filtros.",
+        "confirmDeleteTitle": "¿Eliminar {count} conversación(es)?",
+        "confirmDeleteDescription": "Esta acción no se puede deshacer.",
+        "toastDeleted": "Se eliminaron {count} conversación(es)",
+        "toastStatusUpdated": "Estado actualizado para {count} conversación(es)",
+        "toastOpFailed": "Error en la operación: {message}"
       }
     },
     "conversation": {

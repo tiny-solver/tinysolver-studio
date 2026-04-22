@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "從工作區移除此資料夾？",
       "removeFolderConfirmDescription": "從工作區移除 \"{name}\"？相關分頁與終端機將會關閉。",
       "folderHeaderMenu": {
+        "manageConversations": "會話管理…",
         "removeFromWorkspace": "從工作區移除"
+      },
+      "manageConversations": {
+        "title": "會話管理 — {name}",
+        "searchPlaceholder": "依標題搜尋…",
+        "agentFilterAll": "全部智能體",
+        "statusFilterAll": "全部狀態",
+        "selectAllVisible": "全選",
+        "deselectAll": "取消全選",
+        "selectedCount": "已選 {count} 筆",
+        "matchedCount": "符合 {count} 筆",
+        "messagesShort": "{count} 則",
+        "untitledConversation": "未命名會話",
+        "setStatus": "設為狀態…",
+        "deleteSelected": "刪除",
+        "noConversations": "此資料夾暫無會話。",
+        "noMatchingConversations": "沒有符合過濾條件的會話。",
+        "confirmDeleteTitle": "刪除 {count} 個會話？",
+        "confirmDeleteDescription": "此操作無法復原。",
+        "toastDeleted": "已刪除 {count} 個會話",
+        "toastStatusUpdated": "已更新 {count} 個會話的狀態",
+        "toastOpFailed": "操作失敗：{message}"
       }
     },
     "conversation": {

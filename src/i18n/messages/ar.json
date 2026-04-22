@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "إزالة المجلد من مساحة العمل؟",
       "removeFolderConfirmDescription": "إزالة \"{name}\" من مساحة العمل؟ سيتم إغلاق علامات التبويب والمحطات المرتبطة.",
       "folderHeaderMenu": {
+        "manageConversations": "إدارة المحادثات…",
         "removeFromWorkspace": "إزالة من مساحة العمل"
+      },
+      "manageConversations": {
+        "title": "إدارة المحادثات — {name}",
+        "searchPlaceholder": "البحث بالعنوان…",
+        "agentFilterAll": "جميع الوكلاء",
+        "statusFilterAll": "جميع الحالات",
+        "selectAllVisible": "تحديد الكل",
+        "deselectAll": "إلغاء التحديد",
+        "selectedCount": "{count} محدد",
+        "matchedCount": "{count} مطابق",
+        "messagesShort": "{count} رسالة",
+        "untitledConversation": "محادثة بدون عنوان",
+        "setStatus": "تعيين الحالة…",
+        "deleteSelected": "حذف",
+        "noConversations": "لا توجد محادثات في هذا المجلد.",
+        "noMatchingConversations": "لا توجد محادثات مطابقة للفلاتر.",
+        "confirmDeleteTitle": "حذف {count} محادثة؟",
+        "confirmDeleteDescription": "لا يمكن التراجع عن هذا الإجراء.",
+        "toastDeleted": "تم حذف {count} محادثة",
+        "toastStatusUpdated": "تم تحديث حالة {count} محادثة",
+        "toastOpFailed": "فشلت العملية: {message}"
       }
     },
     "conversation": {

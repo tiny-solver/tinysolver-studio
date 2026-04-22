@@ -796,7 +796,29 @@
       "removeFolderConfirmTitle": "从工作区移除该文件夹？",
       "removeFolderConfirmDescription": "从工作区移除 \"{name}\"？其相关 Tab 与终端将会关闭。",
       "folderHeaderMenu": {
+        "manageConversations": "会话管理…",
         "removeFromWorkspace": "从工作区移除"
+      },
+      "manageConversations": {
+        "title": "会话管理 — {name}",
+        "searchPlaceholder": "按标题搜索…",
+        "agentFilterAll": "全部智能体",
+        "statusFilterAll": "全部状态",
+        "selectAllVisible": "全选",
+        "deselectAll": "取消全选",
+        "selectedCount": "已选 {count} 条",
+        "matchedCount": "匹配 {count} 条",
+        "messagesShort": "{count} 条",
+        "untitledConversation": "未命名会话",
+        "setStatus": "设为状态…",
+        "deleteSelected": "删除",
+        "noConversations": "此文件夹暂无会话。",
+        "noMatchingConversations": "没有匹配过滤条件的会话。",
+        "confirmDeleteTitle": "删除 {count} 个会话？",
+        "confirmDeleteDescription": "此操作不可撤销。",
+        "toastDeleted": "已删除 {count} 个会话",
+        "toastStatusUpdated": "已更新 {count} 个会话的状态",
+        "toastOpFailed": "操作失败：{message}"
       }
     },
     "conversation": {
