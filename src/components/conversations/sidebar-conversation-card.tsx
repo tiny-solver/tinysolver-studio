@@ -138,7 +138,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               onDoubleClick={handleDblClick}
               className={cn(
                 "relative flex h-[1.9375rem] w-full items-center gap-[0.625rem] text-left outline-none",
-                "rounded-[0.375rem] text-sidebar-foreground",
+                "rounded-full text-sidebar-foreground",
                 "transition-colors duration-[120ms]",
                 "pr-[0.5rem] pl-7",
                 isSelected

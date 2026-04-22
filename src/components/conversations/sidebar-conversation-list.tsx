@@ -150,7 +150,7 @@ const FolderHeader = memo(function FolderHeader({
           <div
             className={cn(
               "flex h-[1.9375rem] w-full items-center",
-              "rounded-[0.4375rem]",
+              "rounded-full",
               "transition-colors duration-150",
               "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
             )}
@@ -759,9 +759,9 @@ export function SidebarConversationList({
                 >
                   <div
                     aria-hidden
-                    className="absolute inset-0 right-[0.5rem] bg-sidebar"
+                    className="absolute inset-0 right-[0.25rem] bg-sidebar"
                   />
-                  <div className="relative px-2">
+                  <div className="relative px-1">
                     <FolderHeader
                       key={`sticky-${stickyFolderItem.folderId}`}
                       folderId={stickyFolderItem.folderId}
@@ -781,7 +781,7 @@ export function SidebarConversationList({
               )}
               <ScrollArea
                 className={cn(
-                  "h-full min-h-0 px-2 pb-[1.25rem]",
+                  "h-full min-h-0 px-1 pb-[1.25rem]",
                   "[overflow-anchor:none]"
                 )}
               >
