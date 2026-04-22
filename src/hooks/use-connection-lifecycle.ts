@@ -129,35 +129,35 @@ export function useConnectionLifecycle({
 
   // Auto-connect when tab becomes active and workingDir is available.
   // Depends on isActive + workingDir so that connections wait for folder
-  // info to load (workingDir transitions from undefined → folder.path).
+  // info to load (workingDir transitions from undefined → folder.path),
+  // and so that changing folders on an already-connected tab triggers a
+  // reconnect with the new cwd. The context's connect() dedups same-param
+  // calls and disconnects+reconnects when workingDir differs.
   // Status changes must NOT re-trigger this to avoid infinite reconnect
   // loops on transient errors.
   useEffect(() => {
     if (!isActive) return
     if (!workingDir) return
     let cancelled = false
-    const s = statusRef.current
-    if (!s || s === "disconnected" || s === "error") {
-      connConnectRef
-        .current(agentTypeRef.current, workingDir, sessionIdRef.current)
-        .then(() => {
-          if (!cancelled) {
-            setLastAutoConnectError(null)
-          }
-        })
-        .catch((e: unknown) => {
-          if (!cancelled) {
-            setLastAutoConnectError({
-              contextKey: contextKeyRef.current,
-              agentType: agentTypeRef.current,
-              message: normalizeErrorMessage(e),
-            })
-          }
-          if (!isExpectedConnectError(e)) {
-            console.error("[ConnLifecycle] auto-connect:", e)
-          }
-        })
-    }
+    connConnectRef
+      .current(agentTypeRef.current, workingDir, sessionIdRef.current)
+      .then(() => {
+        if (!cancelled) {
+          setLastAutoConnectError(null)
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setLastAutoConnectError({
+            contextKey: contextKeyRef.current,
+            agentType: agentTypeRef.current,
+            message: normalizeErrorMessage(e),
+          })
+        }
+        if (!isExpectedConnectError(e)) {
+          console.error("[ConnLifecycle] auto-connect:", e)
+        }
+      })
     return () => {
       cancelled = true
     }

@@ -110,6 +110,7 @@ export interface ConnectionState {
   connectionId: string
   contextKey: string
   agentType: AgentType
+  workingDir: string | null
   status: ConnectionStatus
   promptCapabilities: PromptCapabilitiesInfo
   supportsFork: boolean
@@ -134,6 +135,7 @@ type Action =
       contextKey: string
       connectionId: string
       agentType: AgentType
+      workingDir: string | null
     }
   | { type: "CONNECTION_REMOVED"; contextKey: string }
   | { type: "REMOVE_ALL" }
@@ -601,6 +603,7 @@ function connectionsReducer(
         connectionId: action.connectionId,
         contextKey: action.contextKey,
         agentType: action.agentType,
+        workingDir: action.workingDir,
         status: "connecting",
         promptCapabilities: {
           image: false,
@@ -2167,10 +2170,12 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           throw createAlertedError(blocked.reason)
         }
 
+        const nextWorkingDir = workingDir ?? null
         const existing = storeRef.current.connections.get(contextKey)
         if (existing) {
           if (
             existing.agentType === agentType &&
+            existing.workingDir === nextWorkingDir &&
             existing.status !== "disconnected" &&
             existing.status !== "error"
           ) {
@@ -2204,6 +2209,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           contextKey,
           connectionId,
           agentType,
+          workingDir: nextWorkingDir,
         })
 
         const buffered = consumeBufferedEvents(connectionId)
