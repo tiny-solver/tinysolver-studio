@@ -3,23 +3,13 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import {
-  Check,
-  ChevronsUpDown,
-  Folder,
-  FolderOpen,
-  GitBranch,
-  Loader2,
-  Plus,
-} from "lucide-react"
+import { Check, ChevronsUpDown, Folder, GitBranch, Loader2 } from "lucide-react"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTaskContext } from "@/contexts/task-context"
-import { gitListAllBranches, gitCheckout, gitNewBranch } from "@/lib/api"
-import { isDesktop, openFileDialog } from "@/lib/platform"
+import { gitListAllBranches, gitCheckout } from "@/lib/api"
 import type { GitBranchList } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Popover,
   PopoverContent,
@@ -32,15 +22,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import {
   Tooltip,
   TooltipContent,
@@ -64,7 +46,6 @@ export const ConversationContextBar = memo(function ConversationContextBar({
     allFolders,
     branches,
     setBranch,
-    openFolder,
     addFolderToWorkspaceById,
     refreshFolder,
   } = useAppWorkspace()
@@ -115,25 +96,6 @@ export const ConversationContextBar = memo(function ConversationContextBar({
               toast.error(t("toasts.openFolderFailed"))
             }
           }}
-          onOpenNewFolder={async () => {
-            try {
-              if (isDesktop()) {
-                const result = await openFileDialog({
-                  directory: true,
-                  multiple: false,
-                })
-                if (!result) return
-                const selected = Array.isArray(result) ? result[0] : result
-                const detail = await openFolder(selected)
-                setTabFolder(ownTab.id, detail.id, detail.path)
-                toast.success(t("toasts.folderChanged", { name: detail.name }))
-              }
-            } catch (err) {
-              console.error("[ConversationContextBar] open folder failed:", err)
-              toast.error(t("toasts.openFolderFailed"))
-            }
-          }}
-          labelOpenNew={t("openNewFolder")}
           labelEmpty={t("noFolders")}
           labelSearch={t("searchFolder")}
         />
@@ -148,21 +110,6 @@ export const ConversationContextBar = memo(function ConversationContextBar({
             updateTask(taskId, { status: "running" })
             try {
               await gitCheckout(ownFolder.path, branchName)
-              setBranch(ownFolder.id, branchName)
-              await refreshFolder(ownFolder.id)
-              updateTask(taskId, { status: "completed" })
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              updateTask(taskId, { status: "failed", error: msg })
-              toast.error(msg)
-            }
-          }}
-          onNewBranch={async (branchName, startPoint) => {
-            const taskId = `new-branch-${ownFolder.id}-${Date.now()}`
-            addTask(taskId, tBd("tasks.newBranch", { name: branchName }))
-            updateTask(taskId, { status: "running" })
-            try {
-              await gitNewBranch(ownFolder.path, branchName, startPoint)
               setBranch(ownFolder.id, branchName)
               await refreshFolder(ownFolder.id)
               updateTask(taskId, { status: "completed" })
@@ -190,8 +137,6 @@ interface FolderPickerProps {
   currentFolderName: string
   editable: boolean
   onSelect: (folderId: number) => void | Promise<void>
-  onOpenNewFolder: () => void | Promise<void>
-  labelOpenNew: string
   labelEmpty: string
   labelSearch: string
 }
@@ -202,8 +147,6 @@ const FolderPicker = memo(function FolderPicker({
   currentFolderName,
   editable,
   onSelect,
-  onOpenNewFolder,
-  labelOpenNew,
   labelEmpty,
   labelSearch,
 }: FolderPickerProps) {
@@ -236,8 +179,8 @@ const FolderPicker = memo(function FolderPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" className="p-0 w-72">
-        <Command>
+      <PopoverContent align="start" className="p-0 w-72 overflow-hidden">
+        <Command className="rounded-2xl">
           <CommandInput placeholder={labelSearch} />
           <CommandList>
             <CommandEmpty>{labelEmpty}</CommandEmpty>
@@ -264,18 +207,6 @@ const FolderPicker = memo(function FolderPicker({
                 </CommandItem>
               ))}
             </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup>
-              <CommandItem
-                onSelect={() => {
-                  setOpen(false)
-                  void onOpenNewFolder()
-                }}
-              >
-                <FolderOpen className="h-4 w-4" />
-                {labelOpenNew}
-              </CommandItem>
-            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>
@@ -292,7 +223,6 @@ interface BranchPickerProps {
   folderPath: string
   currentBranch: string | null
   onCheckout: (branchName: string) => Promise<void>
-  onNewBranch: (branchName: string, startPoint?: string) => Promise<void>
 }
 
 const BranchPicker = memo(function BranchPicker({
@@ -300,15 +230,12 @@ const BranchPicker = memo(function BranchPicker({
   folderPath,
   currentBranch,
   onCheckout,
-  onNewBranch,
 }: BranchPickerProps) {
   const t = useTranslations("Folder.conversationContextBar")
   const tBd = useTranslations("Folder.branchDropdown")
   const [open, setOpen] = useState(false)
   const [branchList, setBranchList] = useState<GitBranchList | null>(null)
   const [loading, setLoading] = useState(false)
-  const [newBranchOpen, setNewBranchOpen] = useState(false)
-  const [newBranchName, setNewBranchName] = useState("")
 
   const loadBranches = useCallback(async () => {
     setLoading(true)
@@ -333,135 +260,79 @@ const BranchPicker = memo(function BranchPicker({
   }, [folderId])
 
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="xs"
-            className="min-w-0 bg-transparent"
-          >
-            <GitBranch className="size-3 shrink-0 text-muted-foreground" />
-            <span className="max-w-[160px] truncate">
-              {currentBranch ?? t("noBranch")}
-            </span>
-            <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="p-0 w-80 overflow-hidden">
-          <Command className="rounded-2xl">
-            <CommandInput placeholder={t("searchBranch")} />
-            <CommandList>
-              {loading ? (
-                <div className="py-6 text-center text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
-                </div>
-              ) : (
-                <>
-                  <CommandEmpty>{t("noBranches")}</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      onSelect={() => {
-                        setOpen(false)
-                        setNewBranchName("")
-                        setNewBranchOpen(true)
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                      {tBd("newBranch")}
-                    </CommandItem>
-                  </CommandGroup>
-                  {branchList && branchList.local.length > 0 && (
-                    <>
-                      <CommandSeparator />
-                      <CommandGroup
-                        heading={tBd("localBranches", {
-                          count: branchList.local.length,
-                        })}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="xs" className="min-w-0 bg-transparent">
+          <GitBranch className="size-3 shrink-0 text-muted-foreground" />
+          <span className="max-w-[160px] truncate">
+            {currentBranch ?? t("noBranch")}
+          </span>
+          <ChevronsUpDown className="size-3 shrink-0 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="p-0 w-80 overflow-hidden">
+        <Command className="rounded-2xl">
+          <CommandInput placeholder={t("searchBranch")} />
+          <CommandList>
+            {loading ? (
+              <div className="py-6 text-center text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>{t("noBranches")}</CommandEmpty>
+                {branchList && branchList.local.length > 0 && (
+                  <CommandGroup
+                    heading={tBd("localBranches", {
+                      count: branchList.local.length,
+                    })}
+                  >
+                    {branchList.local.map((b) => (
+                      <CommandItem
+                        key={`local-${b}`}
+                        value={`local ${b}`}
+                        onSelect={() => {
+                          setOpen(false)
+                          if (b !== currentBranch) void onCheckout(b)
+                        }}
                       >
-                        {branchList.local.map((b) => (
-                          <CommandItem
-                            key={`local-${b}`}
-                            value={`local ${b}`}
-                            onSelect={() => {
-                              setOpen(false)
-                              if (b !== currentBranch) void onCheckout(b)
-                            }}
-                          >
-                            <GitBranch className="h-4 w-4" />
-                            <span className="flex-1 truncate">{b}</span>
-                            {b === currentBranch && (
-                              <Check className="h-4 w-4 shrink-0" />
-                            )}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </>
-                  )}
-                  {branchList && branchList.remote.length > 0 && (
-                    <CommandGroup
-                      heading={tBd("remoteBranches", {
-                        count: branchList.remote.length,
-                      })}
-                    >
-                      {branchList.remote.map((b) => (
-                        <CommandItem
-                          key={`remote-${b}`}
-                          value={`remote ${b}`}
-                          onSelect={() => {
-                            setOpen(false)
-                            void onCheckout(b)
-                          }}
-                        >
-                          <GitBranch className="h-4 w-4 opacity-60" />
-                          <span className="flex-1 truncate text-muted-foreground">
-                            {b}
-                          </span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  )}
-                </>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      <Dialog open={newBranchOpen} onOpenChange={setNewBranchOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{tBd("dialogs.newBranchTitle")}</DialogTitle>
-          </DialogHeader>
-          <div className="text-sm text-muted-foreground">
-            {tBd("dialogs.newBranchDescription", {
-              branch: currentBranch ?? "-",
-            })}
-          </div>
-          <Input
-            placeholder={tBd("dialogs.branchNamePlaceholder")}
-            value={newBranchName}
-            onChange={(e) => setNewBranchName(e.target.value)}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewBranchOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              disabled={!newBranchName.trim()}
-              onClick={async () => {
-                const name = newBranchName.trim()
-                if (!name) return
-                setNewBranchOpen(false)
-                await onNewBranch(name, currentBranch ?? undefined)
-              }}
-            >
-              {t("create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+                        <GitBranch className="h-4 w-4" />
+                        <span className="flex-1 truncate">{b}</span>
+                        {b === currentBranch && (
+                          <Check className="h-4 w-4 shrink-0" />
+                        )}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+                {branchList && branchList.remote.length > 0 && (
+                  <CommandGroup
+                    heading={tBd("remoteBranches", {
+                      count: branchList.remote.length,
+                    })}
+                  >
+                    {branchList.remote.map((b) => (
+                      <CommandItem
+                        key={`remote-${b}`}
+                        value={`remote ${b}`}
+                        onSelect={() => {
+                          setOpen(false)
+                          void onCheckout(b)
+                        }}
+                      >
+                        <GitBranch className="h-4 w-4 opacity-60" />
+                        <span className="flex-1 truncate text-muted-foreground">
+                          {b}
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   )
 })
