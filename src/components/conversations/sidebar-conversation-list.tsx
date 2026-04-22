@@ -404,10 +404,20 @@ export function SidebarConversationList({
     folder: Extract<FlatItem, { type: "folder_header" }> | null
     pushOffset: number
   }>(() => {
-    const vr = virtualizerRef.current
-    const startIdx = vr ? vr.findItemIndex(scrollOffset) : 0
+    // All items are uniform height (cardHeightPx). Compute offsets from the
+    // index directly instead of querying virtua — querying it during render
+    // (when flatItems has grown but Virtualizer hasn't re-rendered yet) can
+    // poison its internal size cache and produce NaN for total scroll height.
+    if (flatItems.length === 0 || cardHeightPx <= 0) {
+      return { folder: null, pushOffset: 0 }
+    }
+    const rawStart = Math.floor(scrollOffset / cardHeightPx)
+    const startIdx = Math.max(
+      0,
+      Math.min(flatItems.length - 1, Number.isFinite(rawStart) ? rawStart : 0)
+    )
     let folderIdx = -1
-    for (let i = Math.min(startIdx, flatItems.length - 1); i >= 0; i--) {
+    for (let i = startIdx; i >= 0; i--) {
       if (flatItems[i]?.type === "folder_header") {
         folderIdx = i
         break
@@ -421,16 +431,13 @@ export function SidebarConversationList({
       { type: "folder_header" }
     >
     let pushOffset = 0
-    if (vr) {
-      const stickyHeight = vr.getItemSize(folderIdx) || cardHeightPx
-      for (let i = folderIdx + 1; i < flatItems.length; i++) {
-        if (flatItems[i].type === "folder_header") {
-          const nextRelativeY = vr.getItemOffset(i) - scrollOffset
-          if (nextRelativeY < stickyHeight) {
-            pushOffset = Math.min(0, nextRelativeY - stickyHeight)
-          }
-          break
+    for (let i = folderIdx + 1; i < flatItems.length; i++) {
+      if (flatItems[i].type === "folder_header") {
+        const nextRelativeY = i * cardHeightPx - scrollOffset
+        if (nextRelativeY < cardHeightPx) {
+          pushOffset = Math.min(0, nextRelativeY - cardHeightPx)
         }
+        break
       }
     }
     return { folder, pushOffset }
