@@ -175,9 +175,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               {isRunning ? (
                 <span
                   className={cn(
-                    "relative shrink-0 rounded-[0.1875rem] px-[0.375rem] py-px",
-                    "text-[0.6875rem] font-semibold tracking-[0.01875rem]",
-                    "bg-amber-500/10 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400"
+                    "relative inline-flex shrink-0 items-center justify-center",
+                    "h-[0.9375rem] rounded-[0.3125rem] px-[0.25rem]",
+                    "text-[0.625rem] font-semibold leading-none tracking-[0.01875rem]",
+                    "bg-amber-500/20 text-amber-600 dark:bg-amber-400/20 dark:text-amber-400"
                   )}
                 >
                   {tSidebar("statusRunningBadge")}
@@ -185,9 +186,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               ) : isFailed ? (
                 <span
                   className={cn(
-                    "relative shrink-0 rounded-[0.1875rem] px-[0.375rem] py-px",
-                    "text-[0.6875rem] font-semibold tracking-[0.01875rem]",
-                    "bg-destructive/10 text-destructive"
+                    "relative inline-flex shrink-0 items-center justify-center",
+                    "h-[0.9375rem] rounded-[0.3125rem] px-[0.25rem]",
+                    "text-[0.625rem] font-semibold leading-none tracking-[0.01875rem]",
+                    "bg-destructive/20 text-destructive"
                   )}
                 >
                   {tSidebar("statusFailedBadge")}
