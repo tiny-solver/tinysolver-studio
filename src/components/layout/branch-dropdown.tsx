@@ -68,6 +68,7 @@ import {
   gitFetch,
   gitNewBranch,
   gitWorktreeAdd,
+  gitCheckout,
   gitListAllBranches,
   gitMerge,
   gitRebase,
@@ -293,6 +294,21 @@ export function BranchDropdown() {
     }
   }
 
+  async function handleCheckout(branchName: string) {
+    setDropdownOpen(false)
+    await runGitTask(t("tasks.checkoutTo", { branchName }), () =>
+      gitCheckout(folderPath, branchName)
+    )
+  }
+
+  async function handleCheckoutRemote(remoteBranch: string) {
+    const localName = remoteBranch.replace(/^[^/]+\//, "")
+    setDropdownOpen(false)
+    await runGitTask(t("tasks.checkoutTo", { branchName: localName }), () =>
+      gitCheckout(folderPath, localName)
+    )
+  }
+
   async function handleNewBranch() {
     const name = newBranchName.trim()
     if (!name) return
@@ -492,6 +508,18 @@ export function BranchDropdown() {
           {label}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
+          <DropdownMenuItem
+            onSelect={() => {
+              if (isRemote) {
+                void handleCheckoutRemote(b)
+              } else {
+                void handleCheckout(b)
+              }
+            }}
+          >
+            <GitBranch className="h-3.5 w-3.5" />
+            {t("switchToBranch")}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               setDropdownOpen(false)
