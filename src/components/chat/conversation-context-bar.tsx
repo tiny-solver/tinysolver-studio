@@ -301,21 +301,28 @@ const BranchPicker = memo(function BranchPicker({
                       count: branchList.remote.length,
                     })}
                   >
-                    {branchList.remote.map((b) => (
-                      <CommandItem
-                        key={`remote-${b}`}
-                        value={`remote ${b}`}
-                        onSelect={() => {
-                          setOpen(false)
-                          void onCheckout(b)
-                        }}
-                      >
-                        <GitBranch className="h-4 w-4 opacity-60" />
-                        <span className="flex-1 truncate text-muted-foreground">
-                          {b}
-                        </span>
-                      </CommandItem>
-                    ))}
+                    {branchList.remote.map((b) => {
+                      const localName = b.replace(/^[^/]+\//, "")
+                      return (
+                        <CommandItem
+                          key={`remote-${b}`}
+                          value={`remote ${b}`}
+                          onSelect={() => {
+                            setOpen(false)
+                            if (localName !== currentBranch)
+                              void onCheckout(localName)
+                          }}
+                        >
+                          <GitBranch className="h-4 w-4 opacity-60" />
+                          <span className="flex-1 truncate text-muted-foreground">
+                            {b}
+                          </span>
+                          {localName === currentBranch && (
+                            <Check className="h-4 w-4 shrink-0" />
+                          )}
+                        </CommandItem>
+                      )
+                    })}
                   </CommandGroup>
                 )}
               </>
