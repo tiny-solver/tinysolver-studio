@@ -220,6 +220,7 @@ mod tauri_app {
                 folders::get_folder,
                 folders::list_open_folder_details,
                 folders::list_all_folder_details,
+                folders::open_folder,
                 folders::open_folder_by_id,
                 folders::remove_folder_from_workspace,
                 folders::add_folder_to_history,
