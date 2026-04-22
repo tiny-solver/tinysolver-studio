@@ -651,11 +651,6 @@ export function SidebarConversationList({
     [importing, addTask, updateTask, refreshConversations, t]
   )
 
-  const handleImport = useCallback(async () => {
-    if (!activeFolder) return
-    await handleImportForFolder(activeFolder.id)
-  }, [activeFolder, handleImportForFolder])
-
   const handleOpenFolderAction = useCallback(async () => {
     if (isDesktop()) {
       try {
@@ -694,9 +689,6 @@ export function SidebarConversationList({
 
   const showEmptyWorkspaceActions =
     folders.length === 0 && conversations.length === 0
-
-  const emptyAfterFilter =
-    filteredConversations.length === 0 && conversations.length > 0
 
   return (
     <div className="relative flex flex-col flex-1 min-h-0">
@@ -747,44 +739,6 @@ export function SidebarConversationList({
             <Rocket className="h-3.5 w-3.5 mr-1.5" />
             {tFolderDropdown("projectBoot")}
           </Button>
-        </div>
-      ) : conversations.length === 0 ? (
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div className="flex-1 flex flex-col items-center justify-center px-3 gap-3">
-              <p className="text-muted-foreground text-xs text-center">
-                {t("noConversationsFound")}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={importing || !activeFolder}
-                onClick={handleImport}
-              >
-                {importing ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <Download className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                {importing ? t("importing") : t("importLocalSessions")}
-              </Button>
-            </div>
-          </ContextMenuTrigger>
-          <ContextMenuContent>
-            <ContextMenuItem
-              onSelect={handleNewConversation}
-              disabled={!activeFolder}
-            >
-              <Plus className="h-4 w-4" />
-              {t("newConversation")}
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      ) : emptyAfterFilter ? (
-        <div className="flex-1 flex items-center justify-center px-3">
-          <p className="text-muted-foreground text-xs text-center">
-            {t("noMatchingConversations")}
-          </p>
         </div>
       ) : (
         <ContextMenu>
