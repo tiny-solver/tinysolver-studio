@@ -42,6 +42,7 @@ import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
 import {
   loadFolderExpanded,
   saveFolderExpanded,
+  type SidebarSortMode,
 } from "@/lib/sidebar-view-mode-storage"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
 import { ConversationManageDialog } from "./conversation-manage-dialog"
@@ -85,6 +86,21 @@ function compareByUpdatedAtDesc(
   const createdDiff =
     parseTimestamp(right.created_at) - parseTimestamp(left.created_at)
   if (createdDiff !== 0) return createdDiff
+
+  return right.id - left.id
+}
+
+function compareByCreatedAtDesc(
+  left: DbConversationSummary,
+  right: DbConversationSummary
+): number {
+  const createdDiff =
+    parseTimestamp(right.created_at) - parseTimestamp(left.created_at)
+  if (createdDiff !== 0) return createdDiff
+
+  const updatedDiff =
+    parseTimestamp(right.updated_at) - parseTimestamp(left.updated_at)
+  if (updatedDiff !== 0) return updatedDiff
 
   return right.id - left.id
 }
@@ -259,11 +275,13 @@ export interface SidebarConversationListHandle {
 
 export interface SidebarConversationListProps {
   showCompleted?: boolean
+  sortMode?: SidebarSortMode
 }
 
 export function SidebarConversationList({
   ref,
   showCompleted = true,
+  sortMode = "created",
 }: SidebarConversationListProps & {
   ref?: Ref<SidebarConversationListHandle>
 }) {
@@ -368,9 +386,11 @@ export function SidebarConversationList({
       if (list) list.push(conv)
       else map.set(conv.folder_id, [conv])
     }
-    for (const list of map.values()) list.sort(compareByUpdatedAtDesc)
+    const comparator =
+      sortMode === "updated" ? compareByUpdatedAtDesc : compareByCreatedAtDesc
+    for (const list of map.values()) list.sort(comparator)
     return map
-  }, [filteredConversations])
+  }, [filteredConversations, sortMode])
 
   const orderedFolderIds = useMemo(() => {
     const seen = new Set<number>()
@@ -821,7 +841,11 @@ export function SidebarConversationList({
                         isOpenInTab={openTabConversationKeys.has(
                           `${conv.agent_type}:${conv.id}`
                         )}
-                        timeLabel={formatRelative(conv.updated_at)}
+                        timeLabel={formatRelative(
+                          sortMode === "updated"
+                            ? conv.updated_at
+                            : conv.created_at
+                        )}
                         onSelect={handleSelect}
                         onDoubleClick={handleDoubleClick}
                         onRename={handleRename}

@@ -18,6 +18,10 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -29,7 +33,10 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   loadShowCompleted,
+  loadSortMode,
   saveShowCompleted,
+  saveSortMode,
+  type SidebarSortMode,
 } from "@/lib/sidebar-view-mode-storage"
 
 export function Sidebar() {
@@ -39,17 +46,25 @@ export function Sidebar() {
   const listRef = useRef<SidebarConversationListHandle>(null)
 
   const [showCompleted, setShowCompleted] = useState(false)
+  const [sortMode, setSortMode] = useState<SidebarSortMode>("created")
   const [allExpanded, setAllExpanded] = useState(true)
 
   useEffect(() => {
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowCompleted(loadShowCompleted())
+    setSortMode(loadSortMode())
   }, [])
 
   const handleSetShowCompleted = useCallback((value: boolean) => {
     setShowCompleted(value)
     saveShowCompleted(value)
+  }, [])
+
+  const handleSetSortMode = useCallback((value: string) => {
+    const mode: SidebarSortMode = value === "updated" ? "updated" : "created"
+    setSortMode(mode)
+    saveSortMode(mode)
   }, [])
 
   const handleToggleExpandAll = useCallback(() => {
@@ -122,6 +137,19 @@ export function Sidebar() {
                 >
                   {t("showCompleted")}
                 </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t("sortBy")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={sortMode}
+                  onValueChange={handleSetSortMode}
+                >
+                  <DropdownMenuRadioItem value="created">
+                    {t("sortByCreatedAt")}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="updated">
+                    {t("sortByUpdatedAt")}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -142,7 +170,11 @@ export function Sidebar() {
             : undefined
         }
       >
-        <SidebarConversationList ref={listRef} showCompleted={showCompleted} />
+        <SidebarConversationList
+          ref={listRef}
+          showCompleted={showCompleted}
+          sortMode={sortMode}
+        />
       </div>
     </aside>
   )

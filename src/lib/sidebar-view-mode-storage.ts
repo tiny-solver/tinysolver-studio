@@ -2,6 +2,9 @@
 
 const FOLDER_EXPANDED_KEY = "workspace:sidebar-folder-expanded"
 const SHOW_COMPLETED_KEY = "workspace:sidebar-show-completed"
+const SORT_MODE_KEY = "workspace:sidebar-sort-mode"
+
+export type SidebarSortMode = "created" | "updated"
 
 export function loadFolderExpanded(): Record<number, boolean> {
   if (typeof window === "undefined") return {}
@@ -47,6 +50,26 @@ export function saveShowCompleted(value: boolean): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(SHOW_COMPLETED_KEY, String(value))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadSortMode(): SidebarSortMode {
+  if (typeof window === "undefined") return "created"
+  try {
+    const raw = localStorage.getItem(SORT_MODE_KEY)
+    if (raw === "updated" || raw === "created") return raw
+  } catch {
+    /* ignore */
+  }
+  return "created"
+}
+
+export function saveSortMode(value: SidebarSortMode): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(SORT_MODE_KEY, value)
   } catch {
     /* ignore */
   }
