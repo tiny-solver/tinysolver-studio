@@ -571,7 +571,7 @@ export function BranchDropdown() {
             <span className="max-w-[320px] truncate">
               {folderName}
               <span className="mx-1.5 inline-block h-3 w-px bg-foreground/20 align-middle" />
-              <span className="text-primary">{t("versionControl")}</span>
+              <span className="text-primary">{t("noBranch")}</span>
             </span>
             <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
           </button>

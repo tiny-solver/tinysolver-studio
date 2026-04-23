@@ -1068,7 +1068,7 @@
       "switchToBranch": "Mudar para esta branch",
       "mergeBranchIntoCurrent": "Mesclar {branchName} em {currentBranch}",
       "rebaseCurrentToBranch": "Rebase de {currentBranch} sobre {branchName}",
-      "versionControl": "Controle de versão",
+      "noBranch": "Sem ramo",
       "initGitRepo": "Inicializar repositório Git",
       "pullCode": "Fazer pull do código",
       "fetchRemoteBranches": "Buscar branches remotas",

@@ -1068,7 +1068,7 @@
       "switchToBranch": "このブランチに切り替え",
       "mergeBranchIntoCurrent": "{branchName} を {currentBranch} にマージ",
       "rebaseCurrentToBranch": "{currentBranch} を {branchName} にリベース",
-      "versionControl": "バージョン管理",
+      "noBranch": "ブランチなし",
       "initGitRepo": "Git リポジトリを初期化",
       "pullCode": "コードをプル",
       "fetchRemoteBranches": "リモートブランチをフェッチ",

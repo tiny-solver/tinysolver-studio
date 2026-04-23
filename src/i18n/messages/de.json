@@ -1068,7 +1068,7 @@
       "switchToBranch": "Zu diesem Branch wechseln",
       "mergeBranchIntoCurrent": "{branchName} in {currentBranch} mergen",
       "rebaseCurrentToBranch": "{currentBranch} auf {branchName} rebasen",
-      "versionControl": "Versionskontrolle",
+      "noBranch": "Kein Branch",
       "initGitRepo": "Git-Repository initialisieren",
       "pullCode": "Code pullen",
       "fetchRemoteBranches": "Remote-Branches fetchen",

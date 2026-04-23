@@ -1068,7 +1068,7 @@
       "switchToBranch": "切换到此分支",
       "mergeBranchIntoCurrent": "将 {branchName} 合并到 {currentBranch}",
       "rebaseCurrentToBranch": "将 {currentBranch} 变基到 {branchName}",
-      "versionControl": "版本控制",
+      "noBranch": "无分支",
       "initGitRepo": "初始化 Git 仓库",
       "pullCode": "更新代码",
       "fetchRemoteBranches": "提取远程分支",

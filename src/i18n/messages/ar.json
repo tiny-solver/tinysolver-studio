@@ -1068,7 +1068,7 @@
       "switchToBranch": "التبديل إلى هذا الفرع",
       "mergeBranchIntoCurrent": "دمج {branchName} في {currentBranch}",
       "rebaseCurrentToBranch": "Rebase لـ {currentBranch} على {branchName}",
-      "versionControl": "التحكم في الإصدارات",
+      "noBranch": "بدون فرع",
       "initGitRepo": "تهيئة مستودع Git",
       "pullCode": "سحب الكود",
       "fetchRemoteBranches": "جلب الفروع البعيدة",
