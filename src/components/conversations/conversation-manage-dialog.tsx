@@ -146,7 +146,10 @@ export function ConversationManageDialog({
           agent_type: agentFilter === "all" ? null : agentFilter,
           status: statusFilter === "all" ? null : statusFilter,
         })
-        setRows(data)
+        const sorted = [...data].sort(
+          (a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at)
+        )
+        setRows(sorted)
         setError(null)
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
@@ -384,7 +387,7 @@ export function ConversationManageDialog({
                           {t("messagesShort", { count: conv.message_count })}
                         </span>
                         <span className="shrink-0 text-xs text-muted-foreground w-10 text-right">
-                          {formatRelative(conv.updated_at)}
+                          {formatRelative(conv.created_at)}
                         </span>
                         <span
                           className="shrink-0 inline-flex"
