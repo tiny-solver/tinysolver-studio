@@ -1797,6 +1797,8 @@
       "noDiffData": "Sin datos de diff"
     },
     "conversationContextBar": {
+      "folderTitle": "Carpeta de trabajo",
+      "branchTitle": "Rama de trabajo",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",

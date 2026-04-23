@@ -1797,6 +1797,8 @@
       "noDiffData": "Diff データがありません"
     },
     "conversationContextBar": {
+      "folderTitle": "作業フォルダ",
+      "branchTitle": "作業ブランチ",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",

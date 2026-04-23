@@ -64,6 +64,7 @@ export const ConversationContextBar = memo(function ConversationContextBar({
         folders={folders}
         currentFolderId={ownFolder.id}
         currentFolderName={ownFolder.name}
+        title={`${t("folderTitle")}: ${ownFolder.name}`}
         editable={isNewConversation}
         onSelect={async (folderId) => {
           const target = folders.find((f) => f.id === folderId)
@@ -87,6 +88,7 @@ export const ConversationContextBar = memo(function ConversationContextBar({
         folderId={ownFolder.id}
         folderPath={ownFolder.path}
         currentBranch={currentBranch}
+        title={`${t("branchTitle")}: ${currentBranch ?? t("noBranch")}`}
         onCheckout={async (branchName) => {
           const taskId = `checkout-${ownFolder.id}-${Date.now()}`
           addTask(taskId, tBd("tasks.checkoutTo", { branchName }))
@@ -117,6 +119,7 @@ interface FolderPickerProps {
   folders: { id: number; name: string; path: string }[]
   currentFolderId: number
   currentFolderName: string
+  title: string
   editable: boolean
   onSelect: (folderId: number) => void | Promise<void>
   labelEmpty: string
@@ -127,6 +130,7 @@ const FolderPicker = memo(function FolderPicker({
   folders,
   currentFolderId,
   currentFolderName,
+  title,
   editable,
   onSelect,
   labelEmpty,
@@ -138,7 +142,7 @@ const FolderPicker = memo(function FolderPicker({
     <Button
       variant="outline"
       size="xs"
-      title={currentFolderName}
+      title={title}
       className={cn(
         "min-w-0 bg-transparent",
         !editable && "cursor-default opacity-60 hover:bg-transparent"
@@ -200,6 +204,7 @@ interface BranchPickerProps {
   folderId: number
   folderPath: string
   currentBranch: string | null
+  title: string
   onCheckout: (branchName: string) => Promise<void>
 }
 
@@ -207,6 +212,7 @@ const BranchPicker = memo(function BranchPicker({
   folderId,
   folderPath,
   currentBranch,
+  title,
   onCheckout,
 }: BranchPickerProps) {
   const t = useTranslations("Folder.conversationContextBar")
@@ -240,7 +246,12 @@ const BranchPicker = memo(function BranchPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="xs" className="min-w-0 bg-transparent">
+        <Button
+          variant="outline"
+          size="xs"
+          title={title}
+          className="min-w-0 bg-transparent"
+        >
           <GitBranch className="size-3 shrink-0 text-muted-foreground" />
           <span className="max-w-[160px] truncate">
             {currentBranch ?? t("noBranch")}

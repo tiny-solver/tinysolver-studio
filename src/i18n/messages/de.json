@@ -1797,6 +1797,8 @@
       "noDiffData": "Keine Diff-Daten"
     },
     "conversationContextBar": {
+      "folderTitle": "Arbeitsordner",
+      "branchTitle": "Arbeits-Branch",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",

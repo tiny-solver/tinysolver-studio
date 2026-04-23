@@ -1797,6 +1797,8 @@
       "noDiffData": "Diff 데이터 없음"
     },
     "conversationContextBar": {
+      "folderTitle": "작업 폴더",
+      "branchTitle": "작업 브랜치",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",

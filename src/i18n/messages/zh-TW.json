@@ -1797,6 +1797,8 @@
       "noDiffData": "無差異資料"
     },
     "conversationContextBar": {
+      "folderTitle": "工作資料夾",
+      "branchTitle": "工作分支",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",

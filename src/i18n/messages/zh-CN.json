@@ -1797,6 +1797,8 @@
       "noDiffData": "无差异数据"
     },
     "conversationContextBar": {
+      "folderTitle": "工作文件夹",
+      "branchTitle": "工作分支",
       "searchFolder": "搜索文件夹...",
       "searchBranch": "搜索分支...",
       "noFolders": "暂无文件夹",

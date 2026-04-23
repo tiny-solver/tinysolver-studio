@@ -1797,6 +1797,8 @@
       "noDiffData": "لا توجد بيانات diff"
     },
     "conversationContextBar": {
+      "folderTitle": "مجلد العمل",
+      "branchTitle": "فرع العمل",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",

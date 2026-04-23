@@ -1797,6 +1797,8 @@
       "noDiffData": "No diff data"
     },
     "conversationContextBar": {
+      "folderTitle": "Working folder",
+      "branchTitle": "Working branch",
       "searchFolder": "Search folder...",
       "searchBranch": "Search branch...",
       "noFolders": "No folders",
