@@ -17,8 +17,9 @@ import type {
   DbConversationSummary,
 } from "@/lib/types"
 import { useFileTree, type FlatFileEntry } from "@/hooks/use-file-tree"
-import { AGENT_LABELS, STATUS_COLORS, compareAgentType } from "@/lib/types"
+import { AGENT_LABELS, STATUS_ICON_COLORS, compareAgentType } from "@/lib/types"
 import { AgentIcon } from "@/components/agent-icon"
+import { ConversationStatusIcon } from "@/components/conversations/conversation-status-icon"
 import {
   CommandDialog,
   CommandInput,
@@ -268,11 +269,12 @@ export function SearchCommandDialog({
                     value={`${conv.id}-${conv.title ?? ""}`}
                     onSelect={() => handleSelectConversation(conv)}
                   >
-                    <span
+                    <ConversationStatusIcon
+                      status={conv.status as ConversationStatus}
                       className={cn(
-                        "w-2 h-2 rounded-full shrink-0",
-                        STATUS_COLORS[conv.status as ConversationStatus] ??
-                          "bg-gray-400"
+                        "h-4 w-4",
+                        STATUS_ICON_COLORS[conv.status as ConversationStatus] ??
+                          "text-muted-foreground"
                       )}
                     />
                     <span className="flex-1 truncate">

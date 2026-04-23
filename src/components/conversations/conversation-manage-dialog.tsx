@@ -61,10 +61,11 @@ import type {
 import {
   AGENT_LABELS,
   ALL_AGENT_TYPES,
-  STATUS_COLORS,
+  STATUS_ICON_COLORS,
   STATUS_ORDER,
 } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { ConversationStatusIcon } from "@/components/conversations/conversation-status-icon"
 
 interface ConversationManageDialogProps {
   open: boolean
@@ -291,11 +292,9 @@ export function ConversationManageDialog({
                   {STATUS_ORDER.map((s) => (
                     <SelectItem key={s} value={s}>
                       <span className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "h-2 w-2 rounded-full",
-                            STATUS_COLORS[s]
-                          )}
+                        <ConversationStatusIcon
+                          status={s}
+                          className={cn("h-4 w-4", STATUS_ICON_COLORS[s])}
                         />
                         {tStatus(s)}
                       </span>
@@ -388,11 +387,7 @@ export function ConversationManageDialog({
                           {formatRelative(conv.updated_at)}
                         </span>
                         <span
-                          className={cn(
-                            "shrink-0 h-2 w-2 rounded-full",
-                            STATUS_COLORS[conv.status as ConversationStatus] ??
-                              "bg-gray-400"
-                          )}
+                          className="shrink-0 inline-flex"
                           title={
                             STATUS_ORDER.includes(
                               conv.status as ConversationStatus
@@ -400,7 +395,17 @@ export function ConversationManageDialog({
                               ? tStatus(conv.status as ConversationStatus)
                               : conv.status
                           }
-                        />
+                        >
+                          <ConversationStatusIcon
+                            status={conv.status as ConversationStatus}
+                            className={cn(
+                              "h-4 w-4",
+                              STATUS_ICON_COLORS[
+                                conv.status as ConversationStatus
+                              ] ?? "text-muted-foreground"
+                            )}
+                          />
+                        </span>
                       </div>
                     )
                   })
@@ -434,11 +439,9 @@ export function ConversationManageDialog({
                       key={s}
                       onSelect={() => handleBulkStatus(s)}
                     >
-                      <span
-                        className={cn(
-                          "h-2 w-2 rounded-full mr-2",
-                          STATUS_COLORS[s]
-                        )}
+                      <ConversationStatusIcon
+                        status={s}
+                        className={cn("h-4 w-4", STATUS_ICON_COLORS[s])}
                       />
                       {tStatus(s)}
                     </DropdownMenuItem>
