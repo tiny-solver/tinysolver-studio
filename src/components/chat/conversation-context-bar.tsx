@@ -112,7 +112,12 @@ export const ConversationContextBar = memo(function ConversationContextBar({
         )}
       >
         {hasSelectors && ownTab && ownFolder && (
-          <div className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-border/50 bg-background pl-2 pr-2">
+          <div
+            className={cn(
+              "sticky left-0 z-10 flex shrink-0 items-center gap-1.5 bg-background pl-2 pr-2",
+              hasExtraContent && "border-r border-border/50"
+            )}
+          >
             <FolderPicker
               folders={folders}
               currentFolderId={ownFolder.id}
