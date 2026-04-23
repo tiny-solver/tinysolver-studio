@@ -5,7 +5,6 @@ import {
   ArchiveRestore,
   Archive,
   ArrowDownToLine,
-  ArrowLeftRight,
   ChevronDown,
   ChevronRight,
   FolderGit2,
@@ -77,7 +76,6 @@ import {
   openCommitWindow,
   openPushWindow,
   openStashWindow,
-  setFolderParentBranch,
 } from "@/lib/api"
 import { openFileDialog, subscribe } from "@/lib/platform"
 import { RemoteManageDialog } from "@/components/layout/remote-manage-dialog"
@@ -130,7 +128,6 @@ export function BranchDropdown() {
   const branch = activeFolder
     ? (branches.get(activeFolder.id) ?? activeFolder.git_branch ?? null)
     : null
-  const parentBranch = activeFolder?.parent_branch ?? null
 
   const [branchList, setBranchList] = useState<GitBranchList>({
     local: [],
@@ -349,13 +346,7 @@ export function BranchDropdown() {
     await runGitTask(t("tasks.newWorktree", { name }), async () => {
       await gitWorktreeAdd(folderPath, name, wtPath)
       await openFolder(wtPath)
-      await setFolderParentBranch(wtPath, branch)
     })
-  }
-
-  function handleMergeParent() {
-    if (!parentBranch) return
-    setConfirmAction({ type: "merge", branchName: parentBranch })
   }
 
   async function handleConfirm() {
@@ -817,18 +808,6 @@ export function BranchDropdown() {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-
-      {parentBranch && (
-        <button
-          className="flex cursor-default select-none items-center gap-1 rounded px-1.5 py-0.5 text-xs text-orange-500 transition-colors hover:bg-accent hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300"
-          disabled={loading}
-          onClick={handleMergeParent}
-          title={t("parentBranchHint", { parentBranch })}
-        >
-          <ArrowLeftRight className="h-3 w-3 shrink-0" />
-          <span className="max-w-32 truncate">{parentBranch}</span>
-        </button>
-      )}
 
       <AlertDialog
         open={confirmAction !== null}

@@ -1082,7 +1082,6 @@
       "noLocalBranches": "لا توجد فروع محلية",
       "remoteBranches": "الفروع البعيدة ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "لا توجد فروع بعيدة",
-      "parentBranchHint": "تم إنشاء الفرع الحالي من {parentBranch}. انقر لدمج {parentBranch} في الفرع الحالي.",
       "dialogs": {
         "newBranchTitle": "فرع جديد",
         "newBranchDescription": "إنشاء فرع جديد من الفرع الحالي {branch}",

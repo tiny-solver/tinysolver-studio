@@ -1082,7 +1082,6 @@
       "noLocalBranches": "Aucune branche locale",
       "remoteBranches": "Branches distantes ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "Aucune branche distante",
-      "parentBranchHint": "La branche actuelle a été créée depuis {parentBranch}. Cliquez pour fusionner {parentBranch} dans la branche actuelle.",
       "dialogs": {
         "newBranchTitle": "Nouvelle branche",
         "newBranchDescription": "Créer une nouvelle branche depuis la branche actuelle {branch}",

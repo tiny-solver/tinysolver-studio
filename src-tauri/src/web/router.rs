@@ -115,10 +115,6 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
             post(handlers::folders::add_folder_to_history),
         )
         .route(
-            "/set_folder_parent_branch",
-            post(handlers::folders::set_folder_parent_branch),
-        )
-        .route(
             "/remove_folder_from_history",
             post(handlers::folders::remove_folder_from_history),
         )

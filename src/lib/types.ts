@@ -160,7 +160,6 @@ export interface FolderDetail {
   name: string
   path: string
   git_branch: string | null
-  parent_branch: string | null
   default_agent_type: AgentType | null
   last_opened_at: string
   sort_order: number

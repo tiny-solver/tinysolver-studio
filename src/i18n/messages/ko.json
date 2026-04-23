@@ -1082,7 +1082,6 @@
       "noLocalBranches": "로컬 브랜치가 없습니다",
       "remoteBranches": "원격 브랜치 ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "원격 브랜치가 없습니다",
-      "parentBranchHint": "현재 브랜치는 {parentBranch}에서 생성되었습니다. 클릭하여 {parentBranch}를 현재 브랜치에 병합하세요.",
       "dialogs": {
         "newBranchTitle": "새 브랜치",
         "newBranchDescription": "현재 브랜치 {branch}에서 새 브랜치를 만듭니다",

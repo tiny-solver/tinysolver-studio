@@ -1082,7 +1082,6 @@
       "noLocalBranches": "No local branches",
       "remoteBranches": "Remote branches ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "No remote branches",
-      "parentBranchHint": "Current branch was created from {parentBranch}. Click to merge {parentBranch} into current branch.",
       "dialogs": {
         "newBranchTitle": "New branch",
         "newBranchDescription": "Create a new branch from current branch {branch}",

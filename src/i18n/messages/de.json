@@ -1082,7 +1082,6 @@
       "noLocalBranches": "Keine lokalen Branches",
       "remoteBranches": "Remote-Branches ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "Keine Remote-Branches",
-      "parentBranchHint": "Der aktuelle Branch wurde von {parentBranch} erstellt. Klicken, um {parentBranch} in den aktuellen Branch zu mergen.",
       "dialogs": {
         "newBranchTitle": "Neuer Branch",
         "newBranchDescription": "Neuen Branch vom aktuellen Branch {branch} erstellen",

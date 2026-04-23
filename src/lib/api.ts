@@ -656,16 +656,6 @@ export async function getFolderConversation(
   return getTransport().call("get_folder_conversation", { conversationId })
 }
 
-export async function setFolderParentBranch(
-  path: string,
-  parentBranch: string | null
-): Promise<void> {
-  return getTransport().call("set_folder_parent_branch", {
-    path,
-    parentBranch,
-  })
-}
-
 export async function removeFolderFromHistory(path: string): Promise<void> {
   return getTransport().call("remove_folder_from_history", { path })
 }

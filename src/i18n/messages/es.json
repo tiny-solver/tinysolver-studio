@@ -1082,7 +1082,6 @@
       "noLocalBranches": "Sin ramas locales",
       "remoteBranches": "Ramas remotas ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "Sin ramas remotas",
-      "parentBranchHint": "La rama actual fue creada desde {parentBranch}. Haz clic para fusionar {parentBranch} en la rama actual.",
       "dialogs": {
         "newBranchTitle": "Nueva rama",
         "newBranchDescription": "Crear una nueva rama desde la rama actual {branch}",

@@ -287,13 +287,6 @@ pub async fn open_push_window(
     }))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetFolderParentBranchParams {
-    pub path: String,
-    pub parent_branch: Option<String>,
-}
-
 pub async fn add_folder_to_history(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AddFolderParams>,
@@ -303,16 +296,6 @@ pub async fn add_folder_to_history(
         .await
         .map_err(AppCommandError::from)?;
     Ok(Json(result))
-}
-
-pub async fn set_folder_parent_branch(
-    Extension(state): Extension<Arc<AppState>>,
-    Json(params): Json<SetFolderParentBranchParams>,
-) -> Result<Json<()>, AppCommandError> {
-    let db = &state.db;
-    folder_commands::set_folder_parent_branch_core(&db.conn, &params.path, params.parent_branch)
-        .await?;
-    Ok(Json(()))
 }
 
 pub async fn remove_folder_from_history(

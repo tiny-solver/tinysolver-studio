@@ -1082,7 +1082,6 @@
       "noLocalBranches": "Sem branches locais",
       "remoteBranches": "Branches remotas ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "Sem branches remotas",
-      "parentBranchHint": "A branch atual foi criada a partir de {parentBranch}. Clique para mesclar {parentBranch} na branch atual.",
       "dialogs": {
         "newBranchTitle": "Nova branch",
         "newBranchDescription": "Criar uma nova branch a partir da branch atual {branch}",

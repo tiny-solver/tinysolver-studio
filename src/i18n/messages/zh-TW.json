@@ -1082,7 +1082,6 @@
       "noLocalBranches": "無本地分支",
       "remoteBranches": "遠端分支 ({count})",
       "noRemoteBranches": "無遠端分支",
-      "parentBranchHint": "目前分支從 {parentBranch} 建立，點擊合併 {parentBranch} 到目前分支",
       "dialogs": {
         "newBranchTitle": "新增分支",
         "newBranchDescription": "從目前分支 {branch} 建立新分支",

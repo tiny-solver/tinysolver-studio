@@ -31,7 +31,6 @@ fn to_detail(m: folder::Model) -> FolderDetail {
         name: m.name,
         path: m.path,
         git_branch: m.git_branch,
-        parent_branch: m.parent_branch,
         default_agent_type,
         last_opened_at: m.last_opened_at,
         sort_order: m.sort_order,
@@ -85,7 +84,6 @@ pub async fn add_folder(
             name: Set(name),
             path: Set(path.to_string()),
             git_branch: Set(None),
-            parent_branch: Set(None),
             default_agent_type: Set(None),
             last_opened_at: Set(now),
             created_at: Set(now),
@@ -122,22 +120,6 @@ pub async fn remove_folder(conn: &DatabaseConnection, path: &str) -> Result<(), 
         let mut active = row.into_active_model();
         active.deleted_at = Set(Some(now));
         active.updated_at = Set(now);
-        active.update(conn).await?;
-    }
-    Ok(())
-}
-
-pub async fn set_folder_parent_branch(
-    conn: &DatabaseConnection,
-    folder_id: i32,
-    parent_branch: Option<String>,
-) -> Result<(), DbError> {
-    let row = folder::Entity::find_by_id(folder_id).one(conn).await?;
-
-    if let Some(row) = row {
-        let mut active = row.into_active_model();
-        active.parent_branch = Set(parent_branch);
-        active.updated_at = Set(Utc::now());
         active.update(conn).await?;
     }
     Ok(())

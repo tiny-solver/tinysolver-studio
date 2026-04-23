@@ -15,7 +15,6 @@ pub struct Model {
     pub updated_at: DateTimeUtc,
     pub deleted_at: Option<DateTimeUtc>,
     pub is_open: bool,
-    pub parent_branch: Option<String>,
     pub sort_order: i32,
 }
 

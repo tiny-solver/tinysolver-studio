@@ -1082,7 +1082,6 @@
       "noLocalBranches": "ローカルブランチはありません",
       "remoteBranches": "リモートブランチ ({count, plural, one {#} other {#}})",
       "noRemoteBranches": "リモートブランチはありません",
-      "parentBranchHint": "現在のブランチは {parentBranch} から作成されました。クリックして {parentBranch} を現在のブランチにマージします。",
       "dialogs": {
         "newBranchTitle": "新規ブランチ",
         "newBranchDescription": "現在のブランチ {branch} から新しいブランチを作成",
