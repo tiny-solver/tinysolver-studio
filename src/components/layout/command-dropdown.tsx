@@ -110,11 +110,9 @@ export function CommandDropdown() {
   useEffect(() => {
     if (!folderId) {
       setSelectedCommandIdState(null)
-      setRunningCommandTerminals({})
       return
     }
     setSelectedCommandIdState(getSelectedCommandId(folderId))
-    setRunningCommandTerminals({})
   }, [folderId])
 
   const refreshCommands = useCallback(async () => {
