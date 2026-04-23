@@ -881,6 +881,7 @@
     },
     "search": {
       "dialogTitle": "검색",
+      "dialogTitleWithFolder": "검색 — {name}",
       "tabConversations": "대화",
       "tabFiles": "파일",
       "placeholder": "대화 검색...",

@@ -881,6 +881,7 @@
     },
     "search": {
       "dialogTitle": "Search",
+      "dialogTitleWithFolder": "Search — {name}",
       "tabConversations": "Conversations",
       "tabFiles": "Files",
       "placeholder": "Search conversations...",

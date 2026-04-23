@@ -175,11 +175,25 @@ export function SearchCommandDialog({
 
   return (
     <CommandDialog
-      title={t("dialogTitle")}
+      title={
+        folder
+          ? t("dialogTitleWithFolder", { name: folder.name })
+          : t("dialogTitle")
+      }
       open={open}
       onOpenChange={onOpenChange}
       shouldFilter={activeTab === "conversations"}
     >
+      {/* Folder context header */}
+      {folder && (
+        <div className="flex items-center gap-2 border-b px-4 py-2.5">
+          <Folder className="w-4 h-4 shrink-0 text-muted-foreground" />
+          <span className="text-sm font-medium truncate">
+            {t("dialogTitleWithFolder", { name: folder.name })}
+          </span>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center gap-0 border-b px-3">
         <button

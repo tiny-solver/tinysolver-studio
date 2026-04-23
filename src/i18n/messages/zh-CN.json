@@ -881,6 +881,7 @@
     },
     "search": {
       "dialogTitle": "搜索",
+      "dialogTitleWithFolder": "搜索 — {name}",
       "tabConversations": "会话",
       "tabFiles": "文件",
       "placeholder": "搜索会话...",

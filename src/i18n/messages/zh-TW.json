@@ -881,6 +881,7 @@
     },
     "search": {
       "dialogTitle": "搜尋",
+      "dialogTitleWithFolder": "搜尋 — {name}",
       "tabConversations": "會話",
       "tabFiles": "檔案",
       "placeholder": "搜尋會話...",

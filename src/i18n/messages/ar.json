@@ -881,6 +881,7 @@
     },
     "search": {
       "dialogTitle": "بحث",
+      "dialogTitleWithFolder": "بحث — {name}",
       "tabConversations": "المحادثات",
       "tabFiles": "الملفات",
       "placeholder": "البحث في المحادثات...",
