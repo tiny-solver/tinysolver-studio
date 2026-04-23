@@ -152,14 +152,17 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               <span
                 aria-hidden
                 className={cn(
-                  "pointer-events-none absolute -top-px -bottom-px z-0",
+                  "pointer-events-none absolute z-0",
                   isOpenInTab
                     ? "bg-sidebar-primary/85"
                     : "bg-sidebar-primary/30"
                 )}
                 style={{
-                  left: "calc(0.875rem + 0.5px)",
-                  width: "1px",
+                  top: "-0.0625rem",
+                  bottom: "-0.0625rem",
+                  left: "var(--conv-rail-axis, 0.875rem)",
+                  width: "0.125rem",
+                  transform: "translateX(-50%)",
                 }}
               />
               <SidebarStatusIcon status={beadStatus} emphasized={isOpenInTab} />

@@ -28,7 +28,7 @@ function IconFrame({
         className
       )}
       style={{
-        left: "0.875rem",
+        left: "var(--conv-rail-axis, 0.875rem)",
         width: "0.75rem",
         height: "0.75rem",
         transform: "translate(-50%, -50%)",

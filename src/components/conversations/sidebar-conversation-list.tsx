@@ -168,15 +168,24 @@ const FolderHeader = memo(function FolderHeader({
               data-folder-id={folderId}
               onClick={() => onToggle(folderId)}
               className={cn(
-                "flex h-full min-w-0 flex-1 items-center gap-[0.5rem] px-2 outline-none",
+                "relative flex h-full min-w-0 flex-1 items-center pr-[0.5rem] outline-none",
                 "text-sidebar-foreground",
                 isDragging ? "cursor-grabbing" : "cursor-grab"
               )}
+              style={{ paddingLeft: "calc(var(--conv-rail-axis) + 0.875rem)" }}
             >
               <span
+                aria-hidden
                 className={cn(
-                  "flex h-[0.75rem] w-[0.75rem] shrink-0 items-center justify-center text-muted-foreground/75"
+                  "pointer-events-none absolute flex items-center justify-center text-muted-foreground/75"
                 )}
+                style={{
+                  top: "50%",
+                  left: "var(--conv-rail-axis)",
+                  width: "0.75rem",
+                  height: "0.75rem",
+                  transform: "translate(-50%, -50%)",
+                }}
               >
                 {expanded ? (
                   <ChevronDown className="h-[0.6875rem] w-[0.6875rem]" />
@@ -919,6 +928,11 @@ export function SidebarConversationList({
                   values={orderedFolderIds}
                   onReorder={handleReorder}
                   className="flex flex-col"
+                  style={
+                    {
+                      "--conv-rail-axis": "0.875rem",
+                    } as React.CSSProperties
+                  }
                 >
                   {orderedFolderIds.map((folderId, index) => {
                     const folderName =
