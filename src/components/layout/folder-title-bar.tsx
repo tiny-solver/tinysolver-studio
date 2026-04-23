@@ -212,7 +212,7 @@ export function FolderTitleBar() {
       ref={modeContainerRef}
       role="tablist"
       aria-label={tModes("workspaceModesAria")}
-      className="relative inline-flex h-[27px] items-center rounded-full border border-border/50 bg-muted/50 p-0.5"
+      className="relative inline-flex h-[1.6875rem] items-center rounded-full border border-border/50 bg-muted/50 p-0.5"
     >
       {modeIndicator && (
         <div
@@ -240,7 +240,7 @@ export function FolderTitleBar() {
             role="tab"
             tabIndex={0}
             className={cn(
-              "relative z-10 m-0 flex h-[23px] cursor-pointer select-none items-center justify-center gap-1 rounded-full border-0 bg-transparent p-0 align-middle text-xs font-medium leading-none transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+              "relative z-10 m-0 flex h-[1.4375rem] cursor-pointer select-none items-center justify-center gap-1 rounded-full border-0 bg-transparent p-0 align-middle text-xs font-medium leading-none transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
               isActive ? "px-2.5" : "px-2",
               isActive
                 ? "text-foreground"
