@@ -644,6 +644,13 @@ export async function reorderFolders(ids: number[]): Promise<void> {
   return getTransport().call("reorder_folders", { ids })
 }
 
+export async function updateFolderColor(
+  folderId: number,
+  color: string
+): Promise<FolderDetail> {
+  return getTransport().call("update_folder_color", { folderId, color })
+}
+
 export async function importLocalConversations(
   folderId: number
 ): Promise<ImportResult> {

@@ -782,7 +782,8 @@
         "folderRemoved": "已移除資料夾 {name}",
         "openFolderFailed": "開啟資料夾失敗",
         "removeFolderFailed": "移除資料夾失敗：{message}",
-        "reorderFoldersFailed": "重新排序資料夾失敗：{message}"
+        "reorderFoldersFailed": "重新排序資料夾失敗：{message}",
+        "changeFolderColorFailed": "修改顏色失敗：{message}"
       },
       "statsLabel": "{folders} 個資料夾 · {convos} 個對話",
       "reorderHandle": "拖拽排序",
@@ -802,6 +803,7 @@
       "removeFolderConfirmDescription": "從工作區移除 \"{name}\"？相關分頁與終端機將會關閉。",
       "folderHeaderMenu": {
         "manageConversations": "會話管理…",
+        "changeColor": "修改顏色",
         "removeFromWorkspace": "從工作區移除"
       },
       "manageConversations": {

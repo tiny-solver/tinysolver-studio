@@ -142,6 +142,25 @@ pub async fn reorder_folders(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UpdateFolderColorParams {
+    pub folder_id: i32,
+    pub color: String,
+}
+
+pub async fn update_folder_color(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<UpdateFolderColorParams>,
+) -> Result<Json<FolderDetail>, AppCommandError> {
+    let db = &state.db;
+    let folder = folder_service::update_folder_color(&db.conn, params.folder_id, &params.color)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found("Folder not found"))?;
+    Ok(Json(folder))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PathParams {
     pub path: String,
 }

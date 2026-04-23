@@ -125,10 +125,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               <span
                 aria-hidden
                 className={cn(
-                  "pointer-events-none absolute z-0",
-                  isOpenInTab
-                    ? "bg-sidebar-primary/85"
-                    : "bg-sidebar-primary/30"
+                  "pointer-events-none absolute z-0 bg-sidebar-border"
                 )}
                 style={{
                   top: "-0.0625rem",

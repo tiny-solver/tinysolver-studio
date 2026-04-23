@@ -782,7 +782,8 @@
         "folderRemoved": "Pasta {name} removida",
         "openFolderFailed": "Falha ao abrir pasta",
         "removeFolderFailed": "Falha ao remover pasta: {message}",
-        "reorderFoldersFailed": "Falha ao reordenar pastas: {message}"
+        "reorderFoldersFailed": "Falha ao reordenar pastas: {message}",
+        "changeFolderColorFailed": "Falha ao alterar a cor: {message}"
       },
       "statsLabel": "{folders} pastas · {convos} conversas",
       "reorderHandle": "Arraste para reordenar",
@@ -802,6 +803,7 @@
       "removeFolderConfirmDescription": "Remover \"{name}\" do espaço de trabalho? As abas e terminais relacionados serão fechados.",
       "folderHeaderMenu": {
         "manageConversations": "Gerenciar conversas…",
+        "changeColor": "Alterar cor",
         "removeFromWorkspace": "Remover do espaço de trabalho"
       },
       "manageConversations": {

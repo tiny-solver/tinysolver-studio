@@ -567,6 +567,19 @@ pub async fn reorder_folders(
         .map_err(AppCommandError::from)
 }
 
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn update_folder_color(
+    db: tauri::State<'_, AppDatabase>,
+    folder_id: i32,
+    color: String,
+) -> Result<crate::models::FolderDetail, AppCommandError> {
+    folder_service::update_folder_color(&db.conn, folder_id, &color)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found("Folder not found"))
+}
+
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError> {
     std::fs::create_dir_all(&path).map_err(AppCommandError::io)

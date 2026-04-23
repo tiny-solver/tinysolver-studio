@@ -10,6 +10,35 @@ use crate::db::error::DbError;
 use crate::models::agent::AgentType;
 use crate::models::{FolderDetail, FolderHistoryEntry};
 
+/// Palette kept in sync with the frontend swatch picker. Changes here must be
+/// mirrored in `src/components/conversations/sidebar-conversation-list.tsx`.
+/// `"foreground"` is a theme-aware sentinel the frontend resolves to
+/// `var(--sidebar-foreground)`.
+pub const FOLDER_COLOR_PALETTE: &[&str] = &[
+    "#ef4444",
+    "#f97316",
+    "#eab308",
+    "#84cc16",
+    "#22c55e",
+    "#06b6d4",
+    "#8b5cf6",
+    "#d946ef",
+    "#ec4899",
+    "foreground",
+];
+
+fn pick_folder_color(folder_id: i32, folder_name: &str) -> String {
+    let mut name_hash: u32 = 0;
+    for c in folder_name.chars() {
+        name_hash = name_hash.wrapping_mul(31).wrapping_add(c as u32);
+    }
+    let combined = (folder_id as u32)
+        .wrapping_mul(2654435761)
+        .wrapping_add(name_hash);
+    let idx = (combined as usize) % FOLDER_COLOR_PALETTE.len();
+    FOLDER_COLOR_PALETTE[idx].to_string()
+}
+
 fn to_entry(m: folder::Model) -> FolderHistoryEntry {
     FolderHistoryEntry {
         id: m.id,
@@ -34,6 +63,7 @@ fn to_detail(m: folder::Model) -> FolderDetail {
         default_agent_type,
         last_opened_at: m.last_opened_at,
         sort_order: m.sort_order,
+        color: m.color,
     }
 }
 
@@ -81,7 +111,7 @@ pub async fn add_folder(
             .unwrap_or(0);
         let active = folder::ActiveModel {
             id: NotSet,
-            name: Set(name),
+            name: Set(name.clone()),
             path: Set(path.to_string()),
             git_branch: Set(None),
             default_agent_type: Set(None),
@@ -91,11 +121,40 @@ pub async fn add_folder(
             deleted_at: Set(None),
             is_open: Set(true),
             sort_order: Set(max_order + 1),
+            // Temporary placeholder — we overwrite below with a hash derived
+            // from the final auto-assigned id so each new folder gets a
+            // deterministic, well-distributed palette color.
+            color: Set(FOLDER_COLOR_PALETTE[0].to_string()),
         };
-        active.insert(conn).await?
+        let inserted = active.insert(conn).await?;
+        let assigned = pick_folder_color(inserted.id, &name);
+        let mut active = inserted.into_active_model();
+        active.color = Set(assigned);
+        active.update(conn).await?
     };
 
     Ok(to_entry(model))
+}
+
+pub async fn update_folder_color(
+    conn: &DatabaseConnection,
+    folder_id: i32,
+    color: &str,
+) -> Result<Option<FolderDetail>, DbError> {
+    let row = folder::Entity::find_by_id(folder_id)
+        .filter(folder::Column::DeletedAt.is_null())
+        .one(conn)
+        .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let mut active = row.into_active_model();
+    active.color = Set(color.to_string());
+    active.updated_at = Set(Utc::now());
+    let updated = active.update(conn).await?;
+    Ok(Some(to_detail(updated)))
 }
 
 pub async fn list_folders(conn: &DatabaseConnection) -> Result<Vec<FolderHistoryEntry>, DbError> {

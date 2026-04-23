@@ -163,6 +163,7 @@ export interface FolderDetail {
   default_agent_type: AgentType | null
   last_opened_at: string
   sort_order: number
+  color: string
 }
 
 export interface OpenedTab {

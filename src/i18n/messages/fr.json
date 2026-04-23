@@ -782,7 +782,8 @@
         "folderRemoved": "Dossier {name} retiré",
         "openFolderFailed": "Échec de l'ouverture du dossier",
         "removeFolderFailed": "Échec de la suppression du dossier : {message}",
-        "reorderFoldersFailed": "Échec du réordonnancement des dossiers : {message}"
+        "reorderFoldersFailed": "Échec du réordonnancement des dossiers : {message}",
+        "changeFolderColorFailed": "Échec du changement de couleur : {message}"
       },
       "statsLabel": "{folders} dossiers · {convos} conversations",
       "reorderHandle": "Glisser pour réorganiser",
@@ -802,6 +803,7 @@
       "removeFolderConfirmDescription": "Retirer \"{name}\" de l'espace de travail ? Les onglets et terminaux associés seront fermés.",
       "folderHeaderMenu": {
         "manageConversations": "Gérer les conversations…",
+        "changeColor": "Changer la couleur",
         "removeFromWorkspace": "Retirer de l'espace de travail"
       },
       "manageConversations": {

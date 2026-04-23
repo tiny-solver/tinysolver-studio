@@ -782,7 +782,8 @@
         "folderRemoved": "Removed folder {name}",
         "openFolderFailed": "Failed to open folder",
         "removeFolderFailed": "Failed to remove folder: {message}",
-        "reorderFoldersFailed": "Failed to reorder folders: {message}"
+        "reorderFoldersFailed": "Failed to reorder folders: {message}",
+        "changeFolderColorFailed": "Failed to change folder color: {message}"
       },
       "statsLabel": "{folders} folders · {convos} conversations",
       "reorderHandle": "Drag to reorder",
@@ -802,6 +803,7 @@
       "removeFolderConfirmDescription": "Remove \"{name}\" from the workspace? Its tabs and terminals will close.",
       "folderHeaderMenu": {
         "manageConversations": "Manage conversations…",
+        "changeColor": "Change color",
         "removeFromWorkspace": "Remove from workspace"
       },
       "manageConversations": {

@@ -16,6 +16,7 @@ pub struct Model {
     pub deleted_at: Option<DateTimeUtc>,
     pub is_open: bool,
     pub sort_order: i32,
+    pub color: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

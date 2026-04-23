@@ -782,7 +782,8 @@
         "folderRemoved": "フォルダ {name} を削除しました",
         "openFolderFailed": "フォルダを開けませんでした",
         "removeFolderFailed": "フォルダの削除に失敗しました: {message}",
-        "reorderFoldersFailed": "フォルダの並べ替えに失敗しました: {message}"
+        "reorderFoldersFailed": "フォルダの並べ替えに失敗しました: {message}",
+        "changeFolderColorFailed": "色の変更に失敗しました: {message}"
       },
       "statsLabel": "{folders} フォルダ · {convos} 会話",
       "reorderHandle": "ドラッグして並べ替え",
@@ -802,6 +803,7 @@
       "removeFolderConfirmDescription": "\"{name}\" をワークスペースから削除しますか？関連するタブとターミナルが閉じられます。",
       "folderHeaderMenu": {
         "manageConversations": "会話の管理…",
+        "changeColor": "色を変更",
         "removeFromWorkspace": "ワークスペースから削除"
       },
       "manageConversations": {

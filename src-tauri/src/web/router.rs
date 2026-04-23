@@ -108,6 +108,10 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         )
         .route("/reorder_folders", post(handlers::folders::reorder_folders))
         .route(
+            "/update_folder_color",
+            post(handlers::folders::update_folder_color),
+        )
+        .route(
             "/add_folder_to_history",
             post(handlers::folders::add_folder_to_history),
         )

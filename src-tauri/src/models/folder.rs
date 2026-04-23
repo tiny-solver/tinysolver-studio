@@ -20,6 +20,7 @@ pub struct FolderDetail {
     pub default_agent_type: Option<AgentType>,
     pub last_opened_at: DateTime<Utc>,
     pub sort_order: i32,
+    pub color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

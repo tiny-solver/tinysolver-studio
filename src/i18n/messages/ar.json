@@ -782,7 +782,8 @@
         "folderRemoved": "تمت إزالة المجلد {name}",
         "openFolderFailed": "فشل فتح المجلد",
         "removeFolderFailed": "فشل إزالة المجلد: {message}",
-        "reorderFoldersFailed": "فشل إعادة ترتيب المجلدات: {message}"
+        "reorderFoldersFailed": "فشل إعادة ترتيب المجلدات: {message}",
+        "changeFolderColorFailed": "فشل تغيير اللون: {message}"
       },
       "statsLabel": "{folders} مجلدات · {convos} محادثة",
       "reorderHandle": "اسحب لإعادة الترتيب",
@@ -802,6 +803,7 @@
       "removeFolderConfirmDescription": "إزالة \"{name}\" من مساحة العمل؟ سيتم إغلاق علامات التبويب والمحطات المرتبطة.",
       "folderHeaderMenu": {
         "manageConversations": "إدارة المحادثات…",
+        "changeColor": "تغيير اللون",
         "removeFromWorkspace": "إزالة من مساحة العمل"
       },
       "manageConversations": {
