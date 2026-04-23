@@ -1920,69 +1920,65 @@ export function MessageInput({
           className
         )}
       >
-        <ConversationContextBar tabId={attachmentTabId} />
-        {(hasImageAttachments || hasResourceAttachments) && (
-          <div className="flex shrink-0 flex-col gap-1 px-2 pt-2">
-            {hasImageAttachments && (
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                {imageAttachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
+        <ConversationContextBar
+          tabId={attachmentTabId}
+          hasExtraContent={hasImageAttachments || hasResourceAttachments}
+          scrollEndTrigger={attachments.length}
+          extraContent={
+            <>
+              {imageAttachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAttachmentId(attachment.id)}
+                    className="cursor-pointer transition-opacity hover:opacity-80"
                   >
-                    <button
-                      type="button"
-                      onClick={() => setPreviewAttachmentId(attachment.id)}
-                      className="cursor-pointer transition-opacity hover:opacity-80"
-                    >
-                      <Image
-                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
-                        alt={attachment.name}
-                        width={56}
-                        height={56}
-                        unoptimized
-                        className="h-14 w-14 object-cover"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
-                      aria-label={t("removeAttachmentAria", {
-                        name: attachment.name,
-                      })}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {hasResourceAttachments && (
-              <div className="flex items-center gap-1 overflow-x-auto">
-                {resourceAttachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
+                    <Image
+                      src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                      alt={attachment.name}
+                      width={56}
+                      height={56}
+                      unoptimized
+                      className="h-14 w-14 object-cover"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(attachment.id)}
+                    className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
+                    aria-label={t("removeAttachmentAria", {
+                      name: attachment.name,
+                    })}
                   >
-                    <FileSearch className="h-3 w-3" />
-                    <span className="max-w-40 truncate">{attachment.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
-                      aria-label={t("removeAttachmentAria", {
-                        name: attachment.name,
-                      })}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              {resourceAttachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
+                >
+                  <FileSearch className="h-3 w-3" />
+                  <span className="max-w-40 truncate">{attachment.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(attachment.id)}
+                    className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
+                    aria-label={t("removeAttachmentAria", {
+                      name: attachment.name,
+                    })}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </>
+          }
+        />
         <Textarea
           ref={textareaRef}
           value={text}

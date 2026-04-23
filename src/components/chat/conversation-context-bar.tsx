@@ -1,9 +1,10 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { Check, ChevronsUpDown, Folder, GitBranch, Loader2 } from "lucide-react"
+import type { OverlayScrollbarsComponentRef } from "overlayscrollbars-react"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTaskContext } from "@/contexts/task-context"
@@ -23,14 +24,21 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
 interface ConversationContextBarProps {
   tabId?: string | null
+  extraContent?: React.ReactNode
+  hasExtraContent?: boolean
+  scrollEndTrigger?: number
 }
 
 export const ConversationContextBar = memo(function ConversationContextBar({
   tabId,
+  extraContent,
+  hasExtraContent = false,
+  scrollEndTrigger,
 }: ConversationContextBarProps = {}) {
   const t = useTranslations("Folder.conversationContextBar")
   const tBd = useTranslations("Folder.branchDropdown")
@@ -52,57 +60,113 @@ export const ConversationContextBar = memo(function ConversationContextBar({
     [ownTab, allFolders]
   )
 
-  if (!ownTab || !ownFolder) return null
+  const scrollRef = useRef<OverlayScrollbarsComponentRef>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
+  const prevScrollTriggerRef = useRef<number>(scrollEndTrigger ?? 0)
+  useEffect(() => {
+    if (scrollEndTrigger == null) return
+    if (scrollEndTrigger <= prevScrollTriggerRef.current) {
+      prevScrollTriggerRef.current = scrollEndTrigger
+      return
+    }
+    prevScrollTriggerRef.current = scrollEndTrigger
+    requestAnimationFrame(() => {
+      const viewport = scrollRef.current?.osInstance()?.elements().viewport
+      if (!viewport) return
+      viewport.scrollTo({ left: viewport.scrollWidth, behavior: "smooth" })
+    })
+  }, [scrollEndTrigger])
 
-  const isNewConversation = ownTab.conversationId == null
-  const currentBranch =
-    branches.get(ownFolder.id) ?? ownFolder.git_branch ?? null
+  useEffect(() => {
+    const inner = innerRef.current
+    if (!inner) return
+    const handler = (e: WheelEvent) => {
+      const viewport = scrollRef.current?.osInstance()?.elements().viewport
+      if (!viewport) return
+      if (viewport.scrollWidth <= viewport.clientWidth) return
+      const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX
+      if (delta === 0) return
+      e.preventDefault()
+      viewport.scrollLeft += delta
+    }
+    inner.addEventListener("wheel", handler, { passive: false })
+    return () => inner.removeEventListener("wheel", handler)
+  }, [])
+
+  const hasSelectors = Boolean(ownTab && ownFolder)
+  if (!hasSelectors && !hasExtraContent) return null
+
+  const isNewConversation = ownTab?.conversationId == null
+  const currentBranch = ownFolder
+    ? (branches.get(ownFolder.id) ?? ownFolder.git_branch ?? null)
+    : null
+  const showBranchPicker = hasSelectors && currentBranch != null
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 text-xs text-muted-foreground">
-      <FolderPicker
-        folders={folders}
-        currentFolderId={ownFolder.id}
-        currentFolderName={ownFolder.name}
-        title={`${t("folderTitle")}: ${ownFolder.name}`}
-        editable={isNewConversation}
-        onSelect={async (folderId) => {
-          const target = folders.find((f) => f.id === folderId)
-          if (!target) return
-          try {
-            setTabFolder(ownTab.id, target.id, target.path)
-            toast.success(t("toasts.folderChanged", { name: target.name }))
-          } catch (err) {
-            console.error("[ConversationContextBar] switch folder failed:", err)
-            toast.error(t("toasts.openFolderFailed"))
-          }
-        }}
-        labelEmpty={t("noFolders")}
-        labelSearch={t("searchFolder")}
-      />
+    <ScrollArea x="scroll" y="hidden" className="shrink-0" ref={scrollRef}>
+      <div
+        ref={innerRef}
+        className={cn(
+          "flex w-max items-center gap-1.5 pr-2 pt-2 text-xs text-muted-foreground",
+          !hasSelectors && "pl-2"
+        )}
+      >
+        {hasSelectors && ownTab && ownFolder && (
+          <div className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-border/50 bg-background pl-2 pr-2">
+            <FolderPicker
+              folders={folders}
+              currentFolderId={ownFolder.id}
+              currentFolderName={ownFolder.name}
+              title={`${t("folderTitle")}: ${ownFolder.name}`}
+              editable={isNewConversation}
+              onSelect={async (folderId) => {
+                const target = folders.find((f) => f.id === folderId)
+                if (!target) return
+                try {
+                  setTabFolder(ownTab.id, target.id, target.path)
+                  toast.success(
+                    t("toasts.folderChanged", { name: target.name })
+                  )
+                } catch (err) {
+                  console.error(
+                    "[ConversationContextBar] switch folder failed:",
+                    err
+                  )
+                  toast.error(t("toasts.openFolderFailed"))
+                }
+              }}
+              labelEmpty={t("noFolders")}
+              labelSearch={t("searchFolder")}
+            />
 
-      <BranchPicker
-        folderId={ownFolder.id}
-        folderPath={ownFolder.path}
-        currentBranch={currentBranch}
-        title={`${t("branchTitle")}: ${currentBranch ?? t("noBranch")}`}
-        onCheckout={async (branchName) => {
-          const taskId = `checkout-${ownFolder.id}-${Date.now()}`
-          addTask(taskId, tBd("tasks.checkoutTo", { branchName }))
-          updateTask(taskId, { status: "running" })
-          try {
-            await gitCheckout(ownFolder.path, branchName)
-            setBranch(ownFolder.id, branchName)
-            await refreshFolder(ownFolder.id)
-            updateTask(taskId, { status: "completed" })
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            updateTask(taskId, { status: "failed", error: msg })
-            toast.error(msg)
-          }
-        }}
-      />
-    </div>
+            {showBranchPicker && (
+              <BranchPicker
+                folderId={ownFolder.id}
+                folderPath={ownFolder.path}
+                currentBranch={currentBranch}
+                title={`${t("branchTitle")}: ${currentBranch ?? t("noBranch")}`}
+                onCheckout={async (branchName) => {
+                  const taskId = `checkout-${ownFolder.id}-${Date.now()}`
+                  addTask(taskId, tBd("tasks.checkoutTo", { branchName }))
+                  updateTask(taskId, { status: "running" })
+                  try {
+                    await gitCheckout(ownFolder.path, branchName)
+                    setBranch(ownFolder.id, branchName)
+                    await refreshFolder(ownFolder.id)
+                    updateTask(taskId, { status: "completed" })
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    updateTask(taskId, { status: "failed", error: msg })
+                    toast.error(msg)
+                  }
+                }}
+              />
+            )}
+          </div>
+        )}
+        {extraContent}
+      </div>
+    </ScrollArea>
   )
 })
 
