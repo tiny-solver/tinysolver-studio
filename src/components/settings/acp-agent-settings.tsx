@@ -985,6 +985,34 @@ const OPENCODE_PROVIDER_NPM_OPTIONS = [
     value: "@ai-sdk/cerebras",
     label: "@ai-sdk/cerebras",
   },
+  {
+    value: "@ai-sdk/azure",
+    label: "@ai-sdk/azure",
+  },
+  {
+    value: "@ai-sdk/xai",
+    label: "@ai-sdk/xai",
+  },
+  {
+    value: "@ai-sdk/anthropic",
+    label: "@ai-sdk/anthropic",
+  },
+  {
+    value: "@ai-sdk/amazon-bedrock",
+    label: "@ai-sdk/amazon-bedrock",
+  },
+  {
+    value: "@ai-sdk/google",
+    label: "@ai-sdk/google",
+  },
+  {
+    value: "@ai-sdk/google-vertex",
+    label: "@ai-sdk/google-vertex",
+  },
+  {
+    value: "@ai-sdk/deepseek",
+    label: "@ai-sdk/deepseek",
+  },
 ] as const
 
 interface OpenCodeModelOptionGroup {
