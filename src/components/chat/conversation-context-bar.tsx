@@ -23,12 +23,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 interface ConversationContextBarProps {
@@ -65,53 +59,51 @@ export const ConversationContextBar = memo(function ConversationContextBar({
     branches.get(ownFolder.id) ?? ownFolder.git_branch ?? null
 
   return (
-    <TooltipProvider>
-      <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 text-xs text-muted-foreground">
-        <FolderPicker
-          folders={folders}
-          currentFolderId={ownFolder.id}
-          currentFolderName={ownFolder.name}
-          editable={isNewConversation}
-          onSelect={async (folderId) => {
-            const target = folders.find((f) => f.id === folderId)
-            if (!target) return
-            try {
-              setTabFolder(ownTab.id, target.id, target.path)
-              toast.success(t("toasts.folderChanged", { name: target.name }))
-            } catch (err) {
-              console.error(
-                "[ConversationContextBar] switch folder failed:",
-                err
-              )
-              toast.error(t("toasts.openFolderFailed"))
-            }
-          }}
-          labelEmpty={t("noFolders")}
-          labelSearch={t("searchFolder")}
-        />
+    <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 text-xs text-muted-foreground">
+      <FolderPicker
+        folders={folders}
+        currentFolderId={ownFolder.id}
+        currentFolderName={ownFolder.name}
+        editable={isNewConversation}
+        onSelect={async (folderId) => {
+          const target = folders.find((f) => f.id === folderId)
+          if (!target) return
+          try {
+            setTabFolder(ownTab.id, target.id, target.path)
+            toast.success(t("toasts.folderChanged", { name: target.name }))
+          } catch (err) {
+            console.error(
+              "[ConversationContextBar] switch folder failed:",
+              err
+            )
+            toast.error(t("toasts.openFolderFailed"))
+          }
+        }}
+        labelEmpty={t("noFolders")}
+        labelSearch={t("searchFolder")}
+      />
 
-        <BranchPicker
-          folderId={ownFolder.id}
-          folderPath={ownFolder.path}
-          currentBranch={currentBranch}
-          onCheckout={async (branchName) => {
-            const taskId = `checkout-${ownFolder.id}-${Date.now()}`
-            addTask(taskId, tBd("tasks.checkoutTo", { branchName }))
-            updateTask(taskId, { status: "running" })
-            try {
-              await gitCheckout(ownFolder.path, branchName)
-              setBranch(ownFolder.id, branchName)
-              await refreshFolder(ownFolder.id)
-              updateTask(taskId, { status: "completed" })
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
-              updateTask(taskId, { status: "failed", error: msg })
-              toast.error(msg)
-            }
-          }}
-        />
-      </div>
-    </TooltipProvider>
+      <BranchPicker
+        folderId={ownFolder.id}
+        folderPath={ownFolder.path}
+        currentBranch={currentBranch}
+        onCheckout={async (branchName) => {
+          const taskId = `checkout-${ownFolder.id}-${Date.now()}`
+          addTask(taskId, tBd("tasks.checkoutTo", { branchName }))
+          updateTask(taskId, { status: "running" })
+          try {
+            await gitCheckout(ownFolder.path, branchName)
+            setBranch(ownFolder.id, branchName)
+            await refreshFolder(ownFolder.id)
+            updateTask(taskId, { status: "completed" })
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            updateTask(taskId, { status: "failed", error: msg })
+            toast.error(msg)
+          }
+        }}
+      />
+    </div>
   )
 })
 
@@ -146,6 +138,7 @@ const FolderPicker = memo(function FolderPicker({
     <Button
       variant="outline"
       size="xs"
+      title={currentFolderName}
       className={cn(
         "min-w-0 bg-transparent",
         !editable && "cursor-default opacity-60 hover:bg-transparent"
@@ -158,12 +151,7 @@ const FolderPicker = memo(function FolderPicker({
   )
 
   if (!editable) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-        <TooltipContent side="bottom">{currentFolderName}</TooltipContent>
-      </Tooltip>
-    )
+    return trigger
   }
 
   return (

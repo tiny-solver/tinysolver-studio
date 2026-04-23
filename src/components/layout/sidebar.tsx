@@ -24,12 +24,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   loadShowCompleted,
@@ -81,80 +75,72 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none">
-      <TooltipProvider>
-        <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border pl-4 pr-2">
-          <div className="flex min-w-0 items-baseline gap-[0.375rem]">
-            <h2 className="truncate text-[0.875rem] font-bold tracking-[-0.00625rem] text-sidebar-foreground">
-              {t("title")}
-            </h2>
-          </div>
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 text-muted-foreground"
-              onClick={() => listRef.current?.scrollToActive()}
-              title={t("locateActiveConversation")}
-            >
-              <Crosshair className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 text-muted-foreground"
-              onClick={handleToggleExpandAll}
-              title={
-                allExpanded ? t("collapseAllGroups") : t("expandAllGroups")
-              }
-            >
-              {allExpanded ? (
-                <ChevronsDownUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronsUpDown className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0 text-muted-foreground"
-                    >
-                      <EllipsisVertical className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {t("moreOptions")}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                <DropdownMenuCheckboxItem
-                  checked={showCompleted}
-                  onCheckedChange={handleSetShowCompleted}
-                >
-                  {t("showCompleted")}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>{t("sortBy")}</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={sortMode}
-                  onValueChange={handleSetSortMode}
-                >
-                  <DropdownMenuRadioItem value="created">
-                    {t("sortByCreatedAt")}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="updated">
-                    {t("sortByUpdatedAt")}
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border pl-4 pr-2">
+        <div className="flex min-w-0 items-baseline gap-[0.375rem]">
+          <h2 className="truncate text-[0.875rem] font-bold tracking-[-0.00625rem] text-sidebar-foreground">
+            {t("title")}
+          </h2>
         </div>
-      </TooltipProvider>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0 text-muted-foreground"
+            onClick={() => listRef.current?.scrollToActive()}
+            title={t("locateActiveConversation")}
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0 text-muted-foreground"
+            onClick={handleToggleExpandAll}
+            title={
+              allExpanded ? t("collapseAllGroups") : t("expandAllGroups")
+            }
+          >
+            {allExpanded ? (
+              <ChevronsDownUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronsUpDown className="h-3.5 w-3.5" />
+            )}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground"
+                title={t("moreOptions")}
+              >
+                <EllipsisVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuCheckboxItem
+                checked={showCompleted}
+                onCheckedChange={handleSetShowCompleted}
+              >
+                {t("showCompleted")}
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>{t("sortBy")}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={sortMode}
+                onValueChange={handleSetSortMode}
+              >
+                <DropdownMenuRadioItem value="created">
+                  {t("sortByCreatedAt")}
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="updated">
+                  {t("sortByUpdatedAt")}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
       {/* On mobile, clicking a conversation card auto-closes the Sheet */}
       <div
