@@ -993,6 +993,19 @@ export function SidebarConversationList({
               <Plus className="h-4 w-4" />
               {t("newConversation")}
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={handleOpenFolderAction}>
+              <FolderOpen className="h-4 w-4" />
+              {tFolderDropdown("openFolder")}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => setCloneOpen(true)}>
+              <GitBranch className="h-4 w-4" />
+              {tFolderDropdown("cloneRepository")}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={handleProjectBoot}>
+              <Rocket className="h-4 w-4" />
+              {tFolderDropdown("projectBoot")}
+            </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
       )}
