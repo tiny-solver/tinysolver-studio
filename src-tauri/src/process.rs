@@ -280,8 +280,7 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
         }
 
         // All installed versions, newest first.
-        if let Some(nvm_home) =
-            resolve_dir(&[("NVM_HOME", &[]), ("APPDATA", &["nvm"])], None, &[])
+        if let Some(nvm_home) = resolve_dir(&[("NVM_HOME", &[]), ("APPDATA", &["nvm"])], None, &[])
         {
             if nvm_home.is_dir() {
                 if let Ok(mut entries) = std::fs::read_dir(&nvm_home).map(|rd| {
@@ -460,7 +459,9 @@ fn find_node_bin_dir(home: Option<&std::path::Path>) -> Option<PathBuf> {
     }
 
     // Return the first candidate that actually contains a `node` binary.
-    candidates.into_iter().find(|dir| dir.join(node_bin).is_file())
+    candidates
+        .into_iter()
+        .find(|dir| dir.join(node_bin).is_file())
 }
 
 /// Prepend a directory to the process `PATH` environment variable.

@@ -5,8 +5,8 @@ use serde::Deserialize;
 
 use crate::app_error::AppCommandError;
 use crate::app_state::AppState;
-use crate::commands::chat_channel as cc_commands;
 use crate::chat_channel::backends::weixin::{WeixinQrcodeInfo, WeixinQrcodeStatusPublic};
+use crate::commands::chat_channel as cc_commands;
 use crate::models::chat_channel::{ChannelStatusInfo, ChatChannelInfo, ChatChannelMessageLogInfo};
 
 // ---------------------------------------------------------------------------
@@ -167,8 +167,7 @@ pub async fn test_chat_channel(
 pub async fn get_chat_channel_status(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<ChannelStatusInfo>>, AppCommandError> {
-    let result =
-        cc_commands::get_chat_channel_status_core(&state.chat_channel_manager).await?;
+    let result = cc_commands::get_chat_channel_status_core(&state.chat_channel_manager).await?;
     Ok(Json(result))
 }
 
@@ -270,7 +269,6 @@ pub async fn weixin_check_qrcode(
     Json(params): Json<WeixinCheckQrcodeParams>,
 ) -> Result<Json<WeixinQrcodeStatusPublic>, AppCommandError> {
     let result =
-        cc_commands::weixin_check_qrcode_core(&state.db, params.channel_id, &params.qrcode)
-            .await?;
+        cc_commands::weixin_check_qrcode_core(&state.db, params.channel_id, &params.qrcode).await?;
     Ok(Json(result))
 }

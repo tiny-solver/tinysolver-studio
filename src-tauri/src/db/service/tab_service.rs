@@ -87,10 +87,7 @@ pub async fn delete_tabs_for_folder(
     conn: &DatabaseConnection,
     folder_id: i32,
 ) -> Result<(), DbError> {
-    let sql = format!(
-        "DELETE FROM opened_tab WHERE folder_id = {}",
-        folder_id
-    );
+    let sql = format!("DELETE FROM opened_tab WHERE folder_id = {}", folder_id);
     conn.execute(Statement::from_string(DbBackend::Sqlite, sql))
         .await?;
     Ok(())

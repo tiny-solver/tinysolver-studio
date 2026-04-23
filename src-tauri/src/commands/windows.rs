@@ -1,15 +1,15 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU8, Ordering as AtomicOrdering};
 #[cfg(target_os = "macos")]
 use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU8, Ordering as AtomicOrdering};
+use std::sync::Mutex;
 
 use sea_orm::DatabaseConnection;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::app_error::AppCommandError;
-use crate::db::AppDatabase;
 use crate::db::service::app_metadata_service;
+use crate::db::AppDatabase;
 use crate::models::FolderDetail;
 
 /// Base traffic-light position (logical px) at 100 % zoom.
@@ -123,12 +123,15 @@ fn is_system_dark_mode() -> bool {
                 // Output: "    AppsUseLightTheme    REG_DWORD    0x0"
                 // Extract the last token on the matching line to avoid
                 // substring false-positives (e.g. "0x00000001" contains "0x0").
-                stdout.lines().find(|l| l.contains("AppsUseLightTheme")).map(|line| {
-                    line.split_whitespace()
-                        .last()
-                        .map(|val| val == "0x0" || val == "0x00000000")
-                        .unwrap_or(false)
-                })
+                stdout
+                    .lines()
+                    .find(|l| l.contains("AppsUseLightTheme"))
+                    .map(|line| {
+                        line.split_whitespace()
+                            .last()
+                            .map(|val| val == "0x0" || val == "0x00000000")
+                            .unwrap_or(false)
+                    })
             })
             .unwrap_or(false)
     })
@@ -263,6 +266,12 @@ impl SettingsWindowState {
     }
 }
 
+impl Default for SettingsWindowState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommitWindowState {
     pub fn new() -> Self {
         Self {
@@ -281,6 +290,12 @@ impl CommitWindowState {
             .lock()
             .ok()
             .and_then(|mut owners| owners.remove(commit_label))
+    }
+}
+
+impl Default for CommitWindowState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -505,6 +520,12 @@ impl MergeWindowState {
             .lock()
             .ok()
             .and_then(|mut owners| owners.remove(merge_label))
+    }
+}
+
+impl Default for MergeWindowState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -738,11 +759,9 @@ pub async fn open_project_boot_window(
         .inner_size(1400.0, 900.0)
         .min_inner_size(1100.0, 700.0)
         .center();
-    let window = apply_platform_window_style(builder)
-        .build()
-        .map_err(|e| {
-            AppCommandError::window("Failed to open project boot window", e.to_string())
-        })?;
+    let window = apply_platform_window_style(builder).build().map_err(|e| {
+        AppCommandError::window("Failed to open project boot window", e.to_string())
+    })?;
     post_window_setup(&window);
 
     Ok(())
@@ -764,12 +783,8 @@ pub async fn update_traffic_light_position(
     CURRENT_ZOOM.store(clamped, AtomicOrdering::Relaxed);
 
     // Persist to DB so the next launch reads the correct value.
-    let _ = app_metadata_service::upsert_value(
-        &db.conn,
-        ZOOM_LEVEL_DB_KEY,
-        &clamped.to_string(),
-    )
-    .await;
+    let _ =
+        app_metadata_service::upsert_value(&db.conn, ZOOM_LEVEL_DB_KEY, &clamped.to_string()).await;
 
     let _ = app;
     Ok(())
@@ -786,13 +801,7 @@ pub async fn update_appearance_mode(
 ) -> Result<(), AppCommandError> {
     CACHED_APPEARANCE_MODE.store(mode_from_str(&mode), AtomicOrdering::Relaxed);
 
-    let _ = app_metadata_service::upsert_value(
-        &db.conn,
-        APPEARANCE_MODE_DB_KEY,
-        &mode,
-    )
-    .await;
+    let _ = app_metadata_service::upsert_value(&db.conn, APPEARANCE_MODE_DB_KEY, &mode).await;
 
     Ok(())
 }
-

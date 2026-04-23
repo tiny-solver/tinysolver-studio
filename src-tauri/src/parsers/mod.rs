@@ -471,8 +471,7 @@ pub fn resolve_patch_text(patch: &str, cwd: Option<&str>) -> Option<String> {
             if let (Some(ref fl), true) = (&file_lines, current_file_path.is_some()) {
                 // Collect context lines from this hunk to find match position
                 let hunk_lines = collect_hunk_lines(&lines, i + 1);
-                if let Some((old_start, old_count, new_count)) =
-                    find_hunk_position(fl, &hunk_lines)
+                if let Some((old_start, old_count, new_count)) = find_hunk_position(fl, &hunk_lines)
                 {
                     let new_start = old_start; // same start for context-based patches
                     output.push_str(&format!(
@@ -496,7 +495,11 @@ pub fn resolve_patch_text(patch: &str, cwd: Option<&str>) -> Option<String> {
         i += 1;
     }
 
-    if any_resolved { Some(output) } else { None }
+    if any_resolved {
+        Some(output)
+    } else {
+        None
+    }
 }
 
 /// Load file lines from disk, trying both absolute path and cwd-relative.
@@ -523,9 +526,7 @@ pub fn load_file_lines(path: &str, cwd: Option<&str>) -> Option<Vec<String>> {
 fn collect_hunk_lines<'a>(lines: &'a [&'a str], start: usize) -> Vec<&'a str> {
     let mut result = Vec::new();
     for &line in &lines[start..] {
-        if line == "@@"
-            || line.starts_with("*** ")
-        {
+        if line == "@@" || line.starts_with("*** ") {
             break;
         }
         result.push(line);
@@ -541,10 +542,7 @@ fn collect_hunk_lines<'a>(lines: &'a [&'a str], start: usize) -> Vec<&'a str> {
 /// 1. Contiguous match of context+added lines (post-patch file, no further edits)
 /// 2. Contiguous match of context+deleted lines (pre-patch file)
 /// 3. Subsequence match of context-only lines (file has been further modified)
-fn find_hunk_position(
-    file_lines: &[String],
-    hunk_lines: &[&str],
-) -> Option<(usize, usize, usize)> {
+fn find_hunk_position(file_lines: &[String], hunk_lines: &[&str]) -> Option<(usize, usize, usize)> {
     let mut old_count = 0usize;
     let mut new_count = 0usize;
     for hl in hunk_lines {
@@ -601,7 +599,11 @@ fn find_contiguous(file_lines: &[String], view: &[&str]) -> Option<usize> {
         if file_lines[i].as_str() != first {
             continue;
         }
-        if view.iter().enumerate().all(|(j, v)| file_lines[i + j].as_str() == *v) {
+        if view
+            .iter()
+            .enumerate()
+            .all(|(j, v)| file_lines[i + j].as_str() == *v)
+        {
             return Some(i);
         }
     }

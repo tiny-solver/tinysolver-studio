@@ -3,10 +3,9 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use sacp::schema::{
-    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest,
-    KillTerminalResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
-    WaitForTerminalExitResponse,
+    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest, KillTerminalResponse,
+    ReleaseTerminalRequest, ReleaseTerminalResponse, TerminalExitStatus, TerminalOutputRequest,
+    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
 };
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::Mutex;

@@ -88,9 +88,7 @@ fn has_project_opencode_config(project_root: &Path) -> bool {
 
 /// Inspect `~/.config/opencode/opencode.json` and `~/.cache/opencode/node_modules/`
 /// to determine which declared plugins are installed and which are missing.
-pub fn check_opencode_plugins(
-    project_root: Option<&Path>,
-) -> Result<PluginCheckSummary, String> {
+pub fn check_opencode_plugins(project_root: Option<&Path>) -> Result<PluginCheckSummary, String> {
     let config_path = opencode_config_path()
         .ok_or_else(|| "Cannot determine opencode config directory".to_string())?;
     let cache_dir = opencode_cache_dir()
@@ -257,12 +255,7 @@ fn write_backup_and_prune(path: &Path, content: &str, keep: usize) -> Result<(),
     let mut backups: Vec<_> = fs::read_dir(parent)
         .map_err(|e| e.to_string())?
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(&prefix)
-        })
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with(&prefix))
         .collect();
 
     // Sort by name descending (timestamp in name → newest first)
@@ -280,8 +273,8 @@ pub(crate) fn atomic_rewrite_opencode_json(
     path: &Path,
     mutator: impl FnOnce(&mut serde_json::Value) -> Result<(), String>,
 ) -> Result<(), String> {
-    let raw = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    let raw =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
 
     // Try parsing first.  If serde_json succeeds the file is valid JSON
     // and any "//" or "/*" sequences live inside string values — not real
@@ -302,14 +295,12 @@ pub(crate) fn atomic_rewrite_opencode_json(
 
     mutator(&mut doc)?;
 
-    let new_raw = serde_json::to_string_pretty(&doc)
-        .map_err(|e| format!("Failed to serialize JSON: {e}"))?;
+    let new_raw =
+        serde_json::to_string_pretty(&doc).map_err(|e| format!("Failed to serialize JSON: {e}"))?;
 
     let tmp_path = path.with_extension("json.tmp");
-    fs::write(&tmp_path, &new_raw)
-        .map_err(|e| format!("Failed to write temp file: {e}"))?;
-    fs::rename(&tmp_path, path)
-        .map_err(|e| format!("Failed to rename temp file: {e}"))?;
+    fs::write(&tmp_path, &new_raw).map_err(|e| format!("Failed to write temp file: {e}"))?;
+    fs::rename(&tmp_path, path).map_err(|e| format!("Failed to rename temp file: {e}"))?;
 
     Ok(())
 }
@@ -366,12 +357,9 @@ fn pin_latest_specs(
             for item in arr.iter_mut() {
                 if let Some(spec_str) = item.as_str() {
                     if let Some((parsed_name, _)) = parse_plugin_spec(spec_str) {
-                        if let Some((_, version)) =
-                            pin_map.iter().find(|(n, _)| *n == parsed_name)
+                        if let Some((_, version)) = pin_map.iter().find(|(n, _)| *n == parsed_name)
                         {
-                            *item = serde_json::Value::String(format!(
-                                "{parsed_name}@{version}"
-                            ));
+                            *item = serde_json::Value::String(format!("{parsed_name}@{version}"));
                             pinned += 1;
                         }
                     }
@@ -417,9 +405,9 @@ pub async fn install_missing_plugins(
     task_id: String,
     emitter: &EventEmitter,
 ) -> Result<(), String> {
-    let _guard = PLUGIN_OP_LOCK.try_lock().map_err(|_| {
-        "Another plugin operation is in progress".to_string()
-    })?;
+    let _guard = PLUGIN_OP_LOCK
+        .try_lock()
+        .map_err(|_| "Another plugin operation is in progress".to_string())?;
 
     emit_plugin_event(emitter, &task_id, PluginInstallEventKind::Started, "");
 
@@ -597,12 +585,14 @@ pub async fn install_missing_plugins(
 
 /// Uninstall a single plugin: remove from opencode.json, then `bun remove` from cache.
 pub async fn uninstall_plugin(name: String) -> Result<PluginCheckSummary, String> {
-    let _guard = PLUGIN_OP_LOCK.try_lock().map_err(|_| {
-        "Another plugin operation is in progress".to_string()
-    })?;
+    let _guard = PLUGIN_OP_LOCK
+        .try_lock()
+        .map_err(|_| "Another plugin operation is in progress".to_string())?;
 
     if is_protected_package(&name) {
-        return Err(format!("Cannot uninstall {name}: it is an internal opencode package"));
+        return Err(format!(
+            "Cannot uninstall {name}: it is an internal opencode package"
+        ));
     }
 
     let config_path = opencode_config_path()

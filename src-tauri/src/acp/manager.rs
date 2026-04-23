@@ -219,10 +219,7 @@ impl ConnectionManager {
     pub async fn disconnect_all(&self) -> usize {
         let cmd_txs: Vec<_> = {
             let mut connections = self.connections.lock().await;
-            connections
-                .drain()
-                .map(|(_, conn)| conn.cmd_tx)
-                .collect()
+            connections.drain().map(|(_, conn)| conn.cmd_tx).collect()
         };
         let disconnected = cmd_txs.len();
         for cmd_tx in cmd_txs {

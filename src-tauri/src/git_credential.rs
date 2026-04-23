@@ -219,10 +219,7 @@ pub async fn get_remote_url(repo_path: &str) -> Option<String> {
 }
 
 /// Get the remote URL for a specific named remote.
-pub async fn get_remote_url_by_name(
-    repo_path: &str,
-    remote_name: &str,
-) -> Option<String> {
+pub async fn get_remote_url_by_name(repo_path: &str, remote_name: &str) -> Option<String> {
     let output = crate::process::tokio_command("git")
         .args(["remote", "get-url", remote_name])
         .current_dir(repo_path)
@@ -235,7 +232,11 @@ pub async fn get_remote_url_by_name(
     }
 
     let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if url.is_empty() { None } else { Some(url) }
+    if url.is_empty() {
+        None
+    } else {
+        Some(url)
+    }
 }
 
 /// Extract the hostname from a git remote URL.
@@ -302,9 +303,7 @@ pub fn find_matching_account<'a>(
 }
 
 /// Load GitHub accounts from the database.
-pub async fn load_github_accounts(
-    conn: &DatabaseConnection,
-) -> Option<GitHubAccountsSettings> {
+pub async fn load_github_accounts(conn: &DatabaseConnection) -> Option<GitHubAccountsSettings> {
     let raw = app_metadata_service::get_value(conn, GITHUB_ACCOUNTS_KEY)
         .await
         .ok()??;
@@ -375,7 +374,10 @@ pub async fn try_inject_for_repo_remote(
     let remote_url = match get_remote_url_by_name(repo_path, target_remote).await {
         Some(url) => url,
         None => {
-            eprintln!("[GIT_CRED] no remote URL found for {} (remote: {})", repo_path, target_remote);
+            eprintln!(
+                "[GIT_CRED] no remote URL found for {} (remote: {})",
+                repo_path, target_remote
+            );
             return false;
         }
     };

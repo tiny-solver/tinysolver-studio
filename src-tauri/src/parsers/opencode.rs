@@ -228,9 +228,7 @@ impl OpenCodeParser {
 
         // Pre-scan: collect all subagent session IDs from task tool parts so we
         // can batch-load their tool calls in a single query instead of N queries.
-        let subagent_session_ids = self
-            .scan_subagent_session_ids(conn, conversation_id)
-            .await;
+        let subagent_session_ids = self.scan_subagent_session_ids(conn, conversation_id).await;
         let subagent_tools = batch_load_subagent_tool_calls(conn, &subagent_session_ids).await;
 
         let mut messages = Vec::with_capacity(rows.len());
@@ -270,8 +268,9 @@ impl OpenCodeParser {
                 None
             };
 
-            let (content_blocks, usage_from_step_finish) =
-                self.load_sqlite_parts(conn, &msg_id, &subagent_tools).await?;
+            let (content_blocks, usage_from_step_finish) = self
+                .load_sqlite_parts(conn, &msg_id, &subagent_tools)
+                .await?;
 
             let usage = if is_assistant {
                 extract_opencode_usage(&value).or(usage_from_step_finish)
@@ -511,8 +510,7 @@ impl OpenCodeParser {
                             agent_stats,
                         });
                     } else {
-                        let input_preview = state_input
-                            .and_then(|v| value_to_preview(Some(v)));
+                        let input_preview = state_input.and_then(|v| value_to_preview(Some(v)));
 
                         blocks.push(ContentBlock::ToolUse {
                             tool_use_id: call_id.clone(),
@@ -811,9 +809,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
 
             // Only absorb immediately following Tool messages
             // (stop at the next assistant message to keep turns small for virtualization)
-            while i < messages.len()
-                && matches!(messages[i].role, MessageRole::Tool)
-            {
+            while i < messages.len() && matches!(messages[i].role, MessageRole::Tool) {
                 blocks.extend(messages[i].content.clone());
                 if usage.is_none() {
                     usage = messages[i].usage.clone();
@@ -888,7 +884,11 @@ async fn batch_load_subagent_tool_calls(
     let values: Vec<sea_orm::Value> = session_ids.iter().map(|s| s.as_str().into()).collect();
 
     let rows = match conn
-        .query_all(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, values))
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            &sql,
+            values,
+        ))
         .await
     {
         Ok(r) => r,

@@ -28,12 +28,7 @@ pub async fn send_notification(
     #[cfg(not(target_os = "macos"))]
     {
         use tauri_plugin_notification::NotificationExt;
-        let _ = app
-            .notification()
-            .builder()
-            .title(title)
-            .body(body)
-            .show();
+        let _ = app.notification().builder().title(title).body(body).show();
     }
 
     Ok(())

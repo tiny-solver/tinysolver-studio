@@ -9,7 +9,9 @@ use super::i18n::Lang;
 use super::manager::ChatChannelManager;
 use super::message_formatter;
 use super::types::RichMessage;
-use crate::db::service::{app_metadata_service, chat_channel_message_log_service, chat_channel_service};
+use crate::db::service::{
+    app_metadata_service, chat_channel_message_log_service, chat_channel_service,
+};
 use crate::web::event_bridge::WebEventBroadcaster;
 
 /// Minimum interval between pushes for the same event type per channel (debounce).

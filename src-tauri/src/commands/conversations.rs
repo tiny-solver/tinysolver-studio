@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 use crate::app_error::AppCommandError;
 #[cfg(feature = "tauri-runtime")]
 use crate::db::entities::conversation;
-use crate::db::service::{conversation_service, folder_service};
 #[cfg(feature = "tauri-runtime")]
 use crate::db::service::import_service;
+use crate::db::service::{conversation_service, folder_service};
 #[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::*;
@@ -288,8 +288,7 @@ pub async fn get_folder_conversation_core(
         .await
         .map_err(AppCommandError::from)?;
 
-    let (turns, session_stats, resolved_ext_id) = if let Some(ref ext_id) = summary.external_id
-    {
+    let (turns, session_stats, resolved_ext_id) = if let Some(ref ext_id) = summary.external_id {
         let at = summary.agent_type;
         let eid = ext_id.clone();
         let db_created_at = summary.created_at;
@@ -317,7 +316,10 @@ pub async fn get_folder_conversation_core(
                     // ID after session/new fallback overwrote the original
                     // (Gemini CLI).  Fall back to matching by folder_path
                     // and started_at from the parsed conversation list.
-                    if matches!(at, AgentType::OpenClaw | AgentType::Cline | AgentType::Gemini) {
+                    if matches!(
+                        at,
+                        AgentType::OpenClaw | AgentType::Cline | AgentType::Gemini
+                    ) {
                         if let Ok(all) = parser.list_conversations() {
                             // Filter by folder_path first, then find the closest
                             // started_at match within 300 seconds of db_created_at.
@@ -333,17 +335,14 @@ pub async fn get_folder_conversation_core(
                                     (c.started_at - db_created_at).num_seconds().unsigned_abs()
                                 })
                                 .filter(|c| {
-                                    let diff = (c.started_at - db_created_at).num_seconds().unsigned_abs();
+                                    let diff =
+                                        (c.started_at - db_created_at).num_seconds().unsigned_abs();
                                     diff < 300
                                 });
                             if let Some(conv) = matched {
                                 let new_ext_id = conv.id.clone();
                                 if let Ok(d) = parser.get_conversation(&new_ext_id) {
-                                    return Ok((
-                                        d.turns,
-                                        d.session_stats,
-                                        Some(new_ext_id),
-                                    ));
+                                    return Ok((d.turns, d.session_stats, Some(new_ext_id)));
                                 }
                             }
                         }
@@ -367,8 +366,7 @@ pub async fn get_folder_conversation_core(
     // If we resolved a different external_id (e.g. ACP UUID → parser branch ID),
     // update the database so future lookups are direct.
     if let Some(new_ext_id) = resolved_ext_id {
-        let _ =
-            conversation_service::update_external_id(conn, conversation_id, new_ext_id).await;
+        let _ = conversation_service::update_external_id(conn, conversation_id, new_ext_id).await;
     }
 
     let mut summary = summary;

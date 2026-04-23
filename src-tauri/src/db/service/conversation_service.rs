@@ -207,8 +207,7 @@ pub async fn list_all(
     sort_by: Option<String>,
     status: Option<String>,
 ) -> Result<Vec<DbConversationSummary>, DbError> {
-    let mut query = conversation::Entity::find()
-        .filter(conversation::Column::DeletedAt.is_null());
+    let mut query = conversation::Entity::find().filter(conversation::Column::DeletedAt.is_null());
 
     match folder_ids {
         Some(ids) if !ids.is_empty() => {

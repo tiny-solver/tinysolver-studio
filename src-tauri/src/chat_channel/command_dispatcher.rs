@@ -155,9 +155,16 @@ async fn dispatch_command(
                 guard.find_by_sender(channel_id, sender_id).is_some()
             };
             if has_session {
-                return session_commands::handle_followup(
-                    db, text, channel_id, sender_id, conn_mgr, bridge, lang, prefix,
-                )
+                return session_commands::handle_followup(session_commands::FollowupRequest {
+                    db,
+                    text,
+                    channel_id,
+                    sender_id,
+                    conn_mgr,
+                    bridge,
+                    lang,
+                    prefix,
+                })
                 .await;
             }
             return command_handlers::handle_help(prefix, lang);
@@ -205,8 +212,7 @@ async fn dispatch_command(
             .await
         }
         "cancel" => {
-            session_commands::handle_cancel(db, channel_id, sender_id, conn_mgr, bridge, lang)
-                .await
+            session_commands::handle_cancel(db, channel_id, sender_id, conn_mgr, bridge, lang).await
         }
         "approve" => {
             let always = args.eq_ignore_ascii_case("always");

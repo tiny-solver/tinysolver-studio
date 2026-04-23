@@ -96,9 +96,7 @@ export function Sidebar() {
             size="icon"
             className="h-6 w-6 shrink-0 text-muted-foreground"
             onClick={handleToggleExpandAll}
-            title={
-              allExpanded ? t("collapseAllGroups") : t("expandAllGroups")
-            }
+            title={allExpanded ? t("collapseAllGroups") : t("expandAllGroups")}
           >
             {allExpanded ? (
               <ChevronsDownUp className="h-3.5 w-3.5" />

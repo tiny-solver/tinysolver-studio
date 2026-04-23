@@ -38,8 +38,9 @@ pub struct AcpAgentMeta {
 impl AcpAgentMeta {
     pub fn registry_version(&self) -> Option<&'static str> {
         match &self.distribution {
-            AgentDistribution::Npx { version, .. }
-            | AgentDistribution::Binary { version, .. } => Some(*version),
+            AgentDistribution::Npx { version, .. } | AgentDistribution::Binary { version, .. } => {
+                Some(*version)
+            }
         }
     }
 }

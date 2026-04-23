@@ -10,7 +10,11 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(AgentSetting::Table)
-                    .add_column(ColumnDef::new(AgentSetting::ModelProviderId).integer().null())
+                    .add_column(
+                        ColumnDef::new(AgentSetting::ModelProviderId)
+                            .integer()
+                            .null(),
+                    )
                     .to_owned(),
             )
             .await

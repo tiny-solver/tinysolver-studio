@@ -62,8 +62,10 @@ pub fn ensure_git_repo(path: &str) -> Result<(), AppCommandError> {
                 git_path.display()
             ))
             .with_detail(err.to_string())),
-            _ => Err(AppCommandError::io(err)
-                .with_detail(format!("Failed to inspect Git metadata: {}", git_path.display()))),
+            _ => Err(AppCommandError::io(err).with_detail(format!(
+                "Failed to inspect Git metadata: {}",
+                git_path.display()
+            ))),
         },
     }
 }

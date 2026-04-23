@@ -77,24 +77,21 @@ pub struct CreateFileTreeEntryParams {
 pub async fn read_file_preview(
     Json(params): Json<ReadFilePreviewParams>,
 ) -> Result<Json<folder_commands::FilePreviewContent>, AppCommandError> {
-    let result =
-        folder_commands::read_file_preview(params.root_path, params.path).await?;
+    let result = folder_commands::read_file_preview(params.root_path, params.path).await?;
     Ok(Json(result))
 }
 
 pub async fn read_file_base64(
     Json(params): Json<ReadFileBase64Params>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::read_file_base64(params.path, params.max_bytes).await?;
+    let result = folder_commands::read_file_base64(params.path, params.max_bytes).await?;
     Ok(Json(result))
 }
 
 pub async fn read_file_for_edit(
     Json(params): Json<ReadFileForEditParams>,
 ) -> Result<Json<folder_commands::FileEditContent>, AppCommandError> {
-    let result =
-        folder_commands::read_file_for_edit(params.root_path, params.path).await?;
+    let result = folder_commands::read_file_for_edit(params.root_path, params.path).await?;
     Ok(Json(result))
 }
 
@@ -114,24 +111,17 @@ pub async fn save_file_content(
 pub async fn save_file_copy(
     Json(params): Json<SaveFileCopyParams>,
 ) -> Result<Json<folder_commands::FileSaveResult>, AppCommandError> {
-    let result = folder_commands::save_file_copy(
-        params.root_path,
-        params.path,
-        params.content,
-    )
-    .await?;
+    let result =
+        folder_commands::save_file_copy(params.root_path, params.path, params.content).await?;
     Ok(Json(result))
 }
 
 pub async fn rename_file_tree_entry(
     Json(params): Json<RenameFileTreeEntryParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result = folder_commands::rename_file_tree_entry(
-        params.root_path,
-        params.path,
-        params.new_name,
-    )
-    .await?;
+    let result =
+        folder_commands::rename_file_tree_entry(params.root_path, params.path, params.new_name)
+            .await?;
     Ok(Json(result))
 }
 

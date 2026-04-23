@@ -102,14 +102,30 @@ async fn check_npm_environment(node_required: Option<&str>) -> Vec<CheckItem> {
     let (node_result, npm_result) = tokio::join!(
         async {
             match &node_path {
-                Some(p) => crate::process::tokio_command(p).arg("--version").output().await,
-                None => Err(std::io::Error::new(std::io::ErrorKind::NotFound, "node not found in PATH")),
+                Some(p) => {
+                    crate::process::tokio_command(p)
+                        .arg("--version")
+                        .output()
+                        .await
+                }
+                None => Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "node not found in PATH",
+                )),
             }
         },
         async {
             match &npm_path {
-                Some(p) => crate::process::tokio_command(p).arg("--version").output().await,
-                None => Err(std::io::Error::new(std::io::ErrorKind::NotFound, "npm not found in PATH")),
+                Some(p) => {
+                    crate::process::tokio_command(p)
+                        .arg("--version")
+                        .output()
+                        .await
+                }
+                None => Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "npm not found in PATH",
+                )),
             }
         },
     );
@@ -310,47 +326,44 @@ async fn check_binary_environment(
     // but still pass — the Settings page's version-badge flow is the
     // canonical place to surface "upgrade available".
     if platform_supported {
-        let cache_check =
-            match binary_cache::find_best_cached_binary_for_agent(agent_type, cmd) {
-                Ok(Some((_, cached_version))) => {
-                    let message = if cached_version == version {
-                        "Binary is cached locally".to_string()
-                    } else {
-                        format!(
-                            "Binary {cached_version} is cached locally (recommended: {version})"
-                        )
-                    };
-                    CheckItem {
-                        check_id: "binary_cached".into(),
-                        label: "Binary cache".into(),
-                        status: CheckStatus::Pass,
-                        message,
-                        fixes: vec![],
-                    }
+        let cache_check = match binary_cache::find_best_cached_binary_for_agent(agent_type, cmd) {
+            Ok(Some((_, cached_version))) => {
+                let message = if cached_version == version {
+                    "Binary is cached locally".to_string()
+                } else {
+                    format!("Binary {cached_version} is cached locally (recommended: {version})")
+                };
+                CheckItem {
+                    check_id: "binary_cached".into(),
+                    label: "Binary cache".into(),
+                    status: CheckStatus::Pass,
+                    message,
+                    fixes: vec![],
                 }
-                Ok(None) => CheckItem {
-                    check_id: "binary_cached".into(),
-                    label: "Binary cache".into(),
-                    status: CheckStatus::Warn,
-                    message:
-                        "Binary is not installed. Download it from Agent Settings before connecting."
-                            .into(),
-                    fixes: vec![],
-                },
-                Err(_) => CheckItem {
-                    check_id: "binary_cached".into(),
-                    label: "Binary cache".into(),
-                    status: CheckStatus::Warn,
-                    message: "Cannot determine binary cache path".into(),
-                    fixes: vec![],
-                },
-            };
+            }
+            Ok(None) => CheckItem {
+                check_id: "binary_cached".into(),
+                label: "Binary cache".into(),
+                status: CheckStatus::Warn,
+                message:
+                    "Binary is not installed. Download it from Agent Settings before connecting."
+                        .into(),
+                fixes: vec![],
+            },
+            Err(_) => CheckItem {
+                check_id: "binary_cached".into(),
+                label: "Binary cache".into(),
+                status: CheckStatus::Warn,
+                message: "Cannot determine binary cache path".into(),
+                fixes: vec![],
+            },
+        };
         checks.push(cache_check);
     }
 
     // OpenCode plugin checks
     if agent_type == AgentType::OpenCode {
-        use crate::acp::opencode_plugins::{self, PluginStatus, spec_has_floating_version};
+        use crate::acp::opencode_plugins::{self, spec_has_floating_version, PluginStatus};
         match opencode_plugins::check_opencode_plugins(None) {
             Ok(summary) => {
                 let missing: Vec<_> = summary
@@ -376,8 +389,7 @@ async fn check_binary_environment(
                         fixes: vec![],
                     });
                 } else {
-                    let names: Vec<&str> =
-                        missing.iter().map(|p| p.name.as_str()).collect();
+                    let names: Vec<&str> = missing.iter().map(|p| p.name.as_str()).collect();
                     checks.push(CheckItem {
                         check_id: "opencode_plugins".into(),
                         label: "OpenCode plugins".into(),

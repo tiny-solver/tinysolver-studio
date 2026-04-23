@@ -340,7 +340,6 @@ pub fn search_results_count_title(lang: Lang, keyword: &str, count: usize) -> St
     }
 }
 
-
 pub fn no_activity_today(lang: Lang) -> &'static str {
     match lang {
         Lang::ZhCn => "今日暂无编码活动",
@@ -667,36 +666,26 @@ pub fn search_usage(lang: Lang, prefix: &str) -> String {
 
 pub fn unknown_command(lang: Lang, prefix: &str, command: &str) -> String {
     match lang {
-        Lang::ZhCn => format!(
-            "未知命令: {prefix}{command}\n输入 {prefix}help 查看可用命令"
-        ),
-        Lang::ZhTw => format!(
-            "未知命令: {prefix}{command}\n輸入 {prefix}help 查看可用命令"
-        ),
-        Lang::Ja => format!(
-            "不明なコマンド: {prefix}{command}\n{prefix}help でヘルプを表示"
-        ),
-        Lang::Ko => format!(
-            "알 수 없는 명령: {prefix}{command}\n{prefix}help 로 도움말 보기"
-        ),
+        Lang::ZhCn => format!("未知命令: {prefix}{command}\n输入 {prefix}help 查看可用命令"),
+        Lang::ZhTw => format!("未知命令: {prefix}{command}\n輸入 {prefix}help 查看可用命令"),
+        Lang::Ja => format!("不明なコマンド: {prefix}{command}\n{prefix}help でヘルプを表示"),
+        Lang::Ko => format!("알 수 없는 명령: {prefix}{command}\n{prefix}help 로 도움말 보기"),
         Lang::Es => format!(
             "Comando desconocido: {prefix}{command}\nEscriba {prefix}help para ver los comandos"
         ),
-        Lang::De => format!(
-            "Unbekannter Befehl: {prefix}{command}\n{prefix}help für Hilfe eingeben"
-        ),
-        Lang::Fr => format!(
-            "Commande inconnue : {prefix}{command}\nTapez {prefix}help pour l'aide"
-        ),
-        Lang::Pt => format!(
-            "Comando desconhecido: {prefix}{command}\nDigite {prefix}help para ajuda"
-        ),
-        Lang::Ar => format!(
-            "أمر غير معروف: {prefix}{command}\nاكتب {prefix}help لعرض المساعدة"
-        ),
-        Lang::En => format!(
-            "Unknown command: {prefix}{command}\nType {prefix}help for available commands"
-        ),
+        Lang::De => {
+            format!("Unbekannter Befehl: {prefix}{command}\n{prefix}help für Hilfe eingeben")
+        }
+        Lang::Fr => {
+            format!("Commande inconnue : {prefix}{command}\nTapez {prefix}help pour l'aide")
+        }
+        Lang::Pt => {
+            format!("Comando desconhecido: {prefix}{command}\nDigite {prefix}help para ajuda")
+        }
+        Lang::Ar => format!("أمر غير معروف: {prefix}{command}\nاكتب {prefix}help لعرض المساعدة"),
+        Lang::En => {
+            format!("Unknown command: {prefix}{command}\nType {prefix}help for available commands")
+        }
     }
 }
 
@@ -782,10 +771,14 @@ pub fn folder_index_out_of_range(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!("序号超出范围，请使用 {prefix}folder 查看列表。"),
         Lang::ZhTw => format!("序號超出範圍，請使用 {prefix}folder 查看列表。"),
-        Lang::Ja => format!("インデックスが範囲外です。{prefix}folder でリストを確認してください。"),
+        Lang::Ja => {
+            format!("インデックスが範囲外です。{prefix}folder でリストを確認してください。")
+        }
         Lang::Ko => format!("인덱스가 범위를 벗어났습니다. {prefix}folder로 목록을 확인하세요."),
         Lang::Es => format!("Índice fuera de rango. Usa {prefix}folder para ver la lista."),
-        Lang::De => format!("Index außerhalb des Bereichs. {prefix}folder verwenden, um aufzulisten."),
+        Lang::De => {
+            format!("Index außerhalb des Bereichs. {prefix}folder verwenden, um aufzulisten.")
+        }
         Lang::Fr => format!("Index hors limites. Utilisez {prefix}folder pour lister."),
         Lang::Pt => format!("Índice fora de intervalo. Use {prefix}folder para listar."),
         Lang::Ar => format!("الفهرس خارج النطاق. استخدم {prefix}folder لعرض القائمة."),
@@ -842,7 +835,9 @@ pub fn no_folder_selected(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!("未选择工作目录，请先使用 {prefix}folder 选择。"),
         Lang::ZhTw => format!("未選擇工作目錄，請先使用 {prefix}folder 選擇。"),
-        Lang::Ja => format!("フォルダが選択されていません。先に {prefix}folder を使用してください。"),
+        Lang::Ja => {
+            format!("フォルダが選択されていません。先に {prefix}folder を使用してください。")
+        }
         Lang::Ko => format!("폴더가 선택되지 않았습니다. 먼저 {prefix}folder를 사용하세요."),
         Lang::Es => format!("Ninguna carpeta seleccionada. Usa {prefix}folder primero."),
         Lang::De => format!("Kein Ordner ausgewählt. Zuerst {prefix}folder verwenden."),
@@ -873,12 +868,22 @@ pub fn agent_select_hint(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!("回复 {prefix}agent <数字> 或 {prefix}agent <名称> 选择。"),
         Lang::ZhTw => format!("回覆 {prefix}agent <數字> 或 {prefix}agent <名稱> 選擇。"),
-        Lang::Ja => format!("{prefix}agent <番号> または {prefix}agent <名前> で選択してください。"),
+        Lang::Ja => {
+            format!("{prefix}agent <番号> または {prefix}agent <名前> で選択してください。")
+        }
         Lang::Ko => format!("{prefix}agent <번호> 또는 {prefix}agent <이름>으로 선택하세요."),
-        Lang::Es => format!("Responde {prefix}agent <número> o {prefix}agent <nombre> para seleccionar."),
-        Lang::De => format!("Antworte {prefix}agent <Nummer> oder {prefix}agent <Name> zur Auswahl."),
-        Lang::Fr => format!("Répondez {prefix}agent <numéro> ou {prefix}agent <nom> pour sélectionner."),
-        Lang::Pt => format!("Responda {prefix}agent <número> ou {prefix}agent <nome> para selecionar."),
+        Lang::Es => {
+            format!("Responde {prefix}agent <número> o {prefix}agent <nombre> para seleccionar.")
+        }
+        Lang::De => {
+            format!("Antworte {prefix}agent <Nummer> oder {prefix}agent <Name> zur Auswahl.")
+        }
+        Lang::Fr => {
+            format!("Répondez {prefix}agent <numéro> ou {prefix}agent <nom> pour sélectionner.")
+        }
+        Lang::Pt => {
+            format!("Responda {prefix}agent <número> ou {prefix}agent <nome> para selecionar.")
+        }
         Lang::Ar => format!("أجب بـ {prefix}agent <رقم> أو {prefix}agent <اسم> للاختيار."),
         Lang::En => format!("Reply {prefix}agent <number> or {prefix}agent <name> to select."),
     }
@@ -891,7 +896,9 @@ pub fn agent_index_out_of_range(lang: Lang, prefix: &str) -> String {
         Lang::Ja => format!("インデックスが範囲外です。{prefix}agent でリストを確認してください。"),
         Lang::Ko => format!("인덱스가 범위를 벗어났습니다. {prefix}agent로 목록을 확인하세요."),
         Lang::Es => format!("Índice fuera de rango. Usa {prefix}agent para ver la lista."),
-        Lang::De => format!("Index außerhalb des Bereichs. {prefix}agent verwenden, um aufzulisten."),
+        Lang::De => {
+            format!("Index außerhalb des Bereichs. {prefix}agent verwenden, um aufzulisten.")
+        }
         Lang::Fr => format!("Index hors limites. Utilisez {prefix}agent pour lister."),
         Lang::Pt => format!("Índice fora de intervalo. Use {prefix}agent para listar."),
         Lang::Ar => format!("الفهرس خارج النطاق. استخدم {prefix}agent لعرض القائمة."),
@@ -1299,7 +1306,9 @@ pub fn no_active_session_use_task(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!("没有活跃的会话，请使用 {prefix}task 开始新任务。"),
         Lang::ZhTw => format!("沒有活躍的對話，請使用 {prefix}task 開始新任務。"),
-        Lang::Ja => format!("アクティブなセッションがありません。{prefix}task で開始してください。"),
+        Lang::Ja => {
+            format!("アクティブなセッションがありません。{prefix}task で開始してください。")
+        }
         Lang::Ko => format!("활성 세션이 없습니다. {prefix}task로 시작하세요."),
         Lang::Es => format!("No hay sesión activa. Usa {prefix}task para iniciar una."),
         Lang::De => format!("Keine aktive Sitzung. {prefix}task zum Starten verwenden."),
@@ -1314,11 +1323,17 @@ pub fn session_connection_lost(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn => format!("会话连接已断开，请使用 {prefix}task 开始新任务。"),
         Lang::ZhTw => format!("對話連線已斷開，請使用 {prefix}task 開始新任務。"),
-        Lang::Ja => format!("セッション接続が切断されました。{prefix}task で新しく開始してください。"),
+        Lang::Ja => {
+            format!("セッション接続が切断されました。{prefix}task で新しく開始してください。")
+        }
         Lang::Ko => format!("세션 연결이 끊어졌습니다. {prefix}task로 새로 시작하세요."),
         Lang::Es => format!("Conexión de sesión perdida. Usa {prefix}task para iniciar una nueva."),
-        Lang::De => format!("Sitzungsverbindung verloren. {prefix}task für neue Sitzung verwenden."),
-        Lang::Fr => format!("Connexion de session perdue. Utilisez {prefix}task pour en démarrer une nouvelle."),
+        Lang::De => {
+            format!("Sitzungsverbindung verloren. {prefix}task für neue Sitzung verwenden.")
+        }
+        Lang::Fr => format!(
+            "Connexion de session perdue. Utilisez {prefix}task pour en démarrer une nouvelle."
+        ),
         Lang::Pt => format!("Conexão da sessão perdida. Use {prefix}task para iniciar uma nova."),
         Lang::Ar => format!("انقطع اتصال الجلسة. استخدم {prefix}task لبدء جلسة جديدة."),
         Lang::En => format!("Session connection lost. Use {prefix}task to start a new one."),

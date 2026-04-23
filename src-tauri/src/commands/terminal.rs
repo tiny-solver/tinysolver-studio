@@ -32,16 +32,14 @@ pub(crate) fn prepare_credential_env(
         }
     };
 
-    let helper_script = match git_credential::create_credential_helper_script(
-        app_data_dir,
-        &app_binary,
-    ) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("[TERM] failed to create credential helper script: {}", e);
-            return None;
-        }
-    };
+    let helper_script =
+        match git_credential::create_credential_helper_script(app_data_dir, &app_binary) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("[TERM] failed to create credential helper script: {}", e);
+                return None;
+            }
+        };
 
     let helper_path_str = helper_script.to_string_lossy().to_string();
 

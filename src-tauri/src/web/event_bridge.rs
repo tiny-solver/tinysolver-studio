@@ -56,11 +56,7 @@ pub enum EventEmitter {
 }
 
 /// Unified event emission: sends to both Tauri webview and Web clients (if applicable).
-pub fn emit_event(
-    emitter: &EventEmitter,
-    event: &str,
-    payload: impl Serialize + Clone,
-) {
+pub fn emit_event(emitter: &EventEmitter, event: &str, payload: impl Serialize + Clone) {
     match emitter {
         #[cfg(feature = "tauri-runtime")]
         EventEmitter::Tauri(app) => {

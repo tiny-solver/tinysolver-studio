@@ -10,9 +10,7 @@ use super::session_bridge::{PendingPermission, SessionBridge};
 use super::types::{MessageLevel, RichMessage};
 use crate::acp::manager::ConnectionManager;
 use crate::acp::types::PromptInputBlock;
-use crate::db::service::{
-    app_metadata_service, conversation_service, sender_context_service,
-};
+use crate::db::service::{app_metadata_service, conversation_service, sender_context_service};
 use crate::web::event_bridge::WebEventBroadcaster;
 
 use super::manager::ChatChannelManager;
@@ -132,10 +130,7 @@ async fn handle_acp_event_payload(
         }
 
         "content_delta" => {
-            let text = payload
-                .get("text")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let text = payload.get("text").and_then(|v| v.as_str()).unwrap_or("");
 
             // Collect flush info under the lock, then release before any IO.
             let flush_info: Option<(i32, String, Option<String>)> = {
@@ -245,14 +240,11 @@ async fn handle_acp_event_payload(
                 let channel_id = session.channel_id;
                 let sender_id = session.sender_id.clone();
 
-                let auto_approve = sender_context_service::get_or_create(
-                    db,
-                    channel_id,
-                    &sender_id,
-                )
-                .await
-                .map(|ctx| ctx.auto_approve)
-                .unwrap_or(false);
+                let auto_approve =
+                    sender_context_service::get_or_create(db, channel_id, &sender_id)
+                        .await
+                        .map(|ctx| ctx.auto_approve)
+                        .unwrap_or(false);
 
                 if auto_approve {
                     let option_id = options
@@ -286,8 +278,7 @@ async fn handle_acp_event_payload(
                         serde_json::Value::Null => None,
                         other => Some(other.to_string()),
                     });
-                let tool_desc =
-                    format_tool_call_detail(tool_title, raw_input_str.as_deref());
+                let tool_desc = format_tool_call_detail(tool_title, raw_input_str.as_deref());
 
                 session.permission_pending = Some(PendingPermission {
                     request_id: request_id.to_string(),
@@ -407,16 +398,12 @@ async fn handle_acp_event_payload(
                     crate::db::entities::conversation::ConversationStatus::Cancelled,
                 )
                 .await;
-                let _ =
-                    sender_context_service::clear_session(db, channel_id, &sender_id).await;
+                let _ = sender_context_service::clear_session(db, channel_id, &sender_id).await;
             }
         }
 
         "status_changed" => {
-            let status = payload
-                .get("status")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let status = payload.get("status").and_then(|v| v.as_str()).unwrap_or("");
 
             if status == "disconnected" || status == "error" {
                 let mut guard = bridge.lock().await;
@@ -425,8 +412,7 @@ async fn handle_acp_event_payload(
                     let sender_id = session.sender_id.clone();
                     drop(guard);
 
-                    let _ =
-                        sender_context_service::clear_session(db, channel_id, &sender_id).await;
+                    let _ = sender_context_service::clear_session(db, channel_id, &sender_id).await;
                 }
             }
         }
@@ -653,7 +639,11 @@ fn format_tool_call_detail(title: &str, raw_input: Option<&str>) -> String {
         if let Some(pattern) = obj.get("pattern").and_then(|v| v.as_str()) {
             let path = obj.get("path").and_then(|v| v.as_str());
             return if let Some(p) = path {
-                format!("Grep: \"{}\" in {}", truncate_str(pattern, 40), short_path(p))
+                format!(
+                    "Grep: \"{}\" in {}",
+                    truncate_str(pattern, 40),
+                    short_path(p)
+                )
             } else {
                 format!("Grep: \"{}\"", truncate_str(pattern, 60))
             };

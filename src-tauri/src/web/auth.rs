@@ -5,11 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-pub async fn require_token(
-    request: Request,
-    next: Next,
-    token: String,
-) -> Response {
+pub async fn require_token(request: Request, next: Next, token: String) -> Response {
     // Allow WebSocket upgrade requests to authenticate via query param.
     // The token value is URL-encoded by the client, so decode before comparing.
     if let Some(query) = request.uri().query() {

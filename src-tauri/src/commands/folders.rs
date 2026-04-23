@@ -1192,11 +1192,7 @@ pub async fn git_checkout(path: String, branch_name: String) -> Result<(), AppCo
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_reset(
-    path: String,
-    commit: String,
-    mode: String,
-) -> Result<(), AppCommandError> {
+pub async fn git_reset(path: String, commit: String, mode: String) -> Result<(), AppCommandError> {
     let mode = mode.trim().to_lowercase();
     let mode_flag = match mode.as_str() {
         "soft" | "mixed" | "hard" | "keep" => format!("--{mode}"),
@@ -2128,10 +2124,7 @@ pub async fn git_delete_branch(
         .map_err(AppCommandError::io)?;
 
     if !output.status.success() {
-        return Err(git_command_error(
-            &format!("branch {flag}"),
-            &output.stderr,
-        ));
+        return Err(git_command_error(&format!("branch {flag}"), &output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }

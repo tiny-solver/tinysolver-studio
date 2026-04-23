@@ -2,8 +2,8 @@ pub mod agent;
 pub mod chat_channel;
 pub mod conversation;
 pub mod folder;
-pub mod model_provider;
 pub mod message;
+pub mod model_provider;
 pub mod system;
 
 pub use agent::AgentType;

@@ -29,9 +29,7 @@ async fn detect_one(name: &str) -> PackageManagerInfo {
 
     match result {
         Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string();
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             PackageManagerInfo {
                 name: name.to_string(),
                 installed: true,
@@ -76,7 +74,9 @@ pub async fn create_shadcn_project(
         return Err(AppCommandError::invalid_input("Template is required"));
     }
     if target_dir.is_empty() {
-        return Err(AppCommandError::invalid_input("Target directory is required"));
+        return Err(AppCommandError::invalid_input(
+            "Target directory is required",
+        ));
     }
 
     let full_path = PathBuf::from(&target_dir).join(&project_name);

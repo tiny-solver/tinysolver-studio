@@ -564,24 +564,14 @@ fn parse_codex_subagent_stats(
 
                 let input_preview = if tool_name == "exec_command" {
                     parse_codex_json_arg(payload)
-                        .and_then(|a| {
-                            a.get("cmd")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string())
-                        })
+                        .and_then(|a| a.get("cmd").and_then(|v| v.as_str()).map(|s| s.to_string()))
                         .or_else(|| {
                             value_to_preview(
-                                payload
-                                    .get("arguments")
-                                    .or_else(|| payload.get("input")),
+                                payload.get("arguments").or_else(|| payload.get("input")),
                             )
                         })
                 } else {
-                    value_to_preview(
-                        payload
-                            .get("arguments")
-                            .or_else(|| payload.get("input")),
-                    )
+                    value_to_preview(payload.get("arguments").or_else(|| payload.get("input")))
                 };
 
                 let tc = AgentToolCall {
@@ -631,7 +621,11 @@ fn parse_codex_subagent_stats(
     let total_duration_ms = match (first_ts, last_ts) {
         (Some(f), Some(l)) => {
             let dur = (l - f).num_milliseconds();
-            if dur > 0 { Some(dur as u64) } else { None }
+            if dur > 0 {
+                Some(dur as u64)
+            } else {
+                None
+            }
         }
         _ => None,
     };
@@ -955,10 +949,8 @@ impl CodexParser {
                                             .and_then(|a| a.get("message"))
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("");
-                                        let description = truncate_str(
-                                            message.lines().next().unwrap_or(""),
-                                            60,
-                                        );
+                                        let description =
+                                            truncate_str(message.lines().next().unwrap_or(""), 60);
 
                                         if let Some(ref id) = tool_use_id {
                                             spawn_agent_call_ids.insert(id.clone());
@@ -993,47 +985,43 @@ impl CodexParser {
                                     "close_agent" => {
                                         if let Some(ref id) = tool_use_id {
                                             close_agent_call_ids.insert(id.clone());
-                                            let target = parse_codex_json_arg(payload)
-                                                .and_then(|a| {
+                                            let target =
+                                                parse_codex_json_arg(payload).and_then(|a| {
                                                     a.get("target")
                                                         .and_then(|v| v.as_str())
                                                         .map(|s| s.to_string())
                                                 });
                                             if let Some(target) = target {
-                                                close_agent_targets
-                                                    .insert(id.clone(), target);
+                                                close_agent_targets.insert(id.clone(), target);
                                             }
                                         }
                                     }
                                     _ => {
                                         if let Some(ref id) = tool_use_id {
-                                            call_id_tool_names.insert(
-                                                id.clone(),
-                                                raw_tool_name.to_string(),
-                                            );
+                                            call_id_tool_names
+                                                .insert(id.clone(), raw_tool_name.to_string());
                                         }
-                                        let input_preview =
-                                            if raw_tool_name == "exec_command" {
-                                                parse_codex_json_arg(payload)
-                                                    .and_then(|a| {
-                                                        a.get("cmd")
-                                                            .and_then(|v| v.as_str())
-                                                            .map(|s| s.to_string())
-                                                    })
-                                                    .or_else(|| {
-                                                        value_to_preview(
-                                                            payload.get("arguments").or_else(
-                                                                || payload.get("input"),
-                                                            ),
-                                                        )
-                                                    })
-                                            } else {
-                                                value_to_preview(
-                                                    payload
-                                                        .get("arguments")
-                                                        .or_else(|| payload.get("input")),
-                                                )
-                                            };
+                                        let input_preview = if raw_tool_name == "exec_command" {
+                                            parse_codex_json_arg(payload)
+                                                .and_then(|a| {
+                                                    a.get("cmd")
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string())
+                                                })
+                                                .or_else(|| {
+                                                    value_to_preview(
+                                                        payload
+                                                            .get("arguments")
+                                                            .or_else(|| payload.get("input")),
+                                                    )
+                                                })
+                                        } else {
+                                            value_to_preview(
+                                                payload
+                                                    .get("arguments")
+                                                    .or_else(|| payload.get("input")),
+                                            )
+                                        };
                                         messages.push(UnifiedMessage {
                                             id: format!("tool-{}", messages.len()),
                                             role: MessageRole::Assistant,
@@ -1071,15 +1059,11 @@ impl CodexParser {
                                 if is_spawn {
                                     if let Some(output_obj) = parse_codex_json_output(payload) {
                                         if let (Some(agent_id), Some(call_id)) = (
-                                            output_obj
-                                                .get("agent_id")
-                                                .and_then(|v| v.as_str()),
+                                            output_obj.get("agent_id").and_then(|v| v.as_str()),
                                             tool_use_id.as_ref(),
                                         ) {
-                                            agent_id_to_spawn_call_id.insert(
-                                                agent_id.to_string(),
-                                                call_id.clone(),
-                                            );
+                                            agent_id_to_spawn_call_id
+                                                .insert(agent_id.to_string(), call_id.clone());
                                         }
                                     }
                                     messages.push(UnifiedMessage {
@@ -1098,14 +1082,12 @@ impl CodexParser {
                                     });
                                 } else if is_wait {
                                     if let Some(output_obj) = parse_codex_json_output(payload) {
-                                        if let Some(status) = output_obj
-                                            .get("status")
-                                            .and_then(|s| s.as_object())
+                                        if let Some(status) =
+                                            output_obj.get("status").and_then(|s| s.as_object())
                                         {
                                             for (agent_id, result) in status {
-                                                if let Some(text) = result
-                                                    .get("completed")
-                                                    .and_then(|v| v.as_str())
+                                                if let Some(text) =
+                                                    result.get("completed").and_then(|v| v.as_str())
                                                 {
                                                     agent_final_results
                                                         .entry(agent_id.clone())
@@ -1115,8 +1097,7 @@ impl CodexParser {
                                         }
                                     }
                                 } else if is_close {
-                                    active_agent_count =
-                                        active_agent_count.saturating_sub(1);
+                                    active_agent_count = active_agent_count.saturating_sub(1);
                                     if let Some(output_obj) = parse_codex_json_output(payload) {
                                         if let Some(agent_id) = tool_use_id
                                             .as_ref()
@@ -1135,7 +1116,9 @@ impl CodexParser {
                                     }
                                 } else {
                                     let is_exec = tool_use_id.as_ref().is_some_and(|id| {
-                                        call_id_tool_names.get(id).is_some_and(|n| n == "exec_command")
+                                        call_id_tool_names
+                                            .get(id)
+                                            .is_some_and(|n| n == "exec_command")
                                     });
                                     let output_value = payload.get("output");
                                     let raw_output = value_to_preview(output_value);
@@ -1235,9 +1218,7 @@ impl CodexParser {
                             if let Some(dir) = session_dir {
                                 let stats = agent_stats_cache
                                     .entry(agent_id.to_string())
-                                    .or_insert_with(|| {
-                                        parse_codex_subagent_stats(dir, agent_id)
-                                    });
+                                    .or_insert_with(|| parse_codex_subagent_stats(dir, agent_id));
                                 if stats.is_some() {
                                     *agent_stats = stats.clone();
                                 }
@@ -1677,9 +1658,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
 
             // Only absorb immediately following Tool messages
             // (stop at the next assistant message to keep turns small for virtualization)
-            while i < messages.len()
-                && matches!(messages[i].role, MessageRole::Tool)
-            {
+            while i < messages.len() && matches!(messages[i].role, MessageRole::Tool) {
                 blocks.extend(messages[i].content.clone());
                 if usage.is_none() {
                     usage = messages[i].usage.clone();

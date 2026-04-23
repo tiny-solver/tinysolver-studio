@@ -18,9 +18,7 @@ fn validate_agent_types(agent_types: &[String]) -> Result<(), AppCommandError> {
     }
     for at in agent_types {
         let _: AgentType = serde_json::from_value(serde_json::Value::String(at.clone()))
-            .map_err(|_| {
-                AppCommandError::invalid_input(format!("Invalid agent type: {at}"))
-            })?;
+            .map_err(|_| AppCommandError::invalid_input(format!("Invalid agent type: {at}")))?;
     }
     Ok(())
 }
@@ -32,20 +30,28 @@ fn validate_fields(
 ) -> Result<(), AppCommandError> {
     if let Some(n) = name {
         if n.len() > 256 {
-            return Err(AppCommandError::invalid_input("Name must be 256 characters or less"));
+            return Err(AppCommandError::invalid_input(
+                "Name must be 256 characters or less",
+            ));
         }
     }
     if let Some(u) = api_url {
         if u.len() > 2048 {
-            return Err(AppCommandError::invalid_input("API URL must be 2048 characters or less"));
+            return Err(AppCommandError::invalid_input(
+                "API URL must be 2048 characters or less",
+            ));
         }
         if !u.starts_with("http://") && !u.starts_with("https://") {
-            return Err(AppCommandError::invalid_input("API URL must start with http:// or https://"));
+            return Err(AppCommandError::invalid_input(
+                "API URL must start with http:// or https://",
+            ));
         }
     }
     if let Some(k) = api_key {
         if k.len() > 4096 {
-            return Err(AppCommandError::invalid_input("API Key must be 4096 characters or less"));
+            return Err(AppCommandError::invalid_input(
+                "API Key must be 4096 characters or less",
+            ));
         }
     }
     Ok(())
@@ -72,15 +78,9 @@ pub async fn create_model_provider_core(
     let agent_types_json = serde_json::to_string(&agent_types)
         .map_err(|e| AppCommandError::invalid_input(e.to_string()))?;
 
-    let model = model_provider_service::create(
-        &db.conn,
-        name,
-        api_url,
-        api_key,
-        agent_types_json,
-    )
-    .await
-    .map_err(AppCommandError::from)?;
+    let model = model_provider_service::create(&db.conn, name, api_url, api_key, agent_types_json)
+        .await
+        .map_err(AppCommandError::from)?;
     Ok(ModelProviderInfo::from(model))
 }
 
@@ -122,8 +122,12 @@ pub async fn update_model_provider_core(
     .map_err(AppCommandError::from)?;
 
     // Cascade credential changes to all dependent agent settings and config files.
-    let url_changed = api_url.as_deref().is_some_and(|u| u != old_provider.api_url);
-    let key_changed = api_key.as_deref().is_some_and(|k| k != old_provider.api_key);
+    let url_changed = api_url
+        .as_deref()
+        .is_some_and(|u| u != old_provider.api_url);
+    let key_changed = api_key
+        .as_deref()
+        .is_some_and(|k| k != old_provider.api_key);
     if url_changed || key_changed {
         let final_url = api_url.as_deref().unwrap_or(&old_provider.api_url);
         let final_key = api_key.as_deref().unwrap_or(&old_provider.api_key);
@@ -135,10 +139,7 @@ pub async fn update_model_provider_core(
     Ok(ModelProviderInfo::from(model))
 }
 
-pub async fn delete_model_provider_core(
-    db: &AppDatabase,
-    id: i32,
-) -> Result<(), AppCommandError> {
+pub async fn delete_model_provider_core(db: &AppDatabase, id: i32) -> Result<(), AppCommandError> {
     // Check if any agent settings reference this provider.
     let dependents = agent_setting_service::find_by_model_provider_id(&db.conn, id)
         .await

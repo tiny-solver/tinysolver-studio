@@ -16,6 +16,17 @@ use crate::db::service::{conversation_service, folder_service, sender_context_se
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::EventEmitter;
 
+pub struct FollowupRequest<'a> {
+    pub db: &'a DatabaseConnection,
+    pub text: &'a str,
+    pub channel_id: i32,
+    pub sender_id: &'a str,
+    pub conn_mgr: &'a ConnectionManager,
+    pub bridge: &'a Arc<Mutex<SessionBridge>>,
+    pub lang: Lang,
+    pub prefix: &'a str,
+}
+
 // ── /folder ──
 
 pub async fn handle_folder(
@@ -70,13 +81,7 @@ async fn list_folders(
             .map(|id| id == f.id)
             .unwrap_or(false);
         let marker = if current { " [*]" } else { "" };
-        body.push_str(&format!(
-            "{}. {}{} ({})\n",
-            i + 1,
-            f.name,
-            marker,
-            f.path
-        ));
+        body.push_str(&format!("{}. {}{} ({})\n", i + 1, f.name, marker, f.path));
     }
 
     body.push_str(&format!("\n{}", i18n::folder_select_hint(lang, prefix)));
@@ -107,8 +112,7 @@ async fn select_folder_by_index(
         return RichMessage::info(i18n::folder_index_out_of_range(lang, prefix));
     };
 
-    let _ = sender_context_service::update_folder(db, channel_id, sender_id, Some(folder.id))
-        .await;
+    let _ = sender_context_service::update_folder(db, channel_id, sender_id, Some(folder.id)).await;
 
     RichMessage::info(format!("{} ({})", folder.name, folder.path))
         .with_title(i18n::folder_selected_title(lang))
@@ -128,8 +132,7 @@ async fn select_folder_by_path(
         }
     };
 
-    let _ =
-        sender_context_service::update_folder(db, channel_id, sender_id, Some(entry.id)).await;
+    let _ = sender_context_service::update_folder(db, channel_id, sender_id, Some(entry.id)).await;
 
     RichMessage::info(format!("{} ({})", entry.name, entry.path))
         .with_title(i18n::folder_selected_title(lang))
@@ -317,10 +320,7 @@ pub async fn handle_task(
                 conversation::ConversationStatus::Cancelled,
             )
             .await;
-            return RichMessage::error(format!(
-                "{}{e}",
-                i18n::failed_to_start_agent_label(lang)
-            ));
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_start_agent_label(lang)));
         }
     };
 
@@ -352,11 +352,8 @@ pub async fn handle_task(
     )
     .await;
 
-    RichMessage::info(format!(
-        "[{}] #{} @ {}",
-        agent_type, conv.id, folder.name,
-    ))
-    .with_title(i18n::task_started_title(lang))
+    RichMessage::info(format!("[{}] #{} @ {}", agent_type, conv.id, folder.name,))
+        .with_title(i18n::task_started_title(lang))
 }
 
 // ── /sessions ──
@@ -401,16 +398,16 @@ pub async fn handle_sessions(
     {
         Ok(c) => c,
         Err(e) => {
-            return RichMessage::error(format!(
-                "{}{e}",
-                i18n::failed_to_list_sessions_label(lang)
-            ));
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_list_sessions_label(lang)));
         }
     };
 
     if convs.is_empty() {
-        return RichMessage::info(i18n::no_active_sessions_in_folder(lang))
-            .with_title(format!("{} - {}", i18n::sessions_title(lang), folder.name));
+        return RichMessage::info(i18n::no_active_sessions_in_folder(lang)).with_title(format!(
+            "{} - {}",
+            i18n::sessions_title(lang),
+            folder.name
+        ));
     }
 
     let mut body = String::new();
@@ -433,8 +430,11 @@ pub async fn handle_sessions(
 
     body.push_str(&format!("\n{}", i18n::sessions_resume_hint(lang, prefix)));
 
-    RichMessage::info(body.trim_end())
-        .with_title(format!("{} - {}", i18n::sessions_title(lang), folder.name))
+    RichMessage::info(body.trim_end()).with_title(format!(
+        "{} - {}",
+        i18n::sessions_title(lang),
+        folder.name
+    ))
 }
 
 // ── /resume ──
@@ -491,10 +491,7 @@ pub async fn handle_resume(
     {
         Ok(id) => id,
         Err(e) => {
-            return RichMessage::error(format!(
-                "{}{e}",
-                i18n::failed_to_start_agent_label(lang)
-            ));
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_start_agent_label(lang)));
         }
     };
 
@@ -579,8 +576,7 @@ pub async fn handle_cancel(
     // Clear session from context
     let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
 
-    RichMessage::info(i18n::task_cancelled_body(lang))
-        .with_title(i18n::task_cancelled_title(lang))
+    RichMessage::info(i18n::task_cancelled_body(lang)).with_title(i18n::task_cancelled_title(lang))
 }
 
 // ── /approve, /deny ──
@@ -661,8 +657,7 @@ pub async fn handle_permission_response(
 
     // Update auto_approve if requested
     if always && approve {
-        let _ =
-            sender_context_service::update_auto_approve(db, channel_id, sender_id, true).await;
+        let _ = sender_context_service::update_auto_approve(db, channel_id, sender_id, true).await;
     }
 
     let action = if approve {
@@ -680,66 +675,58 @@ pub async fn handle_permission_response(
 
 // ── follow-up (non-command text) ──
 
-pub async fn handle_followup(
-    db: &DatabaseConnection,
-    text: &str,
-    channel_id: i32,
-    sender_id: &str,
-    conn_mgr: &ConnectionManager,
-    bridge: &Arc<Mutex<SessionBridge>>,
-    lang: Lang,
-    prefix: &str,
-) -> RichMessage {
-    let ctx = match sender_context_service::get_or_create(db, channel_id, sender_id).await {
-        Ok(c) => c,
-        Err(e) => {
-            return RichMessage::error(format!("{}{e}", i18n::failed_to_load_context_label(lang)));
-        }
-    };
+pub async fn handle_followup(req: FollowupRequest<'_>) -> RichMessage {
+    let ctx =
+        match sender_context_service::get_or_create(req.db, req.channel_id, req.sender_id).await {
+            Ok(c) => c,
+            Err(e) => {
+                return RichMessage::error(format!(
+                    "{}{e}",
+                    i18n::failed_to_load_context_label(req.lang)
+                ));
+            }
+        };
 
     let connection_id = match &ctx.current_connection_id {
         Some(id) => id.clone(),
         None => {
-            return RichMessage::info(i18n::no_active_session_use_task(lang, prefix));
+            return RichMessage::info(i18n::no_active_session_use_task(req.lang, req.prefix));
         }
     };
 
     // Check connection exists in bridge
     {
-        let bridge_guard = bridge.lock().await;
+        let bridge_guard = req.bridge.lock().await;
         if bridge_guard.get(&connection_id).is_none() {
             // Connection lost, clear context
             drop(bridge_guard);
-            let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
-            return RichMessage::info(i18n::session_connection_lost(lang, prefix));
+            let _ =
+                sender_context_service::clear_session(req.db, req.channel_id, req.sender_id).await;
+            return RichMessage::info(i18n::session_connection_lost(req.lang, req.prefix));
         }
     }
 
     // Send prompt to agent
     let blocks = vec![PromptInputBlock::Text {
-        text: text.to_string(),
+        text: req.text.to_string(),
     }];
 
-    if let Err(e) = conn_mgr.send_prompt(&connection_id, blocks).await {
+    if let Err(e) = req.conn_mgr.send_prompt(&connection_id, blocks).await {
         // Connection may have died
-        bridge.lock().await.remove(&connection_id);
-        let _ = sender_context_service::clear_session(db, channel_id, sender_id).await;
+        req.bridge.lock().await.remove(&connection_id);
+        let _ = sender_context_service::clear_session(req.db, req.channel_id, req.sender_id).await;
         return RichMessage::error(format!(
             "{}{e}",
-            i18n::failed_to_send_message_label(lang)
+            i18n::failed_to_send_message_label(req.lang)
         ));
     }
 
-    RichMessage::info(i18n::message_sent(lang))
+    RichMessage::info(i18n::message_sent(req.lang))
 }
 
 // ── /resume (list recent) ──
 
-async fn list_recent_sessions(
-    db: &DatabaseConnection,
-    lang: Lang,
-    prefix: &str,
-) -> RichMessage {
+async fn list_recent_sessions(db: &DatabaseConnection, lang: Lang, prefix: &str) -> RichMessage {
     let recent = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
         .order_by_desc(conversation::Column::CreatedAt)
@@ -768,10 +755,7 @@ async fn list_recent_sessions(
         let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
         let agent = &conv.agent_type;
         let time = conv.created_at.format("%m-%d %H:%M");
-        body.push_str(&format!(
-            "#{} [{}] {} ({})\n",
-            conv.id, agent, title, time,
-        ));
+        body.push_str(&format!("#{} [{}] {} ({})\n", conv.id, agent, title, time,));
     }
 
     body.push_str(&format!("\n{}", i18n::recent_resume_hint(lang, prefix)));

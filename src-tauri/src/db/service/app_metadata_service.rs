@@ -1,7 +1,7 @@
 use chrono::Utc;
 use sea_orm::sea_query::OnConflict;
-use sea_orm::{ConnectionTrait, DatabaseConnection};
 use sea_orm::{ActiveValue::NotSet, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ConnectionTrait, DatabaseConnection};
 
 use crate::db::entities::app_metadata;
 use crate::db::error::DbError;

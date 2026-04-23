@@ -268,28 +268,26 @@ impl ChatChannelManager {
     }
 
     async fn auto_connect_channels(&self, db_conn: &DatabaseConnection) {
-        let channels =
-            match crate::db::service::chat_channel_service::list_enabled(db_conn).await {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("[ChatChannel] failed to load enabled channels: {e}");
-                    return;
-                }
-            };
+        let channels = match crate::db::service::chat_channel_service::list_enabled(db_conn).await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[ChatChannel] failed to load enabled channels: {e}");
+                return;
+            }
+        };
 
         for ch in channels {
-            let channel_type: ChannelType = match serde_json::from_value(
-                serde_json::Value::String(ch.channel_type.clone()),
-            ) {
-                Ok(t) => t,
-                Err(_) => {
-                    eprintln!(
-                        "[ChatChannel] unknown channel type '{}' for '{}' (id={}), skipping",
-                        ch.channel_type, ch.name, ch.id
-                    );
-                    continue;
-                }
-            };
+            let channel_type: ChannelType =
+                match serde_json::from_value(serde_json::Value::String(ch.channel_type.clone())) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        eprintln!(
+                            "[ChatChannel] unknown channel type '{}' for '{}' (id={}), skipping",
+                            ch.channel_type, ch.name, ch.id
+                        );
+                        continue;
+                    }
+                };
 
             let config: serde_json::Value = match serde_json::from_str(&ch.config_json) {
                 Ok(v) => v,
@@ -313,17 +311,17 @@ impl ChatChannelManager {
                 }
             };
 
-            let backend =
-                match super::backends::create_backend(ch.id, channel_type, &config, token) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        eprintln!(
-                            "[ChatChannel] failed to create backend for '{}' (id={}): {e}",
-                            ch.name, ch.id
-                        );
-                        continue;
-                    }
-                };
+            let backend = match super::backends::create_backend(ch.id, channel_type, &config, token)
+            {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!(
+                        "[ChatChannel] failed to create backend for '{}' (id={}): {e}",
+                        ch.name, ch.id
+                    );
+                    continue;
+                }
+            };
 
             if let Err(e) = self
                 .add_channel(ch.id, ch.name.clone(), channel_type, backend)

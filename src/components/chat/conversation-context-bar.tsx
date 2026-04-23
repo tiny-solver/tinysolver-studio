@@ -73,10 +73,7 @@ export const ConversationContextBar = memo(function ConversationContextBar({
             setTabFolder(ownTab.id, target.id, target.path)
             toast.success(t("toasts.folderChanged", { name: target.name }))
           } catch (err) {
-            console.error(
-              "[ConversationContextBar] switch folder failed:",
-              err
-            )
+            console.error("[ConversationContextBar] switch folder failed:", err)
             toast.error(t("toasts.openFolderFailed"))
           }
         }}

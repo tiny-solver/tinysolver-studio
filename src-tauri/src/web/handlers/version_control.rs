@@ -125,10 +125,8 @@ pub async fn get_github_accounts(
 
     let settings = match raw {
         Some(raw) => serde_json::from_str::<GitHubAccountsSettings>(&raw).map_err(|e| {
-            AppCommandError::configuration_invalid(
-                "Failed to parse stored GitHub accounts",
-            )
-            .with_detail(e.to_string())
+            AppCommandError::configuration_invalid("Failed to parse stored GitHub accounts")
+                .with_detail(e.to_string())
         })?,
         None => GitHubAccountsSettings::default(),
     };
@@ -160,8 +158,7 @@ pub async fn update_github_accounts(
 pub async fn validate_github_token(
     Json(params): Json<ValidateGitHubTokenParams>,
 ) -> Result<Json<GitHubTokenValidation>, AppCommandError> {
-    let result =
-        vc_commands::validate_github_token(params.server_url, params.token).await?;
+    let result = vc_commands::validate_github_token(params.server_url, params.token).await?;
     Ok(Json(result))
 }
 

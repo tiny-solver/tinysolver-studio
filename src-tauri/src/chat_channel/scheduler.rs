@@ -8,7 +8,9 @@ use super::i18n::Lang;
 use super::manager::ChatChannelManager;
 use super::message_formatter::{self, DailyReportData};
 use crate::db::entities::conversation;
-use crate::db::service::{app_metadata_service, chat_channel_message_log_service, chat_channel_service};
+use crate::db::service::{
+    app_metadata_service, chat_channel_message_log_service, chat_channel_service,
+};
 
 const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
 /// Days to retain message logs before cleanup.
@@ -60,10 +62,7 @@ pub fn spawn_daily_report_scheduler(
                     continue;
                 }
 
-                let report_time = ch
-                    .daily_report_time
-                    .as_deref()
-                    .unwrap_or("18:00");
+                let report_time = ch.daily_report_time.as_deref().unwrap_or("18:00");
 
                 if current_time != report_time {
                     continue;
@@ -124,8 +123,7 @@ async fn generate_daily_report(db: &DatabaseConnection) -> DailyReportData {
         .await
         .unwrap_or_default();
 
-    let mut by_agent: std::collections::HashMap<String, u32> =
-        std::collections::HashMap::new();
+    let mut by_agent: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     let mut folder_ids: HashSet<i32> = HashSet::new();
     let mut activities: Vec<String> = Vec::new();
 

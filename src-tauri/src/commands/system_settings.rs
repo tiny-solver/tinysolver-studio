@@ -139,7 +139,11 @@ pub async fn update_system_language_settings(
         .map_err(AppCommandError::from)?;
 
     let emitter = crate::web::event_bridge::EventEmitter::Tauri(app);
-    crate::web::event_bridge::emit_event(&emitter, LANGUAGE_SETTINGS_UPDATED_EVENT, settings.clone());
+    crate::web::event_bridge::emit_event(
+        &emitter,
+        LANGUAGE_SETTINGS_UPDATED_EVENT,
+        settings.clone(),
+    );
 
     Ok(settings)
 }

@@ -79,8 +79,7 @@ pub struct GitStatusParams {
 pub async fn git_status(
     Json(params): Json<GitStatusParams>,
 ) -> Result<Json<Vec<folder_commands::GitStatusEntry>>, AppCommandError> {
-    let result =
-        folder_commands::git_status(params.path, params.show_all_untracked).await?;
+    let result = folder_commands::git_status(params.path, params.show_all_untracked).await?;
     Ok(Json(result))
 }
 
@@ -101,8 +100,7 @@ pub struct GitCommitBranchesParams {
 pub async fn git_commit_branches(
     Json(params): Json<GitCommitBranchesParams>,
 ) -> Result<Json<Vec<String>>, AppCommandError> {
-    let result =
-        folder_commands::git_commit_branches(params.path, params.commit).await?;
+    let result = folder_commands::git_commit_branches(params.path, params.commit).await?;
     Ok(Json(result))
 }
 
@@ -117,9 +115,7 @@ pub struct GitShowFileParams {
 pub async fn git_show_file(
     Json(params): Json<GitShowFileParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::git_show_file(params.path, params.file, params.ref_name)
-            .await?;
+    let result = folder_commands::git_show_file(params.path, params.file, params.ref_name).await?;
     Ok(Json(result))
 }
 
@@ -130,9 +126,7 @@ pub struct GitDiffParams {
     pub file: Option<String>,
 }
 
-pub async fn git_diff(
-    Json(params): Json<GitDiffParams>,
-) -> Result<Json<String>, AppCommandError> {
+pub async fn git_diff(Json(params): Json<GitDiffParams>) -> Result<Json<String>, AppCommandError> {
     let result = folder_commands::git_diff(params.path, params.file).await?;
     Ok(Json(result))
 }
@@ -160,13 +154,8 @@ pub struct GitLogParams {
 pub async fn git_log(
     Json(params): Json<GitLogParams>,
 ) -> Result<Json<folder_commands::GitLogResult>, AppCommandError> {
-    let result = folder_commands::git_log(
-        params.path,
-        params.limit,
-        params.branch,
-        params.remote,
-    )
-    .await?;
+    let result =
+        folder_commands::git_log(params.path, params.limit, params.branch, params.remote).await?;
     Ok(Json(result))
 }
 
@@ -174,9 +163,7 @@ pub async fn git_log(
 // New pure git handlers (Pattern A – direct function calls)
 // ---------------------------------------------------------------------------
 
-pub async fn git_init(
-    Json(params): Json<PathParams>,
-) -> Result<Json<()>, AppCommandError> {
+pub async fn git_init(Json(params): Json<PathParams>) -> Result<Json<()>, AppCommandError> {
     folder_commands::git_init(params.path).await?;
     Ok(Json(()))
 }
@@ -220,8 +207,7 @@ pub struct GitNewBranchParams {
 pub async fn git_new_branch(
     Json(params): Json<GitNewBranchParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    folder_commands::git_new_branch(params.path, params.branch_name, params.start_point)
-        .await?;
+    folder_commands::git_new_branch(params.path, params.branch_name, params.start_point).await?;
     Ok(Json(()))
 }
 
@@ -236,12 +222,8 @@ pub struct GitWorktreeAddParams {
 pub async fn git_worktree_add(
     Json(params): Json<GitWorktreeAddParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    folder_commands::git_worktree_add(
-        params.path,
-        params.branch_name,
-        params.worktree_path,
-    )
-    .await?;
+    folder_commands::git_worktree_add(params.path, params.branch_name, params.worktree_path)
+        .await?;
     Ok(Json(()))
 }
 
@@ -260,9 +242,7 @@ pub struct GitResetParams {
     pub mode: String,
 }
 
-pub async fn git_reset(
-    Json(params): Json<GitResetParams>,
-) -> Result<Json<()>, AppCommandError> {
+pub async fn git_reset(Json(params): Json<GitResetParams>) -> Result<Json<()>, AppCommandError> {
     folder_commands::git_reset(params.path, params.commit, params.mode).await?;
     Ok(Json(()))
 }
@@ -285,12 +265,8 @@ pub struct GitStashPushParams {
 pub async fn git_stash_push(
     Json(params): Json<GitStashPushParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result = folder_commands::git_stash_push(
-        params.path,
-        params.message,
-        params.keep_index,
-    )
-    .await?;
+    let result =
+        folder_commands::git_stash_push(params.path, params.message, params.keep_index).await?;
     Ok(Json(result))
 }
 
@@ -304,8 +280,7 @@ pub struct GitStashPopParams {
 pub async fn git_stash_pop(
     Json(params): Json<GitStashPopParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::git_stash_pop(params.path, params.stash_ref).await?;
+    let result = folder_commands::git_stash_pop(params.path, params.stash_ref).await?;
     Ok(Json(result))
 }
 
@@ -319,16 +294,14 @@ pub async fn git_stash_list(
 pub async fn git_stash_apply(
     Json(params): Json<PathStashRefParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::git_stash_apply(params.path, params.stash_ref).await?;
+    let result = folder_commands::git_stash_apply(params.path, params.stash_ref).await?;
     Ok(Json(result))
 }
 
 pub async fn git_stash_drop(
     Json(params): Json<PathStashRefParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::git_stash_drop(params.path, params.stash_ref).await?;
+    let result = folder_commands::git_stash_drop(params.path, params.stash_ref).await?;
     Ok(Json(result))
 }
 
@@ -342,16 +315,14 @@ pub async fn git_stash_clear(
 pub async fn git_stash_show(
     Json(params): Json<PathStashRefParams>,
 ) -> Result<Json<Vec<folder_commands::GitStatusEntry>>, AppCommandError> {
-    let result =
-        folder_commands::git_stash_show(params.path, params.stash_ref).await?;
+    let result = folder_commands::git_stash_show(params.path, params.stash_ref).await?;
     Ok(Json(result))
 }
 
 pub async fn git_is_tracked(
     Json(params): Json<PathFileParams>,
 ) -> Result<Json<bool>, AppCommandError> {
-    let result =
-        folder_commands::git_is_tracked(params.path, params.file).await?;
+    let result = folder_commands::git_is_tracked(params.path, params.file).await?;
     Ok(Json(result))
 }
 
@@ -366,12 +337,8 @@ pub struct GitDiffWithBranchParams {
 pub async fn git_diff_with_branch(
     Json(params): Json<GitDiffWithBranchParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result = folder_commands::git_diff_with_branch(
-        params.path,
-        params.branch,
-        params.file,
-    )
-    .await?;
+    let result =
+        folder_commands::git_diff_with_branch(params.path, params.branch, params.file).await?;
     Ok(Json(result))
 }
 
@@ -386,9 +353,7 @@ pub struct GitShowDiffParams {
 pub async fn git_show_diff(
     Json(params): Json<GitShowDiffParams>,
 ) -> Result<Json<String>, AppCommandError> {
-    let result =
-        folder_commands::git_show_diff(params.path, params.commit, params.file)
-            .await?;
+    let result = folder_commands::git_show_diff(params.path, params.commit, params.file).await?;
     Ok(Json(result))
 }
 
@@ -437,16 +402,14 @@ pub async fn git_set_remote_url(
 pub async fn git_merge(
     Json(params): Json<PathBranchParams>,
 ) -> Result<Json<folder_commands::GitMergeResult>, AppCommandError> {
-    let result =
-        folder_commands::git_merge(params.path, params.branch_name).await?;
+    let result = folder_commands::git_merge(params.path, params.branch_name).await?;
     Ok(Json(result))
 }
 
 pub async fn git_rebase(
     Json(params): Json<PathBranchParams>,
 ) -> Result<Json<folder_commands::GitRebaseResult>, AppCommandError> {
-    let result =
-        folder_commands::git_rebase(params.path, params.branch_name).await?;
+    let result = folder_commands::git_rebase(params.path, params.branch_name).await?;
     Ok(Json(result))
 }
 
@@ -462,8 +425,7 @@ pub async fn git_delete_branch(
     Json(params): Json<GitDeleteBranchParams>,
 ) -> Result<Json<String>, AppCommandError> {
     let result =
-        folder_commands::git_delete_branch(params.path, params.branch_name, params.force)
-            .await?;
+        folder_commands::git_delete_branch(params.path, params.branch_name, params.force).await?;
     Ok(Json(result))
 }
 
@@ -503,16 +465,14 @@ pub async fn git_list_conflicts(
 pub async fn git_conflict_file_versions(
     Json(params): Json<PathFileParams>,
 ) -> Result<Json<folder_commands::GitConflictFileVersions>, AppCommandError> {
-    let result =
-        folder_commands::git_conflict_file_versions(params.path, params.file).await?;
+    let result = folder_commands::git_conflict_file_versions(params.path, params.file).await?;
     Ok(Json(result))
 }
 
 pub async fn git_resolve_conflict(
     Json(params): Json<PathFileContentParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    folder_commands::git_resolve_conflict(params.path, params.file, params.content)
-        .await?;
+    folder_commands::git_resolve_conflict(params.path, params.file, params.content).await?;
     Ok(Json(()))
 }
 

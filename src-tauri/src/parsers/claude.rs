@@ -586,19 +586,16 @@ impl ClaudeParser {
                         if tur.get("agentType").is_some() {
                             let mut stats = extract_agent_execution_stats(tur);
                             // Load tool calls from subagent's own JSONL transcript
-                            if let Some(agent_id) =
-                                tur.get("agentId").and_then(|v| v.as_str())
-                            {
+                            if let Some(agent_id) = tur.get("agentId").and_then(|v| v.as_str()) {
                                 // Reject path traversal: agentId must be alphanumeric
                                 if !agent_id.is_empty()
                                     && !agent_id.contains('/')
                                     && !agent_id.contains('\\')
                                     && !agent_id.contains("..")
                                 {
-                                    let subagent_dir =
-                                        path.with_extension("").join("subagents");
-                                    let subagent_path = subagent_dir
-                                        .join(format!("agent-{}.jsonl", agent_id));
+                                    let subagent_dir = path.with_extension("").join("subagents");
+                                    let subagent_path =
+                                        subagent_dir.join(format!("agent-{}.jsonl", agent_id));
                                     if subagent_path.exists() {
                                         stats.tool_calls =
                                             parse_subagent_tool_calls(&subagent_path);
@@ -775,9 +772,7 @@ impl ClaudeParser {
                                     ..
                                 } = b
                                 {
-                                    if tn == tool_name
-                                        && !existing_result_ids.contains(id)
-                                    {
+                                    if tn == tool_name && !existing_result_ids.contains(id) {
                                         return Some(id.clone());
                                     }
                                 }
@@ -980,7 +975,11 @@ fn extract_claude_user_image(item: &serde_json::Value) -> Option<ContentBlock> {
     let mime_type = source
         .and_then(|s| s.get("media_type"))
         .and_then(|m| m.as_str())
-        .or_else(|| source.and_then(|s| s.get("mime_type")).and_then(|m| m.as_str()))
+        .or_else(|| {
+            source
+                .and_then(|s| s.get("mime_type"))
+                .and_then(|m| m.as_str())
+        })
         .or_else(|| item.get("media_type").and_then(|m| m.as_str()))
         .or_else(|| item.get("mime_type").and_then(|m| m.as_str()))
         .map(str::trim)
@@ -1192,9 +1191,7 @@ fn parse_subagent_tool_calls(path: &PathBuf) -> Vec<AgentToolCall> {
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string();
-                        let input = item.get("input").map(|v| {
-                            truncate_str(&v.to_string(), 500)
-                        });
+                        let input = item.get("input").map(|v| truncate_str(&v.to_string(), 500));
                         if !id.is_empty() {
                             calls.push((id, name, input));
                         }
@@ -1219,8 +1216,7 @@ fn parse_subagent_tool_calls(path: &PathBuf) -> Vec<AgentToolCall> {
                             .get("is_error")
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
-                        let output = extract_tool_result_text(item)
-                            .map(|s| truncate_str(&s, 500));
+                        let output = extract_tool_result_text(item).map(|s| truncate_str(&s, 500));
                         if !id.is_empty() {
                             results.insert(id, (output, is_error));
                         }
@@ -1233,9 +1229,7 @@ fn parse_subagent_tool_calls(path: &PathBuf) -> Vec<AgentToolCall> {
     calls
         .into_iter()
         .map(|(id, name, input)| {
-            let (output, is_error) = results
-                .remove(&id)
-                .unwrap_or((None, false));
+            let (output, is_error) = results.remove(&id).unwrap_or((None, false));
             AgentToolCall {
                 tool_name: name,
                 input_preview: input,

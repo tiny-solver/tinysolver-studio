@@ -44,8 +44,7 @@ pub async fn get_system_language_settings(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<SystemLanguageSettings>, AppCommandError> {
     let db = &state.db;
-    let settings =
-        settings_commands::load_system_language_settings(&db.conn).await?;
+    let settings = settings_commands::load_system_language_settings(&db.conn).await?;
     Ok(Json(settings))
 }
 
@@ -67,13 +66,9 @@ pub async fn update_system_proxy_settings(
             .with_detail(e.to_string())
     })?;
 
-    app_metadata_service::upsert_value(
-        &db.conn,
-        SYSTEM_PROXY_SETTINGS_KEY,
-        &serialized,
-    )
-    .await
-    .map_err(AppCommandError::from)?;
+    app_metadata_service::upsert_value(&db.conn, SYSTEM_PROXY_SETTINGS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
 
     proxy::apply_system_proxy_settings(&settings)?;
     Ok(Json(settings))
@@ -91,13 +86,9 @@ pub async fn update_system_language_settings(
             .with_detail(e.to_string())
     })?;
 
-    app_metadata_service::upsert_value(
-        &db.conn,
-        SYSTEM_LANGUAGE_SETTINGS_KEY,
-        &serialized,
-    )
-    .await
-    .map_err(AppCommandError::from)?;
+    app_metadata_service::upsert_value(&db.conn, SYSTEM_LANGUAGE_SETTINGS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
 
     crate::web::event_bridge::emit_event(
         &state.emitter,

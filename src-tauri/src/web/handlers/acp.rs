@@ -188,10 +188,9 @@ pub struct AcpListAgentSkillsParams {
 pub async fn acp_list_agent_skills(
     Json(params): Json<AcpListAgentSkillsParams>,
 ) -> Result<Json<AgentSkillsListResult>, AppCommandError> {
-    let result =
-        acp_commands::acp_list_agent_skills(params.agent_type, params.workspace_path)
-            .await
-            .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    let result = acp_commands::acp_list_agent_skills(params.agent_type, params.workspace_path)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
 }
 
@@ -482,10 +481,9 @@ pub async fn acp_detect_agent_local_version(
     Json(params): Json<AgentTypeParams>,
 ) -> Result<Json<Option<String>>, AppCommandError> {
     let db = &state.db;
-    let result =
-        acp_commands::acp_detect_agent_local_version_core(params.agent_type, &db.conn)
-            .await
-            .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    let result = acp_commands::acp_detect_agent_local_version_core(params.agent_type, &db.conn)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
 }
 
@@ -610,11 +608,8 @@ pub struct CodexPollDeviceCodeParams {
 pub async fn codex_poll_device_code(
     Json(params): Json<CodexPollDeviceCodeParams>,
 ) -> Result<Json<acp_commands::CodexDeviceCodePollResult>, AppCommandError> {
-    let result = acp_commands::codex_poll_device_code_core(
-        params.device_auth_id,
-        params.user_code,
-    )
-    .await
-    .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    let result = acp_commands::codex_poll_device_code_core(params.device_auth_id, params.user_code)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
 }

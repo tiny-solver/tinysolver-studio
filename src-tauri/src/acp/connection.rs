@@ -156,9 +156,7 @@ async fn build_agent(
     debug_assert_eq!(meta.agent_type, agent_type);
 
     match meta.distribution {
-        AgentDistribution::Npx {
-            cmd, args, env, ..
-        } => {
+        AgentDistribution::Npx { cmd, args, env, .. } => {
             let merged_env = merge_agent_env(env, runtime_env);
             let mut parts: Vec<String> = Vec::new();
             for (k, v) in &merged_env {
@@ -251,10 +249,7 @@ async fn build_agent(
                         ))
                     })?;
             if cached_version == registry_version {
-                eprintln!(
-                    "[ACP][{}] Using cached binary {cached_version}",
-                    meta.name
-                );
+                eprintln!("[ACP][{}] Using cached binary {cached_version}", meta.name);
             } else {
                 eprintln!(
                     "[ACP][{}] Using cached binary {cached_version} (registry recommends {registry_version})",
@@ -273,8 +268,7 @@ async fn build_agent(
                 server = server.args(cmd_args);
             }
             let merged_env = merge_agent_env(env, runtime_env);
-            let env_key_list: Vec<&str> =
-                merged_env.iter().map(|(k, _)| k.as_str()).collect();
+            let env_key_list: Vec<&str> = merged_env.iter().map(|(k, _)| k.as_str()).collect();
             if !merged_env.is_empty() {
                 let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
                     .iter()
@@ -314,34 +308,36 @@ async fn build_agent(
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
             let agent_name = meta.name.to_string();
-            Ok(AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
-                move |line, dir| {
-                    let (tag, enabled) = match dir {
-                        sacp_tokio::LineDirection::Stderr => ("stderr", true),
-                        sacp_tokio::LineDirection::Stdout => ("stdout", stdio_debug_enabled),
-                        sacp_tokio::LineDirection::Stdin => ("stdin", stdio_debug_enabled),
-                    };
-                    if !enabled {
-                        return;
-                    }
-                    const MAX: usize = 256;
-                    if line.len() > MAX {
-                        let head = line
-                            .char_indices()
-                            .take_while(|(i, _)| *i < MAX)
-                            .last()
-                            .map(|(i, c)| i + c.len_utf8())
-                            .unwrap_or(MAX);
-                        eprintln!(
-                            "[ACP][{agent_name}][{tag}] {}... <truncated {} bytes>",
-                            &line[..head],
-                            line.len() - head
-                        );
-                    } else {
-                        eprintln!("[ACP][{agent_name}][{tag}] {line}");
-                    }
-                },
-            ))
+            Ok(
+                AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
+                    move |line, dir| {
+                        let (tag, enabled) = match dir {
+                            sacp_tokio::LineDirection::Stderr => ("stderr", true),
+                            sacp_tokio::LineDirection::Stdout => ("stdout", stdio_debug_enabled),
+                            sacp_tokio::LineDirection::Stdin => ("stdin", stdio_debug_enabled),
+                        };
+                        if !enabled {
+                            return;
+                        }
+                        const MAX: usize = 256;
+                        if line.len() > MAX {
+                            let head = line
+                                .char_indices()
+                                .take_while(|(i, _)| *i < MAX)
+                                .last()
+                                .map(|(i, c)| i + c.len_utf8())
+                                .unwrap_or(MAX);
+                            eprintln!(
+                                "[ACP][{agent_name}][{tag}] {}... <truncated {} bytes>",
+                                &line[..head],
+                                line.len() - head
+                            );
+                        } else {
+                            eprintln!("[ACP][{agent_name}][{tag}] {line}");
+                        }
+                    },
+                ),
+            )
         }
     }
 }
@@ -574,37 +570,40 @@ fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
     if options.iter().any(|o| o.id == "mode") {
         return;
     }
-    options.insert(0, SessionConfigOptionInfo {
-        id: "mode".to_string(),
-        name: "Approval Preset".to_string(),
-        description: Some(
-            "Choose an approval and sandboxing preset for your session".to_string(),
-        ),
-        category: Some("mode".to_string()),
-        kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
-            current_value: "auto".to_string(),
-            options: vec![
-                SessionConfigSelectOptionInfo {
-                    value: "read-only".to_string(),
-                    name: "Read Only".to_string(),
-                    description: Some("Codex can only read files".to_string()),
-                },
-                SessionConfigSelectOptionInfo {
-                    value: "auto".to_string(),
-                    name: "Default".to_string(),
-                    description: Some(
-                        "Codex can edit files, but asks before running commands".to_string(),
-                    ),
-                },
-                SessionConfigSelectOptionInfo {
-                    value: "full-access".to_string(),
-                    name: "Full Access".to_string(),
-                    description: Some("Codex runs without asking for approval".to_string()),
-                },
-            ],
-            groups: vec![],
-        }),
-    });
+    options.insert(
+        0,
+        SessionConfigOptionInfo {
+            id: "mode".to_string(),
+            name: "Approval Preset".to_string(),
+            description: Some(
+                "Choose an approval and sandboxing preset for your session".to_string(),
+            ),
+            category: Some("mode".to_string()),
+            kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
+                current_value: "auto".to_string(),
+                options: vec![
+                    SessionConfigSelectOptionInfo {
+                        value: "read-only".to_string(),
+                        name: "Read Only".to_string(),
+                        description: Some("Codex can only read files".to_string()),
+                    },
+                    SessionConfigSelectOptionInfo {
+                        value: "auto".to_string(),
+                        name: "Default".to_string(),
+                        description: Some(
+                            "Codex can edit files, but asks before running commands".to_string(),
+                        ),
+                    },
+                    SessionConfigSelectOptionInfo {
+                        value: "full-access".to_string(),
+                        name: "Full Access".to_string(),
+                        description: Some("Codex runs without asking for approval".to_string()),
+                    },
+                ],
+                groups: vec![],
+            }),
+        },
+    );
 }
 
 fn emit_session_config_options_values(
@@ -758,7 +757,15 @@ async fn run_connection(
                 async move |req: RequestPermissionRequest,
                             responder: Responder<RequestPermissionResponse>,
                             _cx: ConnectionTo<Agent>| {
-                    handle_permission_request(&conn_id, &emitter_inner, &perms, &perm_cwd, req, responder).await;
+                    handle_permission_request(
+                        &conn_id,
+                        &emitter_inner,
+                        &perms,
+                        &perm_cwd,
+                        req,
+                        responder,
+                    )
+                    .await;
                     Ok(())
                 }
             },
@@ -979,7 +986,13 @@ async fn run_connection(
                                             notif.update,
                                             SessionUpdate::AvailableCommandsUpdate(_)
                                         ) {
-                                            emit_conversation_update(&cid, &h, agent_type, notif.update, None);
+                                            emit_conversation_update(
+                                                &cid,
+                                                &h,
+                                                agent_type,
+                                                notif.update,
+                                                None,
+                                            );
                                         }
                                         Ok(())
                                     })
@@ -1004,7 +1017,12 @@ async fn run_connection(
                             },
                         );
                         emit_session_modes(&conn_id, &emitter_clone, session.modes());
-                        emit_session_config_options(&conn_id, &emitter_clone, agent_type, &initial_config_options);
+                        emit_session_config_options(
+                            &conn_id,
+                            &emitter_clone,
+                            agent_type,
+                            &initial_config_options,
+                        );
                         emit_selectors_ready(&conn_id, &emitter_clone);
 
                         let loop_result = run_conversation_loop(
@@ -1058,9 +1076,7 @@ async fn run_connection(
                                 "acp://event",
                                 AcpEvent::Error {
                                     connection_id: conn_id.clone(),
-                                    message: format!(
-                                        "Failed to load session, starting new: {e}"
-                                    ),
+                                    message: format!("Failed to load session, starting new: {e}"),
                                     agent_type: agent_type.to_string(),
                                     code: None,
                                 },
@@ -1072,8 +1088,7 @@ async fn run_connection(
                             .await?;
                         let fallback_sid = new_resp.session_id.0.to_string();
                         let initial_config_options = new_resp.config_options.clone();
-                        let mut session =
-                            cx.attach_session(new_resp, Default::default())?;
+                        let mut session = cx.attach_session(new_resp, Default::default())?;
                         crate::web::event_bridge::emit_event(
                             &emitter_clone,
                             "acp://event",
@@ -1139,7 +1154,12 @@ async fn run_connection(
                     },
                 );
                 emit_session_modes(&conn_id, &emitter_clone, session.modes());
-                emit_session_config_options(&conn_id, &emitter_clone, agent_type, &initial_config_options);
+                emit_session_config_options(
+                    &conn_id,
+                    &emitter_clone,
+                    agent_type,
+                    &initial_config_options,
+                );
                 emit_selectors_ready(&conn_id, &emitter_clone);
 
                 let loop_result = run_conversation_loop(
@@ -1229,8 +1249,7 @@ async fn handle_permission_request(
                             obj.insert(key.to_string(), parsed);
                         }
                     } else if text.contains("@@\n") || text.contains("@@\r\n") {
-                        if let Some(resolved) =
-                            crate::parsers::resolve_patch_text(&text, Some(cwd))
+                        if let Some(resolved) = crate::parsers::resolve_patch_text(&text, Some(cwd))
                         {
                             obj.insert(key.to_string(), serde_json::Value::String(resolved));
                         }
@@ -1759,7 +1778,14 @@ async fn handle_fork_or_exit(
 
     // Recursively handle nested forks
     Box::pin(handle_fork_or_exit(
-        loop_result, conn_id, emitter, agent_type, perms, cmd_rx, terminal_runtime, _cwd,
+        loop_result,
+        conn_id,
+        emitter,
+        agent_type,
+        perms,
+        cmd_rx,
+        terminal_runtime,
+        _cwd,
         cwd_string,
     ))
     .await
@@ -2169,8 +2195,10 @@ async fn run_conversation_loop<'a>(
             }) => {
                 let cx = session.connection();
                 let sid = session.session_id().clone();
-                if let Err(e) =
-                    set_session_config_option(&cx, &sid, conn_id, emitter, agent_type, config_id, value_id).await
+                if let Err(e) = set_session_config_option(
+                    &cx, &sid, conn_id, emitter, agent_type, config_id, value_id,
+                )
+                .await
                 {
                     crate::web::event_bridge::emit_event(
                         emitter,
@@ -2499,10 +2527,10 @@ fn emit_conversation_update(
         }
         SessionUpdate::ToolCall(tc) => {
             let content = serialize_tool_call_content(&tc.content);
-            let raw_input = json_value_to_text(&tc.raw_input)
-                .map(|text| resolve_live_tool_input(&text, cwd));
-            let raw_output = json_value_to_text(&tc.raw_output)
-                .map(|text| structurize_live_output(&text));
+            let raw_input =
+                json_value_to_text(&tc.raw_input).map(|text| resolve_live_tool_input(&text, cwd));
+            let raw_output =
+                json_value_to_text(&tc.raw_output).map(|text| structurize_live_output(&text));
             let locations = if tc.locations.is_empty() {
                 None
             } else {
@@ -2581,7 +2609,12 @@ fn emit_conversation_update(
             );
         }
         SessionUpdate::ConfigOptionUpdate(update) => {
-            emit_session_config_options_values(connection_id, emitter, agent_type, update.config_options);
+            emit_session_config_options_values(
+                connection_id,
+                emitter,
+                agent_type,
+                update.config_options,
+            );
         }
         SessionUpdate::AvailableCommandsUpdate(update) => {
             let commands: Vec<AvailableCommandInfo> = update
@@ -2661,8 +2694,8 @@ mod tests {
         )
         .unwrap();
 
-        let event = map_claude_sdk_ext_notification("conn-1", &raw)
-            .expect("valid sdk payload should map");
+        let event =
+            map_claude_sdk_ext_notification("conn-1", &raw).expect("valid sdk payload should map");
 
         match event {
             AcpEvent::ClaudeSdkMessage {
@@ -2700,11 +2733,8 @@ mod tests {
         .unwrap();
         assert!(map_claude_sdk_ext_notification("conn-1", &wrong_method).is_none());
 
-        let missing_fields = UntypedMessage::new(
-            "_claude/sdkMessage",
-            serde_json::json!({"sessionId": 1}),
-        )
-        .unwrap();
+        let missing_fields =
+            UntypedMessage::new("_claude/sdkMessage", serde_json::json!({"sessionId": 1})).unwrap();
         assert!(map_claude_sdk_ext_notification("conn-1", &missing_fields).is_none());
     }
 

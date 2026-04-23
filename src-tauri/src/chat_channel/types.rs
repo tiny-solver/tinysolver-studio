@@ -147,7 +147,8 @@ impl InteractiveMessage {
                 .iter()
                 .map(|b| format!("[{}]", b.label))
                 .collect();
-            msg.body.push_str(&format!("\n\n{}", button_text.join("  ")));
+            msg.body
+                .push_str(&format!("\n\n{}", button_text.join("  ")));
         }
         msg
     }

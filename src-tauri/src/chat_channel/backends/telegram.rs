@@ -34,10 +34,7 @@ impl TelegramBackend {
     }
 
     fn api_url(&self, method: &str) -> String {
-        format!(
-            "https://api.telegram.org/bot{}/{}",
-            self.bot_token, method
-        )
+        format!("https://api.telegram.org/bot{}/{}", self.bot_token, method)
     }
 
     async fn send_text(
@@ -171,9 +168,8 @@ impl ChatChannelBackend for TelegramBackend {
                                     {
                                         offset = uid + 1;
                                     }
-                                    if let Some(text) = update
-                                        .pointer("/message/text")
-                                        .and_then(|t| t.as_str())
+                                    if let Some(text) =
+                                        update.pointer("/message/text").and_then(|t| t.as_str())
                                     {
                                         // Group chat filtering: only process if @bot is mentioned
                                         let chat_type = update
@@ -184,8 +180,7 @@ impl ChatChannelBackend for TelegramBackend {
                                         if (chat_type == "group" || chat_type == "supergroup")
                                             && !bot_username.is_empty()
                                         {
-                                            let at_bot =
-                                                format!("@{}", bot_username);
+                                            let at_bot = format!("@{}", bot_username);
                                             if !text.to_lowercase().contains(&at_bot) {
                                                 eprintln!("[Telegram] skipped group msg without @bot: {text}");
                                                 continue;

@@ -135,20 +135,13 @@ impl AgentParser for ClineParser {
                 fs::read_to_string(meta_path)
                     .ok()
                     .and_then(|raw| serde_json::from_str::<TaskMetadata>(&raw).ok())
-                    .and_then(|meta| {
-                        meta.model_usage
-                            .first()
-                            .and_then(|u| u.model_id.clone())
-                    })
+                    .and_then(|meta| meta.model_usage.first().and_then(|u| u.model_id.clone()))
             });
 
             let folder_path = entry.cwd_on_task_initialization.clone();
             let folder_name = folder_path.as_deref().map(folder_name_from_path);
 
-            let title = entry
-                .task
-                .as_deref()
-                .map(|t| truncate_str(t.trim(), 100));
+            let title = entry.task.as_deref().map(|t| truncate_str(t.trim(), 100));
 
             // Count messages from api_conversation_history.json
             let api_path = tasks_dir.join("api_conversation_history.json");
@@ -309,10 +302,7 @@ impl AgentParser for ClineParser {
             }
         }
 
-        let started_at = turns
-            .first()
-            .map(|t| t.timestamp)
-            .unwrap_or_else(Utc::now);
+        let started_at = turns.first().map(|t| t.timestamp).unwrap_or_else(Utc::now);
         let ended_at = turns.last().map(|t| t.timestamp);
 
         let session_stats = compute_session_stats(&turns);
@@ -441,8 +431,7 @@ fn collect_text_parts(content: &serde_json::Value) -> Vec<String> {
 /// Check if text looks like a Cline tool result: `[tool_name ...] Result:`
 fn is_tool_result_text(text: &str) -> bool {
     let trimmed = text.trim_start();
-    trimmed.starts_with('[')
-        && trimmed.contains("] Result:")
+    trimmed.starts_with('[') && trimmed.contains("] Result:")
 }
 
 /// Parse `[tool_name for 'arg'] Result:\ncontent` into (tool_name, output, is_error).
@@ -451,10 +440,7 @@ fn parse_tool_result_text(text: &str) -> (String, String, bool) {
     // Extract tool name from [tool_name ...] or [tool_name] prefix
     let tool_name = trimmed
         .strip_prefix('[')
-        .and_then(|s| {
-            s.find([']', ' '])
-                .map(|i| s[..i].to_string())
-        })
+        .and_then(|s| s.find([']', ' ']).map(|i| s[..i].to_string()))
         .unwrap_or_default();
 
     let is_error = trimmed.contains("[ERROR]") || trimmed.contains("Error:");
@@ -537,8 +523,7 @@ fn parse_content_blocks(content: &serde_json::Value) -> Vec<ContentBlock> {
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string();
-                        let tool_use_id =
-                            item.get("id").and_then(|v| v.as_str()).map(String::from);
+                        let tool_use_id = item.get("id").and_then(|v| v.as_str()).map(String::from);
                         let input_preview = item.get("input").map(|v| {
                             let s = v.to_string();
                             truncate_str(&s, 2000)

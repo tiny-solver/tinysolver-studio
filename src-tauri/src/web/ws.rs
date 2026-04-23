@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use axum::extract::ws::{Message, WebSocket};
 use axum::{
     extract::{Extension, WebSocketUpgrade},
     response::IntoResponse,
 };
-use axum::extract::ws::{Message, WebSocket};
 
 use crate::app_state::AppState;
 

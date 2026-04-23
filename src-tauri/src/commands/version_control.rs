@@ -24,9 +24,7 @@ async fn run_git_version(git_path: &str) -> Result<GitDetectResult, AppCommandEr
         .arg("--version")
         .output()
         .await
-        .map_err(|_| {
-            AppCommandError::not_found(format!("Cannot execute git at: {git_path}"))
-        })?;
+        .map_err(|_| AppCommandError::not_found(format!("Cannot execute git at: {git_path}")))?;
 
     if !output.status.success() {
         return Ok(GitDetectResult {
@@ -108,9 +106,7 @@ pub(crate) async fn detect_git_core(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn detect_git(
-    db: State<'_, AppDatabase>,
-) -> Result<GitDetectResult, AppCommandError> {
+pub async fn detect_git(db: State<'_, AppDatabase>) -> Result<GitDetectResult, AppCommandError> {
     detect_git_core(&db.conn).await
 }
 
@@ -145,9 +141,7 @@ async fn load_git_settings(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn get_git_settings(
-    db: State<'_, AppDatabase>,
-) -> Result<GitSettings, AppCommandError> {
+pub async fn get_git_settings(db: State<'_, AppDatabase>) -> Result<GitSettings, AppCommandError> {
     load_git_settings(&db.conn).await
 }
 
@@ -221,27 +215,21 @@ pub async fn update_github_accounts(
 // ---------------------------------------------------------------------------
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn save_account_token(
-    account_id: String,
-    token: String,
-) -> Result<(), AppCommandError> {
+pub async fn save_account_token(account_id: String, token: String) -> Result<(), AppCommandError> {
     crate::keyring_store::set_token(&account_id, &token)
         .map_err(|e| AppCommandError::io_error("Failed to save token to keyring").with_detail(e))
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn get_account_token(
-    account_id: String,
-) -> Result<Option<String>, AppCommandError> {
+pub async fn get_account_token(account_id: String) -> Result<Option<String>, AppCommandError> {
     Ok(crate::keyring_store::get_token(&account_id))
 }
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn delete_account_token(
-    account_id: String,
-) -> Result<(), AppCommandError> {
-    crate::keyring_store::delete_token(&account_id)
-        .map_err(|e| AppCommandError::io_error("Failed to delete token from keyring").with_detail(e))
+pub async fn delete_account_token(account_id: String) -> Result<(), AppCommandError> {
+    crate::keyring_store::delete_token(&account_id).map_err(|e| {
+        AppCommandError::io_error("Failed to delete token from keyring").with_detail(e)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +271,9 @@ pub async fn validate_github_token(
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(|e| AppCommandError::network("Failed to connect to GitHub API").with_detail(e.to_string()))?;
+        .map_err(|e| {
+            AppCommandError::network("Failed to connect to GitHub API").with_detail(e.to_string())
+        })?;
 
     if !response.status().is_success() {
         let status = response.status().as_u16();
@@ -315,13 +305,9 @@ pub async fn validate_github_token(
         })
         .unwrap_or_default();
 
-    let user = response
-        .json::<GitHubUserResponse>()
-        .await
-        .map_err(|e| {
-            AppCommandError::network("Failed to parse GitHub API response")
-                .with_detail(e.to_string())
-        })?;
+    let user = response.json::<GitHubUserResponse>().await.map_err(|e| {
+        AppCommandError::network("Failed to parse GitHub API response").with_detail(e.to_string())
+    })?;
 
     Ok(GitHubTokenValidation {
         success: true,

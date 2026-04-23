@@ -71,8 +71,7 @@ pub async fn mcp_scan_local() -> Result<Json<Vec<LocalMcpServer>>, AppCommandErr
     Ok(Json(result))
 }
 
-pub async fn mcp_list_marketplaces(
-) -> Result<Json<Vec<McpMarketplaceProvider>>, AppCommandError> {
+pub async fn mcp_list_marketplaces() -> Result<Json<Vec<McpMarketplaceProvider>>, AppCommandError> {
     let result = mcp_commands::mcp_list_marketplaces().await?;
     Ok(Json(result))
 }
@@ -80,23 +79,18 @@ pub async fn mcp_list_marketplaces(
 pub async fn mcp_search_marketplace(
     Json(params): Json<SearchMarketplaceParams>,
 ) -> Result<Json<Vec<McpMarketplaceItem>>, AppCommandError> {
-    let result = mcp_commands::mcp_search_marketplace(
-        params.provider_id,
-        params.query,
-        params.limit,
-    )
-    .await?;
+    let result =
+        mcp_commands::mcp_search_marketplace(params.provider_id, params.query, params.limit)
+            .await?;
     Ok(Json(result))
 }
 
 pub async fn mcp_get_marketplace_server_detail(
     Json(params): Json<GetMarketplaceServerDetailParams>,
 ) -> Result<Json<McpMarketplaceServerDetail>, AppCommandError> {
-    let result = mcp_commands::mcp_get_marketplace_server_detail(
-        params.provider_id,
-        params.server_id,
-    )
-    .await?;
+    let result =
+        mcp_commands::mcp_get_marketplace_server_detail(params.provider_id, params.server_id)
+            .await?;
     Ok(Json(result))
 }
 
@@ -119,27 +113,21 @@ pub async fn mcp_install_from_marketplace(
 pub async fn mcp_upsert_local_server(
     Json(params): Json<UpsertLocalServerParams>,
 ) -> Result<Json<LocalMcpServer>, AppCommandError> {
-    let result = mcp_commands::mcp_upsert_local_server(
-        params.server_id,
-        params.spec,
-        params.apps,
-    )
-    .await?;
+    let result =
+        mcp_commands::mcp_upsert_local_server(params.server_id, params.spec, params.apps).await?;
     Ok(Json(result))
 }
 
 pub async fn mcp_set_server_apps(
     Json(params): Json<SetServerAppsParams>,
 ) -> Result<Json<Option<LocalMcpServer>>, AppCommandError> {
-    let result =
-        mcp_commands::mcp_set_server_apps(params.server_id, params.apps).await?;
+    let result = mcp_commands::mcp_set_server_apps(params.server_id, params.apps).await?;
     Ok(Json(result))
 }
 
 pub async fn mcp_remove_server(
     Json(params): Json<RemoveServerParams>,
 ) -> Result<Json<bool>, AppCommandError> {
-    let result =
-        mcp_commands::mcp_remove_server(params.server_id, params.apps).await?;
+    let result = mcp_commands::mcp_remove_server(params.server_id, params.apps).await?;
     Ok(Json(result))
 }

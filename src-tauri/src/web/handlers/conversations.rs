@@ -98,8 +98,7 @@ pub struct GetConversationParams {
 pub async fn get_conversation(
     Json(params): Json<GetConversationParams>,
 ) -> Result<Json<ConversationDetail>, AppCommandError> {
-    let result =
-        conv_commands::get_conversation(params.agent_type, params.conversation_id).await?;
+    let result = conv_commands::get_conversation(params.agent_type, params.conversation_id).await?;
     Ok(Json(result))
 }
 
@@ -149,9 +148,10 @@ pub async fn import_local_conversations(
         .await
         .map_err(AppCommandError::from)?
         .ok_or_else(|| AppCommandError::not_found("Folder not found"))?;
-    let result = import_service::import_local_conversations(&db.conn, params.folder_id, &folder.path)
-        .await
-        .map_err(AppCommandError::from)?;
+    let result =
+        import_service::import_local_conversations(&db.conn, params.folder_id, &folder.path)
+            .await
+            .map_err(AppCommandError::from)?;
     Ok(Json(result))
 }
 

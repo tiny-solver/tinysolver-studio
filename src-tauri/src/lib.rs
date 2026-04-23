@@ -181,14 +181,11 @@ mod tauri_app {
                     });
                 }
 
-                if label == "main"
-                    && matches!(event, tauri::WindowEvent::CloseRequested { .. })
-                {
+                if label == "main" && matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                     let app = window.app_handle();
                     if let Some(cm) = app.try_state::<ConnectionManager>() {
-                        let disconnected = tauri::async_runtime::block_on(
-                            cm.disconnect_by_owner_window(&label),
-                        );
+                        let disconnected =
+                            tauri::async_runtime::block_on(cm.disconnect_by_owner_window(&label));
                         eprintln!(
                             "[ACP] main window closing disconnected_connections={}",
                             disconnected

@@ -69,8 +69,7 @@ fn write_tokens(tokens: &std::collections::HashMap<String, String>) -> Result<()
     }
     let json = serde_json::to_string_pretty(tokens)
         .map_err(|e| format!("failed to serialize tokens: {e}"))?;
-    std::fs::write(&path, json)
-        .map_err(|e| format!("failed to write token store: {e}"))
+    std::fs::write(&path, json).map_err(|e| format!("failed to write token store: {e}"))
 }
 
 #[cfg(not(feature = "tauri-runtime"))]

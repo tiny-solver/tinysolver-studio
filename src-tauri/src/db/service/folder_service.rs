@@ -181,10 +181,7 @@ pub async fn list_all_folder_details(
     Ok(rows.into_iter().map(to_detail).collect())
 }
 
-pub async fn reorder_folders(
-    conn: &DatabaseConnection,
-    ids: Vec<i32>,
-) -> Result<(), DbError> {
+pub async fn reorder_folders(conn: &DatabaseConnection, ids: Vec<i32>) -> Result<(), DbError> {
     if ids.is_empty() {
         return Ok(());
     }

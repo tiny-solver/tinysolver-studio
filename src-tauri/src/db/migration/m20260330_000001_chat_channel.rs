@@ -20,22 +20,14 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(ChatChannel::Name).string().not_null())
-                    .col(
-                        ColumnDef::new(ChatChannel::ChannelType)
-                            .string()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(ChatChannel::ChannelType).string().not_null())
                     .col(
                         ColumnDef::new(ChatChannel::Enabled)
                             .boolean()
                             .not_null()
                             .default(true),
                     )
-                    .col(
-                        ColumnDef::new(ChatChannel::ConfigJson)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(ChatChannel::ConfigJson).text().not_null())
                     .col(ColumnDef::new(ChatChannel::EventFilterJson).text().null())
                     .col(
                         ColumnDef::new(ChatChannel::DailyReportEnabled)
@@ -43,11 +35,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(false),
                     )
-                    .col(
-                        ColumnDef::new(ChatChannel::DailyReportTime)
-                            .string()
-                            .null(),
-                    )
+                    .col(ColumnDef::new(ChatChannel::DailyReportTime).string().null())
                     .col(
                         ColumnDef::new(ChatChannel::CreatedAt)
                             .timestamp_with_time_zone()
@@ -138,11 +126,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(
-                Table::drop()
-                    .table(ChatChannelMessageLog::Table)
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(ChatChannelMessageLog::Table).to_owned())
             .await?;
         manager
             .drop_table(Table::drop().table(ChatChannel::Table).to_owned())

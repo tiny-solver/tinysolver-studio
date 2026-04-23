@@ -202,9 +202,7 @@ impl LarkBackend {
 
         let token = result
             .tenant_access_token
-            .ok_or_else(|| {
-                ChatChannelError::AuthenticationFailed("No token in response".into())
-            })?;
+            .ok_or_else(|| ChatChannelError::AuthenticationFailed("No token in response".into()))?;
         let expire_secs = result.expire.unwrap_or(7200);
 
         let expires_at = Instant::now()
@@ -252,10 +250,7 @@ impl LarkBackend {
             )));
         }
 
-        let message_id = result
-            .data
-            .and_then(|d| d.message_id)
-            .unwrap_or_default();
+        let message_id = result.data.and_then(|d| d.message_id).unwrap_or_default();
         Ok(SentMessageId(message_id))
     }
 

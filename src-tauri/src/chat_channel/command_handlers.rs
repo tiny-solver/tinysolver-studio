@@ -6,11 +6,7 @@ use super::manager::ChatChannelManager;
 use super::types::{MessageLevel, RichMessage};
 use crate::db::entities::conversation;
 
-pub async fn handle_search(
-    db: &DatabaseConnection,
-    keyword: &str,
-    lang: Lang,
-) -> RichMessage {
+pub async fn handle_search(db: &DatabaseConnection, keyword: &str, lang: Lang) -> RichMessage {
     let matched = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
         .filter(conversation::Column::Title.contains(keyword))
@@ -40,10 +36,7 @@ pub async fn handle_search(
         let title = conv.title.as_deref().unwrap_or(i18n::untitled(lang));
         let agent = &conv.agent_type;
         let time = conv.created_at.format("%m-%d %H:%M");
-        body.push_str(&format!(
-            "#{} [{}] {} ({})\n",
-            conv.id, agent, title, time,
-        ));
+        body.push_str(&format!("#{} [{}] {} ({})\n", conv.id, agent, title, time,));
     }
 
     RichMessage::info(body.trim_end()).with_title(i18n::search_results_count_title(
@@ -55,11 +48,7 @@ pub async fn handle_search(
 
 pub async fn handle_today(db: &DatabaseConnection, lang: Lang) -> RichMessage {
     let now = Utc::now();
-    let today_start = now
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .and_utc();
+    let today_start = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
 
     let rows = match conversation::Entity::find()
         .filter(conversation::Column::DeletedAt.is_null())
@@ -99,10 +88,7 @@ pub async fn handle_today(db: &DatabaseConnection, lang: Lang) -> RichMessage {
     let mut body = i18n::total_sessions(lang, rows.len() as u32);
     body.push_str(&format!("\n\n{}", i18n::by_agent_label(lang)));
     for (agent, count) in &by_agent {
-        body.push_str(&format!(
-            "\n  {}",
-            i18n::agent_count(lang, agent, *count)
-        ));
+        body.push_str(&format!("\n  {}", i18n::agent_count(lang, agent, *count)));
     }
 
     if !titles.is_empty() {

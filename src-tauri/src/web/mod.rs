@@ -121,11 +121,10 @@ async fn persist_web_service_config(
     })
     .await
     .map_err(|e: TransactionError<AppCommandError>| match e {
-        TransactionError::Connection(db) => AppCommandError::new(
-            AppErrorCode::DatabaseError,
-            "Database transaction failed",
-        )
-        .with_detail(db.to_string()),
+        TransactionError::Connection(db) => {
+            AppCommandError::new(AppErrorCode::DatabaseError, "Database transaction failed")
+                .with_detail(db.to_string())
+        }
         TransactionError::Transaction(inner) => inner,
     })
 }
@@ -178,12 +177,18 @@ pub(crate) fn find_static_dir_tauri(app: &tauri::AppHandle) -> PathBuf {
     if let Some(ref dir) = resource {
         let web = dir.join("web");
         if web.join("index.html").exists() {
-            eprintln!("[WEB] Serving static files from resource/web: {}", web.display());
+            eprintln!(
+                "[WEB] Serving static files from resource/web: {}",
+                web.display()
+            );
             return web;
         }
         // Fallback: files at resource root.
         if dir.join("index.html").exists() {
-            eprintln!("[WEB] Serving static files from resource dir: {}", dir.display());
+            eprintln!(
+                "[WEB] Serving static files from resource dir: {}",
+                dir.display()
+            );
             return dir.clone();
         }
     }
@@ -197,7 +202,10 @@ pub(crate) fn find_static_dir_fallback() -> PathBuf {
     let project_out = manifest_dir.parent().map(|p| p.join("out"));
     if let Some(ref out) = project_out {
         if out.join("index.html").exists() {
-            eprintln!("[WEB] Serving static files from project out/: {}", out.display());
+            eprintln!(
+                "[WEB] Serving static files from project out/: {}",
+                out.display()
+            );
             return out.clone();
         }
     }
@@ -217,7 +225,10 @@ pub fn find_static_dir_standalone(explicit: Option<&str>) -> PathBuf {
     if let Some(dir) = explicit {
         let p = PathBuf::from(dir);
         if p.join("index.html").exists() {
-            eprintln!("[WEB] Serving static files from CODEG_STATIC_DIR: {}", p.display());
+            eprintln!(
+                "[WEB] Serving static files from CODEG_STATIC_DIR: {}",
+                p.display()
+            );
             return p;
         }
     }
@@ -292,12 +303,13 @@ pub(crate) async fn do_start_web_server_with_state(
     let host = host.unwrap_or_else(|| "0.0.0.0".to_string());
     let token = resolve_web_service_token(&app_state.db.conn, token).await?;
 
-    let addr: SocketAddr = format!("{}:{}", host, port)
-        .parse()
-        .map_err(|e: std::net::AddrParseError| {
-            AppCommandError::new(AppErrorCode::InvalidInput, ERR_INVALID_ADDRESS)
-                .with_detail(e.to_string())
-        })?;
+    let addr: SocketAddr =
+        format!("{}:{}", host, port)
+            .parse()
+            .map_err(|e: std::net::AddrParseError| {
+                AppCommandError::new(AppErrorCode::InvalidInput, ERR_INVALID_ADDRESS)
+                    .with_detail(e.to_string())
+            })?;
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -387,12 +399,13 @@ pub async fn start_web_server(
     let host_val = host.unwrap_or_else(|| "0.0.0.0".to_string());
     let token = resolve_web_service_token(&db.conn, token).await?;
 
-    let addr: SocketAddr = format!("{}:{}", host_val, port_val)
-        .parse()
-        .map_err(|e: std::net::AddrParseError| {
-            AppCommandError::new(AppErrorCode::InvalidInput, ERR_INVALID_ADDRESS)
-                .with_detail(e.to_string())
-        })?;
+    let addr: SocketAddr =
+        format!("{}:{}", host_val, port_val)
+            .parse()
+            .map_err(|e: std::net::AddrParseError| {
+                AppCommandError::new(AppErrorCode::InvalidInput, ERR_INVALID_ADDRESS)
+                    .with_detail(e.to_string())
+            })?;
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -410,7 +423,10 @@ pub async fn start_web_server(
         },
         connection_manager: (*app.state::<crate::acp::manager::ConnectionManager>()).clone_ref(),
         terminal_manager: (*app.state::<crate::terminal::manager::TerminalManager>()).clone_ref(),
-        event_broadcaster: app.state::<Arc<crate::web::event_bridge::WebEventBroadcaster>>().inner().clone(),
+        event_broadcaster: app
+            .state::<Arc<crate::web::event_bridge::WebEventBroadcaster>>()
+            .inner()
+            .clone(),
         emitter: crate::web::event_bridge::EventEmitter::Tauri(app.clone()),
         data_dir: app.path().app_data_dir().unwrap_or_default(),
         web_server_state: WebServerState::new(), // placeholder; not used by handlers

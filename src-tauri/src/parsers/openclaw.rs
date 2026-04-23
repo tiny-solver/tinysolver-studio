@@ -19,9 +19,7 @@ use crate::parsers::{
 /// timestamp prefix from OpenClaw user messages.
 fn sender_block_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"(?s)^Sender \(untrusted metadata\):\s*```[^`]*```\s*").unwrap()
-    })
+    RE.get_or_init(|| Regex::new(r"(?s)^Sender \(untrusted metadata\):\s*```[^`]*```\s*").unwrap())
 }
 
 fn timestamp_prefix_regex() -> &'static Regex {
@@ -354,9 +352,7 @@ impl OpenClawParser {
     }
 
     /// Read sessions.json for a given agent directory.
-    fn read_session_index(
-        agent_dir: &Path,
-    ) -> Result<HashMap<String, SessionMeta>, ParseError> {
+    fn read_session_index(agent_dir: &Path) -> Result<HashMap<String, SessionMeta>, ParseError> {
         let index_path = agent_dir.join("sessions").join("sessions.json");
         if !index_path.exists() {
             return Ok(HashMap::new());
@@ -710,18 +706,12 @@ impl OpenClawParser {
             if jsonl_path.exists() {
                 let meta = Self::read_session_index(&agent_dir)
                     .ok()
-                    .and_then(|index| {
-                        index
-                            .into_values()
-                            .find(|m| m.session_id == session_id)
-                    });
+                    .and_then(|index| index.into_values().find(|m| m.session_id == session_id));
                 return Ok((jsonl_path, leaf_id, meta));
             }
 
             // Try reset files
-            if let Some((path, meta)) =
-                Self::find_reset_file(&agent_dir, session_id)
-            {
+            if let Some((path, meta)) = Self::find_reset_file(&agent_dir, session_id) {
                 return Ok((path, leaf_id, meta));
             }
         }
@@ -747,9 +737,7 @@ impl OpenClawParser {
                 if jsonl_path.exists() {
                     let meta = Self::read_session_index(&agent_dir)
                         .ok()
-                        .and_then(|index| {
-                            index.into_values().find(|m| m.session_id == bare_id)
-                        });
+                        .and_then(|index| index.into_values().find(|m| m.session_id == bare_id));
                     return Ok((jsonl_path, None, meta));
                 }
 
@@ -768,9 +756,8 @@ impl OpenClawParser {
                         // Check if any leaf id matches the bare_id
                         let leaves = tree.leaf_ids();
                         if leaves.iter().any(|l| l == bare_id) {
-                            let meta = Self::read_session_index(&agent_dir)
-                                .ok()
-                                .and_then(|index| {
+                            let meta =
+                                Self::read_session_index(&agent_dir).ok().and_then(|index| {
                                     index.into_values().find(|m| m.session_id == *sid)
                                 });
                             return Ok((path.clone(), Some(bare_id.to_string()), meta));
@@ -905,7 +892,10 @@ fn extract_first_text_content(value: &serde_json::Value) -> Option<String> {
     let content = value.get("message")?.get("content")?.as_array()?;
     for item in content {
         if item.get("type").and_then(|t| t.as_str()) == Some("text") {
-            return item.get("text").and_then(|t| t.as_str()).map(|s| s.to_string());
+            return item
+                .get("text")
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string());
         }
     }
     None
@@ -987,8 +977,13 @@ fn extract_assistant_content(value: &serde_json::Value) -> Vec<ContentBlock> {
                         .to_string();
                     let is_edit_tool = matches!(
                         tool_name.to_lowercase().as_str(),
-                        "edit" | "write" | "apply_patch" | "patch" | "applypatch"
-                            | "edit_file" | "editfile"
+                        "edit"
+                            | "write"
+                            | "apply_patch"
+                            | "patch"
+                            | "applypatch"
+                            | "edit_file"
+                            | "editfile"
                     );
                     let max_len = if is_edit_tool { 50000 } else { 500 };
                     let input_preview = item.get("arguments").map(|a| {
@@ -1068,10 +1063,7 @@ fn extract_usage(value: &serde_json::Value) -> Option<TurnUsage> {
             .get("cacheWrite")
             .and_then(|v| v.as_u64())
             .unwrap_or(0),
-        cache_read_input_tokens: usage
-            .get("cacheRead")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0),
+        cache_read_input_tokens: usage.get("cacheRead").and_then(|v| v.as_u64()).unwrap_or(0),
     })
 }
 
@@ -1117,9 +1109,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
 
             // Only absorb immediately following Tool messages
             // (stop at the next assistant message to keep turns small for virtualization)
-            while i < messages.len()
-                && matches!(messages[i].role, MessageRole::Tool)
-            {
+            while i < messages.len() && matches!(messages[i].role, MessageRole::Tool) {
                 blocks.extend(messages[i].content.clone());
                 if usage.is_none() {
                     usage = messages[i].usage.clone();
@@ -1162,7 +1152,8 @@ mod tests {
 
     #[test]
     fn extracts_working_directory() {
-        let text = "[Tue 2026-03-17 12:58 GMT+8] [Working directory: ~/forway/agent-workspace]\n\nHello";
+        let text =
+            "[Tue 2026-03-17 12:58 GMT+8] [Working directory: ~/forway/agent-workspace]\n\nHello";
         let wd = extract_working_dir(text).unwrap();
         let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
         assert_eq!(wd, format!("{}/forway/agent-workspace", home));
@@ -1219,9 +1210,13 @@ mod tests {
         });
         let blocks = extract_assistant_content(&value);
         assert_eq!(blocks.len(), 3);
-        assert!(matches!(&blocks[0], ContentBlock::Thinking { text } if text == "I should read the file"));
+        assert!(
+            matches!(&blocks[0], ContentBlock::Thinking { text } if text == "I should read the file")
+        );
         assert!(matches!(&blocks[1], ContentBlock::Text { text } if text == "Let me check."));
-        assert!(matches!(&blocks[2], ContentBlock::ToolUse { tool_name, .. } if tool_name == "read"));
+        assert!(
+            matches!(&blocks[2], ContentBlock::ToolUse { tool_name, .. } if tool_name == "read")
+        );
     }
 
     #[test]
@@ -1272,8 +1267,9 @@ mod tests {
             json!({"type":"message","id":"a1","parentId":"u1","timestamp":"2026-03-17T04:56:30.466Z","message":{"role":"assistant","content":[{"type":"text","text":"[[reply_to_current]] Hi there!"}],"model":"gpt-5.4","usage":{"input":100,"output":50,"cacheRead":200,"cacheWrite":0,"totalTokens":350},"stopReason":"stop","timestamp":1773723390466_i64}})
         ).unwrap();
 
-        let detail = OpenClawParser::parse_conversation_detail(&path, "test/test-session", None, None)
-            .expect("parse detail");
+        let detail =
+            OpenClawParser::parse_conversation_detail(&path, "test/test-session", None, None)
+                .expect("parse detail");
         fs::remove_file(&path).unwrap();
 
         assert_eq!(detail.turns.len(), 2);

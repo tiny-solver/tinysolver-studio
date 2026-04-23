@@ -98,20 +98,19 @@ pub async fn connect_chat_channel_core(
         .map_err(AppCommandError::from)?
         .ok_or_else(|| AppCommandError::not_found(format!("Chat channel {id} not found")))?;
 
-    let channel_type: ChannelType =
-        serde_json::from_value(serde_json::Value::String(model.channel_type.clone()))
-            .map_err(|_| {
-                AppCommandError::configuration_invalid(format!(
-                    "Invalid channel type: {}",
-                    model.channel_type
-                ))
-            })?;
+    let channel_type: ChannelType = serde_json::from_value(serde_json::Value::String(
+        model.channel_type.clone(),
+    ))
+    .map_err(|_| {
+        AppCommandError::configuration_invalid(format!(
+            "Invalid channel type: {}",
+            model.channel_type
+        ))
+    })?;
 
-    let config: serde_json::Value =
-        serde_json::from_str(&model.config_json).map_err(|e| {
-            AppCommandError::configuration_invalid("Invalid config JSON")
-                .with_detail(e.to_string())
-        })?;
+    let config: serde_json::Value = serde_json::from_str(&model.config_json).map_err(|e| {
+        AppCommandError::configuration_invalid("Invalid config JSON").with_detail(e.to_string())
+    })?;
 
     let token = crate::keyring_store::get_channel_token(id).ok_or_else(|| {
         eprintln!("[connect_chat_channel] channel {id}: Token not set in keyring");
@@ -138,29 +137,25 @@ pub async fn connect_chat_channel_core(
     Ok(())
 }
 
-pub async fn test_chat_channel_core(
-    db: &AppDatabase,
-    id: i32,
-) -> Result<(), AppCommandError> {
+pub async fn test_chat_channel_core(db: &AppDatabase, id: i32) -> Result<(), AppCommandError> {
     let model = chat_channel_service::get_by_id(&db.conn, id)
         .await
         .map_err(AppCommandError::from)?
         .ok_or_else(|| AppCommandError::not_found(format!("Chat channel {id} not found")))?;
 
-    let channel_type: ChannelType =
-        serde_json::from_value(serde_json::Value::String(model.channel_type.clone()))
-            .map_err(|_| {
-                AppCommandError::configuration_invalid(format!(
-                    "Invalid channel type: {}",
-                    model.channel_type
-                ))
-            })?;
+    let channel_type: ChannelType = serde_json::from_value(serde_json::Value::String(
+        model.channel_type.clone(),
+    ))
+    .map_err(|_| {
+        AppCommandError::configuration_invalid(format!(
+            "Invalid channel type: {}",
+            model.channel_type
+        ))
+    })?;
 
-    let config: serde_json::Value =
-        serde_json::from_str(&model.config_json).map_err(|e| {
-            AppCommandError::configuration_invalid("Invalid config JSON")
-                .with_detail(e.to_string())
-        })?;
+    let config: serde_json::Value = serde_json::from_str(&model.config_json).map_err(|e| {
+        AppCommandError::configuration_invalid("Invalid config JSON").with_detail(e.to_string())
+    })?;
 
     let token = crate::keyring_store::get_channel_token(id)
         .ok_or_else(|| AppCommandError::configuration_missing("Token not set"))?;
@@ -215,18 +210,20 @@ pub async fn list_chat_channel_messages_core(
 ) -> Result<Vec<ChatChannelMessageLogInfo>, AppCommandError> {
     let limit = limit.unwrap_or(50);
     let offset = offset.unwrap_or(0);
-    let rows = chat_channel_message_log_service::list_by_channel(&db.conn, channel_id, limit, offset)
-        .await
-        .map_err(AppCommandError::from)?;
-    Ok(rows.into_iter().map(ChatChannelMessageLogInfo::from).collect())
+    let rows =
+        chat_channel_message_log_service::list_by_channel(&db.conn, channel_id, limit, offset)
+            .await
+            .map_err(AppCommandError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(ChatChannelMessageLogInfo::from)
+        .collect())
 }
 
 const COMMAND_PREFIX_KEY: &str = "chat_command_prefix";
 const DEFAULT_COMMAND_PREFIX: &str = "/";
 
-pub async fn get_chat_command_prefix_core(
-    db: &AppDatabase,
-) -> Result<String, AppCommandError> {
+pub async fn get_chat_command_prefix_core(db: &AppDatabase) -> Result<String, AppCommandError> {
     let val = crate::db::service::app_metadata_service::get_value(&db.conn, COMMAND_PREFIX_KEY)
         .await
         .map_err(AppCommandError::from)?;
@@ -238,10 +235,7 @@ pub async fn set_chat_command_prefix_core(
     prefix: String,
 ) -> Result<(), AppCommandError> {
     let trimmed = prefix.trim();
-    if trimmed.is_empty()
-        || trimmed.len() > 3
-        || trimmed.chars().any(|c| c.is_alphanumeric())
-    {
+    if trimmed.is_empty() || trimmed.len() > 3 || trimmed.chars().any(|c| c.is_alphanumeric()) {
         return Err(AppCommandError::invalid_input(
             "Prefix must be 1-3 non-alphanumeric characters",
         ));
@@ -254,9 +248,7 @@ pub async fn set_chat_command_prefix_core(
 
 const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
 
-pub async fn get_chat_message_language_core(
-    db: &AppDatabase,
-) -> Result<String, AppCommandError> {
+pub async fn get_chat_message_language_core(db: &AppDatabase) -> Result<String, AppCommandError> {
     let val = crate::db::service::app_metadata_service::get_value(&db.conn, MESSAGE_LANGUAGE_KEY)
         .await
         .map_err(AppCommandError::from)?;
@@ -360,14 +352,20 @@ pub async fn weixin_check_qrcode_core(
     if result.status == "confirmed" {
         eprintln!(
             "[Weixin] QR confirmed for channel {channel_id}, bot_token={}, base_url={}",
-            result.bot_token.as_deref().map(|t| if t.len() > 8 { &t[..8] } else { t }).unwrap_or("None"),
+            result
+                .bot_token
+                .as_deref()
+                .map(|t| if t.len() > 8 { &t[..8] } else { t })
+                .unwrap_or("None"),
             result.base_url.as_deref().unwrap_or("None"),
         );
         if let Some(ref token) = result.bot_token {
             save_chat_channel_token_core(channel_id, token)?;
             eprintln!("[Weixin] Token saved for channel {channel_id}");
         } else {
-            eprintln!("[Weixin] WARNING: No bot_token in confirmed response for channel {channel_id}");
+            eprintln!(
+                "[Weixin] WARNING: No bot_token in confirmed response for channel {channel_id}"
+            );
         }
         if let Some(ref base_url) = result.base_url {
             let config_json = serde_json::json!({ "base_url": base_url }).to_string();
@@ -415,7 +413,16 @@ pub async fn create_chat_channel(
     daily_report_enabled: bool,
     daily_report_time: Option<String>,
 ) -> Result<ChatChannelInfo, AppCommandError> {
-    create_chat_channel_core(&db, name, channel_type, config_json, enabled, daily_report_enabled, daily_report_time).await
+    create_chat_channel_core(
+        &db,
+        name,
+        channel_type,
+        config_json,
+        enabled,
+        daily_report_enabled,
+        daily_report_time,
+    )
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -431,7 +438,17 @@ pub async fn update_chat_channel(
     daily_report_enabled: Option<bool>,
     daily_report_time: Option<Option<String>>,
 ) -> Result<ChatChannelInfo, AppCommandError> {
-    update_chat_channel_core(&db, id, name, enabled, config_json, event_filter_json, daily_report_enabled, daily_report_time).await
+    update_chat_channel_core(
+        &db,
+        id,
+        name,
+        enabled,
+        config_json,
+        event_filter_json,
+        daily_report_enabled,
+        daily_report_time,
+    )
+    .await
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -446,7 +463,10 @@ pub async fn delete_chat_channel(
 
 #[cfg(feature = "tauri-runtime")]
 #[tauri::command]
-pub async fn save_chat_channel_token(channel_id: i32, token: String) -> Result<(), AppCommandError> {
+pub async fn save_chat_channel_token(
+    channel_id: i32,
+    token: String,
+) -> Result<(), AppCommandError> {
     save_chat_channel_token_core(channel_id, &token)
 }
 

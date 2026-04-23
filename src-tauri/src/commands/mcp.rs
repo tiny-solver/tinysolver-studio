@@ -1735,9 +1735,7 @@ fn upsert_openclaw_server(id: &str, spec: &Value) -> Result<(), AppCommandError>
     let mcp = obj
         .get_mut("mcp")
         .and_then(Value::as_object_mut)
-        .ok_or_else(|| {
-            mcp_configuration_invalid(format!("invalid mcp in {}", path.display()))
-        })?;
+        .ok_or_else(|| mcp_configuration_invalid(format!("invalid mcp in {}", path.display())))?;
 
     if !mcp.get("servers").map(Value::is_object).unwrap_or(false) {
         mcp.insert("servers".to_string(), Value::Object(Map::new()));

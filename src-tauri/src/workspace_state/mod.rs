@@ -321,7 +321,6 @@ impl WatchEventBatch {
             "modify".to_string()
         }
     }
-
 }
 
 fn normalize_slash_path(path: &Path) -> String {
@@ -375,7 +374,9 @@ fn git_check_ignored_paths(
 
     if let Some(mut stdin) = child.stdin.take() {
         for path in paths {
-            stdin.write_all(path.as_bytes()).map_err(AppCommandError::io)?;
+            stdin
+                .write_all(path.as_bytes())
+                .map_err(AppCommandError::io)?;
             stdin.write_all(&[0]).map_err(AppCommandError::io)?;
         }
     }
@@ -899,15 +900,13 @@ pub async fn start_workspace_state_stream_core(
     let mut watcher = Some(
         notify::recommended_watcher(
             move |result: Result<notify::Event, notify::Error>| match result {
-                Ok(event) => {
-                    match event_tx.try_send(event) {
-                        Ok(()) => {}
-                        Err(TrySendError::Full(_)) => {
-                            dropped_events_for_callback.store(true, Ordering::Release);
-                        }
-                        Err(TrySendError::Closed(_)) => {}
+                Ok(event) => match event_tx.try_send(event) {
+                    Ok(()) => {}
+                    Err(TrySendError::Full(_)) => {
+                        dropped_events_for_callback.store(true, Ordering::Release);
                     }
-                }
+                    Err(TrySendError::Closed(_)) => {}
+                },
                 Err(err) => {
                     eprintln!(
                         "[workspace-state-watch] failed event for {}: {}",
@@ -1082,7 +1081,8 @@ mod tests {
 
     #[test]
     fn workspace_state_core_seq_is_monotonic() {
-        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
+        let mut core =
+            WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
 
         let e1 = core.append_event(
             "meta".to_string(),
@@ -1107,7 +1107,8 @@ mod tests {
 
     #[test]
     fn workspace_state_core_snapshot_incremental_when_since_available() {
-        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
+        let mut core =
+            WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
 
         let e1 = core.append_event(
             "meta".to_string(),
@@ -1136,7 +1137,8 @@ mod tests {
 
     #[test]
     fn workspace_state_core_snapshot_full_when_since_too_old() {
-        let mut core = WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
+        let mut core =
+            WorkspaceStateCore::new("/tmp/repo".to_string(), Vec::new(), Vec::new(), false);
         core.recent_capacity = 1;
 
         core.append_event(

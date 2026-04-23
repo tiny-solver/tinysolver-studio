@@ -54,9 +54,9 @@ impl SessionBridge {
     }
 
     pub fn find_by_sender(&self, channel_id: i32, sender_id: &str) -> Option<&ActiveSession> {
-        self.sessions.values().find(|s| {
-            s.channel_id == channel_id && s.sender_id == sender_id
-        })
+        self.sessions
+            .values()
+            .find(|s| s.channel_id == channel_id && s.sender_id == sender_id)
     }
 
     pub fn find_by_sender_mut(
@@ -64,9 +64,9 @@ impl SessionBridge {
         channel_id: i32,
         sender_id: &str,
     ) -> Option<&mut ActiveSession> {
-        self.sessions.values_mut().find(|s| {
-            s.channel_id == channel_id && s.sender_id == sender_id
-        })
+        self.sessions
+            .values_mut()
+            .find(|s| s.channel_id == channel_id && s.sender_id == sender_id)
     }
 
     pub fn all_sessions(&self) -> impl Iterator<Item = &ActiveSession> {

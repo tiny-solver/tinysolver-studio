@@ -23,11 +23,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 
+use crate::acp::types::AgentSkillScope;
 use crate::commands::acp::{
     preferred_scope_skill_dir, remove_skill_entry, scoped_skill_dirs, skill_storage_spec,
     validate_skill_id,
 };
-use crate::acp::types::AgentSkillScope;
 use crate::models::agent::AgentType;
 
 // ─── Embedded bundle ────────────────────────────────────────────────────
@@ -373,9 +373,7 @@ fn create_link_raw(src: &Path, dst: &Path) -> io::Result<bool> {
             copy_dir_recursive(src, dst).map_err(|copy_err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!(
-                        "junction failed ({junction_err}); copy fallback failed ({copy_err})"
-                    ),
+                    format!("junction failed ({junction_err}); copy fallback failed ({copy_err})"),
                 )
             })?;
             Ok(true)
@@ -518,9 +516,7 @@ fn ensure_central_experts_installed_blocking() -> InstallReport {
                 report.pending_user_review.push(meta.id.clone());
             }
             Err(e) => {
-                report
-                    .errors
-                    .push(format!("{}: {}", meta.id, e));
+                report.errors.push(format!("{}: {}", meta.id, e));
             }
         }
     }
@@ -639,10 +635,10 @@ fn extract_bundle_dir(
                     .path()
                     .to_str()
                     .ok_or_else(|| ExpertsError::Io("non-utf8 path in bundle".into()))?;
-                let rel_within =
-                    rel.strip_prefix(bundle_prefix)
-                        .and_then(|s| s.strip_prefix('/'))
-                        .unwrap_or(rel);
+                let rel_within = rel
+                    .strip_prefix(bundle_prefix)
+                    .and_then(|s| s.strip_prefix('/'))
+                    .unwrap_or(rel);
                 let out_path = target.join(rel_within);
                 if let Some(parent) = out_path.parent() {
                     fs::create_dir_all(parent)?;
@@ -686,8 +682,7 @@ pub async fn experts_list() -> Result<Vec<ExpertListItem>, ExpertsError> {
 pub async fn experts_list_for_agent(
     agent_type: AgentType,
 ) -> Result<Vec<ExpertListItem>, ExpertsError> {
-    let _ = skill_storage_spec(agent_type)
-        .ok_or(ExpertsError::UnsupportedAgent(agent_type))?;
+    let _ = skill_storage_spec(agent_type).ok_or(ExpertsError::UnsupportedAgent(agent_type))?;
 
     let dirs = scoped_skill_dirs(agent_type, AgentSkillScope::Global, None)
         .map_err(|_| ExpertsError::UnsupportedAgent(agent_type))?;
@@ -727,8 +722,8 @@ pub async fn experts_list_for_agent(
 pub async fn experts_get_install_status(
     expert_id: String,
 ) -> Result<Vec<ExpertInstallStatus>, ExpertsError> {
-    let expert_id = validate_skill_id(&expert_id)
-        .map_err(|e| ExpertsError::Metadata(e.to_string()))?;
+    let expert_id =
+        validate_skill_id(&expert_id).map_err(|e| ExpertsError::Metadata(e.to_string()))?;
     let _ = find_metadata(&expert_id)?; // ensure it exists in the bundle
     let expected = expert_central_path(&expert_id);
     let agents = supported_agents();
@@ -776,8 +771,8 @@ pub async fn experts_link_to_agent(
     expert_id: String,
     agent_type: AgentType,
 ) -> Result<ExpertInstallStatus, ExpertsError> {
-    let expert_id = validate_skill_id(&expert_id)
-        .map_err(|e| ExpertsError::Metadata(e.to_string()))?;
+    let expert_id =
+        validate_skill_id(&expert_id).map_err(|e| ExpertsError::Metadata(e.to_string()))?;
     let _ = find_metadata(&expert_id)?;
     let central = expert_central_path(&expert_id);
     if !central.exists() {
@@ -819,9 +814,8 @@ pub async fn experts_link_to_agent(
                 }
                 ExpertLinkState::NotLinked => {
                     // Shouldn't happen after AlreadyExists, but retry once.
-                    create_link_raw(&central, &link_path).map_err(|e| ExpertsError::Io(format!(
-                        "retry link failed: {e}"
-                    )))?;
+                    create_link_raw(&central, &link_path)
+                        .map_err(|e| ExpertsError::Io(format!("retry link failed: {e}")))?;
                 }
             }
         }
@@ -846,8 +840,8 @@ pub async fn experts_unlink_from_agent(
     expert_id: String,
     agent_type: AgentType,
 ) -> Result<(), ExpertsError> {
-    let expert_id = validate_skill_id(&expert_id)
-        .map_err(|e| ExpertsError::Metadata(e.to_string()))?;
+    let expert_id =
+        validate_skill_id(&expert_id).map_err(|e| ExpertsError::Metadata(e.to_string()))?;
 
     let _guard = mutation_lock().lock().await;
 
@@ -865,10 +859,14 @@ pub async fn experts_unlink_from_agent(
             continue;
         }
         let state = classify_link(&candidate, &central);
-        if matches!(state, ExpertLinkState::LinkedToCodeg | ExpertLinkState::Broken) {
+        if matches!(
+            state,
+            ExpertLinkState::LinkedToCodeg | ExpertLinkState::Broken
+        ) {
             // Safe to remove a link to our central store or a broken link.
-            remove_skill_entry(&candidate)
-                .map_err(|e| ExpertsError::Io(format!("remove link {}: {e}", candidate.display())))?;
+            remove_skill_entry(&candidate).map_err(|e| {
+                ExpertsError::Io(format!("remove link {}: {e}", candidate.display()))
+            })?;
             removed = true;
         } else if state == ExpertLinkState::LinkedElsewhere {
             return Err(ExpertsError::ForeignLink {
@@ -893,8 +891,8 @@ pub async fn experts_unlink_from_agent(
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn experts_read_content(expert_id: String) -> Result<String, ExpertsError> {
-    let expert_id = validate_skill_id(&expert_id)
-        .map_err(|e| ExpertsError::Metadata(e.to_string()))?;
+    let expert_id =
+        validate_skill_id(&expert_id).map_err(|e| ExpertsError::Metadata(e.to_string()))?;
     let _ = find_metadata(&expert_id)?;
     let path = expert_central_path(&expert_id).join("SKILL.md");
     if !path.exists() {
