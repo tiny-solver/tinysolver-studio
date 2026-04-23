@@ -132,7 +132,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            className="relative h-[2rem]"
+            className="relative h-[2rem] bg-sidebar"
             data-conv-key={`${conversation.agent_type}:${conversation.id}`}
           >
             <button
@@ -158,7 +158,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     : "bg-sidebar-primary/30"
                 )}
                 style={{
-                  left: "calc(0.875rem - 0.5px)",
+                  left: "calc(0.875rem + 0.5px)",
                   width: "1px",
                 }}
               />
