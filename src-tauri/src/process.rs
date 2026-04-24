@@ -71,25 +71,32 @@ impl SetEnv for tokio::process::Command {
     }
 }
 
+/// On Windows, resolve a bare program name to its concrete file on PATH
+/// by trying `.exe → .cmd → .bat` in order.
+///
+/// Rust's `Command::new("foo")` on Windows relies on `CreateProcessW`'s
+/// implicit extension lookup, which does not locate `.cmd` / `.bat` shims
+/// reliably for many npm-installed tools (`tsc`, `vite`, `eslint`, ...).
+/// Without this helper those agents hang or ENOENT when ACP agents send
+/// bare names. Extension fallback is **purely additive**: if the caller
+/// already supplied a path, extension, or the `.exe` is found, the result
+/// is identical to the previous behavior.
 #[cfg(windows)]
-fn maybe_windows_cmd_shim(program: &OsStr) -> Option<OsString> {
+fn resolve_windows_program(program: &OsStr) -> Option<OsString> {
     let path = Path::new(program);
+    // Only apply fallback for bare names (no path components, no extension).
     if path.components().count() != 1 || path.extension().is_some() {
         return None;
     }
 
     let raw = program.to_string_lossy();
-    let normalized = raw.to_ascii_lowercase();
-    let needs_cmd_shim = matches!(
-        normalized.as_str(),
-        "npm" | "npx" | "pnpm" | "pnpx" | "yarn" | "yarnpkg" | "corepack"
-    );
-
-    if needs_cmd_shim {
-        Some(OsString::from(format!("{raw}.cmd")))
-    } else {
-        None
+    for ext in ["exe", "cmd", "bat"] {
+        let candidate = format!("{raw}.{ext}");
+        if which::which(&candidate).is_ok() {
+            return Some(OsString::from(candidate));
+        }
     }
+    None
 }
 
 pub fn normalized_program<S>(program: S) -> OsString
@@ -98,8 +105,8 @@ where
 {
     #[cfg(windows)]
     {
-        if let Some(shimmed) = maybe_windows_cmd_shim(program.as_ref()) {
-            return shimmed;
+        if let Some(resolved) = resolve_windows_program(program.as_ref()) {
+            return resolved;
         }
     }
 
