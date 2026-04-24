@@ -47,7 +47,8 @@
       "chat_channels": "Chat Channels",
       "web_service": "Web Service",
       "model_providers": "Model Providers",
-      "experts": "Experts"
+      "experts": "Experts",
+      "quick_messages": "Quick Messages"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "Failed to enable expert",
       "disableFailed": "Failed to disable expert",
       "openFolderFailed": "Failed to open folder"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "Quick Messages",
+    "description": "Manage reusable message snippets. Drag to reorder.",
+    "loading": "Loading quick messages…",
+    "emptyList": "No quick messages yet. Click \"New\" to create one.",
+    "emptySelection": "Select a quick message to edit.",
+    "searchPlaceholder": "Search by title or content",
+    "untitled": "Untitled",
+    "actions": {
+      "new": "New",
+      "save": "Save",
+      "delete": "Delete",
+      "dragSort": "Drag to reorder",
+      "dragSortMessage": "Drag to reorder quick message: {name}"
+    },
+    "fields": {
+      "title": "Title",
+      "titlePlaceholder": "Give this message a short title",
+      "content": "Content",
+      "contentPlaceholder": "Write the message content here"
+    },
+    "confirmDelete": {
+      "title": "Delete quick message?",
+      "message": "This will permanently delete \"{name}\". Are you sure?",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "toasts": {
+      "loadFailed": "Failed to load quick messages",
+      "createFailed": "Failed to create quick message",
+      "saveFailed": "Failed to save quick message",
+      "deleteFailed": "Failed to delete quick message",
+      "saveOrderFailed": "Failed to save order",
+      "created": "Quick message created",
+      "saved": "Quick message saved",
+      "deleted": "Quick message deleted"
     }
   }
 }

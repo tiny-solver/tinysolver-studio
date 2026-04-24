@@ -47,7 +47,8 @@
       "chat_channels": "قنوات المحادثة",
       "web_service": "خدمة الويب",
       "model_providers": "مزودو النماذج",
-      "experts": "الخبراء"
+      "experts": "الخبراء",
+      "quick_messages": "رسائل سريعة"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "فشل تفعيل الخبير",
       "disableFailed": "فشل تعطيل الخبير",
       "openFolderFailed": "فشل فتح المجلد"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "رسائل سريعة",
+    "description": "إدارة مقتطفات الرسائل القابلة لإعادة الاستخدام. اسحب لإعادة الترتيب.",
+    "loading": "جارٍ تحميل الرسائل السريعة…",
+    "emptyList": "لا توجد رسائل سريعة بعد. انقر على \"جديد\" لإنشاء واحدة.",
+    "emptySelection": "اختر رسالة سريعة للتعديل.",
+    "searchPlaceholder": "ابحث حسب العنوان أو المحتوى",
+    "untitled": "بدون عنوان",
+    "actions": {
+      "new": "جديد",
+      "save": "حفظ",
+      "delete": "حذف",
+      "dragSort": "اسحب لإعادة الترتيب",
+      "dragSortMessage": "اسحب لإعادة ترتيب الرسالة السريعة: {name}"
+    },
+    "fields": {
+      "title": "العنوان",
+      "titlePlaceholder": "أعطِ هذه الرسالة عنوانًا قصيرًا",
+      "content": "المحتوى",
+      "contentPlaceholder": "اكتب محتوى الرسالة هنا"
+    },
+    "confirmDelete": {
+      "title": "حذف الرسالة السريعة؟",
+      "message": "سيؤدي ذلك إلى حذف \"{name}\" نهائيًا. هل أنت متأكد؟",
+      "cancel": "إلغاء",
+      "confirm": "حذف"
+    },
+    "toasts": {
+      "loadFailed": "فشل تحميل الرسائل السريعة",
+      "createFailed": "فشل إنشاء الرسالة السريعة",
+      "saveFailed": "فشل حفظ الرسالة السريعة",
+      "deleteFailed": "فشل حذف الرسالة السريعة",
+      "saveOrderFailed": "فشل حفظ الترتيب",
+      "created": "تم إنشاء الرسالة السريعة",
+      "saved": "تم حفظ الرسالة السريعة",
+      "deleted": "تم حذف الرسالة السريعة"
     }
   }
 }

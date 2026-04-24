@@ -47,7 +47,8 @@
       "chat_channels": "Canais de chat",
       "web_service": "Serviço Web",
       "model_providers": "Provedores de Modelos",
-      "experts": "Especialistas"
+      "experts": "Especialistas",
+      "quick_messages": "Mensagens rápidas"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "Falha ao ativar o especialista",
       "disableFailed": "Falha ao desativar o especialista",
       "openFolderFailed": "Falha ao abrir a pasta"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "Mensagens rápidas",
+    "description": "Gerencie trechos de mensagens reutilizáveis. Arraste para reordenar.",
+    "loading": "Carregando mensagens rápidas…",
+    "emptyList": "Ainda não há mensagens rápidas. Clique em \"Nova\" para criar uma.",
+    "emptySelection": "Selecione uma mensagem rápida para editar.",
+    "searchPlaceholder": "Pesquisar por título ou conteúdo",
+    "untitled": "Sem título",
+    "actions": {
+      "new": "Nova",
+      "save": "Salvar",
+      "delete": "Excluir",
+      "dragSort": "Arraste para reordenar",
+      "dragSortMessage": "Arrastar para reordenar mensagem rápida: {name}"
+    },
+    "fields": {
+      "title": "Título",
+      "titlePlaceholder": "Dê um título curto a esta mensagem",
+      "content": "Conteúdo",
+      "contentPlaceholder": "Digite aqui o conteúdo da mensagem"
+    },
+    "confirmDelete": {
+      "title": "Excluir mensagem rápida?",
+      "message": "Isso excluirá permanentemente \"{name}\". Tem certeza?",
+      "cancel": "Cancelar",
+      "confirm": "Excluir"
+    },
+    "toasts": {
+      "loadFailed": "Falha ao carregar mensagens rápidas",
+      "createFailed": "Falha ao criar mensagem rápida",
+      "saveFailed": "Falha ao salvar mensagem rápida",
+      "deleteFailed": "Falha ao excluir mensagem rápida",
+      "saveOrderFailed": "Falha ao salvar a ordem",
+      "created": "Mensagem rápida criada",
+      "saved": "Mensagem rápida salva",
+      "deleted": "Mensagem rápida excluída"
     }
   }
 }

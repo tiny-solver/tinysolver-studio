@@ -24,7 +24,8 @@ mod tauri_app {
     use crate::commands::{
         acp as acp_commands, chat_channel as chat_channel_commands, conversations,
         experts as experts_commands, folder_commands, folders, mcp as mcp_commands,
-        model_provider as model_provider_commands, notification, project_boot, system_settings,
+        model_provider as model_provider_commands, notification, project_boot,
+        quick_messages as quick_messages_commands, system_settings,
         terminal as terminal_commands, version_control, windows,
         workspace_state as workspace_state_commands,
     };
@@ -354,6 +355,11 @@ mod tauri_app {
                 folder_commands::delete_folder_command,
                 folder_commands::reorder_folder_commands,
                 folder_commands::bootstrap_folder_commands_from_package_json,
+                quick_messages_commands::quick_messages_list,
+                quick_messages_commands::quick_messages_create,
+                quick_messages_commands::quick_messages_update,
+                quick_messages_commands::quick_messages_delete,
+                quick_messages_commands::quick_messages_reorder,
                 terminal_commands::terminal_spawn,
                 terminal_commands::terminal_write,
                 terminal_commands::terminal_resize,

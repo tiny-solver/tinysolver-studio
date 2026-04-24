@@ -47,7 +47,8 @@
       "chat_channels": "訊息頻道",
       "web_service": "Web 服務",
       "model_providers": "模型供應商",
-      "experts": "專家"
+      "experts": "專家",
+      "quick_messages": "快捷訊息"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "啟用專家失敗",
       "disableFailed": "停用專家失敗",
       "openFolderFailed": "開啟目錄失敗"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "快捷訊息",
+    "description": "管理可重用的訊息片段。拖曳以調整順序。",
+    "loading": "載入快捷訊息…",
+    "emptyList": "尚無快捷訊息。點擊「新增」建立一條。",
+    "emptySelection": "選擇一條快捷訊息進行編輯。",
+    "searchPlaceholder": "依標題或內容搜尋",
+    "untitled": "未命名",
+    "actions": {
+      "new": "新增",
+      "save": "儲存",
+      "delete": "刪除",
+      "dragSort": "拖曳排序",
+      "dragSortMessage": "拖曳排序快捷訊息：{name}"
+    },
+    "fields": {
+      "title": "標題",
+      "titlePlaceholder": "為此訊息取一個簡短的標題",
+      "content": "內容",
+      "contentPlaceholder": "在此輸入訊息內容"
+    },
+    "confirmDelete": {
+      "title": "刪除快捷訊息？",
+      "message": "將永久刪除「{name}」。確定嗎？",
+      "cancel": "取消",
+      "confirm": "刪除"
+    },
+    "toasts": {
+      "loadFailed": "載入快捷訊息失敗",
+      "createFailed": "建立快捷訊息失敗",
+      "saveFailed": "儲存快捷訊息失敗",
+      "deleteFailed": "刪除快捷訊息失敗",
+      "saveOrderFailed": "儲存順序失敗",
+      "created": "已建立快捷訊息",
+      "saved": "已儲存快捷訊息",
+      "deleted": "已刪除快捷訊息"
     }
   }
 }

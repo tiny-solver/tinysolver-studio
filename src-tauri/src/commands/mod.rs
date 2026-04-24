@@ -9,6 +9,7 @@ pub mod model_provider;
 #[cfg(feature = "tauri-runtime")]
 pub mod notification;
 pub mod project_boot;
+pub mod quick_messages;
 pub mod system_settings;
 pub mod terminal;
 pub mod version_control;

@@ -47,7 +47,8 @@
       "chat_channels": "Canales de chat",
       "web_service": "Servicio Web",
       "model_providers": "Proveedores de Modelos",
-      "experts": "Expertos"
+      "experts": "Expertos",
+      "quick_messages": "Mensajes rápidos"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "Error al habilitar el experto",
       "disableFailed": "Error al deshabilitar el experto",
       "openFolderFailed": "Error al abrir la carpeta"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "Mensajes rápidos",
+    "description": "Gestiona fragmentos de mensajes reutilizables. Arrastra para reordenar.",
+    "loading": "Cargando mensajes rápidos…",
+    "emptyList": "Aún no hay mensajes rápidos. Haz clic en \"Nuevo\" para crear uno.",
+    "emptySelection": "Selecciona un mensaje rápido para editar.",
+    "searchPlaceholder": "Buscar por título o contenido",
+    "untitled": "Sin título",
+    "actions": {
+      "new": "Nuevo",
+      "save": "Guardar",
+      "delete": "Eliminar",
+      "dragSort": "Arrastra para reordenar",
+      "dragSortMessage": "Arrastra para reordenar mensaje rápido: {name}"
+    },
+    "fields": {
+      "title": "Título",
+      "titlePlaceholder": "Asigna un título corto a este mensaje",
+      "content": "Contenido",
+      "contentPlaceholder": "Escribe aquí el contenido del mensaje"
+    },
+    "confirmDelete": {
+      "title": "¿Eliminar mensaje rápido?",
+      "message": "Esto eliminará permanentemente \"{name}\". ¿Estás seguro?",
+      "cancel": "Cancelar",
+      "confirm": "Eliminar"
+    },
+    "toasts": {
+      "loadFailed": "Error al cargar mensajes rápidos",
+      "createFailed": "Error al crear el mensaje rápido",
+      "saveFailed": "Error al guardar el mensaje rápido",
+      "deleteFailed": "Error al eliminar el mensaje rápido",
+      "saveOrderFailed": "Error al guardar el orden",
+      "created": "Mensaje rápido creado",
+      "saved": "Mensaje rápido guardado",
+      "deleted": "Mensaje rápido eliminado"
     }
   }
 }

@@ -47,7 +47,8 @@
       "chat_channels": "채팅 채널",
       "web_service": "웹 서비스",
       "model_providers": "모델 제공업체",
-      "experts": "전문가"
+      "experts": "전문가",
+      "quick_messages": "빠른 메시지"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "전문가 활성화에 실패했습니다",
       "disableFailed": "전문가 비활성화에 실패했습니다",
       "openFolderFailed": "폴더를 열지 못했습니다"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "빠른 메시지",
+    "description": "재사용 가능한 메시지 스니펫을 관리합니다. 드래그하여 순서를 변경하세요.",
+    "loading": "빠른 메시지 불러오는 중…",
+    "emptyList": "빠른 메시지가 없습니다. \"새로 만들기\"를 클릭하여 추가하세요.",
+    "emptySelection": "편집할 빠른 메시지를 선택하세요.",
+    "searchPlaceholder": "제목 또는 내용으로 검색",
+    "untitled": "제목 없음",
+    "actions": {
+      "new": "새로 만들기",
+      "save": "저장",
+      "delete": "삭제",
+      "dragSort": "드래그하여 순서 변경",
+      "dragSortMessage": "빠른 메시지 순서 변경: {name}"
+    },
+    "fields": {
+      "title": "제목",
+      "titlePlaceholder": "이 메시지에 짧은 제목을 지정하세요",
+      "content": "내용",
+      "contentPlaceholder": "여기에 메시지 내용을 입력하세요"
+    },
+    "confirmDelete": {
+      "title": "빠른 메시지를 삭제하시겠습니까?",
+      "message": "\"{name}\" 이(가) 영구적으로 삭제됩니다. 계속하시겠습니까?",
+      "cancel": "취소",
+      "confirm": "삭제"
+    },
+    "toasts": {
+      "loadFailed": "빠른 메시지를 불러오지 못했습니다",
+      "createFailed": "빠른 메시지를 만들지 못했습니다",
+      "saveFailed": "빠른 메시지를 저장하지 못했습니다",
+      "deleteFailed": "빠른 메시지를 삭제하지 못했습니다",
+      "saveOrderFailed": "순서를 저장하지 못했습니다",
+      "created": "빠른 메시지가 생성되었습니다",
+      "saved": "빠른 메시지가 저장되었습니다",
+      "deleted": "빠른 메시지가 삭제되었습니다"
     }
   }
 }

@@ -47,7 +47,8 @@
       "chat_channels": "チャットチャンネル",
       "web_service": "Webサービス",
       "model_providers": "モデルプロバイダー",
-      "experts": "エキスパート"
+      "experts": "エキスパート",
+      "quick_messages": "クイックメッセージ"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "エキスパートの有効化に失敗しました",
       "disableFailed": "エキスパートの無効化に失敗しました",
       "openFolderFailed": "フォルダを開けませんでした"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "クイックメッセージ",
+    "description": "再利用可能なメッセージスニペットを管理します。ドラッグして並べ替えできます。",
+    "loading": "クイックメッセージを読み込み中…",
+    "emptyList": "クイックメッセージはまだありません。「新規」をクリックして作成してください。",
+    "emptySelection": "編集するクイックメッセージを選択してください。",
+    "searchPlaceholder": "タイトルまたは内容で検索",
+    "untitled": "無題",
+    "actions": {
+      "new": "新規",
+      "save": "保存",
+      "delete": "削除",
+      "dragSort": "ドラッグして並べ替え",
+      "dragSortMessage": "クイックメッセージを並べ替え: {name}"
+    },
+    "fields": {
+      "title": "タイトル",
+      "titlePlaceholder": "このメッセージに短いタイトルを付けてください",
+      "content": "内容",
+      "contentPlaceholder": "ここにメッセージ内容を入力してください"
+    },
+    "confirmDelete": {
+      "title": "クイックメッセージを削除しますか？",
+      "message": "「{name}」を完全に削除します。よろしいですか？",
+      "cancel": "キャンセル",
+      "confirm": "削除"
+    },
+    "toasts": {
+      "loadFailed": "クイックメッセージの読み込みに失敗しました",
+      "createFailed": "クイックメッセージの作成に失敗しました",
+      "saveFailed": "クイックメッセージの保存に失敗しました",
+      "deleteFailed": "クイックメッセージの削除に失敗しました",
+      "saveOrderFailed": "順序の保存に失敗しました",
+      "created": "クイックメッセージを作成しました",
+      "saved": "クイックメッセージを保存しました",
+      "deleted": "クイックメッセージを削除しました"
     }
   }
 }

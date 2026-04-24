@@ -63,6 +63,7 @@ import type {
   ChatChannelMessageLog,
   ModelProviderInfo,
   PluginCheckSummary,
+  QuickMessage,
 } from "./types"
 
 export async function listConversations(params?: {
@@ -1256,6 +1257,42 @@ export async function bootstrapFolderCommandsFromPackageJson(
     folderId,
     folderPath,
   })
+}
+
+// Quick message management
+
+export async function quickMessagesList(): Promise<QuickMessage[]> {
+  return getTransport().call("quick_messages_list")
+}
+
+export async function quickMessagesCreate(params: {
+  title: string
+  content: string
+}): Promise<QuickMessage> {
+  return getTransport().call("quick_messages_create", {
+    title: params.title,
+    content: params.content,
+  })
+}
+
+export async function quickMessagesUpdate(params: {
+  id: number
+  title?: string
+  content?: string
+}): Promise<QuickMessage> {
+  return getTransport().call("quick_messages_update", {
+    id: params.id,
+    title: params.title ?? null,
+    content: params.content ?? null,
+  })
+}
+
+export async function quickMessagesDelete(id: number): Promise<void> {
+  return getTransport().call("quick_messages_delete", { id })
+}
+
+export async function quickMessagesReorder(ids: number[]): Promise<void> {
+  return getTransport().call("quick_messages_reorder", { ids })
 }
 
 // Directory browser (for web/server mode)

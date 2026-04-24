@@ -47,7 +47,8 @@
       "chat_channels": "消息渠道",
       "web_service": "Web 服务",
       "model_providers": "模型供应商",
-      "experts": "专家"
+      "experts": "专家",
+      "quick_messages": "快捷消息"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "启用专家失败",
       "disableFailed": "禁用专家失败",
       "openFolderFailed": "打开目录失败"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "快捷消息",
+    "description": "管理可复用的消息片段。拖拽以调整顺序。",
+    "loading": "加载快捷消息…",
+    "emptyList": "暂无快捷消息。点击“新建”创建一条。",
+    "emptySelection": "选择一条快捷消息进行编辑。",
+    "searchPlaceholder": "按标题或内容搜索",
+    "untitled": "未命名",
+    "actions": {
+      "new": "新建",
+      "save": "保存",
+      "delete": "删除",
+      "dragSort": "拖拽排序",
+      "dragSortMessage": "拖拽排序快捷消息：{name}"
+    },
+    "fields": {
+      "title": "标题",
+      "titlePlaceholder": "为此消息取一个简短的标题",
+      "content": "内容",
+      "contentPlaceholder": "在此输入消息内容"
+    },
+    "confirmDelete": {
+      "title": "删除快捷消息？",
+      "message": "将永久删除“{name}”。确定吗？",
+      "cancel": "取消",
+      "confirm": "删除"
+    },
+    "toasts": {
+      "loadFailed": "加载快捷消息失败",
+      "createFailed": "创建快捷消息失败",
+      "saveFailed": "保存快捷消息失败",
+      "deleteFailed": "删除快捷消息失败",
+      "saveOrderFailed": "保存顺序失败",
+      "created": "已创建快捷消息",
+      "saved": "已保存快捷消息",
+      "deleted": "已删除快捷消息"
     }
   }
 }

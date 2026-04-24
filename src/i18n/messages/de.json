@@ -47,7 +47,8 @@
       "chat_channels": "Chat-Kanäle",
       "web_service": "Webdienst",
       "model_providers": "Modellanbieter",
-      "experts": "Experten"
+      "experts": "Experten",
+      "quick_messages": "Schnellnachrichten"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "Aktivieren des Experten fehlgeschlagen",
       "disableFailed": "Deaktivieren des Experten fehlgeschlagen",
       "openFolderFailed": "Ordner konnte nicht geöffnet werden"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "Schnellnachrichten",
+    "description": "Verwalte wiederverwendbare Nachrichtenbausteine. Ziehe zum Neuordnen.",
+    "loading": "Schnellnachrichten werden geladen…",
+    "emptyList": "Noch keine Schnellnachrichten. Klicke auf \"Neu\", um eine zu erstellen.",
+    "emptySelection": "Wähle eine Schnellnachricht zum Bearbeiten aus.",
+    "searchPlaceholder": "Nach Titel oder Inhalt suchen",
+    "untitled": "Ohne Titel",
+    "actions": {
+      "new": "Neu",
+      "save": "Speichern",
+      "delete": "Löschen",
+      "dragSort": "Zum Neuordnen ziehen",
+      "dragSortMessage": "Schnellnachricht neu ordnen: {name}"
+    },
+    "fields": {
+      "title": "Titel",
+      "titlePlaceholder": "Gib dieser Nachricht einen kurzen Titel",
+      "content": "Inhalt",
+      "contentPlaceholder": "Gib hier den Nachrichteninhalt ein"
+    },
+    "confirmDelete": {
+      "title": "Schnellnachricht löschen?",
+      "message": "Dadurch wird \"{name}\" dauerhaft gelöscht. Bist du sicher?",
+      "cancel": "Abbrechen",
+      "confirm": "Löschen"
+    },
+    "toasts": {
+      "loadFailed": "Laden der Schnellnachrichten fehlgeschlagen",
+      "createFailed": "Erstellen der Schnellnachricht fehlgeschlagen",
+      "saveFailed": "Speichern der Schnellnachricht fehlgeschlagen",
+      "deleteFailed": "Löschen der Schnellnachricht fehlgeschlagen",
+      "saveOrderFailed": "Reihenfolge konnte nicht gespeichert werden",
+      "created": "Schnellnachricht erstellt",
+      "saved": "Schnellnachricht gespeichert",
+      "deleted": "Schnellnachricht gelöscht"
     }
   }
 }

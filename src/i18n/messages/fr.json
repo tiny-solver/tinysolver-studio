@@ -47,7 +47,8 @@
       "chat_channels": "Canaux de chat",
       "web_service": "Service Web",
       "model_providers": "Fournisseurs de Modèles",
-      "experts": "Experts"
+      "experts": "Experts",
+      "quick_messages": "Messages rapides"
     }
   },
   "AppearanceSettings": {
@@ -2107,6 +2108,44 @@
       "enableFailed": "Échec de l'activation de l'expert",
       "disableFailed": "Échec de la désactivation de l'expert",
       "openFolderFailed": "Échec de l'ouverture du dossier"
+    }
+  },
+  "QuickMessagesSettings": {
+    "title": "Messages rapides",
+    "description": "Gérez des extraits de messages réutilisables. Glissez pour réorganiser.",
+    "loading": "Chargement des messages rapides…",
+    "emptyList": "Aucun message rapide. Cliquez sur « Nouveau » pour en créer un.",
+    "emptySelection": "Sélectionnez un message rapide à modifier.",
+    "searchPlaceholder": "Rechercher par titre ou contenu",
+    "untitled": "Sans titre",
+    "actions": {
+      "new": "Nouveau",
+      "save": "Enregistrer",
+      "delete": "Supprimer",
+      "dragSort": "Glisser pour réorganiser",
+      "dragSortMessage": "Réorganiser le message rapide : {name}"
+    },
+    "fields": {
+      "title": "Titre",
+      "titlePlaceholder": "Donnez un titre court à ce message",
+      "content": "Contenu",
+      "contentPlaceholder": "Saisissez ici le contenu du message"
+    },
+    "confirmDelete": {
+      "title": "Supprimer le message rapide ?",
+      "message": "Cela supprimera définitivement « {name} ». Êtes-vous sûr ?",
+      "cancel": "Annuler",
+      "confirm": "Supprimer"
+    },
+    "toasts": {
+      "loadFailed": "Échec du chargement des messages rapides",
+      "createFailed": "Échec de la création du message rapide",
+      "saveFailed": "Échec de l'enregistrement du message rapide",
+      "deleteFailed": "Échec de la suppression du message rapide",
+      "saveOrderFailed": "Échec de l'enregistrement de l'ordre",
+      "created": "Message rapide créé",
+      "saved": "Message rapide enregistré",
+      "deleted": "Message rapide supprimé"
     }
   }
 }

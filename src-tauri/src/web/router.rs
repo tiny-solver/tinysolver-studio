@@ -631,6 +631,27 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
             "/delete_model_provider",
             post(handlers::model_provider::delete_model_provider),
         )
+        // ─── Quick Messages ───
+        .route(
+            "/quick_messages_list",
+            post(handlers::quick_messages::quick_messages_list),
+        )
+        .route(
+            "/quick_messages_create",
+            post(handlers::quick_messages::quick_messages_create),
+        )
+        .route(
+            "/quick_messages_update",
+            post(handlers::quick_messages::quick_messages_update),
+        )
+        .route(
+            "/quick_messages_delete",
+            post(handlers::quick_messages::quick_messages_delete),
+        )
+        .route(
+            "/quick_messages_reorder",
+            post(handlers::quick_messages::quick_messages_reorder),
+        )
         // ─── Terminal ───
         .route("/terminal_spawn", post(handlers::terminal::terminal_spawn))
         .route("/terminal_write", post(handlers::terminal::terminal_write))

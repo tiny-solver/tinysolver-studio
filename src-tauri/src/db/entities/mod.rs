@@ -9,3 +9,4 @@ pub mod folder_command;
 pub mod model_provider;
 pub mod opened_tab;
 pub mod prelude;
+pub mod quick_message;
