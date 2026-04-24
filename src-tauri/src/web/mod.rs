@@ -22,6 +22,7 @@ pub const DEFAULT_WEB_SERVICE_PORT: u16 = 3080;
 
 pub struct WebServerState {
     handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    shutdown_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     port: AtomicU16,
     token: Mutex<String>,
     running: std::sync::atomic::AtomicBool,
@@ -37,6 +38,7 @@ impl WebServerState {
     pub fn new() -> Self {
         Self {
             handle: Mutex::new(None),
+            shutdown_tx: Mutex::new(None),
             port: AtomicU16::new(0),
             token: Mutex::new(String::new()),
             running: std::sync::atomic::AtomicBool::new(false),
@@ -323,13 +325,18 @@ pub(crate) async fn do_start_web_server_with_state(
     let actual_port = listener.local_addr().map(|a| a.port()).unwrap_or(port);
     eprintln!("[WEB] Starting web server on {}", addr);
 
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let handle = tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, router).await {
+        let serve = axum::serve(listener, router).with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+        });
+        if let Err(e) = serve.await {
             eprintln!("[WEB] Server error: {}", e);
         }
     });
 
     *ws.handle.lock().unwrap() = Some(handle);
+    *ws.shutdown_tx.lock().unwrap() = Some(shutdown_tx);
     ws.port.store(actual_port, Ordering::Relaxed);
     *ws.token.lock().unwrap() = token.clone();
     // running already true from compare_exchange; disarm guard so it doesn't flip back.
@@ -343,13 +350,34 @@ pub(crate) async fn do_start_web_server_with_state(
     })
 }
 
-pub(crate) fn do_stop_web_server(state: &WebServerState) {
-    if let Some(handle) = state.handle.lock().unwrap().take() {
-        handle.abort();
+pub(crate) async fn do_stop_web_server(state: &WebServerState) {
+    let handle_opt = state.handle.lock().unwrap().take();
+    let shutdown_tx = state.shutdown_tx.lock().unwrap().take();
+
+    // Signal graceful shutdown so axum stops accepting new connections
+    // and drops the listening socket once the serve future resolves.
+    if let Some(tx) = shutdown_tx {
+        let _ = tx.send(());
     }
-    state.running.store(false, Ordering::Relaxed);
+
+    // Await the serve task so the OS socket is guaranteed released before we return.
+    // A live WebSocket/keep-alive connection can block graceful drain; after a
+    // short grace period, force-abort and await the cancellation to complete.
+    if let Some(mut handle) = handle_opt {
+        if tokio::time::timeout(std::time::Duration::from_secs(2), &mut handle)
+            .await
+            .is_err()
+        {
+            handle.abort();
+            let _ = handle.await;
+        }
+    }
+
+    // Only release the running flag after the listener is guaranteed dropped,
+    // so a concurrent start() cannot race into a bind() while the old socket lingers.
     state.port.store(0, Ordering::Relaxed);
     *state.token.lock().unwrap() = String::new();
+    state.running.store(false, Ordering::Release);
     eprintln!("[WEB] Web server stopped");
 }
 
@@ -438,13 +466,18 @@ pub async fn start_web_server(
     let actual_port = listener.local_addr().map(|a| a.port()).unwrap_or(port_val);
     eprintln!("[WEB] Starting web server on {}", addr);
 
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let handle = tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, router).await {
+        let serve = axum::serve(listener, router).with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+        });
+        if let Err(e) = serve.await {
             eprintln!("[WEB] Server error: {}", e);
         }
     });
 
     *ws.handle.lock().unwrap() = Some(handle);
+    *ws.shutdown_tx.lock().unwrap() = Some(shutdown_tx);
     ws.port.store(actual_port, Ordering::Relaxed);
     *ws.token.lock().unwrap() = token.clone();
     // running already true from compare_exchange; disarm guard so it doesn't flip back.
@@ -463,7 +496,7 @@ pub async fn start_web_server(
 pub async fn stop_web_server(
     state: tauri::State<'_, WebServerState>,
 ) -> Result<(), AppCommandError> {
-    do_stop_web_server(&state);
+    do_stop_web_server(&state).await;
     Ok(())
 }
 

@@ -42,7 +42,7 @@ pub async fn start_web_server(
 pub async fn stop_web_server(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<()>, AppCommandError> {
-    do_stop_web_server(&state.web_server_state);
+    do_stop_web_server(&state.web_server_state).await;
     Ok(Json(()))
 }
 
