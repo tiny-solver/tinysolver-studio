@@ -1,7 +1,5 @@
 "use client"
 
-import type { AgentType } from "@/lib/types"
-
 interface PersistedDraftState {
   text: string
 }
@@ -83,16 +81,13 @@ function scheduleDraftPersistence(): void {
 }
 
 export function buildConversationDraftStorageKey(
-  agentType: AgentType,
   conversationId: number
 ): string {
-  return `conv:${agentType}:${conversationId}`
+  return `conv:${conversationId}`
 }
 
-export function buildNewConversationDraftStorageKey(params: {
-  tabId: string
-}): string {
-  return `new:${params.tabId}`
+export function buildNewConversationDraftStorageKey(): string {
+  return "new"
 }
 
 export function loadMessageInputDraft(draftKey: string): string | null {
@@ -136,18 +131,4 @@ export function clearMessageInputDraft(draftKey: string): void {
   } catch {
     /* ignore */
   }
-}
-
-export function moveMessageInputDraft(
-  fromDraftKey: string,
-  toDraftKey: string
-): void {
-  if (fromDraftKey === toDraftKey) return
-
-  const sourceText = loadMessageInputDraft(fromDraftKey)
-  const targetText = loadMessageInputDraft(toDraftKey)
-  if (sourceText && !targetText) {
-    saveMessageInputDraft(toDraftKey, sourceText)
-  }
-  clearMessageInputDraft(fromDraftKey)
 }

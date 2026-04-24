@@ -66,7 +66,7 @@ import {
 import {
   buildConversationDraftStorageKey,
   buildNewConversationDraftStorageKey,
-  moveMessageInputDraft,
+  clearMessageInputDraft,
 } from "@/lib/message-input-draft"
 import {
   ContextMenu,
@@ -268,10 +268,10 @@ const ConversationTabView = memo(function ConversationTabView({
   const externalId = detail?.summary.external_id ?? undefined
   const draftStorageKey = useMemo(() => {
     if (dbConversationId != null) {
-      return buildConversationDraftStorageKey(selectedAgent, dbConversationId)
+      return buildConversationDraftStorageKey(dbConversationId)
     }
-    return buildNewConversationDraftStorageKey({ tabId })
-  }, [dbConversationId, tabId, selectedAgent])
+    return buildNewConversationDraftStorageKey()
+  }, [dbConversationId])
   // Use the per-tab workingDir (derived from the tab's own folderId by the
   // parent) rather than the active folder's path — otherwise switching tabs
   // briefly exposes the previous folder's path to the ACP auto-connect
@@ -625,10 +625,7 @@ const ConversationTabView = memo(function ConversationTabView({
             title,
             effectiveConversationId
           )
-          moveMessageInputDraft(
-            buildNewConversationDraftStorageKey({ tabId }),
-            buildConversationDraftStorageKey(selectedAgent, newConversationId)
-          )
+          clearMessageInputDraft(buildNewConversationDraftStorageKey())
           statusUpdatedRef.current = false
           // If the turn already finished while we were creating the
           // conversation, apply the deferred status directly instead

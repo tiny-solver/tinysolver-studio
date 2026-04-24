@@ -407,7 +407,7 @@ export function MessageInput({
     [tExperts]
   )
   const { shortcuts } = useShortcutSettings()
-  const effectiveDraftStorageKey = draftStorageKey ?? attachmentTabId ?? null
+  const effectiveDraftStorageKey = draftStorageKey ?? null
   const resolvedPlaceholder = placeholder ?? t("askAnything")
   const [text, setText] = useState(() => {
     if (!effectiveDraftStorageKey) return ""
