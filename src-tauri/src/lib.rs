@@ -409,7 +409,7 @@ mod tauri_app {
                 if let tauri::RunEvent::ExitRequested { .. } = event {
                     APP_QUITTING.store(true, Ordering::Relaxed);
                     if let Some(ws) = app.try_state::<web::WebServerState>() {
-                        web::do_stop_web_server(&ws);
+                        tauri::async_runtime::block_on(web::do_stop_web_server(&ws));
                     }
                     if let Some(tm) = app.try_state::<TerminalManager>() {
                         tm.kill_all();
