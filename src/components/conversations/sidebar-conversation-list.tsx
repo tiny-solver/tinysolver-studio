@@ -335,6 +335,7 @@ interface FolderGroupItemProps {
   folderId: number
   folderName: string
   conversations: DbConversationSummary[]
+  totalConversationCount: number
   expanded: boolean
   importing: boolean
   reordering: boolean
@@ -367,6 +368,7 @@ function FolderGroupItem({
   folderId,
   folderName,
   conversations,
+  totalConversationCount,
   expanded,
   importing,
   reordering,
@@ -456,27 +458,40 @@ function FolderGroupItem({
           />
         </div>
         {expanded &&
-          conversations.map((conv) => (
-            <SidebarConversationCard
-              key={`conv-${conv.agent_type}-${conv.id}`}
-              conversation={conv}
-              isSelected={
-                selectedConversation?.agentType === conv.agent_type &&
-                selectedConversation?.id === conv.id
-              }
-              isOpenInTab={openTabConversationKeys.has(
-                `${conv.agent_type}:${conv.id}`
-              )}
-              timeLabel={formatRelative(
-                sortMode === "updated" ? conv.updated_at : conv.created_at
-              )}
-              onSelect={onSelect}
-              onDoubleClick={onDoubleClick}
-              onRename={onRename}
-              onDelete={onDelete}
-              onStatusChange={onStatusChange}
-              onNewConversation={onNewConversation}
-            />
+          (conversations.length === 0 ? (
+            <div
+              className="py-[0.375rem] text-[0.75rem] text-muted-foreground/70"
+              style={{
+                paddingLeft: "calc(var(--conv-rail-axis) + 0.875rem)",
+              }}
+            >
+              {totalConversationCount === 0
+                ? t("emptyFolderHint")
+                : t("noMatchingConversations")}
+            </div>
+          ) : (
+            conversations.map((conv) => (
+              <SidebarConversationCard
+                key={`conv-${conv.agent_type}-${conv.id}`}
+                conversation={conv}
+                isSelected={
+                  selectedConversation?.agentType === conv.agent_type &&
+                  selectedConversation?.id === conv.id
+                }
+                isOpenInTab={openTabConversationKeys.has(
+                  `${conv.agent_type}:${conv.id}`
+                )}
+                timeLabel={formatRelative(
+                  sortMode === "updated" ? conv.updated_at : conv.created_at
+                )}
+                onSelect={onSelect}
+                onDoubleClick={onDoubleClick}
+                onRename={onRename}
+                onDelete={onDelete}
+                onStatusChange={onStatusChange}
+                onNewConversation={onNewConversation}
+              />
+            ))
           ))}
       </Reorder.Item>
     </div>
@@ -618,6 +633,14 @@ export function SidebarConversationList({
     for (const list of map.values()) list.sort(comparator)
     return map
   }, [filteredConversations, sortMode])
+
+  const folderTotalCounts = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const conv of conversations) {
+      map.set(conv.folder_id, (map.get(conv.folder_id) ?? 0) + 1)
+    }
+    return map
+  }, [conversations])
 
   const orderedFolderIds = useMemo(() => {
     const folderIdSet = new Set(folders.map((f) => f.id))
@@ -1036,6 +1059,9 @@ export function SidebarConversationList({
                         folderId={folderId}
                         folderName={folderName}
                         conversations={convsWithKey}
+                        totalConversationCount={
+                          folderTotalCounts.get(folderId) ?? 0
+                        }
                         expanded={expanded}
                         importing={importing}
                         reordering={reordering}
