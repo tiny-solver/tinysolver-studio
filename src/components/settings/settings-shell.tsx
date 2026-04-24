@@ -73,14 +73,14 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: Sparkles,
   },
   {
-    href: "/settings/quick-messages",
-    labelKey: "quick_messages",
-    icon: MessageSquareText,
-  },
-  {
     href: "/settings/agents",
     labelKey: "agents",
     icon: Bot,
+  },
+  {
+    href: "/settings/quick-messages",
+    labelKey: "quick_messages",
+    icon: MessageSquareText,
   },
   {
     href: "/settings/model-providers",
