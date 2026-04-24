@@ -108,7 +108,7 @@ pub fn spawn_event_subscriber(
             last_push.retain(|_, t| t.elapsed() < Duration::from_secs(DEBOUNCE_SECS * 2));
 
             if let Some((event_type, msg)) =
-                parse_event(&event.channel, &event.payload, config.lang)
+                parse_event(&event.channel, event.payload.as_ref(), config.lang)
             {
                 // Global event filter check
                 if let Some(filter) = &config.global_filter {

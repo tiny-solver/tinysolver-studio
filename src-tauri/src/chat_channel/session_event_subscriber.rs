@@ -48,7 +48,7 @@ pub fn spawn_session_event_subscriber(
 
                     if event.channel == "acp://event" {
                         handle_acp_event_payload(
-                            &event.payload,
+                            event.payload.as_ref(),
                             &bridge,
                             &manager,
                             &conn_mgr,
