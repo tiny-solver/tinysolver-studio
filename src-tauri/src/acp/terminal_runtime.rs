@@ -123,6 +123,16 @@ impl TerminalInstance {
         };
 
         if let Some(status) = maybe_status {
+            // Drain readers BEFORE exposing exit_status. Otherwise a caller
+            // polling `terminal/output` can see `exit_status = Some(...)` while
+            // a grandchild process (e.g. Node spawned from a `.cmd` shim on
+            // Windows) still holds the stdout/stderr pipe and is flushing
+            // tail output. If the agent treats exit_status as "terminal done",
+            // the trailing bytes never reach the UI. Draining here upholds the
+            // invariant: whenever an external observer sees exit_status, the
+            // snapshot already contains (or has explicitly given up on) all
+            // reader output.
+            self.drain_readers().await;
             let mut snapshot = self.snapshot.lock().await;
             snapshot.exit_status = Some(map_exit_status(status));
         }
