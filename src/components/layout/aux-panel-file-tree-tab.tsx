@@ -1084,7 +1084,7 @@ export function FileTreeTab() {
   // reflected in the backend's depth-2 tree_snapshot, so changes inside them
   // don't emit a tree_replace delta — the frontend has to target invalidation
   // by matching each `changed_paths` entry against its cached ancestors.
-  // The backend already debounces raw FS events (1s / 3s max), so we only
+  // The backend already debounces raw FS events (300ms / 1.5s max), so we only
   // need a microtask hop here to merge paths that hit the same cached
   // ancestor within one envelope (or any synchronous burst of envelopes).
   const subscribeWorkspaceEnvelopes = workspaceState.subscribeEnvelopes
