@@ -302,6 +302,8 @@
     "loadingSkill": "Chargement de la Skill...",
     "emptyNoAgents": "Aucun agent disponible.",
     "noSelectionHint": "Sélectionnez un Skill à gauche ou cliquez sur « Nouveau Skill » pour en créer un.",
+    "systemBadge": "Système",
+    "systemHint": "Skill intégré du CLI · lecture seule",
     "scope": {
       "global": "Global",
       "folder": "Dossier",

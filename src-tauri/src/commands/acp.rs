@@ -1397,6 +1397,13 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
             kind: SkillStorageKind::SkillDirectoryOrMarkdownFile,
             global_dirs: vec![
                 codex_home_dir().join("skills"),
+                // `.system` is where Codex CLI stores its own bundled
+                // skills (imagegen, skill-creator, etc.). The directory
+                // name is a Codex convention, not a stable contract —
+                // if Codex renames it we'll silently stop listing them.
+                // `is_read_only_skill_path` mirrors this path to prevent
+                // edit/delete from clobbering CLI assets.
+                codex_home_dir().join("skills").join(".system"),
                 home_dir_or_default().join(".agents").join("skills"),
             ],
             project_rel_dirs: vec![".codex/skills", ".agents/skills"],
@@ -1532,7 +1539,20 @@ fn build_skill_item(
         scope,
         layout,
         path: path.to_string_lossy().to_string(),
+        read_only: false,
     }
+}
+
+/// Codex ships a handful of built-in skills under `~/.codex/skills/.system/`
+/// (imagegen, skill-creator, etc.). We scan that directory so users see
+/// these in the `$` autocomplete and the Skills settings list — but any
+/// write to those files would clobber the CLI's own assets.
+fn is_read_only_skill_path(agent_type: AgentType, skill_path: &Path) -> bool {
+    if agent_type != AgentType::Codex {
+        return false;
+    }
+    let ro_root = codex_home_dir().join("skills").join(".system");
+    skill_path.starts_with(&ro_root)
 }
 
 fn skill_content_path(layout: AgentSkillLayout, skill_path: &Path) -> PathBuf {
@@ -2967,6 +2987,11 @@ pub async fn acp_list_agent_skills(
     }
 
     let mut skills = skills_by_key.into_values().collect::<Vec<_>>();
+    for skill in &mut skills {
+        if is_read_only_skill_path(agent_type, Path::new(&skill.path)) {
+            skill.read_only = true;
+        }
+    }
     skills.sort_by(|a, b| {
         scope_rank(a.scope)
             .cmp(&scope_rank(b.scope))
@@ -2996,8 +3021,11 @@ pub async fn acp_read_agent_skill(
     let id = validate_skill_id(&skill_id)?;
     let dirs = scoped_skill_dirs(agent_type, scope, workspace_path.as_deref())?;
 
-    let skill = locate_existing_skill_across_dirs(&dirs, spec.kind, &id, scope)
+    let mut skill = locate_existing_skill_across_dirs(&dirs, spec.kind, &id, scope)
         .ok_or_else(|| AcpError::protocol(format!("skill not found: {id}")))?;
+    if is_read_only_skill_path(agent_type, Path::new(&skill.path)) {
+        skill.read_only = true;
+    }
     let content_path = skill_content_path(skill.layout, Path::new(&skill.path));
     let content = fs::read_to_string(&content_path)
         .map_err(|e| AcpError::protocol(format!("failed to read skill content: {e}")))?;
@@ -3026,6 +3054,13 @@ pub async fn acp_save_agent_skill(
         .map_err(|e| AcpError::protocol(format!("failed to create skills directory: {e}")))?;
 
     let existing = locate_existing_skill_across_dirs(&dirs, spec.kind, &id, scope);
+    if let Some(ref item) = existing {
+        if is_read_only_skill_path(agent_type, Path::new(&item.path)) {
+            return Err(AcpError::protocol(format!(
+                "skill '{id}' is a built-in system skill and cannot be modified"
+            )));
+        }
+    }
     let skill = if let Some(item) = existing {
         item
     } else {
@@ -3081,6 +3116,11 @@ pub async fn acp_delete_agent_skill(
 
     let skill = locate_existing_skill_across_dirs(&dirs, spec.kind, &id, scope)
         .ok_or_else(|| AcpError::protocol(format!("skill not found: {id}")))?;
+    if is_read_only_skill_path(agent_type, Path::new(&skill.path)) {
+        return Err(AcpError::protocol(format!(
+            "skill '{id}' is a built-in system skill and cannot be deleted"
+        )));
+    }
     let skill_path = PathBuf::from(&skill.path);
     remove_skill_entry(&skill_path)
         .map_err(|e| AcpError::protocol(format!("failed to delete skill entry: {e}")))?;

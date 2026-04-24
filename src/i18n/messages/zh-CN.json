@@ -302,6 +302,8 @@
     "loadingSkill": "正在加载 Skill...",
     "emptyNoAgents": "暂无可用 Agent。",
     "noSelectionHint": "从左侧选择一个 Skill，或点击“新建 Skill”创建。",
+    "systemBadge": "系统",
+    "systemHint": "CLI 内置 Skill · 只读",
     "scope": {
       "global": "全局",
       "folder": "文件夹",

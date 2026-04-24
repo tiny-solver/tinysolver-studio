@@ -990,6 +990,15 @@ export function SkillsSettings() {
                                 >
                                   {skill.scope}
                                 </Badge>
+                                {skill.read_only && (
+                                  <Badge
+                                    variant="outline"
+                                    title={t("systemHint")}
+                                    className="h-6 px-2 inline-flex items-center gap-1 text-xs leading-none shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                  >
+                                    {t("systemBadge")}
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-[11px] text-muted-foreground truncate mt-1">
                                 {skill.path}
@@ -1010,6 +1019,7 @@ export function SkillsSettings() {
                               {t("actions.preview")}
                             </ContextMenuItem>
                             <ContextMenuItem
+                              disabled={skill.read_only}
                               onSelect={() => {
                                 handleEditSkill(skill).catch((err) => {
                                   console.error(
@@ -1034,7 +1044,12 @@ export function SkillsSettings() {
                               {t("actions.openInWindow")}
                             </ContextMenuItem>
                             <ContextMenuItem
-                              disabled={skillSaving || skillReading || deleting}
+                              disabled={
+                                skillSaving ||
+                                skillReading ||
+                                deleting ||
+                                skill.read_only
+                              }
                               onSelect={() => {
                                 handleRequestDeleteSkill(skill)
                               }}
@@ -1097,10 +1112,19 @@ export function SkillsSettings() {
                   selectedSkillId || isDrafting ? (
                     <div className="h-full flex flex-col">
                       <div className="border-b px-4 py-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex items-center gap-2">
                           <h3 className="text-sm font-semibold truncate">
                             {skillDraftId.trim() || t("newSkillTitle")}
                           </h3>
+                          {selectedSkill?.read_only && (
+                            <Badge
+                              variant="outline"
+                              title={t("systemHint")}
+                              className="h-5 px-1.5 text-[10px] leading-none shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                            >
+                              {t("systemBadge")}
+                            </Badge>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -1123,7 +1147,11 @@ export function SkillsSettings() {
                                 )
                               })
                             }}
-                            disabled={skillSaving || skillReading}
+                            disabled={
+                              skillSaving ||
+                              skillReading ||
+                              Boolean(selectedSkill?.read_only)
+                            }
                           >
                             {skillSaving ? (
                               <>
@@ -1189,7 +1217,10 @@ export function SkillsSettings() {
                                 onClick={() => {
                                   setIsContentEditing((prev) => !prev)
                                 }}
-                                disabled={skillReading}
+                                disabled={
+                                  skillReading ||
+                                  Boolean(selectedSkill?.read_only)
+                                }
                               >
                                 {isContentEditing ? (
                                   <>

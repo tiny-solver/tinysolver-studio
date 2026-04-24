@@ -302,6 +302,8 @@
     "loadingSkill": "Loading skill...",
     "emptyNoAgents": "No available agent.",
     "noSelectionHint": "Select a skill on the left, or click \"New Skill\" to create one.",
+    "systemBadge": "System",
+    "systemHint": "Built-in CLI skill · read-only",
     "scope": {
       "global": "Global",
       "folder": "Folder",
