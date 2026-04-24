@@ -398,7 +398,18 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Best-effort human-readable link target. On Windows, `fs::read_link`
+/// does not resolve junctions in all stdlib versions — prefer the
+/// `junction` crate when the path is a reparse point.
 fn read_link_target(path: &Path) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        if path_is_reparse_point(path) {
+            if let Ok(target) = junction::get_target(path) {
+                return Some(target);
+            }
+        }
+    }
     fs::read_link(path).ok()
 }
 
@@ -425,53 +436,64 @@ fn path_is_reparse_point(_path: &Path) -> bool {
     false
 }
 
-fn classify_link(link_path: &Path, expected_target: &Path) -> ExpertLinkState {
-    if !link_path.exists() && !path_is_symlink(link_path) {
-        return ExpertLinkState::NotLinked;
+/// Equality check for two already-canonicalized paths. On Windows the
+/// filesystem is case-insensitive but `Path` comparison is not — canonical
+/// forms can still differ in drive-letter case or user-supplied casing.
+fn paths_equivalent(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
     }
-    // Broken symlink detection: `exists()` returns false if the link
-    // dangles; but we already checked that. Re-check the metadata.
-    match fs::symlink_metadata(link_path) {
-        Ok(meta) => {
-            let is_link_like = meta.file_type().is_symlink() || path_is_reparse_point(link_path);
-            if !is_link_like {
-                return ExpertLinkState::BlockedByRealDirectory;
-            }
-            // Verify the target.
-            match read_link_target(link_path) {
-                Some(target) => {
-                    // Normalize both sides by canonicalizing the expected
-                    // target. The link target may be relative.
-                    let target = if target.is_absolute() {
-                        target
-                    } else if let Some(parent) = link_path.parent() {
-                        parent.join(target)
-                    } else {
-                        target
-                    };
-                    let canonical_target = fs::canonicalize(&target).ok();
-                    let canonical_expected = fs::canonicalize(expected_target).ok();
-                    match (canonical_target.as_ref(), canonical_expected.as_ref()) {
-                        (Some(t), Some(e)) if t == e => ExpertLinkState::LinkedToCodeg,
-                        (Some(_), Some(_)) => ExpertLinkState::LinkedElsewhere,
-                        (None, _) => ExpertLinkState::Broken,
-                        (_, None) => ExpertLinkState::LinkedElsewhere,
-                    }
-                }
-                None => {
-                    // On Windows junctions, `read_link` may fail but the
-                    // directory still resolves. Fall back to canonical
-                    // comparison via the path itself.
-                    let canonical_link = fs::canonicalize(link_path).ok();
-                    let canonical_expected = fs::canonicalize(expected_target).ok();
-                    match (canonical_link, canonical_expected) {
-                        (Some(t), Some(e)) if t == e => ExpertLinkState::LinkedToCodeg,
-                        _ => ExpertLinkState::LinkedElsewhere,
-                    }
-                }
-            }
-        }
-        Err(_) => ExpertLinkState::NotLinked,
+    #[cfg(windows)]
+    {
+        let a_s = a.as_os_str().to_string_lossy();
+        let b_s = b.as_os_str().to_string_lossy();
+        return a_s.eq_ignore_ascii_case(b_s.as_ref());
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// Resolve a path while following symlinks and Windows junctions.
+/// Returns `None` if the path does not exist or cannot be resolved (e.g.
+/// dangling link).
+fn resolve_real_path(path: &Path) -> Option<PathBuf> {
+    fs::canonicalize(path).ok()
+}
+
+fn classify_link(link_path: &Path, expected_target: &Path) -> ExpertLinkState {
+    // No entry at all (not even a dangling link) → not linked.
+    let meta = match fs::symlink_metadata(link_path) {
+        Ok(m) => m,
+        Err(_) => return ExpertLinkState::NotLinked,
+    };
+
+    let is_link_like = meta.file_type().is_symlink() || path_is_reparse_point(link_path);
+    if !is_link_like {
+        // A real directory (or file) sits where we'd put our link.
+        // This also covers Windows copy-mode fallback, where we could not
+        // create a junction and fell back to `copy_dir_recursive`. We still
+        // surface it as BlockedByRealDirectory so experts_link_to_agent
+        // treats it as "needs user attention" (the copy will not track
+        // central-store updates and must be re-linked explicitly).
+        return ExpertLinkState::BlockedByRealDirectory;
+    }
+
+    // `fs::canonicalize` transparently follows both symlinks and Windows
+    // junctions, so comparing the two canonical forms is the single
+    // source of truth for "does this link point at our central store?".
+    // We intentionally do *not* rely on `fs::read_link`'s string output
+    // for equality — on Windows junctions its output format is
+    // stdlib-version-dependent and often fails to round-trip through
+    // `canonicalize` cleanly.
+    let resolved_link = resolve_real_path(link_path);
+    let resolved_expected = resolve_real_path(expected_target);
+
+    match (resolved_link, resolved_expected) {
+        (None, _) => ExpertLinkState::Broken,
+        (Some(l), Some(e)) if paths_equivalent(&l, &e) => ExpertLinkState::LinkedToCodeg,
+        _ => ExpertLinkState::LinkedElsewhere,
     }
 }
 
