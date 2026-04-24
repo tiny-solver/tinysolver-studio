@@ -302,6 +302,8 @@
     "loadingSkill": "Skill 불러오는 중...",
     "emptyNoAgents": "사용 가능한 에이전트가 없습니다.",
     "noSelectionHint": "왼쪽에서 Skill을 선택하거나 \"새 Skill\"을 클릭하여 만드세요.",
+    "systemBadge": "시스템",
+    "systemHint": "CLI 내장 Skill · 읽기 전용",
     "scope": {
       "global": "전역",
       "folder": "폴더",

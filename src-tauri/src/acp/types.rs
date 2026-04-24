@@ -302,6 +302,10 @@ pub struct AgentSkillItem {
     pub scope: AgentSkillScope,
     pub layout: AgentSkillLayout,
     pub path: String,
+    /// True for skills bundled by the agent CLI itself (e.g. Codex's
+    /// `~/.codex/skills/.system/*`). Surfaced so the UI can show them but
+    /// refuse to edit or delete; the backend also refuses such writes.
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

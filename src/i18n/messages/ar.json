@@ -302,6 +302,8 @@
     "loadingSkill": "جارٍ تحميل Skill...",
     "emptyNoAgents": "لا يوجد وكيل متاح.",
     "noSelectionHint": "اختر Skill من اليسار، أو انقر على \"Skill جديد\" لإنشاء واحد.",
+    "systemBadge": "نظام",
+    "systemHint": "Skill مدمج في CLI · للقراءة فقط",
     "scope": {
       "global": "عام",
       "folder": "مجلد",

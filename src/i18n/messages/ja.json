@@ -302,6 +302,8 @@
     "loadingSkill": "Skillを読み込み中...",
     "emptyNoAgents": "利用可能なエージェントがありません。",
     "noSelectionHint": "左側から Skill を選択するか、「新規 Skill」をクリックして作成してください。",
+    "systemBadge": "システム",
+    "systemHint": "CLI 組み込み Skill・読み取り専用",
     "scope": {
       "global": "グローバル",
       "folder": "フォルダ",
