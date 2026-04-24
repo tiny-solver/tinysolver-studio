@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count} 条",
       "emptyFolderHint": "暂无会话",
       "noMatchingConversations": "未找到匹配的会话",
+      "noUnfinishedConversations": "当前暂无未完成会话，右上角可启用显示已完成会话",
       "removeFolderConfirmTitle": "从工作区移除该文件夹？",
       "removeFolderConfirmDescription": "从工作区移除 \"{name}\"？其相关 Tab 与终端将会关闭。",
       "folderHeaderMenu": {

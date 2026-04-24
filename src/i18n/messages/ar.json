@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count} محادثة",
       "emptyFolderHint": "لا توجد محادثات",
       "noMatchingConversations": "لا توجد محادثات مطابقة",
+      "noUnfinishedConversations": "لا توجد محادثات غير مكتملة. يمكنك تفعيل \"عرض المكتملة\" من القائمة في أعلى اليمين.",
       "removeFolderConfirmTitle": "إزالة المجلد من مساحة العمل؟",
       "removeFolderConfirmDescription": "إزالة \"{name}\" من مساحة العمل؟ سيتم إغلاق علامات التبويب والمحطات المرتبطة.",
       "folderHeaderMenu": {

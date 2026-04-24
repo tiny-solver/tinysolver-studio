@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count, plural, one {# Konversation} other {# Konversationen}}",
       "emptyFolderHint": "Keine Konversationen",
       "noMatchingConversations": "Keine passenden Konversationen",
+      "noUnfinishedConversations": "Keine offenen Konversationen. Aktiviere \"Abgeschlossene anzeigen\" im Menü oben rechts.",
       "removeFolderConfirmTitle": "Ordner aus Arbeitsbereich entfernen?",
       "removeFolderConfirmDescription": "\"{name}\" aus dem Arbeitsbereich entfernen? Zugehörige Tabs und Terminals werden geschlossen.",
       "folderHeaderMenu": {

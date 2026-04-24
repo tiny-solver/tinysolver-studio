@@ -477,7 +477,7 @@ function FolderGroupItem({
             >
               {totalConversationCount === 0
                 ? t("emptyFolderHint")
-                : t("noMatchingConversations")}
+                : t("noUnfinishedConversations")}
             </div>
           ) : (
             conversations.map((conv) => (

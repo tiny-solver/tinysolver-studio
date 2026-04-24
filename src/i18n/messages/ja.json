@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count} 件",
       "emptyFolderHint": "会話がありません",
       "noMatchingConversations": "一致する会話がありません",
+      "noUnfinishedConversations": "未完了の会話はありません。右上のメニューから「完了した会話を表示」を有効にできます。",
       "removeFolderConfirmTitle": "このフォルダをワークスペースから削除しますか？",
       "removeFolderConfirmDescription": "\"{name}\" をワークスペースから削除しますか？関連するタブとターミナルが閉じられます。",
       "folderHeaderMenu": {

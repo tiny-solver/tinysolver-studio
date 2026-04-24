@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count} 條",
       "emptyFolderHint": "暫無對話",
       "noMatchingConversations": "找不到符合的對話",
+      "noUnfinishedConversations": "目前沒有未完成的會話，右上角可啟用顯示已完成會話",
       "removeFolderConfirmTitle": "從工作區移除此資料夾？",
       "removeFolderConfirmDescription": "從工作區移除 \"{name}\"？相關分頁與終端機將會關閉。",
       "folderHeaderMenu": {

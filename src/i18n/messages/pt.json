@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count, plural, one {# conversa} other {# conversas}}",
       "emptyFolderHint": "Sem conversas",
       "noMatchingConversations": "Nenhuma conversa correspondente",
+      "noUnfinishedConversations": "Nenhuma conversa pendente. Ative \"Mostrar concluídas\" no menu superior direito.",
       "removeFolderConfirmTitle": "Remover pasta do espaço de trabalho?",
       "removeFolderConfirmDescription": "Remover \"{name}\" do espaço de trabalho? As abas e terminais relacionados serão fechados.",
       "folderHeaderMenu": {

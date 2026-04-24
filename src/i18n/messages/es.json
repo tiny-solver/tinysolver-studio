@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count, plural, one {# conversación} other {# conversaciones}}",
       "emptyFolderHint": "Sin conversaciones",
       "noMatchingConversations": "No hay conversaciones coincidentes",
+      "noUnfinishedConversations": "No hay conversaciones pendientes. Activa \"Mostrar completadas\" desde el menú superior derecho.",
       "removeFolderConfirmTitle": "¿Eliminar carpeta del espacio de trabajo?",
       "removeFolderConfirmDescription": "¿Eliminar \"{name}\" del espacio de trabajo? Sus pestañas y terminales se cerrarán.",
       "folderHeaderMenu": {

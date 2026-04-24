@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count, plural, one {# conversation} other {# conversations}}",
       "emptyFolderHint": "Aucune conversation",
       "noMatchingConversations": "Aucune conversation correspondante",
+      "noUnfinishedConversations": "Aucune conversation en cours. Activez « Afficher les terminées » dans le menu en haut à droite.",
       "removeFolderConfirmTitle": "Retirer le dossier de l'espace de travail ?",
       "removeFolderConfirmDescription": "Retirer \"{name}\" de l'espace de travail ? Les onglets et terminaux associés seront fermés.",
       "folderHeaderMenu": {

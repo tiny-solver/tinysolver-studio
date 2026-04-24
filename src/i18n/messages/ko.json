@@ -802,6 +802,7 @@
       "conversationCountUnit": "{count}개",
       "emptyFolderHint": "대화 없음",
       "noMatchingConversations": "일치하는 대화가 없습니다",
+      "noUnfinishedConversations": "미완료 대화가 없습니다. 오른쪽 상단 메뉴에서 \"완료된 대화 표시\"를 활성화할 수 있습니다.",
       "removeFolderConfirmTitle": "이 폴더를 워크스페이스에서 제거하시겠습니까?",
       "removeFolderConfirmDescription": "워크스페이스에서 \"{name}\"을(를) 제거하시겠습니까? 관련 탭과 터미널이 닫힙니다.",
       "folderHeaderMenu": {
