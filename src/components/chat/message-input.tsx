@@ -2281,15 +2281,15 @@ export function MessageInput({
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
-            {/* 宽屏内联显示，窄屏（<30rem）通过"更多"气泡显示；用 rem 让阈值随外观缩放同步变化 */}
-            <div className="hidden @[30rem]:contents">{selectorItems}</div>
+            {/* 宽屏内联显示，窄屏（<34rem）通过"更多"气泡显示；用 rem 让阈值随外观缩放同步变化 */}
+            <div className="hidden @[34rem]:contents">{selectorItems}</div>
             {hasAnySelector && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-6 w-6 shrink-0 bg-transparent @[30rem]:hidden"
+                    className="h-6 w-6 shrink-0 bg-transparent @[34rem]:hidden"
                   >
                     <Ellipsis className="size-4" />
                   </Button>
