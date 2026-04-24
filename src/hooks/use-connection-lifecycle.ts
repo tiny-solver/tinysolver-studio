@@ -264,6 +264,10 @@ export function useConnectionLifecycle({
   }, [removeTask, clearSelectorTask])
 
   const handleFocus = useCallback(() => {
+    // Respect the caller's readiness gate — e.g. historical conversations
+    // set isActive=false until the session's external_id resolves, to
+    // avoid connecting with sessionId=undefined and orphaning context.
+    if (!isActive) return
     touchActivity(contextKey)
     if (!status || status === "disconnected" || status === "error") {
       setLastAutoConnectError(null)
@@ -274,6 +278,7 @@ export function useConnectionLifecycle({
       })
     }
   }, [
+    isActive,
     agentType,
     workingDir,
     sessionId,
