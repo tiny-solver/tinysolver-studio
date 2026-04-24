@@ -10,34 +10,10 @@ use crate::db::error::DbError;
 use crate::models::agent::AgentType;
 use crate::models::{FolderDetail, FolderHistoryEntry};
 
-/// Palette kept in sync with the frontend swatch picker. Changes here must be
-/// mirrored in `src/components/conversations/sidebar-conversation-list.tsx`.
-/// `"foreground"` is a theme-aware sentinel the frontend resolves to
-/// `var(--sidebar-foreground)`.
-pub const FOLDER_COLOR_PALETTE: &[&str] = &[
-    "#ef4444",
-    "#f97316",
-    "#eab308",
-    "#84cc16",
-    "#22c55e",
-    "#06b6d4",
-    "#8b5cf6",
-    "#d946ef",
-    "#ec4899",
-    "foreground",
-];
-
-fn pick_folder_color(folder_id: i32, folder_name: &str) -> String {
-    let mut name_hash: u32 = 0;
-    for c in folder_name.chars() {
-        name_hash = name_hash.wrapping_mul(31).wrapping_add(c as u32);
-    }
-    let combined = (folder_id as u32)
-        .wrapping_mul(2654435761)
-        .wrapping_add(name_hash);
-    let idx = (combined as usize) % FOLDER_COLOR_PALETTE.len();
-    FOLDER_COLOR_PALETTE[idx].to_string()
-}
+/// Sentinel stored in the DB that the frontend resolves to
+/// `var(--sidebar-foreground)` — the theme-aware text color. New folders
+/// start with this neutral swatch until the user picks a palette color.
+pub const DEFAULT_FOLDER_COLOR: &str = "foreground";
 
 fn to_entry(m: folder::Model) -> FolderHistoryEntry {
     FolderHistoryEntry {
@@ -121,16 +97,9 @@ pub async fn add_folder(
             deleted_at: Set(None),
             is_open: Set(true),
             sort_order: Set(max_order + 1),
-            // Temporary placeholder — we overwrite below with a hash derived
-            // from the final auto-assigned id so each new folder gets a
-            // deterministic, well-distributed palette color.
-            color: Set(FOLDER_COLOR_PALETTE[0].to_string()),
+            color: Set(DEFAULT_FOLDER_COLOR.to_string()),
         };
-        let inserted = active.insert(conn).await?;
-        let assigned = pick_folder_color(inserted.id, &name);
-        let mut active = inserted.into_active_model();
-        active.color = Set(assigned);
-        active.update(conn).await?
+        active.insert(conn).await?
     };
 
     Ok(to_entry(model))
