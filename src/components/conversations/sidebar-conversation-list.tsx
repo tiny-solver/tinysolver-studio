@@ -12,7 +12,7 @@ import {
 } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { Reorder } from "motion/react"
+import { Reorder, useDragControls, type DragControls } from "motion/react"
 import type { OverlayScrollbarsComponentRef } from "overlayscrollbars-react"
 import {
   ChevronDown,
@@ -167,6 +167,7 @@ const FolderHeader = memo(function FolderHeader({
   onManageConversations,
   onChangeColor,
   isDragging,
+  dragControls,
   t,
 }: {
   folderId: number
@@ -182,6 +183,7 @@ const FolderHeader = memo(function FolderHeader({
   onManageConversations: (folderId: number) => void
   onChangeColor: (folderId: number, color: string) => void
   isDragging?: boolean
+  dragControls: DragControls
   t: ReturnType<typeof useTranslations>
 }) {
   return (
@@ -189,6 +191,10 @@ const FolderHeader = memo(function FolderHeader({
       <ContextMenuTrigger asChild>
         <div className={cn("relative h-[2rem]", isDragging && "opacity-60")}>
           <div
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              dragControls.start(e)
+            }}
             className={cn(
               "group flex h-[1.9375rem] w-full items-center",
               "rounded-full",
@@ -395,6 +401,7 @@ function FolderGroupItem({
   t,
 }: FolderGroupItemProps) {
   const justDraggedRef = useRef(false)
+  const dragControls = useDragControls()
 
   const handleToggle = useCallback(
     (id: number) => {
@@ -429,6 +436,8 @@ function FolderGroupItem({
         as="div"
         value={folderId}
         drag={reordering ? false : "y"}
+        dragListener={false}
+        dragControls={dragControls}
         dragMomentum={false}
         layout="position"
         onDragStart={handleDragStart}
@@ -454,6 +463,7 @@ function FolderGroupItem({
             onManageConversations={onManageConversations}
             onChangeColor={onChangeColor}
             isDragging={dragging}
+            dragControls={dragControls}
             t={t}
           />
         </div>
