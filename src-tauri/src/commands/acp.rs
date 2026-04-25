@@ -2735,6 +2735,7 @@ pub async fn acp_detect_agent_local_version(
 pub(crate) async fn acp_prepare_npx_agent_core(
     agent_type: AgentType,
     registry_version: Option<String>,
+    clean_first: bool,
     task_id: String,
     db: &AppDatabase,
     emitter: &EventEmitter,
@@ -2758,6 +2759,30 @@ pub(crate) async fn acp_prepare_npx_agent_core(
                 .ok()
                 .flatten()
                 .and_then(|m| m.installed_version);
+
+            // Best-effort uninstall before reinstall. Forces npm to re-resolve
+            // the dependency graph from scratch, which is required for
+            // platform-specific optionalDependencies (e.g. native CLI binaries
+            // shipped as `<pkg>-darwin-x64`) to be picked up after an upgrade.
+            // Failures here are logged and swallowed so we still attempt the
+            // install — for example when nothing is currently installed.
+            if clean_first {
+                let package_name = package_name_from_spec(package);
+                emit_agent_install_event(
+                    emitter,
+                    &task_id,
+                    AgentInstallEventKind::Log,
+                    format!("$ npm uninstall -g {package_name} (clean reinstall)"),
+                );
+                if let Err(e) = uninstall_npm_global_package(package).await {
+                    emit_agent_install_event(
+                        emitter,
+                        &task_id,
+                        AgentInstallEventKind::Log,
+                        format!("(warning) uninstall step failed, continuing: {e}"),
+                    );
+                }
+            }
 
             emit_agent_install_event(
                 emitter,
@@ -2813,6 +2838,23 @@ pub(crate) async fn acp_prepare_npx_agent_core(
             );
         }
         Err(e) => {
+            // When clean_first was true the uninstall step may already have
+            // succeeded by the time install failed, leaving the DB pointing at
+            // a version that no longer exists on disk. Resync the DB to the
+            // actual filesystem state so the UI doesn't mislead the user into
+            // thinking they can connect.
+            if clean_first {
+                let detected = detect_local_version(agent_type).await;
+                if let Err(sync_err) =
+                    agent_setting_service::set_installed_version(&db.conn, agent_type, detected)
+                        .await
+                {
+                    eprintln!(
+                        "[acp] failed to resync installed_version after clean upgrade failure: {sync_err}"
+                    );
+                }
+                emit_acp_agents_updated(emitter, "npx_prepare_failed", Some(agent_type));
+            }
             emit_agent_install_event(
                 emitter,
                 &task_id,
@@ -2829,12 +2871,21 @@ pub(crate) async fn acp_prepare_npx_agent_core(
 pub async fn acp_prepare_npx_agent(
     agent_type: AgentType,
     registry_version: Option<String>,
+    clean_first: Option<bool>,
     task_id: String,
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<String, AcpError> {
     let emitter = EventEmitter::Tauri(app);
-    acp_prepare_npx_agent_core(agent_type, registry_version, task_id, &db, &emitter).await
+    acp_prepare_npx_agent_core(
+        agent_type,
+        registry_version,
+        clean_first.unwrap_or(false),
+        task_id,
+        &db,
+        &emitter,
+    )
+    .await
 }
 
 pub(crate) async fn acp_uninstall_agent_core(

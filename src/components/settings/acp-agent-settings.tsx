@@ -3153,7 +3153,8 @@ export function AcpAgentSettings() {
         const installedVersion = await acpPrepareNpxAgent(
           agent.agent_type,
           agent.registry_version,
-          taskId
+          taskId,
+          mode === "upgrade"
         )
         setAgents((prev) =>
           prev.map((item) =>
@@ -3200,6 +3201,25 @@ export function AcpAgentSettings() {
             description: message,
           }
         )
+        if (mode === "upgrade") {
+          // Clean upgrade may have removed the old install before failing —
+          // resync local state so the UI doesn't keep showing a phantom version.
+          try {
+            const detected = await acpDetectAgentLocalVersion(agent.agent_type)
+            setAgents((prev) =>
+              prev.map((item) =>
+                item.agent_type === agent.agent_type
+                  ? { ...item, installed_version: detected ?? null }
+                  : item
+              )
+            )
+          } catch (detectErr) {
+            console.error(
+              "[Settings] failed to resync installed version after upgrade failure:",
+              detectErr
+            )
+          }
+        }
         throw err
       } finally {
         busyActionRef.current.delete(agent.agent_type)

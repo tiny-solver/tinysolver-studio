@@ -492,6 +492,8 @@ pub async fn acp_detect_agent_local_version(
 pub struct AcpPrepareNpxAgentParams {
     pub agent_type: AgentType,
     pub registry_version: Option<String>,
+    #[serde(default)]
+    pub clean_first: bool,
     pub task_id: String,
 }
 
@@ -504,6 +506,7 @@ pub async fn acp_prepare_npx_agent(
     let result = acp_commands::acp_prepare_npx_agent_core(
         params.agent_type,
         params.registry_version,
+        params.clean_first,
         params.task_id,
         db,
         &emitter,

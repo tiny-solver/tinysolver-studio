@@ -189,11 +189,13 @@ export async function acpDetectAgentLocalVersion(
 export async function acpPrepareNpxAgent(
   agentType: AgentType,
   registryVersion: string | null | undefined,
-  taskId: string
+  taskId: string,
+  cleanFirst: boolean = false
 ): Promise<string> {
   return invoke("acp_prepare_npx_agent", {
     agentType,
     registryVersion: registryVersion ?? null,
+    cleanFirst,
     taskId,
   })
 }
