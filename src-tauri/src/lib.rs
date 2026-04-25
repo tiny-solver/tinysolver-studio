@@ -10,6 +10,8 @@ pub mod keyring_store;
 mod models;
 mod network;
 mod parsers;
+#[cfg(feature = "tauri-runtime")]
+pub mod preferences;
 pub mod process;
 mod terminal;
 pub mod web;
@@ -35,8 +37,45 @@ mod tauri_app {
 
     static APP_QUITTING: AtomicBool = AtomicBool::new(false);
 
+    /// On Windows, opt-out users can disable WebView2 hardware acceleration to
+    /// work around AMD/Intel GPU driver bugs that produce a black-screen
+    /// webview. The flag is stored in a tiny sidecar file at
+    /// `~/.codeg/preferences.json` so it can be read **before** the Tauri
+    /// builder, plugins, or tokio runtime start — once a tokio worker is alive,
+    /// `std::env::set_var` would race with concurrent `getenv` calls from
+    /// libraries like reqwest/rustls that read `HTTP_PROXY` etc.
+    #[cfg(target_os = "windows")]
+    fn apply_webview2_rendering_override() {
+        const DISABLE_GPU_ARGS: [&str; 2] = ["--disable-gpu", "--disable-software-rasterizer"];
+        const ENV_KEY: &str = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
+
+        let prefs = crate::preferences::load();
+        if !prefs.disable_hardware_acceleration {
+            return;
+        }
+
+        let mut tokens: Vec<String> = match std::env::var(ENV_KEY) {
+            Ok(prev) => prev
+                .split_whitespace()
+                .map(str::to_string)
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        for arg in DISABLE_GPU_ARGS {
+            if !tokens.iter().any(|t| t == arg) {
+                tokens.push(arg.to_string());
+            }
+        }
+        std::env::set_var(ENV_KEY, tokens.join(" "));
+    }
+
     #[cfg_attr(mobile, tauri::mobile_entry_point)]
     pub fn run() {
+        // Apply the WebView2 rendering override before *any* tokio worker
+        // exists or any plugin reads the env. See doc comment above.
+        #[cfg(target_os = "windows")]
+        apply_webview2_rendering_override();
+
         if let Err(err) = fix_path_env::fix() {
             eprintln!("[PATH] fix_path_env failed: {err}");
         }
@@ -302,6 +341,8 @@ mod tauri_app {
                 system_settings::update_system_proxy_settings,
                 system_settings::get_system_language_settings,
                 system_settings::update_system_language_settings,
+                system_settings::get_system_rendering_settings,
+                system_settings::update_system_rendering_settings,
                 version_control::detect_git,
                 version_control::test_git_path,
                 version_control::get_git_settings,
