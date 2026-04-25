@@ -54,7 +54,11 @@ mod tauri_app {
     /// libraries like reqwest/rustls that read `HTTP_PROXY` etc.
     #[cfg(target_os = "windows")]
     fn apply_webview2_rendering_override() {
-        const DISABLE_GPU_ARGS: [&str; 2] = ["--disable-gpu", "--disable-software-rasterizer"];
+        // Only `--disable-gpu`. Pairing it with `--disable-software-rasterizer`
+        // removes the SwiftShader fallback and produces a white-screen webview
+        // on machines where GPU init fails — leaving no renderer at all. Match
+        // Electron's `app.disableHardwareAcceleration()` behavior.
+        const DISABLE_GPU_ARGS: [&str; 1] = ["--disable-gpu"];
         const ENV_KEY: &str = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
 
         let prefs = crate::preferences::load();
