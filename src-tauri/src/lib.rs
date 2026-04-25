@@ -17,6 +17,14 @@ mod terminal;
 pub mod web;
 pub mod workspace_state;
 
+/// Sweep stale ACP binary cache trash created by the rename-aside fallback in
+/// `acp::binary_cache::clear_agent_cache`. Safe to call any time; intended to
+/// be invoked once at startup from a detached OS thread. Does not block, does
+/// not panic, errors are silently dropped.
+pub fn sweep_acp_binary_trash() {
+    crate::acp::binary_cache::sweep_trash();
+}
+
 #[cfg(feature = "tauri-runtime")]
 mod tauri_app {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -123,6 +131,16 @@ mod tauri_app {
                 // Load saved appearance settings before any window is created.
                 tauri::async_runtime::block_on(windows::load_saved_zoom(&db.conn));
                 tauri::async_runtime::block_on(windows::load_saved_appearance_mode(&db.conn));
+
+                // Sweep stale ACP binary cache trash (rename-aside fallback
+                // artifacts). Detached OS thread: cannot block startup, panics
+                // are caught and dropped, errors are silenced, no subprocesses
+                // spawned. Anything still locked is left for next startup.
+                std::thread::spawn(|| {
+                    let _ = std::panic::catch_unwind(|| {
+                        crate::sweep_acp_binary_trash();
+                    });
+                });
 
                 // Install bundled expert skills into the central store
                 // (`~/.codeg/skills/`). Runs in the background and does
