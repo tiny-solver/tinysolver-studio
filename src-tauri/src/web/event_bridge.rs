@@ -104,3 +104,18 @@ pub fn emit_event(emitter: &EventEmitter, event: &str, payload: impl Serialize) 
         EventEmitter::Noop => {}
     }
 }
+
+use crate::acp::{AcpEvent, EventEnvelope};
+
+/// 统一 ACP 事件发射入口。Phase 0：seq 固定 0；Phase 1 起接入 SessionState。
+pub fn emit_acp(emitter: &EventEmitter, connection_id: &str, payload: AcpEvent) {
+    emit_event(
+        emitter,
+        "acp://event",
+        EventEnvelope {
+            seq: 0,
+            connection_id: connection_id.to_string(),
+            payload,
+        },
+    );
+}

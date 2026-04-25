@@ -39,7 +39,7 @@ use crate::acp::types::{
 };
 use crate::models::agent::AgentType;
 use crate::network::proxy;
-use crate::web::event_bridge::EventEmitter;
+use crate::web::event_bridge::{emit_acp, EventEmitter};
 
 const DEFAULT_COMMAND_COLOR_ENV: [(&str, &str); 1] = [("CLICOLOR_FORCE", "1")];
 
@@ -360,11 +360,10 @@ pub async fn spawn_agent_connection(
     emitter: EventEmitter,
     connections: Arc<tokio::sync::Mutex<HashMap<String, AgentConnection>>>,
 ) -> Result<(), AcpError> {
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         &emitter,
-        "acp://event",
+        &connection_id,
         AcpEvent::StatusChanged {
-            connection_id: connection_id.clone(),
             status: ConnectionStatus::Connecting,
         },
     );
@@ -412,11 +411,10 @@ pub async fn spawn_agent_connection(
 
         if let Err(e) = result {
             let code = e.code().map(String::from);
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 &emitter_clone,
-                "acp://event",
+                &conn_id,
                 AcpEvent::Error {
-                    connection_id: conn_id.clone(),
                     message: e.to_string(),
                     agent_type: agent_type.to_string(),
                     code,
@@ -424,11 +422,10 @@ pub async fn spawn_agent_connection(
             );
         }
 
-        crate::web::event_bridge::emit_event(
+        emit_acp(
             &emitter_clone,
-            "acp://event",
+            &conn_id,
             AcpEvent::StatusChanged {
-                connection_id: conn_id,
                 status: ConnectionStatus::Disconnected,
             },
         );
@@ -464,11 +461,10 @@ fn emit_session_modes(
     modes: &Option<SessionModeState>,
 ) {
     if let Some(mode_state) = modes {
-        crate::web::event_bridge::emit_event(
+        emit_acp(
             emitter,
-            "acp://event",
+            connection_id,
             AcpEvent::SessionModes {
-                connection_id: connection_id.into(),
                 modes: map_session_modes(mode_state),
             },
         );
@@ -616,11 +612,10 @@ fn emit_session_config_options_values(
     if agent_type == AgentType::Codex {
         ensure_codex_mode_option(&mut mapped);
     }
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         emitter,
-        "acp://event",
+        connection_id,
         AcpEvent::SessionConfigOptions {
-            connection_id: connection_id.into(),
             config_options: mapped,
         },
     );
@@ -641,13 +636,7 @@ fn emit_session_config_options(
 }
 
 fn emit_selectors_ready(connection_id: &str, emitter: &EventEmitter) {
-    crate::web::event_bridge::emit_event(
-        emitter,
-        "acp://event",
-        AcpEvent::SelectorsReady {
-            connection_id: connection_id.into(),
-        },
-    );
+    emit_acp(emitter, connection_id, AcpEvent::SelectorsReady);
 }
 
 fn emit_prompt_capabilities(
@@ -655,11 +644,10 @@ fn emit_prompt_capabilities(
     emitter: &EventEmitter,
     capabilities: &sacp::schema::PromptCapabilities,
 ) {
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         emitter,
-        "acp://event",
+        connection_id,
         AcpEvent::PromptCapabilities {
-            connection_id: connection_id.into(),
             prompt_capabilities: PromptCapabilitiesInfo {
                 image: capabilities.image,
                 audio: capabilities.audio,
@@ -929,11 +917,10 @@ async fn run_connection(
             );
 
             // Emit fork support capability
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 &emitter_clone,
-                "acp://event",
+                &conn_id,
                 AcpEvent::ForkSupported {
-                    connection_id: conn_id.clone(),
                     supported: supports_fork,
                 },
             );
@@ -942,11 +929,10 @@ async fn run_connection(
             // selectors and enable sending while the session initialises.
             // Prompts sent before run_conversation_loop are buffered in
             // the cmd_rx channel and processed as soon as the loop starts.
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 &emitter_clone,
-                "acp://event",
+                &conn_id,
                 AcpEvent::StatusChanged {
-                    connection_id: conn_id.clone(),
                     status: ConnectionStatus::Connected,
                 },
             );
@@ -1015,11 +1001,10 @@ async fn run_connection(
                             eprintln!("[ACP] Drained {drained} historical replay notifications");
                         }
 
-                        crate::web::event_bridge::emit_event(
+                        emit_acp(
                             &emitter_clone,
-                            "acp://event",
+                            &conn_id,
                             AcpEvent::SessionStarted {
-                                connection_id: conn_id.clone(),
                                 session_id: sid.clone(),
                             },
                         );
@@ -1078,11 +1063,10 @@ async fn run_connection(
                             return Ok(());
                         }
                         if !err_str.contains("Method not found") {
-                            crate::web::event_bridge::emit_event(
+                            emit_acp(
                                 &emitter_clone,
-                                "acp://event",
+                                &conn_id,
                                 AcpEvent::Error {
-                                    connection_id: conn_id.clone(),
                                     message: format!("Failed to load session, starting new: {e}"),
                                     agent_type: agent_type.to_string(),
                                     code: None,
@@ -1096,11 +1080,10 @@ async fn run_connection(
                         let fallback_sid = new_resp.session_id.0.to_string();
                         let initial_config_options = new_resp.config_options.clone();
                         let mut session = cx.attach_session(new_resp, Default::default())?;
-                        crate::web::event_bridge::emit_event(
+                        emit_acp(
                             &emitter_clone,
-                            "acp://event",
+                            &conn_id,
                             AcpEvent::SessionStarted {
-                                connection_id: conn_id.clone(),
                                 session_id: fallback_sid.clone(),
                             },
                         );
@@ -1152,11 +1135,10 @@ async fn run_connection(
                 let sid = new_resp.session_id.0.to_string();
                 let initial_config_options = new_resp.config_options.clone();
                 let mut session = cx.attach_session(new_resp, Default::default())?;
-                crate::web::event_bridge::emit_event(
+                emit_acp(
                     &emitter_clone,
-                    "acp://event",
+                    &conn_id,
                     AcpEvent::SessionStarted {
-                        connection_id: conn_id.clone(),
                         session_id: sid.clone(),
                     },
                 );
@@ -1269,11 +1251,10 @@ async fn handle_permission_request(
 
     perms.lock().await.insert(request_id.clone(), responder);
 
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         emitter,
-        "acp://event",
+        conn_id,
         AcpEvent::PermissionRequest {
-            connection_id: conn_id.into(),
             request_id,
             tool_call: tool_call_value,
             options,
@@ -1314,13 +1295,10 @@ async fn set_session_mode(
         .block_task()
         .await?;
 
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         emitter,
-        "acp://event",
-        AcpEvent::ModeChanged {
-            connection_id: conn_id.into(),
-            mode_id,
-        },
+        conn_id,
+        AcpEvent::ModeChanged { mode_id },
     );
 
     Ok(())
@@ -1804,11 +1782,10 @@ fn emit_terminal_output_update(
     // single-event cap (with ANSI-safe truncation) before emission so the
     // WS/IPC fanout never carries a multi-MB payload.
     let (payload, _append) = build_emit_payload(&output, append);
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         emitter,
-        "acp://event",
+        connection_id,
         AcpEvent::ToolCallUpdate {
-            connection_id: connection_id.into(),
             tool_call_id: tool_call_id.to_string(),
             title: None,
             status: None,
@@ -1992,11 +1969,10 @@ async fn handle_fork_or_exit(
         .meta(fork_resp.meta);
     let mut session = cx.attach_session(new_resp, Default::default())?;
 
-    crate::web::event_bridge::emit_event(
+    emit_acp(
         emitter,
-        "acp://event",
+        conn_id,
         AcpEvent::SessionStarted {
-            connection_id: conn_id.to_string(),
             session_id: new_sid.clone(),
         },
     );
@@ -2093,11 +2069,10 @@ async fn run_conversation_loop<'a>(
             Some(ConnectionCommand::Prompt { blocks }) => {
                 let prompt_blocks = map_prompt_blocks(blocks);
                 if prompt_blocks.is_empty() {
-                    crate::web::event_bridge::emit_event(
+                    emit_acp(
                         emitter,
-                        "acp://event",
+                        conn_id,
                         AcpEvent::Error {
-                            connection_id: conn_id.into(),
                             message: "Prompt must contain at least one content block".into(),
                             agent_type: agent_type.to_string(),
                             code: None,
@@ -2106,11 +2081,10 @@ async fn run_conversation_loop<'a>(
                     continue;
                 }
 
-                crate::web::event_bridge::emit_event(
+                emit_acp(
                     emitter,
-                    "acp://event",
+                    conn_id,
                     AcpEvent::StatusChanged {
-                        connection_id: conn_id.into(),
                         status: ConnectionStatus::Prompting,
                     },
                 );
@@ -2205,11 +2179,10 @@ async fn run_conversation_loop<'a>(
                                         StopReason::Cancelled => "cancelled",
                                         _ => "unknown",
                                     };
-                                    crate::web::event_bridge::emit_event(
+                                    emit_acp(
                                         emitter,
-                                        "acp://event",
+                                        conn_id,
                                         AcpEvent::TurnComplete {
-                                            connection_id: conn_id.into(),
                                             session_id: sid.0.to_string(),
                                             stop_reason: reason_str.into(),
                                             agent_type: agent_type.to_string(),
@@ -2237,11 +2210,10 @@ async fn run_conversation_loop<'a>(
                                 StopReason::Cancelled => "cancelled",
                                 _ => "unknown",
                             };
-                            crate::web::event_bridge::emit_event(
+                            emit_acp(
                                 emitter,
-                                "acp://event",
+                                conn_id,
                                 AcpEvent::TurnComplete {
-                                    connection_id: conn_id.into(),
                                     session_id: sid.0.to_string(),
                                     stop_reason: reason_str.into(),
                                     agent_type: agent_type.to_string(),
@@ -2276,21 +2248,17 @@ async fn run_conversation_loop<'a>(
                                     let req = SetSessionModeRequest::new(sid.clone(), mode_id.clone());
                                     match cx.send_request_to(Agent, req).block_task().await {
                                         Ok(_) => {
-                                            crate::web::event_bridge::emit_event(
+                                            emit_acp(
                                                 emitter,
-                                                "acp://event",
-                                                AcpEvent::ModeChanged {
-                                                    connection_id: conn_id.into(),
-                                                    mode_id,
-                                                },
+                                                conn_id,
+                                                AcpEvent::ModeChanged { mode_id },
                                             );
                                         }
                                         Err(e) => {
-                                            crate::web::event_bridge::emit_event(
+                                            emit_acp(
                                                 emitter,
-                                                "acp://event",
+                                                conn_id,
                                                 AcpEvent::Error {
-                                                    connection_id: conn_id.into(),
                                                     message: format!("Failed to set mode: {e}"),
                                                     agent_type: agent_type.to_string(),
                                                     code: None,
@@ -2314,11 +2282,10 @@ async fn run_conversation_loop<'a>(
                                     )
                                     .await
                                     {
-                                        crate::web::event_bridge::emit_event(
+                                        emit_acp(
                                             emitter,
-                                            "acp://event",
+                                            conn_id,
                                             AcpEvent::Error {
-                                                connection_id: conn_id.into(),
                                                 message: format!("Failed to set config option: {e}"),
                                                 agent_type: agent_type.to_string(),
                                                 code: None,
@@ -2350,11 +2317,10 @@ async fn run_conversation_loop<'a>(
                                     // transitions out of "prompting" and the user can
                                     // send new messages.  Don't wait for the agent --
                                     // it may be slow to respond or not respond at all.
-                                    crate::web::event_bridge::emit_event(
+                                    emit_acp(
                                         emitter,
-                                        "acp://event",
+                                        conn_id,
                                         AcpEvent::TurnComplete {
-                                            connection_id: conn_id.into(),
                                             session_id: sid.0.to_string(),
                                             stop_reason: "cancelled".into(),
                                             agent_type: agent_type.to_string(),
@@ -2402,11 +2368,10 @@ async fn run_conversation_loop<'a>(
                     break;
                 }
 
-                crate::web::event_bridge::emit_event(
+                emit_acp(
                     emitter,
-                    "acp://event",
+                    conn_id,
                     AcpEvent::StatusChanged {
-                        connection_id: conn_id.into(),
                         status: ConnectionStatus::Connected,
                     },
                 );
@@ -2424,11 +2389,10 @@ async fn run_conversation_loop<'a>(
             }
             Some(ConnectionCommand::SetMode { mode_id }) => {
                 if let Err(e) = set_session_mode(session, conn_id, emitter, mode_id).await {
-                    crate::web::event_bridge::emit_event(
+                    emit_acp(
                         emitter,
-                        "acp://event",
+                        conn_id,
                         AcpEvent::Error {
-                            connection_id: conn_id.into(),
                             message: format!("Failed to set mode: {e}"),
                             agent_type: agent_type.to_string(),
                             code: None,
@@ -2447,11 +2411,10 @@ async fn run_conversation_loop<'a>(
                 )
                 .await
                 {
-                    crate::web::event_bridge::emit_event(
+                    emit_acp(
                         emitter,
-                        "acp://event",
+                        conn_id,
                         AcpEvent::Error {
-                            connection_id: conn_id.into(),
                             message: format!("Failed to set config option: {e}"),
                             agent_type: agent_type.to_string(),
                             code: None,
@@ -2673,10 +2636,7 @@ fn is_claude_api_retry_message(message: &serde_json::Value) -> bool {
     matches!(message_type, Some("system")) && matches!(message_subtype, Some("api_retry"))
 }
 
-fn map_claude_sdk_ext_notification(
-    connection_id: &str,
-    notification: &UntypedMessage,
-) -> Option<AcpEvent> {
+fn map_claude_sdk_ext_notification(notification: &UntypedMessage) -> Option<AcpEvent> {
     if notification.method() != "_claude/sdkMessage" {
         return None;
     }
@@ -2686,7 +2646,6 @@ fn map_claude_sdk_ext_notification(
         return None;
     }
     Some(AcpEvent::ClaudeSdkMessage {
-        connection_id: connection_id.to_string(),
         session_id,
         message,
     })
@@ -2701,8 +2660,8 @@ fn maybe_emit_claude_sdk_ext_notification(
         return;
     };
 
-    if let Some(event) = map_claude_sdk_ext_notification(connection_id, &notification) {
-        crate::web::event_bridge::emit_event(emitter, "acp://event", event);
+    if let Some(event) = map_claude_sdk_ext_notification(&notification) {
+        emit_acp(emitter, connection_id, event);
     }
 }
 
@@ -2749,13 +2708,10 @@ fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
-                AcpEvent::ContentDelta {
-                    connection_id: connection_id.into(),
-                    text: text.text,
-                },
+                connection_id,
+                AcpEvent::ContentDelta { text: text.text },
             );
         }
         SessionUpdate::AgentMessageChunk(_) => {
@@ -2765,13 +2721,10 @@ fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
-                AcpEvent::Thinking {
-                    connection_id: connection_id.into(),
-                    text: text.text,
-                },
+                connection_id,
+                AcpEvent::Thinking { text: text.text },
             );
         }
         SessionUpdate::AgentThoughtChunk(_) => {
@@ -2796,11 +2749,10 @@ fn emit_conversation_update(
             let meta = tc.meta.map(serde_json::Value::Object);
             let status = format!("{:?}", tc.status).to_lowercase();
             raw_output_cache.remove_if_final(&tool_call_id, Some(status.as_str()));
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
+                connection_id,
                 AcpEvent::ToolCall {
-                    connection_id: connection_id.into(),
                     tool_call_id,
                     title: tc.title,
                     kind: format!("{:?}", tc.kind).to_lowercase(),
@@ -2846,11 +2798,10 @@ fn emit_conversation_update(
             let meta = tcu.meta.clone().map(serde_json::Value::Object);
             let status = tcu.fields.status.map(|s| format!("{:?}", s).to_lowercase());
             raw_output_cache.remove_if_final(&tool_call_id, status.as_deref());
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
+                connection_id,
                 AcpEvent::ToolCallUpdate {
-                    connection_id: connection_id.into(),
                     tool_call_id,
                     title: tcu.fields.title,
                     status,
@@ -2864,21 +2815,19 @@ fn emit_conversation_update(
             );
         }
         SessionUpdate::CurrentModeUpdate(update) => {
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
+                connection_id,
                 AcpEvent::ModeChanged {
-                    connection_id: connection_id.into(),
                     mode_id: update.current_mode_id.to_string(),
                 },
             );
         }
         SessionUpdate::Plan(plan) => {
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
+                connection_id,
                 AcpEvent::PlanUpdate {
-                    connection_id: connection_id.into(),
                     entries: map_plan_entries(&plan),
                 },
             );
@@ -2913,21 +2862,17 @@ fn emit_conversation_update(
                     }
                 })
                 .collect();
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
-                AcpEvent::AvailableCommands {
-                    connection_id: connection_id.into(),
-                    commands,
-                },
+                connection_id,
+                AcpEvent::AvailableCommands { commands },
             );
         }
         SessionUpdate::UsageUpdate(update) => {
-            crate::web::event_bridge::emit_event(
+            emit_acp(
                 emitter,
-                "acp://event",
+                connection_id,
                 AcpEvent::UsageUpdate {
-                    connection_id: connection_id.into(),
                     used: update.used,
                     size: update.size,
                 },
@@ -2976,15 +2921,14 @@ mod tests {
         .unwrap();
 
         let event =
-            map_claude_sdk_ext_notification("conn-1", &raw).expect("valid sdk payload should map");
+            map_claude_sdk_ext_notification(&raw).expect("valid sdk payload should map");
 
         match event {
             AcpEvent::ClaudeSdkMessage {
-                connection_id,
                 session_id,
                 message,
             } => {
-                assert_eq!(connection_id, "conn-1");
+                // connection_id 不再属于 AcpEvent，envelope 上提到顶层
                 assert_eq!(session_id, "session-123");
                 assert_eq!(message.get("type").and_then(|v| v.as_str()), Some("system"));
             }
@@ -3002,7 +2946,7 @@ mod tests {
             }),
         )
         .unwrap();
-        assert!(map_claude_sdk_ext_notification("conn-1", &non_retry).is_none());
+        assert!(map_claude_sdk_ext_notification(&non_retry).is_none());
     }
 
     #[test]
@@ -3012,11 +2956,11 @@ mod tests {
             serde_json::json!({"sessionId": "s", "message": {}}),
         )
         .unwrap();
-        assert!(map_claude_sdk_ext_notification("conn-1", &wrong_method).is_none());
+        assert!(map_claude_sdk_ext_notification(&wrong_method).is_none());
 
         let missing_fields =
             UntypedMessage::new("_claude/sdkMessage", serde_json::json!({"sessionId": 1})).unwrap();
-        assert!(map_claude_sdk_ext_notification("conn-1", &missing_fields).is_none());
+        assert!(map_claude_sdk_ext_notification(&missing_fields).is_none());
     }
 
     #[test]

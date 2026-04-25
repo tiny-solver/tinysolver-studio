@@ -9,3 +9,5 @@ pub mod preflight;
 pub mod registry;
 pub mod terminal_runtime;
 pub mod types;
+
+pub use types::{AcpEvent, EventEnvelope};
