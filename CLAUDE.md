@@ -85,6 +85,12 @@ cargo build
 
 **会话状态（后端权威）**：每个 `AgentConnection` 持有 `Arc<RwLock<SessionState>>`，其中累积当前 turn 的 `live_message`、in-flight `active_tool_calls`、待处理 `pending_permission`、协商出的 modes/usage 等。事件发射统一通过 `web/event_bridge.rs::emit_with_state`：先 `apply_event` 写状态、`event_seq += 1`、再 emit envelope，写状态与发事件在同一个 critical section 完成。`SessionState::to_snapshot()` 输出 `LiveSessionSnapshot`——Phase 2 的 snapshot 端点直接消费此结构。
 
+**Snapshot 端点（Phase 2）**：`acp_get_session_snapshot(connection_id)` 与 `acp_get_session_snapshot_by_conversation(conversation_id)` 返回当前 `LiveSessionSnapshot`。前端可在打开会话面板 / 浏览器刷新后调用一次拿到当前 turn 的 in-flight 状态（live_message、active_tool_calls、pending_permission、modes、usage 等），随后用 `seq` 作为锚点对 `acp://event` 流去重——丢弃 `seq <= snapshot.event_seq` 的事件即可与 live 流对齐。`ConnectionManager::get_state` 与 `find_connection_by_conversation_id` 是这两条路径的查找入口。
+
+**ConversationLinked 事件**：`acp_prompt` 首次调用时后端创建 conversation 行并发出 `{ type: "conversation_linked", conversation_id, folder_id }`，前端不需要再轮询 DB 查 conversation_id。`acp_prompt` 现接收可选 `folder_id`；未传时后端从连接的 `working_dir` 自动 `find-or-create` 一个 folder 行（通过 `folder_service::add_folder`，已有 idempotent 语义）。链路汇总在 `ConnectionManager::send_prompt_linked`：snapshot 短锁 → 检查 `state.conversation_id` → 若未链接则创建 row + 通过 `emit_with_state` 发出 `ConversationLinked` → 转交 `send_prompt`。chat_channel 路径继续走 `send_prompt`（自行管理 conversation 行）。
+
+**LifecycleSubscriber**：启动时 spawn 的 Tokio 任务（`acp/lifecycle.rs::spawn_lifecycle_subscriber`），订阅 `acp://event` 全局 broadcaster，把跨连接的 DB 写动作（目前是 `SessionStarted` → 持久化 `external_id` 到 conversation 行）从 `emit_with_state` 热路径解耦。`subscribe()` 在 `tokio::spawn` 之前调用，确保 spawn 与首条 recv 之间发出的事件不丢失。桌面模式在 `lib.rs::setup` 启动，服务器模式在 `bin/codeg_server.rs` 启动。
+
 ### 条件编译约定
 
 - `#[cfg(feature = "tauri-runtime")]` — 仅桌面模式编译（Tauri 窗口、通知、`tauri::State` 参数等）
