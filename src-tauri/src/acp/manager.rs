@@ -138,52 +138,61 @@ impl ConnectionManager {
         // emit, but that would block other emits on DB I/O, which is worse
         // than the rare race.
         if !already_linked {
-            // Branch A: caller already owns a row — adopt it. No DB write.
-            if let Some(caller_conv_id) = conversation_id {
-                // unwrap safe: validated above that folder_id is Some when
-                // conversation_id is Some.
-                let caller_folder_id = folder_id.expect("validated above");
-                emit_with_state(
-                    &state_arc,
-                    &emitter,
-                    AcpEvent::ConversationLinked {
-                        conversation_id: caller_conv_id,
-                        folder_id: caller_folder_id,
-                    },
-                )
-                .await;
-            } else {
+            match (conversation_id, folder_id) {
+                // Branch A: caller already owns a row — adopt it. No DB write.
+                (Some(caller_conv_id), Some(caller_folder_id)) => {
+                    emit_with_state(
+                        &state_arc,
+                        &emitter,
+                        AcpEvent::ConversationLinked {
+                            conversation_id: caller_conv_id,
+                            folder_id: caller_folder_id,
+                        },
+                    )
+                    .await;
+                }
+                // Function-entry guard rejects this combination.
+                (Some(_), None) => unreachable!(
+                    "conversation_id without folder_id should have been rejected at function entry"
+                ),
                 // Branch B: backend creates the row from folder_id (fall back to
                 // working_dir if folder_id missing). Pre-Phase-3a behavior.
-                let folder_id = match folder_id {
-                    Some(id) => id,
-                    None => {
-                        let path = working_dir.ok_or_else(|| {
-                            AcpError::protocol(
-                                "folder_id not provided and connection has no working_dir to fall back on"
-                                    .to_string(),
-                            )
-                        })?;
-                        let path_str = path.to_string_lossy().to_string();
-                        folder_service::add_folder(&db.conn, &path_str)
-                            .await
-                            .map_err(|e| AcpError::protocol(e.to_string()))?
-                            .id
-                    }
-                };
-                let row =
-                    conversation_service::create(&db.conn, folder_id, agent_type, None, None)
-                        .await
-                        .map_err(|e| AcpError::protocol(e.to_string()))?;
-                emit_with_state(
-                    &state_arc,
-                    &emitter,
-                    AcpEvent::ConversationLinked {
-                        conversation_id: row.id,
+                (None, folder_arg) => {
+                    let folder_id = match folder_arg {
+                        Some(id) => id,
+                        None => {
+                            let path = working_dir.ok_or_else(|| {
+                                AcpError::protocol(
+                                    "folder_id not provided and connection has no working_dir to fall back on"
+                                        .to_string(),
+                                )
+                            })?;
+                            let path_str = path.to_string_lossy().to_string();
+                            folder_service::add_folder(&db.conn, &path_str)
+                                .await
+                                .map_err(|e| AcpError::protocol(e.to_string()))?
+                                .id
+                        }
+                    };
+                    let row = conversation_service::create(
+                        &db.conn,
                         folder_id,
-                    },
-                )
-                .await;
+                        agent_type,
+                        None,
+                        None,
+                    )
+                    .await
+                    .map_err(|e| AcpError::protocol(e.to_string()))?;
+                    emit_with_state(
+                        &state_arc,
+                        &emitter,
+                        AcpEvent::ConversationLinked {
+                            conversation_id: row.id,
+                            folder_id,
+                        },
+                    )
+                    .await;
+                }
             }
         }
 
@@ -787,7 +796,11 @@ mod tests {
         // No ConversationLinked event was emitted (already linked). The
         // forwarded send_prompt fails with ProcessExited because the
         // cmd_tx receiver was dropped — it never reaches an emit path.
-        let timed = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
-        assert!(timed.is_err() || timed.unwrap().is_err(), "no event expected");
+        let timed = tokio::time::timeout(std::time::Duration::from_millis(0), rx.recv()).await;
+        assert!(
+            timed.is_err(),
+            "expected no event within 0ms, got {:?}",
+            timed
+        );
     }
 }
