@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use crate::acp::connection::{spawn_agent_connection, AgentConnection, ConnectionCommand};
 use crate::acp::error::AcpError;
 use crate::acp::types::{AcpEvent, ConnectionInfo, ForkResultInfo, PromptInputBlock};
-use crate::db::service::{conversation_service, folder_service};
+use crate::db::service::conversation_service;
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
@@ -89,8 +89,8 @@ impl ConnectionManager {
     ///   `ConversationLinked`. Requires `folder_id` to be `Some` so the event
     ///   carries both ids without forcing subscribers to re-query the DB.
     /// - **Backend-creates path** — if `conversation_id` is `None`, we create
-    ///   the row from `folder_id` (falling back to `state.working_dir` if
-    ///   missing) and emit `ConversationLinked`.
+    ///   the row from `folder_id` (required) and emit `ConversationLinked`.
+    ///   Returns an error if `folder_id` is also `None`.
     ///
     /// Subsequent calls (when state is already linked) ignore both
     /// `folder_id` and `conversation_id` and just forward the prompt.
@@ -112,21 +112,20 @@ impl ConnectionManager {
         }
 
         // Snapshot what we need from the connection map under one short lock.
-        let (state_arc, emitter, agent_type, already_linked, working_dir) = {
+        let (state_arc, emitter, agent_type, already_linked) = {
             let connections = self.connections.lock().await;
             let conn = connections
                 .get(conn_id)
                 .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
-            let (already, working_dir) = {
+            let already = {
                 let s = conn.state.read().await;
-                (s.conversation_id.is_some(), s.working_dir.clone())
+                s.conversation_id.is_some()
             };
             (
                 conn.state.clone(),
                 conn.emitter.clone(),
                 conn.agent_type,
                 already,
-                working_dir,
             )
         };
 
@@ -155,25 +154,12 @@ impl ConnectionManager {
                 (Some(_), None) => unreachable!(
                     "conversation_id without folder_id should have been rejected at function entry"
                 ),
-                // Branch B: backend creates the row from folder_id (fall back to
-                // working_dir if folder_id missing). Pre-Phase-3a behavior.
-                (None, folder_arg) => {
-                    let folder_id = match folder_arg {
-                        Some(id) => id,
-                        None => {
-                            let path = working_dir.ok_or_else(|| {
-                                AcpError::protocol(
-                                    "folder_id not provided and connection has no working_dir to fall back on"
-                                        .to_string(),
-                                )
-                            })?;
-                            let path_str = path.to_string_lossy().to_string();
-                            folder_service::add_folder(&db.conn, &path_str)
-                                .await
-                                .map_err(|e| AcpError::protocol(e.to_string()))?
-                                .id
-                        }
-                    };
+                // Branch B: backend creates the row from caller-supplied
+                // folder_id. Phase 3c-1 made folder_id required here — every
+                // production caller that reaches this branch passes one, and
+                // silent fallback to working_dir-based find-or-create masked
+                // contract violations.
+                (None, Some(folder_id)) => {
                     let row = conversation_service::create(
                         &db.conn,
                         folder_id,
@@ -192,6 +178,11 @@ impl ConnectionManager {
                         },
                     )
                     .await;
+                }
+                (None, None) => {
+                    return Err(AcpError::protocol(
+                        "folder_id required for new conversation row".to_string(),
+                    ));
                 }
             }
         }
@@ -420,32 +411,6 @@ mod tests {
         }
     }
 
-    fn fake_connection_with_working_dir(
-        id: &str,
-        conv_id: Option<i32>,
-        working_dir: Option<std::path::PathBuf>,
-    ) -> AgentConnection {
-        let (tx, _rx) = mpsc::channel(1);
-        let mut state = SessionState::new(
-            id.to_string(),
-            crate::models::agent::AgentType::ClaudeCode,
-            working_dir,
-            "test-window".to_string(),
-            None,
-        );
-        state.conversation_id = conv_id;
-        state.status = ConnectionStatus::Connected;
-        AgentConnection {
-            id: id.to_string(),
-            agent_type: crate::models::agent::AgentType::ClaudeCode,
-            status: ConnectionStatus::Connected,
-            owner_window_label: "test-window".to_string(),
-            cmd_tx: tx,
-            state: Arc::new(RwLock::new(state)),
-            emitter: EventEmitter::Noop,
-        }
-    }
-
     /// Build a broadcaster + subscribed receiver. Subscribing here (not lazily
     /// inside the test) ensures events emitted between construction and the
     /// first `recv` are buffered rather than dropped.
@@ -588,45 +553,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_prompt_linked_falls_back_to_working_dir_when_folder_id_missing() {
-        use crate::db::test_helpers;
-        let db = test_helpers::fresh_in_memory_db().await;
-        let mgr = ConnectionManager::new();
-        let conn_id = "c1";
-        {
-            let mut map = mgr.connections.lock().await;
-            map.insert(
-                conn_id.into(),
-                fake_connection_with_working_dir(
-                    conn_id,
-                    None,
-                    Some(std::path::PathBuf::from("/tmp/codeg-fallback-test")),
-                ),
-            );
-        }
-        // No folder_id provided — expect fallback to working_dir.
-        let _ = mgr
-            .send_prompt_linked(&db, conn_id, vec![], None, None)
-            .await;
-        let snap = mgr
-            .get_state(conn_id)
-            .await
-            .unwrap()
-            .read()
-            .await
-            .to_snapshot();
-        assert!(
-            snap.conversation_id.is_some(),
-            "conversation_id should be set via working_dir fallback"
-        );
-        assert!(
-            snap.folder_id.is_some(),
-            "folder_id should be set via working_dir fallback"
-        );
-    }
-
-    #[tokio::test]
-    async fn send_prompt_linked_errors_when_no_folder_id_and_no_working_dir() {
+    async fn send_prompt_linked_errors_when_no_folder_id() {
         use crate::db::test_helpers;
         let db = test_helpers::fresh_in_memory_db().await;
         let mgr = ConnectionManager::new();
@@ -640,12 +567,12 @@ mod tests {
             .await;
         assert!(
             result.is_err(),
-            "should error when neither folder_id nor working_dir is available"
+            "should error when folder_id is not provided for a new conversation row"
         );
         let err_str = result.unwrap_err().to_string();
         assert!(
-            err_str.contains("working_dir"),
-            "error should mention missing working_dir, got: {err_str}"
+            err_str.contains("folder_id"),
+            "error should mention missing folder_id, got: {err_str}"
         );
     }
 
