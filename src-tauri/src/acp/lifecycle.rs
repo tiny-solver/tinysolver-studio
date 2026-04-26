@@ -33,6 +33,8 @@ pub(crate) async fn handle_event(
             }
             Ok(())
         }
+        // Other events don't need cross-connection DB persistence today; extend
+        // this dispatcher with new arms as the lifecycle scope grows.
         _ => Ok(()),
     }
 }
@@ -143,6 +145,13 @@ mod tests {
     #[tokio::test]
     async fn handle_event_is_noop_when_no_conversation_bound() {
         let db = test_helpers::fresh_in_memory_db().await;
+        // Seed a sentinel conversation row that should remain untouched.
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/test-noop").await;
+        let sentinel =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
+
         let mgr = ConnectionManager::new();
         {
             let mut map = mgr.connections.lock().await;
@@ -152,21 +161,53 @@ mod tests {
             seq: 1,
             connection_id: "c1".to_string(),
             payload: AcpEvent::SessionStarted {
-                session_id: "ignored".into(),
+                session_id: "should-not-write".into(),
             },
         };
         handle_event(&db.conn, &mgr, &env).await.unwrap();
+
+        // Sentinel row must still have no external_id — dispatcher correctly
+        // skipped the write because the connection had no conversation_id.
+        let reloaded = conversation_service::get_by_id(&db.conn, sentinel.id)
+            .await
+            .unwrap();
+        assert!(
+            reloaded.external_id.is_none(),
+            "sentinel row should be untouched"
+        );
     }
 
     #[tokio::test]
     async fn handle_event_is_noop_for_unrelated_events() {
         let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/test-unrelated").await;
+        let conv =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
+
         let mgr = ConnectionManager::new();
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert(
+                "c1".to_string(),
+                fake_connection_with_state("c1", Some(conv.id)),
+            );
+        }
+        // ContentDelta should be a no-op even though the connection IS bound.
         let env = EventEnvelope {
             seq: 1,
             connection_id: "c1".to_string(),
             payload: AcpEvent::ContentDelta { text: "hi".into() },
         };
         handle_event(&db.conn, &mgr, &env).await.unwrap();
+
+        let reloaded = conversation_service::get_by_id(&db.conn, conv.id)
+            .await
+            .unwrap();
+        assert!(
+            reloaded.external_id.is_none(),
+            "non-SessionStarted events must not write external_id"
+        );
     }
 }
