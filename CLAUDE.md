@@ -81,6 +81,8 @@ cargo build
 服务器模式：前端 `fetch()` → Axum HTTP API → 同一业务逻辑 → 返回 JSON
 实时通信：后端事件 → EventEmitter（Tauri 事件 / WebSocket 广播）→ 前端
 
+**事件信封**：所有 ACP 流式事件通过 `EventEnvelope { seq, connection_id, payload: AcpEvent }` 发出。`#[serde(flatten)]` 让 JSON 保持平铺：`{ seq, connection_id, type, ...变体字段 }`。`seq` 是单调递增序号（当前阶段占位 `0`，后续阶段接入 `SessionState` 后严格递增），用于前端做 snapshot 与事件流的去重对账。后端 emit 统一通过 `web/event_bridge.rs::emit_acp` 辅助函数。
+
 ### 条件编译约定
 
 - `#[cfg(feature = "tauri-runtime")]` — 仅桌面模式编译（Tauri 窗口、通知、`tauri::State` 参数等）
