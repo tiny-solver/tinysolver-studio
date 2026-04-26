@@ -394,17 +394,15 @@ export interface SessionUsageUpdateInfo {
 
 // ACP events pushed from Rust backend (discriminated by "type" field)
 export type AcpEvent =
-  | { type: "content_delta"; connection_id: string; text: string }
-  | { type: "thinking"; connection_id: string; text: string }
+  | { type: "content_delta"; text: string }
+  | { type: "thinking"; text: string }
   | {
       type: "claude_sdk_message"
-      connection_id: string
       session_id: string
       message: unknown
     }
   | {
       type: "tool_call"
-      connection_id: string
       tool_call_id: string
       title: string
       kind: string
@@ -417,7 +415,6 @@ export type AcpEvent =
     }
   | {
       type: "tool_call_update"
-      connection_id: string
       tool_call_id: string
       title: string | null
       status: string | null
@@ -430,64 +427,52 @@ export type AcpEvent =
     }
   | {
       type: "permission_request"
-      connection_id: string
       request_id: string
       tool_call: unknown
       options: PermissionOptionInfo[]
     }
   | {
       type: "turn_complete"
-      connection_id: string
       session_id: string
       stop_reason: string
     }
   | {
       type: "session_started"
-      connection_id: string
       session_id: string
     }
   | {
       type: "session_modes"
-      connection_id: string
       modes: SessionModeStateInfo
     }
   | {
       type: "session_config_options"
-      connection_id: string
       config_options: SessionConfigOptionInfo[]
     }
   | {
       type: "selectors_ready"
-      connection_id: string
     }
   | {
       type: "prompt_capabilities"
-      connection_id: string
       prompt_capabilities: PromptCapabilitiesInfo
     }
   | {
       type: "fork_supported"
-      connection_id: string
       supported: boolean
     }
   | {
       type: "mode_changed"
-      connection_id: string
       mode_id: string
     }
   | {
       type: "plan_update"
-      connection_id: string
       entries: PlanEntryInfo[]
     }
   | {
       type: "status_changed"
-      connection_id: string
       status: ConnectionStatus
     }
   | {
       type: "error"
-      connection_id: string
       message: string
       agent_type: string
       /** Stable backend error identifier for localization (e.g. "initialize_timeout"). */
@@ -495,15 +480,23 @@ export type AcpEvent =
     }
   | {
       type: "available_commands"
-      connection_id: string
       commands: AvailableCommandInfo[]
     }
   | {
       type: "usage_update"
-      connection_id: string
       used: number
       size: number
     }
+
+/**
+ * 所有 ACP 事件统一通过此 envelope 发出。
+ * 通过 serde flatten，JSON 形态：{ seq, connection_id, type, ...变体字段 }
+ * TS 端用交叉类型表达：envelope 顶层 = { seq, connection_id } & AcpEvent
+ */
+export type EventEnvelope = {
+  seq: number
+  connection_id: string
+} & AcpEvent
 
 // Connection info returned by acp_list_connections
 export interface ConnectionInfo {
