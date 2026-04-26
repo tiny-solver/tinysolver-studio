@@ -126,6 +126,14 @@ export interface ConnectionState {
   pendingQuestion: PendingQuestion | null
   claudeApiRetry: ClaudeApiRetryState | null
   error: string | null
+  /**
+   * Highest envelope.seq applied to this connection. Used to dedup the
+   * live `acp://event` stream against the snapshot endpoint: a
+   * HYDRATE_FROM_SNAPSHOT sets this to snapshot.event_seq, and incoming
+   * envelopes with seq <= lastAppliedSeq are dropped as duplicates.
+   * Phase 3b initialises to 0 on CONNECTION_CREATED.
+   */
+  lastAppliedSeq: number
 }
 
 // ── Reducer actions ──
@@ -137,6 +145,11 @@ type Action =
       connectionId: string
       agentType: AgentType
       workingDir: string | null
+    }
+  | {
+      type: "HYDRATE_FROM_SNAPSHOT"
+      contextKey: string
+      patch: import("@/lib/snapshot-denormalize").SnapshotPatch
     }
   | { type: "CONNECTION_REMOVED"; contextKey: string }
   | { type: "REMOVE_ALL" }
@@ -643,6 +656,32 @@ function connectionsReducer(
         pendingQuestion: null,
         claudeApiRetry: null,
         error: null,
+        lastAppliedSeq: 0,
+      })
+      return next
+    }
+
+    case "HYDRATE_FROM_SNAPSHOT": {
+      const current = state.get(action.contextKey)
+      if (!current) return state
+      // Race guard: the snapshot may have been generated BEFORE events
+      // that have since arrived and been applied to in-memory state.
+      // Hydrating from a stale snapshot would overwrite fresh state.
+      if (action.patch.eventSeq <= current.lastAppliedSeq) return state
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...current,
+        status: action.patch.status,
+        sessionId: action.patch.sessionId,
+        modes: action.patch.modes,
+        configOptions: action.patch.configOptions,
+        availableCommands: action.patch.availableCommands,
+        usage: action.patch.usage,
+        liveMessage: action.patch.liveMessage,
+        pendingPermission: action.patch.pendingPermission,
+        promptCapabilities:
+          action.patch.promptCapabilities ?? current.promptCapabilities,
+        lastAppliedSeq: action.patch.eventSeq,
       })
       return next
     }
