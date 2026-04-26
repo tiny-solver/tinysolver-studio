@@ -138,7 +138,6 @@ pub struct AgentConnection {
     pub cmd_tx: mpsc::Sender<ConnectionCommand>,
     /// 后端权威的会话状态。所有 `emit_with_state` 写入此状态并自增 seq。
     /// 使用 `Arc<RwLock<_>>` 让 spawn 出的连接 task 与外部 snapshot 读取共享。
-    #[allow(dead_code)] // Phase 1 Task 3: read by Phase 2 snapshot endpoint
     pub state: Arc<RwLock<SessionState>>,
 }
 
