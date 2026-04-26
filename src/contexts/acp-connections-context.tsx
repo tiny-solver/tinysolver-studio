@@ -1780,6 +1780,19 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             sessionId: e.session_id,
           })
           break
+        case "conversation_linked":
+          // Backend just bound (or reaffirmed) the connection's DB conversation
+          // row. Phase 3a frontend pre-creates rows for new-tab sends so this
+          // event is mostly a confirmation; we log it for visibility. Phase 3b
+          // will use this to drive UI mapping when the frontend stops creating
+          // rows itself.
+          console.log("[acp-context] conversation_linked", {
+            contextKey,
+            connectionId: e.connection_id,
+            conversationId: e.conversation_id,
+            folderId: e.folder_id,
+          })
+          break
         case "session_modes": {
           flushStreamingQueue()
           const modeConn = storeRef.current.connections.get(contextKey)
