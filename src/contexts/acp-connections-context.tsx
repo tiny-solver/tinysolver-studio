@@ -2357,8 +2357,11 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         const buffered = consumeBufferedEvents(connectionId)
         if (buffered.length > 0) {
           for (const event of buffered) {
-            // Same seq dedup as the live listener: a snapshot HYDRATE may
-            // have raised lastAppliedSeq past some buffered envelopes.
+            // Mirror the live listener's seq dedup for symmetry. The
+            // synchronous snapshot fetch above is fire-and-forget, so
+            // HYDRATE has not landed yet at this loop entry — the guard
+            // is currently a no-op against a 0 lastAppliedSeq, but it
+            // guards future changes that may await snapshot before drain.
             const conn = storeRef.current.connections.get(contextKey)
             if (conn && event.seq <= conn.lastAppliedSeq) continue
             lastActivityRef.current.set(contextKey, Date.now())
