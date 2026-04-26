@@ -89,7 +89,7 @@ cargo build
 
 **ConversationLinked 事件**：`acp_prompt` 首次调用时后端创建 conversation 行并发出 `{ type: "conversation_linked", conversation_id, folder_id }`，前端不需要再轮询 DB 查 conversation_id。`acp_prompt` 现接收可选 `folder_id`；未传时后端从连接的 `working_dir` 自动 `find-or-create` 一个 folder 行（通过 `folder_service::add_folder`，已有 idempotent 语义）。链路汇总在 `ConnectionManager::send_prompt_linked`：snapshot 短锁 → 检查 `state.conversation_id` → 若未链接则创建 row + 通过 `emit_with_state` 发出 `ConversationLinked` → 转交 `send_prompt`。chat_channel 路径继续走 `send_prompt`（自行管理 conversation 行）。
 
-**LifecycleSubscriber**：启动时 spawn 的 Tokio 任务（`acp/lifecycle.rs::spawn_lifecycle_subscriber`），订阅 `acp://event` 全局 broadcaster，把跨连接的 DB 写动作（目前是 `SessionStarted` → 持久化 `external_id` 到 conversation 行）从 `emit_with_state` 热路径解耦。`subscribe()` 在 `tokio::spawn` 之前调用，确保 spawn 与首条 recv 之间发出的事件不丢失。桌面模式在 `lib.rs::setup` 启动，服务器模式在 `bin/codeg_server.rs` 启动。
+**LifecycleSubscriber**：启动时 spawn 的 Tokio 任务（`acp/lifecycle.rs::lifecycle_subscriber_task`），订阅 `acp://event` 全局 broadcaster，把跨连接的 DB 写动作（目前是 `SessionStarted` → 持久化 `external_id` 到 conversation 行）从 `emit_with_state` 热路径解耦。`lifecycle_subscriber_task` 同步调用 `subscribe()` 后返回 `impl Future`，由调用方决定 spawn 方式：桌面模式（Tauri `setup` 在 tokio 运行时之外）走 `tauri::async_runtime::spawn`，服务器模式走 `tokio::spawn`。subscribe 发生在 future 生成时而非首次 poll，确保事件不丢失。
 
 ### 条件编译约定
 

@@ -1,5 +1,5 @@
 mod acp;
-pub use acp::spawn_lifecycle_subscriber;
+pub use acp::lifecycle_subscriber_task;
 mod app_error;
 pub mod app_state;
 pub mod chat_channel;
@@ -188,7 +188,10 @@ mod tauri_app {
 
                 // Spawn the LifecycleSubscriber: persists cross-connection DB state
                 // (currently `external_id` on conversation rows when SessionStarted fires)
-                // off the emit hot path.
+                // off the emit hot path. `subscribe()` runs synchronously inside
+                // `lifecycle_subscriber_task` before the future is returned, so the
+                // subscribe-before-spawn invariant holds. The setup callback runs
+                // outside any tokio runtime, so we use `tauri::async_runtime::spawn`.
                 {
                     let db_conn = app.state::<db::AppDatabase>().conn.clone();
                     let cm = app.state::<ConnectionManager>().clone_ref();
@@ -196,7 +199,11 @@ mod tauri_app {
                         .state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>()
                         .inner()
                         .clone();
-                    crate::acp::spawn_lifecycle_subscriber(db_conn, cm, broadcaster);
+                    tauri::async_runtime::spawn(crate::acp::lifecycle_subscriber_task(
+                        db_conn,
+                        cm,
+                        broadcaster,
+                    ));
                 }
 
                 // Single-window workspace: ensure the main window exists.

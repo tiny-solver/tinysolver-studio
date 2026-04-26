@@ -12,7 +12,7 @@ pub mod session_state;
 pub mod terminal_runtime;
 pub mod types;
 
-pub use lifecycle::spawn_lifecycle_subscriber;
+pub use lifecycle::lifecycle_subscriber_task;
 pub use session_state::{LiveSessionSnapshot, SessionState};
 // Re-export the inner types of LiveSessionSnapshot for downstream consumers; not all are
 // directly named in Rust today (they ride along through the snapshot struct), so silence

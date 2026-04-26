@@ -4,6 +4,7 @@
 //! fires). Decoupled from `emit_with_state` so the emit hot path stays
 //! lock-tight.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
@@ -39,13 +40,21 @@ pub(crate) async fn handle_event(
     }
 }
 
-pub fn spawn_lifecycle_subscriber(
+/// Subscribe to the broadcaster synchronously and return the subscriber loop
+/// future. Caller spawns it onto whichever tokio runtime they manage
+/// (`tokio::spawn` from inside an async context, `tauri::async_runtime::spawn`
+/// from a Tauri `setup` callback that runs outside the runtime).
+///
+/// The `subscribe()` call happens here, before the future is returned, so any
+/// events emitted between this call and the first poll are buffered by the
+/// broadcast channel rather than dropped.
+pub fn lifecycle_subscriber_task(
     db_conn: DatabaseConnection,
     manager: ConnectionManager,
     broadcaster: Arc<WebEventBroadcaster>,
-) {
+) -> impl Future<Output = ()> + Send + 'static {
     let mut rx = broadcaster.subscribe();
-    tokio::spawn(async move {
+    async move {
         loop {
             match rx.recv().await {
                 Ok(WebEvent { channel, payload }) => {
@@ -75,7 +84,7 @@ pub fn spawn_lifecycle_subscriber(
                 }
             }
         }
-    });
+    }
 }
 
 #[cfg(test)]
