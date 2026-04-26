@@ -83,16 +83,34 @@ impl ConnectionManager {
 
     /// Send a prompt while ensuring a `Conversation` DB row is bound to this
     /// connection. On the first call (when `state.conversation_id` is None),
-    /// requires `folder_id` (or falls back to `state.working_dir`), creates
-    /// the row, and emits `ConversationLinked` before forwarding the prompt.
-    /// Subsequent calls ignore `folder_id`.
+    /// either:
+    /// - **Caller-supplied path** — if `conversation_id` is `Some(id)`, the
+    ///   caller (the frontend) has already created the row and we adopt it via
+    ///   `ConversationLinked`. Requires `folder_id` to be `Some` so the event
+    ///   carries both ids without forcing subscribers to re-query the DB.
+    /// - **Backend-creates path** — if `conversation_id` is `None`, we create
+    ///   the row from `folder_id` (falling back to `state.working_dir` if
+    ///   missing) and emit `ConversationLinked`.
+    ///
+    /// Subsequent calls (when state is already linked) ignore both
+    /// `folder_id` and `conversation_id` and just forward the prompt.
     pub async fn send_prompt_linked(
         &self,
         db: &AppDatabase,
         conn_id: &str,
         blocks: Vec<PromptInputBlock>,
         folder_id: Option<i32>,
+        conversation_id: Option<i32>,
     ) -> Result<(), AcpError> {
+        // Caller-supplied conversation_id requires folder_id (we include it in
+        // the emitted ConversationLinked event so subscribers don't have to
+        // re-query the DB). Validate before touching any state.
+        if conversation_id.is_some() && folder_id.is_none() {
+            return Err(AcpError::protocol(
+                "conversation_id provided without folder_id".to_string(),
+            ));
+        }
+
         // Snapshot what we need from the connection map under one short lock.
         let (state_arc, emitter, agent_type, already_linked, working_dir) = {
             let connections = self.connections.lock().await;
@@ -113,41 +131,60 @@ impl ConnectionManager {
         };
 
         // TOCTOU note: two concurrent `send_prompt_linked` calls for the same
-        // connection could both observe `already_linked == false` and each create
-        // a conversation row. In practice the UI / API surface sends prompts
-        // serially per connection, so the race window is benign. A defensive
-        // fix would hold `state.write()` across check + create + emit, but that
-        // would block other emits on DB I/O, which is worse than the rare race.
+        // connection could both observe `already_linked == false` and each
+        // create a conversation row. In practice the UI / API surface sends
+        // prompts serially per connection, so the race window is benign. A
+        // defensive fix would hold `state.write()` across check + create +
+        // emit, but that would block other emits on DB I/O, which is worse
+        // than the rare race.
         if !already_linked {
-            let folder_id = match folder_id {
-                Some(id) => id,
-                None => {
-                    let path = working_dir.ok_or_else(|| {
-                        AcpError::protocol(
-                            "folder_id not provided and connection has no working_dir to fall back on"
-                                .to_string(),
-                        )
-                    })?;
-                    let path_str = path.to_string_lossy().to_string();
-                    folder_service::add_folder(&db.conn, &path_str)
+            // Branch A: caller already owns a row — adopt it. No DB write.
+            if let Some(caller_conv_id) = conversation_id {
+                // unwrap safe: validated above that folder_id is Some when
+                // conversation_id is Some.
+                let caller_folder_id = folder_id.expect("validated above");
+                emit_with_state(
+                    &state_arc,
+                    &emitter,
+                    AcpEvent::ConversationLinked {
+                        conversation_id: caller_conv_id,
+                        folder_id: caller_folder_id,
+                    },
+                )
+                .await;
+            } else {
+                // Branch B: backend creates the row from folder_id (fall back to
+                // working_dir if folder_id missing). Pre-Phase-3a behavior.
+                let folder_id = match folder_id {
+                    Some(id) => id,
+                    None => {
+                        let path = working_dir.ok_or_else(|| {
+                            AcpError::protocol(
+                                "folder_id not provided and connection has no working_dir to fall back on"
+                                    .to_string(),
+                            )
+                        })?;
+                        let path_str = path.to_string_lossy().to_string();
+                        folder_service::add_folder(&db.conn, &path_str)
+                            .await
+                            .map_err(|e| AcpError::protocol(e.to_string()))?
+                            .id
+                    }
+                };
+                let row =
+                    conversation_service::create(&db.conn, folder_id, agent_type, None, None)
                         .await
-                        .map_err(|e| AcpError::protocol(e.to_string()))?
-                        .id
-                }
-            };
-            let row =
-                conversation_service::create(&db.conn, folder_id, agent_type, None, None)
-                    .await
-                    .map_err(|e| AcpError::protocol(e.to_string()))?;
-            emit_with_state(
-                &state_arc,
-                &emitter,
-                AcpEvent::ConversationLinked {
-                    conversation_id: row.id,
-                    folder_id,
-                },
-            )
-            .await;
+                        .map_err(|e| AcpError::protocol(e.to_string()))?;
+                emit_with_state(
+                    &state_arc,
+                    &emitter,
+                    AcpEvent::ConversationLinked {
+                        conversation_id: row.id,
+                        folder_id,
+                    },
+                )
+                .await;
+            }
         }
 
         self.send_prompt(conn_id, blocks).await
@@ -347,8 +384,10 @@ mod tests {
     use crate::acp::connection::AgentConnection;
     use crate::acp::session_state::SessionState;
     use crate::acp::types::ConnectionStatus;
+    use crate::web::event_bridge::{EventEmitter, WebEvent, WebEventBroadcaster};
+    use std::path::PathBuf;
     use std::sync::Arc;
-    use tokio::sync::{mpsc, RwLock};
+    use tokio::sync::{broadcast, mpsc, RwLock};
 
     fn fake_connection(id: &str, conv_id: Option<i32>) -> AgentConnection {
         let (tx, _rx) = mpsc::channel(1);
@@ -368,7 +407,7 @@ mod tests {
             owner_window_label: "test-window".to_string(),
             cmd_tx: tx,
             state: Arc::new(RwLock::new(state)),
-            emitter: crate::web::event_bridge::EventEmitter::Noop,
+            emitter: EventEmitter::Noop,
         }
     }
 
@@ -394,7 +433,66 @@ mod tests {
             owner_window_label: "test-window".to_string(),
             cmd_tx: tx,
             state: Arc::new(RwLock::new(state)),
-            emitter: crate::web::event_bridge::EventEmitter::Noop,
+            emitter: EventEmitter::Noop,
+        }
+    }
+
+    /// Build a broadcaster + subscribed receiver. Subscribing here (not lazily
+    /// inside the test) ensures events emitted between construction and the
+    /// first `recv` are buffered rather than dropped.
+    fn make_test_broadcaster() -> (Arc<WebEventBroadcaster>, broadcast::Receiver<WebEvent>) {
+        let bcast = Arc::new(WebEventBroadcaster::new());
+        let rx = bcast.subscribe();
+        (bcast, rx)
+    }
+
+    /// Insert a fake `AgentConnection` with the given emitter & working_dir.
+    /// The cmd_tx receiver is dropped — `send_prompt` will return
+    /// `ProcessExited`, which is fine for tests that only verify linkage.
+    async fn insert_fake_connection(
+        mgr: &ConnectionManager,
+        id: &str,
+        agent_type: crate::models::agent::AgentType,
+        working_dir: Option<PathBuf>,
+        emitter: EventEmitter,
+    ) {
+        let (tx, _rx) = mpsc::channel(1);
+        let mut state = SessionState::new(
+            id.to_string(),
+            agent_type,
+            working_dir,
+            "test-window".to_string(),
+            None,
+        );
+        state.status = ConnectionStatus::Connected;
+        let conn = AgentConnection {
+            id: id.to_string(),
+            agent_type,
+            status: ConnectionStatus::Connected,
+            owner_window_label: "test-window".to_string(),
+            cmd_tx: tx,
+            state: Arc::new(RwLock::new(state)),
+            emitter,
+        };
+        let mut map = mgr.connections.lock().await;
+        map.insert(id.to_string(), conn);
+    }
+
+    /// Receive the first `acp://event` envelope from the broadcaster, skipping
+    /// other channels. Times out after 200 ms to keep tests honest.
+    async fn recv_first_acp_event(
+        rx: &mut broadcast::Receiver<WebEvent>,
+    ) -> crate::acp::types::EventEnvelope {
+        loop {
+            let evt = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
+                .await
+                .expect("timed out waiting for acp event")
+                .expect("broadcaster closed");
+            if evt.channel != "acp://event" {
+                continue;
+            }
+            return serde_json::from_value((*evt.payload).clone())
+                .expect("envelope deserializes");
         }
     }
 
@@ -450,7 +548,7 @@ mod tests {
         // First call: creates conversation row, sets state.conversation_id.
         // The mpsc send error after linking is expected and ignored here.
         let _ = mgr
-            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id))
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
             .await;
         let snap = mgr
             .get_state(conn_id)
@@ -468,7 +566,7 @@ mod tests {
 
         // Second call: ignores folder_id, does NOT create another row.
         let _ = mgr
-            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id))
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
             .await;
         let snap2 = mgr
             .get_state(conn_id)
@@ -498,7 +596,9 @@ mod tests {
             );
         }
         // No folder_id provided — expect fallback to working_dir.
-        let _ = mgr.send_prompt_linked(&db, conn_id, vec![], None).await;
+        let _ = mgr
+            .send_prompt_linked(&db, conn_id, vec![], None, None)
+            .await;
         let snap = mgr
             .get_state(conn_id)
             .await
@@ -526,7 +626,9 @@ mod tests {
             let mut map = mgr.connections.lock().await;
             map.insert(conn_id.into(), fake_connection(conn_id, None));
         }
-        let result = mgr.send_prompt_linked(&db, conn_id, vec![], None).await;
+        let result = mgr
+            .send_prompt_linked(&db, conn_id, vec![], None, None)
+            .await;
         assert!(
             result.is_err(),
             "should error when neither folder_id nor working_dir is available"
@@ -536,5 +638,156 @@ mod tests {
             err_str.contains("working_dir"),
             "error should mention missing working_dir, got: {err_str}"
         );
+    }
+
+    /// Count of `conversation` rows (ignoring soft-delete) — used by the
+    /// caller-supplied conversation_id tests to assert no new row was created.
+    async fn count_conversation_rows(db: &crate::db::AppDatabase) -> usize {
+        use crate::db::entities::conversation;
+        use sea_orm::EntityTrait;
+        conversation::Entity::find()
+            .all(&db.conn)
+            .await
+            .unwrap()
+            .len()
+    }
+
+    #[tokio::test]
+    async fn send_prompt_linked_uses_caller_conversation_id_when_provided() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/caller-id").await;
+        // Pre-create a conversation row the caller will reference.
+        let pre_existing = conversation_service::create(
+            &db.conn,
+            folder_id,
+            AgentType::ClaudeCode,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let mgr = ConnectionManager::new();
+        let (broadcaster, mut rx) = make_test_broadcaster();
+        let conn_id = "conn-caller-id";
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/caller-id")),
+            EventEmitter::WebOnly(broadcaster.clone()),
+        )
+        .await;
+
+        // Count rows before
+        let before = count_conversation_rows(&db).await;
+
+        // Send with caller-supplied conversation_id + folder_id.
+        let _ = mgr
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                vec![],
+                Some(folder_id),
+                Some(pre_existing.id),
+            )
+            .await;
+
+        // No new conversation row was created.
+        let after = count_conversation_rows(&db).await;
+        assert_eq!(after, before, "no new row should be created");
+
+        // State now has the caller-supplied conversation_id.
+        let state = mgr.get_state(conn_id).await.unwrap();
+        assert_eq!(state.read().await.conversation_id, Some(pre_existing.id));
+
+        // ConversationLinked event was emitted with the caller's id.
+        let env = recv_first_acp_event(&mut rx).await;
+        match env.payload {
+            AcpEvent::ConversationLinked {
+                conversation_id,
+                folder_id: emitted_folder,
+            } => {
+                assert_eq!(conversation_id, pre_existing.id);
+                assert_eq!(emitted_folder, folder_id);
+            }
+            other => panic!("expected ConversationLinked, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn send_prompt_linked_rejects_conversation_id_without_folder_id() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let mgr = ConnectionManager::new();
+        let (broadcaster, _rx) = make_test_broadcaster();
+        let conn_id = "conn-bad-args";
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/x")),
+            EventEmitter::WebOnly(broadcaster),
+        )
+        .await;
+
+        let err = mgr
+            .send_prompt_linked(&db, conn_id, vec![], None, Some(42))
+            .await
+            .expect_err("should reject conversation_id without folder_id");
+        assert!(matches!(err, AcpError::Protocol(_)));
+    }
+
+    #[tokio::test]
+    async fn send_prompt_linked_caller_id_is_noop_when_already_linked() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/already").await;
+        let pre = conversation_service::create(
+            &db.conn,
+            folder_id,
+            AgentType::ClaudeCode,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let mgr = ConnectionManager::new();
+        let (broadcaster, mut rx) = make_test_broadcaster();
+        let conn_id = "conn-already";
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/already")),
+            EventEmitter::WebOnly(broadcaster.clone()),
+        )
+        .await;
+        // Pre-link the connection state.
+        {
+            let state = mgr.get_state(conn_id).await.unwrap();
+            state.write().await.conversation_id = Some(pre.id);
+        }
+
+        let before = count_conversation_rows(&db).await;
+        let _ = mgr
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                vec![],
+                Some(folder_id),
+                Some(pre.id),
+            )
+            .await;
+        let after = count_conversation_rows(&db).await;
+        assert_eq!(after, before);
+
+        // No ConversationLinked event was emitted (already linked). The
+        // forwarded send_prompt fails with ProcessExited because the
+        // cmd_tx receiver was dropped — it never reaches an emit path.
+        let timed = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
+        assert!(timed.is_err() || timed.unwrap().is_err(), "no event expected");
     }
 }

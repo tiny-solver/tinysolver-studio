@@ -151,6 +151,7 @@ pub async fn acp_prompt(
             &params.connection_id,
             params.blocks,
             params.folder_id,
+            None,
         )
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
