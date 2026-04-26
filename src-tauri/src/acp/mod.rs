@@ -11,9 +11,9 @@ pub mod session_state;
 pub mod terminal_runtime;
 pub mod types;
 
-#[allow(unused_imports)] // Re-exports consumed by Task 2 SessionState
+#[allow(unused_imports)] // Re-exports consumed by Phase 1 Task 3 emit_with_state + Phase 2 endpoints
 pub use session_state::{
-    LiveContentBlock, LiveMessage, PendingPermissionState, ToolCallOutput, ToolCallState,
-    ToolCallStatus, ToolKind, UsageInfo,
+    LiveContentBlock, LiveMessage, LiveSessionSnapshot, PendingPermissionState, SessionState,
+    ToolCallOutput, ToolCallState, ToolCallStatus, ToolKind, UsageInfo,
 };
 pub use types::{AcpEvent, EventEnvelope};
