@@ -1,7 +1,7 @@
 //! 会话级状态结构。后端权威：流式累积、in-flight tool calls、待处理 permission 等
 //! 全部住在这里。Phase 2 的 snapshot 端点直接从此处读取 live 部分。
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
@@ -43,6 +43,10 @@ pub struct ToolCallState {
     pub status: ToolCallStatus,
     pub input: Option<serde_json::Value>,
     pub output: Option<ToolCallOutput>,
+    /// Latest rendered content blocks reported by the agent (markdown / text).
+    /// Distinct from `output` (which is the parsed `raw_output`); kept as the
+    /// most recent value (replace-on-update, not append) for snapshot fidelity.
+    pub content: Option<String>,
     /// 流式拼接的 input chunks（serde 不输出，仅运行时用）
     #[serde(skip)]
     pub raw_input_chunks: Vec<String>,
@@ -108,17 +112,17 @@ pub struct UsageInfo {
 pub struct SessionState {
     // 身份
     pub connection_id: String,
-    pub conversation_id: Option<i64>,
+    pub conversation_id: Option<i32>,
     pub external_id: Option<String>,
     pub agent_type: AgentType,
     pub working_dir: Option<PathBuf>,
     pub owner_window_label: String,
-    pub folder_id: Option<i64>,
+    pub folder_id: Option<i32>,
 
     // 状态
     pub status: ConnectionStatus,
     pub live_message: Option<LiveMessage>,
-    pub active_tool_calls: HashMap<String, ToolCallState>,
+    pub active_tool_calls: BTreeMap<String, ToolCallState>,
     pub pending_permission: Option<PendingPermissionState>,
 
     // ACP 协商出的能力
@@ -142,7 +146,7 @@ impl SessionState {
         agent_type: AgentType,
         working_dir: Option<PathBuf>,
         owner_window_label: String,
-        folder_id: Option<i64>,
+        folder_id: Option<i32>,
     ) -> Self {
         Self {
             connection_id,
@@ -154,7 +158,7 @@ impl SessionState {
             folder_id,
             status: ConnectionStatus::Connecting,
             live_message: None,
-            active_tool_calls: HashMap::new(),
+            active_tool_calls: BTreeMap::new(),
             pending_permission: None,
             modes: None,
             current_mode: None,
@@ -330,7 +334,7 @@ impl SessionState {
         kind: Option<&str>,
         title: Option<&str>,
         status: Option<&str>,
-        _content: Option<&str>,
+        content: Option<&str>,
         raw_input: Option<&str>,
         raw_output: Option<&str>,
     ) {
@@ -344,6 +348,7 @@ impl SessionState {
                 status: ToolCallStatus::Pending,
                 input: None,
                 output: None,
+                content: None,
                 raw_input_chunks: Vec::new(),
             });
         if let Some(k) = kind {
@@ -354,6 +359,9 @@ impl SessionState {
         }
         if let Some(s) = status {
             entry.status = parse_tool_call_status(s);
+        }
+        if let Some(c) = content {
+            entry.content = Some(c.to_string());
         }
         if let Some(chunk) = raw_input {
             entry.raw_input_chunks.push(chunk.to_string());
@@ -376,6 +384,8 @@ impl SessionState {
     pub fn to_snapshot(&self) -> LiveSessionSnapshot {
         LiveSessionSnapshot {
             connection_id: self.connection_id.clone(),
+            conversation_id: self.conversation_id,
+            folder_id: self.folder_id,
             status: self.status.clone(),
             external_id: self.external_id.clone(),
             live_message: self.live_message.clone(),
@@ -398,6 +408,8 @@ impl SessionState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveSessionSnapshot {
     pub connection_id: String,
+    pub conversation_id: Option<i32>,
+    pub folder_id: Option<i32>,
     pub status: ConnectionStatus,
     pub external_id: Option<String>,
     pub live_message: Option<LiveMessage>,
@@ -587,6 +599,64 @@ mod tests {
         assert_eq!(entry.label, "ls");
         assert!(entry.input.is_none());
         assert!(entry.output.is_none());
+    }
+
+    #[test]
+    fn snapshot_active_tool_calls_are_sorted_by_id() {
+        let mut s = fresh_state();
+        for id in ["tc-z", "tc-a", "tc-m"] {
+            s.apply_event(&AcpEvent::ToolCall {
+                tool_call_id: id.into(),
+                title: id.into(),
+                kind: "read".into(),
+                status: "pending".into(),
+                content: None,
+                raw_input: None,
+                raw_output: None,
+                locations: None,
+                meta: None,
+            });
+        }
+        let snap = s.to_snapshot();
+        let ids: Vec<&str> = snap
+            .active_tool_calls
+            .iter()
+            .map(|tc| tc.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["tc-a", "tc-m", "tc-z"]);
+    }
+
+    #[test]
+    fn tool_call_content_field_is_preserved_on_state() {
+        let mut s = fresh_state();
+        s.apply_event(&AcpEvent::ToolCall {
+            tool_call_id: "tc-1".into(),
+            title: "ls".into(),
+            kind: "execute".into(),
+            status: "pending".into(),
+            content: Some("line one\nline two".into()),
+            raw_input: None,
+            raw_output: None,
+            locations: None,
+            meta: None,
+        });
+        let entry = s.active_tool_calls.get("tc-1").expect("tc-1 inserted");
+        assert_eq!(entry.content.as_deref(), Some("line one\nline two"));
+
+        s.apply_event(&AcpEvent::ToolCallUpdate {
+            tool_call_id: "tc-1".into(),
+            title: None,
+            status: None,
+            content: Some("line three".into()),
+            raw_input: None,
+            raw_output: None,
+            raw_output_append: None,
+            locations: None,
+            meta: None,
+        });
+        let entry = s.active_tool_calls.get("tc-1").unwrap();
+        // Phase 2 chooses replace-on-update semantics: update == latest known content.
+        assert_eq!(entry.content.as_deref(), Some("line three"));
     }
 
     #[test]
@@ -847,19 +917,6 @@ mod tests {
             if let Some(obj) = lm.as_object_mut() {
                 obj.remove("id");
                 obj.remove("started_at");
-            }
-        }
-        // active_tool_calls is a Vec<ToolCallState> derived from a HashMap's
-        // values — iteration order is non-deterministic. Sort by id so the
-        // structural comparison is stable across paths.
-        if let Some(tcs) = v.get_mut("active_tool_calls") {
-            if let Some(arr) = tcs.as_array_mut() {
-                arr.sort_by(|x, y| {
-                    x.get("id")
-                        .and_then(|s| s.as_str())
-                        .unwrap_or("")
-                        .cmp(y.get("id").and_then(|s| s.as_str()).unwrap_or(""))
-                });
             }
         }
         v
