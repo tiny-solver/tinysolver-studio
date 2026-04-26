@@ -511,6 +511,76 @@ export type EventEnvelope = {
   connection_id: string
 } & AcpEvent
 
+// --- LiveSessionSnapshot wire types (mirror src-tauri/src/acp/session_state.rs) ---
+
+export type ToolCallStatus = "pending" | "in_progress" | "completed" | "failed"
+
+export type ToolKind =
+  | "read"
+  | "edit"
+  | "delete"
+  | "move"
+  | "search"
+  | "execute"
+  | "think"
+  | "fetch"
+  | "other"
+
+export type ToolCallOutput =
+  | { kind: "text"; content: string }
+  | { kind: "error"; message: string }
+  | { kind: "json"; value: unknown }
+
+export interface ToolCallState {
+  id: string
+  kind: ToolKind
+  label: string
+  status: ToolCallStatus
+  input: unknown | null
+  output: ToolCallOutput | null
+  content: string | null
+}
+
+export type LiveContentBlock =
+  | { kind: "text"; text: string }
+  | { kind: "thinking"; text: string }
+  | { kind: "tool_call_ref"; tool_call_id: string }
+  | { kind: "plan"; entries: unknown }
+
+export interface LiveMessage {
+  id: string
+  role: MessageRole
+  content: LiveContentBlock[]
+  started_at: string
+}
+
+export interface PendingPermissionState {
+  request_id: string
+  tool_call_id: string
+  tool_description: string
+  options: PermissionOptionInfo[]
+  created_at: string
+}
+
+export interface LiveSessionSnapshot {
+  connection_id: string
+  conversation_id: number | null
+  folder_id: number | null
+  status: ConnectionStatus
+  external_id: string | null
+  live_message: LiveMessage | null
+  active_tool_calls: ToolCallState[]
+  pending_permission: PendingPermissionState | null
+  modes: SessionModeStateInfo | null
+  current_mode: string | null
+  config_options: SessionConfigOptionInfo[] | null
+  prompt_capabilities: PromptCapabilitiesInfo | null
+  usage: SessionUsageUpdateInfo | null
+  fork_supported: boolean
+  available_commands: AvailableCommandInfo[]
+  event_seq: number
+}
+
 // Connection info returned by acp_list_connections
 export interface ConnectionInfo {
   id: string

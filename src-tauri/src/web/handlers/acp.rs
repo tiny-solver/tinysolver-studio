@@ -366,6 +366,44 @@ pub async fn acp_list_connections(
     Ok(Json(result))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpGetSessionSnapshotParams {
+    pub connection_id: String,
+}
+
+pub async fn acp_get_session_snapshot(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AcpGetSessionSnapshotParams>,
+) -> Result<Json<Option<crate::acp::LiveSessionSnapshot>>, AppCommandError> {
+    let snap = acp_commands::acp_get_session_snapshot_core(
+        &state.connection_manager,
+        &params.connection_id,
+    )
+    .await
+    .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(snap))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpGetSessionSnapshotByConversationParams {
+    pub conversation_id: i32,
+}
+
+pub async fn acp_get_session_snapshot_by_conversation(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AcpGetSessionSnapshotByConversationParams>,
+) -> Result<Json<Option<crate::acp::LiveSessionSnapshot>>, AppCommandError> {
+    let snap = acp_commands::acp_get_session_snapshot_by_conversation_core(
+        &state.connection_manager,
+        params.conversation_id,
+    )
+    .await
+    .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(snap))
+}
+
 // --- Pattern B+: Core function handlers ---
 
 #[derive(Deserialize)]

@@ -11,9 +11,13 @@ pub mod session_state;
 pub mod terminal_runtime;
 pub mod types;
 
-#[allow(unused_imports)] // Re-exports consumed by Phase 1 Task 3 emit_with_state + Phase 2 endpoints
+pub use session_state::{LiveSessionSnapshot, SessionState};
+// Re-export the inner types of LiveSessionSnapshot for downstream consumers; not all are
+// directly named in Rust today (they ride along through the snapshot struct), so silence
+// dead-import warnings rather than dropping them.
+#[allow(unused_imports)]
 pub use session_state::{
-    LiveContentBlock, LiveMessage, LiveSessionSnapshot, PendingPermissionState, SessionState,
-    ToolCallOutput, ToolCallState, ToolCallStatus, ToolKind, UsageInfo,
+    LiveContentBlock, LiveMessage, PendingPermissionState, ToolCallOutput, ToolCallState,
+    ToolCallStatus, ToolKind, UsageInfo,
 };
 pub use types::{AcpEvent, EventEnvelope};

@@ -8,6 +8,7 @@ import type {
   AgentStats,
   SidebarData,
   ConnectionInfo,
+  LiveSessionSnapshot,
   AcpAgentInfo,
   AcpAgentStatus,
   AgentSkillScope,
@@ -171,6 +172,20 @@ export async function acpDisconnect(connectionId: string): Promise<void> {
 
 export async function acpListConnections(): Promise<ConnectionInfo[]> {
   return getTransport().call("acp_list_connections")
+}
+
+export async function acpGetSessionSnapshot(
+  connectionId: string
+): Promise<LiveSessionSnapshot | null> {
+  return getTransport().call("acp_get_session_snapshot", { connectionId })
+}
+
+export async function acpGetSessionSnapshotByConversation(
+  conversationId: number
+): Promise<LiveSessionSnapshot | null> {
+  return getTransport().call("acp_get_session_snapshot_by_conversation", {
+    conversationId,
+  })
 }
 
 export async function acpListAgents(): Promise<AcpAgentInfo[]> {
