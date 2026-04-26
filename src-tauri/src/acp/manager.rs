@@ -99,8 +99,10 @@ impl ConnectionManager {
             let conn = connections
                 .get(conn_id)
                 .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
-            let already = conn.state.read().await.conversation_id.is_some();
-            let working_dir = conn.state.read().await.working_dir.clone();
+            let (already, working_dir) = {
+                let s = conn.state.read().await;
+                (s.conversation_id.is_some(), s.working_dir.clone())
+            };
             (
                 conn.state.clone(),
                 conn.emitter.clone(),
@@ -110,6 +112,12 @@ impl ConnectionManager {
             )
         };
 
+        // TOCTOU note: two concurrent `send_prompt_linked` calls for the same
+        // connection could both observe `already_linked == false` and each create
+        // a conversation row. In practice the UI / API surface sends prompts
+        // serially per connection, so the race window is benign. A defensive
+        // fix would hold `state.write()` across check + create + emit, but that
+        // would block other emits on DB I/O, which is worse than the rare race.
         if !already_linked {
             let folder_id = match folder_id {
                 Some(id) => id,
