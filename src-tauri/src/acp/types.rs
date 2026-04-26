@@ -107,6 +107,14 @@ pub enum AcpEvent {
     },
     /// Session established with agent-assigned session ID
     SessionStarted { session_id: String },
+    /// Backend has bound this connection to a conversation row. Emitted exactly
+    /// once per connection lifetime, on first prompt that creates the row.
+    /// Frontend uses this to associate the connection_id with conversation_id
+    /// without polling the DB.
+    ConversationLinked {
+        conversation_id: i32,
+        folder_id: i32,
+    },
     /// Session modes are available for this connection
     SessionModes { modes: SessionModeStateInfo },
     /// Session configuration options are available/updated for this connection

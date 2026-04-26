@@ -275,6 +275,13 @@ impl SessionState {
                 self.pending_permission = None;
                 self.status = ConnectionStatus::Connected;
             }
+            AcpEvent::ConversationLinked {
+                conversation_id,
+                folder_id,
+            } => {
+                self.conversation_id = Some(*conversation_id);
+                self.folder_id = Some(*folder_id);
+            }
             AcpEvent::PlanUpdate { .. }
             | AcpEvent::ClaudeSdkMessage { .. }
             | AcpEvent::SelectorsReady
@@ -523,6 +530,22 @@ mod tests {
         assert!(s.pending_permission.is_none());
         assert!(!s.fork_supported);
         assert!(s.available_commands.is_empty());
+    }
+
+    #[test]
+    fn conversation_linked_event_writes_ids_into_state_and_snapshot() {
+        let mut s = fresh_state();
+        assert_eq!(s.conversation_id, None);
+        assert_eq!(s.folder_id, None);
+        s.apply_event(&AcpEvent::ConversationLinked {
+            conversation_id: 42,
+            folder_id: 7,
+        });
+        assert_eq!(s.conversation_id, Some(42));
+        assert_eq!(s.folder_id, Some(7));
+        let snap = s.to_snapshot();
+        assert_eq!(snap.conversation_id, Some(42));
+        assert_eq!(snap.folder_id, Some(7));
     }
 
     #[test]

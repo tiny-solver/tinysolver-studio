@@ -441,6 +441,11 @@ export type AcpEvent =
       session_id: string
     }
   | {
+      type: "conversation_linked"
+      conversation_id: number
+      folder_id: number
+    }
+  | {
       type: "session_modes"
       modes: SessionModeStateInfo
     }
