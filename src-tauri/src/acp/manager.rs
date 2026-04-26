@@ -233,4 +233,100 @@ impl ConnectionManager {
         let connections = self.connections.lock().await;
         connections.values().map(|c| c.info()).collect()
     }
+
+    /// Clone the `Arc<RwLock<SessionState>>` for a given connection id so the
+    /// caller can read/write state without holding the connections mutex.
+    /// Returns `None` if no such connection is registered.
+    pub async fn get_state(
+        &self,
+        conn_id: &str,
+    ) -> Option<std::sync::Arc<tokio::sync::RwLock<crate::acp::SessionState>>> {
+        let connections = self.connections.lock().await;
+        connections.get(conn_id).map(|conn| conn.state.clone())
+    }
+
+    /// Resolve a conversation_id to its currently-active connection id, if any.
+    /// Used by the by-conversation snapshot endpoint and the LifecycleSubscriber.
+    pub async fn find_connection_by_conversation_id(
+        &self,
+        conversation_id: i32,
+    ) -> Option<String> {
+        let connections = self.connections.lock().await;
+        for (id, conn) in connections.iter() {
+            // Read the conversation_id under a read lock; .try_read() avoids
+            // blocking if a writer (emit_with_state) currently holds the lock,
+            // and we simply skip that entry — a fresh snapshot/lookup the next
+            // call resolves it. This keeps the connections mutex window short.
+            if let Ok(state) = conn.state.try_read() {
+                if state.conversation_id == Some(conversation_id) {
+                    return Some(id.clone());
+                }
+            }
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::acp::connection::AgentConnection;
+    use crate::acp::session_state::SessionState;
+    use crate::acp::types::ConnectionStatus;
+    use std::sync::Arc;
+    use tokio::sync::{mpsc, RwLock};
+
+    fn fake_connection(id: &str, conv_id: Option<i32>) -> AgentConnection {
+        let (tx, _rx) = mpsc::channel(1);
+        let mut state = SessionState::new(
+            id.to_string(),
+            crate::models::agent::AgentType::ClaudeCode,
+            None,
+            "test-window".to_string(),
+            None,
+        );
+        state.conversation_id = conv_id;
+        state.status = ConnectionStatus::Connected;
+        AgentConnection {
+            id: id.to_string(),
+            agent_type: crate::models::agent::AgentType::ClaudeCode,
+            status: ConnectionStatus::Connected,
+            owner_window_label: "test-window".to_string(),
+            cmd_tx: tx,
+            state: Arc::new(RwLock::new(state)),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_state_returns_arc_for_known_connection() {
+        let mgr = ConnectionManager::new();
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert("c1".to_string(), fake_connection("c1", None));
+        }
+        let state = mgr.get_state("c1").await.expect("state should be found");
+        assert_eq!(state.read().await.connection_id, "c1");
+    }
+
+    #[tokio::test]
+    async fn get_state_returns_none_for_unknown_connection() {
+        let mgr = ConnectionManager::new();
+        assert!(mgr.get_state("does-not-exist").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn find_connection_by_conversation_id_matches_when_bound() {
+        let mgr = ConnectionManager::new();
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert("c1".to_string(), fake_connection("c1", Some(42)));
+            map.insert("c2".to_string(), fake_connection("c2", None));
+        }
+        let found = mgr
+            .find_connection_by_conversation_id(42)
+            .await
+            .expect("should find c1");
+        assert_eq!(found, "c1");
+        assert!(mgr.find_connection_by_conversation_id(999).await.is_none());
+    }
 }
