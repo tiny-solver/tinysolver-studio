@@ -1294,7 +1294,11 @@ export interface AcpActionsValue {
   ): Promise<void>
   disconnect(contextKey: string): Promise<void>
   disconnectAll(): Promise<void>
-  sendPrompt(contextKey: string, blocks: PromptInputBlock[]): Promise<void>
+  sendPrompt(
+    contextKey: string,
+    blocks: PromptInputBlock[],
+    opts?: { folderId?: number | null; conversationId?: number | null }
+  ): Promise<void>
   setMode(contextKey: string, modeId: string): Promise<void>
   setConfigOption(
     contextKey: string,
@@ -2326,11 +2330,20 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   }, [dispatch])
 
   const sendPrompt = useCallback(
-    async (contextKey: string, blocks: PromptInputBlock[]) => {
+    async (
+      contextKey: string,
+      blocks: PromptInputBlock[],
+      opts?: { folderId?: number | null; conversationId?: number | null }
+    ) => {
       const conn = storeRef.current.connections.get(contextKey)
       if (!conn) return
       lastActivityRef.current.set(contextKey, Date.now())
-      await acpPrompt(conn.connectionId, blocks)
+      await acpPrompt(
+        conn.connectionId,
+        blocks,
+        opts?.folderId ?? null,
+        opts?.conversationId ?? null
+      )
     },
     []
   )
