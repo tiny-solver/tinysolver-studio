@@ -53,9 +53,9 @@ import {
 } from "@/lib/prompt-draft"
 import {
   AGENT_LABELS,
-  type AcpEvent,
   type AgentType,
   type ContentBlock,
+  type EventEnvelope,
   type MessageTurn,
   type PromptDraft,
 } from "@/lib/types"
@@ -1152,14 +1152,14 @@ export function ConversationDetailPanel() {
 
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
-        listen<AcpEvent>("acp://event", (event) => {
-          const payload = event.payload
-          if (payload.type !== "turn_complete") return
+        listen<EventEnvelope>("acp://event", (event) => {
+          const envelope = event.payload
+          if (envelope.type !== "turn_complete") return
 
           const runtimeConversationId =
-            getConversationIdByExternalIdRef.current(payload.session_id)
+            getConversationIdByExternalIdRef.current(envelope.session_id)
           const summary = conversationsRef.current.find(
-            (item) => item.external_id === payload.session_id
+            (item) => item.external_id === envelope.session_id
           )
           const matchedConversationId =
             runtimeConversationId ?? summary?.id ?? null

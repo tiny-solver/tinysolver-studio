@@ -29,6 +29,7 @@ import type {
   AcpEvent,
   AvailableCommandInfo,
   ConnectionStatus,
+  EventEnvelope,
   PlanEntryInfo,
   PermissionOptionInfo,
   SessionConfigOptionInfo,
@@ -1445,7 +1446,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const lastActivityRef = useRef(new Map<string, number>())
   const streamingQueueRef = useRef<StreamingAction[]>([])
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingUnmappedEventsRef = useRef(new Map<string, AcpEvent[]>())
+  const pendingUnmappedEventsRef = useRef(new Map<string, EventEnvelope[]>())
   const listenerReadyRef = useRef(false)
   const listenerReadyWaitersRef = useRef<Array<() => void>>([])
 
@@ -1608,7 +1609,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const bufferUnmappedEvent = useCallback((event: AcpEvent) => {
+  const bufferUnmappedEvent = useCallback((event: EventEnvelope) => {
     const connectionId = event.connection_id
     const buffered = pendingUnmappedEventsRef.current.get(connectionId) ?? []
     if (buffered.length >= MAX_BUFFERED_UNMAPPED_EVENTS_PER_CONNECTION) {
@@ -1628,7 +1629,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const consumeBufferedEvents = useCallback(
-    (connectionId: string): AcpEvent[] => {
+    (connectionId: string): EventEnvelope[] => {
       const buffered = pendingUnmappedEventsRef.current.get(connectionId)
       if (!buffered || buffered.length === 0) return []
       pendingUnmappedEventsRef.current.delete(connectionId)
@@ -1684,7 +1685,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const handleMappedEvent = useCallback(
-    (contextKey: string, e: AcpEvent) => {
+    (contextKey: string, e: EventEnvelope) => {
       switch (e.type) {
         case "status_changed":
           flushStreamingQueue()
@@ -2053,16 +2054,16 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
     listenerReadyRef.current = false
 
-    subscribe<AcpEvent>("acp://event", (payload) => {
-      const contextKey = reverseMapRef.current.get(payload.connection_id)
+    subscribe<EventEnvelope>("acp://event", (envelope) => {
+      const contextKey = reverseMapRef.current.get(envelope.connection_id)
       if (!contextKey) {
-        bufferUnmappedEvent(payload)
+        bufferUnmappedEvent(envelope)
         return
       }
 
       // Touch activity on every incoming event
       lastActivityRef.current.set(contextKey, Date.now())
-      handleMappedEvent(contextKey, payload)
+      handleMappedEvent(contextKey, envelope)
     })
       .then((fn) => {
         if (cancelled) {

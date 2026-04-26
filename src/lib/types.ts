@@ -489,9 +489,17 @@ export type AcpEvent =
     }
 
 /**
- * 所有 ACP 事件统一通过此 envelope 发出。
- * 通过 serde flatten，JSON 形态：{ seq, connection_id, type, ...变体字段 }
- * TS 端用交叉类型表达：envelope 顶层 = { seq, connection_id } & AcpEvent
+ * Wire envelope for all ACP events. JSON shape is flat via Rust's serde
+ * flatten: { seq, connection_id, type, ...variant fields }. Expressed in TS
+ * as an intersection that distributes over the AcpEvent discriminated union,
+ * so `envelope.type` narrows the variant fields just like on AcpEvent.
+ *
+ * `seq` is a monotonically-increasing per-connection sequence number. Phase 0
+ * always emits 0 (placeholder); Phase 1 wires it to the real counter, after
+ * which clients use it as a dedup anchor between snapshot fetches and the
+ * live event stream (drop events with seq <= last_event_seq from snapshot).
+ *
+ * 所有 ACP 事件统一通过此 envelope 发出，详见 spec phase 0/1。
  */
 export type EventEnvelope = {
   seq: number
