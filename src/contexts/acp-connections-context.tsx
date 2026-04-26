@@ -22,7 +22,9 @@ import {
   acpCancel,
   acpRespondPermission,
   acpDisconnect,
+  acpGetSessionSnapshot,
 } from "@/lib/api"
+import { denormalizeSnapshot } from "@/lib/snapshot-denormalize"
 import type {
   AgentType,
   AcpAgentStatus,
@@ -2289,6 +2291,29 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           agentType,
           workingDir: nextWorkingDir,
         })
+
+        // Hydrate from backend snapshot. Non-blocking: if the snapshot
+        // response loses the race against the live event stream, the
+        // HYDRATE_FROM_SNAPSHOT reducer arm is a no-op (eventSeq guard).
+        // If the connection is brand-new and SessionState is empty, the
+        // snapshot is structurally empty and HYDRATE is also a no-op.
+        void acpGetSessionSnapshot(connectionId)
+          .then((snapshot) => {
+            if (!snapshot) return
+            const patch = denormalizeSnapshot(snapshot)
+            dispatch({
+              type: "HYDRATE_FROM_SNAPSHOT",
+              contextKey,
+              patch,
+            })
+          })
+          .catch((e: unknown) => {
+            console.warn(
+              "[acp-context] snapshot fetch failed for",
+              connectionId,
+              e
+            )
+          })
 
         const buffered = consumeBufferedEvents(connectionId)
         if (buffered.length > 0) {
