@@ -118,9 +118,15 @@ export async function acpConnect(
 export async function acpPrompt(
   connectionId: string,
   blocks: PromptInputBlock[],
-  folderId: number | null = null
+  folderId: number | null = null,
+  conversationId: number | null = null
 ): Promise<void> {
-  return getTransport().call("acp_prompt", { connectionId, blocks, folderId })
+  return getTransport().call("acp_prompt", {
+    connectionId,
+    blocks,
+    folderId,
+    conversationId,
+  })
 }
 
 export async function acpSetMode(
