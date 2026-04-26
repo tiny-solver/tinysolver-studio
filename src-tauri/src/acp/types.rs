@@ -43,7 +43,7 @@ pub struct PromptCapabilitiesInfo {
 /// `seq` 用于前端去重锚点（Phase 0 占位 0，Phase 1 起严格递增）。
 /// `connection_id` 上提到顶层，配合 `#[serde(flatten)]` 让 JSON 保持平铺：
 /// `{ seq, connection_id, type, ...变体字段 }`。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventEnvelope {
     pub seq: u64,
     pub connection_id: String,
@@ -52,7 +52,7 @@ pub struct EventEnvelope {
 }
 
 /// Events pushed from Rust backend to frontend via Tauri event system.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AcpEvent {
     /// Agent returned text content (streaming delta)

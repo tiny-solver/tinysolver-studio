@@ -25,11 +25,12 @@ use sacp::{
     UntypedMessage,
 };
 use sacp_tokio::AcpAgent;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{FileSystemRuntime, FileSystemRuntimeError};
 use crate::acp::registry::{self, AgentDistribution};
+use crate::acp::session_state::SessionState;
 use crate::acp::terminal_runtime::{TerminalRuntime, TerminalRuntimeError};
 use crate::acp::types::{
     AcpEvent, AvailableCommandInfo, ConnectionInfo, ConnectionStatus, PermissionOptionInfo,
@@ -39,7 +40,7 @@ use crate::acp::types::{
 };
 use crate::models::agent::AgentType;
 use crate::network::proxy;
-use crate::web::event_bridge::{emit_acp, EventEmitter};
+use crate::web::event_bridge::{emit_with_state, EventEmitter};
 
 const DEFAULT_COMMAND_COLOR_ENV: [(&str, &str); 1] = [("CLICOLOR_FORCE", "1")];
 
@@ -135,6 +136,10 @@ pub struct AgentConnection {
     pub status: ConnectionStatus,
     pub owner_window_label: String,
     pub cmd_tx: mpsc::Sender<ConnectionCommand>,
+    /// 后端权威的会话状态。所有 `emit_with_state` 写入此状态并自增 seq。
+    /// 使用 `Arc<RwLock<_>>` 让 spawn 出的连接 task 与外部 snapshot 读取共享。
+    #[allow(dead_code)] // Phase 1 Task 3: read by Phase 2 snapshot endpoint
+    pub state: Arc<RwLock<SessionState>>,
 }
 
 impl AgentConnection {
@@ -360,13 +365,25 @@ pub async fn spawn_agent_connection(
     emitter: EventEmitter,
     connections: Arc<tokio::sync::Mutex<HashMap<String, AgentConnection>>>,
 ) -> Result<(), AcpError> {
-    emit_acp(
+    // Create the authoritative session state up front. Subsequent emit_with_state
+    // calls write through this state and increment its seq counter so the first
+    // event the frontend sees has seq=1, not the placeholder 0 from Phase 0.
+    let session_state = Arc::new(RwLock::new(SessionState::new(
+        connection_id.clone(),
+        agent_type,
+        working_dir.clone().map(PathBuf::from),
+        owner_window_label.clone(),
+        None, // folder_id 由后续 prompt handler 在首次 send 时绑定 (Phase 2)
+    )));
+
+    emit_with_state(
+        &session_state,
         &emitter,
-        &connection_id,
         AcpEvent::StatusChanged {
             status: ConnectionStatus::Connecting,
         },
-    );
+    )
+    .await;
 
     let agent = build_agent(agent_type, &runtime_env).await?;
 
@@ -375,6 +392,7 @@ pub async fn spawn_agent_connection(
     let emitter_clone = emitter.clone();
     let cleanup_connections = connections.clone();
     let cleanup_connection_id = connection_id.clone();
+    let state_clone = Arc::clone(&session_state);
 
     // Insert the entry BEFORE spawning the background task so that a
     // fast-failing `run_connection` can never remove it before it was
@@ -387,6 +405,7 @@ pub async fn spawn_agent_connection(
             status: ConnectionStatus::Connecting,
             owner_window_label,
             cmd_tx,
+            state: Arc::clone(&session_state),
         },
     );
 
@@ -406,29 +425,32 @@ pub async fn spawn_agent_connection(
             session_id,
             cmd_rx,
             emitter_clone.clone(),
+            Arc::clone(&state_clone),
         )
         .await;
 
         if let Err(e) = result {
             let code = e.code().map(String::from);
-            emit_acp(
+            emit_with_state(
+                &state_clone,
                 &emitter_clone,
-                &conn_id,
                 AcpEvent::Error {
                     message: e.to_string(),
                     agent_type: agent_type.to_string(),
                     code,
                 },
-            );
+            )
+            .await;
         }
 
-        emit_acp(
+        emit_with_state(
+            &state_clone,
             &emitter_clone,
-            &conn_id,
             AcpEvent::StatusChanged {
                 status: ConnectionStatus::Disconnected,
             },
-        );
+        )
+        .await;
         // `_cleanup` is dropped here — removes the connection entry from
         // the manager map. Same drop semantics apply on panic unwinding.
     });
@@ -455,19 +477,20 @@ fn map_session_modes(mode_state: &SessionModeState) -> SessionModeStateInfo {
     }
 }
 
-fn emit_session_modes(
-    connection_id: &str,
+async fn emit_session_modes(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     modes: &Option<SessionModeState>,
 ) {
     if let Some(mode_state) = modes {
-        emit_acp(
+        emit_with_state(
+            state,
             emitter,
-            connection_id,
             AcpEvent::SessionModes {
                 modes: map_session_modes(mode_state),
             },
-        );
+        )
+        .await;
     }
 }
 
@@ -602,8 +625,8 @@ fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
     );
 }
 
-fn emit_session_config_options_values(
-    connection_id: &str,
+async fn emit_session_config_options_values(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     agent_type: AgentType,
     config_options: Vec<SessionConfigOption>,
@@ -612,17 +635,18 @@ fn emit_session_config_options_values(
     if agent_type == AgentType::Codex {
         ensure_codex_mode_option(&mut mapped);
     }
-    emit_acp(
+    emit_with_state(
+        state,
         emitter,
-        connection_id,
         AcpEvent::SessionConfigOptions {
             config_options: mapped,
         },
-    );
+    )
+    .await;
 }
 
-fn emit_session_config_options(
-    connection_id: &str,
+async fn emit_session_config_options(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     agent_type: AgentType,
     config_options: &Option<Vec<SessionConfigOption>>,
@@ -632,21 +656,21 @@ fn emit_session_config_options(
     // and return `None`; emitting an empty list lets the frontend settle
     // loading state instead of waiting forever.
     let options = config_options.clone().unwrap_or_default();
-    emit_session_config_options_values(connection_id, emitter, agent_type, options);
+    emit_session_config_options_values(state, emitter, agent_type, options).await;
 }
 
-fn emit_selectors_ready(connection_id: &str, emitter: &EventEmitter) {
-    emit_acp(emitter, connection_id, AcpEvent::SelectorsReady);
+async fn emit_selectors_ready(state: &Arc<RwLock<SessionState>>, emitter: &EventEmitter) {
+    emit_with_state(state, emitter, AcpEvent::SelectorsReady).await;
 }
 
-fn emit_prompt_capabilities(
-    connection_id: &str,
+async fn emit_prompt_capabilities(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     capabilities: &sacp::schema::PromptCapabilities,
 ) {
-    emit_acp(
+    emit_with_state(
+        state,
         emitter,
-        connection_id,
         AcpEvent::PromptCapabilities {
             prompt_capabilities: PromptCapabilitiesInfo {
                 image: capabilities.image,
@@ -654,7 +678,8 @@ fn emit_prompt_capabilities(
                 embedded_context: capabilities.embedded_context,
             },
         },
-    );
+    )
+    .await;
 }
 
 fn resolve_working_dir(working_dir: Option<&str>) -> PathBuf {
@@ -714,6 +739,7 @@ fn build_load_session_request(
 }
 
 /// The main ACP connection loop.
+#[allow(clippy::too_many_arguments)]
 async fn run_connection(
     agent: AcpAgent,
     connection_id: String,
@@ -722,6 +748,7 @@ async fn run_connection(
     session_id: Option<String>,
     mut cmd_rx: mpsc::Receiver<ConnectionCommand>,
     emitter: EventEmitter,
+    state: Arc<RwLock<SessionState>>,
 ) -> Result<(), AcpError> {
     let pending_perms: PendingPermissions = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     let terminal_runtime = Arc::new(TerminalRuntime::new());
@@ -732,21 +759,22 @@ async fn run_connection(
     let conn_id = connection_id.clone();
     let emitter_clone = emitter.clone();
     let perms = pending_perms.clone();
+    let state_outer = Arc::clone(&state);
 
     Client
         .builder()
         .name("codeg")
         .on_receive_request(
             {
-                let conn_id = conn_id.clone();
                 let emitter_inner = emitter_clone.clone();
                 let perms = perms.clone();
                 let perm_cwd = cwd_string.clone();
+                let state_inner = Arc::clone(&state);
                 async move |req: RequestPermissionRequest,
                             responder: Responder<RequestPermissionResponse>,
                             _cx: ConnectionTo<Agent>| {
                     handle_permission_request(
-                        &conn_id,
+                        &state_inner,
                         &emitter_inner,
                         &perms,
                         &perm_cwd,
@@ -844,6 +872,7 @@ async fn run_connection(
             on_receive_request!(),
         )
         .connect_with(agent, async move |cx| -> Result<(), sacp::Error> {
+            let state = state_outer;
             let agent_name_for_log = registry::get_agent_meta(agent_type).name;
 
             // Advertise filesystem + terminal capabilities for ACP tool execution.
@@ -901,10 +930,11 @@ async fn run_connection(
                 }
             };
             emit_prompt_capabilities(
-                &conn_id,
+                &state,
                 &emitter_clone,
                 &init_resp.agent_capabilities.prompt_capabilities,
-            );
+            )
+            .await;
 
             let supports_fork = init_resp
                 .agent_capabilities
@@ -917,25 +947,27 @@ async fn run_connection(
             );
 
             // Emit fork support capability
-            emit_acp(
+            emit_with_state(
+                &state,
                 &emitter_clone,
-                &conn_id,
                 AcpEvent::ForkSupported {
                     supported: supports_fork,
                 },
-            );
+            )
+            .await;
 
             // Emit connected status early so the frontend can show cached
             // selectors and enable sending while the session initialises.
             // Prompts sent before run_conversation_loop are buffered in
             // the cmd_rx channel and processed as soon as the loop starts.
-            emit_acp(
+            emit_with_state(
+                &state,
                 &emitter_clone,
-                &conn_id,
                 AcpEvent::StatusChanged {
                     status: ConnectionStatus::Connected,
                 },
-            );
+            )
+            .await;
 
             if let Some(sid) = session_id {
                 // Load existing session via session/load
@@ -963,8 +995,8 @@ async fn run_connection(
                         {
                             drained += 1;
                             if let SessionMessage::SessionMessage(dispatch) = msg {
-                                let cid = conn_id.clone();
                                 let h = emitter_clone.clone();
+                                let st = Arc::clone(&state);
                                 let dispatch = fix_usage_update_nulls(dispatch);
                                 let _ = MatchDispatch::new(dispatch)
                                     .if_notification(async |notif: SessionNotification| {
@@ -979,19 +1011,20 @@ async fn run_connection(
                                             let mut replay_cache =
                                                 ToolCallOutputCache::default();
                                             emit_conversation_update(
-                                                &cid,
+                                                &st,
                                                 &h,
                                                 agent_type,
                                                 notif.update,
                                                 None,
                                                 &mut replay_cache,
-                                            );
+                                            )
+                                            .await;
                                         }
                                         Ok(())
                                     })
                                     .await
                                     .otherwise(async |dispatch| {
-                                        maybe_emit_claude_sdk_ext_notification(&cid, &h, dispatch);
+                                        maybe_emit_claude_sdk_ext_notification(&st, &h, dispatch).await;
                                         Ok(())
                                     })
                                     .await;
@@ -1001,26 +1034,29 @@ async fn run_connection(
                             eprintln!("[ACP] Drained {drained} historical replay notifications");
                         }
 
-                        emit_acp(
+                        emit_with_state(
+                            &state,
                             &emitter_clone,
-                            &conn_id,
                             AcpEvent::SessionStarted {
                                 session_id: sid.clone(),
                             },
-                        );
-                        emit_session_modes(&conn_id, &emitter_clone, session.modes());
+                        )
+                        .await;
+                        emit_session_modes(&state, &emitter_clone, session.modes()).await;
                         emit_session_config_options(
-                            &conn_id,
+                            &state,
                             &emitter_clone,
                             agent_type,
                             &initial_config_options,
-                        );
-                        emit_selectors_ready(&conn_id, &emitter_clone);
+                        )
+                        .await;
+                        emit_selectors_ready(&state, &emitter_clone).await;
 
                         let loop_result = run_conversation_loop(
                             &mut session,
                             &conn_id,
                             &emitter_clone,
+                            &state,
                             agent_type,
                             &perms,
                             &mut cmd_rx,
@@ -1035,6 +1071,7 @@ async fn run_connection(
                             loop_result,
                             &conn_id,
                             &emitter_clone,
+                            &state,
                             agent_type,
                             &perms,
                             &mut cmd_rx,
@@ -1063,15 +1100,16 @@ async fn run_connection(
                             return Ok(());
                         }
                         if !err_str.contains("Method not found") {
-                            emit_acp(
+                            emit_with_state(
+                                &state,
                                 &emitter_clone,
-                                &conn_id,
                                 AcpEvent::Error {
                                     message: format!("Failed to load session, starting new: {e}"),
                                     agent_type: agent_type.to_string(),
                                     code: None,
                                 },
-                            );
+                            )
+                            .await;
                         }
                         let new_resp = cx
                             .send_request_to(Agent, build_new_session_request(agent_type, &cwd))
@@ -1080,26 +1118,29 @@ async fn run_connection(
                         let fallback_sid = new_resp.session_id.0.to_string();
                         let initial_config_options = new_resp.config_options.clone();
                         let mut session = cx.attach_session(new_resp, Default::default())?;
-                        emit_acp(
+                        emit_with_state(
+                            &state,
                             &emitter_clone,
-                            &conn_id,
                             AcpEvent::SessionStarted {
                                 session_id: fallback_sid.clone(),
                             },
-                        );
-                        emit_session_modes(&conn_id, &emitter_clone, session.modes());
+                        )
+                        .await;
+                        emit_session_modes(&state, &emitter_clone, session.modes()).await;
                         emit_session_config_options(
-                            &conn_id,
+                            &state,
                             &emitter_clone,
                             agent_type,
                             &initial_config_options,
-                        );
-                        emit_selectors_ready(&conn_id, &emitter_clone);
+                        )
+                        .await;
+                        emit_selectors_ready(&state, &emitter_clone).await;
 
                         let loop_result = run_conversation_loop(
                             &mut session,
                             &conn_id,
                             &emitter_clone,
+                            &state,
                             agent_type,
                             &perms,
                             &mut cmd_rx,
@@ -1116,6 +1157,7 @@ async fn run_connection(
                             loop_result,
                             &conn_id,
                             &emitter_clone,
+                            &state,
                             agent_type,
                             &perms,
                             &mut cmd_rx,
@@ -1135,26 +1177,29 @@ async fn run_connection(
                 let sid = new_resp.session_id.0.to_string();
                 let initial_config_options = new_resp.config_options.clone();
                 let mut session = cx.attach_session(new_resp, Default::default())?;
-                emit_acp(
+                emit_with_state(
+                    &state,
                     &emitter_clone,
-                    &conn_id,
                     AcpEvent::SessionStarted {
                         session_id: sid.clone(),
                     },
-                );
-                emit_session_modes(&conn_id, &emitter_clone, session.modes());
+                )
+                .await;
+                emit_session_modes(&state, &emitter_clone, session.modes()).await;
                 emit_session_config_options(
-                    &conn_id,
+                    &state,
                     &emitter_clone,
                     agent_type,
                     &initial_config_options,
-                );
-                emit_selectors_ready(&conn_id, &emitter_clone);
+                )
+                .await;
+                emit_selectors_ready(&state, &emitter_clone).await;
 
                 let loop_result = run_conversation_loop(
                     &mut session,
                     &conn_id,
                     &emitter_clone,
+                    &state,
                     agent_type,
                     &perms,
                     &mut cmd_rx,
@@ -1169,6 +1214,7 @@ async fn run_connection(
                     loop_result,
                     &conn_id,
                     &emitter_clone,
+                    &state,
                     agent_type,
                     &perms,
                     &mut cmd_rx,
@@ -1192,7 +1238,7 @@ async fn run_connection(
 
 /// Store the permission responder and emit event to frontend.
 async fn handle_permission_request(
-    conn_id: &str,
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     perms: &PendingPermissions,
     cwd: &str,
@@ -1251,15 +1297,16 @@ async fn handle_permission_request(
 
     perms.lock().await.insert(request_id.clone(), responder);
 
-    emit_acp(
+    emit_with_state(
+        state,
         emitter,
-        conn_id,
         AcpEvent::PermissionRequest {
             request_id,
             tool_call: tool_call_value,
             options,
         },
-    );
+    )
+    .await;
 }
 
 fn respond_terminal_request<T: sacp::JsonRpcResponse>(
@@ -1284,7 +1331,7 @@ fn respond_file_system_request<T: sacp::JsonRpcResponse>(
 
 async fn set_session_mode(
     session: &mut sacp::ActiveSession<'_, Agent>,
-    conn_id: &str,
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     mode_id: String,
 ) -> Result<(), sacp::Error> {
@@ -1295,19 +1342,16 @@ async fn set_session_mode(
         .block_task()
         .await?;
 
-    emit_acp(
-        emitter,
-        conn_id,
-        AcpEvent::ModeChanged { mode_id },
-    );
+    emit_with_state(state, emitter, AcpEvent::ModeChanged { mode_id }).await;
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn set_session_config_option(
     cx: &ConnectionTo<Agent>,
     session_id: &SessionId,
-    conn_id: &str,
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     agent_type: AgentType,
     config_id: String,
@@ -1324,7 +1368,7 @@ async fn set_session_config_option(
             sacp::util::internal_error(format!("Failed to parse config option response: {e}"))
         })?;
 
-    emit_session_config_options_values(conn_id, emitter, agent_type, response.config_options);
+    emit_session_config_options_values(state, emitter, agent_type, response.config_options).await;
     Ok(())
 }
 
@@ -1769,8 +1813,8 @@ async fn poll_terminal_tool_call_output(
     })
 }
 
-fn emit_terminal_output_update(
-    connection_id: &str,
+async fn emit_terminal_output_update(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     tool_call_id: &str,
     output: String,
@@ -1782,9 +1826,9 @@ fn emit_terminal_output_update(
     // single-event cap (with ANSI-safe truncation) before emission so the
     // WS/IPC fanout never carries a multi-MB payload.
     let (payload, _append) = build_emit_payload(&output, append);
-    emit_acp(
+    emit_with_state(
+        state,
         emitter,
-        connection_id,
         AcpEvent::ToolCallUpdate {
             tool_call_id: tool_call_id.to_string(),
             title: None,
@@ -1796,13 +1840,14 @@ fn emit_terminal_output_update(
             locations: None,
             meta: None,
         },
-    );
+    )
+    .await;
 }
 
 async fn poll_tracked_terminal_tool_calls(
     terminal_runtime: &TerminalRuntime,
     session_id: &SessionId,
-    connection_id: &str,
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     tracked: &mut HashMap<String, TrackedTerminalToolCall>,
 ) {
@@ -1842,12 +1887,13 @@ async fn poll_tracked_terminal_tool_calls(
 
         if let Some(output) = poll_result.output {
             emit_terminal_output_update(
-                connection_id,
+                state,
                 emitter,
                 &tool_call_id,
                 output,
                 poll_result.append,
-            );
+            )
+            .await;
         }
 
         if (is_final_tool_call_status(entry.status.as_deref())
@@ -1932,6 +1978,7 @@ async fn handle_fork_or_exit(
     loop_result: Result<Option<ForkExitInfo>, sacp::Error>,
     conn_id: &str,
     emitter: &EventEmitter,
+    state: &Arc<RwLock<SessionState>>,
     agent_type: AgentType,
     perms: &PendingPermissions,
     cmd_rx: &mut mpsc::Receiver<ConnectionCommand>,
@@ -1969,21 +2016,23 @@ async fn handle_fork_or_exit(
         .meta(fork_resp.meta);
     let mut session = cx.attach_session(new_resp, Default::default())?;
 
-    emit_acp(
+    emit_with_state(
+        state,
         emitter,
-        conn_id,
         AcpEvent::SessionStarted {
             session_id: new_sid.clone(),
         },
-    );
-    emit_session_modes(conn_id, emitter, session.modes());
-    emit_session_config_options(conn_id, emitter, agent_type, &initial_config_options);
-    emit_selectors_ready(conn_id, emitter);
+    )
+    .await;
+    emit_session_modes(state, emitter, session.modes()).await;
+    emit_session_config_options(state, emitter, agent_type, &initial_config_options).await;
+    emit_selectors_ready(state, emitter).await;
 
     let loop_result = run_conversation_loop(
         &mut session,
         conn_id,
         emitter,
+        state,
         agent_type,
         perms,
         cmd_rx,
@@ -2000,6 +2049,7 @@ async fn handle_fork_or_exit(
         loop_result,
         conn_id,
         emitter,
+        state,
         agent_type,
         perms,
         cmd_rx,
@@ -2019,6 +2069,7 @@ async fn run_conversation_loop<'a>(
     session: &mut sacp::ActiveSession<'a, Agent>,
     conn_id: &str,
     emitter: &EventEmitter,
+    state: &Arc<RwLock<SessionState>>,
     agent_type: AgentType,
     perms: &PendingPermissions,
     cmd_rx: &mut mpsc::Receiver<ConnectionCommand>,
@@ -2039,20 +2090,20 @@ async fn run_conversation_loop<'a>(
                 update = session.read_update() => {
                     match update {
                         Ok(SessionMessage::SessionMessage(dispatch)) => {
-                            let cid = conn_id.to_string();
                             let h = emitter.clone();
+                            let st = Arc::clone(state);
                             let cwd_opt = Some(cwd);
                             let dispatch = fix_usage_update_nulls(dispatch);
                             let _ = MatchDispatch::new(dispatch)
                                 .if_notification(
                                     async |notif: SessionNotification| {
-                                        emit_conversation_update(&cid, &h, agent_type, notif.update, cwd_opt, &mut raw_output_cache);
+                                        emit_conversation_update(&st, &h, agent_type, notif.update, cwd_opt, &mut raw_output_cache).await;
                                         Ok(())
                                     },
                                 )
                                 .await
                                 .otherwise(async |dispatch| {
-                                    maybe_emit_claude_sdk_ext_notification(&cid, &h, dispatch);
+                                    maybe_emit_claude_sdk_ext_notification(&st, &h, dispatch).await;
                                     Ok(())
                                 })
                                 .await;
@@ -2069,25 +2120,27 @@ async fn run_conversation_loop<'a>(
             Some(ConnectionCommand::Prompt { blocks }) => {
                 let prompt_blocks = map_prompt_blocks(blocks);
                 if prompt_blocks.is_empty() {
-                    emit_acp(
+                    emit_with_state(
+                        state,
                         emitter,
-                        conn_id,
                         AcpEvent::Error {
                             message: "Prompt must contain at least one content block".into(),
                             agent_type: agent_type.to_string(),
                             code: None,
                         },
-                    );
+                    )
+                    .await;
                     continue;
                 }
 
-                emit_acp(
+                emit_with_state(
+                    state,
                     emitter,
-                    conn_id,
                     AcpEvent::StatusChanged {
                         status: ConnectionStatus::Prompting,
                     },
-                );
+                )
+                .await;
 
                 // Clone connection and session ID before entering the
                 // select loop so we can send CancelNotification without
@@ -2126,8 +2179,8 @@ async fn run_conversation_loop<'a>(
                             };
                             match update {
                                 SessionMessage::SessionMessage(dispatch) => {
-                                    let cid = conn_id.to_string();
                                     let h = emitter.clone();
+                                    let st = Arc::clone(state);
                                     let runtime = terminal_runtime.clone();
                                     let session_id = sid.clone();
                                     let cwd_opt = Some(cwd);
@@ -2139,12 +2192,12 @@ async fn run_conversation_loop<'a>(
                                                     &notif.update,
                                                     &mut tracked_terminal_tool_calls,
                                                 );
-                                                emit_conversation_update(&cid, &h, agent_type, notif.update, cwd_opt, &mut raw_output_cache);
+                                                emit_conversation_update(&st, &h, agent_type, notif.update, cwd_opt, &mut raw_output_cache).await;
                                                 if should_poll_now {
                                                     poll_tracked_terminal_tool_calls(
                                                         runtime.as_ref(),
                                                         &session_id,
-                                                        &cid,
+                                                        &st,
                                                         &h,
                                                         &mut tracked_terminal_tool_calls,
                                                     )
@@ -2155,7 +2208,7 @@ async fn run_conversation_loop<'a>(
                                         )
                                         .await
                                         .otherwise(async |dispatch| {
-                                            maybe_emit_claude_sdk_ext_notification(&cid, &h, dispatch);
+                                            maybe_emit_claude_sdk_ext_notification(&st, &h, dispatch).await;
                                             Ok(())
                                         })
                                         .await
@@ -2168,7 +2221,7 @@ async fn run_conversation_loop<'a>(
                                         poll_tracked_terminal_tool_calls(
                                             terminal_runtime.as_ref(),
                                             &sid,
-                                            conn_id,
+                                            state,
                                             emitter,
                                             &mut tracked_terminal_tool_calls,
                                         )
@@ -2179,15 +2232,16 @@ async fn run_conversation_loop<'a>(
                                         StopReason::Cancelled => "cancelled",
                                         _ => "unknown",
                                     };
-                                    emit_acp(
+                                    emit_with_state(
+                                        state,
                                         emitter,
-                                        conn_id,
                                         AcpEvent::TurnComplete {
                                             session_id: sid.0.to_string(),
                                             stop_reason: reason_str.into(),
                                             agent_type: agent_type.to_string(),
                                         },
-                                    );
+                                    )
+                                    .await;
                                     break;
                                 }
                                 _ => {}
@@ -2199,7 +2253,7 @@ async fn run_conversation_loop<'a>(
                                 poll_tracked_terminal_tool_calls(
                                     terminal_runtime.as_ref(),
                                     &sid,
-                                    conn_id,
+                                    state,
                                     emitter,
                                     &mut tracked_terminal_tool_calls,
                                 )
@@ -2210,22 +2264,23 @@ async fn run_conversation_loop<'a>(
                                 StopReason::Cancelled => "cancelled",
                                 _ => "unknown",
                             };
-                            emit_acp(
+                            emit_with_state(
+                                state,
                                 emitter,
-                                conn_id,
                                 AcpEvent::TurnComplete {
                                     session_id: sid.0.to_string(),
                                     stop_reason: reason_str.into(),
                                     agent_type: agent_type.to_string(),
                                 },
-                            );
+                            )
+                            .await;
                             break;
                         }
                         _ = terminal_poll_interval.tick(), if !tracked_terminal_tool_calls.is_empty() => {
                             poll_tracked_terminal_tool_calls(
                                 terminal_runtime.as_ref(),
                                 &sid,
-                                conn_id,
+                                state,
                                 emitter,
                                 &mut tracked_terminal_tool_calls,
                             )
@@ -2248,22 +2303,24 @@ async fn run_conversation_loop<'a>(
                                     let req = SetSessionModeRequest::new(sid.clone(), mode_id.clone());
                                     match cx.send_request_to(Agent, req).block_task().await {
                                         Ok(_) => {
-                                            emit_acp(
+                                            emit_with_state(
+                                                state,
                                                 emitter,
-                                                conn_id,
                                                 AcpEvent::ModeChanged { mode_id },
-                                            );
+                                            )
+                                            .await;
                                         }
                                         Err(e) => {
-                                            emit_acp(
+                                            emit_with_state(
+                                                state,
                                                 emitter,
-                                                conn_id,
                                                 AcpEvent::Error {
                                                     message: format!("Failed to set mode: {e}"),
                                                     agent_type: agent_type.to_string(),
                                                     code: None,
                                                 },
-                                            );
+                                            )
+                                            .await;
                                         }
                                     }
                                 }
@@ -2274,7 +2331,7 @@ async fn run_conversation_loop<'a>(
                                     if let Err(e) = set_session_config_option(
                                         &cx,
                                         &sid,
-                                        conn_id,
+                                        state,
                                         emitter,
                                         agent_type,
                                         config_id,
@@ -2282,15 +2339,16 @@ async fn run_conversation_loop<'a>(
                                     )
                                     .await
                                     {
-                                        emit_acp(
+                                        emit_with_state(
+                                            state,
                                             emitter,
-                                            conn_id,
                                             AcpEvent::Error {
                                                 message: format!("Failed to set config option: {e}"),
                                                 agent_type: agent_type.to_string(),
                                                 code: None,
                                             },
-                                        );
+                                        )
+                                        .await;
                                     }
                                 }
                                 Some(ConnectionCommand::Cancel) => {
@@ -2317,15 +2375,16 @@ async fn run_conversation_loop<'a>(
                                     // transitions out of "prompting" and the user can
                                     // send new messages.  Don't wait for the agent --
                                     // it may be slow to respond or not respond at all.
-                                    emit_acp(
+                                    emit_with_state(
+                                        state,
                                         emitter,
-                                        conn_id,
                                         AcpEvent::TurnComplete {
                                             session_id: sid.0.to_string(),
                                             stop_reason: "cancelled".into(),
                                             agent_type: agent_type.to_string(),
                                         },
-                                    );
+                                    )
+                                    .await;
                                     // Drain the prompt response in the background so
                                     // the SACP library doesn't log "receiver dropped"
                                     // errors when the agent eventually responds.
@@ -2368,13 +2427,14 @@ async fn run_conversation_loop<'a>(
                     break;
                 }
 
-                emit_acp(
+                emit_with_state(
+                    state,
                     emitter,
-                    conn_id,
                     AcpEvent::StatusChanged {
                         status: ConnectionStatus::Connected,
                     },
-                );
+                )
+                .await;
             }
             Some(ConnectionCommand::RespondPermission {
                 request_id,
@@ -2388,16 +2448,17 @@ async fn run_conversation_loop<'a>(
                 }
             }
             Some(ConnectionCommand::SetMode { mode_id }) => {
-                if let Err(e) = set_session_mode(session, conn_id, emitter, mode_id).await {
-                    emit_acp(
+                if let Err(e) = set_session_mode(session, state, emitter, mode_id).await {
+                    emit_with_state(
+                        state,
                         emitter,
-                        conn_id,
                         AcpEvent::Error {
                             message: format!("Failed to set mode: {e}"),
                             agent_type: agent_type.to_string(),
                             code: None,
                         },
-                    );
+                    )
+                    .await;
                 }
             }
             Some(ConnectionCommand::SetConfigOption {
@@ -2407,19 +2468,20 @@ async fn run_conversation_loop<'a>(
                 let cx = session.connection();
                 let sid = session.session_id().clone();
                 if let Err(e) = set_session_config_option(
-                    &cx, &sid, conn_id, emitter, agent_type, config_id, value_id,
+                    &cx, &sid, state, emitter, agent_type, config_id, value_id,
                 )
                 .await
                 {
-                    emit_acp(
+                    emit_with_state(
+                        state,
                         emitter,
-                        conn_id,
                         AcpEvent::Error {
                             message: format!("Failed to set config option: {e}"),
                             agent_type: agent_type.to_string(),
                             code: None,
                         },
-                    );
+                    )
+                    .await;
                 }
             }
             Some(ConnectionCommand::Cancel) => {
@@ -2651,8 +2713,8 @@ fn map_claude_sdk_ext_notification(notification: &UntypedMessage) -> Option<AcpE
     })
 }
 
-fn maybe_emit_claude_sdk_ext_notification(
-    connection_id: &str,
+async fn maybe_emit_claude_sdk_ext_notification(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     dispatch: Dispatch,
 ) {
@@ -2661,7 +2723,7 @@ fn maybe_emit_claude_sdk_ext_notification(
     };
 
     if let Some(event) = map_claude_sdk_ext_notification(&notification) {
-        emit_acp(emitter, connection_id, event);
+        emit_with_state(state, emitter, event).await;
     }
 }
 
@@ -2691,8 +2753,8 @@ fn fix_usage_update_nulls(mut dispatch: Dispatch) -> Dispatch {
 /// `raw_output_cache` is a per-session cache used to detect cumulative
 /// snapshots from agents and convert them into incremental deltas so the
 /// event pipeline never carries a full N-MB tool output more than once.
-fn emit_conversation_update(
-    connection_id: &str,
+async fn emit_conversation_update(
+    state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     agent_type: AgentType,
     update: SessionUpdate,
@@ -2708,11 +2770,12 @@ fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::ContentDelta { text: text.text },
-            );
+            )
+            .await;
         }
         SessionUpdate::AgentMessageChunk(_) => {
             // Non-text chunks are currently not surfaced in live streaming UI.
@@ -2721,11 +2784,12 @@ fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::Thinking { text: text.text },
-            );
+            )
+            .await;
         }
         SessionUpdate::AgentThoughtChunk(_) => {
             // Non-text thought chunks are currently ignored.
@@ -2749,9 +2813,9 @@ fn emit_conversation_update(
             let meta = tc.meta.map(serde_json::Value::Object);
             let status = format!("{:?}", tc.status).to_lowercase();
             raw_output_cache.remove_if_final(&tool_call_id, Some(status.as_str()));
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::ToolCall {
                     tool_call_id,
                     title: tc.title,
@@ -2763,7 +2827,8 @@ fn emit_conversation_update(
                     locations,
                     meta,
                 },
-            );
+            )
+            .await;
         }
         SessionUpdate::ToolCallUpdate(tcu) => {
             let tool_call_id = tcu.tool_call_id.to_string();
@@ -2798,9 +2863,9 @@ fn emit_conversation_update(
             let meta = tcu.meta.clone().map(serde_json::Value::Object);
             let status = tcu.fields.status.map(|s| format!("{:?}", s).to_lowercase());
             raw_output_cache.remove_if_final(&tool_call_id, status.as_deref());
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::ToolCallUpdate {
                     tool_call_id,
                     title: tcu.fields.title,
@@ -2812,33 +2877,37 @@ fn emit_conversation_update(
                     locations,
                     meta,
                 },
-            );
+            )
+            .await;
         }
         SessionUpdate::CurrentModeUpdate(update) => {
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::ModeChanged {
                     mode_id: update.current_mode_id.to_string(),
                 },
-            );
+            )
+            .await;
         }
         SessionUpdate::Plan(plan) => {
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::PlanUpdate {
                     entries: map_plan_entries(&plan),
                 },
-            );
+            )
+            .await;
         }
         SessionUpdate::ConfigOptionUpdate(update) => {
             emit_session_config_options_values(
-                connection_id,
+                state,
                 emitter,
                 agent_type,
                 update.config_options,
-            );
+            )
+            .await;
         }
         SessionUpdate::AvailableCommandsUpdate(update) => {
             // Some agents (e.g. Claude Code with overlapping user/project slash
@@ -2862,21 +2931,23 @@ fn emit_conversation_update(
                     }
                 })
                 .collect();
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::AvailableCommands { commands },
-            );
+            )
+            .await;
         }
         SessionUpdate::UsageUpdate(update) => {
-            emit_acp(
+            emit_with_state(
+                state,
                 emitter,
-                connection_id,
                 AcpEvent::UsageUpdate {
                     used: update.used,
                     size: update.size,
                 },
-            );
+            )
+            .await;
         }
         other => {
             // Log unhandled update types for debugging

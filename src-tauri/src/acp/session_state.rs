@@ -135,7 +135,7 @@ pub struct SessionState {
     pub last_activity_at: DateTime<Utc>,
 }
 
-#[allow(dead_code)] // Phase 1 Task 2: consumed by Phase 1 Task 3 emit_with_state + Phase 2 endpoints
+#[allow(dead_code)] // `to_snapshot` is consumed by Phase 2 snapshot endpoints
 impl SessionState {
     pub fn new(
         connection_id: String,
