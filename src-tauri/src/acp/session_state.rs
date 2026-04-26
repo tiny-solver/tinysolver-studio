@@ -24,7 +24,6 @@ pub struct LiveMessage {
 }
 
 /// 流式 turn 的内容块。事件按到达顺序追加。
-#[allow(dead_code)] // ToolCallRef and Plan reserved for future events (Task 2 producers)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LiveContentBlock {
@@ -107,7 +106,6 @@ pub struct UsageInfo {
 ///
 /// 字段范围：仅当前 turn 的 in-flight 数据 + 元信息 + 协商出的能力。
 /// 已完成的 turn 不存在这里——它们由 parser 从 agent JSONL 读。
-#[allow(dead_code)] // Phase 1 Task 2: many fields populated/read by Phase 1 Task 3 + Phase 2 endpoints
 #[derive(Debug)]
 pub struct SessionState {
     // 身份
@@ -139,7 +137,6 @@ pub struct SessionState {
     pub last_activity_at: DateTime<Utc>,
 }
 
-#[allow(dead_code)] // `to_snapshot` is consumed by Phase 2 snapshot endpoints
 impl SessionState {
     pub fn new(
         connection_id: String,
@@ -411,7 +408,6 @@ impl SessionState {
 }
 
 /// `to_snapshot()` 的输出——前端可消费的 wire shape。
-#[allow(dead_code)] // Phase 1 Task 2: consumed by Phase 2 snapshot endpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveSessionSnapshot {
     pub connection_id: String,
