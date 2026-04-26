@@ -278,6 +278,11 @@ type Action =
       contextKey: string
       usage: SessionUsageUpdateInfo
     }
+  | {
+      type: "EVENT_APPLIED"
+      contextKey: string
+      seq: number
+    }
 
 type StreamingAction =
   | { type: "CONTENT_DELTA"; contextKey: string; text: string }
@@ -684,6 +689,19 @@ function connectionsReducer(
         promptCapabilities:
           action.patch.promptCapabilities ?? current.promptCapabilities,
         lastAppliedSeq: action.patch.eventSeq,
+      })
+      return next
+    }
+
+    case "EVENT_APPLIED": {
+      const current = state.get(action.contextKey)
+      if (!current) return state
+      // Idempotent: only advances if the new seq is strictly higher.
+      if (action.seq <= current.lastAppliedSeq) return state
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...current,
+        lastAppliedSeq: action.seq,
       })
       return next
     }
@@ -2119,9 +2137,25 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      // Seq dedup: skip envelopes already accounted for by a snapshot or a
+      // prior delivery. snapshot.event_seq sets the lower bound; subsequent
+      // envelopes with seq <= lastAppliedSeq are no-op duplicates.
+      const conn = storeRef.current.connections.get(contextKey)
+      if (conn && envelope.seq <= conn.lastAppliedSeq) {
+        return
+      }
+
       // Touch activity on every incoming event
       lastActivityRef.current.set(contextKey, Date.now())
       handleMappedEvent(contextKey, envelope)
+
+      // Advance lastAppliedSeq after the event's effects have dispatched.
+      // EVENT_APPLIED is idempotent (only advances if higher).
+      dispatch({
+        type: "EVENT_APPLIED",
+        contextKey,
+        seq: envelope.seq,
+      })
     })
       .then((fn) => {
         if (cancelled) {
@@ -2147,7 +2181,12 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       }
       unlisten?.()
     }
-  }, [bufferUnmappedEvent, handleMappedEvent, resolveListenerReadyWaiters])
+  }, [
+    bufferUnmappedEvent,
+    dispatch,
+    handleMappedEvent,
+    resolveListenerReadyWaiters,
+  ])
 
   // ── Idle sweep timer ──
   useEffect(() => {
@@ -2318,8 +2357,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         const buffered = consumeBufferedEvents(connectionId)
         if (buffered.length > 0) {
           for (const event of buffered) {
+            // Same seq dedup as the live listener: a snapshot HYDRATE may
+            // have raised lastAppliedSeq past some buffered envelopes.
+            const conn = storeRef.current.connections.get(contextKey)
+            if (conn && event.seq <= conn.lastAppliedSeq) continue
             lastActivityRef.current.set(contextKey, Date.now())
             handleMappedEvent(contextKey, event)
+            dispatch({
+              type: "EVENT_APPLIED",
+              contextKey,
+              seq: event.seq,
+            })
           }
         }
       } catch (err) {
