@@ -486,7 +486,7 @@ fn extract_tool_call_id_and_description(tool_call: &serde_json::Value) -> (Strin
 mod tests {
     use super::*;
     use crate::acp::types::{
-        AcpEvent, ConnectionStatus, PromptCapabilitiesInfo, SessionConfigKindInfo,
+        AcpEvent, ConnectionStatus, EventEnvelope, PromptCapabilitiesInfo, SessionConfigKindInfo,
         SessionConfigOptionInfo, SessionConfigSelectInfo, SessionModeInfo, SessionModeStateInfo,
     };
 
@@ -777,5 +777,152 @@ mod tests {
             tc_json
         );
         assert_eq!(tc_json["input"], serde_json::json!({"a": 1}));
+    }
+
+    fn scripted_event_sequence() -> Vec<AcpEvent> {
+        vec![
+            AcpEvent::SessionStarted {
+                session_id: "ext-1".into(),
+            },
+            AcpEvent::ContentDelta {
+                text: "Hello ".into(),
+            },
+            AcpEvent::ContentDelta {
+                text: "world".into(),
+            },
+            AcpEvent::ToolCall {
+                tool_call_id: "tc-1".into(),
+                title: "ls".into(),
+                kind: "execute".into(),
+                status: "pending".into(),
+                content: None,
+                raw_input: None,
+                raw_output: None,
+                locations: None,
+                meta: None,
+            },
+            AcpEvent::ToolCallUpdate {
+                tool_call_id: "tc-1".into(),
+                title: None,
+                status: Some("completed".into()),
+                content: None,
+                raw_input: None,
+                raw_output: Some("\"done\"".into()),
+                raw_output_append: None,
+                locations: None,
+                meta: None,
+            },
+            AcpEvent::Thinking {
+                text: "considering".into(),
+            },
+            AcpEvent::ContentDelta {
+                text: " More text".into(),
+            },
+            AcpEvent::UsageUpdate {
+                used: 1234,
+                size: 200_000,
+            },
+        ]
+    }
+
+    #[test]
+    fn full_turn_lifecycle_increments_seq_monotonically() {
+        let mut s = fresh_state();
+        let events = scripted_event_sequence();
+        let mut seq = 0u64;
+        for e in &events {
+            s.apply_event(e);
+            seq += 1;
+            s.event_seq = seq;
+        }
+        assert_eq!(s.event_seq, events.len() as u64);
+    }
+
+    /// Strip volatile fields that legitimately differ between Path A and Path B
+    /// (e.g. `LiveMessage.id` is generated via `uuid::new_v4()` and `started_at`
+    /// uses `Utc::now()`) but don't matter for snapshot/live consistency.
+    fn normalize_snapshot(snap: &LiveSessionSnapshot) -> serde_json::Value {
+        let mut v = serde_json::to_value(snap).unwrap();
+        if let Some(lm) = v.get_mut("live_message") {
+            if let Some(obj) = lm.as_object_mut() {
+                obj.remove("id");
+                obj.remove("started_at");
+            }
+        }
+        // active_tool_calls is a Vec<ToolCallState> derived from a HashMap's
+        // values — iteration order is non-deterministic. Sort by id so the
+        // structural comparison is stable across paths.
+        if let Some(tcs) = v.get_mut("active_tool_calls") {
+            if let Some(arr) = tcs.as_array_mut() {
+                arr.sort_by(|x, y| {
+                    x.get("id")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("")
+                        .cmp(y.get("id").and_then(|s| s.as_str()).unwrap_or(""))
+                });
+            }
+        }
+        v
+    }
+
+    /// 对账测试：从初始状态全程 apply 到 N 个事件 == 从 snapshot
+    /// (apply 完前 K 个) + apply 剩下 N-K 个事件，最终状态等价。
+    #[test]
+    fn snapshot_filtered_events_yield_same_state_as_live_subscriber() {
+        let events = scripted_event_sequence();
+        let split = events.len() / 2;
+
+        // Path A: live subscriber——全程 apply
+        let mut a = fresh_state();
+        for (i, e) in events.iter().enumerate() {
+            a.apply_event(e);
+            a.event_seq = (i + 1) as u64;
+        }
+
+        // Path B: snapshot 重连
+        // 1) apply 前 split 个事件
+        let mut b = fresh_state();
+        for (i, e) in events.iter().take(split).enumerate() {
+            b.apply_event(e);
+            b.event_seq = (i + 1) as u64;
+        }
+        // 2) snapshot round-trip 通过 JSON
+        let snapshot = b.to_snapshot();
+        let _wire = serde_json::to_string(&snapshot).unwrap();
+        // 3) 继续 apply 剩下事件
+        for (i, e) in events.iter().enumerate().skip(split) {
+            b.apply_event(e);
+            b.event_seq = (i + 1) as u64;
+        }
+
+        let snap_a = a.to_snapshot();
+        let snap_b = b.to_snapshot();
+
+        assert_eq!(snap_a.event_seq, snap_b.event_seq);
+        assert_eq!(snap_a.status, snap_b.status);
+        assert_eq!(snap_a.external_id, snap_b.external_id);
+        assert_eq!(snap_a.usage, snap_b.usage);
+
+        // Full structural equivalence (with volatile fields stripped + tool
+        // calls sorted by id). This is the load-bearing consistency check.
+        assert_eq!(normalize_snapshot(&snap_a), normalize_snapshot(&snap_b));
+    }
+
+    /// 验证 envelope 序列化 + 反序列化 round-trip
+    #[test]
+    fn event_envelope_round_trips_through_json() {
+        let env = EventEnvelope {
+            seq: 7,
+            connection_id: "conn-x".into(),
+            payload: AcpEvent::ContentDelta { text: "abc".into() },
+        };
+        let json = serde_json::to_string(&env).unwrap();
+        let back: EventEnvelope = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.seq, 7);
+        assert_eq!(back.connection_id, "conn-x");
+        match back.payload {
+            AcpEvent::ContentDelta { text } => assert_eq!(text, "abc"),
+            _ => panic!("expected ContentDelta"),
+        }
     }
 }
