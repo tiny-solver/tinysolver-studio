@@ -12,7 +12,7 @@ use crate::models::agent::AgentType;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
 
 pub struct ConnectionManager {
-    connections: Arc<Mutex<HashMap<String, AgentConnection>>>,
+    pub(crate) connections: Arc<Mutex<HashMap<String, AgentConnection>>>,
 }
 
 impl ConnectionManager {

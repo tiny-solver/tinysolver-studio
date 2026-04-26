@@ -1,4 +1,5 @@
 mod acp;
+pub use acp::spawn_lifecycle_subscriber;
 mod app_error;
 pub mod app_state;
 pub mod chat_channel;
@@ -183,6 +184,19 @@ mod tauri_app {
                     tauri::async_runtime::spawn(async move {
                         ccm_ref.start_background(br, db_conn, cm, emitter).await;
                     });
+                }
+
+                // Spawn the LifecycleSubscriber: persists cross-connection DB state
+                // (currently `external_id` on conversation rows when SessionStarted fires)
+                // off the emit hot path.
+                {
+                    let db_conn = app.state::<db::AppDatabase>().conn.clone();
+                    let cm = app.state::<ConnectionManager>().clone_ref();
+                    let broadcaster = app
+                        .state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>()
+                        .inner()
+                        .clone();
+                    crate::acp::spawn_lifecycle_subscriber(db_conn, cm, broadcaster);
                 }
 
                 // Single-window workspace: ensure the main window exists.
