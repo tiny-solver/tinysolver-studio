@@ -2060,9 +2060,13 @@ pub async fn acp_connect(
 pub async fn acp_prompt(
     connection_id: String,
     blocks: Vec<PromptInputBlock>,
+    folder_id: Option<i32>,
+    db: State<'_, crate::db::AppDatabase>,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), AcpError> {
-    manager.send_prompt(&connection_id, blocks).await
+    manager
+        .send_prompt_linked(&db, &connection_id, blocks, folder_id)
+        .await
 }
 
 #[cfg(feature = "tauri-runtime")]

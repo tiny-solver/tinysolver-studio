@@ -137,15 +137,21 @@ pub async fn acp_disconnect(
 pub struct AcpPromptParams {
     pub connection_id: String,
     pub blocks: Vec<crate::acp::types::PromptInputBlock>,
+    pub folder_id: Option<i32>,
 }
 
 pub async fn acp_prompt(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpPromptParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let manager = &state.connection_manager;
-    manager
-        .send_prompt(&params.connection_id, params.blocks)
+    state
+        .connection_manager
+        .send_prompt_linked(
+            &state.db,
+            &params.connection_id,
+            params.blocks,
+            params.folder_id,
+        )
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))

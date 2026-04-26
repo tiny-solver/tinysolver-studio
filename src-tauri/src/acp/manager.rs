@@ -5,9 +5,11 @@ use tokio::sync::Mutex;
 
 use crate::acp::connection::{spawn_agent_connection, AgentConnection, ConnectionCommand};
 use crate::acp::error::AcpError;
-use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
+use crate::acp::types::{AcpEvent, ConnectionInfo, ForkResultInfo, PromptInputBlock};
+use crate::db::service::{conversation_service, folder_service};
+use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
-use crate::web::event_bridge::EventEmitter;
+use crate::web::event_bridge::{emit_with_state, EventEmitter};
 
 pub struct ConnectionManager {
     connections: Arc<Mutex<HashMap<String, AgentConnection>>>,
@@ -77,6 +79,70 @@ impl ConnectionManager {
             .send(ConnectionCommand::Prompt { blocks })
             .await
             .map_err(|_| AcpError::ProcessExited)
+    }
+
+    /// Send a prompt while ensuring a `Conversation` DB row is bound to this
+    /// connection. On the first call (when `state.conversation_id` is None),
+    /// requires `folder_id` (or falls back to `state.working_dir`), creates
+    /// the row, and emits `ConversationLinked` before forwarding the prompt.
+    /// Subsequent calls ignore `folder_id`.
+    pub async fn send_prompt_linked(
+        &self,
+        db: &AppDatabase,
+        conn_id: &str,
+        blocks: Vec<PromptInputBlock>,
+        folder_id: Option<i32>,
+    ) -> Result<(), AcpError> {
+        // Snapshot what we need from the connection map under one short lock.
+        let (state_arc, emitter, agent_type, already_linked, working_dir) = {
+            let connections = self.connections.lock().await;
+            let conn = connections
+                .get(conn_id)
+                .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
+            let already = conn.state.read().await.conversation_id.is_some();
+            let working_dir = conn.state.read().await.working_dir.clone();
+            (
+                conn.state.clone(),
+                conn.emitter.clone(),
+                conn.agent_type,
+                already,
+                working_dir,
+            )
+        };
+
+        if !already_linked {
+            let folder_id = match folder_id {
+                Some(id) => id,
+                None => {
+                    let path = working_dir.ok_or_else(|| {
+                        AcpError::protocol(
+                            "folder_id not provided and connection has no working_dir to fall back on"
+                                .to_string(),
+                        )
+                    })?;
+                    let path_str = path.to_string_lossy().to_string();
+                    folder_service::add_folder(&db.conn, &path_str)
+                        .await
+                        .map_err(|e| AcpError::protocol(e.to_string()))?
+                        .id
+                }
+            };
+            let row =
+                conversation_service::create(&db.conn, folder_id, agent_type, None, None)
+                    .await
+                    .map_err(|e| AcpError::protocol(e.to_string()))?;
+            emit_with_state(
+                &state_arc,
+                &emitter,
+                AcpEvent::ConversationLinked {
+                    conversation_id: row.id,
+                    folder_id,
+                },
+            )
+            .await;
+        }
+
+        self.send_prompt(conn_id, blocks).await
     }
 
     pub async fn set_mode(&self, conn_id: &str, mode_id: String) -> Result<(), AcpError> {
@@ -294,6 +360,33 @@ mod tests {
             owner_window_label: "test-window".to_string(),
             cmd_tx: tx,
             state: Arc::new(RwLock::new(state)),
+            emitter: crate::web::event_bridge::EventEmitter::Noop,
+        }
+    }
+
+    fn fake_connection_with_working_dir(
+        id: &str,
+        conv_id: Option<i32>,
+        working_dir: Option<std::path::PathBuf>,
+    ) -> AgentConnection {
+        let (tx, _rx) = mpsc::channel(1);
+        let mut state = SessionState::new(
+            id.to_string(),
+            crate::models::agent::AgentType::ClaudeCode,
+            working_dir,
+            "test-window".to_string(),
+            None,
+        );
+        state.conversation_id = conv_id;
+        state.status = ConnectionStatus::Connected;
+        AgentConnection {
+            id: id.to_string(),
+            agent_type: crate::models::agent::AgentType::ClaudeCode,
+            status: ConnectionStatus::Connected,
+            owner_window_label: "test-window".to_string(),
+            cmd_tx: tx,
+            state: Arc::new(RwLock::new(state)),
+            emitter: crate::web::event_bridge::EventEmitter::Noop,
         }
     }
 
@@ -328,5 +421,112 @@ mod tests {
             .expect("should find c1");
         assert_eq!(found, "c1");
         assert!(mgr.find_connection_by_conversation_id(999).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn send_prompt_linked_creates_conversation_on_first_call_only() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/test").await;
+
+        let mgr = ConnectionManager::new();
+        let conn_id = "c1";
+        {
+            let mut map = mgr.connections.lock().await;
+            // Note: cmd_tx receiver is dropped, so send_prompt's mpsc.send will fail
+            // with ProcessExited. That's fine — we only verify the linkage side
+            // effect, not the actual prompt forwarding.
+            map.insert(conn_id.into(), fake_connection(conn_id, None));
+        }
+
+        // First call: creates conversation row, sets state.conversation_id.
+        // The mpsc send error after linking is expected and ignored here.
+        let _ = mgr
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id))
+            .await;
+        let snap = mgr
+            .get_state(conn_id)
+            .await
+            .unwrap()
+            .read()
+            .await
+            .to_snapshot();
+        assert!(
+            snap.conversation_id.is_some(),
+            "conversation_id should be set"
+        );
+        assert_eq!(snap.folder_id, Some(folder_id));
+        let first_id = snap.conversation_id.unwrap();
+
+        // Second call: ignores folder_id, does NOT create another row.
+        let _ = mgr
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id))
+            .await;
+        let snap2 = mgr
+            .get_state(conn_id)
+            .await
+            .unwrap()
+            .read()
+            .await
+            .to_snapshot();
+        assert_eq!(snap2.conversation_id, Some(first_id));
+    }
+
+    #[tokio::test]
+    async fn send_prompt_linked_falls_back_to_working_dir_when_folder_id_missing() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let mgr = ConnectionManager::new();
+        let conn_id = "c1";
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert(
+                conn_id.into(),
+                fake_connection_with_working_dir(
+                    conn_id,
+                    None,
+                    Some(std::path::PathBuf::from("/tmp/codeg-fallback-test")),
+                ),
+            );
+        }
+        // No folder_id provided — expect fallback to working_dir.
+        let _ = mgr.send_prompt_linked(&db, conn_id, vec![], None).await;
+        let snap = mgr
+            .get_state(conn_id)
+            .await
+            .unwrap()
+            .read()
+            .await
+            .to_snapshot();
+        assert!(
+            snap.conversation_id.is_some(),
+            "conversation_id should be set via working_dir fallback"
+        );
+        assert!(
+            snap.folder_id.is_some(),
+            "folder_id should be set via working_dir fallback"
+        );
+    }
+
+    #[tokio::test]
+    async fn send_prompt_linked_errors_when_no_folder_id_and_no_working_dir() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let mgr = ConnectionManager::new();
+        let conn_id = "c1";
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert(conn_id.into(), fake_connection(conn_id, None));
+        }
+        let result = mgr.send_prompt_linked(&db, conn_id, vec![], None).await;
+        assert!(
+            result.is_err(),
+            "should error when neither folder_id nor working_dir is available"
+        );
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("working_dir"),
+            "error should mention missing working_dir, got: {err_str}"
+        );
     }
 }

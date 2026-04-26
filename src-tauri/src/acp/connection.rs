@@ -139,6 +139,9 @@ pub struct AgentConnection {
     /// 后端权威的会话状态。所有 `emit_with_state` 写入此状态并自增 seq。
     /// 使用 `Arc<RwLock<_>>` 让 spawn 出的连接 task 与外部 snapshot 读取共享。
     pub state: Arc<RwLock<SessionState>>,
+    /// 出口侧的事件发射器；管理器层（如 `send_prompt_linked`）需要直接发射
+    /// `ConversationLinked` 等带 SessionState 写入的事件。
+    pub emitter: EventEmitter,
 }
 
 impl AgentConnection {
@@ -405,6 +408,7 @@ pub async fn spawn_agent_connection(
             owner_window_label,
             cmd_tx,
             state: Arc::clone(&session_state),
+            emitter: emitter.clone(),
         },
     );
 
