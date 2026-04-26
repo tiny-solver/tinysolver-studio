@@ -2061,11 +2061,12 @@ pub async fn acp_prompt(
     connection_id: String,
     blocks: Vec<PromptInputBlock>,
     folder_id: Option<i32>,
+    conversation_id: Option<i32>,
     db: State<'_, crate::db::AppDatabase>,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), AcpError> {
     manager
-        .send_prompt_linked(&db, &connection_id, blocks, folder_id, None)
+        .send_prompt_linked(&db, &connection_id, blocks, folder_id, conversation_id)
         .await
 }
 

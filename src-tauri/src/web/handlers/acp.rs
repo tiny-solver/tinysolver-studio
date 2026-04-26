@@ -138,6 +138,7 @@ pub struct AcpPromptParams {
     pub connection_id: String,
     pub blocks: Vec<crate::acp::types::PromptInputBlock>,
     pub folder_id: Option<i32>,
+    pub conversation_id: Option<i32>,
 }
 
 pub async fn acp_prompt(
@@ -151,7 +152,7 @@ pub async fn acp_prompt(
             &params.connection_id,
             params.blocks,
             params.folder_id,
-            None,
+            params.conversation_id,
         )
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
