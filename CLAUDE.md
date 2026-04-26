@@ -83,6 +83,8 @@ cargo build
 
 **事件信封**：所有 ACP 流式事件通过 `EventEnvelope { seq, connection_id, payload: AcpEvent }` 发出。`#[serde(flatten)]` 让 JSON 保持平铺：`{ seq, connection_id, type, ...变体字段 }`。`seq` 是单调递增序号（当前阶段占位 `0`，后续阶段接入 `SessionState` 后严格递增），用于前端做 snapshot 与事件流的去重对账。后端 emit 统一通过 `web/event_bridge.rs::emit_acp` 辅助函数。
 
+**会话状态（后端权威）**：每个 `AgentConnection` 持有 `Arc<RwLock<SessionState>>`，其中累积当前 turn 的 `live_message`、in-flight `active_tool_calls`、待处理 `pending_permission`、协商出的 modes/usage 等。事件发射统一通过 `web/event_bridge.rs::emit_with_state`：先 `apply_event` 写状态、`event_seq += 1`、再 emit envelope，写状态与发事件在同一个 critical section 完成。`SessionState::to_snapshot()` 输出 `LiveSessionSnapshot`——Phase 2 的 snapshot 端点直接消费此结构。
+
 ### 条件编译约定
 
 - `#[cfg(feature = "tauri-runtime")]` — 仅桌面模式编译（Tauri 窗口、通知、`tauri::State` 参数等）
