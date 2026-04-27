@@ -14,6 +14,7 @@ import {
 
 const DEFAULT_PORT = 3080
 import { openUrl } from "@/lib/platform"
+import { copyTextToClipboard } from "@/lib/utils"
 
 function AddressCard({ label, value }: { label: string; value: string }) {
   const t = useTranslations("WebServiceSettings")
@@ -65,9 +66,10 @@ function TokenEditor({
   const [copied, setCopied] = useState(false)
   const [revealed, setRevealed] = useState(false)
 
-  function handleCopy() {
+  async function handleCopy() {
     if (!value) return
-    navigator.clipboard.writeText(value)
+    const ok = await copyTextToClipboard(value)
+    if (!ok) return
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
