@@ -444,6 +444,18 @@ pub async fn spawn_agent_connection(
                 },
             )
             .await;
+            // Drive the state machine through `Error` before `Disconnected`
+            // so the frontend's error-handling effect (cancelled-on-error)
+            // engages — without this hop the connection would jump straight
+            // to Disconnected and look like a clean shutdown.
+            emit_with_state(
+                &state_clone,
+                &emitter_clone,
+                AcpEvent::StatusChanged {
+                    status: ConnectionStatus::Error,
+                },
+            )
+            .await;
         }
 
         emit_with_state(

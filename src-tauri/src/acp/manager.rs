@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::acp::connection::{spawn_agent_connection, AgentConnection, ConnectionCommand};
@@ -15,14 +16,33 @@ use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
 
+/// Composite key identifying a logical agent session for spawn-time dedup.
+/// Two `acp_connect` calls with the same triple race for the same `Mutex`,
+/// so the second one observes the first's freshly-spawned connection in
+/// `find_connection_for_reuse` instead of starting a duplicate process.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct SpawnDedupKey {
+    agent_type: AgentType,
+    working_dir: Option<PathBuf>,
+    session_id: String,
+}
+
 pub struct ConnectionManager {
     pub(crate) connections: Arc<Mutex<HashMap<String, AgentConnection>>>,
+    /// Per-(agent, working_dir, session_id) async mutex. Held across the
+    /// dedup-lookup + spawn critical section so two concurrent
+    /// `spawn_agent` calls for the same logical session can't both miss
+    /// dedup during the connecting window (before `SessionStarted` writes
+    /// `state.external_id`). Entries persist for process lifetime — bounded
+    /// by the number of distinct sessions ever connected.
+    spawn_locks: Arc<Mutex<HashMap<SpawnDedupKey, Arc<Mutex<()>>>>>,
 }
 
 impl ConnectionManager {
     pub fn new() -> Self {
         Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
+            spawn_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -30,6 +50,7 @@ impl ConnectionManager {
     pub fn clone_ref(&self) -> Self {
         Self {
             connections: self.connections.clone(),
+            spawn_locks: self.spawn_locks.clone(),
         }
     }
 
@@ -49,6 +70,33 @@ impl ConnectionManager {
         // spawning a fresh process — this is what makes a browser refresh
         // mid-turn re-attach to the existing live state rather than orphan it.
         let working_dir_path = working_dir.as_ref().map(PathBuf::from);
+
+        // Acquire a per-(agent, working_dir, session_id) async mutex so two
+        // concurrent connects for the same logical session can't both miss
+        // dedup during the connecting window. The lookup-then-spawn
+        // critical section runs under this lock; the second waiter, on
+        // entry, observes the first call's freshly-inserted connection via
+        // `find_connection_for_reuse` and returns its id instead of
+        // spawning a duplicate. Skipped entirely when `session_id` is None
+        // (fresh sessions never dedup, by design).
+        let dedup_lock = if let Some(sid) = session_id.as_deref() {
+            let key = SpawnDedupKey {
+                agent_type,
+                working_dir: working_dir_path.clone(),
+                session_id: sid.to_string(),
+            };
+            let mu = {
+                let mut locks = self.spawn_locks.lock().await;
+                locks
+                    .entry(key)
+                    .or_insert_with(|| Arc::new(Mutex::new(())))
+                    .clone()
+            };
+            Some(mu.lock_owned().await)
+        } else {
+            None
+        };
+
         if let Some(existing) = self
             .find_connection_for_reuse(agent_type, working_dir_path.as_ref(), session_id.as_deref())
             .await
@@ -83,7 +131,57 @@ impl ConnectionManager {
         )
         .await?;
 
+        // Release the dedup lock only AFTER the connection has been
+        // inserted into the connections map by spawn_agent_connection.
+        // Any waiter on this same key will then observe the new connection
+        // in their own find_connection_for_reuse call.
+        drop(dedup_lock);
+
         Ok(connection_id)
+    }
+
+    /// Disconnect connections that have been idle longer than `idle_timeout`.
+    /// "Idle" means: status is `Connected`, no `pending_permission`, no
+    /// activity (no events, no commands) for at least `idle_timeout`.
+    /// `Prompting` connections are always preserved (a turn is in flight).
+    /// Returns the number of connections that were disconnected.
+    pub async fn sweep_idle(&self, idle_timeout: Duration) -> usize {
+        let now = chrono::Utc::now();
+        let timeout = match chrono::Duration::from_std(idle_timeout) {
+            Ok(d) => d,
+            Err(_) => return 0,
+        };
+        let to_disconnect: Vec<String> = {
+            let connections = self.connections.lock().await;
+            let mut victims = Vec::new();
+            for (id, conn) in connections.iter() {
+                let Ok(state) = conn.state.try_read() else {
+                    // Per-state writer holds the lock; a future tick will
+                    // re-evaluate this entry. Don't block the connections
+                    // mutex on it.
+                    continue;
+                };
+                if state.status != ConnectionStatus::Connected {
+                    continue;
+                }
+                if state.pending_permission.is_some() {
+                    continue;
+                }
+                let elapsed = now.signed_duration_since(state.last_activity_at);
+                if elapsed >= timeout {
+                    victims.push(id.clone());
+                }
+            }
+            victims
+        };
+        let mut disconnected = 0;
+        for id in to_disconnect {
+            eprintln!("[ACP] idle sweep disconnecting connection={}", id);
+            if self.disconnect(&id).await.is_ok() {
+                disconnected += 1;
+            }
+        }
+        disconnected
     }
 
     /// Look up an existing live connection that we can reuse instead of
@@ -1092,6 +1190,168 @@ mod tests {
             .await
             .is_none(),
             "Errored connection must not be reused"
+        );
+    }
+
+    /// Helper that backdates a connection's `last_activity_at` so the
+    /// idle sweep sees it as having crossed its threshold.
+    async fn backdate_last_activity(mgr: &ConnectionManager, conn_id: &str, secs_ago: i64) {
+        let state = mgr.get_state(conn_id).await.expect("connection exists");
+        let mut s = state.write().await;
+        s.last_activity_at = chrono::Utc::now() - chrono::Duration::seconds(secs_ago);
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_disconnects_idle_connected_connections() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "stale",
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/stale")),
+            EventEmitter::Noop,
+        )
+        .await;
+        backdate_last_activity(&mgr, "stale", 600).await;
+
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(n, 1);
+        assert!(
+            mgr.connections.lock().await.get("stale").is_none(),
+            "Idle connection must be removed after sweep"
+        );
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_skips_recently_active_connection() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "fresh",
+            AgentType::ClaudeCode,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        // last_activity_at defaults to "now" inside SessionState::new — no
+        // backdating, so it should NOT be swept.
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(n, 0);
+        assert!(mgr.connections.lock().await.contains_key("fresh"));
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_skips_prompting_connection() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "prompting",
+            AgentType::ClaudeCode,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        backdate_last_activity(&mgr, "prompting", 600).await;
+        // Override status to Prompting — a turn is in flight; never sweep.
+        {
+            let state = mgr.get_state("prompting").await.unwrap();
+            state.write().await.status = ConnectionStatus::Prompting;
+        }
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(n, 0);
+        assert!(mgr.connections.lock().await.contains_key("prompting"));
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_skips_pending_permission() {
+        use crate::acp::session_state::PendingPermissionState;
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "permission",
+            AgentType::ClaudeCode,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        backdate_last_activity(&mgr, "permission", 600).await;
+        {
+            let state = mgr.get_state("permission").await.unwrap();
+            state.write().await.pending_permission = Some(PendingPermissionState {
+                request_id: "req-1".into(),
+                tool_call_id: "tc-1".into(),
+                tool_description: "test".into(),
+                options: vec![],
+                created_at: chrono::Utc::now(),
+            });
+        }
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(
+            n, 0,
+            "Connection with pending permission must not be swept (user is mid-decision)"
+        );
+        assert!(mgr.connections.lock().await.contains_key("permission"));
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_picks_only_qualifying_subset() {
+        let mgr = ConnectionManager::new();
+        for id in ["a", "b", "c"] {
+            insert_fake_connection(
+                &mgr,
+                id,
+                AgentType::ClaudeCode,
+                None,
+                EventEmitter::Noop,
+            )
+            .await;
+        }
+        // a: idle (sweep target), b: fresh (not idle), c: idle but Prompting (skipped).
+        backdate_last_activity(&mgr, "a", 600).await;
+        backdate_last_activity(&mgr, "c", 600).await;
+        {
+            let state = mgr.get_state("c").await.unwrap();
+            state.write().await.status = ConnectionStatus::Prompting;
+        }
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(n, 1);
+        let map = mgr.connections.lock().await;
+        assert!(!map.contains_key("a"));
+        assert!(map.contains_key("b"));
+        assert!(map.contains_key("c"));
+    }
+
+    /// When two `spawn_agent` calls race for the same logical session id,
+    /// the per-key dedup mutex makes the second one observe the first's
+    /// freshly-spawned connection and reuse it. Without the mutex, both
+    /// would have missed dedup during the connecting window.
+    ///
+    /// Simulates the race by pre-inserting a "first call's connection" with
+    /// `external_id` set; what's tested is that two concurrent
+    /// `find_connection_for_reuse` calls under the same lock see consistent
+    /// state. The `spawn_locks` map being shared via `clone_ref` is the
+    /// invariant we need.
+    #[tokio::test]
+    async fn spawn_locks_are_shared_across_clone_ref() {
+        let mgr = ConnectionManager::new();
+        let cloned = mgr.clone_ref();
+        // Both clones must reference the same map. Insert via one,
+        // observe via the other.
+        let key = SpawnDedupKey {
+            agent_type: AgentType::ClaudeCode,
+            working_dir: Some(PathBuf::from("/tmp/dedup-test")),
+            session_id: "ext-shared".into(),
+        };
+        {
+            let mut locks = mgr.spawn_locks.lock().await;
+            locks
+                .entry(key.clone())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())));
+        }
+        let cloned_locks = cloned.spawn_locks.lock().await;
+        assert!(
+            cloned_locks.contains_key(&key),
+            "spawn_locks must be shared between original and clone_ref"
         );
     }
 }

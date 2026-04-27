@@ -116,6 +116,18 @@ async fn async_main() {
         state.event_broadcaster.clone(),
     ));
 
+    // Spawn the idle sweep so connections abandoned without an explicit
+    // disconnect (e.g. browser tab closed, panic survivors) are reaped.
+    // Override the 30-minute default via `CODEG_ACP_IDLE_TIMEOUT_SECS`
+    // (set to `0` to disable).
+    if let Some(idle_timeout) = codeg_lib::idle_timeout_from_env() {
+        tokio::spawn(codeg_lib::idle_sweep_task(
+            state.connection_manager.clone_ref(),
+            idle_timeout,
+            std::time::Duration::from_secs(codeg_lib::SWEEP_INTERVAL_SECS),
+        ));
+    }
+
     // Build router
     let router = codeg_lib::web::router::build_router(state, token.clone(), static_dir);
 
