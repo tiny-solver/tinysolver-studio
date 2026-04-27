@@ -46,6 +46,16 @@ pub struct ToolCallState {
     /// Distinct from `output` (which is the parsed `raw_output`); kept as the
     /// most recent value (replace-on-update, not append) for snapshot fidelity.
     pub content: Option<String>,
+    /// File locations affected by this tool call (e.g. paths of edits).
+    /// Forwarded verbatim from the agent's ToolCall/ToolCallUpdate event.
+    /// `None` if the agent didn't supply it. Partial-update preservation:
+    /// an incoming `None` from a `ToolCallUpdate` (which typically carries
+    /// only changed fields) must NOT clobber a previously-set value.
+    pub locations: Option<serde_json::Value>,
+    /// ACP extensibility metadata. Used by frontend Phase 1 parent
+    /// extraction. `None` if the agent didn't supply it. Same partial-update
+    /// preservation semantic as `locations`.
+    pub meta: Option<serde_json::Value>,
     /// 流式拼接的 input chunks（serde 不输出，仅运行时用）
     #[serde(skip)]
     pub raw_input_chunks: Vec<String>,
@@ -221,7 +231,8 @@ impl SessionState {
                 content,
                 raw_input,
                 raw_output,
-                ..
+                locations,
+                meta,
             } => {
                 self.upsert_tool_call(
                     tool_call_id,
@@ -231,7 +242,16 @@ impl SessionState {
                     content.as_deref(),
                     raw_input.as_deref(),
                     raw_output.as_deref(),
+                    locations.as_ref(),
+                    meta.as_ref(),
                 );
+                // Anchor the tool call in `live_message.content` so snapshot
+                // reload preserves position relative to surrounding text /
+                // thinking blocks. Idempotent by id: a second ToolCall (or a
+                // ToolCallUpdate, see below) for the same id must not push a
+                // duplicate ref. Mirrors text/thinking deltas in lazily
+                // creating `live_message` if absent.
+                self.push_tool_call_ref_if_absent(tool_call_id);
             }
             AcpEvent::ToolCallUpdate {
                 tool_call_id,
@@ -240,6 +260,8 @@ impl SessionState {
                 content,
                 raw_input,
                 raw_output,
+                locations,
+                meta,
                 ..
             } => {
                 self.upsert_tool_call(
@@ -250,7 +272,14 @@ impl SessionState {
                     content.as_deref(),
                     raw_input.as_deref(),
                     raw_output.as_deref(),
+                    locations.as_ref(),
+                    meta.as_ref(),
                 );
+                // Defensive: if a ToolCallUpdate arrives before its initial
+                // ToolCall (unusual ordering / replay), ensure the ref block
+                // still gets anchored. Idempotent so the normal-flow case is
+                // a no-op here.
+                self.push_tool_call_ref_if_absent(tool_call_id);
             }
             AcpEvent::PermissionRequest {
                 request_id,
@@ -279,18 +308,35 @@ impl SessionState {
                 self.conversation_id = Some(*conversation_id);
                 self.folder_id = Some(*folder_id);
             }
-            AcpEvent::PlanUpdate { .. }
-            | AcpEvent::ClaudeSdkMessage { .. }
+            AcpEvent::PlanUpdate { entries } => {
+                // Replace any existing Plan block, then append at end.
+                // Mirrors the frontend's PLAN_UPDATE reducer semantic: there
+                // is at most one plan block, always at the current end of
+                // content. `Vec<PlanEntryInfo>` is converted to
+                // `serde_json::Value` because the wire-side `Plan` variant
+                // stores it opaquely (frontend casts back to PlanEntryInfo[]).
+                let live = self.ensure_live_message();
+                live.content
+                    .retain(|b| !matches!(b, LiveContentBlock::Plan { .. }));
+                live.content.push(LiveContentBlock::Plan {
+                    entries: serde_json::to_value(entries)
+                        .unwrap_or(serde_json::Value::Null),
+                });
+            }
+            AcpEvent::ClaudeSdkMessage { .. }
             | AcpEvent::SelectorsReady
             | AcpEvent::Error { .. } => {
                 // 这些事件不直接修改 SessionState 的可见字段。
-                // PlanUpdate 后续可能扩展为 live_message 内 Plan block；当前阶段保持空操作。
             }
         }
         self.last_activity_at = Utc::now();
     }
 
-    fn append_text_delta(&mut self, text: &str) {
+    /// Lazily initialize `self.live_message` and return a mutable reference
+    /// to it. Centralizes the "create-if-absent" pattern shared by the
+    /// text/thinking delta appenders, the tool-call ref pusher, and the
+    /// plan-update applier.
+    fn ensure_live_message(&mut self) -> &mut LiveMessage {
         if self.live_message.is_none() {
             self.live_message = Some(LiveMessage {
                 id: format!("live-{}", uuid::Uuid::new_v4()),
@@ -299,7 +345,13 @@ impl SessionState {
                 started_at: Utc::now(),
             });
         }
-        let live = self.live_message.as_mut().expect("live_message just set");
+        self.live_message
+            .as_mut()
+            .expect("live_message just initialized")
+    }
+
+    fn append_text_delta(&mut self, text: &str) {
+        let live = self.ensure_live_message();
         if let Some(LiveContentBlock::Text { text: existing }) = live.content.last_mut() {
             existing.push_str(text);
         } else {
@@ -310,15 +362,7 @@ impl SessionState {
     }
 
     fn append_thinking_delta(&mut self, text: &str) {
-        if self.live_message.is_none() {
-            self.live_message = Some(LiveMessage {
-                id: format!("live-{}", uuid::Uuid::new_v4()),
-                role: MessageRole::Assistant,
-                content: Vec::new(),
-                started_at: Utc::now(),
-            });
-        }
-        let live = self.live_message.as_mut().expect("live_message just set");
+        let live = self.ensure_live_message();
         if let Some(LiveContentBlock::Thinking { text: existing }) = live.content.last_mut() {
             existing.push_str(text);
         } else {
@@ -328,9 +372,32 @@ impl SessionState {
         }
     }
 
+    /// Push a `ToolCallRef` block onto `live_message.content` for the given
+    /// tool-call id, but only if no existing block in `content` already
+    /// references that id. Called by both `ToolCall` and `ToolCallUpdate`
+    /// arms so a tool's position survives any event-ordering edge case
+    /// without ever duplicating.
+    fn push_tool_call_ref_if_absent(&mut self, tool_call_id: &str) {
+        let live = self.ensure_live_message();
+        let already_present = live.content.iter().any(|b| {
+            matches!(
+                b,
+                LiveContentBlock::ToolCallRef { tool_call_id: id } if id == tool_call_id
+            )
+        });
+        if !already_present {
+            live.content.push(LiveContentBlock::ToolCallRef {
+                tool_call_id: tool_call_id.to_string(),
+            });
+        }
+    }
+
     /// Insert-or-update a tool call entry. Used by both `ToolCall` (initial) and
     /// `ToolCallUpdate` events. `kind` is `Some` only on the initial event;
-    /// title/status/content/raw_input/raw_output are merged when present.
+    /// title/status/content/raw_input/raw_output/locations/meta are merged
+    /// when present. Partial-update preservation: a `None` value passed in
+    /// from a `ToolCallUpdate` (which typically carries only the fields that
+    /// changed) must NOT clobber a previously-set value on the entry.
     #[allow(clippy::too_many_arguments)]
     fn upsert_tool_call(
         &mut self,
@@ -341,6 +408,8 @@ impl SessionState {
         content: Option<&str>,
         raw_input: Option<&str>,
         raw_output: Option<&str>,
+        locations: Option<&serde_json::Value>,
+        meta: Option<&serde_json::Value>,
     ) {
         let entry = self
             .active_tool_calls
@@ -353,6 +422,8 @@ impl SessionState {
                 input: None,
                 output: None,
                 content: None,
+                locations: None,
+                meta: None,
                 raw_input_chunks: Vec::new(),
             });
         if let Some(k) = kind {
@@ -381,6 +452,12 @@ impl SessionState {
         }
         if let Some(text) = raw_output {
             entry.output = Some(parse_tool_call_output_text(text));
+        }
+        if let Some(loc) = locations {
+            entry.locations = Some(loc.clone());
+        }
+        if let Some(m) = meta {
+            entry.meta = Some(m.clone());
         }
     }
 
@@ -982,6 +1059,284 @@ mod tests {
         // Full structural equivalence (with volatile fields stripped + tool
         // calls sorted by id). This is the load-bearing consistency check.
         assert_eq!(normalize_snapshot(&snap_a), normalize_snapshot(&snap_b));
+    }
+
+    // ---------- Phase 3c-3: snapshot fidelity ----------
+
+    /// Helper: returns the kind discriminator + payload-id of each block in
+    /// `live_message.content`, suitable for asserting block ordering.
+    fn live_block_summary(s: &SessionState) -> Vec<(&'static str, String)> {
+        s.live_message
+            .as_ref()
+            .map(|lm| {
+                lm.content
+                    .iter()
+                    .map(|b| match b {
+                        LiveContentBlock::Text { text } => ("text", text.clone()),
+                        LiveContentBlock::Thinking { text } => ("thinking", text.clone()),
+                        LiveContentBlock::ToolCallRef { tool_call_id } => {
+                            ("tool_call_ref", tool_call_id.clone())
+                        }
+                        LiveContentBlock::Plan { entries } => {
+                            ("plan", serde_json::to_string(entries).unwrap_or_default())
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn tool_call_event(id: &str, title: &str) -> AcpEvent {
+        AcpEvent::ToolCall {
+            tool_call_id: id.into(),
+            title: title.into(),
+            kind: "execute".into(),
+            status: "pending".into(),
+            content: None,
+            raw_input: None,
+            raw_output: None,
+            locations: None,
+            meta: None,
+        }
+    }
+
+    #[test]
+    fn tool_call_pushes_ref_block_at_current_position() {
+        let mut s = fresh_state();
+        s.apply_event(&AcpEvent::ContentDelta {
+            text: "before ".into(),
+        });
+        s.apply_event(&tool_call_event("tc-1", "ls"));
+        s.apply_event(&AcpEvent::ContentDelta {
+            text: "between".into(),
+        });
+        s.apply_event(&tool_call_event("tc-2", "pwd"));
+
+        let summary = live_block_summary(&s);
+        assert_eq!(
+            summary,
+            vec![
+                ("text", "before ".to_string()),
+                ("tool_call_ref", "tc-1".to_string()),
+                ("text", "between".to_string()),
+                ("tool_call_ref", "tc-2".to_string()),
+            ],
+            "tool-call refs must anchor at the position they arrived in the stream"
+        );
+    }
+
+    #[test]
+    fn tool_call_ref_push_is_idempotent() {
+        let mut s = fresh_state();
+        s.apply_event(&tool_call_event("tc-1", "ls"));
+        // Defensive: second ToolCall with the same id (replay/unusual ordering)
+        // must NOT push a duplicate ref block.
+        s.apply_event(&tool_call_event("tc-1", "ls (retry)"));
+
+        let summary = live_block_summary(&s);
+        let ref_count = summary
+            .iter()
+            .filter(|(kind, id)| *kind == "tool_call_ref" && id == "tc-1")
+            .count();
+        assert_eq!(ref_count, 1, "duplicate ToolCall must not duplicate ref");
+    }
+
+    #[test]
+    fn tool_call_update_does_not_duplicate_ref() {
+        let mut s = fresh_state();
+        s.apply_event(&tool_call_event("tc-1", "ls"));
+        s.apply_event(&AcpEvent::ToolCallUpdate {
+            tool_call_id: "tc-1".into(),
+            title: None,
+            status: Some("completed".into()),
+            content: None,
+            raw_input: None,
+            raw_output: Some("\"done\"".into()),
+            raw_output_append: None,
+            locations: None,
+            meta: None,
+        });
+
+        let summary = live_block_summary(&s);
+        let ref_count = summary
+            .iter()
+            .filter(|(kind, id)| *kind == "tool_call_ref" && id == "tc-1")
+            .count();
+        assert_eq!(
+            ref_count, 1,
+            "ToolCall + ToolCallUpdate for same id yields exactly one ref"
+        );
+    }
+
+    #[test]
+    fn tool_call_state_carries_locations_and_meta() {
+        let mut s = fresh_state();
+        let locs = serde_json::json!([{ "path": "/tmp/foo.rs", "line": 12 }]);
+        let meta = serde_json::json!({ "parent_tool_use_id": "abc", "session": "ext-1" });
+        s.apply_event(&AcpEvent::ToolCall {
+            tool_call_id: "tc-1".into(),
+            title: "edit".into(),
+            kind: "edit".into(),
+            status: "in_progress".into(),
+            content: None,
+            raw_input: None,
+            raw_output: None,
+            locations: Some(locs.clone()),
+            meta: Some(meta.clone()),
+        });
+        let entry = s.active_tool_calls.get("tc-1").expect("tc-1 inserted");
+        assert_eq!(entry.locations.as_ref(), Some(&locs));
+        assert_eq!(entry.meta.as_ref(), Some(&meta));
+
+        // Snapshot round-trip preserves both.
+        let snap = s.to_snapshot();
+        let tc = snap
+            .active_tool_calls
+            .iter()
+            .find(|t| t.id == "tc-1")
+            .unwrap();
+        assert_eq!(tc.locations.as_ref(), Some(&locs));
+        assert_eq!(tc.meta.as_ref(), Some(&meta));
+    }
+
+    #[test]
+    fn tool_call_update_preserves_locations_when_omitted() {
+        let mut s = fresh_state();
+        let locs = serde_json::json!([{ "path": "/tmp/foo.rs" }]);
+        let meta = serde_json::json!({ "k": "v" });
+        s.apply_event(&AcpEvent::ToolCall {
+            tool_call_id: "tc-1".into(),
+            title: "edit".into(),
+            kind: "edit".into(),
+            status: "in_progress".into(),
+            content: None,
+            raw_input: None,
+            raw_output: None,
+            locations: Some(locs.clone()),
+            meta: Some(meta.clone()),
+        });
+        // Subsequent partial update without locations/meta — must not clobber.
+        s.apply_event(&AcpEvent::ToolCallUpdate {
+            tool_call_id: "tc-1".into(),
+            title: None,
+            status: Some("completed".into()),
+            content: None,
+            raw_input: None,
+            raw_output: Some("\"ok\"".into()),
+            raw_output_append: None,
+            locations: None,
+            meta: None,
+        });
+        let entry = s.active_tool_calls.get("tc-1").unwrap();
+        assert_eq!(entry.status, ToolCallStatus::Completed);
+        assert_eq!(
+            entry.locations.as_ref(),
+            Some(&locs),
+            "ToolCallUpdate without locations must NOT clobber previously-set value"
+        );
+        assert_eq!(
+            entry.meta.as_ref(),
+            Some(&meta),
+            "ToolCallUpdate without meta must NOT clobber previously-set value"
+        );
+    }
+
+    #[test]
+    fn plan_update_appends_at_end_replacing_existing() {
+        use crate::acp::types::PlanEntryInfo;
+        let mut s = fresh_state();
+        s.apply_event(&AcpEvent::ContentDelta { text: "A".into() });
+        s.apply_event(&AcpEvent::PlanUpdate {
+            entries: vec![PlanEntryInfo {
+                content: "step v1".into(),
+                priority: "high".into(),
+                status: "pending".into(),
+            }],
+        });
+        s.apply_event(&AcpEvent::ContentDelta { text: "B".into() });
+        s.apply_event(&AcpEvent::PlanUpdate {
+            entries: vec![PlanEntryInfo {
+                content: "step v2".into(),
+                priority: "high".into(),
+                status: "in_progress".into(),
+            }],
+        });
+
+        let summary = live_block_summary(&s);
+        // Expect: text("A"), text("B"), plan(v2). The old plan block is
+        // removed and the fresh one is appended at end (after all current
+        // text), matching the frontend reducer's replace-then-append.
+        assert_eq!(summary.len(), 3, "summary was: {:?}", summary);
+        assert_eq!(summary[0], ("text", "A".to_string()));
+        assert_eq!(summary[1], ("text", "B".to_string()));
+        assert_eq!(summary[2].0, "plan");
+        assert!(
+            summary[2].1.contains("step v2"),
+            "plan block must be the v2 entries, not v1; got: {}",
+            summary[2].1
+        );
+        assert!(
+            !summary[2].1.contains("step v1"),
+            "old plan block must be removed; got: {}",
+            summary[2].1
+        );
+    }
+
+    #[test]
+    fn plan_update_creates_live_message_when_absent() {
+        use crate::acp::types::PlanEntryInfo;
+        let mut s = fresh_state();
+        assert!(s.live_message.is_none());
+        s.apply_event(&AcpEvent::PlanUpdate {
+            entries: vec![PlanEntryInfo {
+                content: "first step".into(),
+                priority: "medium".into(),
+                status: "pending".into(),
+            }],
+        });
+        let live = s
+            .live_message
+            .as_ref()
+            .expect("PlanUpdate must lazily create live_message");
+        assert_eq!(live.content.len(), 1);
+        match &live.content[0] {
+            LiveContentBlock::Plan { entries } => {
+                assert!(
+                    entries.to_string().contains("first step"),
+                    "plan must carry the entries payload; got: {}",
+                    entries
+                );
+            }
+            other => panic!("expected Plan block, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn turn_complete_clears_plan_and_tool_refs() {
+        use crate::acp::types::PlanEntryInfo;
+        let mut s = fresh_state();
+        s.apply_event(&AcpEvent::ContentDelta { text: "x".into() });
+        s.apply_event(&tool_call_event("tc-1", "ls"));
+        s.apply_event(&AcpEvent::PlanUpdate {
+            entries: vec![PlanEntryInfo {
+                content: "step".into(),
+                priority: "low".into(),
+                status: "pending".into(),
+            }],
+        });
+        // Sanity precondition: live now has text, ref, plan.
+        assert_eq!(live_block_summary(&s).len(), 3);
+        assert_eq!(s.active_tool_calls.len(), 1);
+
+        s.apply_event(&AcpEvent::TurnComplete {
+            session_id: "ext".into(),
+            stop_reason: "end_turn".into(),
+            agent_type: "claude_code".into(),
+        });
+        // The existing `live_message = None` clear handles the new block kinds
+        // automatically — they live inside live_message, not as siblings.
+        assert!(s.live_message.is_none());
+        assert!(s.active_tool_calls.is_empty());
     }
 
     /// 验证 envelope 序列化 + 反序列化 round-trip
