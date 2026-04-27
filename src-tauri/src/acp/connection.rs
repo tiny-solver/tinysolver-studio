@@ -142,6 +142,13 @@ pub struct AgentConnection {
     /// 出口侧的事件发射器；管理器层（如 `send_prompt_linked`）需要直接发射
     /// `ConversationLinked` 等带 SessionState 写入的事件。
     pub emitter: EventEmitter,
+    /// Serializes prompt sends per connection. Held across the
+    /// link-check + DB write + emit + cmd_tx.send sequence so two
+    /// concurrent prompts (multiple browser tabs of the same conversation,
+    /// chat-channel + UI overlap) can't interleave and produce duplicate
+    /// conversation rows or a confused agent that received two prompts
+    /// in the same turn.
+    pub prompt_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AgentConnection {
@@ -409,6 +416,7 @@ pub async fn spawn_agent_connection(
             cmd_tx,
             state: Arc::clone(&session_state),
             emitter: emitter.clone(),
+            prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
         },
     );
 

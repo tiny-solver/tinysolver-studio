@@ -10,9 +10,12 @@ use std::time::Duration;
 
 use crate::acp::manager::ConnectionManager;
 
-/// Default idle threshold (30 minutes). Override at startup via
-/// `CODEG_ACP_IDLE_TIMEOUT_SECS`.
-pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 30 * 60;
+/// Default idle threshold (60 seconds). Override at startup via
+/// `CODEG_ACP_IDLE_TIMEOUT_SECS`. The threshold is intentionally tight:
+/// the sweep only runs against connections in `Connected` state with no
+/// `pending_permission`, and `last_activity_at` is bumped on every
+/// emit, so an actively-used connection never qualifies.
+pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 60;
 /// Sweep cadence — runs once per minute. Each tick is a brief lock on the
 /// connections map plus per-state `try_read`s, so a 1-minute interval is
 /// trivially cheap relative to the wall-clock idle threshold.

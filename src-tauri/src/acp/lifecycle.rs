@@ -6,6 +6,7 @@
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use sea_orm::DatabaseConnection;
 use tokio::sync::broadcast;
@@ -16,6 +17,53 @@ use crate::db::entities::conversation::ConversationStatus;
 use crate::db::error::DbError;
 use crate::db::service::conversation_service;
 use crate::web::event_bridge::{emit_with_state, WebEvent, WebEventBroadcaster};
+
+/// Backoff schedule for `handle_event` DB writes. Most transient
+/// SQLite contention clears within the first retry; the third gives a
+/// final chance before we fall back to "log loudly and move on".
+const HANDLE_EVENT_RETRY_BACKOFFS: &[Duration] =
+    &[Duration::from_millis(100), Duration::from_millis(500)];
+
+/// Wrap `handle_event` with a small backoff retry. Most failures here
+/// are transient SQLite "database is locked" errors that clear within a
+/// few hundred milliseconds; without a retry the conversation row would
+/// silently miss its `pending_review` write and the sidebar would stay
+/// stuck on `in_progress` until the next prompt's `in_progress` write.
+///
+/// Final failure is logged at ERROR — this is the only signal the
+/// subscriber is dropping correctness on the floor, so it must be noisy.
+async fn handle_event_with_retry(
+    db_conn: &DatabaseConnection,
+    manager: &ConnectionManager,
+    envelope: &EventEnvelope,
+) {
+    match handle_event(db_conn, manager, envelope).await {
+        Ok(()) => return,
+        Err(e) => {
+            eprintln!(
+                "[lifecycle][WARN] handle_event failed (attempt 1, will retry) for {:?}: {e}",
+                envelope.payload
+            );
+        }
+    }
+    for (attempt, backoff) in HANDLE_EVENT_RETRY_BACKOFFS.iter().enumerate() {
+        tokio::time::sleep(*backoff).await;
+        match handle_event(db_conn, manager, envelope).await {
+            Ok(()) => return,
+            Err(e) => {
+                let attempt_num = attempt + 2;
+                let is_last = attempt + 1 == HANDLE_EVENT_RETRY_BACKOFFS.len();
+                let level = if is_last { "ERROR" } else { "WARN" };
+                eprintln!(
+                    "[lifecycle][{level}] handle_event failed (attempt {attempt_num}{}) \
+                     for {:?}: {e}",
+                    if is_last { ", giving up" } else { ", will retry" },
+                    envelope.payload
+                );
+            }
+        }
+    }
+}
 
 pub(crate) async fn handle_event(
     db_conn: &DatabaseConnection,
@@ -104,19 +152,21 @@ pub fn lifecycle_subscriber_task(
                     let envelope: EventEnvelope = match serde_json::from_value((*payload).clone()) {
                         Ok(env) => env,
                         Err(e) => {
-                            eprintln!("[lifecycle] failed to parse envelope: {e}");
+                            eprintln!("[lifecycle][ERROR] failed to parse envelope: {e}");
                             continue;
                         }
                     };
-                    if let Err(e) = handle_event(&db_conn, &manager, &envelope).await {
-                        eprintln!(
-                            "[lifecycle] DB write failed for {:?}: {e}",
-                            envelope.payload
-                        );
-                    }
+                    handle_event_with_retry(&db_conn, &manager, &envelope).await;
                 }
                 Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                    eprintln!("[lifecycle] broadcaster lagged, dropped {skipped} events");
+                    // Lagged means events were dropped between rx polls because
+                    // the broadcast buffer (4096) overflowed. Capacity-shaped
+                    // by emit_with_state's burst rate vs. our DB write speed.
+                    // Logged at WARN — visible-but-non-fatal.
+                    eprintln!(
+                        "[lifecycle][WARN] broadcaster lagged, dropped {skipped} events \
+                         (DB writes can't keep up with emit rate)"
+                    );
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     eprintln!("[lifecycle] broadcaster closed; subscriber exiting");
@@ -158,6 +208,7 @@ mod tests {
             cmd_tx: tx,
             state: Arc::new(RwLock::new(state)),
             emitter: EventEmitter::Noop,
+            prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 

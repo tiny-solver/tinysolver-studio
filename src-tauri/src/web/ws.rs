@@ -30,7 +30,11 @@ async fn handle_ws_connection(mut socket: WebSocket, state: Arc<AppState>) {
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        eprintln!("[WS] receiver lagged, skipped {n} events");
+                        // Capacity-shaped by emit_with_state's burst rate vs.
+                        // the WebSocket client's read speed. Logged at WARN —
+                        // visible-but-non-fatal; the client will receive the
+                        // next event but missed the dropped ones.
+                        eprintln!("[WS][WARN] receiver lagged, skipped {n} events");
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         break;

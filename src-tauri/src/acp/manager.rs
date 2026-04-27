@@ -233,7 +233,12 @@ impl ConnectionManager {
         None
     }
 
-    pub async fn send_prompt(
+    /// Forwards a prompt to the connection's command channel without
+    /// touching `prompt_lock`. Internal helper — both `send_prompt` and
+    /// `send_prompt_linked` acquire the lock externally and then call
+    /// this. Re-entering through `send_prompt` from `send_prompt_linked`
+    /// while holding the lock would deadlock, hence the split.
+    async fn send_prompt_inner(
         &self,
         conn_id: &str,
         blocks: Vec<PromptInputBlock>,
@@ -249,6 +254,30 @@ impl ConnectionManager {
             .send(ConnectionCommand::Prompt { blocks })
             .await
             .map_err(|_| AcpError::ProcessExited)
+    }
+
+    /// Clone the connection's `prompt_lock` under a short connections-map lock.
+    /// Returned Arc allows the caller to hold the prompt lock without
+    /// keeping the connections map locked.
+    async fn clone_prompt_lock(
+        &self,
+        conn_id: &str,
+    ) -> Result<Arc<tokio::sync::Mutex<()>>, AcpError> {
+        let connections = self.connections.lock().await;
+        let conn = connections
+            .get(conn_id)
+            .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
+        Ok(conn.prompt_lock.clone())
+    }
+
+    pub async fn send_prompt(
+        &self,
+        conn_id: &str,
+        blocks: Vec<PromptInputBlock>,
+    ) -> Result<(), AcpError> {
+        let prompt_lock = self.clone_prompt_lock(conn_id).await?;
+        let _guard = prompt_lock.lock_owned().await;
+        self.send_prompt_inner(conn_id, blocks).await
     }
 
     /// Send a prompt while ensuring a `Conversation` DB row is bound to this
@@ -281,7 +310,18 @@ impl ConnectionManager {
             ));
         }
 
+        // Acquire the per-connection prompt lock for the entire link-check
+        // + DB write + emit + cmd_tx.send sequence. Two concurrent prompts
+        // (multiple browser tabs of the same conversation; chat-channel
+        // racing the UI) are now strictly serialized — the second waiter
+        // observes `already_linked == true` after the first commits, so
+        // it can't double-create a conversation row.
+        let prompt_lock = self.clone_prompt_lock(conn_id).await?;
+        let _prompt_guard = prompt_lock.lock_owned().await;
+
         // Snapshot what we need from the connection map under one short lock.
+        // The conversation-linked check happens INSIDE the prompt lock so
+        // any racing send sees a consistent post-link state.
         let (state_arc, emitter, agent_type, already_linked) = {
             let connections = self.connections.lock().await;
             let conn = connections
@@ -299,13 +339,6 @@ impl ConnectionManager {
             )
         };
 
-        // TOCTOU note: two concurrent `send_prompt_linked` calls for the same
-        // connection could both observe `already_linked == false` and each
-        // create a conversation row. In practice the UI / API surface sends
-        // prompts serially per connection, so the race window is benign. A
-        // defensive fix would hold `state.write()` across check + create +
-        // emit, but that would block other emits on DB I/O, which is worse
-        // than the rare race.
         if !already_linked {
             match (conversation_id, folder_id) {
                 // Branch A: caller already owns a row — adopt it. No DB write.
@@ -382,7 +415,10 @@ impl ConnectionManager {
             .await;
         }
 
-        self.send_prompt(conn_id, blocks).await
+        // We hold `_prompt_guard` here, so call the lock-free inner helper
+        // — re-entering `send_prompt` would try to acquire the same mutex
+        // and deadlock.
+        self.send_prompt_inner(conn_id, blocks).await
     }
 
     pub async fn set_mode(&self, conn_id: &str, mode_id: String) -> Result<(), AcpError> {
@@ -621,6 +657,7 @@ mod tests {
             cmd_tx: tx,
             state: Arc::new(RwLock::new(state)),
             emitter: EventEmitter::Noop,
+            prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -660,6 +697,7 @@ mod tests {
             cmd_tx: tx,
             state: Arc::new(RwLock::new(state)),
             emitter,
+            prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
         };
         let mut map = mgr.connections.lock().await;
         map.insert(id.to_string(), conn);
@@ -1352,6 +1390,50 @@ mod tests {
         assert!(
             cloned_locks.contains_key(&key),
             "spawn_locks must be shared between original and clone_ref"
+        );
+    }
+
+    /// Two concurrent `send_prompt_linked` calls on the SAME connection
+    /// must serialize through the per-connection `prompt_lock` so the
+    /// backend-creates branch can't fire twice and produce duplicate
+    /// conversation rows. The second call observes `already_linked == true`
+    /// (set by the first under the lock) and skips creation.
+    #[tokio::test]
+    async fn send_prompt_linked_serializes_concurrent_callers() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/race").await;
+
+        let mgr = Arc::new(ConnectionManager::new());
+        let conn_id = "race-conn";
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert(conn_id.into(), fake_connection(conn_id, None));
+        }
+
+        let before = count_conversation_rows(&db).await;
+        // tokio::join! polls the two futures concurrently in the SAME
+        // task — they can borrow `&db` and `mgr` without the 'static
+        // requirement that `tokio::spawn` would impose.
+        let mgr_ref = mgr.as_ref();
+        tokio::join!(
+            async {
+                let _ = mgr_ref
+                    .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
+                    .await;
+            },
+            async {
+                let _ = mgr_ref
+                    .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
+                    .await;
+            },
+        );
+
+        let after = count_conversation_rows(&db).await;
+        assert_eq!(
+            after - before,
+            1,
+            "exactly one new conversation row across two concurrent send_prompt_linked"
         );
     }
 }
