@@ -593,12 +593,33 @@ function dedupeCommandsByName(
   return deduped ?? commands
 }
 
+/**
+ * Lazy-create a `LiveMessage` shell mirroring the backend's
+ * `ensure_live_message` semantic. Required because the backend only
+ * initializes `session_state.live_message` when the first `ContentDelta` /
+ * `Thinking` / `ToolCall` / `PlanUpdate` arrives — there's a window between
+ * `StatusChanged(Prompting)` and the first content event in which the
+ * snapshot reports `live_message: null`. After a browser refresh inside
+ * that window, the live `STATUS_CHANGED(prompting)` event won't re-fire
+ * (status is already prompting in the snapshot), so without this fallback
+ * the reducer would drop every subsequent delta / tool call / plan update.
+ */
+function ensureLiveMessage(prev: LiveMessage | null): LiveMessage {
+  if (prev) return prev
+  return {
+    id: randomUUID(),
+    role: "assistant",
+    content: [],
+    startedAt: Date.now(),
+  }
+}
+
 function applyStreamingAction(
   conn: ConnectionState,
   action: StreamingAction
 ): ConnectionState | null {
-  const prev = conn.liveMessage
-  if (!prev || action.text.length === 0) return null
+  if (action.text.length === 0) return null
+  const prev = ensureLiveMessage(conn.liveMessage)
 
   const lastBlock = prev.content[prev.content.length - 1]
   let newContent: LiveContentBlock[] | null = null
@@ -811,8 +832,8 @@ function connectionsReducer(
 
     case "TOOL_CALL": {
       const conn = state.get(action.contextKey)
-      if (!conn?.liveMessage) return state
-      const prev = conn.liveMessage
+      if (!conn) return state
+      const prev = ensureLiveMessage(conn.liveMessage)
       const existingIndex = prev.content.findIndex(
         (b) =>
           b.type === "tool_call" && b.info.tool_call_id === action.tool_call_id
@@ -879,8 +900,8 @@ function connectionsReducer(
 
     case "TOOL_CALL_UPDATE": {
       const conn = state.get(action.contextKey)
-      if (!conn?.liveMessage) return state
-      const prev = conn.liveMessage
+      if (!conn) return state
+      const prev = ensureLiveMessage(conn.liveMessage)
       const existingIndex = prev.content.findIndex(
         (b) =>
           b.type === "tool_call" && b.info.tool_call_id === action.tool_call_id
@@ -1226,8 +1247,8 @@ function connectionsReducer(
 
     case "PLAN_UPDATE": {
       const conn = state.get(action.contextKey)
-      if (!conn?.liveMessage) return state
-      const prev = conn.liveMessage
+      if (!conn) return state
+      const prev = ensureLiveMessage(conn.liveMessage)
       const nonPlanContent = prev.content.filter(
         (block) => block.type !== "plan"
       )
