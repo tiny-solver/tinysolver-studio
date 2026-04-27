@@ -752,7 +752,7 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile()
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
       <FolderTitleBar />
       {isMobile ? (
         <MobileFolderWorkspaceShell>{children}</MobileFolderWorkspaceShell>
