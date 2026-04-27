@@ -694,6 +694,11 @@ function connectionsReducer(
         // snapshot to recover the bit, otherwise the init-session task is
         // stuck forever.
         selectorsReady: action.patch.selectorsReady || current.selectorsReady,
+        // Same monotonic-merge as `selectorsReady`. The agent emits
+        // `fork_supported` once during the initial handshake; a post-refresh
+        // frontend that missed the live event needs the snapshot to recover
+        // the capability — without this the Fork button stays hidden forever.
+        supportsFork: action.patch.supportsFork || current.supportsFork,
         lastAppliedSeq: action.patch.eventSeq,
       })
       return next

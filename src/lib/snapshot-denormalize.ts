@@ -21,8 +21,8 @@ import type {
 /**
  * Snapshot-derived subset of ConnectionState. Fields not present here
  * (pendingQuestion, claudeApiRetry, error, contextKey, agentType,
- * workingDir, supportsFork) are frontend-only or set elsewhere and must
- * not be touched by HYDRATE_FROM_SNAPSHOT.
+ * workingDir) are frontend-only or set elsewhere and must not be touched
+ * by HYDRATE_FROM_SNAPSHOT.
  */
 export interface SnapshotPatch {
   status: ConnectionStatus
@@ -35,6 +35,7 @@ export interface SnapshotPatch {
   pendingPermission: PendingPermission | null
   promptCapabilities: PromptCapabilitiesInfo | null
   selectorsReady: boolean
+  supportsFork: boolean
   eventSeq: number
 }
 
@@ -63,12 +64,18 @@ export function denormalizeSnapshot(wire: LiveSessionSnapshot): SnapshotPatch {
     pendingPermission: wire.pending_permission
       ? {
           request_id: wire.pending_permission.request_id,
-          tool_call: { description: wire.pending_permission.tool_description },
+          // Pass the raw forwarded tool_call through unchanged.
+          // `parsePermissionToolCall` walks rawInput / content / locations /
+          // patch / plan to render the approval dialog — synthesizing
+          // `{ description }` here would force the user to approve blind
+          // after a refresh.
+          tool_call: wire.pending_permission.tool_call,
           options: wire.pending_permission.options,
         }
       : null,
     promptCapabilities: wire.prompt_capabilities ?? DEFAULT_PROMPT_CAPS,
     selectorsReady: wire.selectors_ready,
+    supportsFork: wire.fork_supported,
     eventSeq: wire.event_seq,
   }
 }

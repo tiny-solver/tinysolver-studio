@@ -566,7 +566,14 @@ export interface LiveMessage {
 export interface PendingPermissionState {
   request_id: string
   tool_call_id: string
-  tool_description: string
+  /**
+   * Raw ACP tool_call JSON forwarded from the agent (rawInput / content /
+   * locations / patch / plan all preserved). Frontend's
+   * `parsePermissionToolCall` consumes this directly to render the approval
+   * dialog after a refresh; flattening to a description loses everything
+   * except the title.
+   */
+  tool_call: unknown
   options: PermissionOptionInfo[]
   created_at: string
 }

@@ -96,11 +96,16 @@ pub enum ToolCallOutput {
 
 /// 待处理的权限请求。重连后从 SessionState 恢复，跨 UI 关闭不丢。
 /// 注意：与 chat_channel::PendingPermission 不同（后者有 sent_message_id）。
+///
+/// `tool_call` 是 agent 原样转发的 JSON——保留 rawInput / content / locations /
+/// patch / plan 等所有结构，前端 `parsePermissionToolCall` 依赖它来渲染 diff、
+/// shell 命令、plan 列表等审批必备信息。压成 `description: String` 那种摘要
+/// 字符串会让"刷新后继续审批"变成"盲签"。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingPermissionState {
     pub request_id: String,
     pub tool_call_id: String,
-    pub tool_description: String,
+    pub tool_call: serde_json::Value,
     pub options: Vec<crate::acp::types::PermissionOptionInfo>,
     pub created_at: DateTime<Utc>,
 }
@@ -292,11 +297,11 @@ impl SessionState {
                 tool_call,
                 options,
             } => {
-                let (tc_id, tc_desc) = extract_tool_call_id_and_description(tool_call);
+                let tc_id = extract_tool_call_id(tool_call);
                 self.pending_permission = Some(PendingPermissionState {
                     request_id: request_id.clone(),
                     tool_call_id: tc_id,
-                    tool_description: tc_desc,
+                    tool_call: tool_call.clone(),
                     options: options.clone(),
                     created_at: Utc::now(),
                 });
@@ -571,27 +576,20 @@ fn parse_tool_call_output_text(text: &str) -> ToolCallOutput {
     }
 }
 
-/// Permission 事件的 `tool_call` 字段是 sacp 的 ToolCall JSON。提取 id 和
-/// 用于展示的描述（优先 title，其次 kind）。同时兼容 camelCase / snake_case。
-fn extract_tool_call_id_and_description(tool_call: &serde_json::Value) -> (String, String) {
-    let obj = tool_call.as_object();
-    let id = obj
+/// Permission 事件的 `tool_call` 字段是 ACP 的 ToolCall JSON。提取 id 用作
+/// `PendingPermissionState.tool_call_id`——快查路径（match by id 时不必每次重
+/// 解析整个 tool_call value）。完整 tool_call value 由调用方另行保留，前端
+/// 依赖它做 diff / 命令 / plan 渲染。同时兼容 camelCase / snake_case。
+fn extract_tool_call_id(tool_call: &serde_json::Value) -> String {
+    tool_call
+        .as_object()
         .and_then(|o| {
             o.get("toolCallId")
                 .or_else(|| o.get("tool_call_id"))
                 .and_then(|v| v.as_str())
         })
         .unwrap_or("")
-        .to_string();
-    let description = obj
-        .and_then(|o| {
-            o.get("title")
-                .or_else(|| o.get("kind"))
-                .and_then(|v| v.as_str())
-        })
-        .unwrap_or("")
-        .to_string();
-    (id, description)
+        .to_string()
 }
 
 #[cfg(test)]
@@ -917,21 +915,38 @@ mod tests {
     }
 
     #[test]
-    fn permission_request_extracts_tool_call_id_and_description() {
+    fn permission_request_preserves_full_tool_call_value() {
         let mut s = fresh_state();
+        // Realistic permission payload: title + kind + rawInput (used by the
+        // frontend's permission parser to extract command / diff / plan).
+        // After the refresh-survives-permission fix, all of this must round
+        // trip via the snapshot — losing rawInput would force the user to
+        // approve blind.
+        let raw_tool_call = serde_json::json!({
+            "toolCallId": "tc-9",
+            "title": "Run rm -rf /",
+            "kind": "execute",
+            "rawInput": { "command": "rm -rf /" },
+            "locations": [{ "path": "/", "line": 1 }],
+        });
         s.apply_event(&AcpEvent::PermissionRequest {
             request_id: "p-1".into(),
-            tool_call: serde_json::json!({
-                "toolCallId": "tc-9",
-                "title": "Run rm -rf /",
-                "kind": "execute"
-            }),
+            tool_call: raw_tool_call.clone(),
             options: vec![],
         });
         let p = s.pending_permission.as_ref().expect("permission set");
         assert_eq!(p.request_id, "p-1");
         assert_eq!(p.tool_call_id, "tc-9");
-        assert_eq!(p.tool_description, "Run rm -rf /");
+        assert_eq!(
+            p.tool_call, raw_tool_call,
+            "full tool_call JSON must round-trip into PendingPermissionState"
+        );
+
+        // Snapshot round-trip preserves it byte-for-byte (the load-bearing
+        // property — frontend re-renders the approval dialog from this).
+        let snap = s.to_snapshot();
+        let snap_perm = snap.pending_permission.as_ref().unwrap();
+        assert_eq!(snap_perm.tool_call, raw_tool_call);
     }
 
     #[test]

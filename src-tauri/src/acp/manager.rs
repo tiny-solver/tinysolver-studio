@@ -390,7 +390,7 @@ impl ConnectionManager {
             }
         }
 
-        // Centralized status transition: every successful prompt send flips the
+        // Centralized status transition: every prompt send flips the
         // conversation row to InProgress. This MUST happen on every call
         // (including the already-linked path) so that a follow-up turn whose
         // row is currently `pending_review` correctly transitions back. The
@@ -415,10 +415,49 @@ impl ConnectionManager {
             .await;
         }
 
-        // We hold `_prompt_guard` here, so call the lock-free inner helper
-        // — re-entering `send_prompt` would try to acquire the same mutex
-        // and deadlock.
-        self.send_prompt_inner(conn_id, blocks).await
+        // We hold `_prompt_guard` here, so call the lock-free inner helper —
+        // re-entering `send_prompt` would try to acquire the same mutex and
+        // deadlock. On failure (channel closed, process exited), flip the
+        // row to `Cancelled` so the UI doesn't strand on `in_progress`. No
+        // `TurnComplete` will ever arrive for a prompt that never reached
+        // the agent, so without this rollback the lifecycle subscriber's
+        // PendingReview write also never fires — the row would be stuck
+        // until a follow-up `send_prompt_linked` happened to re-flip it.
+        match self.send_prompt_inner(conn_id, blocks).await {
+            Ok(()) => Ok(()),
+            Err(send_err) => {
+                if let Some(cid) = conversation_id_for_status {
+                    match conversation_service::update_status(
+                        &db.conn,
+                        cid,
+                        ConversationStatus::Cancelled,
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            emit_with_state(
+                                &state_arc,
+                                &emitter,
+                                AcpEvent::ConversationStatusChanged {
+                                    conversation_id: cid,
+                                    status: ConversationStatus::Cancelled,
+                                },
+                            )
+                            .await;
+                        }
+                        Err(rollback_err) => {
+                            // Best-effort: original send error is the load-bearing
+                            // signal; rollback failure is logged but not surfaced.
+                            eprintln!(
+                                "[ACP][ERROR] failed to mark conversation {cid} cancelled \
+                                 after send failure (original={send_err}): {rollback_err}"
+                            );
+                        }
+                    }
+                }
+                Err(send_err)
+            }
+        }
     }
 
     pub async fn set_mode(&self, conn_id: &str, mode_id: String) -> Result<(), AcpError> {
@@ -971,13 +1010,13 @@ mod tests {
         let after = count_conversation_rows(&db).await;
         assert_eq!(after, before);
 
-        // No ConversationLinked event was emitted (already linked). A
-        // ConversationStatusChanged(InProgress) event IS emitted as part of
-        // the centralized status transition (every send re-asserts InProgress).
-        // The forwarded send_prompt fails with ProcessExited because the
-        // cmd_tx receiver was dropped — it never reaches an emit path.
-        let env = recv_first_acp_event(&mut rx).await;
-        match env.payload {
+        // No ConversationLinked event was emitted (already linked). The
+        // centralized status transition fires InProgress; then because the
+        // dropped cmd_tx receiver makes `send_prompt_inner` return
+        // ProcessExited, the rollback path fires Cancelled. Two events,
+        // strictly ordered.
+        let env_in_progress = recv_first_acp_event(&mut rx).await;
+        match env_in_progress.payload {
             AcpEvent::ConversationStatusChanged {
                 conversation_id,
                 status,
@@ -986,7 +1025,20 @@ mod tests {
                 assert_eq!(status, ConversationStatus::InProgress);
             }
             other => panic!(
-                "expected only a ConversationStatusChanged event when already linked, got {other:?}"
+                "first event must be ConversationStatusChanged(InProgress), got {other:?}"
+            ),
+        }
+        let env_cancelled = recv_first_acp_event(&mut rx).await;
+        match env_cancelled.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, pre.id);
+                assert_eq!(status, ConversationStatus::Cancelled);
+            }
+            other => panic!(
+                "second event must be ConversationStatusChanged(Cancelled) after send failure, got {other:?}"
             ),
         }
     }
@@ -1015,9 +1067,12 @@ mod tests {
         .await;
 
         // First call: backend creates the conversation row and links it.
-        // We expect TWO events in order: ConversationLinked, then
-        // ConversationStatusChanged(InProgress). The DB row's status must
-        // already be InProgress by the time the second event fires.
+        // The cmd_tx receiver in `insert_fake_connection` has been dropped,
+        // so `send_prompt_inner` returns ProcessExited — exercising the new
+        // Cancelled-rollback path. We expect THREE events in order:
+        //   1. ConversationLinked
+        //   2. ConversationStatusChanged(InProgress)  [pre-send write]
+        //   3. ConversationStatusChanged(Cancelled)   [rollback after send failure]
         let _ = mgr
             .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
             .await;
@@ -1046,27 +1101,42 @@ mod tests {
                 "second event must be ConversationStatusChanged(InProgress), got {other:?}"
             ),
         }
-        // Ordering invariant: ConversationLinked precedes ConversationStatusChanged.
+        let env3 = recv_first_acp_event(&mut rx).await;
+        match env3.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, conv_id);
+                assert_eq!(status, ConversationStatus::Cancelled);
+            }
+            other => panic!(
+                "third event must be ConversationStatusChanged(Cancelled) on send failure, got {other:?}"
+            ),
+        }
+        // Ordering invariant: ConversationLinked < InProgress < Cancelled.
         assert!(
-            env2.seq > env1.seq,
-            "status event seq ({}) must follow linked event seq ({})",
+            env2.seq > env1.seq && env3.seq > env2.seq,
+            "event seqs must be strictly monotonic: linked={} in_progress={} cancelled={}",
+            env1.seq,
             env2.seq,
-            env1.seq
+            env3.seq
         );
 
-        // DB row reflects InProgress (it's also the row's default at create
-        // time, but the explicit write must succeed and not leave it in any
-        // other state).
+        // DB row settles at Cancelled (the rollback after send failure). The
+        // intermediate InProgress write is observable only via the event,
+        // not by the time the test reads the row.
         let row = conversation::Entity::find_by_id(conv_id)
             .one(&db.conn)
             .await
             .unwrap()
             .expect("conversation row exists");
-        assert_eq!(row.status, ConversationStatus::InProgress);
+        assert_eq!(row.status, ConversationStatus::Cancelled);
 
-        // Second send: already-linked path also writes + emits InProgress.
-        // Pre-flip the row to PendingReview to observe the transition flip
-        // back. (Mirrors the "follow-up turn after a TurnComplete" scenario.)
+        // Second send: already-linked path also writes + emits InProgress
+        // and then Cancelled (same send-failure rollback). Pre-flip the row
+        // to PendingReview to observe the transition flip forward — mirrors
+        // the "follow-up turn after a TurnComplete" scenario.
         conversation_service::update_status(&db.conn, conv_id, ConversationStatus::PendingReview)
             .await
             .unwrap();
@@ -1075,8 +1145,8 @@ mod tests {
             .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
             .await;
 
-        let env3 = recv_first_acp_event(&mut rx).await;
-        match env3.payload {
+        let env4 = recv_first_acp_event(&mut rx).await;
+        match env4.payload {
             AcpEvent::ConversationStatusChanged {
                 conversation_id,
                 status,
@@ -1085,17 +1155,28 @@ mod tests {
                 assert_eq!(status, ConversationStatus::InProgress);
             }
             other => panic!(
-                "second send must re-emit ConversationStatusChanged(InProgress), got {other:?}"
+                "second send must re-emit ConversationStatusChanged(InProgress) first, got {other:?}"
             ),
         }
-        // DB write precedes emit: by the time the event was visible the row
-        // must be back to InProgress.
+        let env5 = recv_first_acp_event(&mut rx).await;
+        match env5.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, conv_id);
+                assert_eq!(status, ConversationStatus::Cancelled);
+            }
+            other => panic!(
+                "second send must rollback to Cancelled after send failure, got {other:?}"
+            ),
+        }
         let row2 = conversation::Entity::find_by_id(conv_id)
             .one(&db.conn)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(row2.status, ConversationStatus::InProgress);
+        assert_eq!(row2.status, ConversationStatus::Cancelled);
     }
 
     // ---------- Phase: connection dedup ----------
@@ -1318,7 +1399,7 @@ mod tests {
             state.write().await.pending_permission = Some(PendingPermissionState {
                 request_id: "req-1".into(),
                 tool_call_id: "tc-1".into(),
-                tool_description: "test".into(),
+                tool_call: serde_json::json!({ "toolCallId": "tc-1", "title": "test" }),
                 options: vec![],
                 created_at: chrono::Utc::now(),
             });
@@ -1435,5 +1516,97 @@ mod tests {
             1,
             "exactly one new conversation row across two concurrent send_prompt_linked"
         );
+    }
+
+    /// When `send_prompt_inner` fails (process gone, channel closed) the row
+    /// must end up `Cancelled`, NOT stuck on `in_progress`. Without this
+    /// rollback the lifecycle subscriber's TurnComplete write never fires
+    /// (no turn ever started), so the only thing that could later un-stick
+    /// the row is a follow-up prompt happening to succeed — fragile, and on
+    /// the server-side / chat-channel paths there may be no follow-up at all.
+    #[tokio::test]
+    async fn send_prompt_linked_rolls_back_to_cancelled_on_send_failure() {
+        use crate::db::entities::conversation;
+        use crate::db::test_helpers;
+        use sea_orm::EntityTrait;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/cancel-rollback").await;
+
+        let mgr = ConnectionManager::new();
+        let (broadcaster, mut rx) = make_test_broadcaster();
+        let conn_id = "conn-cancel";
+        // insert_fake_connection drops the cmd_tx receiver, so send_prompt_inner
+        // returns ProcessExited — exactly the failure mode this test targets.
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/cancel-rollback")),
+            EventEmitter::WebOnly(broadcaster.clone()),
+        )
+        .await;
+
+        let result = mgr
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
+            .await;
+        assert!(
+            matches!(result, Err(AcpError::ProcessExited)),
+            "send_prompt_inner must propagate ProcessExited up to the caller; got {result:?}"
+        );
+
+        // Drain events: ConversationLinked → InProgress → Cancelled, in order.
+        let env_linked = recv_first_acp_event(&mut rx).await;
+        let conv_id = match env_linked.payload {
+            AcpEvent::ConversationLinked {
+                conversation_id, ..
+            } => conversation_id,
+            other => panic!("expected ConversationLinked first, got {other:?}"),
+        };
+        let env_in_progress = recv_first_acp_event(&mut rx).await;
+        match env_in_progress.payload {
+            AcpEvent::ConversationStatusChanged { status, .. } => {
+                assert_eq!(status, ConversationStatus::InProgress);
+            }
+            other => panic!(
+                "expected ConversationStatusChanged(InProgress) before send, got {other:?}"
+            ),
+        }
+        let env_cancelled = recv_first_acp_event(&mut rx).await;
+        match env_cancelled.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, conv_id);
+                assert_eq!(
+                    status,
+                    ConversationStatus::Cancelled,
+                    "send_prompt failure must roll the row forward to Cancelled, not leave InProgress"
+                );
+            }
+            other => panic!(
+                "expected ConversationStatusChanged(Cancelled) on send failure, got {other:?}"
+            ),
+        }
+
+        // Strict ordering: linked < in_progress < cancelled. The lifecycle
+        // contract says the Cancelled emit cannot precede the InProgress one
+        // — UIs that animate based on "previous → current" depend on this.
+        assert!(
+            env_in_progress.seq > env_linked.seq && env_cancelled.seq > env_in_progress.seq,
+            "event seq must be strictly monotonic: linked={} in_progress={} cancelled={}",
+            env_linked.seq,
+            env_in_progress.seq,
+            env_cancelled.seq,
+        );
+
+        // DB row settles at Cancelled — final ground truth read.
+        let row = conversation::Entity::find_by_id(conv_id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .expect("conversation row exists");
+        assert_eq!(row.status, ConversationStatus::Cancelled);
     }
 }
