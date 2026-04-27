@@ -177,6 +177,12 @@ export async function acpDisconnect(connectionId: string): Promise<void> {
   return getTransport().call("acp_disconnect", { connectionId })
 }
 
+export async function acpTouchConnection(
+  connectionId: string
+): Promise<boolean> {
+  return getTransport().call("acp_touch_connection", { connectionId })
+}
+
 export async function acpListConnections(): Promise<ConnectionInfo[]> {
   return getTransport().call("acp_list_connections")
 }

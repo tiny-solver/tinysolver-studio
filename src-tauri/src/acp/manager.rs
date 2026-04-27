@@ -238,6 +238,32 @@ impl ConnectionManager {
         Ok(connection_id)
     }
 
+    /// Bump `last_activity_at` for a live connection so the idle sweep
+    /// won't reap it. Used by the frontend keepalive loop to protect
+    /// connections backing currently-open conversation tabs (the
+    /// frontend is the only side that knows which tabs the user has
+    /// open). Silently no-ops if the connection is missing or already
+    /// in a terminal state — touch must never resurrect a dead
+    /// connection or contend with the spawn/disconnect paths.
+    pub async fn touch(&self, conn_id: &str) -> bool {
+        let state_arc = {
+            let connections = self.connections.lock().await;
+            match connections.get(conn_id) {
+                Some(conn) => conn.state.clone(),
+                None => return false,
+            }
+        };
+        let mut state = state_arc.write().await;
+        if matches!(
+            state.status,
+            ConnectionStatus::Disconnected | ConnectionStatus::Error
+        ) {
+            return false;
+        }
+        state.last_activity_at = chrono::Utc::now();
+        true
+    }
+
     /// Disconnect connections that have been idle longer than `idle_timeout`.
     /// "Idle" means: status is `Connected`, no `pending_permission`, no
     /// activity (no events, no commands) for at least `idle_timeout`.
@@ -653,6 +679,7 @@ impl ConnectionManager {
             connections.remove(conn_id).map(|conn| conn.cmd_tx)
         };
         if let Some(cmd_tx) = cmd_tx {
+            eprintln!("[ACP] disconnect connection={}", conn_id);
             let _ = cmd_tx.send(ConnectionCommand::Disconnect).await;
             Ok(())
         } else {

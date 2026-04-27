@@ -392,6 +392,10 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .route("/acp_list_agents", post(handlers::acp::acp_list_agents))
         .route("/acp_connect", post(handlers::acp::acp_connect))
         .route("/acp_disconnect", post(handlers::acp::acp_disconnect))
+        .route(
+            "/acp_touch_connection",
+            post(handlers::acp::acp_touch_connection),
+        )
         .route("/acp_prompt", post(handlers::acp::acp_prompt))
         .route("/acp_preflight", post(handlers::acp::acp_preflight))
         .route("/acp_set_mode", post(handlers::acp::acp_set_mode))

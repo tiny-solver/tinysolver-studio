@@ -22,6 +22,7 @@ import {
   acpCancel,
   acpRespondPermission,
   acpDisconnect,
+  acpTouchConnection,
   acpGetSessionSnapshot,
 } from "@/lib/api"
 import { denormalizeSnapshot } from "@/lib/snapshot-denormalize"
@@ -43,6 +44,7 @@ import type {
 import { AGENT_LABELS } from "@/lib/types"
 import {
   CONNECTION_IDLE_TIMEOUT_MS,
+  CONNECTION_KEEPALIVE_INTERVAL_MS,
   IDLE_SWEEP_INTERVAL_MS,
 } from "@/lib/constants"
 import { sendSystemNotification } from "@/lib/notification"
@@ -2307,7 +2309,50 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     resolveListenerReadyWaiters,
   ])
 
+  // ── Backend keepalive timer ──
+  // Frontend is the only side that knows which conversation tabs the
+  // user has open. Without this, the backend's idle sweep
+  // (CODEG_ACP_IDLE_TIMEOUT_SECS, default 60s) would reap connections
+  // backing visible tabs whenever the user was just reading without
+  // sending — forcing them to re-spawn the agent on next message.
+  // Touching only bumps last_activity_at; it does not emit any event.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const currentActiveKey = storeRef.current.activeKey
+      const currentOpenTabKeys = openTabKeysRef.current
+      const seen = new Set<string>()
+      const toTouch: string[] = []
+      const consider = (contextKey: string) => {
+        if (seen.has(contextKey)) return
+        seen.add(contextKey)
+        const conn = storeRef.current.connections.get(contextKey)
+        if (!conn) return
+        // Prompting is already sweep-protected on the backend; touching
+        // is harmless but redundant. Connecting hasn't reached the
+        // sweep-eligible state yet. Only Connected matters.
+        if (conn.status !== "connected") return
+        toTouch.push(conn.connectionId)
+      }
+      if (currentActiveKey) consider(currentActiveKey)
+      for (const contextKey of currentOpenTabKeys) consider(contextKey)
+      for (const connectionId of toTouch) {
+        acpTouchConnection(connectionId).catch(() => {})
+      }
+    }, CONNECTION_KEEPALIVE_INTERVAL_MS)
+
+    return () => clearInterval(timer)
+  }, [])
+
   // ── Idle sweep timer ──
+  // Complements the backend keepalive: this sweep targets connections
+  // that are NOT in `openTabKeys ∪ {activeKey}` — i.e. connections the
+  // frontend opened but is no longer surfacing to the user (panel
+  // dismissed, navigated away). The backend's own idle sweep would
+  // reap them on its 60s cadence regardless; doing it here too keeps
+  // the React store free of stale entries and triggers an explicit
+  // disconnect rather than waiting for the backend's own timeout.
+  // Connections backing currently-open tabs are never reaped here —
+  // those are kept alive by the keepalive loop above.
   useEffect(() => {
     const timer = setInterval(() => {
       const now = Date.now()
