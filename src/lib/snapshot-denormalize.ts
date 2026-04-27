@@ -134,7 +134,7 @@ function toolStateToInfo(tc: ToolCallState): ToolCallInfo {
     raw_input: tc.input == null ? null : JSON.stringify(tc.input),
     raw_output_chunks: outputChunks,
     raw_output_total_bytes: outputBytes,
-    locations: null,
-    meta: null,
+    locations: tc.locations ?? null,
+    meta: tc.meta ?? null,
   }
 }

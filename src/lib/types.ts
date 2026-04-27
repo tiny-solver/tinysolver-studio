@@ -539,6 +539,10 @@ export interface ToolCallState {
   input: unknown | null
   output: ToolCallOutput | null
   content: string | null
+  /** File locations affected by this tool call. Opaque pass-through. */
+  locations: unknown | null
+  /** ACP extensibility metadata. Opaque pass-through. */
+  meta: Record<string, unknown> | null
 }
 
 export type LiveContentBlock =
