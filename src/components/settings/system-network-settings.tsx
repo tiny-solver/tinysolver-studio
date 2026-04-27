@@ -8,6 +8,7 @@ import {
   Loader2,
   MonitorCog,
   RefreshCw,
+  SquareTerminal,
   Wifi,
 } from "lucide-react"
 import { Github } from "@lobehub/icons"
@@ -31,9 +32,11 @@ import {
 import {
   getSystemProxySettings,
   getSystemRenderingSettings,
+  getSystemTerminalSettings,
   updateSystemLanguageSettings,
   updateSystemProxySettings,
   updateSystemRenderingSettings,
+  updateSystemTerminalSettings,
 } from "@/lib/api"
 import { isDesktop, openUrl } from "@/lib/platform"
 import type { AppLocale } from "@/lib/types"
@@ -59,9 +62,29 @@ const PROXY_EXAMPLE = "http://127.0.0.1:7890"
 const APP_LANGUAGE_VALUES = APP_LOCALES
 
 type LanguageSelectValue = "system" | AppLocale
+type TerminalShellSelectValue =
+  | "system"
+  | "pwsh.exe"
+  | "powershell.exe"
+  | "cmd.exe"
 
 function isAppLocale(value: string): value is AppLocale {
   return APP_LANGUAGE_VALUES.includes(value as AppLocale)
+}
+
+function toTerminalShellSelectValue(
+  value: string | null,
+  isWindows: boolean
+): TerminalShellSelectValue {
+  if (!isWindows) return "system"
+  if (
+    value === "pwsh.exe" ||
+    value === "powershell.exe" ||
+    value === "cmd.exe"
+  ) {
+    return value
+  }
+  return "system"
 }
 
 type UpdateAction = "check" | "install"
@@ -85,6 +108,7 @@ export function SystemNetworkSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingLanguage, setSavingLanguage] = useState(false)
+  const [savingTerminal, setSavingTerminal] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [proxyUrl, setProxyUrl] = useState("")
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -111,6 +135,8 @@ export function SystemNetworkSettings() {
   const [appLanguage, setAppLanguage] = useState<LanguageSelectValue>(
     languageSettings.mode === "system" ? "system" : languageSettings.language
   )
+  const [defaultTerminalShell, setDefaultTerminalShell] =
+    useState<TerminalShellSelectValue>("system")
 
   useEffect(() => {
     setAppLanguage(
@@ -171,16 +197,21 @@ export function SystemNetworkSettings() {
     setLoadError(null)
 
     try {
-      const [proxySettings, version, renderingSettings] = await Promise.all([
-        getSystemProxySettings(),
-        getCurrentAppVersion(),
-        renderingSettingsLoadable
-          ? getSystemRenderingSettings()
-          : Promise.resolve(null),
-      ])
+      const [proxySettings, terminalSettings, version, renderingSettings] =
+        await Promise.all([
+          getSystemProxySettings(),
+          getSystemTerminalSettings(),
+          getCurrentAppVersion(),
+          renderingSettingsLoadable
+            ? getSystemRenderingSettings()
+            : Promise.resolve(null),
+        ])
 
       setEnabled(proxySettings.enabled)
       setProxyUrl(proxySettings.proxy_url ?? "")
+      setDefaultTerminalShell(
+        toTerminalShellSelectValue(terminalSettings.default_shell, isWindows)
+      )
       setCurrentVersion(version)
       if (renderingSettings) {
         const value = renderingSettings.disable_hardware_acceleration
@@ -198,7 +229,7 @@ export function SystemNetworkSettings() {
     } finally {
       setLoading(false)
     }
-  }, [renderingSettingsLoadable])
+  }, [isWindows, renderingSettingsLoadable])
 
   useEffect(() => {
     loadSettings().catch((err) => {
@@ -218,6 +249,26 @@ export function SystemNetworkSettings() {
       })
     }
   }, [availableUpdate])
+
+  const saveTerminalSettings = useCallback(
+    async (shell: TerminalShellSelectValue) => {
+      setSavingTerminal(true)
+      try {
+        const result = await updateSystemTerminalSettings({
+          default_shell: shell === "system" ? null : shell,
+        })
+        setDefaultTerminalShell(
+          toTerminalShellSelectValue(result.default_shell, isWindows)
+        )
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(t("terminalSaveFailed", { message }))
+      } finally {
+        setSavingTerminal(false)
+      }
+    },
+    [isWindows, t]
+  )
 
   const saveProxySettings = useCallback(
     async (nextEnabled: boolean, nextProxyUrl: string) => {
@@ -572,6 +623,55 @@ export function SystemNetworkSettings() {
               {t("updateError", { message: updateError })}
             </div>
           )}
+        </section>
+
+        <section className="rounded-xl border bg-card p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <SquareTerminal className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">{t("terminalTitle")}</h2>
+          </div>
+
+          <p className="text-xs text-muted-foreground leading-5">
+            {t("terminalDescription")}
+          </p>
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              {t("defaultTerminalShell")}
+            </label>
+            <Select
+              value={defaultTerminalShell}
+              onValueChange={(value) => {
+                const shell = toTerminalShellSelectValue(value, isWindows)
+                setDefaultTerminalShell(shell)
+                saveTerminalSettings(shell)
+              }}
+              disabled={savingTerminal}
+            >
+              <SelectTrigger className="w-full sm:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="system">
+                  {t("terminalSystemDefault")}
+                </SelectItem>
+                {isWindows && (
+                  <>
+                    <SelectItem value="pwsh.exe">
+                      {t("terminalPowerShell7")}
+                    </SelectItem>
+                    <SelectItem value="powershell.exe">
+                      {t("terminalWindowsPowerShell")}
+                    </SelectItem>
+                    <SelectItem value="cmd.exe">{t("terminalCmd")}</SelectItem>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {t("defaultTerminalShellHint")}
+            </p>
+          </div>
         </section>
 
         <section className="rounded-xl border bg-card p-4 space-y-4">

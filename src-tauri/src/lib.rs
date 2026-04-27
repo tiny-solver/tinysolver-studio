@@ -401,6 +401,8 @@ mod tauri_app {
                 system_settings::update_system_proxy_settings,
                 system_settings::get_system_language_settings,
                 system_settings::update_system_language_settings,
+                system_settings::get_system_terminal_settings,
+                system_settings::update_system_terminal_settings,
                 system_settings::get_system_rendering_settings,
                 system_settings::update_system_rendering_settings,
                 version_control::detect_git,

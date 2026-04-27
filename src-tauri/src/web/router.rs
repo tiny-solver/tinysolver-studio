@@ -383,12 +383,20 @@ pub fn build_router(
             post(handlers::system_settings::get_system_language_settings),
         )
         .route(
+            "/get_system_terminal_settings",
+            post(handlers::system_settings::get_system_terminal_settings),
+        )
+        .route(
             "/update_system_proxy_settings",
             post(handlers::system_settings::update_system_proxy_settings),
         )
         .route(
             "/update_system_language_settings",
             post(handlers::system_settings::update_system_language_settings),
+        )
+        .route(
+            "/update_system_terminal_settings",
+            post(handlers::system_settings::update_system_terminal_settings),
         )
         // ─── ACP ───
         .route(

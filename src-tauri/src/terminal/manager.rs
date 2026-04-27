@@ -165,6 +165,7 @@ pub struct SpawnOptions {
     pub terminal_id: String,
     pub working_dir: String,
     pub owner_window_label: String,
+    pub shell: Option<String>,
     pub initial_command: Option<String>,
     pub extra_env: Option<HashMap<String, String>>,
     pub temp_files: Vec<std::path::PathBuf>,
@@ -212,7 +213,13 @@ impl TerminalManager {
             })
             .map_err(|e| TerminalError::SpawnFailed(e.to_string()))?;
 
-        let shell = resolve_shell();
+        let shell = opts
+            .shell
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(resolve_shell);
         let mut cmd = CommandBuilder::new(&shell);
         configure_shell_command(&mut cmd, &shell, opts.initial_command.as_deref());
         cmd.cwd(&opts.working_dir);

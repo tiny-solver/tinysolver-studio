@@ -727,6 +727,10 @@ export interface SystemLanguageSettings {
   language: AppLocale
 }
 
+export interface SystemTerminalSettings {
+  default_shell: string | null
+}
+
 export interface SystemRenderingSettings {
   disable_hardware_acceleration: boolean
 }

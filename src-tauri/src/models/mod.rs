@@ -23,7 +23,7 @@ pub use message::{
 };
 pub use system::{
     GitCredentials, GitDetectResult, GitHubAccountsSettings, GitHubTokenValidation, GitSettings,
-    SystemLanguageSettings, SystemProxySettings,
+    SystemLanguageSettings, SystemProxySettings, SystemTerminalSettings,
 };
 #[cfg(feature = "tauri-runtime")]
 pub use system::SystemRenderingSettings;

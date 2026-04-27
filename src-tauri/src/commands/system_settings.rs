@@ -6,18 +6,21 @@ use crate::app_error::AppCommandError;
 use crate::db::service::app_metadata_service;
 #[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
-use crate::models::{SystemLanguageSettings, SystemProxySettings};
 #[cfg(feature = "tauri-runtime")]
 use crate::models::SystemRenderingSettings;
-#[cfg(feature = "tauri-runtime")]
-use crate::preferences;
+use crate::models::{SystemLanguageSettings, SystemProxySettings, SystemTerminalSettings};
 #[cfg(feature = "tauri-runtime")]
 use crate::network::proxy;
+#[cfg(feature = "tauri-runtime")]
+use crate::preferences;
 
 const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
 const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
+const SYSTEM_TERMINAL_SETTINGS_KEY: &str = "system_terminal_settings";
 #[cfg(feature = "tauri-runtime")]
 const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
+#[cfg(feature = "tauri-runtime")]
+const TERMINAL_SETTINGS_UPDATED_EVENT: &str = "app://terminal-settings-updated";
 
 fn normalize_proxy_settings(
     settings: SystemProxySettings,
@@ -90,6 +93,38 @@ pub(crate) async fn load_system_language_settings(
     })
 }
 
+pub(crate) fn normalize_terminal_settings(
+    settings: SystemTerminalSettings,
+) -> SystemTerminalSettings {
+    SystemTerminalSettings {
+        default_shell: settings
+            .default_shell
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+    }
+}
+
+pub(crate) async fn load_system_terminal_settings(
+    conn: &DatabaseConnection,
+) -> Result<SystemTerminalSettings, AppCommandError> {
+    let raw = app_metadata_service::get_value(conn, SYSTEM_TERMINAL_SETTINGS_KEY)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let Some(raw) = raw else {
+        return Ok(SystemTerminalSettings::default());
+    };
+
+    let parsed = serde_json::from_str::<SystemTerminalSettings>(&raw).map_err(|e| {
+        AppCommandError::configuration_invalid("Failed to parse stored terminal settings")
+            .with_detail(e.to_string())
+    })?;
+
+    Ok(normalize_terminal_settings(parsed))
+}
+
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_system_proxy_settings(
@@ -128,6 +163,14 @@ pub async fn get_system_language_settings(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn get_system_terminal_settings(
+    db: State<'_, AppDatabase>,
+) -> Result<SystemTerminalSettings, AppCommandError> {
+    load_system_terminal_settings(&db.conn).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_system_language_settings(
     settings: SystemLanguageSettings,
     db: State<'_, AppDatabase>,
@@ -150,6 +193,33 @@ pub async fn update_system_language_settings(
     );
 
     Ok(settings)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn update_system_terminal_settings(
+    settings: SystemTerminalSettings,
+    db: State<'_, AppDatabase>,
+    app: tauri::AppHandle,
+) -> Result<SystemTerminalSettings, AppCommandError> {
+    let normalized = normalize_terminal_settings(settings);
+    let serialized = serde_json::to_string(&normalized).map_err(|e| {
+        AppCommandError::invalid_input("Failed to serialize terminal settings")
+            .with_detail(e.to_string())
+    })?;
+
+    app_metadata_service::upsert_value(&db.conn, SYSTEM_TERMINAL_SETTINGS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let emitter = crate::web::event_bridge::EventEmitter::Tauri(app);
+    crate::web::event_bridge::emit_event(
+        &emitter,
+        TERMINAL_SETTINGS_UPDATED_EVENT,
+        normalized.clone(),
+    );
+
+    Ok(normalized)
 }
 
 #[cfg(feature = "tauri-runtime")]
