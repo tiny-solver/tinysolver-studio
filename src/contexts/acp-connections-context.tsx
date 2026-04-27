@@ -1385,6 +1385,61 @@ export function useAcpActions(): AcpActionsValue {
   return ctx
 }
 
+// ── Event subscriber context ──
+//
+// JS-level fanout of `acp://event` envelopes. The provider owns the single
+// physical Tauri/WebSocket subscription; consumers register callbacks here
+// instead of opening a second listener. See `useAcpEvent` below.
+
+type EventSubscriberHandler = (envelope: EventEnvelope) => void
+type EventSubscriberRef = { current: EventSubscriberHandler }
+
+interface AcpEventSubscriberApi {
+  subscribers: Set<EventSubscriberRef>
+}
+
+const AcpEventSubscriberContext = createContext<AcpEventSubscriberApi | null>(
+  null
+)
+
+/**
+ * Subscribe to `acp://event` envelopes via the provider's primary listener.
+ *
+ * The handler is invoked AFTER the context's reducer has dispatched its own
+ * actions for that envelope (state is consistent at fire time). It also
+ * inherits the provider's `seq` dedup — duplicates the primary listener
+ * would skip are skipped here too. Unmapped events (no `contextKey`) do
+ * NOT fan out.
+ *
+ * Stability: the latest `handler` is stored in a ref each render, so callers
+ * may pass an inline function. There is no need for caller-side refs to keep
+ * the subscription stable across renders.
+ *
+ * Errors thrown by `handler` are caught and logged so a single buggy
+ * subscriber cannot break the central listener.
+ */
+export function useAcpEvent(handler: EventSubscriberHandler): void {
+  const ctx = useContext(AcpEventSubscriberContext)
+  if (!ctx) {
+    throw new Error("useAcpEvent must be used within AcpConnectionsProvider")
+  }
+  const handlerRef = useRef(handler)
+  // Re-sync each render so the latest closure is used at fire time.
+  useEffect(() => {
+    handlerRef.current = handler
+  })
+  // Register / unregister exactly once. Set-of-refs (not Set-of-functions)
+  // so unmount cleanup matches the original entry even though `handler`
+  // identity may change between renders.
+  useEffect(() => {
+    const ref = handlerRef
+    ctx.subscribers.add(ref)
+    return () => {
+      ctx.subscribers.delete(ref)
+    }
+  }, [ctx])
+}
+
 // ── Helper: extract affected key from action ──
 
 function getAffectedKey(action: Action): string | null {
@@ -1512,6 +1567,11 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const pendingUnmappedEventsRef = useRef(new Map<string, EventEnvelope[]>())
   const listenerReadyRef = useRef(false)
   const listenerReadyWaitersRef = useRef<Array<() => void>>([])
+  // Set of refs (not callbacks) so unmount cleanup matches the original
+  // registration even when caller-side handler identity changes per render.
+  // Populated by the `useAcpEvent` hook; read by the primary `acp://event`
+  // listener and the buffered-events replay loop.
+  const eventSubscribersRef = useRef<Set<EventSubscriberRef>>(new Set())
 
   // ── Notify helpers ──
 
@@ -2156,6 +2216,19 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         contextKey,
         seq: envelope.seq,
       })
+
+      // Fan out to JS-level subscribers (e.g. ConversationDetailPanel's
+      // background turn_complete handler). Runs AFTER the reducer dispatches
+      // and AFTER seq dedup, so subscribers see a consistent, deduped stream.
+      // Unmapped events return early above and never reach here. One bad
+      // subscriber must not kill the others — wrap each call in try/catch.
+      for (const ref of eventSubscribersRef.current) {
+        try {
+          ref.current(envelope)
+        } catch (err) {
+          console.error("[acp-context] subscriber threw:", err)
+        }
+      }
     })
       .then((fn) => {
         if (cancelled) {
@@ -2371,6 +2444,15 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
               contextKey,
               seq: event.seq,
             })
+            // Mirror the live listener: fan out to JS-level subscribers
+            // after EVENT_APPLIED so subscribers inherit the same dedup.
+            for (const ref of eventSubscribersRef.current) {
+              try {
+                ref.current(event)
+              } catch (err) {
+                console.error("[acp-context] subscriber threw:", err)
+              }
+            }
           }
         }
       } catch (err) {
@@ -2573,10 +2655,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     ]
   )
 
+  const eventSubscriberApi = useMemo<AcpEventSubscriberApi>(
+    () => ({ subscribers: eventSubscribersRef.current }),
+    []
+  )
+
   return (
     <AcpActionsContext.Provider value={actions}>
       <ConnectionStoreContext.Provider value={storeApi}>
-        {children}
+        <AcpEventSubscriberContext.Provider value={eventSubscriberApi}>
+          {children}
+        </AcpEventSubscriberContext.Provider>
       </ConnectionStoreContext.Provider>
     </AcpActionsContext.Provider>
   )

@@ -21,8 +21,7 @@ import {
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { disposeTauriListener } from "@/lib/tauri-listener"
-import { useAcpActions } from "@/contexts/acp-connections-context"
+import { useAcpActions, useAcpEvent } from "@/contexts/acp-connections-context"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
@@ -1065,12 +1064,8 @@ export function ConversationDetailPanel() {
     removeConversation: runtimeRemoveConversation,
   } = useConversationRuntime()
   const { activeFolder: folder } = useActiveFolder()
-  const {
-    conversations,
-    refreshConversations,
-    updateConversationLocal,
-    getFolder,
-  } = useAppWorkspace()
+  const { conversations, updateConversationLocal, getFolder } =
+    useAppWorkspace()
   const {
     tabs,
     activeTabId,
@@ -1090,16 +1085,6 @@ export function ConversationDetailPanel() {
   const { disconnect: disconnectByKey } = useAcpActions()
   const { addTask, updateTask } = useTaskContext()
   const [reloadByTabId, setReloadByTabId] = useState<Record<string, number>>({})
-  const tabsRef = useRef(tabs)
-  const conversationsRef = useRef(conversations)
-
-  useEffect(() => {
-    tabsRef.current = tabs
-  }, [tabs])
-
-  useEffect(() => {
-    conversationsRef.current = conversations
-  }, [conversations])
 
   const exportLabels = useMemo<ExportLabels>(
     () => ({
@@ -1137,118 +1122,74 @@ export function ConversationDetailPanel() {
     })
   }, [onPreviewTabReplaced, disconnectByKey])
 
-  // Refs for background turn_complete handler so the listener
-  // can be registered once and always read the latest values.
-  const getConversationIdByExternalIdRef = useRef(getConversationIdByExternalId)
-  const getSessionRef = useRef(getSession)
-  const runtimeCompleteTurnRef = useRef(runtimeCompleteTurn)
-  const runtimeRemoveConversationRef = useRef(runtimeRemoveConversation)
-  const refreshConversationsRef = useRef(refreshConversations)
-  const updateConversationLocalRef = useRef(updateConversationLocal)
-  useEffect(() => {
-    getConversationIdByExternalIdRef.current = getConversationIdByExternalId
-  }, [getConversationIdByExternalId])
-  useEffect(() => {
-    getSessionRef.current = getSession
-  }, [getSession])
-  useEffect(() => {
-    runtimeCompleteTurnRef.current = runtimeCompleteTurn
-  }, [runtimeCompleteTurn])
-  useEffect(() => {
-    runtimeRemoveConversationRef.current = runtimeRemoveConversation
-  }, [runtimeRemoveConversation])
-  useEffect(() => {
-    refreshConversationsRef.current = refreshConversations
-  }, [refreshConversations])
-  useEffect(() => {
-    updateConversationLocalRef.current = updateConversationLocal
-  }, [updateConversationLocal])
-
   // Background turn_complete handler: for conversations not open in tabs.
-  // Registered once — uses refs to avoid re-creating the listener on every
-  // state change, which would cause "Couldn't find callback id" warnings
-  // due to the async gap between unlisten and the new listen().
-  useEffect(() => {
-    let cancelled = false
-    let unlisten: (() => void | Promise<void>) | null = null
+  // Subscribes via the context's primary `acp://event` listener (single
+  // physical Tauri/WebSocket subscription, plus seq dedup from Phase 3b).
+  // `useAcpEvent` stabilizes handler identity internally, so the callback
+  // can read closure values directly — no caller-side refs needed.
+  useAcpEvent(
+    useCallback(
+      (envelope: EventEnvelope) => {
+        if (envelope.type !== "turn_complete") return
 
-    void import("@tauri-apps/api/event")
-      .then(({ listen }) =>
-        listen<EventEnvelope>("acp://event", (event) => {
-          const envelope = event.payload
-          if (envelope.type !== "turn_complete") return
+        const runtimeConversationId = getConversationIdByExternalId(
+          envelope.session_id
+        )
+        const summary = conversations.find(
+          (item) => item.external_id === envelope.session_id
+        )
+        const matchedConversationId =
+          runtimeConversationId ?? summary?.id ?? null
+        if (!matchedConversationId) return
 
-          const runtimeConversationId =
-            getConversationIdByExternalIdRef.current(envelope.session_id)
-          const summary = conversationsRef.current.find(
-            (item) => item.external_id === envelope.session_id
-          )
-          const matchedConversationId =
-            runtimeConversationId ?? summary?.id ?? null
-          if (!matchedConversationId) return
+        // Check both virtual (runtime) ID and real DB ID — after
+        // bindConversationTab the tab stores the real DB ID while the
+        // runtime session may still be keyed by the virtual ID.
+        const dbId2 = summary?.id
+        const isOpenInTabs = tabs.some(
+          (tab) =>
+            tab.conversationId === matchedConversationId ||
+            (dbId2 != null && tab.conversationId === dbId2)
+        )
+        if (isOpenInTabs) return
 
-          // Check both virtual (runtime) ID and real DB ID — after
-          // bindConversationTab the tab stores the real DB ID while the
-          // runtime session may still be keyed by the virtual ID.
-          const dbId2 = summary?.id
-          const isOpenInTabs = tabsRef.current.some(
-            (tab) =>
-              tab.conversationId === matchedConversationId ||
-              (dbId2 != null && tab.conversationId === dbId2)
-          )
-          if (isOpenInTabs) return
+        // Promote liveMessage + optimisticTurns to localTurns immediately
+        runtimeCompleteTurn(matchedConversationId)
 
-          // Promote liveMessage + optimisticTurns to localTurns immediately
-          runtimeCompleteTurnRef.current(matchedConversationId)
-
-          // If tab was closed while agent was responding, clean up now
-          const session = getSessionRef.current(matchedConversationId)
-          if (session?.pendingCleanup) {
-            runtimeRemoveConversationRef.current(matchedConversationId)
-          }
-
-          // Update conversation status — use the DB summary (found by
-          // external_id above) since matchedConversationId may be a virtual
-          // (negative) ID that won't match any DB record.
-          const dbId =
-            summary?.id ??
-            (matchedConversationId > 0 ? matchedConversationId : null)
-          if (dbId && (!summary || summary.status === "in_progress")) {
-            updateConversationLocalRef.current(dbId, {
-              status: "pending_review",
-            })
-            updateConversationStatus(dbId, "pending_review").catch(
-              (error: unknown) =>
-                console.error(
-                  "[ConversationDetailPanel] background update status:",
-                  error
-                )
-            )
-          }
-        })
-      )
-      .then((dispose) => {
-        if (cancelled) {
-          disposeTauriListener(
-            dispose,
-            "ConversationDetailPanel.backgroundRefresh"
-          )
-          return
+        // If tab was closed while agent was responding, clean up now
+        const session = getSession(matchedConversationId)
+        if (session?.pendingCleanup) {
+          runtimeRemoveConversation(matchedConversationId)
         }
-        unlisten = dispose
-      })
-      .catch(() => {
-        // Ignore when non-tauri runtime.
-      })
 
-    return () => {
-      cancelled = true
-      disposeTauriListener(
-        unlisten,
-        "ConversationDetailPanel.backgroundRefresh"
-      )
-    }
-  }, [])
+        // Update conversation status — use the DB summary (found by
+        // external_id above) since matchedConversationId may be a virtual
+        // (negative) ID that won't match any DB record.
+        const dbId =
+          summary?.id ??
+          (matchedConversationId > 0 ? matchedConversationId : null)
+        if (dbId && (!summary || summary.status === "in_progress")) {
+          updateConversationLocal(dbId, { status: "pending_review" })
+          updateConversationStatus(dbId, "pending_review").catch(
+            (error: unknown) =>
+              console.error(
+                "[ConversationDetailPanel] background update status:",
+                error
+              )
+          )
+        }
+      },
+      [
+        conversations,
+        tabs,
+        getConversationIdByExternalId,
+        getSession,
+        runtimeCompleteTurn,
+        runtimeRemoveConversation,
+        updateConversationLocal,
+      ]
+    )
+  )
 
   const hasNoTabs = tabs.length === 0 && !activeTabId
   const activeConversationTab = useMemo(
