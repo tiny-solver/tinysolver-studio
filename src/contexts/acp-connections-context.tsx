@@ -155,6 +155,7 @@ type Action =
     }
   | { type: "CONNECTION_REMOVED"; contextKey: string }
   | { type: "REMOVE_ALL" }
+  | { type: "REKEY_CONNECTION"; fromKey: string; toKey: string }
   | {
       type: "STATUS_CHANGED"
       contextKey: string
@@ -714,6 +715,17 @@ function connectionsReducer(
 
     case "REMOVE_ALL":
       return new Map()
+
+    case "REKEY_CONNECTION": {
+      const conn = state.get(action.fromKey)
+      if (!conn) return state
+      // Defensive: if toKey already has an entry, do not clobber it.
+      if (state.has(action.toKey)) return state
+      const next = new Map(state)
+      next.delete(action.fromKey)
+      next.set(action.toKey, { ...conn, contextKey: action.toKey })
+      return next
+    }
 
     case "STATUS_CHANGED": {
       const conn = state.get(action.contextKey)
@@ -1614,6 +1626,9 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         for (const key of keys) {
           notifyKeyListeners(key)
         }
+      } else if (action.type === "REKEY_CONNECTION") {
+        notifyKeyListeners(action.fromKey)
+        notifyKeyListeners(action.toKey)
       } else {
         const key = getAffectedKey(action)
         if (key) notifyKeyListeners(key)
@@ -2384,6 +2399,49 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        // Orphan rescue: when no entry exists at this contextKey but an
+        // alive connection with the same sessionId exists at another
+        // contextKey, rekey instead of creating a fresh backend connection.
+        // This handles tab close+reopen for newly-created conversations:
+        // the original tab's contextKey (e.g. "new-XXXX") differs from
+        // the canonical sidebar-reopen contextKey (e.g. "conv-{folderId}-
+        // {agent}-{convId}"), and the orphaned connection holds the
+        // in-flight live state (live_message, pending_permission, etc.)
+        // that we want to preserve across the remount.
+        if (!existing && sessionId) {
+          let orphanKey: string | null = null
+          let orphanConn: ConnectionState | null = null
+          for (const [key, conn] of storeRef.current.connections) {
+            if (key === contextKey) continue
+            if (
+              conn.sessionId === sessionId &&
+              conn.agentType === agentType &&
+              conn.workingDir === nextWorkingDir &&
+              conn.status !== "disconnected" &&
+              conn.status !== "error"
+            ) {
+              orphanKey = key
+              orphanConn = conn
+              break
+            }
+          }
+          if (orphanKey && orphanConn) {
+            reverseMapRef.current.set(orphanConn.connectionId, contextKey)
+            const lastActivity = lastActivityRef.current.get(orphanKey)
+            lastActivityRef.current.delete(orphanKey)
+            lastActivityRef.current.set(contextKey, lastActivity ?? Date.now())
+            if (storeRef.current.activeKey === orphanKey) {
+              setActiveKey(contextKey)
+            }
+            dispatch({
+              type: "REKEY_CONNECTION",
+              fromKey: orphanKey,
+              toKey: contextKey,
+            })
+            return
+          }
+        }
+
         await waitForListenerReady()
         const connectionId = await acpConnect(agentType, workingDir, sessionId)
 
@@ -2502,6 +2560,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       dispatch,
       handleMappedEvent,
       resolveConnectBlockState,
+      setActiveKey,
       t,
       waitForListenerReady,
     ]

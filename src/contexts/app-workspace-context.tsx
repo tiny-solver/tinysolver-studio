@@ -39,7 +39,7 @@ interface AppWorkspaceContextValue {
   conversations: DbConversationSummary[]
   conversationsLoading: boolean
   conversationsError: string | null
-  refreshConversations: () => void
+  refreshConversations: () => Promise<DbConversationSummary[] | null>
   updateConversationLocal: (
     id: number,
     patch: Partial<Pick<DbConversationSummary, "status" | "title">>
@@ -154,16 +154,20 @@ export function AppWorkspaceProvider({ children }: AppWorkspaceProviderProps) {
     }
   }, [])
 
-  const refreshConversations = useCallback(async () => {
+  const refreshConversations = useCallback(async (): Promise<
+    DbConversationSummary[] | null
+  > => {
     setConversationsLoading(true)
     try {
       const list = await listAllConversations()
-      if (!mountedRef.current) return
+      if (!mountedRef.current) return null
       setConversations(list)
       setConversationsError(null)
+      return list
     } catch (err) {
-      if (!mountedRef.current) return
+      if (!mountedRef.current) return null
       setConversationsError(toErrorMessage(err))
+      return null
     } finally {
       if (mountedRef.current) {
         setConversationsLoading(false)

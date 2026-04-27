@@ -444,7 +444,17 @@ const ConversationTabView = memo(function ConversationTabView({
     // Clearing is handled by COMPLETE_TURN (sets liveMessage = null) and
     // by this effect's cleanup (when not prompting).
     if (conn.liveMessage != null) {
-      setLiveMessage(effectiveConversationId, conn.liveMessage)
+      // isLive=true when actively prompting tells the runtime reducer to
+      // bypass its stale-reconnect-replay guard. This matters for the
+      // rekey path (close+reopen mid-turn): the runtime session for the
+      // persisted conversation id is fresh and may have user turns in
+      // detail.turns post-load, which would otherwise drop the live
+      // assistant stream on the floor.
+      setLiveMessage(
+        effectiveConversationId,
+        conn.liveMessage,
+        connStatus === "prompting"
+      )
     }
     return () => {
       // Don't clear liveMessage if agent is still responding — the session
@@ -454,7 +464,7 @@ const ConversationTabView = memo(function ConversationTabView({
         setLiveMessage(effectiveConversationId, null)
       }
     }
-  }, [conn.liveMessage, effectiveConversationId, setLiveMessage])
+  }, [conn.liveMessage, connStatus, effectiveConversationId, setLiveMessage])
 
   useEffect(() => {
     if (effectiveConversationId <= 0) return
@@ -1064,8 +1074,12 @@ export function ConversationDetailPanel() {
     removeConversation: runtimeRemoveConversation,
   } = useConversationRuntime()
   const { activeFolder: folder } = useActiveFolder()
-  const { conversations, updateConversationLocal, getFolder } =
-    useAppWorkspace()
+  const {
+    conversations,
+    updateConversationLocal,
+    refreshConversations,
+    getFolder,
+  } = useAppWorkspace()
   const {
     tabs,
     activeTabId,
@@ -1165,19 +1179,47 @@ export function ConversationDetailPanel() {
         // Update conversation status — use the DB summary (found by
         // external_id above) since matchedConversationId may be a virtual
         // (negative) ID that won't match any DB record.
-        const dbId =
-          summary?.id ??
-          (matchedConversationId > 0 ? matchedConversationId : null)
-        if (dbId && (!summary || summary.status === "in_progress")) {
-          updateConversationLocal(dbId, { status: "pending_review" })
-          updateConversationStatus(dbId, "pending_review").catch(
-            (error: unknown) =>
-              console.error(
-                "[ConversationDetailPanel] background update status:",
-                error
-              )
-          )
+        const tryUpdateStatus = (
+          resolvedSummary: typeof summary,
+          fallbackId: number | null
+        ) => {
+          const dbId =
+            resolvedSummary?.id ??
+            (fallbackId != null && fallbackId > 0 ? fallbackId : null)
+          if (
+            dbId &&
+            (!resolvedSummary || resolvedSummary.status === "in_progress")
+          ) {
+            updateConversationLocal(dbId, { status: "pending_review" })
+            updateConversationStatus(dbId, "pending_review").catch(
+              (error: unknown) =>
+                console.error(
+                  "[ConversationDetailPanel] background update status:",
+                  error
+                )
+            )
+            return true
+          }
+          return false
         }
+
+        if (summary) {
+          tryUpdateStatus(summary, matchedConversationId)
+          return
+        }
+
+        // Fallback: when summary lookup misses (race between conversation
+        // row creation and the workspace's `conversations` refresh — common
+        // for newly-created conversations whose tab was closed before the
+        // summary list refreshed), force a refresh and retry once. Without
+        // this, the sidebar can stay stuck on "in_progress" indefinitely.
+        void refreshConversations().then((refreshed) => {
+          if (!refreshed) return
+          const refreshedSummary = refreshed.find(
+            (item) => item.external_id === envelope.session_id
+          )
+          tryUpdateStatus(refreshedSummary, matchedConversationId)
+        })
       },
       [
         conversations,
@@ -1187,6 +1229,7 @@ export function ConversationDetailPanel() {
         runtimeCompleteTurn,
         runtimeRemoveConversation,
         updateConversationLocal,
+        refreshConversations,
       ]
     )
   )
