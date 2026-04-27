@@ -587,6 +587,7 @@ export interface LiveSessionSnapshot {
   usage: SessionUsageUpdateInfo | null
   fork_supported: boolean
   available_commands: AvailableCommandInfo[]
+  selectors_ready: boolean
   event_seq: number
 }
 

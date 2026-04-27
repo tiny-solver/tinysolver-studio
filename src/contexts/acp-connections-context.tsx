@@ -689,6 +689,11 @@ function connectionsReducer(
         pendingPermission: action.patch.pendingPermission,
         promptCapabilities:
           action.patch.promptCapabilities ?? current.promptCapabilities,
+        // Latches once on true. The `selectors_ready` event fires only once
+        // per connection lifetime; a fresh frontend (post-refresh) needs the
+        // snapshot to recover the bit, otherwise the init-session task is
+        // stuck forever.
+        selectorsReady: action.patch.selectorsReady || current.selectorsReady,
         lastAppliedSeq: action.patch.eventSeq,
       })
       return next

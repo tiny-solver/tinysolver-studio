@@ -20,9 +20,9 @@ import type {
 
 /**
  * Snapshot-derived subset of ConnectionState. Fields not present here
- * (selectorsReady, pendingQuestion, claudeApiRetry, error, contextKey,
- * agentType, workingDir, supportsFork) are frontend-only or set elsewhere
- * and must not be touched by HYDRATE_FROM_SNAPSHOT.
+ * (pendingQuestion, claudeApiRetry, error, contextKey, agentType,
+ * workingDir, supportsFork) are frontend-only or set elsewhere and must
+ * not be touched by HYDRATE_FROM_SNAPSHOT.
  */
 export interface SnapshotPatch {
   status: ConnectionStatus
@@ -34,6 +34,7 @@ export interface SnapshotPatch {
   liveMessage: LocalLiveMessage | null
   pendingPermission: PendingPermission | null
   promptCapabilities: PromptCapabilitiesInfo | null
+  selectorsReady: boolean
   eventSeq: number
 }
 
@@ -67,6 +68,7 @@ export function denormalizeSnapshot(wire: LiveSessionSnapshot): SnapshotPatch {
         }
       : null,
     promptCapabilities: wire.prompt_capabilities ?? DEFAULT_PROMPT_CAPS,
+    selectorsReady: wire.selectors_ready,
     eventSeq: wire.event_seq,
   }
 }

@@ -141,6 +141,11 @@ pub struct SessionState {
     pub fork_supported: bool,
     pub available_commands: Vec<AvailableCommandInfo>,
     pub usage: Option<UsageInfo>,
+    /// True once the agent's initial selectors handshake (modes +
+    /// config_options) has finished and `SelectorsReady` has fired. Persisted
+    /// on the snapshot so a frontend that reconnects after refresh can see
+    /// "init complete" without waiting for an event that already fired.
+    pub selectors_ready: bool,
 
     // 事件锚点
     pub event_seq: u64,
@@ -174,6 +179,7 @@ impl SessionState {
             fork_supported: false,
             available_commands: Vec::new(),
             usage: None,
+            selectors_ready: false,
             event_seq: 0,
             last_activity_at: Utc::now(),
         }
@@ -331,9 +337,13 @@ impl SessionState {
                 // `LiveSessionSnapshot`. Listed explicitly (rather than swept
                 // up by the catchall) so the no-op is intentional and grep-able.
             }
-            AcpEvent::ClaudeSdkMessage { .. }
-            | AcpEvent::SelectorsReady
-            | AcpEvent::Error { .. } => {
+            AcpEvent::SelectorsReady => {
+                // Latches once. Snapshot exposes this so a fresh frontend (e.g.
+                // after browser refresh) can tell the initial handshake is
+                // already done — the event fires only once per connection.
+                self.selectors_ready = true;
+            }
+            AcpEvent::ClaudeSdkMessage { .. } | AcpEvent::Error { .. } => {
                 // 这些事件不直接修改 SessionState 的可见字段。
             }
         }
@@ -487,6 +497,7 @@ impl SessionState {
             usage: self.usage.clone(),
             fork_supported: self.fork_supported,
             available_commands: self.available_commands.clone(),
+            selectors_ready: self.selectors_ready,
             event_seq: self.event_seq,
         }
     }
@@ -510,6 +521,7 @@ pub struct LiveSessionSnapshot {
     pub usage: Option<UsageInfo>,
     pub fork_supported: bool,
     pub available_commands: Vec<AvailableCommandInfo>,
+    pub selectors_ready: bool,
     pub event_seq: u64,
 }
 
@@ -611,6 +623,20 @@ mod tests {
         assert!(s.pending_permission.is_none());
         assert!(!s.fork_supported);
         assert!(s.available_commands.is_empty());
+        assert!(!s.selectors_ready);
+    }
+
+    #[test]
+    fn selectors_ready_event_latches_state_and_snapshot() {
+        let mut s = fresh_state();
+        assert!(!s.selectors_ready);
+        assert!(!s.to_snapshot().selectors_ready);
+        s.apply_event(&AcpEvent::SelectorsReady);
+        assert!(s.selectors_ready);
+        assert!(s.to_snapshot().selectors_ready);
+        // Idempotent — staying true on a second apply.
+        s.apply_event(&AcpEvent::SelectorsReady);
+        assert!(s.selectors_ready);
     }
 
     #[test]
