@@ -329,7 +329,18 @@ class WorkspaceStateStore {
           await stopWorkspaceStateStream(this.rootPath).catch(() => {})
           return
         }
-        this.patchState((prev) => applySnapshot(prev, initialSnapshot))
+        // Reset our seq baseline before applying. The backend stream is
+        // brand new (or re-created after stop), so its WorkspaceStateCore
+        // starts at seq=0. If the user previously visited this folder, the
+        // store still holds the prior lifecycle's `state.seq` (e.g. 10),
+        // and applySnapshot's `snapshot.seq < state.seq` guard would drop
+        // the cold-scan payload entirely — leaving git/file tree frozen on
+        // pre-restart cached data even though the disk view is fresh.
+        // Symptom: after switching away while the agent commits and
+        // switching back, changes still render as uncommitted forever.
+        this.patchState((prev) =>
+          applySnapshot({ ...prev, seq: 0 }, initialSnapshot)
+        )
         this.hasBaselineSnapshot = true
 
         const unlisten = await subscribe<WorkspaceStateEvent>(
