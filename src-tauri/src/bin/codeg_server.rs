@@ -129,7 +129,13 @@ async fn async_main() {
     }
 
     // Build router
-    let router = codeg_lib::web::router::build_router(state, token.clone(), static_dir);
+    let shutdown_signal = state.web_server_state.shutdown_signal();
+    let router = codeg_lib::web::router::build_router(
+        state.clone(),
+        token.clone(),
+        static_dir,
+        shutdown_signal,
+    );
 
     // Bind
     let addr = format!("{}:{}", host, port);
@@ -140,7 +146,21 @@ async fn async_main() {
             std::process::exit(1);
         });
 
+    if let Err(e) = codeg_lib::web::socket_inherit::mark_listener_non_inheritable(&listener) {
+        eprintln!(
+            "[SERVER][WARN] failed to mark listener non-inheritable: {}",
+            e
+        );
+    }
+
     let actual_port = listener.local_addr().map(|a| a.port()).unwrap_or(port);
+
+    // Publish runtime state so the settings page (served by us) shows
+    // the truth — running on `actual_port` with this token — instead of
+    // the placeholder "stopped" that triggers the stale-port banner.
+    state
+        .web_server_state
+        .mark_externally_running(actual_port, token.clone());
     let addresses = get_local_addresses(actual_port);
 
     eprintln!("[SERVER] Token: {}", token);

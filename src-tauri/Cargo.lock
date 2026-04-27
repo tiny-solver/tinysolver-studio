@@ -871,6 +871,7 @@ dependencies = [
  "junction",
  "keyring",
  "kill_tree",
+ "libc",
  "mac-notification-sys",
  "notify",
  "portable-pty",

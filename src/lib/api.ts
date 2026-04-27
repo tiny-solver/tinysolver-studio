@@ -1568,6 +1568,21 @@ export async function getWebServiceConfig(): Promise<WebServiceConfig> {
   return getTransport().call("get_web_service_config")
 }
 
+export type WebServicePortState = "free" | "occupied" | "unknown"
+
+export interface WebServicePortProbe {
+  port: number
+  state: WebServicePortState
+}
+
+export async function probeWebServicePort(
+  port?: number
+): Promise<WebServicePortProbe> {
+  return getTransport().call("probe_web_service_port", {
+    port: port ?? null,
+  })
+}
+
 // ─── Chat Channels ───
 
 export async function listChatChannels(): Promise<ChatChannelInfo[]> {

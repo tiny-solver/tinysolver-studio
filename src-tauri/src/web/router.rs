@@ -11,10 +11,16 @@ use axum::{
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 
+use super::shutdown::ShutdownSignal;
 use super::{auth, handlers, ws};
 use crate::app_state::AppState;
 
-pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::PathBuf) -> Router {
+pub fn build_router(
+    state: Arc<AppState>,
+    token: String,
+    static_dir: std::path::PathBuf,
+    shutdown_signal: Arc<ShutdownSignal>,
+) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -542,6 +548,10 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
             post(handlers::web_server::stop_web_server),
         )
         .route(
+            "/probe_web_service_port",
+            post(handlers::web_server::probe_web_service_port),
+        )
+        .route(
             "/check_app_update",
             post(handlers::web_server::check_app_update),
         )
@@ -731,6 +741,7 @@ pub fn build_router(state: Arc<AppState>, token: String, static_dir: std::path::
         .layer(html_rewrite)
         .layer(cors)
         .layer(Extension(state))
+        .layer(Extension(shutdown_signal))
 }
 
 async fn health_check() -> impl IntoResponse {
