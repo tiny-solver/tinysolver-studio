@@ -152,6 +152,18 @@ pub struct SessionState {
     /// "init complete" without waiting for an event that already fired.
     pub selectors_ready: bool,
 
+    /// Single-fire signal that fires when `SessionStarted` applies (i.e.
+    /// `external_id` transitioned from None → Some). `ConnectionManager::
+    /// spawn_agent` holds the per-(agent, working_dir, session_id) dedup
+    /// lock until this fires (or times out), so a concurrent acp_connect
+    /// for the same logical session sees the populated `external_id` and
+    /// reuses instead of spawning a duplicate. `Some` immediately after
+    /// `install_session_started_signal()`; `take()`'d in `apply_event::
+    /// SessionStarted`; `None` thereafter (the signal is one-shot per
+    /// connection). Lives only on the in-memory `SessionState`; not
+    /// transmitted on the wire (`LiveSessionSnapshot` doesn't include it).
+    pub(crate) session_started_tx: Option<tokio::sync::oneshot::Sender<()>>,
+
     // 事件锚点
     pub event_seq: u64,
     pub last_activity_at: DateTime<Utc>,
@@ -185,9 +197,22 @@ impl SessionState {
             available_commands: Vec::new(),
             usage: None,
             selectors_ready: false,
+            session_started_tx: None,
             event_seq: 0,
             last_activity_at: Utc::now(),
         }
+    }
+
+    /// Install a one-shot signal that fires when `SessionStarted` applies.
+    /// Returns the receiver; caller (typically `spawn_agent_connection`)
+    /// passes it back to the dedup waiter in `spawn_agent`. Calling this
+    /// more than once on the same state replaces the previous sender,
+    /// silently dropping it — the contract is "exactly one install per
+    /// connection lifetime" and that's what `spawn_agent_connection` does.
+    pub fn install_session_started_signal(&mut self) -> tokio::sync::oneshot::Receiver<()> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.session_started_tx = Some(tx);
+        rx
     }
 
     /// 单一分发器：把一个 AcpEvent 应用到 self。注意此方法**不**自增 event_seq——
@@ -197,6 +222,15 @@ impl SessionState {
             AcpEvent::SessionStarted { session_id } => {
                 self.external_id = Some(session_id.clone());
                 self.status = ConnectionStatus::Connected;
+                // Fire the dedup waiter (if any). Take()-and-send is
+                // single-shot: a duplicate SessionStarted (replay, agent
+                // re-init) finds None here and is a no-op, which is
+                // exactly the desired idempotent behavior. send returns
+                // Err only when the receiver dropped (timeout already
+                // fired in spawn_agent) — also a no-op.
+                if let Some(tx) = self.session_started_tx.take() {
+                    let _ = tx.send(());
+                }
             }
             AcpEvent::StatusChanged { status } => {
                 self.status = status.clone();
@@ -718,6 +752,65 @@ mod tests {
         });
         assert_eq!(s.external_id.as_deref(), Some("ext-42"));
         assert_eq!(s.status, ConnectionStatus::Connected);
+    }
+
+    #[tokio::test]
+    async fn session_started_signal_fires_when_session_started_applies() {
+        let mut s = fresh_state();
+        let rx = s.install_session_started_signal();
+        // Pre-fire: rx not ready.
+        assert!(s.session_started_tx.is_some());
+
+        s.apply_event(&AcpEvent::SessionStarted {
+            session_id: "ext-1".into(),
+        });
+
+        // tx was take()'d.
+        assert!(s.session_started_tx.is_none());
+        // rx resolves with Ok(()) — bounded timeout because the test must
+        // never hang if the signal logic regresses.
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(50), rx).await;
+        assert!(
+            matches!(result, Ok(Ok(()))),
+            "rx must fire on SessionStarted; got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn session_started_signal_is_single_shot_safe_against_replay() {
+        let mut s = fresh_state();
+        let rx = s.install_session_started_signal();
+        s.apply_event(&AcpEvent::SessionStarted {
+            session_id: "ext-1".into(),
+        });
+        // Replay (or any second SessionStarted) must not panic / double-fire.
+        s.apply_event(&AcpEvent::SessionStarted {
+            session_id: "ext-2".into(),
+        });
+        // The first send delivered; rx is consumed.
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(50), rx).await;
+        assert!(matches!(result, Ok(Ok(()))));
+    }
+
+    #[tokio::test]
+    async fn session_started_rx_aborts_when_state_drops_before_session_started() {
+        // Mirrors the production "agent died before SessionStarted" path:
+        // SessionState owns tx, gets dropped → rx receives RecvError. The
+        // dedup waiter in `spawn_agent` treats this as "abort, release
+        // dedup_lock, let next caller proceed".
+        let rx = {
+            let mut s = fresh_state();
+            s.install_session_started_signal()
+            // s drops here, taking tx with it.
+        };
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(50), rx).await;
+        assert!(
+            matches!(result, Ok(Err(_))),
+            "rx must receive Err when sender drops without sending; got {result:?}"
+        );
     }
 
     #[test]

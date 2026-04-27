@@ -27,15 +27,79 @@ struct SpawnDedupKey {
     session_id: String,
 }
 
+/// Default upper bound on how long `spawn_agent` will hold the per-session
+/// dedup lock waiting for `SessionStarted`. Picked to comfortably cover
+/// cold-start agents (claude-code/codex warm: <2s; npx-fetched cold: 10–30s)
+/// without deadlocking the next concurrent acp_connect when an agent is
+/// genuinely broken.
+pub(crate) const SPAWN_HANDSHAKE_TIMEOUT_SECS: u64 = 60;
+
+/// Read the spawn-handshake timeout from `CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS`,
+/// falling back to `SPAWN_HANDSHAKE_TIMEOUT_SECS`. Returns the configured
+/// `Duration`. Tests can construct the manager with a custom value via
+/// `with_spawn_handshake_timeout` instead of mutating env.
+fn spawn_handshake_timeout_from_env() -> Duration {
+    let secs = std::env::var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(SPAWN_HANDSHAKE_TIMEOUT_SECS);
+    Duration::from_secs(secs)
+}
+
+/// Outcome of the `spawn_agent` dedup wait. Logged so production can audit
+/// how often the timeout fires vs. the agent handshake completes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HandshakeWaitOutcome {
+    /// `SessionStarted` applied; `external_id` is now set on the state.
+    Ready,
+    /// Sender was dropped before SessionStarted fired (typically the
+    /// connection died during init — `run_connection` returned Err).
+    Aborted,
+    /// Timeout elapsed before either of the above. Releases the dedup lock
+    /// so the next caller can proceed; the slow agent is no worse off.
+    TimedOut,
+}
+
+impl HandshakeWaitOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            HandshakeWaitOutcome::Ready => "ready",
+            HandshakeWaitOutcome::Aborted => "aborted",
+            HandshakeWaitOutcome::TimedOut => "timeout",
+        }
+    }
+}
+
+/// Wait for the spawn-time `SessionStarted` signal, bounded by `timeout`.
+/// Extracted so the outcome enum can be unit-tested without spawning a
+/// real agent process.
+async fn wait_for_session_started(
+    rx: tokio::sync::oneshot::Receiver<()>,
+    timeout: Duration,
+) -> (HandshakeWaitOutcome, Duration) {
+    let start = std::time::Instant::now();
+    let outcome = match tokio::time::timeout(timeout, rx).await {
+        Ok(Ok(())) => HandshakeWaitOutcome::Ready,
+        Ok(Err(_)) => HandshakeWaitOutcome::Aborted,
+        Err(_) => HandshakeWaitOutcome::TimedOut,
+    };
+    (outcome, start.elapsed())
+}
+
 pub struct ConnectionManager {
     pub(crate) connections: Arc<Mutex<HashMap<String, AgentConnection>>>,
     /// Per-(agent, working_dir, session_id) async mutex. Held across the
-    /// dedup-lookup + spawn critical section so two concurrent
-    /// `spawn_agent` calls for the same logical session can't both miss
-    /// dedup during the connecting window (before `SessionStarted` writes
-    /// `state.external_id`). Entries persist for process lifetime — bounded
-    /// by the number of distinct sessions ever connected.
+    /// dedup-lookup + spawn + SessionStarted-wait critical section so two
+    /// concurrent `spawn_agent` calls for the same logical session can't
+    /// both miss dedup during the handshake window. Entries persist for
+    /// process lifetime — bounded by the number of distinct sessions ever
+    /// connected.
     spawn_locks: Arc<Mutex<HashMap<SpawnDedupKey, Arc<Mutex<()>>>>>,
+    /// Bound on how long `spawn_agent` waits for the agent's handshake
+    /// before releasing the dedup lock. Configurable per-instance for
+    /// tests; in production initialized from env via
+    /// `spawn_handshake_timeout_from_env`.
+    spawn_handshake_timeout: Duration,
 }
 
 impl ConnectionManager {
@@ -43,6 +107,7 @@ impl ConnectionManager {
         Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
+            spawn_handshake_timeout: spawn_handshake_timeout_from_env(),
         }
     }
 
@@ -51,6 +116,18 @@ impl ConnectionManager {
         Self {
             connections: self.connections.clone(),
             spawn_locks: self.spawn_locks.clone(),
+            spawn_handshake_timeout: self.spawn_handshake_timeout,
+        }
+    }
+
+    /// Test-only constructor that overrides the spawn-handshake timeout.
+    /// Production code should use `new()`.
+    #[cfg(test)]
+    fn with_spawn_handshake_timeout(timeout: Duration) -> Self {
+        Self {
+            connections: Arc::new(Mutex::new(HashMap::new())),
+            spawn_locks: Arc::new(Mutex::new(HashMap::new())),
+            spawn_handshake_timeout: timeout,
         }
     }
 
@@ -73,12 +150,14 @@ impl ConnectionManager {
 
         // Acquire a per-(agent, working_dir, session_id) async mutex so two
         // concurrent connects for the same logical session can't both miss
-        // dedup during the connecting window. The lookup-then-spawn
-        // critical section runs under this lock; the second waiter, on
-        // entry, observes the first call's freshly-inserted connection via
-        // `find_connection_for_reuse` and returns its id instead of
-        // spawning a duplicate. Skipped entirely when `session_id` is None
-        // (fresh sessions never dedup, by design).
+        // dedup during the handshake window. The lookup → spawn → wait-for-
+        // SessionStarted critical section runs under this lock; the second
+        // waiter, on entry, observes the first call's connection with
+        // `state.external_id` already populated and returns its id via
+        // `find_connection_for_reuse`. Skipped entirely when `session_id`
+        // is None (fresh sessions can't dedup — by design — since the
+        // agent assigns the id).
+        let session_id_for_log = session_id.clone();
         let dedup_lock = if let Some(sid) = session_id.as_deref() {
             let key = SpawnDedupKey {
                 agent_type,
@@ -115,11 +194,11 @@ impl ConnectionManager {
             connection_id, owner_window_label, agent_type
         );
 
-        // `spawn_agent_connection` inserts the entry into `self.connections`
-        // itself and registers a cleanup hook that removes it once the
-        // background `run_connection` task exits. This keeps the manager
-        // from leaking entries after timeouts / errors.
-        spawn_agent_connection(
+        // `spawn_agent_connection` inserts the entry into `self.connections`,
+        // installs the SessionStarted dedup signal on the state, registers
+        // a cleanup hook, and returns the rx half of the signal. Any spawn
+        // failure short-circuits before we touch the rx wait.
+        let session_started_rx = spawn_agent_connection(
             connection_id.clone(),
             agent_type,
             working_dir,
@@ -131,10 +210,29 @@ impl ConnectionManager {
         )
         .await?;
 
-        // Release the dedup lock only AFTER the connection has been
-        // inserted into the connections map by spawn_agent_connection.
-        // Any waiter on this same key will then observe the new connection
-        // in their own find_connection_for_reuse call.
+        // When dedup is active, hold the lock until the agent's
+        // SessionStarted has applied (so external_id is populated for the
+        // next waiter), aborted (connection died), or the timeout fires.
+        // Logged on every wait so production can audit real-world handshake
+        // latencies and tune `CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS`.
+        if dedup_lock.is_some() {
+            let timeout = self.spawn_handshake_timeout;
+            let (outcome, elapsed) =
+                wait_for_session_started(session_started_rx, timeout).await;
+            eprintln!(
+                "[ACP] dedup_wait connection_id={} session_id={} outcome={} \
+                 elapsed_ms={} timeout_ms={}",
+                connection_id,
+                session_id_for_log.as_deref().unwrap_or(""),
+                outcome.as_str(),
+                elapsed.as_millis(),
+                timeout.as_millis(),
+            );
+        }
+        // session_started_rx (in the no-dedup branch) is dropped here. tx
+        // staying inside SessionState gets dropped naturally when the
+        // connection terminates, no leak.
+
         drop(dedup_lock);
 
         Ok(connection_id)
@@ -193,11 +291,14 @@ impl ConnectionManager {
     ///   `Option<PathBuf>` so canonicalization is the caller's concern)
     /// - the connection's `state.status` is neither `Disconnected` nor `Error`
     ///
-    /// Read-only — does not hold a write lock on any session, and uses
-    /// `try_read` on per-session state so a writer (`emit_with_state`) holding
-    /// the state lock won't block this scan; we just skip such entries (they
-    /// can be picked up next call). Returns the connection id of a winning
-    /// match, or `None` if no live connection qualifies.
+    /// Per-session state is acquired via `read().await` rather than `try_read`:
+    /// the only writer is `emit_with_state`, whose critical section is
+    /// microseconds (apply_event + seq++ + broadcast::send), so contention
+    /// resolves quickly and the previous "skip on writer" behavior was just
+    /// trading correctness (false-negative dedup → duplicate process spawn)
+    /// for an imperceptible latency win. The connections-map mutex is held
+    /// across the awaits — fine because no path takes `state.write()` while
+    /// holding the connections mutex (no lock-cycle).
     pub(crate) async fn find_connection_for_reuse(
         &self,
         agent_type: AgentType,
@@ -211,11 +312,7 @@ impl ConnectionManager {
             if conn.agent_type != agent_type {
                 continue;
             }
-            let Ok(state) = conn.state.try_read() else {
-                // Don't block the connections-map mutex on a per-state
-                // writer; a future scan can pick this connection up.
-                continue;
-            };
+            let state = conn.state.read().await;
             if state.external_id.as_deref() != Some(session_id) {
                 continue;
             }
@@ -646,20 +743,18 @@ impl ConnectionManager {
 
     /// Resolve a conversation_id to its currently-active connection id, if any.
     /// Used by the by-conversation snapshot endpoint and the LifecycleSubscriber.
+    /// Per-session state is acquired via `read().await` to avoid the
+    /// `try_read`-skip false negative that would intermittently return None
+    /// while `emit_with_state` is mid-update — the wait is microseconds.
     pub async fn find_connection_by_conversation_id(
         &self,
         conversation_id: i32,
     ) -> Option<String> {
         let connections = self.connections.lock().await;
         for (id, conn) in connections.iter() {
-            // Read the conversation_id under a read lock; .try_read() avoids
-            // blocking if a writer (emit_with_state) currently holds the lock,
-            // and we simply skip that entry — a fresh snapshot/lookup the next
-            // call resolves it. This keeps the connections mutex window short.
-            if let Ok(state) = conn.state.try_read() {
-                if state.conversation_id == Some(conversation_id) {
-                    return Some(id.clone());
-                }
+            let state = conn.state.read().await;
+            if state.conversation_id == Some(conversation_id) {
+                return Some(id.clone());
             }
         }
         None
@@ -1516,6 +1611,86 @@ mod tests {
             1,
             "exactly one new conversation row across two concurrent send_prompt_linked"
         );
+    }
+
+    // ---------- Phase: spawn handshake wait helper ----------
+
+    #[tokio::test]
+    async fn wait_for_session_started_returns_ready_when_sender_fires() {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        // Fire immediately on a separate task so the wait future actually
+        // gets to register.
+        tokio::spawn(async move {
+            let _ = tx.send(());
+        });
+        let (outcome, elapsed) =
+            wait_for_session_started(rx, Duration::from_millis(500)).await;
+        assert_eq!(outcome, HandshakeWaitOutcome::Ready);
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "Ready outcome must resolve well before timeout, got {elapsed:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_session_started_returns_aborted_when_sender_drops() {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        // Drop the sender — emulates "connection died before SessionStarted",
+        // i.e. SessionState's tx was dropped during cleanup.
+        drop(tx);
+        let (outcome, elapsed) =
+            wait_for_session_started(rx, Duration::from_millis(500)).await;
+        assert_eq!(outcome, HandshakeWaitOutcome::Aborted);
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "Aborted outcome must resolve well before timeout, got {elapsed:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_session_started_returns_timed_out_when_neither_happens() {
+        let (_tx, rx) = tokio::sync::oneshot::channel::<()>();
+        // Hold the sender alive but never fire and never drop. Tight
+        // timeout so the test stays fast; production timeout is 60s.
+        let (outcome, elapsed) =
+            wait_for_session_started(rx, Duration::from_millis(40)).await;
+        assert_eq!(outcome, HandshakeWaitOutcome::TimedOut);
+        assert!(
+            elapsed >= Duration::from_millis(40),
+            "TimedOut must wait at least the full timeout, got {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn spawn_handshake_timeout_from_env_uses_default_when_unset() {
+        // Snapshot env, mutate, restore. Single test owns this var to avoid
+        // cross-test contention.
+        let prev = std::env::var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS").ok();
+        std::env::remove_var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS");
+        let default = spawn_handshake_timeout_from_env();
+        assert_eq!(default, Duration::from_secs(SPAWN_HANDSHAKE_TIMEOUT_SECS));
+
+        std::env::set_var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS", "5");
+        assert_eq!(spawn_handshake_timeout_from_env(), Duration::from_secs(5));
+
+        std::env::set_var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS", "garbage");
+        assert_eq!(
+            spawn_handshake_timeout_from_env(),
+            Duration::from_secs(SPAWN_HANDSHAKE_TIMEOUT_SECS),
+            "invalid value falls back to default"
+        );
+
+        // Restore.
+        match prev {
+            Some(v) => std::env::set_var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS", v),
+            None => std::env::remove_var("CODEG_ACP_SPAWN_HANDSHAKE_TIMEOUT_SECS"),
+        }
+    }
+
+    #[test]
+    fn with_spawn_handshake_timeout_overrides_default_for_tests() {
+        let mgr = ConnectionManager::with_spawn_handshake_timeout(Duration::from_secs(7));
+        assert_eq!(mgr.spawn_handshake_timeout, Duration::from_secs(7));
     }
 
     /// When `send_prompt_inner` fails (process gone, channel closed) the row
