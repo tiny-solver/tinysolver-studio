@@ -1,11 +1,15 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::acp::connection::{spawn_agent_connection, AgentConnection, ConnectionCommand};
 use crate::acp::error::AcpError;
-use crate::acp::types::{AcpEvent, ConnectionInfo, ForkResultInfo, PromptInputBlock};
+use crate::acp::types::{
+    AcpEvent, ConnectionInfo, ConnectionStatus, ForkResultInfo, PromptInputBlock,
+};
+use crate::db::entities::conversation::ConversationStatus;
 use crate::db::service::conversation_service;
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
@@ -38,6 +42,25 @@ impl ConnectionManager {
         owner_window_label: String,
         emitter: EventEmitter,
     ) -> Result<String, AcpError> {
+        // Connection dedup: when resuming an agent session (session_id is
+        // Some), look for a live AgentConnection that already represents
+        // the same external session in the same working_dir for the same
+        // agent_type and is not torn down. If found, reuse it instead of
+        // spawning a fresh process — this is what makes a browser refresh
+        // mid-turn re-attach to the existing live state rather than orphan it.
+        let working_dir_path = working_dir.as_ref().map(PathBuf::from);
+        if let Some(existing) = self
+            .find_connection_for_reuse(agent_type, working_dir_path.as_ref(), session_id.as_deref())
+            .await
+        {
+            eprintln!(
+                "[ACP] reusing connection id={} for session_id={}",
+                existing,
+                session_id.as_deref().unwrap_or("")
+            );
+            return Ok(existing);
+        }
+
         let connection_id = uuid::Uuid::new_v4().to_string();
         eprintln!(
             "[ACP] spawning connection id={} owner_window={} agent={:?}",
@@ -61,6 +84,55 @@ impl ConnectionManager {
         .await?;
 
         Ok(connection_id)
+    }
+
+    /// Look up an existing live connection that we can reuse instead of
+    /// spawning a new process. Reuse criteria, ALL must hold:
+    /// - `session_id` is Some (we never dedup speculative / fresh connects)
+    /// - the connection's `state.external_id` equals `session_id`
+    /// - the connection's `agent_type` equals the requested one
+    /// - the connection's `working_dir` equals the requested one (compared as
+    ///   `Option<PathBuf>` so canonicalization is the caller's concern)
+    /// - the connection's `state.status` is neither `Disconnected` nor `Error`
+    ///
+    /// Read-only — does not hold a write lock on any session, and uses
+    /// `try_read` on per-session state so a writer (`emit_with_state`) holding
+    /// the state lock won't block this scan; we just skip such entries (they
+    /// can be picked up next call). Returns the connection id of a winning
+    /// match, or `None` if no live connection qualifies.
+    pub(crate) async fn find_connection_for_reuse(
+        &self,
+        agent_type: AgentType,
+        working_dir: Option<&PathBuf>,
+        session_id: Option<&str>,
+    ) -> Option<String> {
+        // No session_id → caller is opening a fresh session; never dedup.
+        let session_id = session_id?;
+        let connections = self.connections.lock().await;
+        for (id, conn) in connections.iter() {
+            if conn.agent_type != agent_type {
+                continue;
+            }
+            let Ok(state) = conn.state.try_read() else {
+                // Don't block the connections-map mutex on a per-state
+                // writer; a future scan can pick this connection up.
+                continue;
+            };
+            if state.external_id.as_deref() != Some(session_id) {
+                continue;
+            }
+            if state.working_dir.as_ref() != working_dir {
+                continue;
+            }
+            if matches!(
+                state.status,
+                ConnectionStatus::Disconnected | ConnectionStatus::Error
+            ) {
+                continue;
+            }
+            return Some(id.clone());
+        }
+        None
     }
 
     pub async fn send_prompt(
@@ -185,6 +257,31 @@ impl ConnectionManager {
                     ));
                 }
             }
+        }
+
+        // Centralized status transition: every successful prompt send flips the
+        // conversation row to InProgress. This MUST happen on every call
+        // (including the already-linked path) so that a follow-up turn whose
+        // row is currently `pending_review` correctly transitions back. The
+        // DB write precedes the event emit so any subscriber observing
+        // `ConversationStatusChanged` can assume the row is consistent.
+        // `update_status` is a single UPDATE — idempotent with respect to
+        // the same status value, so re-writing `InProgress` is a benign no-op
+        // on the row (touches `updated_at` only).
+        let conversation_id_for_status = state_arc.read().await.conversation_id;
+        if let Some(cid) = conversation_id_for_status {
+            conversation_service::update_status(&db.conn, cid, ConversationStatus::InProgress)
+                .await
+                .map_err(|e| AcpError::protocol(e.to_string()))?;
+            emit_with_state(
+                &state_arc,
+                &emitter,
+                AcpEvent::ConversationStatusChanged {
+                    conversation_id: cid,
+                    status: ConversationStatus::InProgress,
+                },
+            )
+            .await;
         }
 
         self.send_prompt(conn_id, blocks).await
@@ -354,6 +451,24 @@ impl ConnectionManager {
     ) -> Option<std::sync::Arc<tokio::sync::RwLock<crate::acp::SessionState>>> {
         let connections = self.connections.lock().await;
         connections.get(conn_id).map(|conn| conn.state.clone())
+    }
+
+    /// Like `get_state`, but also clones the connection's `EventEmitter`.
+    /// Used by the lifecycle subscriber when it needs to both update the
+    /// per-session state and re-broadcast a derived event (e.g. emitting
+    /// `ConversationStatusChanged` after writing the row's status).
+    /// One short lock on the connections map; both pieces are cheap to clone.
+    pub async fn get_state_and_emitter(
+        &self,
+        conn_id: &str,
+    ) -> Option<(
+        std::sync::Arc<tokio::sync::RwLock<crate::acp::SessionState>>,
+        EventEmitter,
+    )> {
+        let connections = self.connections.lock().await;
+        connections
+            .get(conn_id)
+            .map(|conn| (conn.state.clone(), conn.emitter.clone()))
     }
 
     /// Resolve a conversation_id to its currently-active connection id, if any.
@@ -720,14 +835,263 @@ mod tests {
         let after = count_conversation_rows(&db).await;
         assert_eq!(after, before);
 
-        // No ConversationLinked event was emitted (already linked). The
-        // forwarded send_prompt fails with ProcessExited because the
+        // No ConversationLinked event was emitted (already linked). A
+        // ConversationStatusChanged(InProgress) event IS emitted as part of
+        // the centralized status transition (every send re-asserts InProgress).
+        // The forwarded send_prompt fails with ProcessExited because the
         // cmd_tx receiver was dropped — it never reaches an emit path.
-        let timed = tokio::time::timeout(std::time::Duration::from_millis(0), rx.recv()).await;
+        let env = recv_first_acp_event(&mut rx).await;
+        match env.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, pre.id);
+                assert_eq!(status, ConversationStatus::InProgress);
+            }
+            other => panic!(
+                "expected only a ConversationStatusChanged event when already linked, got {other:?}"
+            ),
+        }
+    }
+
+    // ---------- Phase: status centralization ----------
+
+    #[tokio::test]
+    async fn send_prompt_linked_writes_in_progress_and_emits_event() {
+        use crate::db::entities::conversation;
+        use crate::db::test_helpers;
+        use sea_orm::EntityTrait;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/status").await;
+
+        let mgr = ConnectionManager::new();
+        let (broadcaster, mut rx) = make_test_broadcaster();
+        let conn_id = "conn-status-1";
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/status")),
+            EventEmitter::WebOnly(broadcaster.clone()),
+        )
+        .await;
+
+        // First call: backend creates the conversation row and links it.
+        // We expect TWO events in order: ConversationLinked, then
+        // ConversationStatusChanged(InProgress). The DB row's status must
+        // already be InProgress by the time the second event fires.
+        let _ = mgr
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
+            .await;
+
+        let env1 = recv_first_acp_event(&mut rx).await;
+        let conv_id = match env1.payload {
+            AcpEvent::ConversationLinked {
+                conversation_id,
+                folder_id: emitted_folder,
+            } => {
+                assert_eq!(emitted_folder, folder_id);
+                conversation_id
+            }
+            other => panic!("first event must be ConversationLinked, got {other:?}"),
+        };
+        let env2 = recv_first_acp_event(&mut rx).await;
+        match env2.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, conv_id);
+                assert_eq!(status, ConversationStatus::InProgress);
+            }
+            other => panic!(
+                "second event must be ConversationStatusChanged(InProgress), got {other:?}"
+            ),
+        }
+        // Ordering invariant: ConversationLinked precedes ConversationStatusChanged.
         assert!(
-            timed.is_err(),
-            "expected no event within 0ms, got {:?}",
-            timed
+            env2.seq > env1.seq,
+            "status event seq ({}) must follow linked event seq ({})",
+            env2.seq,
+            env1.seq
+        );
+
+        // DB row reflects InProgress (it's also the row's default at create
+        // time, but the explicit write must succeed and not leave it in any
+        // other state).
+        let row = conversation::Entity::find_by_id(conv_id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .expect("conversation row exists");
+        assert_eq!(row.status, ConversationStatus::InProgress);
+
+        // Second send: already-linked path also writes + emits InProgress.
+        // Pre-flip the row to PendingReview to observe the transition flip
+        // back. (Mirrors the "follow-up turn after a TurnComplete" scenario.)
+        conversation_service::update_status(&db.conn, conv_id, ConversationStatus::PendingReview)
+            .await
+            .unwrap();
+
+        let _ = mgr
+            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), None)
+            .await;
+
+        let env3 = recv_first_acp_event(&mut rx).await;
+        match env3.payload {
+            AcpEvent::ConversationStatusChanged {
+                conversation_id,
+                status,
+            } => {
+                assert_eq!(conversation_id, conv_id);
+                assert_eq!(status, ConversationStatus::InProgress);
+            }
+            other => panic!(
+                "second send must re-emit ConversationStatusChanged(InProgress), got {other:?}"
+            ),
+        }
+        // DB write precedes emit: by the time the event was visible the row
+        // must be back to InProgress.
+        let row2 = conversation::Entity::find_by_id(conv_id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row2.status, ConversationStatus::InProgress);
+    }
+
+    // ---------- Phase: connection dedup ----------
+
+    #[tokio::test]
+    async fn find_connection_for_reuse_returns_none_when_session_id_is_none() {
+        let mgr = ConnectionManager::new();
+        let (broadcaster, _rx) = make_test_broadcaster();
+        // Insert a connection that *would* match if session_id were Some.
+        let id = "c1";
+        insert_fake_connection(
+            &mgr,
+            id,
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/reuse")),
+            EventEmitter::WebOnly(broadcaster),
+        )
+        .await;
+        {
+            let state = mgr.get_state(id).await.unwrap();
+            state.write().await.external_id = Some("ext-1".into());
+        }
+        let found = mgr
+            .find_connection_for_reuse(
+                AgentType::ClaudeCode,
+                Some(&PathBuf::from("/tmp/reuse")),
+                None,
+            )
+            .await;
+        assert!(
+            found.is_none(),
+            "no session_id means we never dedup speculative connects"
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_agent_reuses_existing_connection_when_session_id_matches() {
+        // Direct unit test for the lookup helper that spawn_agent calls
+        // before its (process-spawning) block. We test the helper directly so
+        // the test never tries to launch an agent process.
+        let mgr = ConnectionManager::new();
+        let (broadcaster, _rx) = make_test_broadcaster();
+        let existing_id = "preexisting-conn";
+        let working_dir = PathBuf::from("/tmp/reuse-match");
+        insert_fake_connection(
+            &mgr,
+            existing_id,
+            AgentType::ClaudeCode,
+            Some(working_dir.clone()),
+            EventEmitter::WebOnly(broadcaster.clone()),
+        )
+        .await;
+        {
+            let state = mgr.get_state(existing_id).await.unwrap();
+            let mut s = state.write().await;
+            s.external_id = Some("ext-1".into());
+            s.status = ConnectionStatus::Connected;
+        }
+
+        // Same session_id + same agent + same working_dir -> reuse.
+        let found = mgr
+            .find_connection_for_reuse(AgentType::ClaudeCode, Some(&working_dir), Some("ext-1"))
+            .await;
+        assert_eq!(found.as_deref(), Some(existing_id));
+
+        // Different session_id -> no reuse.
+        assert!(mgr
+            .find_connection_for_reuse(AgentType::ClaudeCode, Some(&working_dir), Some("other-ext"))
+            .await
+            .is_none());
+
+        // Different working_dir -> no reuse.
+        assert!(mgr
+            .find_connection_for_reuse(
+                AgentType::ClaudeCode,
+                Some(&PathBuf::from("/tmp/different")),
+                Some("ext-1")
+            )
+            .await
+            .is_none());
+
+        // Different agent_type -> no reuse.
+        assert!(mgr
+            .find_connection_for_reuse(AgentType::Codex, Some(&working_dir), Some("ext-1"))
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn find_connection_for_reuse_skips_disconnected_or_errored() {
+        let mgr = ConnectionManager::new();
+        let (broadcaster, _rx) = make_test_broadcaster();
+        let working_dir = PathBuf::from("/tmp/torn-down");
+        insert_fake_connection(
+            &mgr,
+            "torn",
+            AgentType::ClaudeCode,
+            Some(working_dir.clone()),
+            EventEmitter::WebOnly(broadcaster.clone()),
+        )
+        .await;
+        {
+            let state = mgr.get_state("torn").await.unwrap();
+            let mut s = state.write().await;
+            s.external_id = Some("ext-1".into());
+            s.status = ConnectionStatus::Disconnected;
+        }
+        assert!(
+            mgr.find_connection_for_reuse(
+                AgentType::ClaudeCode,
+                Some(&working_dir),
+                Some("ext-1"),
+            )
+            .await
+            .is_none(),
+            "Disconnected connection must not be reused"
+        );
+
+        // Flip to Error — also excluded.
+        {
+            let state = mgr.get_state("torn").await.unwrap();
+            state.write().await.status = ConnectionStatus::Error;
+        }
+        assert!(
+            mgr.find_connection_for_reuse(
+                AgentType::ClaudeCode,
+                Some(&working_dir),
+                Some("ext-1"),
+            )
+            .await
+            .is_none(),
+            "Errored connection must not be reused"
         );
     }
 }

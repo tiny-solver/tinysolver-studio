@@ -12,7 +12,10 @@ import type { ImperativePanelGroupHandle } from "react-resizable-panels"
 import { FolderTitleBar } from "@/components/layout/folder-title-bar"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StatusBar } from "@/components/layout/status-bar"
-import { AppWorkspaceProvider } from "@/contexts/app-workspace-context"
+import {
+  AppWorkspaceProvider,
+  ConversationStatusEventBridge,
+} from "@/contexts/app-workspace-context"
 import {
   ActiveFolderProvider,
   useActiveFolder,
@@ -774,6 +777,7 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
           <GitCredentialProvider>
             <TaskProvider>
               <AcpConnectionsProvider>
+                <ConversationStatusEventBridge />
                 <ConversationRuntimeProvider>
                   <WorkspaceProvider>
                     <TabProvider>

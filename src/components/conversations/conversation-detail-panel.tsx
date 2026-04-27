@@ -230,10 +230,6 @@ const ConversationTabView = memo(function ConversationTabView({
   const statusUpdatedRef = useRef(false)
   const selectedAgentRef = useRef(selectedAgent)
   const createConversationPendingRef = useRef(false)
-  // When the turn finishes (cancel / complete) before createConversation
-  // resolves, we can't update the DB status yet.  This ref records the
-  // desired status so the createConversation callback can apply it.
-  const deferredStatusRef = useRef<string | null>(null)
   // For existing conversations (opened from sidebar), the external_id is
   // already persisted — don't let a session/new fallback overwrite it.
   const externalIdSavedRef = useRef(conversationId != null)
@@ -373,43 +369,14 @@ const ConversationTabView = memo(function ConversationTabView({
     syncCancelRef.current?.()
     syncCancelRef.current = null
 
-    const targetStatus =
-      connStatus === "disconnected" || connStatus === "error"
-        ? null
-        : "pending_review"
-
     const persistedId = dbConvIdRef.current
-    if (!persistedId) {
-      // Conversation hasn't been persisted yet (createConversation still
-      // in flight).  Record the desired status so the create callback
-      // can apply it once the DB row exists.
-      if (targetStatus) {
-        deferredStatusRef.current = targetStatus
-      }
-      return
-    }
-
-    // Async patch metadata (usage, duration_ms, model, session_stats)
-    if (persistedId > 0) {
+    if (persistedId && persistedId > 0) {
       syncCancelRef.current = syncTurnMetadata(
         persistedId,
         effectiveConversationId
       )
     }
-
-    if (targetStatus) {
-      updateConversationLocal(persistedId, { status: targetStatus })
-      updateConversationStatus(persistedId, targetStatus).catch((e: unknown) =>
-        console.error("[ConversationTabView] update status:", e)
-      )
-    }
-  }, [
-    completeTurn,
-    connStatus,
-    effectiveConversationId,
-    syncTurnMetadata,
-    updateConversationLocal,
-  ])
+  }, [completeTurn, connStatus, effectiveConversationId, syncTurnMetadata])
 
   // Auto-send queued messages when agent finishes responding.
   // Refs are synced via useEffect; the auto-send effect is declared
@@ -610,11 +577,6 @@ const ConversationTabView = memo(function ConversationTabView({
           folderId,
           conversationId: persistedId,
         })
-        updateConversationLocal(persistedId, { status: "in_progress" })
-        updateConversationStatus(persistedId, "in_progress").catch(
-          (e: unknown) =>
-            console.error("[ConversationTabView] update status:", e)
-        )
         statusUpdatedRef.current = false
         return
       }
@@ -660,19 +622,7 @@ const ConversationTabView = memo(function ConversationTabView({
           )
           clearMessageInputDraft(buildNewConversationDraftStorageKey())
           statusUpdatedRef.current = false
-          // If the turn already finished while we were creating the
-          // conversation, apply the deferred status directly instead
-          // of setting "in_progress" (which would never be updated).
-          const initialStatus = deferredStatusRef.current ?? "in_progress"
-          deferredStatusRef.current = null
           refreshConversations()
-          updateConversationLocal(newConversationId, {
-            status: initialStatus,
-          })
-          updateConversationStatus(newConversationId, initialStatus).catch(
-            (e: unknown) =>
-              console.error("[ConversationTabView] update status:", e)
-          )
 
           // Now that the row exists, kick off the actual prompt with the
           // conversation_id pinned so the backend adopts our row instead of
@@ -708,7 +658,6 @@ const ConversationTabView = memo(function ConversationTabView({
       tWelcome,
       tabId,
       trySaveExternalId,
-      updateConversationLocal,
     ]
   )
 
@@ -1074,12 +1023,7 @@ export function ConversationDetailPanel() {
     removeConversation: runtimeRemoveConversation,
   } = useConversationRuntime()
   const { activeFolder: folder } = useActiveFolder()
-  const {
-    conversations,
-    updateConversationLocal,
-    refreshConversations,
-    getFolder,
-  } = useAppWorkspace()
+  const { conversations, getFolder } = useAppWorkspace()
   const {
     tabs,
     activeTabId,
@@ -1175,51 +1119,6 @@ export function ConversationDetailPanel() {
         if (session?.pendingCleanup) {
           runtimeRemoveConversation(matchedConversationId)
         }
-
-        // Update conversation status — use the DB summary (found by
-        // external_id above) since matchedConversationId may be a virtual
-        // (negative) ID that won't match any DB record.
-        const tryUpdateStatus = (
-          resolvedSummary: typeof summary,
-          fallbackId: number | null
-        ) => {
-          const dbId =
-            resolvedSummary?.id ??
-            (fallbackId != null && fallbackId > 0 ? fallbackId : null)
-          if (
-            dbId &&
-            (!resolvedSummary || resolvedSummary.status === "in_progress")
-          ) {
-            updateConversationLocal(dbId, { status: "pending_review" })
-            updateConversationStatus(dbId, "pending_review").catch(
-              (error: unknown) =>
-                console.error(
-                  "[ConversationDetailPanel] background update status:",
-                  error
-                )
-            )
-            return true
-          }
-          return false
-        }
-
-        if (summary) {
-          tryUpdateStatus(summary, matchedConversationId)
-          return
-        }
-
-        // Fallback: when summary lookup misses (race between conversation
-        // row creation and the workspace's `conversations` refresh — common
-        // for newly-created conversations whose tab was closed before the
-        // summary list refreshed), force a refresh and retry once. Without
-        // this, the sidebar can stay stuck on "in_progress" indefinitely.
-        void refreshConversations().then((refreshed) => {
-          if (!refreshed) return
-          const refreshedSummary = refreshed.find(
-            (item) => item.external_id === envelope.session_id
-          )
-          tryUpdateStatus(refreshedSummary, matchedConversationId)
-        })
       },
       [
         conversations,
@@ -1228,8 +1127,6 @@ export function ConversationDetailPanel() {
         getSession,
         runtimeCompleteTurn,
         runtimeRemoveConversation,
-        updateConversationLocal,
-        refreshConversations,
       ]
     )
   )

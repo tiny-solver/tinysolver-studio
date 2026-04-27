@@ -12,9 +12,10 @@ use tokio::sync::broadcast;
 
 use crate::acp::manager::ConnectionManager;
 use crate::acp::types::{AcpEvent, EventEnvelope};
+use crate::db::entities::conversation::ConversationStatus;
 use crate::db::error::DbError;
 use crate::db::service::conversation_service;
-use crate::web::event_bridge::{WebEvent, WebEventBroadcaster};
+use crate::web::event_bridge::{emit_with_state, WebEvent, WebEventBroadcaster};
 
 pub(crate) async fn handle_event(
     db_conn: &DatabaseConnection,
@@ -32,6 +33,45 @@ pub(crate) async fn handle_event(
                 conversation_service::update_external_id(db_conn, cid, session_id.clone())
                     .await?;
             }
+            Ok(())
+        }
+        AcpEvent::TurnComplete { .. } => {
+            // Centralized status transition: when the agent reports the turn
+            // is done, flip the conversation row to PendingReview and
+            // re-broadcast the change as `ConversationStatusChanged`. This
+            // lives in the lifecycle subscriber (rather than at the original
+            // emit site in `acp/connection.rs`) so the write is decoupled from
+            // the protocol-event hot path AND survives a frontend refresh
+            // mid-turn — the row gets the correct status even if no
+            // browser is connected to react to TurnComplete itself.
+            // `completed` / `cancelled` transitions remain frontend-driven.
+            let Some((state_arc, emitter)) = manager
+                .get_state_and_emitter(&envelope.connection_id)
+                .await
+            else {
+                return Ok(());
+            };
+            let conversation_id = state_arc.read().await.conversation_id;
+            // No conversation row bound (defensive — should never happen in
+            // practice since `send_prompt_linked` runs before TurnComplete can
+            // fire). Nothing to update.
+            let Some(cid) = conversation_id else {
+                return Ok(());
+            };
+            // DB write before emit so any downstream subscriber that observes
+            // the ConversationStatusChanged event can assume the row is
+            // already at PendingReview.
+            conversation_service::update_status(db_conn, cid, ConversationStatus::PendingReview)
+                .await?;
+            emit_with_state(
+                &state_arc,
+                &emitter,
+                AcpEvent::ConversationStatusChanged {
+                    conversation_id: cid,
+                    status: ConversationStatus::PendingReview,
+                },
+            )
+            .await;
             Ok(())
         }
         // Other events don't need cross-connection DB persistence today; extend
@@ -183,6 +223,96 @@ mod tests {
         assert!(
             reloaded.external_id.is_none(),
             "sentinel row should be untouched"
+        );
+    }
+
+    /// Helper: read the raw `status` column off the conversation entity
+    /// (the `conversation_service::get_by_id` summary type stringifies status,
+    /// which loses round-trip parity with the `ConversationStatus` enum).
+    async fn read_row_status(
+        db: &crate::db::AppDatabase,
+        conversation_id: i32,
+    ) -> ConversationStatus {
+        use crate::db::entities::conversation;
+        use sea_orm::EntityTrait;
+        conversation::Entity::find_by_id(conversation_id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .expect("conversation row exists")
+            .status
+    }
+
+    #[tokio::test]
+    async fn handle_event_writes_pending_review_on_turn_complete() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/turn-complete").await;
+        let conv =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
+        // Sanity precondition: row was created in InProgress (the
+        // conversation_service::create default).
+        assert_eq!(
+            read_row_status(&db, conv.id).await,
+            ConversationStatus::InProgress
+        );
+
+        let mgr = ConnectionManager::new();
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert(
+                "c1".to_string(),
+                fake_connection_with_state("c1", Some(conv.id)),
+            );
+        }
+        let env = EventEnvelope {
+            seq: 1,
+            connection_id: "c1".to_string(),
+            payload: AcpEvent::TurnComplete {
+                session_id: "ext-1".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        };
+        handle_event(&db.conn, &mgr, &env).await.unwrap();
+        assert_eq!(
+            read_row_status(&db, conv.id).await,
+            ConversationStatus::PendingReview
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_event_pending_review_is_noop_when_no_conversation_bound() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/no-conv").await;
+        // Sentinel row: must remain in its initial status (InProgress) since
+        // the connection is unbound and the dispatcher should skip the write.
+        let sentinel =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
+        assert_eq!(sentinel.status, ConversationStatus::InProgress);
+
+        let mgr = ConnectionManager::new();
+        {
+            let mut map = mgr.connections.lock().await;
+            map.insert("c1".to_string(), fake_connection_with_state("c1", None));
+        }
+        let env = EventEnvelope {
+            seq: 1,
+            connection_id: "c1".to_string(),
+            payload: AcpEvent::TurnComplete {
+                session_id: "ext-1".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        };
+        handle_event(&db.conn, &mgr, &env).await.unwrap();
+        assert_eq!(
+            read_row_status(&db, sentinel.id).await,
+            ConversationStatus::InProgress,
+            "row must be untouched when no conversation_id is bound to the connection"
         );
     }
 

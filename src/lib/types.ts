@@ -446,6 +446,11 @@ export type AcpEvent =
       folder_id: number
     }
   | {
+      type: "conversation_status_changed"
+      conversation_id: number
+      status: ConversationStatus
+    }
+  | {
       type: "session_modes"
       modes: SessionModeStateInfo
     }

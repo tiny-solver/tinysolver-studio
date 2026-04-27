@@ -323,6 +323,14 @@ impl SessionState {
                         .unwrap_or(serde_json::Value::Null),
                 });
             }
+            AcpEvent::ConversationStatusChanged { .. } => {
+                // No-op on purpose. Conversation row `status` is row-level
+                // metadata persisted by the lifecycle subscriber / send_prompt
+                // path, not in-flight session state — snapshot consumers read
+                // status via the conversation list endpoints, not via
+                // `LiveSessionSnapshot`. Listed explicitly (rather than swept
+                // up by the catchall) so the no-op is intentional and grep-able.
+            }
             AcpEvent::ClaudeSdkMessage { .. }
             | AcpEvent::SelectorsReady
             | AcpEvent::Error { .. } => {
@@ -603,6 +611,63 @@ mod tests {
         assert!(s.pending_permission.is_none());
         assert!(!s.fork_supported);
         assert!(s.available_commands.is_empty());
+    }
+
+    #[test]
+    fn conversation_status_changed_event_is_a_visible_field_noop() {
+        use crate::db::entities::conversation::ConversationStatus;
+        // Seed a fully-populated state so we can verify nothing visible mutates
+        // when ConversationStatusChanged is applied.
+        let mut s = fresh_state();
+        s.apply_event(&AcpEvent::SessionStarted {
+            session_id: "ext-1".into(),
+        });
+        s.apply_event(&AcpEvent::ContentDelta {
+            text: "hello".into(),
+        });
+        s.apply_event(&AcpEvent::ToolCall {
+            tool_call_id: "tc-1".into(),
+            title: "ls".into(),
+            kind: "execute".into(),
+            status: "pending".into(),
+            content: None,
+            raw_input: None,
+            raw_output: None,
+            locations: None,
+            meta: None,
+        });
+        s.apply_event(&AcpEvent::ConversationLinked {
+            conversation_id: 7,
+            folder_id: 3,
+        });
+        let before = s.to_snapshot();
+        let before_status = s.status.clone();
+        let before_conversation_id = s.conversation_id;
+        let before_external_id = s.external_id.clone();
+
+        s.apply_event(&AcpEvent::ConversationStatusChanged {
+            conversation_id: 7,
+            status: ConversationStatus::InProgress,
+        });
+
+        // Visible state fields unchanged.
+        assert_eq!(s.status, before_status);
+        assert_eq!(s.conversation_id, before_conversation_id);
+        assert_eq!(s.external_id, before_external_id);
+        assert!(
+            s.live_message.is_some(),
+            "live_message must be preserved across status-changed event"
+        );
+        assert_eq!(s.active_tool_calls.len(), 1);
+        assert!(s.active_tool_calls.contains_key("tc-1"));
+
+        // Snapshot output unchanged (modulo last_activity_at which is internal).
+        let after = s.to_snapshot();
+        assert_eq!(
+            serde_json::to_value(&before).unwrap(),
+            serde_json::to_value(&after).unwrap(),
+            "snapshot must be byte-identical after no-op event"
+        );
     }
 
     #[test]
