@@ -46,6 +46,7 @@ import type {
   FileSaveResult,
   WorkspaceSnapshotResponse,
   GitLogResult,
+  AvailableTerminalShells,
   SystemLanguageSettings,
   SystemProxySettings,
   SystemRenderingSettings,
@@ -496,6 +497,14 @@ export async function updateSystemTerminalSettings(
   settings: SystemTerminalSettings
 ): Promise<SystemTerminalSettings> {
   return getTransport().call("update_system_terminal_settings", { settings })
+}
+
+export async function getAvailableTerminalShells(): Promise<AvailableTerminalShells> {
+  return getTransport().call("get_available_terminal_shells")
+}
+
+export async function probeTerminalShellPath(path: string): Promise<boolean> {
+  return getTransport().call("probe_terminal_shell_path", { path })
 }
 
 export async function getSystemRenderingSettings(): Promise<SystemRenderingSettings> {

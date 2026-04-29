@@ -30,16 +30,22 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  getAvailableTerminalShells,
   getSystemProxySettings,
   getSystemRenderingSettings,
   getSystemTerminalSettings,
+  probeTerminalShellPath,
   updateSystemLanguageSettings,
   updateSystemProxySettings,
   updateSystemRenderingSettings,
   updateSystemTerminalSettings,
 } from "@/lib/api"
 import { isDesktop, openUrl } from "@/lib/platform"
-import type { AppLocale } from "@/lib/types"
+import type {
+  AppLocale,
+  AvailableTerminalShells,
+  TerminalShellOption,
+} from "@/lib/types"
 import { usePlatform } from "@/hooks/use-platform"
 import {
   checkAppUpdate,
@@ -62,29 +68,27 @@ const PROXY_EXAMPLE = "http://127.0.0.1:7890"
 const APP_LANGUAGE_VALUES = APP_LOCALES
 
 type LanguageSelectValue = "system" | AppLocale
-type TerminalShellSelectValue =
-  | "system"
-  | "pwsh.exe"
-  | "powershell.exe"
-  | "cmd.exe"
+
+const TERMINAL_SHELL_OPTION_SYSTEM = "system"
+const TERMINAL_SHELL_OPTION_CUSTOM = "custom"
 
 function isAppLocale(value: string): value is AppLocale {
   return APP_LANGUAGE_VALUES.includes(value as AppLocale)
 }
 
-function toTerminalShellSelectValue(
-  value: string | null,
-  isWindows: boolean
-): TerminalShellSelectValue {
-  if (!isWindows) return "system"
-  if (
-    value === "pwsh.exe" ||
-    value === "powershell.exe" ||
-    value === "cmd.exe"
-  ) {
-    return value
-  }
-  return "system"
+/// Pick which dropdown row matches a stored `default_shell` value:
+/// - null  → "system"
+/// - matches a predefined option's `value` → that option's id
+/// - anything else → "custom" (user-supplied path)
+function resolveSelectedShellId(
+  storedShell: string | null,
+  options: TerminalShellOption[]
+): string {
+  if (!storedShell) return TERMINAL_SHELL_OPTION_SYSTEM
+  const matched = options.find(
+    (opt) => opt.value !== null && opt.value === storedShell
+  )
+  return matched?.id ?? TERMINAL_SHELL_OPTION_CUSTOM
 }
 
 type UpdateAction = "check" | "install"
@@ -97,6 +101,9 @@ let processStartDisableHwAccel: boolean | null = null
 
 export function SystemNetworkSettings() {
   const t = useTranslations("SystemSettings")
+  // Backend-driven label keys are dynamic strings, so we widen `t` for that
+  // single call site rather than casting at every use.
+  const tDynamic = t as unknown as (key: string) => string
   const tLanguage = useTranslations("Language")
   const locale = useLocale()
   const { languageSettings, languageSettingsLoaded, setLanguageSettings } =
@@ -135,8 +142,13 @@ export function SystemNetworkSettings() {
   const [appLanguage, setAppLanguage] = useState<LanguageSelectValue>(
     languageSettings.mode === "system" ? "system" : languageSettings.language
   )
-  const [defaultTerminalShell, setDefaultTerminalShell] =
-    useState<TerminalShellSelectValue>("system")
+  const [availableShells, setAvailableShells] =
+    useState<AvailableTerminalShells | null>(null)
+  const [selectedShellId, setSelectedShellId] = useState<string>(
+    TERMINAL_SHELL_OPTION_SYSTEM
+  )
+  const [customShellPath, setCustomShellPath] = useState<string>("")
+  const [customPathExists, setCustomPathExists] = useState<boolean | null>(null)
 
   useEffect(() => {
     setAppLanguage(
@@ -197,21 +209,41 @@ export function SystemNetworkSettings() {
     setLoadError(null)
 
     try {
-      const [proxySettings, terminalSettings, version, renderingSettings] =
-        await Promise.all([
-          getSystemProxySettings(),
-          getSystemTerminalSettings(),
-          getCurrentAppVersion(),
-          renderingSettingsLoadable
-            ? getSystemRenderingSettings()
-            : Promise.resolve(null),
-        ])
+      const [
+        proxySettings,
+        terminalSettings,
+        terminalShells,
+        version,
+        renderingSettings,
+      ] = await Promise.all([
+        getSystemProxySettings(),
+        getSystemTerminalSettings(),
+        getAvailableTerminalShells(),
+        getCurrentAppVersion(),
+        renderingSettingsLoadable
+          ? getSystemRenderingSettings()
+          : Promise.resolve(null),
+      ])
 
       setEnabled(proxySettings.enabled)
       setProxyUrl(proxySettings.proxy_url ?? "")
-      setDefaultTerminalShell(
-        toTerminalShellSelectValue(terminalSettings.default_shell, isWindows)
+      setAvailableShells(terminalShells)
+      const initialId = resolveSelectedShellId(
+        terminalSettings.default_shell,
+        terminalShells.options
       )
+      setSelectedShellId(initialId)
+      if (initialId === TERMINAL_SHELL_OPTION_CUSTOM) {
+        setCustomShellPath(terminalSettings.default_shell ?? "")
+        setCustomPathExists(
+          terminalSettings.default_shell
+            ? await probeTerminalShellPath(terminalSettings.default_shell)
+            : null
+        )
+      } else {
+        setCustomShellPath("")
+        setCustomPathExists(null)
+      }
       setCurrentVersion(version)
       if (renderingSettings) {
         const value = renderingSettings.disable_hardware_acceleration
@@ -229,7 +261,7 @@ export function SystemNetworkSettings() {
     } finally {
       setLoading(false)
     }
-  }, [isWindows, renderingSettingsLoadable])
+  }, [renderingSettingsLoadable])
 
   useEffect(() => {
     loadSettings().catch((err) => {
@@ -250,16 +282,33 @@ export function SystemNetworkSettings() {
     }
   }, [availableUpdate])
 
-  const saveTerminalSettings = useCallback(
-    async (shell: TerminalShellSelectValue) => {
+  const persistTerminalShell = useCallback(
+    async (defaultShell: string | null) => {
       setSavingTerminal(true)
       try {
         const result = await updateSystemTerminalSettings({
-          default_shell: shell === "system" ? null : shell,
+          default_shell: defaultShell,
         })
-        setDefaultTerminalShell(
-          toTerminalShellSelectValue(result.default_shell, isWindows)
+        // Re-fetch options to refresh `exists` flags (e.g. user just installed
+        // pwsh, or backend filter dropped a cross-platform stale value).
+        const refreshedShells = await getAvailableTerminalShells()
+        setAvailableShells(refreshedShells)
+        const nextSelectedId = resolveSelectedShellId(
+          result.default_shell,
+          refreshedShells.options
         )
+        setSelectedShellId(nextSelectedId)
+        if (nextSelectedId === TERMINAL_SHELL_OPTION_CUSTOM) {
+          setCustomShellPath(result.default_shell ?? "")
+          setCustomPathExists(
+            result.default_shell
+              ? await probeTerminalShellPath(result.default_shell)
+              : null
+          )
+        } else {
+          setCustomShellPath("")
+          setCustomPathExists(null)
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         toast.error(t("terminalSaveFailed", { message }))
@@ -267,8 +316,29 @@ export function SystemNetworkSettings() {
         setSavingTerminal(false)
       }
     },
-    [isWindows, t]
+    [t]
   )
+
+  const onShellSelectChange = useCallback(
+    (nextId: string) => {
+      setSelectedShellId(nextId)
+      if (nextId === TERMINAL_SHELL_OPTION_CUSTOM) {
+        // Don't persist yet — wait for user to type a path and press Save.
+        setCustomShellPath("")
+        setCustomPathExists(null)
+        return
+      }
+      const matched = availableShells?.options.find((opt) => opt.id === nextId)
+      void persistTerminalShell(matched?.value ?? null)
+    },
+    [availableShells, persistTerminalShell]
+  )
+
+  const onCustomPathSave = useCallback(() => {
+    const trimmed = customShellPath.trim()
+    if (!trimmed) return
+    void persistTerminalShell(trimmed)
+  }, [customShellPath, persistTerminalShell])
 
   const saveProxySettings = useCallback(
     async (nextEnabled: boolean, nextProxyUrl: string) => {
@@ -640,37 +710,70 @@ export function SystemNetworkSettings() {
               {t("defaultTerminalShell")}
             </label>
             <Select
-              value={defaultTerminalShell}
-              onValueChange={(value) => {
-                const shell = toTerminalShellSelectValue(value, isWindows)
-                setDefaultTerminalShell(shell)
-                saveTerminalSettings(shell)
-              }}
-              disabled={savingTerminal}
+              value={selectedShellId}
+              onValueChange={onShellSelectChange}
+              disabled={savingTerminal || !availableShells}
             >
               <SelectTrigger className="w-full sm:w-64">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="start">
-                <SelectItem value="system">
-                  {t("terminalSystemDefault")}
-                </SelectItem>
-                {isWindows && (
-                  <>
-                    <SelectItem value="pwsh.exe">
-                      {t("terminalPowerShell7")}
-                    </SelectItem>
-                    <SelectItem value="powershell.exe">
-                      {t("terminalWindowsPowerShell")}
-                    </SelectItem>
-                    <SelectItem value="cmd.exe">{t("terminalCmd")}</SelectItem>
-                  </>
-                )}
+                {availableShells?.options.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>
+                    <span className="flex items-center gap-2">
+                      <span>{tDynamic(opt.label_key)}</span>
+                      {!opt.exists && !opt.accepts_custom_path && (
+                        <span className="text-[10px] text-muted-foreground">
+                          ({t("terminalShellNotInstalled")})
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground">
-              {t("defaultTerminalShellHint")}
-            </p>
+            {availableShells && (
+              <p className="text-[11px] text-muted-foreground">
+                {t("terminalCurrentShell", {
+                  path: availableShells.resolved_shell,
+                })}
+              </p>
+            )}
+
+            {selectedShellId === TERMINAL_SHELL_OPTION_CUSTOM && (
+              <div className="space-y-2 pt-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  {t("terminalShellCustomPath")}
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    value={customShellPath}
+                    onChange={(event) => {
+                      setCustomShellPath(event.target.value)
+                      setCustomPathExists(null)
+                    }}
+                    placeholder={t("terminalShellCustomPlaceholder")}
+                    disabled={savingTerminal}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={onCustomPathSave}
+                    disabled={savingTerminal || !customShellPath.trim()}
+                  >
+                    {t("terminalShellCustomSave")}
+                  </Button>
+                </div>
+                {customPathExists === false && customShellPath.trim() && (
+                  <p className="text-[11px] text-amber-500">
+                    {t("terminalShellNotFoundWarning")}
+                  </p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  {t("terminalShellCustomHint")}
+                </p>
+              </div>
+            )}
           </div>
         </section>
 

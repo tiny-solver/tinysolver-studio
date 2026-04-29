@@ -731,6 +731,19 @@ export interface SystemTerminalSettings {
   default_shell: string | null
 }
 
+export interface TerminalShellOption {
+  id: string
+  label_key: string
+  value: string | null
+  exists: boolean
+  accepts_custom_path: boolean
+}
+
+export interface AvailableTerminalShells {
+  options: TerminalShellOption[]
+  resolved_shell: string
+}
+
 export interface SystemRenderingSettings {
   disable_hardware_acceleration: boolean
 }

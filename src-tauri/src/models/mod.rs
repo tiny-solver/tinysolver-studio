@@ -22,8 +22,9 @@ pub use message::{
     TurnUsage, UnifiedMessage,
 };
 pub use system::{
-    GitCredentials, GitDetectResult, GitHubAccountsSettings, GitHubTokenValidation, GitSettings,
-    SystemLanguageSettings, SystemProxySettings, SystemTerminalSettings,
+    AvailableTerminalShells, GitCredentials, GitDetectResult, GitHubAccountsSettings,
+    GitHubTokenValidation, GitSettings, SystemLanguageSettings, SystemProxySettings,
+    SystemTerminalSettings, TerminalShellOption,
 };
 #[cfg(feature = "tauri-runtime")]
 pub use system::SystemRenderingSettings;

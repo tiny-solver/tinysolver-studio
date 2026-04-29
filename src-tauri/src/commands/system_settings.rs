@@ -8,19 +8,24 @@ use crate::db::service::app_metadata_service;
 use crate::db::AppDatabase;
 #[cfg(feature = "tauri-runtime")]
 use crate::models::SystemRenderingSettings;
-use crate::models::{SystemLanguageSettings, SystemProxySettings, SystemTerminalSettings};
+use crate::models::{
+    AvailableTerminalShells, SystemLanguageSettings, SystemProxySettings, SystemTerminalSettings,
+    TerminalShellOption,
+};
 #[cfg(feature = "tauri-runtime")]
 use crate::network::proxy;
 #[cfg(feature = "tauri-runtime")]
 use crate::preferences;
+use crate::terminal::manager::resolve_shell;
 
-const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
-const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
-const SYSTEM_TERMINAL_SETTINGS_KEY: &str = "system_terminal_settings";
-#[cfg(feature = "tauri-runtime")]
-const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
-#[cfg(feature = "tauri-runtime")]
-const TERMINAL_SETTINGS_UPDATED_EVENT: &str = "app://terminal-settings-updated";
+pub(crate) const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
+pub(crate) const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
+pub(crate) const SYSTEM_TERMINAL_SETTINGS_KEY: &str = "system_terminal_settings";
+pub(crate) const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
+pub(crate) const TERMINAL_SETTINGS_UPDATED_EVENT: &str = "app://terminal-settings-updated";
+
+pub(crate) const TERMINAL_SHELL_OPTION_SYSTEM: &str = "system";
+pub(crate) const TERMINAL_SHELL_OPTION_CUSTOM: &str = "custom";
 
 fn normalize_proxy_settings(
     settings: SystemProxySettings,
@@ -93,6 +98,32 @@ pub(crate) async fn load_system_language_settings(
     })
 }
 
+/// Whether `value` resolves to an executable on the current host. Used to
+/// drive the "not installed" badge in the picker; never used to *block* a
+/// selection — users may legitimately preconfigure a shell before installing it.
+fn shell_exists(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let path = std::path::Path::new(trimmed);
+    let looks_like_path = path.is_absolute()
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || path.components().count() > 1;
+
+    if looks_like_path {
+        return path.is_file();
+    }
+
+    which::which(trimmed).is_ok()
+}
+
+/// Trim and drop empty-only. We deliberately do **not** filter by host
+/// platform: the Settings UI's custom-path field lets users type any shell
+/// they want, and silently rewriting their input is more confusing than
+/// letting `terminal_spawn` surface the failure if the path is wrong.
 pub(crate) fn normalize_terminal_settings(
     settings: SystemTerminalSettings,
 ) -> SystemTerminalSettings {
@@ -104,6 +135,60 @@ pub(crate) fn normalize_terminal_settings(
             .filter(|value| !value.is_empty())
             .map(str::to_string),
     }
+}
+
+/// Build the per-platform option list shown in the "default shell" picker.
+/// The frontend renders these verbatim, looking each `label_key` up under its
+/// `SystemSettings` namespace — so adding a new shell here requires zero
+/// frontend code changes (only a new translation key).
+pub(crate) fn build_available_terminal_shells() -> AvailableTerminalShells {
+    let mut options: Vec<TerminalShellOption> = Vec::new();
+
+    options.push(TerminalShellOption {
+        id: TERMINAL_SHELL_OPTION_SYSTEM.to_string(),
+        label_key: "terminalSystemDefault".to_string(),
+        value: None,
+        // System default always "exists" — resolve_shell() has its own fallback chain.
+        exists: true,
+        accepts_custom_path: false,
+    });
+
+    if cfg!(target_os = "windows") {
+        for (id, label_key) in [
+            ("pwsh.exe", "terminalPowerShell7"),
+            ("powershell.exe", "terminalWindowsPowerShell"),
+            ("cmd.exe", "terminalCmd"),
+        ] {
+            options.push(TerminalShellOption {
+                id: id.to_string(),
+                label_key: label_key.to_string(),
+                value: Some(id.to_string()),
+                exists: shell_exists(id),
+                accepts_custom_path: false,
+            });
+        }
+    }
+
+    options.push(TerminalShellOption {
+        id: TERMINAL_SHELL_OPTION_CUSTOM.to_string(),
+        label_key: "terminalShellCustom".to_string(),
+        value: None,
+        // The "custom" row itself is always available; the path the user
+        // types is validated via probe_terminal_shell_path.
+        exists: true,
+        accepts_custom_path: true,
+    });
+
+    AvailableTerminalShells {
+        options,
+        resolved_shell: resolve_shell(),
+    }
+}
+
+/// Probe whether a user-supplied shell path or command exists on the host.
+/// Returns `false` for empty / whitespace-only input.
+pub(crate) fn probe_terminal_shell_path_core(path: &str) -> bool {
+    shell_exists(path)
 }
 
 pub(crate) async fn load_system_terminal_settings(
@@ -167,6 +252,18 @@ pub async fn get_system_terminal_settings(
     db: State<'_, AppDatabase>,
 ) -> Result<SystemTerminalSettings, AppCommandError> {
     load_system_terminal_settings(&db.conn).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn get_available_terminal_shells() -> Result<AvailableTerminalShells, AppCommandError> {
+    Ok(build_available_terminal_shells())
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn probe_terminal_shell_path(path: String) -> Result<bool, AppCommandError> {
+    Ok(probe_terminal_shell_path_core(&path))
 }
 
 #[cfg(feature = "tauri-runtime")]
