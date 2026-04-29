@@ -1603,6 +1603,8 @@
         "dropFilesToAttach": "Dateien zum Anhängen ablegen",
         "loadingSettings": "Einstellungen werden geladen...",
         "loadingMode": "Modus wird geladen...",
+        "modeLabel": "Modus",
+        "sessionSettings": "Sitzungseinstellungen",
         "cancel": "Abbrechen",
         "send": "Senden",
         "forkAndSend": "Fork & Senden",

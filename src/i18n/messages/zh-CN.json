@@ -1603,6 +1603,8 @@
         "dropFilesToAttach": "拖拽文件到此处附加",
         "loadingSettings": "正在加载设置...",
         "loadingMode": "正在加载模式...",
+        "modeLabel": "模式",
+        "sessionSettings": "会话设置",
         "cancel": "取消",
         "send": "发送",
         "forkAndSend": "分叉发送",

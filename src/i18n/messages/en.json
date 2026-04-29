@@ -1603,6 +1603,8 @@
         "dropFilesToAttach": "Drop files to attach",
         "loadingSettings": "Loading settings...",
         "loadingMode": "Loading mode...",
+        "modeLabel": "Mode",
+        "sessionSettings": "Session settings",
         "cancel": "Cancel",
         "send": "Send",
         "forkAndSend": "Fork & Send",

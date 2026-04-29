@@ -1603,6 +1603,8 @@
         "dropFilesToAttach": "أسقط الملفات لإرفاقها",
         "loadingSettings": "جارٍ تحميل الإعدادات...",
         "loadingMode": "جارٍ تحميل الوضع...",
+        "modeLabel": "الوضع",
+        "sessionSettings": "إعدادات الجلسة",
         "cancel": "إلغاء",
         "send": "إرسال",
         "forkAndSend": "تفريع وإرسال",
