@@ -37,6 +37,12 @@ pub struct SystemLanguageSettings {
     pub language: AppLocale,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SystemTerminalSettings {
+    pub default_shell: Option<String>,
+}
+
 #[cfg(feature = "tauri-runtime")]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]

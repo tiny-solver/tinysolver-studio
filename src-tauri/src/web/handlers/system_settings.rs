@@ -12,7 +12,9 @@ use crate::network::proxy;
 
 const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
 const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
+const SYSTEM_TERMINAL_SETTINGS_KEY: &str = "system_terminal_settings";
 const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
+const TERMINAL_SETTINGS_UPDATED_EVENT: &str = "app://terminal-settings-updated";
 
 // Wrapper structs to match Tauri's named parameter convention.
 // Frontend sends `{ settings: <T> }` which Tauri `invoke()` unwraps automatically,
@@ -26,6 +28,11 @@ pub struct UpdateProxySettingsParams {
 #[derive(Deserialize)]
 pub struct UpdateLanguageSettingsParams {
     pub settings: SystemLanguageSettings,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateTerminalSettingsParams {
+    pub settings: SystemTerminalSettings,
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +52,14 @@ pub async fn get_system_language_settings(
 ) -> Result<Json<SystemLanguageSettings>, AppCommandError> {
     let db = &state.db;
     let settings = settings_commands::load_system_language_settings(&db.conn).await?;
+    Ok(Json(settings))
+}
+
+pub async fn get_system_terminal_settings(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<SystemTerminalSettings>, AppCommandError> {
+    let db = &state.db;
+    let settings = settings_commands::load_system_terminal_settings(&db.conn).await?;
     Ok(Json(settings))
 }
 
@@ -93,6 +108,31 @@ pub async fn update_system_language_settings(
     crate::web::event_bridge::emit_event(
         &state.emitter,
         LANGUAGE_SETTINGS_UPDATED_EVENT,
+        settings.clone(),
+    );
+
+    Ok(Json(settings))
+}
+
+pub async fn update_system_terminal_settings(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<UpdateTerminalSettingsParams>,
+) -> Result<Json<SystemTerminalSettings>, AppCommandError> {
+    let settings = settings_commands::normalize_terminal_settings(params.settings);
+    let db = &state.db;
+
+    let serialized = serde_json::to_string(&settings).map_err(|e| {
+        AppCommandError::invalid_input("Failed to serialize terminal settings")
+            .with_detail(e.to_string())
+    })?;
+
+    app_metadata_service::upsert_value(&db.conn, SYSTEM_TERMINAL_SETTINGS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    crate::web::event_bridge::emit_event(
+        &state.emitter,
+        TERMINAL_SETTINGS_UPDATED_EVENT,
         settings.clone(),
     );
 
