@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
+import { AgentIcon } from "@/components/agent-icon"
 import { cn, randomUUID } from "@/lib/utils"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
@@ -2290,7 +2291,11 @@ export function MessageInput({
                     title={t("sessionSettings")}
                     aria-label={t("sessionSettings")}
                   >
-                    <Cog className="size-4" />
+                    {agentType ? (
+                      <AgentIcon agentType={agentType} className="size-4" />
+                    ) : (
+                      <Cog className="size-4" />
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
