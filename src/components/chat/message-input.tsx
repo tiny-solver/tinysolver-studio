@@ -60,7 +60,10 @@ import {
   type AttachFileToSessionDetail,
   type AppendTextToSessionDetail,
 } from "@/lib/session-attachment-events"
-import { ConversationContextBar } from "@/components/chat/conversation-context-bar"
+import {
+  ConversationContextBar,
+  ConversationFolderBranchPicker,
+} from "@/components/chat/conversation-context-bar"
 import { ModeSelector } from "@/components/chat/mode-selector"
 import { SessionConfigSelector } from "@/components/chat/session-config-selector"
 import {
@@ -1966,7 +1969,6 @@ export function MessageInput({
         )}
       >
         <ConversationContextBar
-          tabId={attachmentTabId}
           hasExtraContent={hasImageAttachments || hasResourceAttachments}
           scrollEndTrigger={attachments.length}
           extraContent={
@@ -2039,6 +2041,7 @@ export function MessageInput({
         />
         <div className="@container flex shrink-0 items-end justify-between gap-2 px-2 pb-2">
           <div className="flex min-w-0 items-end gap-2">
+            <ConversationFolderBranchPicker tabId={attachmentTabId} />
             <DropdownMenu onOpenChange={handleAddMenuOpenChange}>
               <DropdownMenuTrigger asChild>
                 <Button
