@@ -1296,7 +1296,7 @@ export function ConversationDetailPanel() {
         className={cn(
           canTile
             ? cn(
-                "relative h-full min-w-96 flex-1 overflow-hidden",
+                "relative h-full min-w-[28rem] flex-1 overflow-hidden",
                 index > 0 && "border-l border-border",
                 active &&
                   "bg-gradient-to-b from-sidebar-primary/[0.03] to-transparent"
