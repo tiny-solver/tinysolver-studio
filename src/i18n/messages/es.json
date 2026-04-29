@@ -1604,7 +1604,7 @@
         "loadingSettings": "Cargando ajustes...",
         "loadingMode": "Cargando modo...",
         "modeLabel": "Modo",
-        "sessionSettings": "Ajustes de sesión",
+        "agentSettings": "Ajustes del agente",
         "cancel": "Cancelar",
         "send": "Enviar",
         "forkAndSend": "Fork y Enviar",

@@ -1604,7 +1604,7 @@
         "loadingSettings": "جارٍ تحميل الإعدادات...",
         "loadingMode": "جارٍ تحميل الوضع...",
         "modeLabel": "الوضع",
-        "sessionSettings": "إعدادات الجلسة",
+        "agentSettings": "إعدادات الوكيل",
         "cancel": "إلغاء",
         "send": "إرسال",
         "forkAndSend": "تفريع وإرسال",

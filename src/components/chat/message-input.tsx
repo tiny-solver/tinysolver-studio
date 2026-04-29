@@ -2288,8 +2288,8 @@ export function MessageInput({
                     variant="outline"
                     size="icon"
                     className="h-6 w-6 shrink-0 bg-transparent"
-                    title={t("sessionSettings")}
-                    aria-label={t("sessionSettings")}
+                    title={t("agentSettings")}
+                    aria-label={t("agentSettings")}
                   >
                     {agentType ? (
                       <AgentIcon agentType={agentType} className="size-4" />

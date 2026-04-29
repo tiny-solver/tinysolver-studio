@@ -35,7 +35,7 @@ export function ModeSelector({
           {currentLabel}
         </span>
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="max-h-[60vh] min-w-72 overflow-y-auto">
+      <DropdownMenuSubContent className="max-h-[60vh] min-w-72 max-w-xs overflow-y-auto">
         <DropdownMenuRadioGroup
           value={selectedModeId ?? ""}
           onValueChange={onSelect}

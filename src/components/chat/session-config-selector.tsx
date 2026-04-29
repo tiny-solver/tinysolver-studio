@@ -43,7 +43,7 @@ export function SessionConfigSelector({
           {currentLabel}
         </span>
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="max-h-[60vh] min-w-72 overflow-y-auto">
+      <DropdownMenuSubContent className="max-h-[60vh] min-w-72 max-w-xs overflow-y-auto">
         <DropdownMenuRadioGroup
           value={option.kind.current_value}
           onValueChange={(value) => onSelect(option.id, value)}
