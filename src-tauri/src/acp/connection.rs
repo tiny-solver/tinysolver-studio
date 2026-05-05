@@ -89,7 +89,7 @@ pub enum ConnectionCommand {
         option_id: String,
     },
     Fork {
-        reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkResultInfo, AcpError>>,
+        reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkProtocolResult, AcpError>>,
     },
     Disconnect,
 }
@@ -1994,7 +1994,7 @@ fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
 struct ForkExitInfo {
     fork_response: sacp::schema::ForkSessionResponse,
     original_session_id: String,
-    reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkResultInfo, AcpError>>,
+    reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkProtocolResult, AcpError>>,
     connection: ConnectionTo<Agent>,
 }
 
@@ -2032,8 +2032,9 @@ async fn handle_fork_or_exit(
         new_sid, fork_info.original_session_id
     );
 
-    // Reply success to the frontend
-    let _ = fork_info.reply.send(Ok(crate::acp::types::ForkResultInfo {
+    // Reply protocol-level result to manager.fork_session, which will combine
+    // it with the freshly-created sibling row id to produce the wire ForkResultInfo.
+    let _ = fork_info.reply.send(Ok(crate::acp::types::ForkProtocolResult {
         forked_session_id: new_sid.clone(),
         original_session_id: fork_info.original_session_id,
     }));

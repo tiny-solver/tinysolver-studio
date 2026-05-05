@@ -35,14 +35,7 @@ import { ConversationShell } from "@/components/chat/conversation-shell"
 import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  acpFork,
-  createConversation,
-  openSettingsWindow,
-  updateConversationExternalId,
-  updateConversationStatus,
-  updateConversationTitle,
-} from "@/lib/api"
+import { acpFork, createConversation, openSettingsWindow } from "@/lib/api"
 import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
 import {
@@ -229,9 +222,6 @@ const ConversationTabView = memo(function ConversationTabView({
   const mountedRef = useRef(true)
   const selectedAgentRef = useRef(selectedAgent)
   const createConversationPendingRef = useRef(false)
-  // For existing conversations (opened from sidebar), the external_id is
-  // already persisted — don't let a session/new fallback overwrite it.
-  const externalIdSavedRef = useRef(conversationId != null)
   const sessionIdRef = useRef<string | null>(null)
   const syncCancelRef = useRef<(() => void) | null>(null)
 
@@ -442,29 +432,6 @@ const ConversationTabView = memo(function ConversationTabView({
     setExternalId(effectiveConversationId, connSessionId)
   }, [connSessionId, effectiveConversationId, setExternalId])
 
-  const trySaveExternalId = useCallback(() => {
-    if (
-      externalIdSavedRef.current ||
-      !dbConvIdRef.current ||
-      !sessionIdRef.current
-    ) {
-      return
-    }
-    externalIdSavedRef.current = true
-    updateConversationExternalId(
-      dbConvIdRef.current,
-      sessionIdRef.current
-    ).catch((e: unknown) =>
-      console.error("[ConversationTabView] update external_id:", e)
-    )
-  }, [])
-
-  useEffect(() => {
-    if (connSessionId) {
-      trySaveExternalId()
-    }
-  }, [connSessionId, trySaveExternalId])
-
   useEffect(() => {
     if (dbConversationId == null) return
     if (reloadSignal === latestReloadSignal.current) return
@@ -570,9 +537,10 @@ const ConversationTabView = memo(function ConversationTabView({
           )
           dbConvIdRef.current = newConversationId
           // Set external ID on the stable virtual session (no migration needed —
-          // effectiveConversationId never changes, so the session stays in place)
+          // effectiveConversationId never changes, so the session stays in place).
+          // DB persistence of external_id is now backend-driven from
+          // send_prompt_linked once the row is linked, so no explicit DB write here.
           setExternalId(effectiveConversationId, sessionIdRef.current ?? null)
-          trySaveExternalId()
 
           if (!mountedRef.current) {
             // Component unmounted while creating — mark for deferred cleanup
@@ -626,7 +594,6 @@ const ConversationTabView = memo(function ConversationTabView({
       tabs,
       tWelcome,
       tabId,
-      trySaveExternalId,
     ]
   )
 
@@ -635,38 +602,16 @@ const ConversationTabView = memo(function ConversationTabView({
     handleSendRef.current = handleSend
   }, [handleSend])
 
-  // Resolve the current conversation title from tab context (most up-to-date)
-  // or fall back to the DB detail summary.
-  const conversationTitle = useMemo(() => {
-    const tabTitle = tabs.find((tab) => tab.id === tabId)?.title
-    return tabTitle || detail?.summary.title || null
-  }, [tabs, tabId, detail?.summary.title])
-
   const handleForkSend = useCallback(
     async (draft: PromptDraft, selectedModeIdArg?: string | null) => {
       const connectionId = conn.connectionId
       if (!connectionId || connStatus !== "connected") return
       try {
-        const { forkedSessionId, originalSessionId } =
-          await acpFork(connectionId)
-        const persistedId = dbConvIdRef.current
-        if (persistedId != null) {
-          const baseTitle = conversationTitle ?? t("newConversation")
-          // Strip existing [Fork] prefix to avoid stacking
-          const cleanTitle = baseTitle.replace(/^\[Fork]\s*/g, "")
-          // Point current conversation at S2 (forked) and add fork tag
-          await updateConversationExternalId(persistedId, forkedSessionId)
-          await updateConversationTitle(persistedId, `[Fork] ${cleanTitle}`)
-          // Save original S1 as a separate conversation with original title
-          const s1ConvId = await createConversation(
-            folderId,
-            selectedAgent,
-            cleanTitle
-          )
-          await updateConversationExternalId(s1ConvId, originalSessionId)
-          await updateConversationStatus(s1ConvId, "pending_review")
-        }
-        // Update runtime session id to S2
+        // Backend now performs all DB writes in one transaction-shaped call:
+        // - current row: external_id=S2, title="[Fork] ..."
+        // - sibling row: created with external_id=S1, status=pending_review
+        const { forkedSessionId } = await acpFork(connectionId)
+        // Update runtime session id to S2 (frontend in-memory state only)
         sessionIdRef.current = forkedSessionId
         setExternalId(effectiveConversationId, forkedSessionId)
 
@@ -689,12 +634,9 @@ const ConversationTabView = memo(function ConversationTabView({
     [
       conn.connectionId,
       connStatus,
-      conversationTitle,
       effectiveConversationId,
-      folderId,
       handleSend,
       refreshConversations,
-      selectedAgent,
       setExternalId,
       t,
     ]
