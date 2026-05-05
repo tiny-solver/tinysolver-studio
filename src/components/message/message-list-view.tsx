@@ -25,13 +25,17 @@ import {
   MessageAction,
 } from "@/components/ai-elements/message"
 import {
+  AlertCircle,
   CheckIcon,
   ChevronDown,
   ChevronRight,
   CopyIcon,
   Info,
   Loader2,
+  Plus,
+  RefreshCw,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useTranslations } from "next-intl"
 import {
   buildPlanKey,
@@ -52,6 +56,8 @@ interface MessageListViewProps {
   detailLoading?: boolean
   detailError?: string | null
   hideEmptyState?: boolean
+  onReload?: () => void
+  onNewSession?: () => void
 }
 
 interface ResolvedMessageGroup {
@@ -255,6 +261,8 @@ export function MessageListView({
   detailLoading = false,
   detailError = null,
   hideEmptyState = false,
+  onReload,
+  onNewSession,
 }: MessageListViewProps) {
   const t = useTranslations("Folder.chat.messageList")
   const sharedT = useTranslations("Folder.chat.shared")
@@ -428,12 +436,49 @@ export function MessageListView({
   }
 
   if (detailError && !hasRenderableContent) {
+    const showActions = Boolean(onReload || onNewSession)
+    const reloading = detailLoading
     return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <p className="text-destructive text-sm">
-            {t("error", { message: detailError })}
-          </p>
+      <div role="alert" className="flex h-full items-center justify-center p-6">
+        <div className="flex max-w-md flex-col items-center gap-4 text-center">
+          <AlertCircle
+            aria-hidden="true"
+            className="h-8 w-8 text-destructive"
+          />
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium">{t("errorTitle")}</h3>
+            <p className="text-sm text-muted-foreground break-words">
+              {detailError}
+            </p>
+          </div>
+          {showActions && (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {onReload && (
+                <Button
+                  size="sm"
+                  onClick={onReload}
+                  disabled={reloading}
+                  aria-busy={reloading}
+                >
+                  {reloading ? (
+                    <Loader2
+                      aria-hidden="true"
+                      className="me-1.5 h-4 w-4 animate-spin"
+                    />
+                  ) : (
+                    <RefreshCw aria-hidden="true" className="me-1.5 h-4 w-4" />
+                  )}
+                  {t("errorActionReload")}
+                </Button>
+              )}
+              {onNewSession && (
+                <Button size="sm" variant="outline" onClick={onNewSession}>
+                  <Plus aria-hidden="true" className="me-1.5 h-4 w-4" />
+                  {t("errorActionNewSession")}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )

@@ -156,8 +156,14 @@ const ConversationTabView = memo(function ConversationTabView({
   const { activeFolder: folder, activeFolderId } = useActiveFolder()
   const { refreshConversations } = useAppWorkspace()
   const folderId = activeFolderId ?? 0
-  const { tabs, bindConversationTab, setTabRuntimeConversationId, pinTab } =
-    useTabContext()
+  const {
+    tabs,
+    bindConversationTab,
+    setTabRuntimeConversationId,
+    pinTab,
+    openNewConversationTab,
+    closeTab,
+  } = useTabContext()
   const { setSessionStats } = useSessionStats()
   const {
     appendOptimisticTurn,
@@ -258,7 +264,8 @@ const ConversationTabView = memo(function ConversationTabView({
     hasPersistedConversation && selectedAgent !== "cline" && detailLoading
   const canAutoConnect =
     (hasPersistedConversation || (agentsLoaded && usableAgentCount > 0)) &&
-    !awaitingHistoricalSessionId
+    !awaitingHistoricalSessionId &&
+    !(hasPersistedConversation && detailError)
   const draftStorageKey = useMemo(() => {
     if (dbConversationId != null) {
       return buildConversationDraftStorageKey(dbConversationId)
@@ -775,6 +782,20 @@ const ConversationTabView = memo(function ConversationTabView({
   const showDraftHeader = !hasPersistedConversation && !hasSentMessage
   const isWelcomeMode = showDraftHeader
 
+  const canShowDetailErrorActions =
+    hasPersistedConversation && dbConversationId != null && !!folder
+  const handleReloadDetail = useCallback(() => {
+    if (dbConversationId == null) return
+    refetchDetail(dbConversationId)
+  }, [dbConversationId, refetchDetail])
+  // Close the failing tab and route to the singleton draft tab so only one
+  // new conversation can exist at a time.
+  const handleOpenNewSession = useCallback(() => {
+    if (!folder) return
+    closeTab(tabId)
+    openNewConversationTab(folder.id, workingDirForConnection ?? folder.path)
+  }, [closeTab, folder, openNewConversationTab, tabId, workingDirForConnection])
+
   const messageListNode = (
     <MessageListView
       conversationId={effectiveConversationId}
@@ -786,6 +807,10 @@ const ConversationTabView = memo(function ConversationTabView({
       detailLoading={detailLoading}
       detailError={detailError}
       hideEmptyState={!hasPersistedConversation || hasSentMessage}
+      onReload={canShowDetailErrorActions ? handleReloadDetail : undefined}
+      onNewSession={
+        canShowDetailErrorActions ? handleOpenNewSession : undefined
+      }
     />
   )
 
