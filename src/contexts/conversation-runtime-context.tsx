@@ -91,6 +91,17 @@ type Action =
   | {
       type: "COMPLETE_TURN"
       conversationId: number
+      /**
+       * Optional authoritative liveMessage from the caller. Used to avoid a
+       * race where the connections-context batches the final STREAM_BATCH
+       * and STATUS_CHANGED into one render: by the time COMPLETE_TURN runs,
+       * the panel's mirror effect that copies conn.liveMessage into
+       * session.liveMessage has not yet executed for the current render,
+       * so session.liveMessage is one render stale and missing the final
+       * text chunk. When provided, this value is preferred over
+       * session.liveMessage for the snapshot.
+       */
+      liveMessage?: LiveMessage | null
     }
   | {
       type: "APPEND_OPTIMISTIC_TURN"
@@ -587,11 +598,21 @@ function reducer(
       const current = state.byConversationId.get(action.conversationId)
       if (!current) return state
 
+      // Prefer the caller-provided liveMessage when present. The panel's
+      // mirror effect that syncs conn.liveMessage → session.liveMessage runs
+      // AFTER this effect within the same render, so session.liveMessage
+      // misses the final stream chunk that arrived in the same React batch
+      // as the status transition.
+      const sourceLiveMessage =
+        action.liveMessage !== undefined
+          ? action.liveMessage
+          : current.liveMessage
+
       // Convert liveMessage to completed MessageTurns (split into rounds)
-      const streamingTurns = current.liveMessage
+      const streamingTurns = sourceLiveMessage
         ? buildStreamingTurnsFromLiveMessage(
             current.conversationId,
-            current.liveMessage
+            sourceLiveMessage
           ).turns
         : []
 
@@ -797,7 +818,10 @@ interface ConversationRuntimeContextValue {
   getTimelineTurns: (conversationId: number) => ConversationTimelineTurn[]
   fetchDetail: (conversationId: number) => void
   refetchDetail: (conversationId: number) => void
-  completeTurn: (conversationId: number) => void
+  completeTurn: (
+    conversationId: number,
+    liveMessage?: LiveMessage | null
+  ) => void
   appendOptimisticTurn: (
     conversationId: number,
     turn: MessageTurn,
@@ -1038,9 +1062,12 @@ export function ConversationRuntimeProvider({
     []
   )
 
-  const completeTurn = useCallback((conversationId: number) => {
-    dispatch({ type: "COMPLETE_TURN", conversationId })
-  }, [])
+  const completeTurn = useCallback(
+    (conversationId: number, liveMessage?: LiveMessage | null) => {
+      dispatch({ type: "COMPLETE_TURN", conversationId, liveMessage })
+    },
+    []
+  )
 
   const appendOptimisticTurn = useCallback(
     (conversationId: number, turn: MessageTurn, turnToken: string) => {

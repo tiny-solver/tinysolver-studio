@@ -351,8 +351,13 @@ const ConversationTabView = memo(function ConversationTabView({
     prevConnStatusRef.current = connStatus
     if (!wasPrompting || connStatus === "prompting") return
 
-    // Turn completed — promote liveMessage + optimisticTurns to localTurns
-    completeTurn(effectiveConversationId)
+    // Turn completed — promote liveMessage + optimisticTurns to localTurns.
+    // Pass conn.liveMessage explicitly: when turn_complete arrives in the
+    // same React batch as the final STREAM_BATCH (typical case), the mirror
+    // effect that syncs conn.liveMessage into the runtime session has not
+    // run yet for this render, so session.liveMessage would be missing the
+    // final text chunk. The connections-context value is authoritative.
+    completeTurn(effectiveConversationId, conn.liveMessage)
 
     // Cancel previous metadata sync (handles rapid consecutive turns)
     syncCancelRef.current?.()
@@ -365,7 +370,13 @@ const ConversationTabView = memo(function ConversationTabView({
         effectiveConversationId
       )
     }
-  }, [completeTurn, connStatus, effectiveConversationId, syncTurnMetadata])
+  }, [
+    completeTurn,
+    connStatus,
+    conn.liveMessage,
+    effectiveConversationId,
+    syncTurnMetadata,
+  ])
 
   // Auto-send queued messages when agent finishes responding.
   // Refs are synced via useEffect; the auto-send effect is declared
