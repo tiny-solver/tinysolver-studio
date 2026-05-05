@@ -558,7 +558,7 @@ fn opencode_config_path() -> PathBuf {
     home_dir_or_default()
         .join(".config")
         .join("opencode")
-        .join("config.json")
+        .join("opencode.json")
 }
 
 fn gemini_config_path() -> PathBuf {
@@ -1030,6 +1030,8 @@ fn canonical_to_opencode_spec(spec: &Value) -> Result<Value, AppCommandError> {
             )));
         }
     }
+
+    out.insert("enabled".to_string(), Value::Bool(true));
 
     Ok(Value::Object(out))
 }
