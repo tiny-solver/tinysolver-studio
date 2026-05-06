@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -140,6 +140,36 @@ pub(crate) async fn resolve_npx_command(cmd: &str) -> Option<PathBuf> {
         return Some(path);
     }
     resolve_npx_command_from_current_npm_prefix(cmd).await
+}
+
+#[derive(Default)]
+struct NpxCommandResolver {
+    per_cmd_cache: HashMap<String, Option<PathBuf>>,
+    request_npm_prefix: Option<Option<PathBuf>>,
+}
+
+impl NpxCommandResolver {
+    async fn resolve_for_list(&mut self, cmd: &str) -> Option<PathBuf> {
+        if let Some(cached) = self.per_cmd_cache.get(cmd) {
+            return cached.clone();
+        }
+
+        let resolved = if let Some(path) = resolve_command_on_path(cmd) {
+            Some(path)
+        } else {
+            let prefix = if let Some(prefix) = &self.request_npm_prefix {
+                prefix.clone()
+            } else {
+                let resolved_prefix = cached_npm_global_prefix().await;
+                self.request_npm_prefix = Some(resolved_prefix.clone());
+                resolved_prefix
+            };
+            prefix.and_then(|p| resolve_npx_command_from_npm_prefix(cmd, &p))
+        };
+
+        self.per_cmd_cache.insert(cmd.to_string(), resolved.clone());
+        resolved
+    }
 }
 
 async fn resolve_npx_command_from_current_npm_prefix(cmd: &str) -> Option<PathBuf> {
@@ -2367,14 +2397,17 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
         .map_err(|e| AcpError::protocol(e.to_string()))?;
 
     let mut agents = Vec::new();
+    let mut npx_resolver = NpxCommandResolver::default();
     for (idx, agent_type) in agent_types.into_iter().enumerate() {
         let setting = settings_map.get(&agent_type);
         let meta = registry::get_agent_meta(agent_type);
         let (available, dist_type, local_installed_version) = match &meta.distribution {
             registry::AgentDistribution::Npx { cmd, .. } => {
-                // Keep the list path bounded: PATH is checked directly, and
-                // the npm-prefix fallback is timed out and cached process-wide.
-                let cached = resolve_npx_command(cmd)
+                // Keep the list path bounded: each list request probes npm
+                // global prefix at most once, then reuses the result across
+                // all NPX agents in the loop.
+                let cached = npx_resolver
+                    .resolve_for_list(cmd)
                     .await
                     .and_then(|_| setting.and_then(|m| m.installed_version.clone()));
                 (true, "npx", cached)
