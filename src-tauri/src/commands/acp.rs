@@ -2235,9 +2235,10 @@ pub async fn acp_set_config_option(
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_cancel(
     connection_id: String,
+    db: State<'_, AppDatabase>,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), AcpError> {
-    manager.cancel(&connection_id).await
+    manager.cancel(&db.conn, &connection_id).await
 }
 
 #[cfg(feature = "tauri-runtime")]
