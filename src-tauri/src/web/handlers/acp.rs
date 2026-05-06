@@ -96,6 +96,7 @@ pub async fn acp_connect(
     // If the agent isn't ready, return SdkNotInstalled here so the frontend
     // can prompt the user to install it from Agent Settings.
     acp_commands::verify_agent_installed(params.agent_type)
+        .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
 
     let emitter = state.emitter.clone();
