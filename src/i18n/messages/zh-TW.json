@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "載入 Agent 設定中..."
   },
+  "LoginPage": {
+    "documentTitle": "登入 - codeg",
+    "brand": "Codeg",
+    "subtitle": "輸入存取 Token 以連接到桌面端",
+    "tokenPlaceholder": "Access Token",
+    "connect": "連接",
+    "connecting": "連接中...",
+    "helpText": "Token 可在桌面端 設定 → Web 服務 中取得",
+    "invalidToken": "Token 無效，請檢查後重試",
+    "connectionFailed": "連接失敗 (HTTP {status})",
+    "networkError": "無法連接到伺服器"
+  },
   "CommitPage": {
     "title": "提交程式碼",
     "invalidFolderId": "無效的 folderId",

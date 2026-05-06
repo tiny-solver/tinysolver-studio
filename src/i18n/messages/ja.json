@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "エージェント設定を読み込み中..."
   },
+  "LoginPage": {
+    "documentTitle": "ログイン - codeg",
+    "brand": "Codeg",
+    "subtitle": "デスクトップアプリに接続するためのアクセストークンを入力してください",
+    "tokenPlaceholder": "アクセストークン",
+    "connect": "接続",
+    "connecting": "接続中...",
+    "helpText": "トークンはデスクトップアプリの 設定 → Web サービス で取得できます",
+    "invalidToken": "トークンが無効です。確認して再度お試しください",
+    "connectionFailed": "接続失敗 (HTTP {status})",
+    "networkError": "サーバーに接続できません"
+  },
   "CommitPage": {
     "title": "コミット",
     "invalidFolderId": "無効なフォルダID",

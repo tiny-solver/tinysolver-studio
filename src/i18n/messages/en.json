@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "Loading agent settings..."
   },
+  "LoginPage": {
+    "documentTitle": "Login - codeg",
+    "brand": "Codeg",
+    "subtitle": "Enter your access token to connect to the desktop app",
+    "tokenPlaceholder": "Access Token",
+    "connect": "Connect",
+    "connecting": "Connecting...",
+    "helpText": "Find your token in the desktop app under Settings → Web Service",
+    "invalidToken": "Invalid token. Please check and try again.",
+    "connectionFailed": "Connection failed (HTTP {status})",
+    "networkError": "Unable to connect to the server"
+  },
   "CommitPage": {
     "title": "Commit",
     "invalidFolderId": "Invalid folder ID",

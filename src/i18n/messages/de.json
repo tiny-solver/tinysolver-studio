@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "Agent-Einstellungen werden geladen..."
   },
+  "LoginPage": {
+    "documentTitle": "Anmelden - codeg",
+    "brand": "Codeg",
+    "subtitle": "Gib dein Zugriffstoken ein, um dich mit der Desktop-App zu verbinden",
+    "tokenPlaceholder": "Zugriffstoken",
+    "connect": "Verbinden",
+    "connecting": "Verbinde...",
+    "helpText": "Das Token findest du in der Desktop-App unter Einstellungen → Webdienst",
+    "invalidToken": "Ungültiges Token. Bitte überprüfe es und versuche es erneut.",
+    "connectionFailed": "Verbindung fehlgeschlagen (HTTP {status})",
+    "networkError": "Verbindung zum Server nicht möglich"
+  },
   "CommitPage": {
     "title": "Einchecken",
     "invalidFolderId": "Ungültige Ordner-ID",

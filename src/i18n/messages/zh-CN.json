@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "加载 Agent 设置中..."
   },
+  "LoginPage": {
+    "documentTitle": "登录 - codeg",
+    "brand": "Codeg",
+    "subtitle": "输入访问 Token 以连接到桌面端",
+    "tokenPlaceholder": "Access Token",
+    "connect": "连接",
+    "connecting": "连接中...",
+    "helpText": "Token 可在桌面端 设置 → Web 服务 中获取",
+    "invalidToken": "Token 无效，请检查后重试",
+    "connectionFailed": "连接失败 (HTTP {status})",
+    "networkError": "无法连接到服务器"
+  },
   "CommitPage": {
     "title": "提交代码",
     "invalidFolderId": "无效的 folderId",

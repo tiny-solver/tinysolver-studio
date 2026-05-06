@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "Carregando configurações de agentes..."
   },
+  "LoginPage": {
+    "documentTitle": "Entrar - codeg",
+    "brand": "Codeg",
+    "subtitle": "Digite seu token de acesso para conectar ao aplicativo de desktop",
+    "tokenPlaceholder": "Token de acesso",
+    "connect": "Conectar",
+    "connecting": "Conectando...",
+    "helpText": "Encontre seu token no app de desktop em Configurações → Serviço Web",
+    "invalidToken": "Token inválido. Verifique e tente novamente.",
+    "connectionFailed": "Falha na conexão (HTTP {status})",
+    "networkError": "Não foi possível conectar ao servidor"
+  },
   "CommitPage": {
     "title": "Confirmar",
     "invalidFolderId": "ID de pasta inválido",

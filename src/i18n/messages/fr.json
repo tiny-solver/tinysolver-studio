@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "Chargement des paramètres des agents..."
   },
+  "LoginPage": {
+    "documentTitle": "Connexion - codeg",
+    "brand": "Codeg",
+    "subtitle": "Saisissez votre jeton d'accès pour vous connecter à l'application de bureau",
+    "tokenPlaceholder": "Jeton d'accès",
+    "connect": "Se connecter",
+    "connecting": "Connexion...",
+    "helpText": "Vous trouverez votre jeton dans l'application de bureau sous Paramètres → Service Web",
+    "invalidToken": "Jeton invalide. Veuillez vérifier et réessayer.",
+    "connectionFailed": "Échec de la connexion (HTTP {status})",
+    "networkError": "Impossible de se connecter au serveur"
+  },
   "CommitPage": {
     "title": "Valider",
     "invalidFolderId": "ID de dossier invalide",

@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "에이전트 설정을 불러오는 중..."
   },
+  "LoginPage": {
+    "documentTitle": "로그인 - codeg",
+    "brand": "Codeg",
+    "subtitle": "데스크톱 앱에 연결하려면 액세스 토큰을 입력하세요",
+    "tokenPlaceholder": "액세스 토큰",
+    "connect": "연결",
+    "connecting": "연결 중...",
+    "helpText": "토큰은 데스크톱 앱의 설정 → 웹 서비스에서 확인할 수 있습니다",
+    "invalidToken": "유효하지 않은 토큰입니다. 확인 후 다시 시도하세요",
+    "connectionFailed": "연결 실패 (HTTP {status})",
+    "networkError": "서버에 연결할 수 없습니다"
+  },
   "CommitPage": {
     "title": "커밋",
     "invalidFolderId": "유효하지 않은 폴더 ID",

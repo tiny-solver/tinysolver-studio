@@ -726,6 +726,18 @@
   "SettingsPages": {
     "agentsLoading": "Cargando configuración de agentes..."
   },
+  "LoginPage": {
+    "documentTitle": "Iniciar sesión - codeg",
+    "brand": "Codeg",
+    "subtitle": "Introduce tu token de acceso para conectarte a la aplicación de escritorio",
+    "tokenPlaceholder": "Token de acceso",
+    "connect": "Conectar",
+    "connecting": "Conectando...",
+    "helpText": "Encuentra tu token en la aplicación de escritorio en Configuración → Servicio web",
+    "invalidToken": "Token no válido. Por favor, comprueba e inténtalo de nuevo.",
+    "connectionFailed": "Error de conexión (HTTP {status})",
+    "networkError": "No se puede conectar al servidor"
+  },
   "CommitPage": {
     "title": "Confirmación",
     "invalidFolderId": "ID de carpeta no válido",
