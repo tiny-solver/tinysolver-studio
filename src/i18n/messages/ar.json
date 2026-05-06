@@ -1715,7 +1715,9 @@
         "emptyConversation": "لا توجد رسائل في هذه المحادثة.",
         "systemMessage": "رسالة النظام",
         "copyMessage": "نسخ",
-        "copied": "تم النسخ"
+        "copied": "تم النسخ",
+        "downloadImage": "تنزيل الصورة",
+        "downloadFailed": "فشل التنزيل: {message}"
       },
       "liveTurnStats": {
         "thinking": "جارٍ التفكير...",

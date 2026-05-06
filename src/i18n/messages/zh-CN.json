@@ -1715,7 +1715,9 @@
         "emptyConversation": "当前会话暂无消息。",
         "systemMessage": "系统消息",
         "copyMessage": "复制",
-        "copied": "已复制"
+        "copied": "已复制",
+        "downloadImage": "下载图片",
+        "downloadFailed": "下载失败：{message}"
       },
       "liveTurnStats": {
         "thinking": "思考中...",

@@ -1715,7 +1715,9 @@
         "emptyConversation": "Aucun message dans cette conversation.",
         "systemMessage": "Message système",
         "copyMessage": "Copier",
-        "copied": "Copié"
+        "copied": "Copié",
+        "downloadImage": "Télécharger l'image",
+        "downloadFailed": "Échec du téléchargement : {message}"
       },
       "liveTurnStats": {
         "thinking": "Réflexion...",

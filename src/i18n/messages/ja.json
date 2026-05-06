@@ -1715,7 +1715,9 @@
         "emptyConversation": "この会話にはメッセージがありません。",
         "systemMessage": "システムメッセージ",
         "copyMessage": "コピー",
-        "copied": "コピー済み"
+        "copied": "コピー済み",
+        "downloadImage": "画像をダウンロード",
+        "downloadFailed": "ダウンロードに失敗しました: {message}"
       },
       "liveTurnStats": {
         "thinking": "考え中...",
