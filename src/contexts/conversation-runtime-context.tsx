@@ -598,6 +598,33 @@ function reducer(
       const current = state.byConversationId.get(action.conversationId)
       if (!current) return state
 
+      // Idempotency guard — a single turn can be promoted twice when the
+      // panel's connStatus-edge effect and ConversationDetailPanel's
+      // background turn_complete listener both fire (e.g. when the bg
+      // listener's tab-membership check misses the new-conversation race
+      // and proceeds). The first call drains liveMessage + optimisticTurns
+      // into localTurns and lands syncState=idle; a second pass with a
+      // caller-provided action.liveMessage would otherwise rebuild
+      // streamingTurns from action.liveMessage and append them on top of
+      // the already-promoted turns, producing a duplicated assistant
+      // message in the timeline. If the session is already drained, the
+      // turn is a no-op regardless of action.liveMessage.
+      if (
+        current.liveMessage === null &&
+        current.optimisticTurns.length === 0 &&
+        current.syncState === "idle"
+      ) {
+        // Surface the unexpected double-invocation so future regressions
+        // are noticed in the console rather than silently swallowed.
+        // Reaching this branch means an upstream guard (e.g. the bg
+        // listener's tab-membership check) failed to dedupe.
+        console.warn(
+          "[conversation-runtime] COMPLETE_TURN dispatched on an already-drained session; ignoring",
+          { conversationId: action.conversationId }
+        )
+        return state
+      }
+
       // Prefer the caller-provided liveMessage when present. The panel's
       // mirror effect that syncs conn.liveMessage → session.liveMessage runs
       // AFTER this effect within the same render, so session.liveMessage

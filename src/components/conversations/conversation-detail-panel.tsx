@@ -1047,13 +1047,24 @@ export function ConversationDetailPanel() {
           runtimeConversationId ?? summary?.id ?? null
         if (!matchedConversationId) return
 
-        // Check both virtual (runtime) ID and real DB ID — after
-        // bindConversationTab the tab stores the real DB ID while the
-        // runtime session may still be keyed by the virtual ID.
+        // Match against every identifier the panel may carry for the same
+        // runtime session — otherwise this background handler races the
+        // panel's own completeTurn effect and double-promotes streamingTurns
+        // into localTurns (visible as a duplicated assistant message until
+        // the conversation is reopened from DB).
+        //
+        // Invariant: `tab.runtimeConversationId` is only set when the panel's
+        // effectiveConversationId differs from its bound conversationId, i.e.
+        // for new conversations whose session lives under a virtual (negative)
+        // id. `dbId2` is always a real DB id, so a runtimeConversationId vs.
+        // dbId2 comparison is unreachable and intentionally omitted.
+        // `conversations` may lag the tab update on fast turns, so dbId2
+        // alone (without the runtime id branch) is not a reliable signal.
         const dbId2 = summary?.id
         const isOpenInTabs = tabs.some(
           (tab) =>
             tab.conversationId === matchedConversationId ||
+            tab.runtimeConversationId === matchedConversationId ||
             (dbId2 != null && tab.conversationId === dbId2)
         )
         if (isOpenInTabs) return
