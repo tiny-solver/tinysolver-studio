@@ -1557,7 +1557,8 @@
           "initializeTimeout": "انتهت مهلة مصافحة اتصال {agent} (لا استجابة بعد 60 ثانية). افتح الإعدادات للتحقق من إعدادات الوكيل والشبكة.",
           "processExited": "انتهت عملية {agent} بشكل غير متوقع.",
           "spawnFailed": "تعذر بدء تشغيل {agent}: {message}",
-          "downloadFailed": "فشل تنزيل {agent}: {message}"
+          "downloadFailed": "فشل تنزيل {agent}: {message}",
+          "sessionLoadResourceNotFound": "فشل تحميل جلسة {agent}. أعد التحميل لإعادة المحاولة، أو ابدأ محادثة جديدة."
         },
         "unableReadAgentConfig": "تعذر قراءة إعدادات الوكيل: {message}",
         "connectFailedTitle": "فشل اتصال {agent}",
@@ -1709,7 +1710,7 @@
         "attachedResources": "الموارد المرفقة",
         "loading": "جارٍ التحميل...",
         "error": "خطأ: {message}",
-        "errorTitle": "فشل تحميل المحادثة",
+        "errorTitle": "فشل تحميل الجلسة",
         "errorActionReload": "إعادة تحميل",
         "errorActionNewSession": "محادثة جديدة",
         "emptyConversation": "لا توجد رسائل في هذه المحادثة.",

@@ -45,6 +45,13 @@ export interface ConversationRuntimeSession {
   detailLoading: boolean
   detailError: string | null
 
+  // ACP `session/load` failed in a non-recoverable way (currently only when
+  // the agent reports ResourceNotFound for the historical session_id). Set
+  // by the connections layer via setAcpLoadError; cleared by the user
+  // pressing Reload, by a successful detail refetch, or when a new ACP
+  // session takes over.
+  acpLoadError: string | null
+
   // Active session accumulated turns (promoted optimistic + completed streaming)
   localTurns: MessageTurn[]
 
@@ -157,6 +164,11 @@ type Action =
       }>
       sessionStats?: SessionStats | null
     }
+  | {
+      type: "SET_ACP_LOAD_ERROR"
+      conversationId: number
+      error: string | null
+    }
   | { type: "REMOVE_CONVERSATION"; conversationId: number }
   | { type: "RESET" }
 
@@ -169,6 +181,7 @@ function createEmptySession(
     detail: null,
     detailLoading: false,
     detailError: null,
+    acpLoadError: null,
     localTurns: [],
     optimisticTurns: [],
     liveMessage: null,
@@ -819,6 +832,12 @@ function reducer(
         pendingCleanup: action.pendingCleanup,
       }))
 
+    case "SET_ACP_LOAD_ERROR":
+      return updateSessionInState(state, action.conversationId, (current) => ({
+        ...current,
+        acpLoadError: action.error,
+      }))
+
     case "REMOVE_CONVERSATION": {
       const current = state.byConversationId.get(action.conversationId)
       if (!current) return state
@@ -873,6 +892,7 @@ interface ConversationRuntimeContextValue {
     toConversationId: number
   ) => void
   setPendingCleanup: (conversationId: number, pendingCleanup: boolean) => void
+  setAcpLoadError: (conversationId: number, error: string | null) => void
   removeConversation: (conversationId: number) => void
   reset: () => void
 }
@@ -1156,6 +1176,13 @@ export function ConversationRuntimeProvider({
     []
   )
 
+  const setAcpLoadError = useCallback(
+    (conversationId: number, error: string | null) => {
+      dispatch({ type: "SET_ACP_LOAD_ERROR", conversationId, error })
+    },
+    []
+  )
+
   const removeConversation = useCallback((conversationId: number) => {
     dispatch({ type: "REMOVE_CONVERSATION", conversationId })
   }, [])
@@ -1179,6 +1206,7 @@ export function ConversationRuntimeProvider({
       setSyncState,
       migrateConversation,
       setPendingCleanup,
+      setAcpLoadError,
       removeConversation,
       reset,
     }),
@@ -1196,6 +1224,7 @@ export function ConversationRuntimeProvider({
       setSyncState,
       migrateConversation,
       setPendingCleanup,
+      setAcpLoadError,
       removeConversation,
       reset,
     ]

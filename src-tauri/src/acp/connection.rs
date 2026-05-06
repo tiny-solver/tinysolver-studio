@@ -1292,10 +1292,46 @@ async fn run_connection(
                         // or ephemeral forked session).
                         // Fall back to session/new so the tab still works.
                         let err_str = e.to_string();
-                        eprintln!(
-                            "[ACP] session/load failed ({}), falling back to session/new",
-                            err_str
+                        let is_resource_not_found = matches!(
+                            e.code,
+                            sacp::schema::ErrorCode::ResourceNotFound
                         );
+                        eprintln!(
+                            "[ACP] session/load failed ({}){}",
+                            err_str,
+                            if is_resource_not_found {
+                                ", surfacing as session_load_failed"
+                            } else {
+                                ", falling back to session/new"
+                            }
+                        );
+                        // ResourceNotFound (-32002): the agent has no record of
+                        // this session_id (deleted/expired/never existed).
+                        // Don't auto-fallback to session/new — that would
+                        // silently orphan the historical context. Surface to
+                        // the frontend so the user can choose between Reload
+                        // (transient agent restart) and New conversation.
+                        if is_resource_not_found {
+                            emit_with_state(
+                                &state,
+                                &emitter_clone,
+                                AcpEvent::SessionLoadFailed {
+                                    session_id: sid.clone(),
+                                    message: err_str,
+                                    code: "resource_not_found".to_string(),
+                                },
+                            )
+                            .await;
+                            emit_with_state(
+                                &state,
+                                &emitter_clone,
+                                AcpEvent::StatusChanged {
+                                    status: ConnectionStatus::Error,
+                                },
+                            )
+                            .await;
+                            return Ok(());
+                        }
                         // Only emit a visible error for unexpected failures;
                         // "Method not found" is expected for agents that don't
                         // support session resume (e.g. Cline).

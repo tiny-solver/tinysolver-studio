@@ -1557,7 +1557,8 @@
           "initializeTimeout": "Der Verbindungs-Handshake von {agent} hat nach 60 Sekunden das Zeitlimit überschritten. Öffnen Sie die Einstellungen, um Agenten- und Netzwerkkonfiguration zu prüfen.",
           "processExited": "{agent}-Prozess wurde unerwartet beendet.",
           "spawnFailed": "{agent} konnte nicht gestartet werden: {message}",
-          "downloadFailed": "{agent}-Download fehlgeschlagen: {message}"
+          "downloadFailed": "{agent}-Download fehlgeschlagen: {message}",
+          "sessionLoadResourceNotFound": "{agent}-Sitzung konnte nicht geladen werden. Neu laden, um es erneut zu versuchen, oder eine neue Konversation starten."
         },
         "unableReadAgentConfig": "Agenten-Konfiguration kann nicht gelesen werden: {message}",
         "connectFailedTitle": "{agent} Verbindung fehlgeschlagen",
@@ -1709,7 +1710,7 @@
         "attachedResources": "Angehängte Ressourcen",
         "loading": "Lädt...",
         "error": "Fehler: {message}",
-        "errorTitle": "Konversation konnte nicht geladen werden",
+        "errorTitle": "Sitzung konnte nicht geladen werden",
         "errorActionReload": "Neu laden",
         "errorActionNewSession": "Neue Konversation",
         "emptyConversation": "Keine Nachrichten in dieser Unterhaltung.",

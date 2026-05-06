@@ -1557,7 +1557,8 @@
           "initializeTimeout": "{agent} connection handshake timed out after 60 seconds. Please open Settings to check Agent configuration and network settings.",
           "processExited": "{agent} process exited unexpectedly.",
           "spawnFailed": "Failed to start {agent}: {message}",
-          "downloadFailed": "{agent} download failed: {message}"
+          "downloadFailed": "{agent} download failed: {message}",
+          "sessionLoadResourceNotFound": "{agent} session failed to load. Reload to retry, or start a new conversation."
         },
         "unableReadAgentConfig": "Unable to read Agent config: {message}",
         "connectFailedTitle": "{agent} connection failed",
@@ -1709,7 +1710,7 @@
         "attachedResources": "Attached resources",
         "loading": "Loading...",
         "error": "Error: {message}",
-        "errorTitle": "Failed to load conversation",
+        "errorTitle": "Session load failed",
         "errorActionReload": "Reload",
         "errorActionNewSession": "New conversation",
         "emptyConversation": "No messages in this conversation.",

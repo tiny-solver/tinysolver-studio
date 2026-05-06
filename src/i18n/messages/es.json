@@ -1557,7 +1557,8 @@
           "initializeTimeout": "Se agotó el tiempo del handshake de conexión de {agent} (sin respuesta tras 60 segundos). Abre Ajustes para revisar la configuración del agente y de la red.",
           "processExited": "El proceso de {agent} terminó inesperadamente.",
           "spawnFailed": "No se pudo iniciar {agent}: {message}",
-          "downloadFailed": "La descarga de {agent} falló: {message}"
+          "downloadFailed": "La descarga de {agent} falló: {message}",
+          "sessionLoadResourceNotFound": "Error al cargar la sesión de {agent}. Recarga para reintentar o inicia una nueva conversación."
         },
         "unableReadAgentConfig": "No se puede leer la configuración del agente: {message}",
         "connectFailedTitle": "Falló la conexión de {agent}",
@@ -1709,7 +1710,7 @@
         "attachedResources": "Recursos adjuntos",
         "loading": "Cargando...",
         "error": "Error del chat: {message}",
-        "errorTitle": "Error al cargar la conversación",
+        "errorTitle": "Error al cargar la sesión",
         "errorActionReload": "Recargar",
         "errorActionNewSession": "Nueva conversación",
         "emptyConversation": "No hay mensajes en esta conversación.",

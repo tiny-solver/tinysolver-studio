@@ -1557,7 +1557,8 @@
           "initializeTimeout": "{agent} の接続ハンドシェイクがタイムアウトしました（60 秒以内に応答なし）。設定を開いてエージェントとネットワーク設定を確認してください。",
           "processExited": "{agent} プロセスが予期せず終了しました。",
           "spawnFailed": "{agent} の起動に失敗しました: {message}",
-          "downloadFailed": "{agent} のダウンロードに失敗しました: {message}"
+          "downloadFailed": "{agent} のダウンロードに失敗しました: {message}",
+          "sessionLoadResourceNotFound": "{agent} セッションの読み込みに失敗しました。再読み込みして再試行するか、新しい会話を開始してください。"
         },
         "unableReadAgentConfig": "エージェント設定を読み取れません: {message}",
         "connectFailedTitle": "{agent} の接続に失敗しました",
@@ -1709,7 +1710,7 @@
         "attachedResources": "添付リソース",
         "loading": "読み込み中...",
         "error": "エラー: {message}",
-        "errorTitle": "会話の読み込みに失敗しました",
+        "errorTitle": "セッションの読み込みに失敗しました",
         "errorActionReload": "再読み込み",
         "errorActionNewSession": "新規会話",
         "emptyConversation": "この会話にはメッセージがありません。",

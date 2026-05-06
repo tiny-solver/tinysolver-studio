@@ -56,6 +56,14 @@ interface MessageListViewProps {
   sessionStats?: SessionStats | null
   detailLoading?: boolean
   detailError?: string | null
+  /**
+   * Set when the agent rejected `session/load` non-recoverably (e.g. the
+   * historical session_id was deleted). Takes precedence over `detailError`
+   * AND the renderable-content gate: even when the local DB has the full
+   * message history, the user must explicitly choose Reload or start a new
+   * conversation since the agent can't continue this thread.
+   */
+  acpLoadError?: string | null
   hideEmptyState?: boolean
   onReload?: () => void
   onNewSession?: () => void
@@ -268,6 +276,7 @@ export function MessageListView({
   sessionStats = null,
   detailLoading = false,
   detailError = null,
+  acpLoadError = null,
   hideEmptyState = false,
   onReload,
   onNewSession,
@@ -444,7 +453,15 @@ export function MessageListView({
     )
   }
 
-  if (detailError && !hasRenderableContent) {
+  // ACP load failures always replace content: even when the local DB has
+  // the conversation, the agent can't resume it, so silently rendering
+  // the history would mislead the user into thinking a follow-up message
+  // would extend the same thread.
+  const blockingLoadError = acpLoadError ?? null
+  const fallbackLoadError =
+    detailError && !hasRenderableContent ? detailError : null
+  const renderedLoadError = blockingLoadError ?? fallbackLoadError
+  if (renderedLoadError) {
     const showActions = Boolean(onReload || onNewSession)
     const reloading = detailLoading
     return (
@@ -457,7 +474,7 @@ export function MessageListView({
           <div className="space-y-1">
             <h3 className="text-sm font-medium">{t("errorTitle")}</h3>
             <p className="text-sm text-muted-foreground break-words">
-              {detailError}
+              {renderedLoadError}
             </p>
           </div>
           {showActions && (

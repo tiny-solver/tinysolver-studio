@@ -172,11 +172,13 @@ const ConversationTabView = memo(function ConversationTabView({
     refetchDetail,
     syncTurnMetadata,
     removeConversation,
+    setAcpLoadError,
     setExternalId,
     setLiveMessage,
     setPendingCleanup,
     setSyncState,
   } = useConversationRuntime()
+  const acpActions = useAcpActions()
 
   // Stable runtime session key — set once at mount, never changes.
   // For new conversations this is a virtual (negative) ID; for existing
@@ -243,6 +245,7 @@ const ConversationTabView = memo(function ConversationTabView({
     detail,
     loading: detailLoading,
     error: detailError,
+    acpLoadError,
   } = useConversationDetail(effectiveConversationId)
 
   const runtimeSession = getSession(effectiveConversationId)
@@ -265,7 +268,8 @@ const ConversationTabView = memo(function ConversationTabView({
   const canAutoConnect =
     (hasPersistedConversation || (agentsLoaded && usableAgentCount > 0)) &&
     !awaitingHistoricalSessionId &&
-    !(hasPersistedConversation && detailError)
+    !(hasPersistedConversation && detailError) &&
+    !(hasPersistedConversation && acpLoadError)
   const draftStorageKey = useMemo(() => {
     if (dbConversationId != null) {
       return buildConversationDraftStorageKey(dbConversationId)
@@ -347,6 +351,15 @@ const ConversationTabView = memo(function ConversationTabView({
       sessionIdRef.current = connSessionId
     }
   }, [connSessionId])
+
+  // Mirror the connection's load failure (set on `session_load_failed` from
+  // the agent) onto the per-conversation runtime session so the detail UI
+  // can surface it next to detail-load errors. Cleared automatically when
+  // the connection's loadError clears (e.g. via Reload).
+  const connLoadError = conn.loadError
+  useEffect(() => {
+    setAcpLoadError(effectiveConversationId, connLoadError ?? null)
+  }, [connLoadError, effectiveConversationId, setAcpLoadError])
 
   // completeTurn MUST be declared BEFORE setLiveMessage so that React runs
   // its cleanup/setup before setLiveMessage's cleanup. When connStatus
@@ -786,14 +799,25 @@ const ConversationTabView = memo(function ConversationTabView({
     hasPersistedConversation && dbConversationId != null && !!folder
   const handleReloadDetail = useCallback(() => {
     if (dbConversationId == null) return
+    // Clear the ACP load failure so canAutoConnect re-enables and the next
+    // auto-connect attempt is allowed to retry session/load. The mirror
+    // effect above syncs this back into the runtime session as null.
+    if (acpLoadError) {
+      acpActions.clearAcpLoadError(tabId)
+    }
     refetchDetail(dbConversationId)
-  }, [dbConversationId, refetchDetail])
-  // Close the failing tab and route to the singleton draft tab so only one
-  // new conversation can exist at a time.
+  }, [acpActions, acpLoadError, dbConversationId, refetchDetail, tabId])
+  // Open (or re-activate) the singleton draft tab BEFORE closing the failing
+  // tab. closeTab auto-creates a replacement draft when it removes the last
+  // tab, and `openNewConversationTab` reads `rawTabsRef.current` which
+  // wouldn't yet reflect either pending update if we closed first — the
+  // singleton check would miss the replacement and we'd end up with two
+  // drafts. Doing it in this order means the second `setTabs` (closeTab)
+  // runs against the result of the first.
   const handleOpenNewSession = useCallback(() => {
     if (!folder) return
-    closeTab(tabId)
     openNewConversationTab(folder.id, workingDirForConnection ?? folder.path)
+    closeTab(tabId)
   }, [closeTab, folder, openNewConversationTab, tabId, workingDirForConnection])
 
   const messageListNode = (
@@ -806,6 +830,7 @@ const ConversationTabView = memo(function ConversationTabView({
       sessionStats={effectiveSessionStats}
       detailLoading={detailLoading}
       detailError={detailError}
+      acpLoadError={acpLoadError}
       hideEmptyState={!hasPersistedConversation || hasSentMessage}
       onReload={canShowDetailErrorActions ? handleReloadDetail : undefined}
       onNewSession={
@@ -841,7 +866,7 @@ const ConversationTabView = memo(function ConversationTabView({
       availableCommands={connectionCommands}
       attachmentTabId={tabId}
       draftStorageKey={draftStorageKey}
-      hideInput={isWelcomeMode}
+      hideInput={isWelcomeMode || Boolean(acpLoadError)}
       isActive={isActive}
       queue={msgQueue}
       onEnqueue={mqEnqueue}
