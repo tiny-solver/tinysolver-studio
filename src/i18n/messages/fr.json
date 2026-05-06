@@ -1570,7 +1570,12 @@
           "processExited": "Le processus {agent} s'est arrêté de manière inattendue.",
           "spawnFailed": "Impossible de démarrer {agent} : {message}",
           "downloadFailed": "Échec du téléchargement de {agent} : {message}",
-          "sessionLoadResourceNotFound": "Échec du chargement de la session de {agent}. Rechargez pour réessayer ou démarrez une nouvelle conversation."
+          "sessionLoadResourceNotFound": "Échec du chargement de la session de {agent}. Rechargez pour réessayer ou démarrez une nouvelle conversation.",
+          "turnFailedRefusal": "{agent} a refusé de poursuivre ce tour. Cela indique souvent une erreur de backend ou de passerelle. Vérifiez les journaux de l'agent.",
+          "turnFailedMaxTokens": "{agent} a atteint la limite maximale de jetons pour ce tour.",
+          "turnFailedMaxTurnRequests": "{agent} a atteint le nombre maximal de requêtes autorisées pour ce tour.",
+          "turnFailedUnknown": "{agent} a terminé le tour avec une raison d'arrêt inconnue.",
+          "turnFailedEmpty": "{agent} a terminé le tour sans produire de réponse. Vérifiez la configuration de l'agent."
         },
         "unableReadAgentConfig": "Impossible de lire la configuration de l'agent : {message}",
         "connectFailedTitle": "Échec de la connexion de {agent}",

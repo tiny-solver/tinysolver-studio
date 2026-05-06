@@ -2225,6 +2225,26 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
                   agent: agentLabel,
                   message: e.message,
                 })
+              case "turn_failed_refusal":
+                return t("backendErrors.turnFailedRefusal", {
+                  agent: agentLabel,
+                })
+              case "turn_failed_max_tokens":
+                return t("backendErrors.turnFailedMaxTokens", {
+                  agent: agentLabel,
+                })
+              case "turn_failed_max_turn_requests":
+                return t("backendErrors.turnFailedMaxTurnRequests", {
+                  agent: agentLabel,
+                })
+              case "turn_failed_unknown":
+                return t("backendErrors.turnFailedUnknown", {
+                  agent: agentLabel,
+                })
+              case "turn_failed_empty":
+                return t("backendErrors.turnFailedEmpty", {
+                  agent: agentLabel,
+                })
               default:
                 return e.message
             }

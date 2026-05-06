@@ -2315,6 +2315,87 @@ async fn handle_fork_or_exit(
 
 /// Main conversation command loop: wait for frontend commands and process them.
 ///
+/// Map ACP `StopReason` to a stable lowercase string carried in the
+/// `TurnComplete` event. Covers all 5 spec variants so non-success reasons
+/// (`Refusal`/`MaxTokens`/`MaxTurnRequests`) keep their semantics instead of
+/// collapsing to `"unknown"` — the lifecycle subscriber and frontend rely on
+/// this distinction. The wildcard arm exists because the upstream enum is
+/// `#[non_exhaustive]`.
+fn stop_reason_to_str(reason: StopReason) -> &'static str {
+    match reason {
+        StopReason::EndTurn => "end_turn",
+        StopReason::Cancelled => "cancelled",
+        StopReason::Refusal => "refusal",
+        StopReason::MaxTokens => "max_tokens",
+        StopReason::MaxTurnRequests => "max_turn_requests",
+        _ => "unknown",
+    }
+}
+
+/// True when a `SessionUpdate` represents actual agent-produced output for
+/// the current turn. Used to detect "silent EndTurn" cases where an agent
+/// (notably OpenCode) reports the turn ended successfully but never emitted
+/// any reply or tool call — in practice this means the model-side request
+/// was swallowed and the user would otherwise see a blank conversation
+/// transition silently to `PendingReview`. Metadata-only updates
+/// (`UserMessageChunk`, `Plan`, `*ModeUpdate`, `ConfigOptionUpdate`,
+/// `SessionInfoUpdate`, `AvailableCommandsUpdate`, `UsageUpdate`) do not
+/// count.
+fn is_agent_output_update(update: &SessionUpdate) -> bool {
+    matches!(
+        update,
+        SessionUpdate::AgentMessageChunk(_)
+            | SessionUpdate::AgentThoughtChunk(_)
+            | SessionUpdate::ToolCall(_)
+            | SessionUpdate::ToolCallUpdate(_)
+    )
+}
+
+/// Build an `AcpEvent::Error` for a non-success stop reason so the user gets a
+/// toast instead of a silent transition to `PendingReview`. Returns `None` for
+/// `end_turn` (success) and `cancelled` (already user-driven).
+///
+/// `Refusal` is included because OpenCode (and similar agents) map backend /
+/// gateway errors to `Refusal` per the ACP spec gap — see
+/// <https://shashikantjagtap.net/openclaw-acp-what-coding-agent-users-need-to-know-about-protocol-gaps/>.
+/// `empty` is a synthesized reason emitted by `run_conversation_loop` when
+/// the agent reports `EndTurn` without producing any agent output.
+fn turn_failure_error_event(reason_str: &str, agent_type: AgentType) -> Option<AcpEvent> {
+    let (code, message) = match reason_str {
+        "refusal" => (
+            "turn_failed_refusal",
+            format!("{agent_type} refused to continue this turn."),
+        ),
+        "max_tokens" => (
+            "turn_failed_max_tokens",
+            format!("{agent_type} reached the maximum token limit for this turn."),
+        ),
+        "max_turn_requests" => (
+            "turn_failed_max_turn_requests",
+            format!(
+                "{agent_type} reached the maximum number of allowed requests for this turn."
+            ),
+        ),
+        "unknown" => (
+            "turn_failed_unknown",
+            format!("{agent_type} ended the turn with an unrecognized stop reason."),
+        ),
+        "empty" => (
+            "turn_failed_empty",
+            format!(
+                "{agent_type} ended the turn without producing any response. \
+                 Please check the agent's configuration."
+            ),
+        ),
+        _ => return None,
+    };
+    Some(AcpEvent::Error {
+        message,
+        agent_type: agent_type.to_string(),
+        code: Some(code.to_string()),
+    })
+}
+
 /// Returns `Ok(None)` on normal exit (disconnect / channel closed) or
 /// `Ok(Some(ForkExitInfo))` when the loop should be restarted on a forked session.
 #[allow(clippy::too_many_arguments)]
@@ -2416,6 +2497,13 @@ async fn run_conversation_loop<'a>(
                 terminal_poll_interval
                     .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 let mut disconnect_requested = false;
+                // Tracks whether the agent produced any real output during
+                // this turn (text reply, thinking chunk, or tool call). When
+                // an agent reports `EndTurn` with this still false, we treat
+                // it as a silent failure and synthesize an `"empty"` stop
+                // reason so the user gets an error toast instead of a
+                // confusing `PendingReview` on a blank conversation.
+                let mut turn_had_agent_output = false;
 
                 // Read updates until turn completes.
                 // We must also listen for commands (e.g. RespondPermission)
@@ -2445,6 +2533,9 @@ async fn run_conversation_loop<'a>(
                                                     &notif.update,
                                                     &mut tracked_terminal_tool_calls,
                                                 );
+                                                if is_agent_output_update(&notif.update) {
+                                                    turn_had_agent_output = true;
+                                                }
                                                 emit_conversation_update(&st, &h, agent_type, notif.update, cwd_opt, &mut raw_output_cache).await;
                                                 if should_poll_now {
                                                     poll_tracked_terminal_tool_calls(
@@ -2480,11 +2571,19 @@ async fn run_conversation_loop<'a>(
                                         )
                                         .await;
                                     }
-                                    let reason_str = match reason {
-                                        StopReason::EndTurn => "end_turn",
-                                        StopReason::Cancelled => "cancelled",
-                                        _ => "unknown",
+                                    let raw_reason_str = stop_reason_to_str(reason);
+                                    let reason_str = if raw_reason_str == "end_turn"
+                                        && !turn_had_agent_output
+                                    {
+                                        "empty"
+                                    } else {
+                                        raw_reason_str
                                     };
+                                    if let Some(err_event) =
+                                        turn_failure_error_event(reason_str, agent_type)
+                                    {
+                                        emit_with_state(state, emitter, err_event).await;
+                                    }
                                     emit_with_state(
                                         state,
                                         emitter,
@@ -2512,11 +2611,19 @@ async fn run_conversation_loop<'a>(
                                 )
                                 .await;
                             }
-                            let reason_str = match reason {
-                                StopReason::EndTurn => "end_turn",
-                                StopReason::Cancelled => "cancelled",
-                                _ => "unknown",
+                            let raw_reason_str = stop_reason_to_str(reason);
+                            let reason_str = if raw_reason_str == "end_turn"
+                                && !turn_had_agent_output
+                            {
+                                "empty"
+                            } else {
+                                raw_reason_str
                             };
+                            if let Some(err_event) =
+                                turn_failure_error_event(reason_str, agent_type)
+                            {
+                                emit_with_state(state, emitter, err_event).await;
+                            }
                             emit_with_state(
                                 state,
                                 emitter,
