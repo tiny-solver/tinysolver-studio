@@ -118,6 +118,7 @@ export function SystemNetworkSettings() {
   const [savingTerminal, setSavingTerminal] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [proxyUrl, setProxyUrl] = useState("")
+  const [proxyUrlError, setProxyUrlError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [disableHwAccel, setDisableHwAccel] = useState(false)
   const [savingRendering, setSavingRendering] = useState(false)
@@ -800,6 +801,11 @@ export function SystemNetworkSettings() {
               disabled={saving}
               onChange={(event) => {
                 const next = event.target.checked
+                if (next && !proxyUrl.trim()) {
+                  setProxyUrlError(t("proxyRequired"))
+                  return
+                }
+                setProxyUrlError(null)
                 setEnabled(next)
                 saveProxySettings(next, proxyUrl)
               }}
@@ -813,11 +819,25 @@ export function SystemNetworkSettings() {
             </label>
             <Input
               value={proxyUrl}
-              onChange={(event) => setProxyUrl(event.target.value)}
-              onBlur={() => saveProxySettings(enabled, proxyUrl)}
+              onChange={(event) => {
+                setProxyUrl(event.target.value)
+                if (event.target.value.trim()) setProxyUrlError(null)
+              }}
+              onBlur={() => {
+                if (enabled && !proxyUrl.trim()) {
+                  setProxyUrlError(t("proxyRequired"))
+                  return
+                }
+                setProxyUrlError(null)
+                saveProxySettings(enabled, proxyUrl)
+              }}
               placeholder={PROXY_EXAMPLE}
               disabled={saving}
+              aria-invalid={proxyUrlError ? true : undefined}
             />
+            {proxyUrlError && (
+              <p className="text-[11px] text-destructive">{proxyUrlError}</p>
+            )}
             <p className="text-[11px] text-muted-foreground">
               {t("proxyHint", { example: PROXY_EXAMPLE })}
             </p>
