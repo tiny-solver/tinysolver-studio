@@ -98,7 +98,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
 
   const status = conversation.status as ConversationStatus
   const isRunning = status === "in_progress"
-  const isFailed = status === "cancelled"
+  const isCancelled = status === "cancelled"
 
   return (
     <>
@@ -159,7 +159,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 >
                   {tSidebar("statusRunningBadge")}
                 </span>
-              ) : isFailed ? (
+              ) : isCancelled ? (
                 <span
                   className={cn(
                     "relative inline-flex shrink-0 items-center justify-center",
@@ -168,7 +168,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     "bg-destructive/20 text-destructive"
                   )}
                 >
-                  {tSidebar("statusFailedBadge")}
+                  {tSidebar("statusCancelledBadge")}
                 </span>
               ) : timeLabel ? (
                 <span
