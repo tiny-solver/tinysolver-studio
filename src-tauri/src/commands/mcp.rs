@@ -3860,3 +3860,176 @@ fn resolve_smithery_install_spec_with_selection(
 
     canonicalize_spec(&selected.spec, "smithery selected option")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_mcp_type_canonical_pass_through() {
+        assert_eq!(normalize_mcp_type("stdio"), Some("stdio"));
+        assert_eq!(normalize_mcp_type("http"), Some("http"));
+        assert_eq!(normalize_mcp_type("sse"), Some("sse"));
+        assert_eq!(normalize_mcp_type("local"), Some("local"));
+        assert_eq!(normalize_mcp_type("remote"), Some("remote"));
+    }
+
+    #[test]
+    fn normalize_mcp_type_streamable_http_aliases_collapse_to_http() {
+        for raw in [
+            "streamable-http",
+            "streamableHttp",
+            "streamable_http",
+            "Streamable HTTP",
+            "STREAMABLE-HTTP",
+            "  streamable-http  ",
+            "streamable.http",
+        ] {
+            assert_eq!(normalize_mcp_type(raw), Some("http"), "input {raw:?}");
+        }
+    }
+
+    #[test]
+    fn normalize_mcp_type_rejects_unknown() {
+        assert!(normalize_mcp_type("").is_none());
+        assert!(normalize_mcp_type("   ").is_none());
+        assert!(normalize_mcp_type("Foo").is_none());
+        assert!(normalize_mcp_type("ws").is_none());
+    }
+
+    fn codex_entry(toml_src: &str) -> toml::Value {
+        toml::from_str::<toml::Value>(toml_src).expect("parse test toml")
+    }
+
+    #[test]
+    fn codex_entry_canonicalizes_streamable_http_aliases() {
+        for raw in ["streamableHttp", "streamable-http", "streamable_http"] {
+            let value = codex_entry(&format!(
+                "type = \"{raw}\"\nurl = \"https://mcp.example.com/mcp\"\n"
+            ));
+            let canonical = codex_entry_to_canonical("ex", &value)
+                .unwrap_or_else(|err| panic!("input {raw:?} should normalize: {err}"));
+            assert_eq!(
+                canonical
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                "http",
+                "input {raw:?}"
+            );
+            assert_eq!(
+                canonical
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                "https://mcp.example.com/mcp"
+            );
+        }
+    }
+
+    #[test]
+    fn codex_entry_keeps_canonical_types_intact() {
+        let stdio = codex_entry("type = \"stdio\"\ncommand = \"npx\"\n");
+        let canonical = codex_entry_to_canonical("ex", &stdio).expect("stdio entry");
+        assert_eq!(canonical.get("type").and_then(Value::as_str), Some("stdio"));
+        assert_eq!(canonical.get("command").and_then(Value::as_str), Some("npx"));
+
+        let sse = codex_entry("type = \"sse\"\nurl = \"https://mcp.example.com/sse\"\n");
+        let canonical = codex_entry_to_canonical("ex", &sse).expect("sse entry");
+        assert_eq!(canonical.get("type").and_then(Value::as_str), Some("sse"));
+    }
+
+    #[test]
+    fn codex_entry_rejects_unknown_type_with_raw_in_message() {
+        let value = codex_entry("type = \"Foo\"\nurl = \"https://x\"\n");
+        let err = codex_entry_to_canonical("ex", &value).expect_err("Foo should be rejected");
+        let msg = err.to_string();
+        assert!(msg.contains("'Foo'"), "error should echo raw type: {msg}");
+        assert!(msg.contains("'ex'"), "error should mention id: {msg}");
+    }
+
+    #[test]
+    fn codex_entry_rejects_opencode_only_aliases() {
+        // OpenCode-native types are not valid in Codex TOML; catching them keeps
+        // the Codex pipeline's accepted set tight.
+        for raw in ["local", "remote"] {
+            let value = codex_entry(&format!("type = \"{raw}\"\nurl = \"https://x\"\n"));
+            assert!(
+                codex_entry_to_canonical("ex", &value).is_err(),
+                "raw {raw:?} should not be accepted by Codex pipeline",
+            );
+        }
+    }
+
+    #[test]
+    fn transport_protocol_normalizes_aliases() {
+        assert_eq!(transport_protocol("stdio"), Some("stdio".to_string()));
+        assert_eq!(transport_protocol("http"), Some("http".to_string()));
+        assert_eq!(transport_protocol("sse"), Some("sse".to_string()));
+        assert_eq!(
+            transport_protocol("streamable-http"),
+            Some("http".to_string())
+        );
+        assert_eq!(
+            transport_protocol("streamableHttp"),
+            Some("http".to_string())
+        );
+        assert_eq!(transport_protocol("local"), None);
+        assert_eq!(transport_protocol("foo"), None);
+    }
+
+    fn make_transport(kind: &str, url: &str) -> OfficialTransport {
+        let payload = serde_json::json!({
+            "type": kind,
+            "url": url,
+        });
+        serde_json::from_value(payload).expect("OfficialTransport from json")
+    }
+
+    #[test]
+    fn remote_spec_from_transport_normalizes_aliases() {
+        for raw in ["streamable-http", "streamableHttp", "http"] {
+            let transport = make_transport(raw, "https://mcp.example.com/mcp");
+            let spec =
+                remote_spec_from_transport_with_values(&transport, &Map::new(), false).unwrap();
+            assert_eq!(
+                spec.get("type").and_then(Value::as_str),
+                Some("http"),
+                "raw {raw:?}"
+            );
+        }
+
+        let sse = make_transport("sse", "https://mcp.example.com/sse");
+        let spec = remote_spec_from_transport_with_values(&sse, &Map::new(), false).unwrap();
+        assert_eq!(spec.get("type").and_then(Value::as_str), Some("sse"));
+
+        let unknown = make_transport("ws", "https://x");
+        assert!(remote_spec_from_transport_with_values(&unknown, &Map::new(), false).is_err());
+    }
+
+    fn make_smithery_connection(kind: &str) -> SmitheryConnection {
+        let payload = serde_json::json!({ "type": kind });
+        serde_json::from_value(payload).expect("SmitheryConnection from json")
+    }
+
+    #[test]
+    fn smithery_connection_protocol_normalizes_aliases() {
+        assert_eq!(
+            smithery_connection_protocol(&make_smithery_connection("streamable-http")),
+            "http"
+        );
+        assert_eq!(
+            smithery_connection_protocol(&make_smithery_connection("streamableHttp")),
+            "http"
+        );
+        assert_eq!(
+            smithery_connection_protocol(&make_smithery_connection("sse")),
+            "sse"
+        );
+        // Unknown falls back to http (preserves prior permissive behavior).
+        assert_eq!(
+            smithery_connection_protocol(&make_smithery_connection("ws")),
+            "http"
+        );
+    }
+}
