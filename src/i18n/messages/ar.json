@@ -892,6 +892,7 @@
       "reloadFailed": "فشل إعادة تحميل المحادثة: {message}",
       "reloaded": "تمت إعادة تحميل المحادثة",
       "reload": "إعادة تحميل",
+      "activeConversationIndicator": "المحادثة النشطة",
       "newConversation": "محادثة جديدة",
       "closeConversation": "إغلاق المحادثة",
       "copyText": "نسخ النص",

@@ -892,6 +892,7 @@
       "reloadFailed": "会話の再読み込みに失敗しました: {message}",
       "reloaded": "会話を再読み込みしました",
       "reload": "再読み込み",
+      "activeConversationIndicator": "アクティブな会話",
       "newConversation": "新しい会話",
       "closeConversation": "会話を閉じる",
       "copyText": "テキストをコピー",

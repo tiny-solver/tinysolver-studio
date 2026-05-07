@@ -892,6 +892,7 @@
       "reloadFailed": "대화 다시 불러오기 실패: {message}",
       "reloaded": "대화를 다시 불러왔습니다",
       "reload": "다시 불러오기",
+      "activeConversationIndicator": "활성 대화",
       "newConversation": "새 대화",
       "closeConversation": "대화 닫기",
       "copyText": "텍스트 복사",

@@ -892,6 +892,7 @@
       "reloadFailed": "Failed to reload conversation: {message}",
       "reloaded": "Conversation reloaded",
       "reload": "Reload",
+      "activeConversationIndicator": "Active conversation",
       "newConversation": "New Conversation",
       "closeConversation": "Close Conversation",
       "copyText": "Copy Text",

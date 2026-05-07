@@ -892,6 +892,7 @@
       "reloadFailed": "會話重新載入失敗：{message}",
       "reloaded": "目前會話已重新載入",
       "reload": "重新載入",
+      "activeConversationIndicator": "目前啟用的會話",
       "newConversation": "新增會話",
       "closeConversation": "關閉會話",
       "copyText": "複製文字",

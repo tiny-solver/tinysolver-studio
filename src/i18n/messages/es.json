@@ -892,6 +892,7 @@
       "reloadFailed": "No se pudo recargar la conversación: {message}",
       "reloaded": "Conversación recargada",
       "reload": "Recargar",
+      "activeConversationIndicator": "Conversación activa",
       "newConversation": "Nueva conversación",
       "closeConversation": "Cerrar conversación",
       "copyText": "Copiar texto",
