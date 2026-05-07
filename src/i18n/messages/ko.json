@@ -1852,6 +1852,19 @@
           "todosProgress": "할 일 ({done}/{total})",
           "skillWithName": "Skill: {name}",
           "genericWithContext": "{tool} ({context})"
+        },
+        "toolGroup": {
+          "search": "{count}회 검색",
+          "command": "명령 {count}개 실행",
+          "read": "파일 {count}개 읽기",
+          "edit": "파일 {count}개 편집",
+          "fetch": "리소스 {count}개 가져오기",
+          "think": "{count}회 사고",
+          "todo": "할 일 {count}개 업데이트",
+          "task": "작업 {count}개 실행",
+          "other": "도구 {count}개 사용",
+          "errorSuffix": "{count}건 실패",
+          "joiner": " · "
         }
       }
     },

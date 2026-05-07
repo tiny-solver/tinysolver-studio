@@ -1852,6 +1852,19 @@
           "todosProgress": "المهام ({done}/{total})",
           "skillWithName": "Skill: {name}",
           "genericWithContext": "{tool} ({context})"
+        },
+        "toolGroup": {
+          "search": "{count, plural, zero {بحث صفر مرة} one {بحث مرة واحدة} two {بحث مرتين} few {بحث # مرات} many {بحث # مرة} other {بحث # مرة}}",
+          "command": "{count, plural, zero {تنفيذ صفر أمر} one {تنفيذ أمر واحد} two {تنفيذ أمرين} few {تنفيذ # أوامر} many {تنفيذ # أمراً} other {تنفيذ # أمر}}",
+          "read": "{count, plural, zero {قراءة صفر ملف} one {قراءة ملف واحد} two {قراءة ملفين} few {قراءة # ملفات} many {قراءة # ملفاً} other {قراءة # ملف}}",
+          "edit": "{count, plural, zero {تعديل صفر ملف} one {تعديل ملف واحد} two {تعديل ملفين} few {تعديل # ملفات} many {تعديل # ملفاً} other {تعديل # ملف}}",
+          "fetch": "{count, plural, zero {جلب صفر مورد} one {جلب مورد واحد} two {جلب موردين} few {جلب # موارد} many {جلب # مورداً} other {جلب # مورد}}",
+          "think": "{count, plural, zero {تفكير صفر مرة} one {تفكير مرة واحدة} two {تفكير مرتين} few {تفكير # مرات} many {تفكير # مرة} other {تفكير # مرة}}",
+          "todo": "{count, plural, zero {تحديث صفر مهمة} one {تحديث مهمة واحدة} two {تحديث مهمتين} few {تحديث # مهام} many {تحديث # مهمة} other {تحديث # مهمة}}",
+          "task": "{count, plural, zero {تشغيل صفر مهمة} one {تشغيل مهمة واحدة} two {تشغيل مهمتين} few {تشغيل # مهام} many {تشغيل # مهمة} other {تشغيل # مهمة}}",
+          "other": "{count, plural, zero {استخدام صفر أداة} one {استخدام أداة واحدة} two {استخدام أداتين} few {استخدام # أدوات} many {استخدام # أداة} other {استخدام # أداة}}",
+          "errorSuffix": "{count, plural, zero {صفر فشل} one {فشل واحد} two {فشلان} few {# فشلوا} many {# فشلاً} other {# فشل}}",
+          "joiner": " · "
         }
       }
     },

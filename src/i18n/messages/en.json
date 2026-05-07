@@ -1852,6 +1852,19 @@
           "todosProgress": "Todos ({done}/{total})",
           "skillWithName": "Skill: {name}",
           "genericWithContext": "{tool}: {context}"
+        },
+        "toolGroup": {
+          "search": "{count, plural, one {Explored # search} other {Explored # searches}}",
+          "command": "{count, plural, one {Ran # command} other {Ran # commands}}",
+          "read": "{count, plural, one {Read # file} other {Read # files}}",
+          "edit": "{count, plural, one {Edited # file} other {Edited # files}}",
+          "fetch": "{count, plural, one {Fetched # resource} other {Fetched # resources}}",
+          "think": "{count, plural, one {Thought # time} other {Thought # times}}",
+          "todo": "{count, plural, one {Updated # todo} other {Updated # todos}}",
+          "task": "{count, plural, one {Ran # task} other {Ran # tasks}}",
+          "other": "{count, plural, one {Used # tool} other {Used # tools}}",
+          "errorSuffix": "{count, plural, one {# failed} other {# failed}}",
+          "joiner": " · "
         }
       }
     },

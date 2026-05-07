@@ -1852,6 +1852,19 @@
           "todosProgress": "Tâches ({done}/{total})",
           "skillWithName": "Skill : {name}",
           "genericWithContext": "{tool} ({context})"
+        },
+        "toolGroup": {
+          "search": "{count, plural, one {A exploré # recherche} other {A exploré # recherches}}",
+          "command": "{count, plural, one {A exécuté # commande} other {A exécuté # commandes}}",
+          "read": "{count, plural, one {A lu # fichier} other {A lu # fichiers}}",
+          "edit": "{count, plural, one {A modifié # fichier} other {A modifié # fichiers}}",
+          "fetch": "{count, plural, one {A récupéré # ressource} other {A récupéré # ressources}}",
+          "think": "{count, plural, one {A réfléchi # fois} other {A réfléchi # fois}}",
+          "todo": "{count, plural, one {A mis à jour # tâche} other {A mis à jour # tâches}}",
+          "task": "{count, plural, one {A lancé # tâche} other {A lancé # tâches}}",
+          "other": "{count, plural, one {A utilisé # outil} other {A utilisé # outils}}",
+          "errorSuffix": "{count, plural, one {# échec} other {# échecs}}",
+          "joiner": " · "
         }
       }
     },
