@@ -390,7 +390,13 @@
       "fieldOutOfRange": "La valeur de {field} est hors de la plage autorisée",
       "jsonEmpty": "{name} ne peut pas être vide",
       "jsonInvalid": "{name} n’est pas un JSON valide : {message}",
-      "jsonMustBeObject": "{name} doit être un objet JSON"
+      "jsonMustBeObject": "{name} doit être un objet JSON",
+      "specMustBeObject": "La configuration MCP doit être un objet JSON.",
+      "missingType": "Le champ type est manquant dans la configuration MCP. Indiquez stdio, http (alias : streamable-http, streamableHttp) ou sse.",
+      "unsupportedType": "Type MCP non pris en charge {type}. Pris en charge : stdio, http (alias : streamable-http, streamableHttp), sse.",
+      "stdioCommandRequired": "Un MCP stdio nécessite un champ command non vide.",
+      "remoteUrlRequired": "Un MCP distant nécessite un champ url non vide.",
+      "appsRequired": "Sélectionnez au moins une application cible."
     },
     "jsonNames": {
       "localConfig": "Configuration MCP",
@@ -448,7 +454,9 @@
       "draftTitle": "Nouveau MCP",
       "draftDescription": "Renseignez un Server ID et une configuration pour créer un serveur MCP local.",
       "serverIdLabel": "Server ID",
-      "serverIdPlaceholder": "Server ID (ex. my-mcp)"
+      "serverIdPlaceholder": "Server ID (ex. my-mcp)",
+      "typeHint": "Types pris en charge : stdio, http (alias : streamable-http, streamableHttp), sse. env n'est utilisé que par stdio ; pour les MCP distants, utilisez headers pour transporter les jetons d'authentification.",
+      "envOnRemoteWarning": "env détecté sur un MCP distant. Seul stdio utilise env ; les MCP distants transportent les jetons d'authentification via headers, donc env sera ignoré à l'enregistrement."
     },
     "market": {
       "selectMarketplace": "Sélectionner un marketplace",
@@ -651,9 +659,9 @@
       "authMustBeObject": "auth.json doit être un objet JSON",
       "authInvalid": "Erreur de format auth.json : {message}",
       "providerIdPattern": "L’ID du provider n’accepte que lettres, chiffres, underscore, point et tiret",
-      "providerExists": "Le provider '{providerId}' existe déjà",
+      "providerExists": "Le provider {providerId} existe déjà",
       "modelIdPattern": "L’ID du modèle n’accepte que lettres, chiffres, underscore, point, deux-points et tiret",
-      "modelExists": "Le modèle '{modelId}' existe déjà"
+      "modelExists": "Le modèle {modelId} existe déjà"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "La configuration JSON native est invalide ; réinitialisée en configuration structurée",

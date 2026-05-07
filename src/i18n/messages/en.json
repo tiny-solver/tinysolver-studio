@@ -390,7 +390,13 @@
       "fieldOutOfRange": "{field} value is out of allowed range",
       "jsonEmpty": "{name} cannot be empty",
       "jsonInvalid": "{name} is not valid JSON: {message}",
-      "jsonMustBeObject": "{name} must be a JSON object"
+      "jsonMustBeObject": "{name} must be a JSON object",
+      "specMustBeObject": "MCP config must be a JSON object.",
+      "missingType": "MCP config is missing the type field. Use one of stdio, http (aliases: streamable-http, streamableHttp), sse.",
+      "unsupportedType": "Unsupported MCP type {type}. Supported: stdio, http (aliases: streamable-http, streamableHttp), sse.",
+      "stdioCommandRequired": "stdio MCP requires a non-empty command field.",
+      "remoteUrlRequired": "Remote MCP requires a non-empty url field.",
+      "appsRequired": "Select at least one target app."
     },
     "jsonNames": {
       "localConfig": "MCP Config",
@@ -448,7 +454,9 @@
       "draftTitle": "New MCP",
       "draftDescription": "Provide a Server ID and configuration to create a local MCP server.",
       "serverIdLabel": "Server ID",
-      "serverIdPlaceholder": "Server ID (e.g. my-mcp)"
+      "serverIdPlaceholder": "Server ID (e.g. my-mcp)",
+      "typeHint": "Supported types: stdio, http (aliases: streamable-http, streamableHttp), sse. env is only used by stdio; for remote MCPs use headers to carry auth tokens.",
+      "envOnRemoteWarning": "env detected on a remote MCP. Only stdio uses env; remote MCPs carry auth tokens via headers, so env will be ignored on save."
     },
     "market": {
       "selectMarketplace": "Select marketplace",
@@ -651,9 +659,9 @@
       "authMustBeObject": "auth.json must be a JSON object",
       "authInvalid": "auth.json format error: {message}",
       "providerIdPattern": "Provider ID only supports letters, numbers, underscore, dot and hyphen",
-      "providerExists": "Provider '{providerId}' already exists",
+      "providerExists": "Provider {providerId} already exists",
       "modelIdPattern": "Model ID only supports letters, numbers, underscore, dot, colon and hyphen",
-      "modelExists": "Model '{modelId}' already exists"
+      "modelExists": "Model {modelId} already exists"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "Native JSON config is invalid; reset to structured config",

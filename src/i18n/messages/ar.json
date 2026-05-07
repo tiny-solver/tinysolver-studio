@@ -390,7 +390,13 @@
       "fieldOutOfRange": "قيمة {field} خارج النطاق المسموح",
       "jsonEmpty": "{name} لا يمكن أن يكون فارغًا",
       "jsonInvalid": "{name} ليس JSON صالحًا: {message}",
-      "jsonMustBeObject": "{name} يجب أن يكون كائن JSON"
+      "jsonMustBeObject": "{name} يجب أن يكون كائن JSON",
+      "specMustBeObject": "يجب أن يكون إعداد MCP كائن JSON.",
+      "missingType": "حقل type غير موجود في إعداد MCP. حدد أحد القيم: stdio أو http (الأسماء البديلة: streamable-http و streamableHttp) أو sse.",
+      "unsupportedType": "نوع MCP غير مدعوم {type}. المدعوم: stdio و http (الأسماء البديلة: streamable-http و streamableHttp) و sse.",
+      "stdioCommandRequired": "يتطلب MCP من نوع stdio حقل command غير فارغ.",
+      "remoteUrlRequired": "تتطلب MCP البعيدة حقل url غير فارغ.",
+      "appsRequired": "حدد تطبيقاً مستهدفاً واحداً على الأقل."
     },
     "jsonNames": {
       "localConfig": "إعداد MCP",
@@ -448,7 +454,9 @@
       "draftTitle": "MCP جديد",
       "draftDescription": "أدخل معرّف الخادم والإعدادات لإنشاء خادم MCP محلي.",
       "serverIdLabel": "معرّف الخادم",
-      "serverIdPlaceholder": "معرّف الخادم (مثل: my-mcp)"
+      "serverIdPlaceholder": "معرّف الخادم (مثل: my-mcp)",
+      "typeHint": "الأنواع المدعومة: stdio و http (الأسماء البديلة: streamable-http و streamableHttp) و sse. يُستخدم env مع stdio فقط؛ خوادم MCP البعيدة تحمل رموز المصادقة عبر headers.",
+      "envOnRemoteWarning": "تم اكتشاف env على MCP بعيد. يُستخدم env مع stdio فقط؛ خوادم MCP البعيدة تحمل رموز المصادقة عبر headers، لذا سيتم تجاهل env عند الحفظ."
     },
     "market": {
       "selectMarketplace": "اختر السوق",
@@ -651,9 +659,9 @@
       "authMustBeObject": "يجب أن يكون auth.json كائن JSON",
       "authInvalid": "خطأ في تنسيق auth.json: {message}",
       "providerIdPattern": "يدعم معرّف المزود الأحرف والأرقام والشرطة السفلية والنقطة والشرطة فقط",
-      "providerExists": "المزوّد '{providerId}' موجود بالفعل",
+      "providerExists": "المزوّد {providerId} موجود بالفعل",
       "modelIdPattern": "يدعم معرّف النموذج الأحرف والأرقام والشرطة السفلية والنقطة والنقطتين والشرطة فقط",
-      "modelExists": "النموذج '{modelId}' موجود بالفعل"
+      "modelExists": "النموذج {modelId} موجود بالفعل"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "إعداد JSON الأصلي غير صالح؛ تمت إعادة التعيين إلى إعداد مُهيكل",

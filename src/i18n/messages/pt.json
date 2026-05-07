@@ -390,7 +390,13 @@
       "fieldOutOfRange": "O valor de {field} está fora do intervalo permitido",
       "jsonEmpty": "{name} não pode estar vazio",
       "jsonInvalid": "{name} não é um JSON válido: {message}",
-      "jsonMustBeObject": "{name} deve ser um objeto JSON"
+      "jsonMustBeObject": "{name} deve ser um objeto JSON",
+      "specMustBeObject": "A configuração do MCP deve ser um objeto JSON.",
+      "missingType": "Falta o campo type na configuração do MCP. Use stdio, http (aliases: streamable-http, streamableHttp) ou sse.",
+      "unsupportedType": "Tipo de MCP não suportado {type}. Suportados: stdio, http (aliases: streamable-http, streamableHttp), sse.",
+      "stdioCommandRequired": "Um MCP stdio exige um campo command não vazio.",
+      "remoteUrlRequired": "Um MCP remoto exige um campo url não vazio.",
+      "appsRequired": "Selecione ao menos um aplicativo alvo."
     },
     "jsonNames": {
       "localConfig": "Configuração MCP",
@@ -448,7 +454,9 @@
       "draftTitle": "Novo MCP",
       "draftDescription": "Informe um Server ID e a configuração para criar um servidor MCP local.",
       "serverIdLabel": "Server ID",
-      "serverIdPlaceholder": "Server ID (ex.: my-mcp)"
+      "serverIdPlaceholder": "Server ID (ex.: my-mcp)",
+      "typeHint": "Tipos suportados: stdio, http (aliases: streamable-http, streamableHttp), sse. env só é usado por stdio; para MCPs remotos use headers para transportar tokens de autenticação.",
+      "envOnRemoteWarning": "env detectado em um MCP remoto. Apenas stdio usa env; MCPs remotos transportam tokens de autenticação via headers, portanto env será ignorado ao salvar."
     },
     "market": {
       "selectMarketplace": "Selecionar marketplace",
@@ -651,9 +659,9 @@
       "authMustBeObject": "auth.json deve ser um objeto JSON",
       "authInvalid": "Erro de formato no auth.json: {message}",
       "providerIdPattern": "O ID do provedor só aceita letras, números, sublinhado, ponto e hífen",
-      "providerExists": "O provedor '{providerId}' já existe",
+      "providerExists": "O provedor {providerId} já existe",
       "modelIdPattern": "O ID do modelo só aceita letras, números, sublinhado, ponto, dois-pontos e hífen",
-      "modelExists": "O modelo '{modelId}' já existe"
+      "modelExists": "O modelo {modelId} já existe"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "A configuração JSON nativa é inválida; redefinida para configuração estruturada",

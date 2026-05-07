@@ -390,7 +390,13 @@
       "fieldOutOfRange": "{field} 값이 허용 범위를 벗어났습니다",
       "jsonEmpty": "{name}은(는) 비워둘 수 없습니다",
       "jsonInvalid": "{name}은(는) 유효한 JSON이 아닙니다: {message}",
-      "jsonMustBeObject": "{name}은(는) JSON 객체여야 합니다"
+      "jsonMustBeObject": "{name}은(는) JSON 객체여야 합니다",
+      "specMustBeObject": "MCP 구성은 JSON 객체여야 합니다.",
+      "missingType": "MCP 구성에 type 필드가 없습니다. stdio, http (별칭: streamable-http, streamableHttp), sse 중 하나를 지정하세요.",
+      "unsupportedType": "지원하지 않는 MCP type {type}. 지원: stdio, http (별칭: streamable-http, streamableHttp), sse.",
+      "stdioCommandRequired": "stdio 타입의 MCP에는 비어 있지 않은 command 필드가 필요합니다.",
+      "remoteUrlRequired": "원격 MCP에는 비어 있지 않은 url 필드가 필요합니다.",
+      "appsRequired": "대상 앱을 하나 이상 선택하세요."
     },
     "jsonNames": {
       "localConfig": "MCP 구성",
@@ -448,7 +454,9 @@
       "draftTitle": "새 MCP",
       "draftDescription": "Server ID와 설정을 입력하여 로컬 MCP 서버를 생성합니다.",
       "serverIdLabel": "Server ID",
-      "serverIdPlaceholder": "Server ID (예: my-mcp)"
+      "serverIdPlaceholder": "Server ID (예: my-mcp)",
+      "typeHint": "지원 타입: stdio, http (별칭: streamable-http, streamableHttp), sse. env는 stdio 전용이며, 원격 MCP는 인증 토큰을 headers로 전달해야 합니다.",
+      "envOnRemoteWarning": "원격 MCP 설정에 env가 포함되어 있습니다. env는 stdio에서만 사용되며 원격 MCP는 headers로 인증 토큰을 전달합니다. 저장 시 env는 무시됩니다."
     },
     "market": {
       "selectMarketplace": "마켓플레이스 선택",
@@ -651,9 +659,9 @@
       "authMustBeObject": "auth.json은 JSON 객체여야 합니다",
       "authInvalid": "auth.json 형식 오류: {message}",
       "providerIdPattern": "Provider ID는 문자, 숫자, 밑줄, 점, 하이픈만 지원합니다",
-      "providerExists": "Provider '{providerId}'가 이미 존재합니다",
+      "providerExists": "Provider {providerId}가 이미 존재합니다",
       "modelIdPattern": "Model ID는 문자, 숫자, 밑줄, 점, 콜론, 하이픈만 지원합니다",
-      "modelExists": "Model '{modelId}'가 이미 존재합니다"
+      "modelExists": "Model {modelId}가 이미 존재합니다"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "네이티브 JSON 구성이 잘못되어 구조화 구성으로 재설정했습니다",

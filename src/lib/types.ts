@@ -28,6 +28,10 @@ export interface AppCommandError {
   code: AppErrorCode
   message: string
   detail?: string | null
+  /** Optional dotted i18n key used to render a localized message. */
+  i18n_key?: string | null
+  /** Optional named parameters substituted into the localized template. */
+  i18n_params?: Record<string, string> | null
 }
 
 export interface ConversationSummary {

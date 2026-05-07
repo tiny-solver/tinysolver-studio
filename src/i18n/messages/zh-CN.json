@@ -390,7 +390,13 @@
       "fieldOutOfRange": "{field} 的值不在可选范围内",
       "jsonEmpty": "{name} 不能为空",
       "jsonInvalid": "{name} 不是合法 JSON：{message}",
-      "jsonMustBeObject": "{name} 必须是 JSON 对象"
+      "jsonMustBeObject": "{name} 必须是 JSON 对象",
+      "specMustBeObject": "MCP 配置必须是 JSON 对象。",
+      "missingType": "MCP 配置缺少 type 字段。请填写 stdio、http（别名 streamable-http、streamableHttp）、sse 之一。",
+      "unsupportedType": "不支持的 MCP type：{type}。支持的类型：stdio、http（别名 streamable-http、streamableHttp）、sse。",
+      "stdioCommandRequired": "stdio 类型的 MCP 必须填写非空的 command 字段。",
+      "remoteUrlRequired": "远端 MCP 必须填写非空的 url 字段。",
+      "appsRequired": "请至少选择一个目标 App。"
     },
     "jsonNames": {
       "localConfig": "MCP 配置",
@@ -448,7 +454,9 @@
       "draftTitle": "新建 MCP",
       "draftDescription": "填写 Server ID 与配置以创建本地 MCP 服务器。",
       "serverIdLabel": "Server ID",
-      "serverIdPlaceholder": "Server ID（例如：my-mcp）"
+      "serverIdPlaceholder": "Server ID（例如：my-mcp）",
+      "typeHint": "支持类型：stdio、http（别名 streamable-http、streamableHttp）、sse。env 仅适用于 stdio；远端 MCP 请通过 headers 字段传递鉴权 token。",
+      "envOnRemoteWarning": "检测到远端 MCP 配置中包含 env 字段。env 仅 stdio 类型使用，远端 MCP 应通过 headers 携带鉴权信息，env 字段保存时会被忽略。"
     },
     "market": {
       "selectMarketplace": "选择市场",
@@ -651,9 +659,9 @@
       "authMustBeObject": "auth.json 必须是 JSON 对象",
       "authInvalid": "auth.json 格式错误：{message}",
       "providerIdPattern": "Provider ID 仅支持字母、数字、下划线、点与中划线",
-      "providerExists": "Provider '{providerId}' 已存在",
+      "providerExists": "Provider {providerId} 已存在",
       "modelIdPattern": "模型 ID 仅支持字母、数字、下划线、点、冒号与中划线",
-      "modelExists": "Model '{modelId}' 已存在"
+      "modelExists": "Model {modelId} 已存在"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "原生 JSON 配置格式无效，已重置为结构化配置",

@@ -390,7 +390,13 @@
       "fieldOutOfRange": "Der Wert von {field} liegt außerhalb des erlaubten Bereichs",
       "jsonEmpty": "{name} darf nicht leer sein",
       "jsonInvalid": "{name} ist kein gültiges JSON: {message}",
-      "jsonMustBeObject": "{name} muss ein JSON-Objekt sein"
+      "jsonMustBeObject": "{name} muss ein JSON-Objekt sein",
+      "specMustBeObject": "Die MCP-Konfiguration muss ein JSON-Objekt sein.",
+      "missingType": "Der Konfiguration fehlt das Feld type. Bitte stdio, http (Aliase: streamable-http, streamableHttp) oder sse angeben.",
+      "unsupportedType": "Nicht unterstützter MCP-Typ {type}. Unterstützt: stdio, http (Aliase: streamable-http, streamableHttp), sse.",
+      "stdioCommandRequired": "stdio-MCPs benötigen ein nicht leeres Feld command.",
+      "remoteUrlRequired": "Remote-MCPs benötigen ein nicht leeres Feld url.",
+      "appsRequired": "Mindestens eine Ziel-App auswählen."
     },
     "jsonNames": {
       "localConfig": "MCP-Konfiguration",
@@ -448,7 +454,9 @@
       "draftTitle": "Neuer MCP",
       "draftDescription": "Geben Sie eine Server-ID und Konfiguration an, um einen lokalen MCP-Server zu erstellen.",
       "serverIdLabel": "Server-ID",
-      "serverIdPlaceholder": "Server-ID (z. B. my-mcp)"
+      "serverIdPlaceholder": "Server-ID (z. B. my-mcp)",
+      "typeHint": "Unterstützte Typen: stdio, http (Aliase: streamable-http, streamableHttp), sse. env wird nur von stdio verwendet; für Remote-MCPs Auth-Tokens über headers übermitteln.",
+      "envOnRemoteWarning": "env wurde in einem Remote-MCP erkannt. Nur stdio verwendet env; Remote-MCPs übermitteln Auth-Tokens über headers, sodass env beim Speichern ignoriert wird."
     },
     "market": {
       "selectMarketplace": "Marktplatz auswählen",
@@ -651,9 +659,9 @@
       "authMustBeObject": "auth.json muss ein JSON-Objekt sein",
       "authInvalid": "Formatfehler in auth.json: {message}",
       "providerIdPattern": "Provider-ID unterstützt nur Buchstaben, Zahlen, Unterstrich, Punkt und Bindestrich",
-      "providerExists": "Provider '{providerId}' existiert bereits",
+      "providerExists": "Provider {providerId} existiert bereits",
       "modelIdPattern": "Model-ID unterstützt nur Buchstaben, Zahlen, Unterstrich, Punkt, Doppelpunkt und Bindestrich",
-      "modelExists": "Model '{modelId}' existiert bereits"
+      "modelExists": "Model {modelId} existiert bereits"
     },
     "warnings": {
       "nativeJsonRecoveredStructured": "Native JSON-Konfiguration ist ungültig; auf strukturierte Konfiguration zurückgesetzt",
