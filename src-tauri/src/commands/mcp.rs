@@ -1165,11 +1165,19 @@ fn codex_entry_to_canonical(id: &str, value: &toml::Value) -> Result<Value, AppC
         .filter(|value| !value.is_empty())
         .unwrap_or("stdio")
         .to_string();
+    let canonical_type = normalize_mcp_type(&raw_type).ok_or_else(|| {
+        mcp_invalid_input(format!(
+            "Codex MCP entry '{id}' has unsupported type '{raw_type}'"
+        ))
+    })?;
 
     let mut spec = Map::new();
-    spec.insert("type".to_string(), Value::String(raw_type.clone()));
+    spec.insert(
+        "type".to_string(),
+        Value::String(canonical_type.to_string()),
+    );
 
-    match raw_type.as_str() {
+    match canonical_type {
         "stdio" => {
             if let Some(command) = table
                 .get("command")
@@ -1219,7 +1227,7 @@ fn codex_entry_to_canonical(id: &str, value: &toml::Value) -> Result<Value, AppC
                 spec.insert("cwd".to_string(), Value::String(cwd.to_string()));
             }
         }
-        "http" | "sse" | "streamable-http" => {
+        "http" | "sse" => {
             if let Some(url) = table
                 .get("url")
                 .and_then(toml::Value::as_str)
@@ -2415,10 +2423,8 @@ fn first_non_empty_icon_src(icons: Option<&[OfficialIcon]>) -> Option<String> {
 }
 
 fn transport_protocol(kind: &str) -> Option<String> {
-    match kind.trim() {
-        "stdio" => Some("stdio".to_string()),
-        "http" | "streamable-http" => Some("http".to_string()),
-        "sse" => Some("sse".to_string()),
+    match normalize_mcp_type(kind)? {
+        canonical @ ("stdio" | "http" | "sse") => Some(canonical.to_string()),
         _ => None,
     }
 }
@@ -2798,9 +2804,8 @@ fn remote_spec_from_transport_with_values(
     enforce_required: bool,
 ) -> Result<Value, AppCommandError> {
     let kind = transport.r#type.trim();
-    let canonical_type = match kind {
-        "streamable-http" | "http" => "http",
-        "sse" => "sse",
+    let canonical_type = match normalize_mcp_type(kind) {
+        Some(value @ ("http" | "sse")) => value,
         _ => {
             return Err(mcp_invalid_input(format!(
                 "unsupported transport type '{kind}'"
@@ -3538,9 +3543,9 @@ fn parse_smithery_option_id(option_id: &str) -> Option<usize> {
 }
 
 fn smithery_connection_protocol(connection: &SmitheryConnection) -> String {
-    match connection.r#type.trim() {
-        "sse" => "sse".to_string(),
-        "streamable-http" | "http" => "http".to_string(),
+    match normalize_mcp_type(&connection.r#type) {
+        Some("sse") => "sse".to_string(),
+        Some("http") => "http".to_string(),
         _ => "http".to_string(),
     }
 }
