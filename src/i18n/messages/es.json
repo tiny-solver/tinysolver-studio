@@ -394,6 +394,8 @@
       "specMustBeObject": "La configuración de MCP debe ser un objeto JSON.",
       "missingType": "Falta el campo type en la configuración de MCP. Indica uno de stdio, http (alias: streamable-http, streamableHttp), sse.",
       "unsupportedType": "Tipo de MCP no admitido {type}. Compatibles: stdio, http (alias: streamable-http, streamableHttp), sse.",
+      "codexEntryUnsupportedType": "La entrada Codex MCP {id} tiene un tipo no admitido {type}. Compatibles: stdio, http (alias: streamable-http, streamableHttp), sse.",
+      "unsupportedTransportType": "Tipo de transport no admitido {type}. Compatibles: http (alias: streamable-http, streamableHttp), sse.",
       "stdioCommandRequired": "Los MCP stdio requieren un campo command no vacío.",
       "remoteUrlRequired": "Los MCP remotos requieren un campo url no vacío.",
       "appsRequired": "Selecciona al menos una aplicación de destino."

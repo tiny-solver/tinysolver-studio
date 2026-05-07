@@ -394,6 +394,8 @@
       "specMustBeObject": "MCP 設定は JSON オブジェクトである必要があります。",
       "missingType": "MCP 設定に type フィールドがありません。stdio、http（エイリアス：streamable-http、streamableHttp）、sse のいずれかを指定してください。",
       "unsupportedType": "サポートされていない MCP タイプ {type}。対応：stdio、http（エイリアス：streamable-http、streamableHttp）、sse。",
+      "codexEntryUnsupportedType": "Codex MCP エントリ {id} のタイプ {type} はサポートされていません。対応：stdio、http（エイリアス：streamable-http、streamableHttp）、sse。",
+      "unsupportedTransportType": "サポートされていない transport タイプ {type}。対応：http（エイリアス：streamable-http、streamableHttp）、sse。",
       "stdioCommandRequired": "stdio タイプの MCP には空でない command フィールドが必要です。",
       "remoteUrlRequired": "リモート MCP には空でない url フィールドが必要です。",
       "appsRequired": "対象アプリを少なくとも 1 つ選択してください。"

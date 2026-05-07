@@ -1169,6 +1169,10 @@ fn codex_entry_to_canonical(id: &str, value: &toml::Value) -> Result<Value, AppC
         mcp_invalid_input(format!(
             "Codex MCP entry '{id}' has unsupported type '{raw_type}'"
         ))
+        .with_i18n(
+            "errors.codexEntryUnsupportedType",
+            mcp_i18n_params([("id", id), ("type", raw_type.as_str())]),
+        )
     })?;
 
     let mut spec = Map::new();
@@ -1262,7 +1266,11 @@ fn codex_entry_to_canonical(id: &str, value: &toml::Value) -> Result<Value, AppC
         _ => {
             return Err(mcp_invalid_input(format!(
                 "Codex MCP entry '{id}' has unsupported type '{raw_type}'"
-            )));
+            ))
+            .with_i18n(
+                "errors.codexEntryUnsupportedType",
+                mcp_i18n_params([("id", id), ("type", raw_type.as_str())]),
+            ));
         }
     }
 
@@ -2807,9 +2815,12 @@ fn remote_spec_from_transport_with_values(
     let canonical_type = match normalize_mcp_type(kind) {
         Some(value @ ("http" | "sse")) => value,
         _ => {
-            return Err(mcp_invalid_input(format!(
-                "unsupported transport type '{kind}'"
-            )))
+            return Err(
+                mcp_invalid_input(format!("unsupported transport type '{kind}'")).with_i18n(
+                    "errors.unsupportedTransportType",
+                    mcp_i18n_params([("type", kind)]),
+                ),
+            )
         }
     };
 
@@ -3946,6 +3957,13 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("'Foo'"), "error should echo raw type: {msg}");
         assert!(msg.contains("'ex'"), "error should mention id: {msg}");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some("errors.codexEntryUnsupportedType")
+        );
+        let params = err.i18n_params.as_ref().expect("i18n params attached");
+        assert_eq!(params.get("id").map(String::as_str), Some("ex"));
+        assert_eq!(params.get("type").map(String::as_str), Some("Foo"));
     }
 
     #[test]
@@ -4004,7 +4022,14 @@ mod tests {
         assert_eq!(spec.get("type").and_then(Value::as_str), Some("sse"));
 
         let unknown = make_transport("ws", "https://x");
-        assert!(remote_spec_from_transport_with_values(&unknown, &Map::new(), false).is_err());
+        let err = remote_spec_from_transport_with_values(&unknown, &Map::new(), false)
+            .expect_err("ws should be rejected");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some("errors.unsupportedTransportType")
+        );
+        let params = err.i18n_params.as_ref().expect("i18n params attached");
+        assert_eq!(params.get("type").map(String::as_str), Some("ws"));
     }
 
     fn make_smithery_connection(kind: &str) -> SmitheryConnection {

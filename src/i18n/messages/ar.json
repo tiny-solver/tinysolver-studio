@@ -394,6 +394,8 @@
       "specMustBeObject": "يجب أن يكون إعداد MCP كائن JSON.",
       "missingType": "حقل type غير موجود في إعداد MCP. حدد أحد القيم: stdio أو http (الأسماء البديلة: streamable-http و streamableHttp) أو sse.",
       "unsupportedType": "نوع MCP غير مدعوم {type}. المدعوم: stdio و http (الأسماء البديلة: streamable-http و streamableHttp) و sse.",
+      "codexEntryUnsupportedType": "إدخال Codex MCP {id} له نوع غير مدعوم {type}. المدعوم: stdio و http (الأسماء البديلة: streamable-http و streamableHttp) و sse.",
+      "unsupportedTransportType": "نوع transport غير مدعوم {type}. المدعوم: http (الأسماء البديلة: streamable-http و streamableHttp) و sse.",
       "stdioCommandRequired": "يتطلب MCP من نوع stdio حقل command غير فارغ.",
       "remoteUrlRequired": "تتطلب MCP البعيدة حقل url غير فارغ.",
       "appsRequired": "حدد تطبيقاً مستهدفاً واحداً على الأقل."

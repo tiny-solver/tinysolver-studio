@@ -394,6 +394,8 @@
       "specMustBeObject": "MCP 配置必须是 JSON 对象。",
       "missingType": "MCP 配置缺少 type 字段。请填写 stdio、http（别名 streamable-http、streamableHttp）、sse 之一。",
       "unsupportedType": "不支持的 MCP type：{type}。支持的类型：stdio、http（别名 streamable-http、streamableHttp）、sse。",
+      "codexEntryUnsupportedType": "Codex MCP 条目 {id} 的 type 不受支持：{type}。支持的类型：stdio、http（别名 streamable-http、streamableHttp）、sse。",
+      "unsupportedTransportType": "不支持的 transport 类型：{type}。支持的类型：http（别名 streamable-http、streamableHttp）、sse。",
       "stdioCommandRequired": "stdio 类型的 MCP 必须填写非空的 command 字段。",
       "remoteUrlRequired": "远端 MCP 必须填写非空的 url 字段。",
       "appsRequired": "请至少选择一个目标 App。"
