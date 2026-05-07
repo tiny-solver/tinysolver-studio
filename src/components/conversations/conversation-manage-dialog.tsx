@@ -65,6 +65,7 @@ import {
   STATUS_ORDER,
 } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { toErrorMessage } from "@/lib/app-error"
 import { ConversationStatusIcon } from "@/components/conversations/conversation-status-icon"
 
 interface ConversationManageDialogProps {
@@ -152,7 +153,7 @@ export function ConversationManageDialog({
         setRows(sorted)
         setError(null)
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
+        setError(toErrorMessage(e))
       } finally {
         setLoading(false)
       }
@@ -213,7 +214,7 @@ export function ConversationManageDialog({
     } catch (e) {
       toast.error(
         t("toastOpFailed", {
-          message: e instanceof Error ? e.message : String(e),
+          message: toErrorMessage(e),
         })
       )
     } finally {
@@ -235,7 +236,7 @@ export function ConversationManageDialog({
       } catch (e) {
         toast.error(
           t("toastOpFailed", {
-            message: e instanceof Error ? e.message : String(e),
+            message: toErrorMessage(e),
           })
         )
       } finally {

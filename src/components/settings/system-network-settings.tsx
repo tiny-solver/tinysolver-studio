@@ -57,6 +57,7 @@ import {
 } from "@/lib/updater"
 import type { DownloadEvent } from "@/lib/updater"
 import { APP_LOCALES } from "@/lib/i18n"
+import { toErrorMessage } from "@/lib/app-error"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -256,7 +257,7 @@ export function SystemNetworkSettings() {
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = toErrorMessage(err)
       setLoadError(message)
       console.error("[Settings] load system settings failed:", err)
     } finally {
@@ -311,7 +312,7 @@ export function SystemNetworkSettings() {
           setCustomPathExists(null)
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = toErrorMessage(err)
         toast.error(t("terminalSaveFailed", { message }))
       } finally {
         setSavingTerminal(false)
@@ -354,7 +355,7 @@ export function SystemNetworkSettings() {
         setEnabled(next.enabled)
         setProxyUrl(next.proxy_url ?? "")
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = toErrorMessage(err)
         toast.error(t("saveFailed", { message }))
       } finally {
         setSaving(false)
@@ -374,7 +375,7 @@ export function SystemNetworkSettings() {
         setPersistedDisableHwAccel(result.disable_hardware_acceleration)
       } catch (err) {
         setDisableHwAccel(prev)
-        const message = err instanceof Error ? err.message : String(err)
+        const message = toErrorMessage(err)
         toast.error(t("renderingSaveFailed", { message }))
       } finally {
         setSavingRendering(false)
@@ -387,7 +388,7 @@ export function SystemNetworkSettings() {
     try {
       await relaunchApp()
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = toErrorMessage(err)
       toast.error(t("restartFailed", { message }))
     }
   }, [t])
@@ -404,7 +405,7 @@ export function SystemNetworkSettings() {
 
         setLanguageSettings(next)
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = toErrorMessage(err)
         toast.error(t("languageSaveFailed", { message }))
       } finally {
         setSavingLanguage(false)

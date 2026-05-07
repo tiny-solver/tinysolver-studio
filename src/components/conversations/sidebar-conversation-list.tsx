@@ -75,6 +75,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
+import { toErrorMessage } from "@/lib/app-error"
 
 function parseTimestamp(value: string): number {
   const timestamp = Date.parse(value)
@@ -613,7 +614,7 @@ export function SidebarConversationList({
         await updateFolderColor(folderId, color)
         await refreshFolder(folderId)
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = toErrorMessage(err)
         toast.error(t("toasts.changeFolderColorFailed", { message: msg }))
       }
     },
@@ -771,7 +772,7 @@ export function SidebarConversationList({
       await removeFolderFromWorkspace(folderId)
       toast.success(t("toasts.folderRemoved", { name: folderName }))
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
+      const msg = toErrorMessage(e)
       toast.error(t("toasts.removeFolderFailed", { message: msg }))
     } finally {
       setRemoveConfirm(null)
@@ -882,7 +883,7 @@ export function SidebarConversationList({
           )
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
+        const msg = toErrorMessage(e)
         updateTask(taskId, { status: "failed", error: msg })
         toast.error(t("toasts.importFailed", { message: msg }))
       } finally {
@@ -899,7 +900,7 @@ export function SidebarConversationList({
       try {
         await reorderFolders(order)
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
+        const msg = toErrorMessage(e)
         toast.error(t("toasts.reorderFoldersFailed", { message: msg }))
       } finally {
         setReordering(false)

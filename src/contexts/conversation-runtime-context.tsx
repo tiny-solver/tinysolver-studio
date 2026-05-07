@@ -22,6 +22,7 @@ import type {
   TurnUsage,
 } from "@/lib/types"
 import { inferLiveToolName } from "@/lib/tool-call-normalization"
+import { toErrorMessage } from "@/lib/app-error"
 
 export type ConversationSyncState = "idle" | "awaiting_persist"
 
@@ -1003,7 +1004,7 @@ export function ConversationRuntimeProvider({
         dispatch({
           type: "FETCH_DETAIL_ERROR",
           conversationId,
-          error: error instanceof Error ? error.message : String(error),
+          error: toErrorMessage(error),
         })
       })
   }, [])
@@ -1018,7 +1019,7 @@ export function ConversationRuntimeProvider({
         dispatch({
           type: "FETCH_DETAIL_ERROR",
           conversationId,
-          error: error instanceof Error ? error.message : String(error),
+          error: toErrorMessage(error),
         })
       })
   }, [])

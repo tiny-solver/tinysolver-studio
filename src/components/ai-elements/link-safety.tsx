@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { useCallback, useMemo, useState } from "react"
 import { useTranslations } from "next-intl"
 import { openUrl } from "@/lib/platform"
+import { toErrorMessage } from "@/lib/app-error"
 import type { LinkSafetyConfig, LinkSafetyModalProps } from "streamdown"
 import { toast } from "sonner"
 import { useActiveFolder } from "@/contexts/active-folder-context"
@@ -261,7 +262,7 @@ function useOpenLinkOrFile() {
           })
         } catch (error) {
           toast.error(t("errorFailedOpen"), {
-            description: error instanceof Error ? error.message : String(error),
+            description: toErrorMessage(error),
           })
         }
         return
@@ -271,7 +272,7 @@ function useOpenLinkOrFile() {
         await openUrl(url)
       } catch (error) {
         toast.error(t("errorFailedLink"), {
-          description: error instanceof Error ? error.message : String(error),
+          description: toErrorMessage(error),
         })
       }
     },
@@ -371,7 +372,7 @@ export function FilePathLink({
     })
       .catch((error) => {
         toast.error(t("errorFailedOpen"), {
-          description: error instanceof Error ? error.message : String(error),
+          description: toErrorMessage(error),
         })
       })
       .finally(() => {
