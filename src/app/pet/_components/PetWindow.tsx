@@ -16,7 +16,9 @@ export interface PetWindowProps {
   petId: string
 }
 
+const JUMPING_DURATION_MS = sumDurations("jumping") + 80
 const WAVING_DURATION_MS = sumDurations("waving") + 80
+const PET_HOVER_ENTER_EVENT = "pet://hover-enter"
 
 function sumDurations(state: PetState): number {
   return PET_FRAME_DURATIONS_MS[state].reduce((acc, d) => acc + d, 0)
@@ -31,9 +33,9 @@ export function PetWindow({ petId }: PetWindowProps) {
   const agentState = usePetState()
 
   // Interaction-driven state takes priority over the agent-driven state so
-  // a drag or click immediately wins over the ambient ACP animation. The
-  // override is cleared either by the drag-idle timer (held still during
-  // drag) or by the post-click timeout (after waving finishes).
+  // a drag, hover, or click immediately wins over the ambient ACP animation.
+  // The override is cleared either by the drag-idle timer (held still during
+  // drag) or by the post-action timeout (after waving/jumping finishes).
   const [interactionState, setInteractionState] = useState<PetState | null>(
     null
   )
@@ -47,14 +49,45 @@ export function PetWindow({ petId }: PetWindowProps) {
     setInteractionState(s)
   }, [])
 
-  const handleClick = useCallback(() => {
+  const playOneShot = useCallback((state: PetState, durationMs: number) => {
     if (interactionTimerRef.current) clearTimeout(interactionTimerRef.current)
-    setInteractionState("waving")
+    setInteractionState(state)
     interactionTimerRef.current = setTimeout(() => {
       setInteractionState(null)
       interactionTimerRef.current = null
-    }, WAVING_DURATION_MS)
+    }, durationMs)
   }, [])
+
+  const handleClick = useCallback(() => {
+    playOneShot("jumping", JUMPING_DURATION_MS)
+  }, [playOneShot])
+
+  // Hover detection runs in Rust (`spawn_pet_hover_watcher` polls the
+  // global cursor position and emits `pet://hover-enter`). Going through
+  // the OS window event system from JS is unreliable when the pet isn't
+  // the key window, so we listen for the backend event instead.
+  useEffect(() => {
+    if (!isDesktop()) return
+    let unlisten: (() => void) | null = null
+    let cancelled = false
+    void (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event")
+        const off = await listen(PET_HOVER_ENTER_EVENT, () => {
+          if (cancelled) return
+          playOneShot("waving", WAVING_DURATION_MS)
+        })
+        if (cancelled) off()
+        else unlisten = off
+      } catch (err) {
+        console.warn("[Pet] hover subscription failed:", err)
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (unlisten) unlisten()
+    }
+  }, [playOneShot])
 
   useEffect(() => {
     return () => {

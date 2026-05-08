@@ -770,6 +770,7 @@ pub async fn open_project_boot_window(
 // ─── Desktop pet window ─────────────────────────────────────────────────
 
 const PET_WINDOW_LABEL: &str = "pet";
+const PET_HOVER_ENTER_EVENT: &str = "pet://hover-enter";
 /// Single-frame logical pixel dimensions, locked to the Codex sprite-sheet
 /// contract. The window is sized as one frame × user scale, with no extra
 /// chrome — DPR handling lives inside the webview.
@@ -862,23 +863,87 @@ pub async fn open_pet_window(
         .transparent(true)
         .always_on_top(config.always_on_top)
         .skip_taskbar(true)
-        .shadow(false);
+        .shadow(false)
+        // Don't steal focus from the user's IDE/terminal on summon, and let
+        // the first click on an inactive pet window hit the webview directly
+        // (so drag works without a "click once to activate" cycle).
+        .focused(false)
+        .accept_first_mouse(true);
 
-    if let (Some(x), Some(y)) = (config.x, config.y) {
-        builder = builder.position(x, y);
-    } else {
-        builder = builder.center();
-    }
+    builder = builder.center();
 
-    let pet_window = apply_pet_window_style(builder)
+    apply_pet_window_style(builder)
         .build()
         .map_err(|e| AppCommandError::window("Failed to open pet window", e.to_string()))?;
 
-    pet_window
-        .set_focus()
-        .map_err(|e| AppCommandError::window("Failed to focus pet window", e.to_string()))?;
+    spawn_pet_hover_watcher(app.clone());
 
     Ok(())
+}
+
+/// Polls the global cursor position and emits `pet://hover-enter` whenever
+/// the cursor crosses into the pet window's bounds. Native webviews on
+/// macOS don't reliably deliver mouse events to non-key windows, so we
+/// detect "cursor over the pet" in Rust and let the frontend trigger the
+/// waving animation in response. The task ends when the pet window is
+/// closed.
+fn spawn_pet_hover_watcher(app: AppHandle) {
+    use std::time::Duration;
+    use tauri::Emitter;
+
+    // Bounds change only on drag or scale change, so re-reading them every
+    // tick is wasteful. Refresh every N ticks; a few hundred ms of staleness
+    // is invisible for a hover effect.
+    const BOUNDS_REFRESH_TICKS: u8 = 5;
+
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(80));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut was_inside = false;
+        let mut bounds: Option<(f64, f64, f64, f64)> = None;
+        let mut ticks_since_refresh: u8 = BOUNDS_REFRESH_TICKS;
+        loop {
+            interval.tick().await;
+            let Some(window) = app.get_webview_window(PET_WINDOW_LABEL) else {
+                break;
+            };
+
+            if ticks_since_refresh >= BOUNDS_REFRESH_TICKS {
+                let Ok(pos) = window.outer_position() else {
+                    continue;
+                };
+                let Ok(size) = window.outer_size() else {
+                    continue;
+                };
+                let x_min = pos.x as f64;
+                let y_min = pos.y as f64;
+                bounds = Some((
+                    x_min,
+                    x_min + size.width as f64,
+                    y_min,
+                    y_min + size.height as f64,
+                ));
+                ticks_since_refresh = 0;
+            } else {
+                ticks_since_refresh += 1;
+            }
+
+            let Some((x_min, x_max, y_min, y_max)) = bounds else {
+                continue;
+            };
+            let Ok(cursor) = app.cursor_position() else {
+                continue;
+            };
+            let inside = cursor.x >= x_min
+                && cursor.x < x_max
+                && cursor.y >= y_min
+                && cursor.y < y_max;
+            if inside && !was_inside {
+                let _ = app.emit(PET_HOVER_ENTER_EVENT, ());
+            }
+            was_inside = inside;
+        }
+    });
 }
 
 #[cfg(feature = "tauri-runtime")]
