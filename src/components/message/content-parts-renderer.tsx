@@ -2470,7 +2470,7 @@ const ToolGroupPart = memo(function ToolGroupPart({
         />
         <span className="min-w-0 truncate">
           {part.isStreaming ? (
-            <Shimmer as="span" duration={2}>
+            <Shimmer as="span" duration={1} shineColor="var(--primary)">
               {titleText}
             </Shimmer>
           ) : (

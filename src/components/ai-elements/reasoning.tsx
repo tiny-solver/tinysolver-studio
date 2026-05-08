@@ -176,7 +176,11 @@ export const ReasoningTrigger = memo(
     const defaultGetThinkingMessage = useCallback(
       (nextIsStreaming: boolean, nextDuration?: number) => {
         if (nextIsStreaming || nextDuration === 0) {
-          return <Shimmer duration={1}>{t("thinking")}</Shimmer>
+          return (
+            <Shimmer duration={1} shineColor="var(--primary)">
+              {t("thinking")}
+            </Shimmer>
+          )
         }
         if (nextDuration === undefined) {
           return <p>{t("thoughtForFewSeconds")}</p>

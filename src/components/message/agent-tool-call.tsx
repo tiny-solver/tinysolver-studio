@@ -154,7 +154,7 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
         />
         <span className="min-w-0 truncate">
           {isRunning ? (
-            <Shimmer as="span" duration={2}>
+            <Shimmer as="span" duration={1} shineColor="var(--primary)">
               {title}
             </Shimmer>
           ) : (
@@ -228,7 +228,11 @@ export const AgentToolCallPart = memo(function AgentToolCallPart({
               {isRunning && !part.output && (
                 <div className="flex items-center gap-2">
                   <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                  <Shimmer className="text-sm" duration={2}>
+                  <Shimmer
+                    className="text-sm"
+                    duration={1}
+                    shineColor="var(--primary)"
+                  >
                     {t("agentRunning")}
                   </Shimmer>
                 </div>
