@@ -349,7 +349,7 @@ interface FolderGroupItemProps {
   dragging: boolean
   sortMode: SidebarSortMode
   selectedConversation: { id: number; agentType: string } | null
-  openTabConversationKeys: Set<string>
+  openTabKeys: Set<string>
   color: string
   onToggle: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
@@ -382,7 +382,7 @@ function FolderGroupItem({
   dragging,
   sortMode,
   selectedConversation,
-  openTabConversationKeys,
+  openTabKeys,
   color,
   onToggle,
   onRemoveFromWorkspace,
@@ -489,9 +489,7 @@ function FolderGroupItem({
                   selectedConversation?.agentType === conv.agent_type &&
                   selectedConversation?.id === conv.id
                 }
-                isOpenInTab={openTabConversationKeys.has(
-                  `${conv.agent_type}:${conv.id}`
-                )}
+                isOpenInTab={openTabKeys.has(`${conv.agent_type}:${conv.id}`)}
                 timeLabel={formatRelative(
                   sortMode === "updated" ? conv.updated_at : conv.created_at
                 )}
@@ -573,7 +571,7 @@ export function SidebarConversationList({
     }
   }, [tabs, activeTabId])
 
-  const openTabConversationKeys = useMemo(() => {
+  const openTabKeys = useMemo(() => {
     const set = new Set<string>()
     for (const tab of tabs) {
       if (tab.conversationId != null) {
@@ -1077,7 +1075,7 @@ export function SidebarConversationList({
                         dragging={dragging === folderId}
                         sortMode={sortMode}
                         selectedConversation={selectedConversation}
-                        openTabConversationKeys={openTabConversationKeys}
+                        openTabKeys={openTabKeys}
                         color={folderIndex.get(folderId)?.color ?? "#22c55e"}
                         onToggle={toggleFolder}
                         onRemoveFromWorkspace={handleRemoveFolder}
