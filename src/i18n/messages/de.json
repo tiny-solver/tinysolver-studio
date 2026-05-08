@@ -90,9 +90,7 @@
       "placeholder": "Zoomstufe wählen",
       "default": "Standard",
       "current": "Aktueller Zoom: {zoom}%"
-    },
-    "resetToDefaults": "Auf Standard zurücksetzen",
-    "resetHint": "Themenfarbe und Fensterzoom auf Standardwerte zurücksetzen."
+    }
   },
   "SystemSettings": {
     "loading": "Wird geladen...",
@@ -2240,6 +2238,64 @@
       "created": "Schnellnachricht erstellt",
       "saved": "Schnellnachricht gespeichert",
       "deleted": "Schnellnachricht gelöscht"
+    }
+  },
+  "Pet": {
+    "menu": {
+      "scale": "Skalierung",
+      "openManager": "Pets verwalten",
+      "close": "Schließen"
+    },
+    "loadError": "Pet konnte nicht geladen werden",
+    "missingPetIdParam": "Kein Pet ausgewählt",
+    "summonButton": "Pet",
+    "manager": {
+      "title": "Desktop-Pets",
+      "description": "Schwebende Begleiter mit Codex-kompatiblen Sprite-Sheets.",
+      "addPet": "Pet hinzufügen",
+      "importFromCodex": "Aus Codex importieren",
+      "noPets": "Keine Pets. Lege eines an oder importiere aus Codex.",
+      "setActive": "Aktivieren",
+      "active": "Aktiv",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "deleteConfirm": "Dieses Pet löschen? Auch von der Festplatte entfernt.",
+      "summon": "Pet-Fenster aufrufen",
+      "openCodexHelp": "Codex-Pets müssen in ~/.codex/pets/ liegen. Nichts gefunden.",
+      "specRequirement": "Sprite-Sheet muss 1536x1872 PNG oder WebP mit Transparenz sein.",
+      "form": {
+        "id": "Pet-ID",
+        "idHelp": "Kleinbuchstaben, Ziffern, '-' und '_'. Max 64 Zeichen.",
+        "displayName": "Anzeigename",
+        "description": "Beschreibung (optional)",
+        "spritesheet": "Sprite-Sheet",
+        "chooseFile": "Datei wählen",
+        "replaceFile": "Sprite ersetzen",
+        "saveCreate": "Pet hinzufügen",
+        "saveUpdate": "Änderungen speichern",
+        "cancel": "Abbrechen"
+      },
+      "errors": {
+        "missingId": "Pet-ID erforderlich",
+        "missingName": "Anzeigename erforderlich",
+        "missingSpritesheet": "Sprite erforderlich",
+        "addFailed": "Hinzufügen fehlgeschlagen",
+        "updateFailed": "Aktualisieren fehlgeschlagen",
+        "deleteFailed": "Löschen fehlgeschlagen",
+        "loadFailed": "Pet-Liste konnte nicht geladen werden"
+      }
+    },
+    "import": {
+      "title": "Aus Codex importieren",
+      "subtitle": "Pets unter ~/.codex/pets/.",
+      "selectAll": "Alle auswählen",
+      "alreadyImported": "Bereits importiert",
+      "renameOnConflict": "Konflikte mit Suffix -imported umbenennen",
+      "import": "Auswahl importieren",
+      "noneFound": "Keine importierbaren Codex-Pets gefunden.",
+      "imported": "Erfolgreich importiert",
+      "failed": "Import fehlgeschlagen",
+      "close": "Schließen"
     }
   }
 }

@@ -90,9 +90,7 @@
       "placeholder": "Selecciona el nivel de zoom",
       "default": "Predeterminado",
       "current": "Zoom actual: {zoom}%"
-    },
-    "resetToDefaults": "Restablecer valores",
-    "resetHint": "Restablece el color del tema y el zoom de ventana a los valores predeterminados."
+    }
   },
   "SystemSettings": {
     "loading": "Cargando...",
@@ -2240,6 +2238,64 @@
       "created": "Mensaje rápido creado",
       "saved": "Mensaje rápido guardado",
       "deleted": "Mensaje rápido eliminado"
+    }
+  },
+  "Pet": {
+    "menu": {
+      "scale": "Escala",
+      "openManager": "Gestionar mascotas",
+      "close": "Cerrar"
+    },
+    "loadError": "No se pudo cargar la mascota",
+    "missingPetIdParam": "No hay mascota seleccionada",
+    "summonButton": "Mascota",
+    "manager": {
+      "title": "Mascotas",
+      "description": "Compañeros flotantes de escritorio con sprites compatibles con Codex.",
+      "addPet": "Añadir mascota",
+      "importFromCodex": "Importar desde Codex",
+      "noPets": "No hay mascotas. Añade una o impórtala desde Codex.",
+      "setActive": "Activar",
+      "active": "Activa",
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar esta mascota? Se borrará del disco.",
+      "summon": "Invocar ventana de la mascota",
+      "openCodexHelp": "Las mascotas de Codex deben estar en ~/.codex/pets/. No se encontraron.",
+      "specRequirement": "El sprite debe ser PNG o WebP de 1536x1872 con transparencia.",
+      "form": {
+        "id": "ID de mascota",
+        "idHelp": "Letras minúsculas, dígitos, '-' y '_'. Máx 64 chars.",
+        "displayName": "Nombre",
+        "description": "Descripción (opcional)",
+        "spritesheet": "Sprite",
+        "chooseFile": "Elegir archivo",
+        "replaceFile": "Reemplazar sprite",
+        "saveCreate": "Añadir mascota",
+        "saveUpdate": "Guardar cambios",
+        "cancel": "Cancelar"
+      },
+      "errors": {
+        "missingId": "Se requiere ID de mascota",
+        "missingName": "Se requiere nombre",
+        "missingSpritesheet": "Se requiere sprite",
+        "addFailed": "Error al añadir la mascota",
+        "updateFailed": "Error al actualizar",
+        "deleteFailed": "Error al eliminar",
+        "loadFailed": "Error al cargar mascotas"
+      }
+    },
+    "import": {
+      "title": "Importar desde Codex",
+      "subtitle": "Mascotas disponibles bajo ~/.codex/pets/.",
+      "selectAll": "Seleccionar todo",
+      "alreadyImported": "Ya importada",
+      "renameOnConflict": "Renombrar conflictos con sufijo -imported",
+      "import": "Importar selección",
+      "noneFound": "No hay mascotas Codex importables.",
+      "imported": "Importación correcta",
+      "failed": "Importación fallida",
+      "close": "Cerrar"
     }
   }
 }

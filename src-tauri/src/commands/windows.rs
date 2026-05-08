@@ -767,6 +767,166 @@ pub async fn open_project_boot_window(
     Ok(())
 }
 
+// ─── Desktop pet window ─────────────────────────────────────────────────
+
+const PET_WINDOW_LABEL: &str = "pet";
+/// Single-frame logical pixel dimensions, locked to the Codex sprite-sheet
+/// contract. The window is sized as one frame × user scale, with no extra
+/// chrome — DPR handling lives inside the webview.
+const PET_BASE_WIDTH: f64 = 192.0;
+const PET_BASE_HEIGHT: f64 = 208.0;
+
+/// Apply the pet-window-specific platform style. Deliberately separate from
+/// `apply_platform_window_style`: that helper sets a solid background color
+/// for the main / settings / git windows, which would defeat the
+/// transparent + chromeless pet window. The pet builder needs only
+/// borderless decoration; transparency itself is set by the caller.
+fn apply_pet_window_style<'a, R, M>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+) -> WebviewWindowBuilder<'a, R, M>
+where
+    R: tauri::Runtime,
+    M: tauri::Manager<R>,
+{
+    #[cfg(target_os = "macos")]
+    {
+        builder
+            .title_bar_style(tauri::TitleBarStyle::Transparent)
+            .hidden_title(true)
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        builder.decorations(false)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        builder
+    }
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn open_pet_window(
+    app: AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<(), AppCommandError> {
+    let mut config =
+        crate::commands::pet::pet_get_settings_core(&db.conn).await?;
+    let pet_id = config
+        .active_pet_id
+        .clone()
+        .ok_or_else(|| AppCommandError::configuration_missing("No active pet selected."))?;
+
+    // Validate the pet still exists; otherwise fail loudly so the caller
+    // can route the user to the picker rather than open an empty window.
+    {
+        let id = pet_id.clone();
+        tokio::task::spawn_blocking(move || crate::pets::get_pet(&id))
+            .await
+            .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))??;
+    }
+
+    if let Some(existing) = app.get_webview_window(PET_WINDOW_LABEL) {
+        let _ = existing.unminimize();
+        existing
+            .set_focus()
+            .map_err(|e| AppCommandError::window("Failed to focus pet window", e.to_string()))?;
+        return Ok(());
+    }
+
+    let scale = config.scale.clamp(0.5, 3.0);
+    config.scale = scale;
+    config.enabled = true;
+    crate::commands::pet::pet_save_window_state_core(
+        &db.conn,
+        crate::models::pet::PetWindowStatePatch {
+            x: None,
+            y: None,
+            scale: Some(scale),
+            always_on_top: None,
+            enabled: Some(true),
+        },
+    )
+    .await?;
+
+    let url = WebviewUrl::App(format!("pet?petId={pet_id}").into());
+    let mut builder = WebviewWindowBuilder::new(&app, PET_WINDOW_LABEL, url)
+        .title("codeg pet")
+        .inner_size(PET_BASE_WIDTH * scale, PET_BASE_HEIGHT * scale)
+        .min_inner_size(PET_BASE_WIDTH * 0.5, PET_BASE_HEIGHT * 0.5)
+        .max_inner_size(PET_BASE_WIDTH * 3.0, PET_BASE_HEIGHT * 3.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(config.always_on_top)
+        .skip_taskbar(true)
+        .shadow(false);
+
+    if let (Some(x), Some(y)) = (config.x, config.y) {
+        builder = builder.position(x, y);
+    } else {
+        builder = builder.center();
+    }
+
+    let pet_window = apply_pet_window_style(builder)
+        .build()
+        .map_err(|e| AppCommandError::window("Failed to open pet window", e.to_string()))?;
+
+    pet_window
+        .set_focus()
+        .map_err(|e| AppCommandError::window("Failed to focus pet window", e.to_string()))?;
+
+    Ok(())
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn close_pet_window(
+    app: AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<(), AppCommandError> {
+    if let Some(existing) = app.get_webview_window(PET_WINDOW_LABEL) {
+        let _ = existing.close();
+    }
+    let _ = crate::commands::pet::pet_save_window_state_core(
+        &db.conn,
+        crate::models::pet::PetWindowStatePatch {
+            x: None,
+            y: None,
+            scale: None,
+            always_on_top: None,
+            enabled: Some(false),
+        },
+    )
+    .await?;
+    Ok(())
+}
+
+/// Persist the pet window's last-known position. Called by the pet renderer
+/// when the user finishes dragging.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn pet_window_record_position(
+    db: tauri::State<'_, AppDatabase>,
+    x: f64,
+    y: f64,
+) -> Result<(), AppCommandError> {
+    crate::commands::pet::pet_save_window_state_core(
+        &db.conn,
+        crate::models::pet::PetWindowStatePatch {
+            x: Some(x),
+            y: Some(y),
+            scale: None,
+            always_on_top: None,
+            enabled: None,
+        },
+    )
+    .await?;
+    Ok(())
+}
+
 /// Store the current zoom level and persist it to DB so the next launch
 /// creates windows with the correct traffic-light position.
 /// Existing windows are NOT repositioned at runtime.
