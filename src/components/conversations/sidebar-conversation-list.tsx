@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  ExternalLink,
   FolderOpen,
   GitBranch,
   ListChecks,
@@ -31,6 +32,7 @@ import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTaskContext } from "@/contexts/task-context"
+import { useTerminalContext } from "@/contexts/terminal-context"
 import { useZoomLevel } from "@/hooks/use-appearance"
 import {
   importLocalConversations,
@@ -40,7 +42,7 @@ import {
   updateFolderColor,
   deleteConversation,
 } from "@/lib/api"
-import { isDesktop, openFileDialog } from "@/lib/platform"
+import { isDesktop, openFileDialog, revealItemInDir } from "@/lib/platform"
 import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
 import {
   loadFolderExpanded,
@@ -157,6 +159,7 @@ function formatRelative(iso: string): string {
 const FolderHeader = memo(function FolderHeader({
   folderId,
   folderName,
+  folderPath,
   count,
   expanded,
   importing,
@@ -167,12 +170,15 @@ const FolderHeader = memo(function FolderHeader({
   onImport,
   onManageConversations,
   onChangeColor,
+  onOpenInSystemExplorer,
+  onOpenInTerminal,
   isDragging,
   dragControls,
   t,
 }: {
   folderId: number
   folderName: string
+  folderPath: string
   count: number
   expanded: boolean
   importing: boolean
@@ -183,10 +189,26 @@ const FolderHeader = memo(function FolderHeader({
   onImport: (folderId: number) => void
   onManageConversations: (folderId: number) => void
   onChangeColor: (folderId: number, color: string) => void
+  onOpenInSystemExplorer: (folderId: number) => void
+  onOpenInTerminal: (folderId: number) => void
   isDragging?: boolean
   dragControls: DragControls
   t: ReturnType<typeof useTranslations>
 }) {
+  const tFileTree = useTranslations("Folder.fileTreeTab")
+  const systemExplorerLabel =
+    typeof navigator === "undefined"
+      ? tFileTree("openInFileManager")
+      : (() => {
+          const platform =
+            `${navigator.platform} ${navigator.userAgent}`.toLowerCase()
+          if (platform.includes("mac")) return tFileTree("openInFinder")
+          if (platform.includes("win")) return tFileTree("openInExplorer")
+          return tFileTree("openInFileManager")
+        })()
+  // `revealItemInDir` only works inside Tauri; in web mode it is a no-op,
+  // so disable the entry there to avoid silent failures.
+  const isDesktopMode = isDesktop()
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -208,6 +230,7 @@ const FolderHeader = memo(function FolderHeader({
             <button
               data-folder-id={folderId}
               onClick={() => onToggle(folderId)}
+              title={folderPath}
               className={cn(
                 "relative flex h-full min-w-0 flex-1 items-center pr-[0.5rem] outline-none",
                 "text-sidebar-foreground",
@@ -291,6 +314,23 @@ const FolderHeader = memo(function FolderHeader({
           <Download className="h-4 w-4" />
           {importing ? t("importing") : t("importLocalSessions")}
         </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <ExternalLink className="h-4 w-4" />
+            {tFileTree("openIn")}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem
+              disabled={!isDesktopMode}
+              onSelect={() => onOpenInSystemExplorer(folderId)}
+            >
+              {systemExplorerLabel}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => onOpenInTerminal(folderId)}>
+              {tFileTree("openInTerminal")}
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => onManageConversations(folderId)}>
           <ListChecks className="h-4 w-4" />
@@ -341,6 +381,7 @@ const FolderHeader = memo(function FolderHeader({
 interface FolderGroupItemProps {
   folderId: number
   folderName: string
+  folderPath: string
   conversations: DbConversationSummary[]
   totalConversationCount: number
   expanded: boolean
@@ -357,6 +398,8 @@ interface FolderGroupItemProps {
   onImport: (folderId: number) => void
   onManageConversations: (folderId: number) => void
   onChangeColor: (folderId: number, color: string) => void
+  onOpenInSystemExplorer: (folderId: number) => void
+  onOpenInTerminal: (folderId: number) => void
   onSelect: (id: number, agentType: string) => void
   onDoubleClick: (id: number, agentType: string) => void
   onRename: (id: number, newTitle: string) => Promise<void>
@@ -374,6 +417,7 @@ const DRAGGING_Z_INDEX = 10_000
 function FolderGroupItem({
   folderId,
   folderName,
+  folderPath,
   conversations,
   totalConversationCount,
   expanded,
@@ -390,6 +434,8 @@ function FolderGroupItem({
   onImport,
   onManageConversations,
   onChangeColor,
+  onOpenInSystemExplorer,
+  onOpenInTerminal,
   onSelect,
   onDoubleClick,
   onRename,
@@ -453,6 +499,7 @@ function FolderGroupItem({
           <FolderHeader
             folderId={folderId}
             folderName={folderName}
+            folderPath={folderPath}
             count={conversations.length}
             expanded={expanded}
             importing={importing}
@@ -463,6 +510,8 @@ function FolderGroupItem({
             onImport={onImport}
             onManageConversations={onManageConversations}
             onChangeColor={onChangeColor}
+            onOpenInSystemExplorer={onOpenInSystemExplorer}
+            onOpenInTerminal={onOpenInTerminal}
             isDragging={dragging}
             dragControls={dragControls}
             t={t}
@@ -528,6 +577,8 @@ export function SidebarConversationList({
   const t = useTranslations("Folder.sidebar")
   const tCommon = useTranslations("Folder.common")
   const tFolderDropdown = useTranslations("Folder.folderNameDropdown")
+  const tFileTree = useTranslations("Folder.fileTreeTab")
+  const { createTerminalInDirectory } = useTerminalContext()
   useZoomLevel()
   const {
     folders,
@@ -617,6 +668,30 @@ export function SidebarConversationList({
       }
     },
     [refreshFolder, t]
+  )
+
+  const handleOpenFolderInSystemExplorer = useCallback(
+    (folderId: number) => {
+      const folder = folderIndex.get(folderId)
+      if (!folder) return
+      void revealItemInDir(folder.path).catch(() => {
+        toast.error(tFileTree("toasts.openDirectoryFailed"))
+      })
+    },
+    [folderIndex, tFileTree]
+  )
+
+  const handleOpenFolderInTerminal = useCallback(
+    async (folderId: number) => {
+      const folder = folderIndex.get(folderId)
+      if (!folder) return
+      const title = tFileTree("terminalTitle", { name: folder.name })
+      const id = await createTerminalInDirectory(folder.path, title)
+      if (!id) {
+        toast.error(tFileTree("toasts.openBuiltinTerminalFailed"))
+      }
+    },
+    [folderIndex, createTerminalInDirectory, tFileTree]
   )
 
   const scrollRootRef = useRef<OverlayScrollbarsComponentRef>(null)
@@ -1047,8 +1122,9 @@ export function SidebarConversationList({
                   }
                 >
                   {orderedFolderIds.map((folderId, index) => {
-                    const folderName =
-                      folderIndex.get(folderId)?.name ?? String(folderId)
+                    const folderEntry = folderIndex.get(folderId)
+                    const folderName = folderEntry?.name ?? String(folderId)
+                    const folderPath = folderEntry?.path ?? ""
                     const convs = byFolder.get(folderId) ?? []
                     const expanded = folderExpanded[folderId] ?? true
                     const convsWithKey = convs.map((conv) => ({
@@ -1065,6 +1141,7 @@ export function SidebarConversationList({
                         key={folderId}
                         folderId={folderId}
                         folderName={folderName}
+                        folderPath={folderPath}
                         conversations={convsWithKey}
                         totalConversationCount={
                           folderTotalCounts.get(folderId) ?? 0
@@ -1076,7 +1153,7 @@ export function SidebarConversationList({
                         sortMode={sortMode}
                         selectedConversation={selectedConversation}
                         openTabKeys={openTabKeys}
-                        color={folderIndex.get(folderId)?.color ?? "#22c55e"}
+                        color={folderEntry?.color ?? "#22c55e"}
                         onToggle={toggleFolder}
                         onRemoveFromWorkspace={handleRemoveFolder}
                         onNewConversationForFolder={
@@ -1085,6 +1162,10 @@ export function SidebarConversationList({
                         onImport={handleImportForFolder}
                         onManageConversations={handleManageConversations}
                         onChangeColor={handleChangeFolderColor}
+                        onOpenInSystemExplorer={
+                          handleOpenFolderInSystemExplorer
+                        }
+                        onOpenInTerminal={handleOpenFolderInTerminal}
                         onSelect={handleSelect}
                         onDoubleClick={handleDoubleClick}
                         onRename={handleRename}
