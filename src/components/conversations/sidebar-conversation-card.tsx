@@ -151,14 +151,16 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 />
                 <ConversationStatusDot
                   status={status}
-                  size={isOpenInTab ? "sm" : "xs"}
-                  className={cn(
-                    "absolute",
-                    isOpenInTab
-                      ? "-right-0.5 -bottom-0.5 ring-2 ring-sidebar"
-                      : "right-0 bottom-0"
-                  )}
-                />
+                  size="sm"
+                  className="absolute -right-0.5 -bottom-0.5 ring-2 ring-sidebar"
+                >
+                  {isOpenInTab ? (
+                    <span
+                      aria-hidden
+                      className="block h-[0.1875rem] w-[0.1875rem] rounded-full bg-sidebar"
+                    />
+                  ) : null}
+                </ConversationStatusDot>
               </div>
 
               <span

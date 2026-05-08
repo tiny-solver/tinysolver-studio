@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import type { ConversationStatus } from "@/lib/types"
 import { STATUS_COLORS } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -11,6 +12,7 @@ interface ConversationStatusDotProps {
   size?: ConversationStatusDotSize
   className?: string
   title?: string
+  children?: ReactNode
 }
 
 const SIZE_CLASS: Record<ConversationStatusDotSize, string> = {
@@ -26,18 +28,21 @@ export function ConversationStatusDot({
   size = "md",
   className,
   title,
+  children,
 }: ConversationStatusDotProps) {
   const colorClass = (status && STATUS_COLORS[status]) || FALLBACK_COLOR
   return (
     <span
       className={cn(
-        "inline-block shrink-0 rounded-full",
+        "inline-flex shrink-0 items-center justify-center rounded-full",
         SIZE_CLASS[size],
         colorClass,
         className
       )}
       title={title}
       aria-hidden={title ? undefined : true}
-    />
+    >
+      {children}
+    </span>
   )
 }
