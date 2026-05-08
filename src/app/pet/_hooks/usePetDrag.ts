@@ -7,6 +7,7 @@ import type { PetState } from "@/lib/pet/animation"
 
 const CLICK_THRESHOLD_PX = 5
 const DIRECTION_IDLE_MS = 160
+const DIRECTION_THRESHOLD_PX = 1
 const PERSIST_DEBOUNCE_MS = 220
 
 export interface UsePetDragOptions {
@@ -58,6 +59,7 @@ export function usePetDrag(opts: UsePetDragOptions): UsePetDragResult {
   const startWinLogicalRef = useRef<{ x: number; y: number } | null>(null)
   const scaleFactorRef = useRef(1)
   const totalMovedRef = useRef(0)
+  const lastScreenXRef = useRef<number | null>(null)
   const lastDirRef = useRef<"left" | "right" | null>(null)
   const dirIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -107,23 +109,36 @@ export function usePetDrag(opts: UsePetDragOptions): UsePetDragResult {
       const dist = Math.sqrt(dxLog * dxLog + dyLog * dyLog)
       if (dist > totalMovedRef.current) totalMovedRef.current = dist
 
-      // Direction tracking — only when there's meaningful horizontal travel.
-      if (Math.abs(dxLog) > 1) {
-        const dir: "left" | "right" = dxLog > 0 ? "right" : "left"
+      // Direction tracks the *instant* frame-to-frame motion, not cumulative
+      // displacement from drag start. With cumulative, after a long left-drag
+      // the user has to overshoot back past the origin before the pet flips
+      // to running_right — feels sticky. Frame-delta flips as soon as motion
+      // reverses.
+      const lastX = lastScreenXRef.current ?? e.screenX
+      const instantDx = e.screenX - lastX
+      lastScreenXRef.current = e.screenX
+
+      if (Math.abs(instantDx) > DIRECTION_THRESHOLD_PX) {
+        const dir: "left" | "right" = instantDx > 0 ? "right" : "left"
         if (dir !== lastDirRef.current) {
           lastDirRef.current = dir
           optsRef.current.onDragDirection(
             dir === "right" ? "running_right" : "running_left"
           )
         }
-        if (dirIdleTimerRef.current) clearTimeout(dirIdleTimerRef.current)
-        dirIdleTimerRef.current = setTimeout(() => {
-          if (draggingRef.current) {
-            lastDirRef.current = null
-            optsRef.current.onDragDirection(null)
-          }
-        }, DIRECTION_IDLE_MS)
       }
+
+      // Refresh idle timer on *every* pointermove, not just frames that
+      // cross the direction threshold. Otherwise a slow drag (sub-pixel
+      // per frame) never refreshes the timer and falls back to the
+      // default animation while the user is still actively dragging.
+      if (dirIdleTimerRef.current) clearTimeout(dirIdleTimerRef.current)
+      dirIdleTimerRef.current = setTimeout(() => {
+        if (draggingRef.current) {
+          lastDirRef.current = null
+          optsRef.current.onDragDirection(null)
+        }
+      }, DIRECTION_IDLE_MS)
 
       // Update window position. Compose in logical coordinates for
       // monitor-DPR independence, then convert to physical for the API.
@@ -145,6 +160,7 @@ export function usePetDrag(opts: UsePetDragOptions): UsePetDragResult {
       const moved = totalMovedRef.current
       totalMovedRef.current = 0
       lastDirRef.current = null
+      lastScreenXRef.current = null
 
       if (moved < CLICK_THRESHOLD_PX) {
         optsRef.current.onClick()
@@ -191,6 +207,7 @@ export function usePetDrag(opts: UsePetDragOptions): UsePetDragResult {
         startScreenRef.current = { x: event.screenX, y: event.screenY }
         startWinLogicalRef.current = { x: pos.x / scale, y: pos.y / scale }
         totalMovedRef.current = 0
+        lastScreenXRef.current = event.screenX
         lastDirRef.current = null
         draggingRef.current = true
 

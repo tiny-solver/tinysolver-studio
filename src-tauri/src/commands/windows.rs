@@ -771,6 +771,7 @@ pub async fn open_project_boot_window(
 
 const PET_WINDOW_LABEL: &str = "pet";
 const PET_HOVER_ENTER_EVENT: &str = "pet://hover-enter";
+const PET_HOVER_LEAVE_EVENT: &str = "pet://hover-leave";
 /// Single-frame logical pixel dimensions, locked to the Codex sprite-sheet
 /// contract. The window is sized as one frame × user scale, with no extra
 /// chrome — DPR handling lives inside the webview.
@@ -891,9 +892,10 @@ fn spawn_pet_hover_watcher(app: AppHandle) {
     use std::time::Duration;
     use tauri::Emitter;
 
-    // Bounds change only on drag or scale change, so re-reading them every
-    // tick is wasteful. Refresh every N ticks; a few hundred ms of staleness
-    // is invisible for a hover effect.
+    // Bounds change only on drag or scale; refreshing every N ticks cuts
+    // `outer_position`/`outer_size` IPC by ~80% in the steady state. The
+    // false hover-enter that cache staleness produces during a drag is
+    // suppressed on the JS side via a pointer-down guard (see PetWindow).
     const BOUNDS_REFRESH_TICKS: u8 = 5;
 
     tokio::spawn(async move {
@@ -940,6 +942,8 @@ fn spawn_pet_hover_watcher(app: AppHandle) {
                 && cursor.y < y_max;
             if inside && !was_inside {
                 let _ = app.emit(PET_HOVER_ENTER_EVENT, ());
+            } else if !inside && was_inside {
+                let _ = app.emit(PET_HOVER_LEAVE_EVENT, ());
             }
             was_inside = inside;
         }

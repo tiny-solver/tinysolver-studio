@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl"
 import { Loader2 } from "lucide-react"
 import { getPet, getPetSettings, readPetSpritesheet } from "@/lib/pet/api"
 import type { PetDetail, PetSpriteAsset } from "@/lib/pet/types"
+import { disposeTauriListener } from "@/lib/tauri-listener"
 import { isDesktop } from "@/lib/transport"
 import { PET_FRAME_DURATIONS_MS, type PetState } from "@/lib/pet/animation"
 import { usePetState } from "../_hooks/usePetState"
@@ -16,9 +17,18 @@ export interface PetWindowProps {
   petId: string
 }
 
-const JUMPING_DURATION_MS = sumDurations("jumping") + 80
-const WAVING_DURATION_MS = sumDurations("waving") + 80
+// Hover/click animations loop this many times before resolving back to the
+// agent state. The animator naturally chains non-idle states back to col 0,
+// so we just hold the state for N × single-cycle duration. The +80ms slack
+// covers tick-rounding in the JS animator so we don't cut the last frame.
+const INTERACTION_LOOPS = 3
+const INTERACTION_SLACK_MS = 80
+const JUMPING_DURATION_MS =
+  sumDurations("jumping") * INTERACTION_LOOPS + INTERACTION_SLACK_MS
+const WAVING_DURATION_MS =
+  sumDurations("waving") * INTERACTION_LOOPS + INTERACTION_SLACK_MS
 const PET_HOVER_ENTER_EVENT = "pet://hover-enter"
+const PET_HOVER_LEAVE_EVENT = "pet://hover-leave"
 
 function sumDurations(state: PetState): number {
   return PET_FRAME_DURATIONS_MS[state].reduce((acc, d) => acc + d, 0)
@@ -40,6 +50,7 @@ export function PetWindow({ petId }: PetWindowProps) {
     null
   )
   const interactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pointerDownRef = useRef(false)
 
   const handleDragDirection = useCallback((s: PetState | null) => {
     if (interactionTimerRef.current) {
@@ -58,36 +69,76 @@ export function PetWindow({ petId }: PetWindowProps) {
     }, durationMs)
   }, [])
 
+  const cancelInteraction = useCallback(() => {
+    handleDragDirection(null)
+  }, [handleDragDirection])
+
   const handleClick = useCallback(() => {
     playOneShot("jumping", JUMPING_DURATION_MS)
   }, [playOneShot])
 
+  // Track held-mouse-button state so hover-driven waving stays out of the
+  // way of any active interaction (drag, click-and-hold). Listening on
+  // `window` rather than the root div catches pointerup even when it
+  // happens off-window mid-drag.
+  useEffect(() => {
+    const onDown = () => {
+      pointerDownRef.current = true
+    }
+    const onUp = () => {
+      pointerDownRef.current = false
+    }
+    window.addEventListener("pointerdown", onDown)
+    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointercancel", onUp)
+    return () => {
+      window.removeEventListener("pointerdown", onDown)
+      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointercancel", onUp)
+    }
+  }, [])
+
   // Hover detection runs in Rust (`spawn_pet_hover_watcher` polls the
-  // global cursor position and emits `pet://hover-enter`). Going through
+  // global cursor position and emits enter/leave events). Going through
   // the OS window event system from JS is unreliable when the pet isn't
-  // the key window, so we listen for the backend event instead.
+  // the key window, so we listen for the backend events instead. Leaving
+  // the window cancels any in-flight one-shot so the pet returns to its
+  // ambient state immediately.
   useEffect(() => {
     if (!isDesktop()) return
-    let unlisten: (() => void) | null = null
+    let unlistenEnter: (() => void) | null = null
+    let unlistenLeave: (() => void) | null = null
     let cancelled = false
     void (async () => {
       try {
         const { listen } = await import("@tauri-apps/api/event")
-        const off = await listen(PET_HOVER_ENTER_EVENT, () => {
-          if (cancelled) return
-          playOneShot("waving", WAVING_DURATION_MS)
-        })
-        if (cancelled) off()
-        else unlisten = off
+        const [offEnter, offLeave] = await Promise.all([
+          listen(PET_HOVER_ENTER_EVENT, () => {
+            if (cancelled || pointerDownRef.current) return
+            playOneShot("waving", WAVING_DURATION_MS)
+          }),
+          listen(PET_HOVER_LEAVE_EVENT, () => {
+            if (cancelled || pointerDownRef.current) return
+            cancelInteraction()
+          }),
+        ])
+        if (cancelled) {
+          disposeTauriListener(offEnter, "Pet")
+          disposeTauriListener(offLeave, "Pet")
+        } else {
+          unlistenEnter = offEnter
+          unlistenLeave = offLeave
+        }
       } catch (err) {
         console.warn("[Pet] hover subscription failed:", err)
       }
     })()
     return () => {
       cancelled = true
-      if (unlisten) unlisten()
+      disposeTauriListener(unlistenEnter, "Pet")
+      disposeTauriListener(unlistenLeave, "Pet")
     }
-  }, [playOneShot])
+  }, [playOneShot, cancelInteraction])
 
   useEffect(() => {
     return () => {
