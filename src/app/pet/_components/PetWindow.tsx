@@ -81,8 +81,15 @@ export function PetWindow({ petId }: PetWindowProps) {
   // way of any active interaction (drag, click-and-hold). Listening on
   // `window` rather than the root div catches pointerup even when it
   // happens off-window mid-drag.
+  //
+  // Only the primary (left) button matters here — drag is left-only, and
+  // right-click is consumed by the native context menu, which eats the
+  // paired `pointerup`. If we tracked all buttons we'd get stuck "down"
+  // after every right-click and hover-waving would silently break until
+  // the user clicked again to clear it.
   useEffect(() => {
-    const onDown = () => {
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return
       pointerDownRef.current = true
     }
     const onUp = () => {
@@ -251,11 +258,7 @@ export function PetWindow({ petId }: PetWindowProps) {
         scale={scale}
         label={pet.displayName}
       />
-      <PetMenu
-        scale={scale}
-        onScaleChange={setScale}
-        onOpenSettings={openManager}
-      />
+      <PetMenu onScaleChange={setScale} onOpenSettings={openManager} />
     </div>
   )
 }
