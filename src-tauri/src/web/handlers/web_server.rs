@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
 use axum::{extract::Extension, Json};
 use serde::{Deserialize, Serialize};
@@ -76,14 +77,115 @@ pub async fn probe_web_service_port(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppUpdateCheckResult {
-    pub current_version: &'static str,
-    pub update: Option<()>,
+pub struct AppUpdateInfo {
+    pub version: String,
+    pub body: String,
+    pub date: Option<String>,
 }
 
-pub async fn check_app_update() -> Json<AppUpdateCheckResult> {
-    Json(AppUpdateCheckResult {
-        current_version: env!("CARGO_PKG_VERSION"),
-        update: None,
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateCheckResult {
+    pub current_version: String,
+    pub update: Option<AppUpdateInfo>,
+}
+
+#[derive(Deserialize)]
+struct LatestManifest {
+    version: String,
+    #[serde(default)]
+    notes: Option<String>,
+    #[serde(default)]
+    pub_date: Option<String>,
+}
+
+// Mirrors the `endpoints` entry in `tauri.conf.json` so desktop and server
+// modes consult the same source of truth.
+const UPDATE_MANIFEST_URL: &str =
+    "https://github.com/xintaofei/codeg/releases/latest/download/latest.json";
+
+// Built once on first use so we don't re-allocate the DNS resolver / TLS
+// context for every settings-page mount. Proxy env vars are sampled here, so
+// `init_proxy_from_db` must run before the first request — both startup paths
+// already do that.
+static UPDATE_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(15))
+        .user_agent(concat!("codeg/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| format!("failed to initialize update HTTP client: {e}"))
+});
+
+pub async fn check_app_update() -> Result<Json<AppUpdateCheckResult>, AppCommandError> {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let manifest = fetch_latest_manifest().await?;
+
+    let update = if is_newer_than(&manifest.version, &current_version) {
+        Some(AppUpdateInfo {
+            version: trim_v_prefix(&manifest.version).to_string(),
+            body: manifest.notes.unwrap_or_default(),
+            date: manifest.pub_date,
+        })
+    } else {
+        None
+    };
+
+    Ok(Json(AppUpdateCheckResult {
+        current_version,
+        update,
+    }))
+}
+
+async fn fetch_latest_manifest() -> Result<LatestManifest, AppCommandError> {
+    let client = UPDATE_HTTP_CLIENT.as_ref().map_err(|err| {
+        AppCommandError::network("Failed to initialize update HTTP client")
+            .with_detail(err.clone())
+    })?;
+
+    let response = client
+        .get(UPDATE_MANIFEST_URL)
+        .send()
+        .await
+        .map_err(|e| {
+            AppCommandError::network("Failed to fetch update manifest")
+                .with_detail(e.to_string())
+        })?;
+
+    if !response.status().is_success() {
+        return Err(AppCommandError::network(format!(
+            "Update manifest returned status {}",
+            response.status()
+        )));
+    }
+
+    response.json::<LatestManifest>().await.map_err(|e| {
+        AppCommandError::network("Failed to parse update manifest").with_detail(e.to_string())
     })
+}
+
+fn trim_v_prefix(v: &str) -> &str {
+    v.strip_prefix('v').unwrap_or(v)
+}
+
+/// Best-effort semver comparison. Falls back to inequality if either side is
+/// not a clean `X.Y.Z` triple — that way an unexpected manifest format still
+/// surfaces *something* rather than silently claiming "already latest".
+fn is_newer_than(latest: &str, current: &str) -> bool {
+    fn parse(v: &str) -> Option<(u64, u64, u64)> {
+        let core = trim_v_prefix(v).split(['-', '+']).next()?;
+        let parts: Vec<&str> = core.split('.').collect();
+        if parts.len() < 3 {
+            return None;
+        }
+        Some((
+            parts[0].parse().ok()?,
+            parts[1].parse().ok()?,
+            parts[2].parse().ok()?,
+        ))
+    }
+    match (parse(latest), parse(current)) {
+        (Some(l), Some(c)) => l > c,
+        _ => trim_v_prefix(latest) != trim_v_prefix(current),
+    }
 }
