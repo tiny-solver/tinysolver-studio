@@ -148,6 +148,7 @@
     "updating": "Instalando...",
     "downloading": "Descargando...",
     "upgradeTo": "Actualizar a v{version}",
+    "viewRelease": "Ver lanzamiento v{version}",
     "foundUpdate": "Nueva versión v{version} encontrada",
     "alreadyLatest": "Ya tienes la versión más reciente",
     "checkUpdateFailed": "No se pudo buscar actualizaciones: {message}",

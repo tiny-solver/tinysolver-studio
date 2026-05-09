@@ -148,6 +148,7 @@
     "updating": "جارٍ التثبيت...",
     "downloading": "جارٍ التنزيل...",
     "upgradeTo": "الترقية إلى v{version}",
+    "viewRelease": "عرض إصدار v{version}",
     "foundUpdate": "تم العثور على إصدار جديد v{version}",
     "alreadyLatest": "أنت على أحدث إصدار",
     "checkUpdateFailed": "فشل التحقق من التحديثات: {message}",

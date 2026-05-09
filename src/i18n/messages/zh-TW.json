@@ -148,6 +148,7 @@
     "updating": "升級中...",
     "downloading": "下載中...",
     "upgradeTo": "升級到 v{version}",
+    "viewRelease": "查看 v{version} 發布",
     "foundUpdate": "發現新版本 v{version}",
     "alreadyLatest": "目前已是最新版本",
     "checkUpdateFailed": "檢查更新失敗：{message}",
