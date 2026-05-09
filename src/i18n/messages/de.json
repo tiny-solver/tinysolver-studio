@@ -148,6 +148,7 @@
     "updating": "Wird installiert...",
     "downloading": "Herunterladen...",
     "upgradeTo": "Auf v{version} aktualisieren",
+    "viewRelease": "Release v{version} anzeigen",
     "foundUpdate": "Neue Version v{version} gefunden",
     "alreadyLatest": "Du verwendest bereits die neueste Version",
     "checkUpdateFailed": "Update-Prüfung fehlgeschlagen: {message}",
@@ -1865,8 +1866,8 @@
         "toolGroup": {
           "search": "{count, plural, one {# Suche durchgeführt} other {# Suchen durchgeführt}}",
           "command": "{count, plural, one {# Befehl ausgeführt} other {# Befehle ausgeführt}}",
-          "read": "{count, plural, one {# Datei gelesen} other {# Dateien gelesen}}",
-          "edit": "{count, plural, one {# Datei bearbeitet} other {# Dateien bearbeitet}}",
+          "read": "{count, plural, one {Dateien # Mal gelesen} other {Dateien # Mal gelesen}}",
+          "edit": "{count, plural, one {Dateien # Mal bearbeitet} other {Dateien # Mal bearbeitet}}",
           "fetch": "{count, plural, one {# Ressource abgerufen} other {# Ressourcen abgerufen}}",
           "think": "{count, plural, one {# Mal nachgedacht} other {# Mal nachgedacht}}",
           "todo": "{count, plural, one {# Aufgabe aktualisiert} other {# Aufgaben aktualisiert}}",

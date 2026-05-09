@@ -148,6 +148,7 @@
     "updating": "설치 중...",
     "downloading": "다운로드 중...",
     "upgradeTo": "v{version}로 업그레이드",
+    "viewRelease": "v{version} 릴리스 보기",
     "foundUpdate": "새 버전 v{version}을 찾았습니다",
     "alreadyLatest": "이미 최신 버전입니다",
     "checkUpdateFailed": "업데이트 확인 실패: {message}",
@@ -1865,8 +1866,8 @@
         "toolGroup": {
           "search": "{count}회 검색",
           "command": "명령 {count}개 실행",
-          "read": "파일 {count}개 읽기",
-          "edit": "파일 {count}개 편집",
+          "read": "파일 {count}회 읽기",
+          "edit": "파일 {count}회 편집",
           "fetch": "리소스 {count}개 가져오기",
           "think": "{count}회 사고",
           "todo": "할 일 {count}개 업데이트",
