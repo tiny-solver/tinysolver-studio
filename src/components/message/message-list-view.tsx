@@ -93,6 +93,7 @@ type ThreadRenderItem =
       phase: "persisted" | "optimistic" | "streaming"
       showStats: boolean
       isRoleTransition: boolean
+      previousUserIndex: number | null
     }
   | {
       key: string
@@ -312,10 +313,14 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
   group,
   dimmed = false,
   showStats = true,
+  previousUserIndex = null,
+  isResponseComplete = true,
 }: {
   group: ResolvedMessageGroup
   dimmed?: boolean
   showStats?: boolean
+  previousUserIndex?: number | null
+  isResponseComplete?: boolean
 }) {
   if (group.role === "system") {
     return <CollapsibleSystemMessage group={group} />
@@ -355,6 +360,9 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
           duration_ms={group.duration_ms}
           model={group.model}
           models={group.models}
+          previousUserIndex={previousUserIndex}
+          isResponseComplete={isResponseComplete}
+          copyText={extractTextFromParts(group.parts)}
         />
       )}
     </div>
@@ -514,6 +522,7 @@ export function MessageListView({
         phase,
         showStats: false,
         isRoleTransition: false,
+        previousUserIndex: null,
       }
     })
 
@@ -521,7 +530,10 @@ export function MessageListView({
     // turn, so tool-groups straddling a turn boundary fold into one collapsible.
     const items = mergeConsecutiveAssistantTurns(rawItems)
 
-    // Compute showStats and isRoleTransition for each turn item
+    // Compute showStats, isRoleTransition, and previousUserIndex for each turn.
+    // previousUserIndex points at the closest preceding user turn (used by the
+    // post-stream stats row's "jump to previous user message" button).
+    let lastUserIdx: number | null = null
     for (let idx = 0; idx < items.length; idx++) {
       const item = items[idx]
       if (item.kind !== "turn") continue
@@ -534,11 +546,16 @@ export function MessageListView({
         }
       }
 
+      if (item.group.role === "user") {
+        lastUserIdx = idx
+      }
+
       // showStats: only on the last assistant turn before a non-assistant or end
       if (item.group.role === "assistant") {
         const next = items[idx + 1]
         if (!next || next.kind !== "turn" || next.group.role !== "assistant") {
           item.showStats = true
+          item.previousUserIndex = lastUserIdx
         }
       }
     }
@@ -580,6 +597,8 @@ export function MessageListView({
               group={item.group}
               dimmed={item.phase === "optimistic"}
               showStats={item.showStats}
+              previousUserIndex={item.previousUserIndex}
+              isResponseComplete={item.phase === "persisted"}
             />
           </div>
         )

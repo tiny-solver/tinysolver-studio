@@ -1745,7 +1745,15 @@
         "copyMessage": "コピー",
         "copied": "コピー済み",
         "downloadImage": "画像をダウンロード",
-        "downloadFailed": "ダウンロードに失敗しました: {message}"
+        "downloadFailed": "ダウンロードに失敗しました: {message}",
+        "model": "モデル",
+        "tokenStats": "トークン使用量",
+        "tokenInput": "入力",
+        "tokenOutput": "出力",
+        "tokenCacheRead": "キャッシュ読取",
+        "tokenCacheWrite": "キャッシュ書込",
+        "duration": "所要時間",
+        "jumpToPreviousUserMessage": "前のユーザーメッセージへ"
       },
       "liveTurnStats": {
         "thinking": "考え中...",

@@ -1745,7 +1745,15 @@
         "copyMessage": "نسخ",
         "copied": "تم النسخ",
         "downloadImage": "تنزيل الصورة",
-        "downloadFailed": "فشل التنزيل: {message}"
+        "downloadFailed": "فشل التنزيل: {message}",
+        "model": "النموذج",
+        "tokenStats": "استخدام الرموز",
+        "tokenInput": "الإدخال",
+        "tokenOutput": "الإخراج",
+        "tokenCacheRead": "قراءة التخزين المؤقت",
+        "tokenCacheWrite": "كتابة التخزين المؤقت",
+        "duration": "المدة",
+        "jumpToPreviousUserMessage": "الانتقال إلى رسالة المستخدم"
       },
       "liveTurnStats": {
         "thinking": "جارٍ التفكير...",

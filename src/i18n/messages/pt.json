@@ -1745,7 +1745,15 @@
         "copyMessage": "Copiar",
         "copied": "Copiado",
         "downloadImage": "Baixar imagem",
-        "downloadFailed": "Falha no download: {message}"
+        "downloadFailed": "Falha no download: {message}",
+        "model": "Modelo",
+        "tokenStats": "Uso de tokens",
+        "tokenInput": "Entrada",
+        "tokenOutput": "Saída",
+        "tokenCacheRead": "Leitura de cache",
+        "tokenCacheWrite": "Escrita de cache",
+        "duration": "Duração",
+        "jumpToPreviousUserMessage": "Ir para a mensagem do usuário"
       },
       "liveTurnStats": {
         "thinking": "Pensando...",

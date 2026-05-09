@@ -1745,7 +1745,15 @@
         "copyMessage": "複製",
         "copied": "已複製",
         "downloadImage": "下載圖片",
-        "downloadFailed": "下載失敗：{message}"
+        "downloadFailed": "下載失敗：{message}",
+        "model": "模型",
+        "tokenStats": "Token 使用情況",
+        "tokenInput": "輸入",
+        "tokenOutput": "輸出",
+        "tokenCacheRead": "快取讀取",
+        "tokenCacheWrite": "快取寫入",
+        "duration": "耗時",
+        "jumpToPreviousUserMessage": "跳轉到上一條使用者訊息"
       },
       "liveTurnStats": {
         "thinking": "思考中...",
