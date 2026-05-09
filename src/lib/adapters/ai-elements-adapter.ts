@@ -81,6 +81,8 @@ export interface AdaptedMessage {
   usage?: TurnUsage | null
   duration_ms?: number | null
   model?: string | null
+  /** Wall-clock completion time as ISO string (parsed once at the Rust layer). */
+  completed_at?: string | null
 }
 
 export interface AdapterMessageText {
@@ -836,6 +838,7 @@ export function adaptMessageTurn(
     usage: turn.usage,
     duration_ms: turn.duration_ms,
     model: turn.model,
+    completed_at: turn.completed_at,
   }
 }
 
@@ -873,6 +876,7 @@ interface TurnCacheEntry {
   usage: TurnUsage | null | undefined
   duration_ms: number | null | undefined
   model: string | null | undefined
+  completed_at: string | null | undefined
   adapted: AdaptedMessage
 }
 
@@ -936,7 +940,8 @@ export function createMessageTurnAdapter(): MessageTurnAdapter {
             cached.role === turn.role &&
             cached.usage === turn.usage &&
             cached.duration_ms === turn.duration_ms &&
-            cached.model === turn.model
+            cached.model === turn.model &&
+            cached.completed_at === turn.completed_at
           ) {
             out[i] = cached.adapted
             continue
@@ -956,6 +961,7 @@ export function createMessageTurnAdapter(): MessageTurnAdapter {
             usage: turn.usage,
             duration_ms: turn.duration_ms,
             model: turn.model,
+            completed_at: turn.completed_at,
             adapted,
           })
         } else {

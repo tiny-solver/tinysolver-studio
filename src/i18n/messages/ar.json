@@ -1753,6 +1753,7 @@
         "tokenCacheRead": "قراءة التخزين المؤقت",
         "tokenCacheWrite": "كتابة التخزين المؤقت",
         "duration": "المدة",
+        "completedAt": "وقت الإنجاز",
         "jumpToPreviousUserMessage": "الانتقال إلى رسالة المستخدم"
       },
       "liveTurnStats": {

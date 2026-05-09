@@ -83,6 +83,13 @@ interface ResolvedMessageGroup {
   duration_ms?: number | null
   model?: string | null
   models?: string[]
+  /**
+   * Wall-clock completion time supplied by the Rust parser. For merged
+   * sub-turns this reflects the last sub-turn's completion (inherited
+   * automatically via `{ ...last.group }`), not first-start + accumulated
+   * duration.
+   */
+  completed_at?: string | null
 }
 
 type ThreadRenderItem =
@@ -363,6 +370,7 @@ const HistoricalMessageGroup = memo(function HistoricalMessageGroup({
           previousUserIndex={previousUserIndex}
           isResponseComplete={isResponseComplete}
           copyText={extractTextFromParts(group.parts)}
+          completedAt={group.completed_at}
         />
       )}
     </div>
@@ -508,6 +516,7 @@ export function MessageListView({
           usage: msg.usage,
           duration_ms: msg.duration_ms,
           model: msg.model,
+          completed_at: msg.completed_at,
         }
         groupCache.set(msg, group)
       }

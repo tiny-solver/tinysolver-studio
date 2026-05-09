@@ -5,6 +5,7 @@ import {
   ArrowUpToLine,
   BrainCog,
   CheckIcon,
+  Clock,
   Coins,
   CopyIcon,
   Timer,
@@ -37,6 +38,8 @@ interface TurnStatsProps {
   previousUserIndex?: number | null
   isResponseComplete?: boolean
   copyText?: string
+  /** ISO timestamp marking when the assistant reply finished. */
+  completedAt?: string | null
 }
 
 const iconButtonClass =
@@ -50,6 +53,7 @@ export function TurnStats({
   previousUserIndex,
   isResponseComplete = true,
   copyText = "",
+  completedAt,
 }: TurnStatsProps) {
   const locale = useLocale()
   const t = useTranslations("Folder.chat.messageList")
@@ -64,11 +68,42 @@ export function TurnStats({
       }),
     [locale]
   )
+  const shortTimeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    [locale]
+  )
+  const fullTimeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+      }),
+    [locale]
+  )
+
+  const completedAtDate = useMemo(() => {
+    if (!isResponseComplete) return null
+    if (!completedAt) return null
+    const ms = new Date(completedAt).getTime()
+    if (Number.isNaN(ms)) return null
+    return new Date(ms)
+  }, [completedAt, isResponseComplete])
+  const completedLabel = completedAtDate
+    ? shortTimeFormatter.format(completedAtDate)
+    : null
+  const completedTooltip = completedAtDate
+    ? fullTimeFormatter.format(completedAtDate)
+    : null
 
   const displayModels = models?.length ? models : model ? [model] : []
   const hasCopy = copyText.trim().length > 0
   const hasUsage = Boolean(usage)
   const hasDuration = typeof duration_ms === "number" && duration_ms > 0
+  const hasCompletedAt = Boolean(completedLabel)
   const hasJump =
     isResponseComplete &&
     hasUsage &&
@@ -96,7 +131,8 @@ export function TurnStats({
     []
   )
 
-  if (!hasCopy && !hasUsage && !hasDuration && !hasJump) return null
+  if (!hasCopy && !hasUsage && !hasDuration && !hasCompletedAt && !hasJump)
+    return null
 
   return (
     <div className="mt-2 -ms-[0.3125rem] flex items-center justify-start gap-1 text-xs text-muted-foreground">
@@ -212,6 +248,30 @@ export function TurnStats({
               <span className="font-mono tabular-nums">
                 {formatDuration(duration_ms)}
               </span>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {hasCompletedAt && completedTooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-6 cursor-help items-center gap-1 rounded-full px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                aria-label={`${t("completedAt")}: ${completedTooltip}`}
+              >
+                <Clock aria-hidden="true" className="h-3.5 w-3.5" />
+                <span aria-hidden="true">{completedLabel}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-muted-foreground">
+                  {t("completedAt")}
+                </span>
+                <span className="font-mono tabular-nums">
+                  {completedTooltip}
+                </span>
+              </div>
             </TooltipContent>
           </Tooltip>
         )}

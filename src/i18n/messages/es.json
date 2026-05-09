@@ -1753,6 +1753,7 @@
         "tokenCacheRead": "Lectura de caché",
         "tokenCacheWrite": "Escritura de caché",
         "duration": "Duración",
+        "completedAt": "Completado a las",
         "jumpToPreviousUserMessage": "Ir al mensaje del usuario"
       },
       "liveTurnStats": {

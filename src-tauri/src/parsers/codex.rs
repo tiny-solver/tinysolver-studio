@@ -806,6 +806,7 @@ impl CodexParser {
                                     usage: None,
                                     duration_ms: None,
                                     model: None,
+                                    completed_at: Some(timestamp),
                                 });
                             }
                             "agent_message" => {
@@ -823,6 +824,7 @@ impl CodexParser {
                                         usage: None,
                                         duration_ms: None,
                                         model: None,
+                                        completed_at: Some(timestamp),
                                     });
                                 }
                             }
@@ -842,6 +844,7 @@ impl CodexParser {
                                             usage: None,
                                             duration_ms: None,
                                             model: None,
+                                            completed_at: Some(timestamp),
                                         });
                                     }
                                 }
@@ -869,6 +872,7 @@ impl CodexParser {
                                             usage: None,
                                             duration_ms: None,
                                             model: None,
+                                            completed_at: Some(timestamp),
                                         });
                                     }
                                 }
@@ -1002,6 +1006,7 @@ impl CodexParser {
                                             usage: None,
                                             duration_ms: None,
                                             model: None,
+                                            completed_at: Some(timestamp),
                                         });
                                     }
                                     "wait_agent" => {
@@ -1061,6 +1066,7 @@ impl CodexParser {
                                             usage: None,
                                             duration_ms: None,
                                             model: None,
+                                            completed_at: Some(timestamp),
                                         });
                                     }
                                 }
@@ -1106,6 +1112,7 @@ impl CodexParser {
                                         usage: None,
                                         duration_ms: None,
                                         model: None,
+                                        completed_at: Some(timestamp),
                                     });
                                 } else if is_wait {
                                     if let Some(output_obj) = parse_codex_json_output(payload) {
@@ -1172,6 +1179,7 @@ impl CodexParser {
                                         usage: None,
                                         duration_ms: None,
                                         model: None,
+                                        completed_at: Some(timestamp),
                                     });
                                 }
                             }
@@ -1206,6 +1214,7 @@ impl CodexParser {
                                             usage: None,
                                             duration_ms: None,
                                             model: None,
+                                            completed_at: Some(timestamp),
                                         });
                                     }
                                 }
@@ -1661,6 +1670,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
                 usage: None,
                 duration_ms: None,
                 model: None,
+                completed_at: msg.completed_at,
             });
             i += 1;
         } else if matches!(msg.role, MessageRole::System) {
@@ -1672,6 +1682,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
                 usage: None,
                 duration_ms: None,
                 model: None,
+                completed_at: msg.completed_at,
             });
             i += 1;
         } else {
@@ -1681,6 +1692,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
             let mut duration_ms = msg.duration_ms;
             let mut turn_model = msg.model.clone();
             let timestamp = msg.timestamp;
+            let mut completed_at = msg.completed_at;
             i += 1;
 
             // Only absorb immediately following Tool messages
@@ -1696,6 +1708,9 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
                 if turn_model.is_none() {
                     turn_model = messages[i].model.clone();
                 }
+                if messages[i].completed_at.is_some() {
+                    completed_at = messages[i].completed_at;
+                }
                 i += 1;
             }
 
@@ -1707,6 +1722,7 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
                 usage,
                 duration_ms,
                 model: turn_model,
+                completed_at,
             });
         }
     }
@@ -1726,8 +1742,10 @@ mod tests {
     use super::should_skip_duplicate_user_message;
     use super::strip_blocked_resource_mentions;
     use super::CodexParser;
-    use crate::models::{ContentBlock, MessageRole, SessionStats, TurnUsage, UnifiedMessage};
-    use chrono::{Duration, Utc};
+    use crate::models::{
+        ContentBlock, MessageRole, SessionStats, TurnRole, TurnUsage, UnifiedMessage,
+    };
+    use chrono::{DateTime, Duration, Utc};
     use std::env;
     use std::fs;
     use std::path::PathBuf;
@@ -1810,6 +1828,7 @@ mod tests {
             usage: None,
             duration_ms: None,
             model: None,
+            completed_at: Some(now),
         }];
 
         assert!(should_skip_duplicate_user_message(
@@ -2000,6 +2019,54 @@ mod tests {
             .context_window_usage_percent
             .expect("context window percent present");
         assert!((pct - ((170.0 / 258400.0) * 100.0)).abs() < 0.0001);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn parse_detail_completion_time_uses_agent_message_timestamp_not_added_turn_span() {
+        // Regression: in Codex `duration_ms` is computed from the
+        // turn_context → token_count span, while `timestamp` on the
+        // assistant `UnifiedMessage` is the agent_message event time
+        // (already near turn end). Adding them double-counts the entire
+        // turn span. completed_at must reflect the agent_message arrival.
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time ok")
+            .as_nanos();
+        let path: PathBuf = env::temp_dir().join(format!("codeg-codex-completed-{nanos}.jsonl"));
+
+        let content = concat!(
+            "{\"timestamp\":\"2026-03-01T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"completed-1\",\"cwd\":\"/tmp/demo\"}}\n",
+            // Turn starts here.
+            "{\"timestamp\":\"2026-03-01T10:00:00.522Z\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5-codex\"}}\n",
+            // Assistant message arrives ~9.5s into the turn.
+            "{\"timestamp\":\"2026-03-01T10:00:10.081Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"agent_message\",\"message\":\"done\"}}\n",
+            // token_count fires shortly after, bringing duration_ms = 9.7s.
+            "{\"timestamp\":\"2026-03-01T10:00:10.268Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"total_tokens\":100,\"input_tokens\":80,\"cached_input_tokens\":0,\"output_tokens\":20},\"last_token_usage\":{\"input_tokens\":80,\"cached_input_tokens\":0,\"output_tokens\":20,\"total_tokens\":100},\"model_context_window\":258400}}}\n"
+        );
+        fs::write(&path, content).expect("write test jsonl");
+
+        let parser = CodexParser::new();
+        let detail = parser
+            .parse_conversation_detail(&path, "completed-1")
+            .expect("parse detail ok");
+
+        let assistant = detail
+            .turns
+            .iter()
+            .find(|t| matches!(t.role, TurnRole::Assistant))
+            .expect("assistant turn");
+        let completed_at = assistant.completed_at.expect("completed_at populated");
+        let expected = "2026-03-01T10:00:10.081Z"
+            .parse::<DateTime<Utc>>()
+            .unwrap();
+        assert_eq!(completed_at, expected);
+        // The naive `timestamp + duration_ms` would produce ~10.00:19.827Z.
+        let wrong = "2026-03-01T10:00:19.827Z"
+            .parse::<DateTime<Utc>>()
+            .unwrap();
+        assert_ne!(completed_at, wrong);
 
         let _ = fs::remove_file(path);
     }
