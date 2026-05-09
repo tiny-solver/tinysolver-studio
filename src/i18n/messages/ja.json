@@ -1865,8 +1865,8 @@
         "toolGroup": {
           "search": "{count} 件を検索",
           "command": "{count} 件のコマンドを実行",
-          "read": "{count} 件のファイルを読み取り",
-          "edit": "{count} 件のファイルを編集",
+          "read": "ファイルを {count} 回読み取り",
+          "edit": "ファイルを {count} 回編集",
           "fetch": "{count} 件のリソースを取得",
           "think": "{count} 回思考",
           "todo": "{count} 件の TODO を更新",

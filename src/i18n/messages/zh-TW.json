@@ -1865,8 +1865,8 @@
         "toolGroup": {
           "search": "搜尋 {count} 次",
           "command": "執行 {count} 個指令",
-          "read": "讀取 {count} 個檔案",
-          "edit": "編輯 {count} 個檔案",
+          "read": "讀取 {count} 次檔案",
+          "edit": "編輯 {count} 次檔案",
           "fetch": "抓取 {count} 個資源",
           "think": "思考 {count} 次",
           "todo": "更新 {count} 項待辦",

@@ -1865,8 +1865,8 @@
         "toolGroup": {
           "search": "{count, plural, one {A exploré # recherche} other {A exploré # recherches}}",
           "command": "{count, plural, one {A exécuté # commande} other {A exécuté # commandes}}",
-          "read": "{count, plural, one {A lu # fichier} other {A lu # fichiers}}",
-          "edit": "{count, plural, one {A modifié # fichier} other {A modifié # fichiers}}",
+          "read": "{count, plural, one {A lu des fichiers # fois} other {A lu des fichiers # fois}}",
+          "edit": "{count, plural, one {A modifié des fichiers # fois} other {A modifié des fichiers # fois}}",
           "fetch": "{count, plural, one {A récupéré # ressource} other {A récupéré # ressources}}",
           "think": "{count, plural, one {A réfléchi # fois} other {A réfléchi # fois}}",
           "todo": "{count, plural, one {A mis à jour # tâche} other {A mis à jour # tâches}}",
