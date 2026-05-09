@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import { Loader2, PawPrint, Plus, Sparkles, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -16,11 +16,17 @@ import {
 import { isDesktop } from "@/lib/transport"
 import type { PetSummary } from "@/lib/pet/types"
 import {
+  createPetSpriteObjectUrl,
+  revokePetSpriteObjectUrl,
+} from "@/lib/pet/sprite-url"
+import {
   SPRITE_BACKGROUND_SIZE,
   backgroundPositionFor,
 } from "@/lib/pet/animation"
 import { PetEditor } from "./pet-editor"
 import { PetImporter } from "./pet-importer"
+
+const SPRITE_PREVIEW_CONCURRENCY = 4
 
 export function PetManagerSection() {
   const t = useTranslations("Pet.manager")
@@ -33,8 +39,21 @@ export function PetManagerSection() {
   const [importOpen, setImportOpen] = useState(false)
   const [codexAvailable, setCodexAvailable] = useState(false)
   const [sheetUrls, setSheetUrls] = useState<Record<string, string>>({})
+  const sheetUrlsRef = useRef<Record<string, string>>({})
+  const mountedRef = useRef(true)
+  const refreshSeqRef = useRef(0)
+
+  const replaceSheetUrls = useCallback((next: Record<string, string>) => {
+    revokeSpriteUrlRecord(sheetUrlsRef.current)
+    sheetUrlsRef.current = next
+    setSheetUrls(next)
+  }, [])
 
   const refresh = useCallback(async () => {
+    const seq = refreshSeqRef.current + 1
+    refreshSeqRef.current = seq
+    await Promise.resolve()
+    if (!mountedRef.current || seq !== refreshSeqRef.current) return
     setLoading(true)
     setError(null)
     try {
@@ -43,36 +62,43 @@ export function PetManagerSection() {
         getPetSettings().catch(() => null),
         isCodexImportAvailable().catch(() => ({ available: false })),
       ])
+      if (!mountedRef.current || seq !== refreshSeqRef.current) return
       setPets(list)
       setActiveId(settings?.activePetId ?? null)
       setCodexAvailable(importerAvail.available)
-
-      // Webview can't load `file://` paths directly (and won't work in
-      // server mode at all), so fetch each sheet through the existing
-      // command and render from a base64 data URL.
-      const sprites = await Promise.all(
-        list.map(async (pet) => {
-          try {
-            const asset = await readPetSpritesheet(pet.id)
-            return [
-              pet.id,
-              `data:${asset.mime};base64,${asset.dataBase64}`,
-            ] as const
-          } catch {
-            return [pet.id, ""] as const
-          }
-        })
-      )
-      setSheetUrls(Object.fromEntries(sprites))
-    } catch (err) {
-      setError(toMessage(err))
-    } finally {
+      replaceSheetUrls({})
       setLoading(false)
+
+      void loadSpritePreviews(list).then((nextSheetUrls) => {
+        if (!mountedRef.current || seq !== refreshSeqRef.current) {
+          revokeSpriteUrlRecord(nextSheetUrls)
+          return
+        }
+        replaceSheetUrls(nextSheetUrls)
+      })
+    } catch (err) {
+      if (mountedRef.current && seq === refreshSeqRef.current) {
+        setError(toMessage(err))
+        setLoading(false)
+      }
+    }
+  }, [replaceSheetUrls])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      refreshSeqRef.current += 1
+      revokeSpriteUrlRecord(sheetUrlsRef.current)
+      sheetUrlsRef.current = {}
     }
   }, [])
 
   useEffect(() => {
-    void refresh()
+    const timer = window.setTimeout(() => {
+      void refresh()
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [refresh])
 
   const handleSetActive = useCallback(async (petId: string) => {
@@ -282,6 +308,45 @@ export function PetManagerSection() {
       />
     </section>
   )
+}
+
+async function loadSpritePreviews(
+  pets: PetSummary[]
+): Promise<Record<string, string>> {
+  const results: Array<readonly [string, string]> = []
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < pets.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const pet = pets[index]
+      if (!pet) continue
+      results.push(await loadSpritePreview(pet))
+    }
+  }
+
+  const workerCount = Math.min(SPRITE_PREVIEW_CONCURRENCY, pets.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+
+  return Object.fromEntries(results)
+}
+
+async function loadSpritePreview(
+  pet: PetSummary
+): Promise<readonly [string, string]> {
+  try {
+    const asset = await readPetSpritesheet(pet.id)
+    return [pet.id, createPetSpriteObjectUrl(asset)] as const
+  } catch {
+    return [pet.id, ""] as const
+  }
+}
+
+function revokeSpriteUrlRecord(urls: Record<string, string>): void {
+  for (const url of Object.values(urls)) {
+    revokePetSpriteObjectUrl(url)
+  }
 }
 
 function toMessage(err: unknown): string {
