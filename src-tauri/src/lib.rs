@@ -478,6 +478,8 @@ mod tauri_app {
                 pet_commands::pet_get_settings,
                 pet_commands::pet_set_active,
                 pet_commands::pet_save_window_state,
+                pet_commands::pet_marketplace_list,
+                pet_commands::pet_marketplace_install,
                 project_boot::detect_package_manager,
                 project_boot::create_shadcn_project,
                 system_settings::get_system_proxy_settings,

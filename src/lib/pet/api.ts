@@ -7,6 +7,10 @@ import type {
   ImportablePet,
   ImportCodexPetsRequest,
   ImportCodexPetsResult,
+  MarketplaceInstallRequest,
+  MarketplaceInstallResponse,
+  MarketplaceListParams,
+  MarketplaceListResponse,
   NewPetInput,
   PetCodexImportAvailability,
   PetDetail,
@@ -63,6 +67,18 @@ export async function importCodexPets(
 
 export async function isCodexImportAvailable(): Promise<PetCodexImportAvailability> {
   return getTransport().call("pet_codex_import_available")
+}
+
+export async function listMarketplacePets(
+  params: MarketplaceListParams
+): Promise<MarketplaceListResponse> {
+  return getTransport().call("pet_marketplace_list", { ...params })
+}
+
+export async function installMarketplacePet(
+  request: MarketplaceInstallRequest
+): Promise<MarketplaceInstallResponse> {
+  return getTransport().call("pet_marketplace_install", { ...request })
 }
 
 export async function getPetSettings(): Promise<PetWindowConfig> {
