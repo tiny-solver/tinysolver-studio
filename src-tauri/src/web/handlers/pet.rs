@@ -14,8 +14,8 @@ use crate::commands::pet::{
     PetUpdateMetaParams,
 };
 use crate::models::pet::{
-    ImportCodexPetsRequest, ImportCodexPetsResult, ImportablePet, NewPetInput, PetDetail,
-    PetSpriteAsset, PetSummary, PetWindowConfig, PetWindowStatePatch,
+    ImportCodexPetsRequest, ImportCodexPetsResult, ImportablePet, NewPetInput, PetCelebrationKind,
+    PetDetail, PetSpriteAsset, PetSummary, PetWindowConfig, PetWindowStatePatch,
 };
 use crate::pets::marketplace::{
     MarketplaceInstallRequest, MarketplaceInstallResponse, MarketplaceListParams,
@@ -115,6 +115,20 @@ pub async fn pet_save_window_state(
     pet_commands::pet_save_window_state_core(&state.db.conn, patch)
         .await
         .map(Json)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PetCelebrateParams {
+    pub kind: PetCelebrationKind,
+}
+
+pub async fn pet_celebrate(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<PetCelebrateParams>,
+) -> Result<Json<()>, AppCommandError> {
+    pet_commands::pet_celebrate_core(&state.emitter, params.kind);
+    Ok(Json(()))
 }
 
 pub async fn pet_marketplace_list(

@@ -97,6 +97,19 @@ export async function savePetWindowState(
   return getTransport().call("pet_save_window_state", { ...patch })
 }
 
+// Manual oneshot trigger for events the backend can't observe directly
+// (e.g. merge-completed, which is emitted only from the renderer). The
+// backend forwards the request as a `pet://oneshot` event so the pet
+// window animates regardless of which transport the user is on.
+//
+// Mirrors Rust `PetCelebrationKind`: only the three transient cues that
+// the renderer actually plays are accepted at the API boundary.
+export type PetCelebrationKind = "jumping" | "waving" | "failed"
+
+export async function petCelebrate(kind: PetCelebrationKind): Promise<void> {
+  return getTransport().call("pet_celebrate", { kind })
+}
+
 // Tauri-only — these are noops in web mode (the standalone server cannot
 // open native windows on the user's machine). Callers should branch on
 // `isDesktop()` before invoking them.

@@ -14,14 +14,15 @@ use crate::db::service::app_metadata_service;
 #[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::pet::{
-    ImportCodexPetsRequest, ImportCodexPetsResult, ImportablePet, NewPetInput, PetDetail,
-    PetMetaPatch, PetSpriteAsset, PetSummary, PetWindowConfig, PetWindowStatePatch,
+    ImportCodexPetsRequest, ImportCodexPetsResult, ImportablePet, NewPetInput, PetCelebrationKind,
+    PetDetail, PetMetaPatch, PetSpriteAsset, PetSummary, PetWindowConfig, PetWindowStatePatch,
 };
 use crate::pets;
 use crate::pets::marketplace::{
     MarketplaceInstallRequest, MarketplaceInstallResponse, MarketplaceListParams,
     MarketplaceListResponse,
 };
+use crate::web::event_bridge::{emit_event, EventEmitter};
 
 /// KV key used by `app_metadata_service` for the persisted pet UI state.
 const PET_CONFIG_KEY: &str = "pet.config";
@@ -154,6 +155,19 @@ pub async fn pet_set_active_core(
     config.active_pet_id = pet_id;
     save_config(db, &config).await?;
     Ok(config)
+}
+
+/// Manual oneshot trigger for events the backend can't observe directly
+/// (e.g. `folder://merge-completed`, which is currently emitted only by
+/// the merge UI in the renderer). Goes through `emit_event` so both the
+/// Tauri webview and any WebSocket clients see the same `pet://oneshot`
+/// stream the mapper produces for ACP/git/install events. The narrowed
+/// `PetCelebrationKind` keeps callers from broadcasting an ambient row
+/// (e.g. `running`) — the frontend would silently drop those, which
+/// makes the API quietly mis-behaved.
+pub fn pet_celebrate_core(emitter: &EventEmitter, kind: PetCelebrationKind) {
+    let state: crate::models::pet::PetState = kind.into();
+    emit_event(emitter, "pet://oneshot", state);
 }
 
 pub async fn pet_save_window_state_core(
@@ -368,6 +382,16 @@ pub async fn pet_set_active(
     pet_id: Option<String>,
 ) -> Result<PetWindowConfig, AppCommandError> {
     pet_set_active_core(&db.conn, pet_id).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn pet_celebrate(
+    app: tauri::AppHandle,
+    kind: PetCelebrationKind,
+) -> Result<(), AppCommandError> {
+    pet_celebrate_core(&EventEmitter::Tauri(app), kind);
+    Ok(())
 }
 
 #[cfg(feature = "tauri-runtime")]

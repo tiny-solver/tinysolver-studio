@@ -719,6 +719,7 @@ pub fn build_router(
             "/pet_marketplace_install",
             post(handlers::pet::pet_marketplace_install),
         )
+        .route("/pet_celebrate", post(handlers::pet::pet_celebrate))
         // ─── Terminal ───
         .route("/terminal_spawn", post(handlers::terminal::terminal_spawn))
         .route("/terminal_write", post(handlers::terminal::terminal_write))
