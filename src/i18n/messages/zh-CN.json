@@ -2268,7 +2268,7 @@
       "active": "当前活跃",
       "edit": "编辑",
       "delete": "删除",
-      "deleteConfirm": "确认删除此宠物?会从磁盘上一并移除。",
+      "deleteConfirm": "确认删除宠物 \"{name}\" 吗？会从磁盘上一并移除。",
       "summon": "召唤宠物窗口",
       "openCodexHelp": "Codex 宠物需位于 ~/.codex/pets/ 目录下,但未找到。",
       "specRequirement": "精灵图必须是 1536x1872 像素的带透明通道 PNG 或 WebP。",
@@ -2291,7 +2291,9 @@
         "addFailed": "添加宠物失败",
         "updateFailed": "更新宠物失败",
         "deleteFailed": "删除宠物失败",
-        "loadFailed": "加载宠物列表失败"
+        "loadFailed": "加载宠物列表失败",
+        "setActiveFailed": "设置活跃宠物失败",
+        "summonFailed": "召唤宠物窗口失败"
       }
     },
     "import": {

@@ -2268,7 +2268,7 @@
       "active": "Aktiv",
       "edit": "Bearbeiten",
       "delete": "Löschen",
-      "deleteConfirm": "Dieses Pet löschen? Auch von der Festplatte entfernt.",
+      "deleteConfirm": "Pet „{name}\" löschen? Auch von der Festplatte entfernt.",
       "summon": "Pet-Fenster aufrufen",
       "openCodexHelp": "Codex-Pets müssen in ~/.codex/pets/ liegen. Nichts gefunden.",
       "specRequirement": "Sprite-Sheet muss 1536x1872 PNG oder WebP mit Transparenz sein.",
@@ -2291,7 +2291,9 @@
         "addFailed": "Hinzufügen fehlgeschlagen",
         "updateFailed": "Aktualisieren fehlgeschlagen",
         "deleteFailed": "Löschen fehlgeschlagen",
-        "loadFailed": "Pet-Liste konnte nicht geladen werden"
+        "loadFailed": "Pet-Liste konnte nicht geladen werden",
+        "setActiveFailed": "Aktivieren fehlgeschlagen",
+        "summonFailed": "Pet-Fenster konnte nicht geöffnet werden"
       }
     },
     "import": {

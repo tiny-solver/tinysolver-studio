@@ -2268,7 +2268,7 @@
       "active": "Active",
       "edit": "Edit",
       "delete": "Delete",
-      "deleteConfirm": "Delete this pet? It will be removed from disk.",
+      "deleteConfirm": "Delete pet \"{name}\"? It will be removed from disk.",
       "summon": "Summon pet window",
       "openCodexHelp": "Codex pets must be installed under ~/.codex/pets/. None found.",
       "specRequirement": "Spritesheet must be 1536x1872 PNG or WebP with transparency.",
@@ -2291,7 +2291,9 @@
         "addFailed": "Failed to add pet",
         "updateFailed": "Failed to update pet",
         "deleteFailed": "Failed to delete pet",
-        "loadFailed": "Failed to load pets"
+        "loadFailed": "Failed to load pets",
+        "setActiveFailed": "Failed to set active pet",
+        "summonFailed": "Failed to summon pet window"
       }
     },
     "import": {

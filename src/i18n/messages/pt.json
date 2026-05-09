@@ -2268,7 +2268,7 @@
       "active": "Ativo",
       "edit": "Editar",
       "delete": "Excluir",
-      "deleteConfirm": "Excluir este pet? Será removido do disco.",
+      "deleteConfirm": "Excluir o pet \"{name}\"? Será removido do disco.",
       "summon": "Invocar janela do pet",
       "openCodexHelp": "Pets do Codex precisam estar em ~/.codex/pets/. Nenhum encontrado.",
       "specRequirement": "O sprite precisa ser PNG ou WebP 1536x1872 com transparência.",
@@ -2291,7 +2291,9 @@
         "addFailed": "Falha ao adicionar",
         "updateFailed": "Falha ao atualizar",
         "deleteFailed": "Falha ao excluir",
-        "loadFailed": "Falha ao carregar pets"
+        "loadFailed": "Falha ao carregar pets",
+        "setActiveFailed": "Falha ao ativar pet",
+        "summonFailed": "Falha ao abrir a janela do pet"
       }
     },
     "import": {

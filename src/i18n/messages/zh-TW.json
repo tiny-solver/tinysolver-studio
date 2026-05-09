@@ -2268,7 +2268,7 @@
       "active": "使用中",
       "edit": "編輯",
       "delete": "刪除",
-      "deleteConfirm": "確認刪除此寵物?會從磁碟上一併移除。",
+      "deleteConfirm": "確認刪除寵物「{name}」嗎？會從磁碟上一併移除。",
       "summon": "召喚寵物視窗",
       "openCodexHelp": "Codex 寵物需位於 ~/.codex/pets/ 目錄下,但未找到。",
       "specRequirement": "精靈圖必須是 1536x1872 像素帶透明通道的 PNG 或 WebP。",
@@ -2291,7 +2291,9 @@
         "addFailed": "新增寵物失敗",
         "updateFailed": "更新寵物失敗",
         "deleteFailed": "刪除寵物失敗",
-        "loadFailed": "載入寵物列表失敗"
+        "loadFailed": "載入寵物列表失敗",
+        "setActiveFailed": "設定活躍寵物失敗",
+        "summonFailed": "召喚寵物視窗失敗"
       }
     },
     "import": {
