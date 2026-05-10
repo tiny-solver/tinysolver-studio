@@ -439,6 +439,7 @@ pub async fn open_settings_window(
     state: tauri::State<'_, SettingsWindowState>,
 ) -> Result<(), AppCommandError> {
     let target_route = resolve_settings_target(section.as_deref(), agent_type.as_deref());
+    let owner_label = window.label().to_string();
     if let Some(existing) = app.get_webview_window("settings") {
         post_window_setup(&existing);
         if section.is_some() || agent_type.is_some() {
@@ -451,6 +452,19 @@ pub async fn open_settings_window(
                 AppCommandError::window("Failed to navigate settings window", e.to_string())
             })?;
         }
+        if let Some(prev_owner) = state.take_owner() {
+            if prev_owner != owner_label {
+                if let Some(prev_window) = app.get_webview_window(&prev_owner) {
+                    let _ = prev_window.set_enabled(true);
+                }
+            }
+        }
+        if let Some(owner_window) = app.get_webview_window(&owner_label) {
+            owner_window.set_enabled(false).map_err(|e| {
+                AppCommandError::window("Failed to disable owner window", e.to_string())
+            })?;
+        }
+        state.set_owner(owner_label);
         let _ = existing.unminimize();
         existing.set_focus().map_err(|e| {
             AppCommandError::window("Failed to focus settings window", e.to_string())
@@ -458,18 +472,26 @@ pub async fn open_settings_window(
         return Ok(());
     }
 
-    let owner_label = window.label().to_string();
     let url = WebviewUrl::App(target_route.into());
     let builder = WebviewWindowBuilder::new(&app, "settings", url)
         .title("Settings")
         .inner_size(1080.0, 700.0)
         .min_inner_size(1080.0, 600.0)
+        .always_on_top(true)
         .center();
     let settings_window = apply_platform_window_style(builder)
         .build()
         .map_err(|e| AppCommandError::window("Failed to open settings window", e.to_string()))?;
     post_window_setup(&settings_window);
-
+    if let Some(owner_window) = app.get_webview_window(&owner_label) {
+        if let Err(err) = owner_window.set_enabled(false) {
+            let _ = settings_window.close();
+            return Err(AppCommandError::window(
+                "Failed to disable owner window",
+                err.to_string(),
+            ));
+        }
+    }
     state.set_owner(owner_label);
     settings_window
         .set_focus()
@@ -480,6 +502,7 @@ pub async fn open_settings_window(
 pub fn restore_windows_after_settings(app: &AppHandle, state: &SettingsWindowState) {
     if let Some(owner_label) = state.take_owner() {
         if let Some(window) = app.get_webview_window(&owner_label) {
+            let _ = window.set_enabled(true);
             let _ = window.set_focus();
         }
     }
