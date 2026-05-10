@@ -102,13 +102,23 @@ mod tauri_app {
         process::ensure_node_in_path();
         process::ensure_user_npm_prefix_in_path();
 
-        tauri::Builder::default()
-            // Must be the first plugin: it short-circuits second launches by
-            // signalling the running instance and exiting before any other
-            // initialization. The callback runs in the *original* process.
-            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-                windows::show_main_window(app);
-            }))
+        let builder = tauri::Builder::default();
+
+        // Must be the first plugin: it short-circuits second launches by
+        // signalling the running instance and exiting before any other
+        // initialization. The callback runs in the *original* process.
+        //
+        // Skipped in debug builds so a locally-built `cargo run` instance
+        // can run alongside an installed release build of codeg during
+        // development. NOTE: both builds still share the same `app.codeg`
+        // data directory — don't drive workflows in dev that would corrupt
+        // release-side state (e.g. concurrent SQLite writes).
+        #[cfg(not(debug_assertions))]
+        let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            windows::show_main_window(app);
+        }));
+
+        builder
             .plugin(tauri_plugin_window_state::Builder::new().build())
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_dialog::init())
