@@ -163,6 +163,7 @@ type Action =
         usage?: TurnUsage | null
         duration_ms?: number | null
         model?: string | null
+        completed_at?: string | null
       }>
       sessionStats?: SessionStats | null
     }
@@ -925,16 +926,19 @@ function reducer(
         const newUsage = turn.usage ?? patch.usage
         const newDuration = turn.duration_ms ?? patch.duration_ms
         const newModel = turn.model ?? patch.model
+        const newCompletedAt = turn.completed_at ?? patch.completed_at
         if (
           newUsage !== turn.usage ||
           newDuration !== turn.duration_ms ||
-          newModel !== turn.model
+          newModel !== turn.model ||
+          newCompletedAt !== turn.completed_at
         ) {
           patchedTurns[patch.index] = {
             ...turn,
             usage: newUsage,
             duration_ms: newDuration,
             model: newModel,
+            completed_at: newCompletedAt,
           }
           changed = true
         }
@@ -1192,6 +1196,7 @@ export function ConversationRuntimeProvider({
                 usage?: TurnUsage | null
                 duration_ms?: number | null
                 model?: string | null
+                completed_at?: string | null
               }> = []
 
               for (let i = 0; i < localAssistantIndices.length; i++) {
@@ -1199,12 +1204,18 @@ export function ConversationRuntimeProvider({
                 let usageToApply: TurnUsage | null | undefined
                 let durationToApply: number | null | undefined
                 let modelToApply: string | null | undefined
+                // For the merged-sub-turn case (offset > 0), the latest
+                // completion is parsed[offset + i] (the sub-turn we matched);
+                // earlier rolled-in parsed turns precede it in time, so we
+                // don't aggregate completion timestamps.
+                let completedAtToApply: string | null | undefined
 
                 if (parsedIdx >= 0 && parsedIdx < parsedAssistantTurns.length) {
                   const pt = parsedAssistantTurns[parsedIdx]
                   usageToApply = pt.usage
                   durationToApply = pt.duration_ms
                   modelToApply = pt.model
+                  completedAtToApply = pt.completed_at
                 }
 
                 // When the parser splits the response into more sub-turns
@@ -1247,12 +1258,19 @@ export function ConversationRuntimeProvider({
                   }
                 }
 
-                if (!usageToApply && !durationToApply && !modelToApply) continue
+                if (
+                  !usageToApply &&
+                  !durationToApply &&
+                  !modelToApply &&
+                  !completedAtToApply
+                )
+                  continue
                 patches.push({
                   index: localAssistantIndices[i],
                   usage: usageToApply,
                   duration_ms: durationToApply,
                   model: modelToApply,
+                  completed_at: completedAtToApply,
                 })
               }
 

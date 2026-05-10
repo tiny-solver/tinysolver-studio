@@ -155,6 +155,12 @@ export interface MessageTurn {
   usage?: TurnUsage | null
   duration_ms?: number | null
   model?: string | null
+  /** Wall-clock completion time (ISO). Each Rust parser sets this to its
+   * own end-marker (e.g. OpenCode's `time.completed`, or just the event-log
+   * `timestamp` for agents that log post-generation). Notably this is NOT
+   * `timestamp + duration_ms` — those two fields encode unrelated spans in
+   * most parsers. */
+  completed_at?: string | null
 }
 
 export interface ConversationDetail {

@@ -1756,6 +1756,7 @@
         "tokenCacheRead": "Cache read",
         "tokenCacheWrite": "Cache write",
         "duration": "Duration",
+        "completedAt": "Completed at",
         "jumpToPreviousUserMessage": "Jump to user message"
       },
       "liveTurnStats": {

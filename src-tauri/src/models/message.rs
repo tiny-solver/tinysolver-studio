@@ -136,6 +136,14 @@ pub struct UnifiedMessage {
     pub duration_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Wall-clock time the message finished. Each parser sets this to the
+    /// best end-marker it has access to (e.g. Codex's `token_count` event,
+    /// OpenCode's `completed_ms`, or just the event-log `timestamp` for
+    /// agents that log post-generation). Crucially this is NOT computed as
+    /// `timestamp + duration_ms` — those two fields encode unrelated spans
+    /// in most parsers and adding them produces wrong completion times.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,4 +166,10 @@ pub struct MessageTurn {
     pub duration_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Wall-clock time the turn finished, propagated from the last
+    /// `UnifiedMessage` absorbed into this turn. Not computed from
+    /// `timestamp + duration_ms` — those fields encode unrelated spans in
+    /// most parsers (event-log time vs. full turn span).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
 }
