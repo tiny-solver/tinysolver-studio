@@ -141,6 +141,7 @@ pub async fn pet_get_settings_core(
 
 pub async fn pet_set_active_core(
     db: &DatabaseConnection,
+    emitter: &EventEmitter,
     pet_id: Option<String>,
 ) -> Result<PetWindowConfig, AppCommandError> {
     let mut config = load_config(db).await?;
@@ -156,6 +157,9 @@ pub async fn pet_set_active_core(
 
     config.active_pet_id = pet_id;
     save_config(db, &config).await?;
+    // Notify the live pet window (and any WebSocket subscribers) so it can
+    // swap sprites in place rather than requiring close-and-reopen.
+    emit_event(emitter, "pet://active-changed", &config);
     Ok(config)
 }
 
@@ -389,10 +393,11 @@ pub async fn pet_get_settings(
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn pet_set_active(
+    app: tauri::AppHandle,
     db: tauri::State<'_, AppDatabase>,
     pet_id: Option<String>,
 ) -> Result<PetWindowConfig, AppCommandError> {
-    pet_set_active_core(&db.conn, pet_id).await
+    pet_set_active_core(&db.conn, &EventEmitter::Tauri(app), pet_id).await
 }
 
 #[cfg(feature = "tauri-runtime")]

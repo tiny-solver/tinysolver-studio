@@ -103,7 +103,7 @@ pub async fn pet_set_active(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<PetSetActiveParams>,
 ) -> Result<Json<PetWindowConfig>, AppCommandError> {
-    pet_commands::pet_set_active_core(&state.db.conn, params.pet_id)
+    pet_commands::pet_set_active_core(&state.db.conn, &state.emitter, params.pet_id)
         .await
         .map(Json)
 }
