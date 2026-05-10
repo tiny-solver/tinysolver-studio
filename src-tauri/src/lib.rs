@@ -152,6 +152,25 @@ mod tauri_app {
                 tauri::async_runtime::block_on(windows::load_saved_zoom(&db.conn));
                 tauri::async_runtime::block_on(windows::load_saved_appearance_mode(&db.conn));
 
+                match tauri::async_runtime::block_on(web::load_web_service_config(&db.conn)) {
+                    Ok(config) if config.auto_start => {
+                        let ws = app.state::<web::WebServerState>();
+                        if let Err(err) =
+                            tauri::async_runtime::block_on(web::do_start_web_server_tauri(
+                                app.handle().clone(),
+                                &ws,
+                                config.port,
+                                None,
+                                config.token,
+                            ))
+                        {
+                            eprintln!("[WEB] auto-start failed: {err}");
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(err) => eprintln!("[WEB] failed to load auto-start config: {err}"),
+                }
+
                 // System tray: required for the WeChat-style hide-on-close
                 // flow on Windows/Linux (no built-in dock to bring the
                 // workspace back). Locale comes from the persisted language
@@ -688,6 +707,7 @@ mod tauri_app {
                 web::stop_web_server,
                 web::get_web_server_status,
                 web::get_web_service_config,
+                web::update_web_service_config,
                 web::probe_web_service_port,
             ])
             .build(tauri::generate_context!())
