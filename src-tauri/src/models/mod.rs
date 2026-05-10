@@ -19,8 +19,8 @@ pub use conversation::{
 pub use folder::{FolderCommandInfo, FolderDetail, FolderHistoryEntry, OpenedTab};
 pub use quick_message::QuickMessageInfo;
 pub use message::{
-    AgentExecutionStats, AgentToolCall, ContentBlock, MessageRole, MessageTurn, TurnRole,
-    TurnUsage, UnifiedMessage,
+    AgentExecutionStats, AgentToolCall, ContentBlock, ImageData, MessageRole, MessageTurn,
+    TurnRole, TurnUsage, UnifiedMessage,
 };
 pub use system::{
     AvailableTerminalShells, GitCredentials, GitDetectResult, GitHubAccountsSettings,

@@ -36,7 +36,7 @@ use crate::acp::types::{
     AcpEvent, AvailableCommandInfo, ConnectionInfo, ConnectionStatus, PermissionOptionInfo,
     PlanEntryInfo, PromptCapabilitiesInfo, PromptInputBlock, SessionConfigKindInfo,
     SessionConfigOptionInfo, SessionConfigSelectGroupInfo, SessionConfigSelectInfo,
-    SessionConfigSelectOptionInfo, SessionModeInfo, SessionModeStateInfo,
+    SessionConfigSelectOptionInfo, SessionModeInfo, SessionModeStateInfo, ToolCallImageInfo,
 };
 use crate::models::agent::AgentType;
 use crate::network::proxy;
@@ -2109,6 +2109,7 @@ async fn emit_terminal_output_update(
             raw_output_append: Some(append),
             locations: None,
             meta: None,
+            images: None,
         },
     )
     .await;
@@ -2953,6 +2954,31 @@ fn serialize_tool_call_content(content: &[ToolCallContent]) -> Option<String> {
     }
 }
 
+/// Extract `ContentBlock::Image` payloads from a `ToolCallContent` slice.
+/// Returns `None` when no images are present so the upstream `images` field
+/// on `AcpEvent::ToolCall(Update)` stays absent for non-image tool calls
+/// (preserves replace-on-update semantics: an absent field means "keep
+/// prior", a `Some(vec)` replaces).
+fn extract_tool_call_images(content: &[ToolCallContent]) -> Option<Vec<ToolCallImageInfo>> {
+    let mut imgs: Vec<ToolCallImageInfo> = Vec::new();
+    for item in content {
+        if let ToolCallContent::Content(c) = item {
+            if let ContentBlock::Image(img) = &c.content {
+                imgs.push(ToolCallImageInfo {
+                    data: img.data.clone(),
+                    mime_type: img.mime_type.clone(),
+                    uri: img.uri.clone(),
+                });
+            }
+        }
+    }
+    if imgs.is_empty() {
+        None
+    } else {
+        Some(imgs)
+    }
+}
+
 /// If the output looks like numbered lines (`   115→content`), strip them
 /// and return `{"start_line":N,"content":"..."}` — same as the historical path.
 fn structurize_live_output(text: &str) -> String {
@@ -3175,6 +3201,7 @@ async fn emit_conversation_update(
         SessionUpdate::ToolCall(tc) => {
             let tool_call_id = tc.tool_call_id.to_string();
             let content = serialize_tool_call_content(&tc.content);
+            let images = extract_tool_call_images(&tc.content);
             let raw_input =
                 json_value_to_text(&tc.raw_input).map(|text| resolve_live_tool_input(&text, cwd));
             // Initial tool_call notification — the frontend reducer
@@ -3204,6 +3231,7 @@ async fn emit_conversation_update(
                     raw_output,
                     locations,
                     meta,
+                    images,
                 },
             )
             .await;
@@ -3215,6 +3243,11 @@ async fn emit_conversation_update(
                 .content
                 .as_deref()
                 .and_then(serialize_tool_call_content);
+            let images = tcu
+                .fields
+                .content
+                .as_deref()
+                .and_then(extract_tool_call_images);
             let raw_input = json_value_to_text(&tcu.fields.raw_input)
                 .map(|text| resolve_live_tool_input(&text, cwd));
             // Diff the incoming raw_output against the last snapshot we
@@ -3254,6 +3287,7 @@ async fn emit_conversation_update(
                     raw_output_append,
                     locations,
                     meta,
+                    images,
                 },
             )
             .await;
