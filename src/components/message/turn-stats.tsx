@@ -5,7 +5,6 @@ import {
   ArrowUpToLine,
   BrainCog,
   CheckIcon,
-  Clock,
   Coins,
   CopyIcon,
   Timer,
@@ -131,6 +130,7 @@ export function TurnStats({
     []
   )
 
+  if (!isResponseComplete) return null
   if (!hasCopy && !hasUsage && !hasDuration && !hasCompletedAt && !hasJump)
     return null
 
@@ -163,7 +163,7 @@ export function TurnStats({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className={cn(iconButtonClass, "cursor-help")}
+                className={cn(iconButtonClass, "cursor-default")}
                 aria-label={t("model")}
               >
                 <BrainCog aria-hidden="true" className="h-3.5 w-3.5" />
@@ -181,7 +181,7 @@ export function TurnStats({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className={cn(iconButtonClass, "cursor-help")}
+                className={cn(iconButtonClass, "cursor-default")}
                 aria-label={t("tokenStats")}
               >
                 <Coins aria-hidden="true" className="h-3.5 w-3.5" />
@@ -238,7 +238,7 @@ export function TurnStats({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className={cn(iconButtonClass, "cursor-help")}
+                className={cn(iconButtonClass, "cursor-default")}
                 aria-label={t("duration")}
               >
                 <Timer aria-hidden="true" className="h-3.5 w-3.5" />
@@ -248,30 +248,6 @@ export function TurnStats({
               <span className="font-mono tabular-nums">
                 {formatDuration(duration_ms)}
               </span>
-            </TooltipContent>
-          </Tooltip>
-        )}
-        {hasCompletedAt && completedTooltip && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex h-6 cursor-help items-center gap-1 rounded-full px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                aria-label={`${t("completedAt")}: ${completedTooltip}`}
-              >
-                <Clock aria-hidden="true" className="h-3.5 w-3.5" />
-                <span aria-hidden="true">{completedLabel}</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-muted-foreground">
-                  {t("completedAt")}
-                </span>
-                <span className="font-mono tabular-nums">
-                  {completedTooltip}
-                </span>
-              </div>
             </TooltipContent>
           </Tooltip>
         )}
@@ -289,6 +265,29 @@ export function TurnStats({
             </TooltipTrigger>
             <TooltipContent side="top">
               {t("jumpToPreviousUserMessage")}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {hasCompletedAt && completedTooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-6 cursor-default items-center rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                aria-label={`${t("completedAt")}: ${completedTooltip}`}
+              >
+                <span aria-hidden="true">{completedLabel}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-muted-foreground">
+                  {t("completedAt")}
+                </span>
+                <span className="font-mono tabular-nums">
+                  {completedTooltip}
+                </span>
+              </div>
             </TooltipContent>
           </Tooltip>
         )}
