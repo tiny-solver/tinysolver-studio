@@ -86,12 +86,16 @@ impl PetGlobalState {
             }
             AcpEvent::TurnComplete { .. } => {
                 self.prompting.remove(conn);
-                // PermissionRequest entries with stale request_ids are not
-                // cleared here — the lifecycle of a single permission is
-                // closed by the agent re-sending or the user responding,
-                // both of which surface as ConversationStatusChanged or a
-                // status flip. Leaving stale entries around briefly is
-                // safer than clearing too eagerly.
+                // A permission request is bounded by the turn that raised it:
+                // by the time TurnComplete arrives the user has either
+                // approved (agent reached end_turn / refusal / max_tokens)
+                // or the turn was cancelled. There is no separate event
+                // when the user clicks allow/deny — the response goes
+                // straight back to the agent through `responder.respond()`
+                // — so this is the only deterministic place to drop the
+                // entry. Without this, a single past permission would mask
+                // Running across the entire app until the connection drops.
+                self.pending_permissions.retain(|_, cid| cid != conn);
             }
             AcpEvent::ConversationStatusChanged {
                 conversation_id,
@@ -112,15 +116,36 @@ impl PetGlobalState {
 }
 
 /// Pure function: aggregate → state. Order of checks defines priority.
+///
+/// Priority rationale, top-down:
+///
+/// * `Failed` — most urgent, brief auto-recovery handles the linger.
+/// * `Review` from `pending_permissions` — blocking: the agent literally
+///   cannot proceed without the user clicking allow/deny, so it outranks
+///   any concurrent prompt elsewhere.
+/// * `Running` from `prompting` — active work outranks `pending_reviews`.
+///   `pending_reviews` accumulates a `conversation_id` every time a turn
+///   ends successfully and is only removed when *that specific* conversation
+///   is prompted again (or the row flips to InProgress/Completed/Cancelled).
+///   If `Review` were checked first, a single un-acked turn from any past
+///   conversation would mask the running animation for every subsequent
+///   prompt — including in unrelated conversations — until each stale row
+///   was cleared individually.
+/// * `Review` from `pending_reviews` — informational: surface "you have
+///   un-acked turns" only when nothing is actively running.
+/// * `Waiting` / `Idle` — ambient.
 pub fn compute_pet_state(snapshot: &PetGlobalState) -> PetState {
     if !snapshot.erroring.is_empty() {
         return PetState::Failed;
     }
-    if !snapshot.pending_permissions.is_empty() || !snapshot.pending_reviews.is_empty() {
+    if !snapshot.pending_permissions.is_empty() {
         return PetState::Review;
     }
     if !snapshot.prompting.is_empty() {
         return PetState::Running;
+    }
+    if !snapshot.pending_reviews.is_empty() {
+        return PetState::Review;
     }
     if !snapshot.connected.is_empty() {
         return PetState::Waiting;
@@ -423,6 +448,349 @@ mod tests {
             },
         ));
         assert_eq!(compute_pet_state(&s), PetState::Failed);
+    }
+
+    #[test]
+    fn running_outranks_stale_pending_review_from_other_conversation() {
+        // Regression: a turn that ended in conversation 1 leaves
+        // `pending_reviews = {1}`. Without the priority fix, every subsequent
+        // prompt — even from a different connection / conversation — would
+        // be masked as `Review` until conv 1 was acked, so the pet stops
+        // showing the running animation across the whole app.
+        let mut s = PetGlobalState::default();
+        s.apply(&env(
+            "c1",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 1,
+                status: ConversationStatus::PendingReview,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+
+        s.apply(&env(
+            "c2",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        assert_eq!(
+            compute_pet_state(&s),
+            PetState::Running,
+            "a stale pending_review must not mask an active prompt elsewhere"
+        );
+    }
+
+    #[test]
+    fn back_to_back_conversations_each_show_running() {
+        // End-to-end of the user-reported flow: A prompts → A finishes →
+        // switch to B and prompt → B finishes → back to A. Pet should show
+        // Running during every prompt, regardless of un-acked reviews
+        // accumulating in other conversations.
+        let mut s = PetGlobalState::default();
+
+        // A prompt.
+        s.apply(&env(
+            "c_a",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 1,
+                status: ConversationStatus::InProgress,
+            },
+        ));
+        s.apply(&env(
+            "c_a",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Running);
+
+        // A turn ends.
+        s.apply(&env(
+            "c_a",
+            AcpEvent::TurnComplete {
+                session_id: "sa".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        ));
+        s.apply(&env(
+            "c_a",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Connected,
+            },
+        ));
+        s.apply(&env(
+            "c_a",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 1,
+                status: ConversationStatus::PendingReview,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+
+        // Switch to B and prompt — A's review is still pending but B should
+        // animate running.
+        s.apply(&env(
+            "c_b",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 2,
+                status: ConversationStatus::InProgress,
+            },
+        ));
+        s.apply(&env(
+            "c_b",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Running);
+
+        // B turn ends — both A and B reviews now stale.
+        s.apply(&env(
+            "c_b",
+            AcpEvent::TurnComplete {
+                session_id: "sb".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        ));
+        s.apply(&env(
+            "c_b",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Connected,
+            },
+        ));
+        s.apply(&env(
+            "c_b",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 2,
+                status: ConversationStatus::PendingReview,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+
+        // Back to A and prompt — B is still un-acked but A should animate.
+        s.apply(&env(
+            "c_a",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 1,
+                status: ConversationStatus::InProgress,
+            },
+        ));
+        s.apply(&env(
+            "c_a",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        assert_eq!(
+            compute_pet_state(&s),
+            PetState::Running,
+            "returning to a prior conversation must animate even when other reviews are pending"
+        );
+    }
+
+    #[test]
+    fn concurrent_prompts_stay_running_through_partial_completion() {
+        // Two connections prompting at the same time. When one finishes
+        // (and adds itself to pending_reviews), the pet should keep showing
+        // Running because the other is still actively prompting.
+        let mut s = PetGlobalState::default();
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        s.apply(&env(
+            "c2",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Running);
+
+        // c1 finishes its turn: removed from prompting, conv 1 now pending
+        // review. c2 is still prompting.
+        s.apply(&env(
+            "c1",
+            AcpEvent::TurnComplete {
+                session_id: "s1".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        ));
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Connected,
+            },
+        ));
+        s.apply(&env(
+            "c1",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 1,
+                status: ConversationStatus::PendingReview,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Running);
+
+        // c2 finishes too — now the pet is allowed to surface the reviews.
+        s.apply(&env(
+            "c2",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Connected,
+            },
+        ));
+        s.apply(&env(
+            "c2",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 2,
+                status: ConversationStatus::PendingReview,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+    }
+
+    #[test]
+    fn turn_complete_clears_permission_for_that_connection() {
+        // The user responds to a permission via `RespondPermission` which
+        // bypasses the broadcaster — there is no AcpEvent fired on
+        // resolution. TurnComplete is the only deterministic close of the
+        // permission lifecycle, so leaving entries here past TurnComplete
+        // would mask Running across every conversation indefinitely.
+        let mut s = PetGlobalState::default();
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        s.apply(&env(
+            "c1",
+            AcpEvent::PermissionRequest {
+                request_id: "r1".into(),
+                tool_call: serde_json::json!({}),
+                options: vec![],
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+
+        s.apply(&env(
+            "c1",
+            AcpEvent::TurnComplete {
+                session_id: "s1".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        ));
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Connected,
+            },
+        ));
+
+        assert!(
+            s.pending_permissions.is_empty(),
+            "permission entry must not survive TurnComplete"
+        );
+        assert_eq!(compute_pet_state(&s), PetState::Waiting);
+    }
+
+    #[test]
+    fn turn_complete_only_clears_permissions_for_finishing_connection() {
+        // Concurrent turns: c1 finishes while c2 still has an outstanding
+        // permission. c2's entry must survive — only the connection that
+        // emitted TurnComplete is scrubbed.
+        let mut s = PetGlobalState::default();
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        s.apply(&env(
+            "c2",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        s.apply(&env(
+            "c1",
+            AcpEvent::PermissionRequest {
+                request_id: "r1".into(),
+                tool_call: serde_json::json!({}),
+                options: vec![],
+            },
+        ));
+        s.apply(&env(
+            "c2",
+            AcpEvent::PermissionRequest {
+                request_id: "r2".into(),
+                tool_call: serde_json::json!({}),
+                options: vec![],
+            },
+        ));
+        assert_eq!(s.pending_permissions.len(), 2);
+
+        s.apply(&env(
+            "c1",
+            AcpEvent::TurnComplete {
+                session_id: "s1".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
+        ));
+
+        assert_eq!(s.pending_permissions.len(), 1);
+        assert!(s.pending_permissions.contains_key("r2"));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+    }
+
+    #[test]
+    fn permission_request_outranks_active_prompting() {
+        // An outstanding permission is blocking — the agent literally can't
+        // proceed without user input — so it must outrank Running even
+        // when a different connection is mid-prompt.
+        let mut s = PetGlobalState::default();
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Prompting,
+            },
+        ));
+        s.apply(&env(
+            "c2",
+            AcpEvent::PermissionRequest {
+                request_id: "r1".into(),
+                tool_call: serde_json::json!({}),
+                options: vec![],
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
+    }
+
+    #[test]
+    fn pending_review_visible_only_when_nothing_running() {
+        // The lower-priority review check still fires when no prompts are
+        // active — pet should surface that there's something un-acked once
+        // the running connections settle down.
+        let mut s = PetGlobalState::default();
+        s.apply(&env(
+            "c1",
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Connected,
+            },
+        ));
+        s.apply(&env(
+            "c1",
+            AcpEvent::ConversationStatusChanged {
+                conversation_id: 1,
+                status: ConversationStatus::PendingReview,
+            },
+        ));
+        assert_eq!(compute_pet_state(&s), PetState::Review);
     }
 
     #[test]
