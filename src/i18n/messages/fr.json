@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "Marketplace de mascottes",
       "title": "Marketplace de mascottes",
-      "description": "Parcourez les mascottes publiques de codex-pets.net et installez-les localement.",
       "search": "Rechercher des mascottes",
       "kindFilter": {
         "all": "Toutes",

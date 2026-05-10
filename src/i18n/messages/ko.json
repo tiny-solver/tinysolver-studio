@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "펫 마켓",
       "title": "펫 마켓",
-      "description": "codex-pets.net 의 공개 펫을 둘러보고 로컬에 설치합니다.",
       "search": "펫 검색",
       "kindFilter": {
         "all": "전체",

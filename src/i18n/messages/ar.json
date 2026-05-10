@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "متجر الحيوانات الأليفة",
       "title": "متجر الحيوانات الأليفة",
-      "description": "تصفّح الحيوانات الأليفة العامة من codex-pets.net وثبّتها محلياً.",
       "search": "ابحث عن حيوان أليف",
       "kindFilter": {
         "all": "الكل",

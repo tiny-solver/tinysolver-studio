@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "Mercado de mascotas",
       "title": "Mercado de mascotas",
-      "description": "Explora mascotas públicas de codex-pets.net e instálalas localmente.",
       "search": "Buscar mascotas",
       "kindFilter": {
         "all": "Todas",

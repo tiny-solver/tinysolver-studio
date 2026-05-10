@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "ペットマーケット",
       "title": "ペットマーケット",
-      "description": "codex-pets.net の公開ペットを参照し、ローカルにインストールします。",
       "search": "ペットを検索",
       "kindFilter": {
         "all": "すべて",

@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "寵物市集",
       "title": "寵物市集",
-      "description": "瀏覽 codex-pets.net 上的公共寵物,一鍵安裝到本機。",
       "search": "搜尋寵物",
       "kindFilter": {
         "all": "全部",

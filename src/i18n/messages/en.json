@@ -2315,7 +2315,6 @@
     "marketplace": {
       "openMarketplace": "Pet marketplace",
       "title": "Pet marketplace",
-      "description": "Browse public pets from codex-pets.net and install them locally.",
       "search": "Search pets",
       "kindFilter": {
         "all": "All",
