@@ -5,6 +5,7 @@ import { Reorder } from "motion/react"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
+import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { TabItem } from "./tab-item"
@@ -34,7 +35,11 @@ export function TabBar() {
 
   const { shortcuts } = useShortcutSettings()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const isCoarsePointer = useIsCoarsePointer()
   const [isHovered, setIsHovered] = useState(false)
+  const [touchSortingTabId, setTouchSortingTabId] = useState<string | null>(
+    null
+  )
 
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     if (e.deltaY !== 0 && scrollRef.current) {
@@ -77,7 +82,10 @@ export function TabBar() {
       role="tablist"
       axis="x"
       values={tabs}
-      onReorder={reorderTabs}
+      onReorder={(nextTabs) => {
+        if (isCoarsePointer && !touchSortingTabId) return
+        reorderTabs(nextTabs)
+      }}
       onWheel={handleWheel}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -111,6 +119,10 @@ export function TabBar() {
             onCloseAll={closeAllTabs}
             onPin={pinTab}
             onToggleTile={toggleTileMode}
+            isCoarsePointer={isCoarsePointer}
+            isTouchSorting={touchSortingTabId === tab.id}
+            onTouchSortingStart={setTouchSortingTabId}
+            onTouchSortingEnd={() => setTouchSortingTabId(null)}
           />
         )
       })}
