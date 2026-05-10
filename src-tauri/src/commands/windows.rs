@@ -1196,6 +1196,24 @@ pub async fn update_appearance_mode(
 
 // ─── System tray icon ──────────────────────────────────────────────────
 
+/// Monochrome template image for the macOS menu bar. AppKit treats an
+/// `NSImage` with `isTemplate = true` as a mask: only the alpha channel
+/// matters and the system tints it to match the menu-bar appearance
+/// (light, dark, accent). The colored window icon won't get this
+/// treatment and looks out of place next to other system icons.
+#[cfg(all(feature = "tauri-runtime", target_os = "macos"))]
+const MACOS_TRAY_TEMPLATE_PNG: &[u8] =
+    include_bytes!("../../icons/tray-icon-template.png");
+
+#[cfg(all(feature = "tauri-runtime", target_os = "macos"))]
+fn load_macos_tray_template_icon() -> Result<tauri::image::Image<'static>, String> {
+    let decoded = image::load_from_memory(MACOS_TRAY_TEMPLATE_PNG)
+        .map_err(|e| format!("decode tray template png: {e}"))?
+        .to_rgba8();
+    let (w, h) = (decoded.width(), decoded.height());
+    Ok(tauri::image::Image::new_owned(decoded.into_raw(), w, h))
+}
+
 /// Stable id namespace for tray menu items. Routed through the app-wide
 /// `on_menu_event` handler in `lib.rs`.
 pub const TRAY_MENU_ID_PREFIX: &str = "tray:";
@@ -1334,8 +1352,28 @@ pub fn install_tray_icon(
         // because that's the OS's job, not ours.
         .show_menu_on_left_click(false);
 
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
+    // macOS menu bar expects a monochrome template image that adapts to
+    // light/dark mode and the user's accent settings. Other platforms
+    // (Windows tray, Linux indicators) want the regular colored icon.
+    #[cfg(target_os = "macos")]
+    {
+        match load_macos_tray_template_icon() {
+            Ok(icon) => {
+                builder = builder.icon(icon).icon_as_template(true);
+            }
+            Err(err) => {
+                eprintln!("[Tray] failed to load template icon, falling back: {err}");
+                if let Some(icon) = app.default_window_icon() {
+                    builder = builder.icon(icon.clone());
+                }
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(icon) = app.default_window_icon() {
+            builder = builder.icon(icon.clone());
+        }
     }
 
     builder
