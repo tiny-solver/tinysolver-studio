@@ -67,7 +67,7 @@ export function PetMarketplaceDialog({
   const t = useTranslations("Pet.marketplace")
 
   const [searchInput, setSearchInput] = useState("")
-  const [query, setQuery] = useState("")
+  const [q, setQ] = useState("")
   const [kind, setKind] = useState<KindFilter>("all")
   const [sort, setSort] = useState<SortFilter>("latest")
   const [page, setPage] = useState(1)
@@ -92,10 +92,10 @@ export function PetMarketplaceDialog({
     }
   }, [])
 
-  // Debounce the search input → query
+  // Debounce the search input before issuing marketplace requests.
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      setQuery(searchInput.trim())
+      setQ(searchInput.trim())
       setPage(1)
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(handle)
@@ -110,7 +110,7 @@ export function PetMarketplaceDialog({
       const response = await listMarketplacePets({
         page,
         pageSize: PAGE_SIZE,
-        query: query || undefined,
+        q: q || undefined,
         kind: kind === "all" ? undefined : kind,
         sort: sort === "latest" ? undefined : sort,
       })
@@ -128,7 +128,7 @@ export function PetMarketplaceDialog({
         setLoading(false)
       }
     }
-  }, [page, query, kind, sort, t])
+  }, [page, q, kind, sort, t])
 
   useEffect(() => {
     if (!open) return
