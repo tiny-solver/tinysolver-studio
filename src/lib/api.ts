@@ -1588,10 +1588,17 @@ export async function getWebServerStatus(): Promise<WebServerInfo | null> {
 export interface WebServiceConfig {
   token: string | null
   port: number | null
+  autoStart: boolean
 }
 
 export async function getWebServiceConfig(): Promise<WebServiceConfig> {
   return getTransport().call("get_web_service_config")
+}
+
+export async function updateWebServiceConfig(
+  config: WebServiceConfig
+): Promise<WebServiceConfig> {
+  return getTransport().call("update_web_service_config", { config })
 }
 
 export type WebServicePortState = "free" | "occupied" | "unknown"
