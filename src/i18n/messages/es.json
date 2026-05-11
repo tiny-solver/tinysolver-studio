@@ -2342,6 +2342,17 @@
         "downloads": "Descargas",
         "likes": "Me gusta"
       },
+      "actions": {
+        "idle": "Reposo",
+        "running_right": "Corre der.",
+        "running_left": "Corre izq.",
+        "waving": "Saluda",
+        "jumping": "Salta",
+        "failed": "Fallo",
+        "waiting": "Espera",
+        "running": "Corre",
+        "review": "Revisa"
+      },
       "page": "Página {page} de {total}",
       "prev": "Anterior",
       "next": "Siguiente",

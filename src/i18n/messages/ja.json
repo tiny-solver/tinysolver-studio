@@ -2342,6 +2342,17 @@
         "downloads": "ダウンロード",
         "likes": "いいね"
       },
+      "actions": {
+        "idle": "待機",
+        "running_right": "右走り",
+        "running_left": "左走り",
+        "waving": "手振り",
+        "jumping": "ジャンプ",
+        "failed": "失敗",
+        "waiting": "待ち",
+        "running": "実行",
+        "review": "レビュー"
+      },
       "page": "{page} / {total} ページ",
       "prev": "前へ",
       "next": "次へ",

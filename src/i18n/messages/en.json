@@ -2342,6 +2342,17 @@
         "downloads": "Downloads",
         "likes": "Likes"
       },
+      "actions": {
+        "idle": "Idle",
+        "running_right": "Run right",
+        "running_left": "Run left",
+        "waving": "Wave",
+        "jumping": "Jump",
+        "failed": "Fail",
+        "waiting": "Wait",
+        "running": "Run",
+        "review": "Review"
+      },
       "page": "Page {page} of {total}",
       "prev": "Previous",
       "next": "Next",

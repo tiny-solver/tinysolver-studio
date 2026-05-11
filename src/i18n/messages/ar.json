@@ -2342,6 +2342,17 @@
         "downloads": "التنزيلات",
         "likes": "الإعجابات"
       },
+      "actions": {
+        "idle": "خامل",
+        "running_right": "ركض يمين",
+        "running_left": "ركض يسار",
+        "waving": "تلويح",
+        "jumping": "قفز",
+        "failed": "فشل",
+        "waiting": "انتظار",
+        "running": "ركض",
+        "review": "مراجعة"
+      },
       "page": "صفحة {page} من {total}",
       "prev": "السابق",
       "next": "التالي",

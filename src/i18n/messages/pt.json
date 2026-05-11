@@ -2342,6 +2342,17 @@
         "downloads": "Downloads",
         "likes": "Curtidas"
       },
+      "actions": {
+        "idle": "Parado",
+        "running_right": "Corre dir.",
+        "running_left": "Corre esq.",
+        "waving": "Acena",
+        "jumping": "Pula",
+        "failed": "Falha",
+        "waiting": "Espera",
+        "running": "Corre",
+        "review": "Revisão"
+      },
       "page": "Página {page} de {total}",
       "prev": "Anterior",
       "next": "Próxima",

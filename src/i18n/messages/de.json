@@ -2342,6 +2342,17 @@
         "downloads": "Downloads",
         "likes": "Likes"
       },
+      "actions": {
+        "idle": "Idle",
+        "running_right": "Rechtslauf",
+        "running_left": "Linkslauf",
+        "waving": "Winken",
+        "jumping": "Springen",
+        "failed": "Fehler",
+        "waiting": "Warten",
+        "running": "Laufen",
+        "review": "Review"
+      },
       "page": "Seite {page} von {total}",
       "prev": "Zurück",
       "next": "Weiter",

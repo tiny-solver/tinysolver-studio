@@ -2342,6 +2342,17 @@
         "downloads": "下載",
         "likes": "讚"
       },
+      "actions": {
+        "idle": "待機",
+        "running_right": "右跑",
+        "running_left": "左跑",
+        "waving": "揮手",
+        "jumping": "跳躍",
+        "failed": "失敗",
+        "waiting": "等待",
+        "running": "執行",
+        "review": "審閱"
+      },
       "page": "第 {page} / {total} 頁",
       "prev": "上一頁",
       "next": "下一頁",
