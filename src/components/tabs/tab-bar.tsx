@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Reorder } from "motion/react"
 import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
+import type { TabItem as TabItemData } from "@/contexts/tab-context"
 import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
@@ -73,6 +74,19 @@ export function TabBar() {
     }
   }, [activePane, activeTabId, closeTab, mode, shortcuts.close_current_tab])
 
+  const handleReorder = useCallback(
+    (nextTabs: TabItemData[]) => {
+      if (isCoarsePointer && !touchSortingTabId) return
+      reorderTabs(nextTabs)
+    },
+    [isCoarsePointer, reorderTabs, touchSortingTabId]
+  )
+
+  const handleTouchSortingEnd = useCallback(
+    () => setTouchSortingTabId(null),
+    []
+  )
+
   if (tabs.length === 0) return null
 
   return (
@@ -82,10 +96,7 @@ export function TabBar() {
       role="tablist"
       axis="x"
       values={tabs}
-      onReorder={(nextTabs) => {
-        if (isCoarsePointer && !touchSortingTabId) return
-        reorderTabs(nextTabs)
-      }}
+      onReorder={handleReorder}
       onWheel={handleWheel}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -122,7 +133,7 @@ export function TabBar() {
             isCoarsePointer={isCoarsePointer}
             isTouchSorting={touchSortingTabId === tab.id}
             onTouchSortingStart={setTouchSortingTabId}
-            onTouchSortingEnd={() => setTouchSortingTabId(null)}
+            onTouchSortingEnd={handleTouchSortingEnd}
           />
         )
       })}

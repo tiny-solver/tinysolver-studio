@@ -1,8 +1,7 @@
 "use client"
 
-import { memo, useCallback, useEffect, useRef } from "react"
-import type { PointerEvent as ReactPointerEvent } from "react"
-import { Reorder, useDragControls } from "motion/react"
+import { memo, useCallback, useMemo, useRef } from "react"
+import { Reorder } from "motion/react"
 import { X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { cn } from "@/lib/utils"
@@ -15,6 +14,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { useLongPressDrag } from "@/hooks/use-long-press-drag"
 import type { TabItem as TabItemData } from "@/contexts/tab-context"
 
 interface TabItemProps {
@@ -35,9 +35,6 @@ interface TabItemProps {
   onTouchSortingEnd: () => void
 }
 
-const LONG_PRESS_MS = 500
-const TOUCH_SCROLL_THRESHOLD_PX = 10
-
 export const TabItem = memo(function TabItem({
   tab,
   isActive,
@@ -56,13 +53,7 @@ export const TabItem = memo(function TabItem({
   onTouchSortingEnd,
 }: TabItemProps) {
   const t = useTranslations("Folder.tabs")
-  const dragControls = useDragControls()
-  const isDragging = useRef(false)
   const itemRef = useRef<HTMLDivElement>(null)
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
-  const longPressActiveRef = useRef(false)
-  const suppressNextClickRef = useRef(false)
 
   const resolvedFolderName = folderName ?? String(tab.folderId)
   const tooltip = folderBranch
@@ -78,25 +69,23 @@ export const TabItem = memo(function TabItem({
     el.style.userSelect = ""
   }, [])
 
-  const clearLongPressTimer = useCallback(() => {
-    if (!longPressTimerRef.current) return
-    clearTimeout(longPressTimerRef.current)
-    longPressTimerRef.current = null
-  }, [])
+  const handleLongPressStart = useCallback(
+    () => onTouchSortingStart(tab.id),
+    [onTouchSortingStart, tab.id]
+  )
 
-  useEffect(() => clearLongPressTimer, [clearLongPressTimer])
+  const { dragControls, gestureHandlers } = useLongPressDrag({
+    enabled: isCoarsePointer,
+    onStart: handleLongPressStart,
+    onEnd: onTouchSortingEnd,
+    onDragSettle: clearResidualStyles,
+  })
 
   const handleClick = useCallback(() => {
-    if (suppressNextClickRef.current) {
-      suppressNextClickRef.current = false
-      return
-    }
-    if (isDragging.current) return
     onSwitch(tab.id)
   }, [onSwitch, tab.id])
 
   const handleDoubleClick = useCallback(() => {
-    if (isDragging.current) return
     if (!tab.isPinned) {
       onPin(tab.id)
     }
@@ -110,63 +99,7 @@ export const TabItem = memo(function TabItem({
     onCloseOthers(tab.id)
   }, [onCloseOthers, tab.id])
 
-  const handlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!isCoarsePointer || event.pointerType === "mouse") return
-
-      clearLongPressTimer()
-      longPressActiveRef.current = false
-      touchStartRef.current = { x: event.clientX, y: event.clientY }
-
-      longPressTimerRef.current = setTimeout(() => {
-        longPressTimerRef.current = null
-        longPressActiveRef.current = true
-        suppressNextClickRef.current = true
-        onTouchSortingStart(tab.id)
-        dragControls.start(event.nativeEvent)
-      }, LONG_PRESS_MS)
-    },
-    [
-      clearLongPressTimer,
-      dragControls,
-      isCoarsePointer,
-      onTouchSortingStart,
-      tab.id,
-    ]
-  )
-
-  const handlePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!isCoarsePointer || event.pointerType === "mouse") return
-
-      if (longPressActiveRef.current) {
-        event.preventDefault()
-        return
-      }
-
-      const start = touchStartRef.current
-      if (!start) return
-
-      const movedX = Math.abs(event.clientX - start.x)
-      const movedY = Math.abs(event.clientY - start.y)
-      if (
-        movedX > TOUCH_SCROLL_THRESHOLD_PX ||
-        movedY > TOUCH_SCROLL_THRESHOLD_PX
-      ) {
-        clearLongPressTimer()
-      }
-    },
-    [clearLongPressTimer, isCoarsePointer]
-  )
-
-  const handlePointerEnd = useCallback(() => {
-    clearLongPressTimer()
-    touchStartRef.current = null
-    if (longPressActiveRef.current) {
-      longPressActiveRef.current = false
-      onTouchSortingEnd()
-    }
-  }, [clearLongPressTimer, onTouchSortingEnd])
+  const whileDrag = useMemo(() => ({ scale: 1.03 }), [])
 
   return (
     <Reorder.Item
@@ -177,23 +110,8 @@ export const TabItem = memo(function TabItem({
       drag="x"
       dragControls={dragControls}
       dragListener={!isCoarsePointer}
-      whileDrag={{ scale: 1.03 }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerEnd}
-      onPointerCancel={handlePointerEnd}
-      onDragStart={() => {
-        isDragging.current = true
-      }}
-      onDragEnd={() => {
-        onTouchSortingEnd()
-        longPressActiveRef.current = false
-        touchStartRef.current = null
-        setTimeout(() => {
-          isDragging.current = false
-          clearResidualStyles()
-        }, 200)
-      }}
+      whileDrag={whileDrag}
+      {...gestureHandlers}
       onLayoutAnimationComplete={clearResidualStyles}
       className={cn(
         "shrink-0 rounded-full cursor-grab active:cursor-grabbing",
@@ -202,7 +120,7 @@ export const TabItem = memo(function TabItem({
       )}
     >
       <ContextMenu>
-        <ContextMenuTrigger asChild>
+        <ContextMenuTrigger asChild disabled={isTouchSorting}>
           <div
             role="tab"
             aria-selected={isActive}
