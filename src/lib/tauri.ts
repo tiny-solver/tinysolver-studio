@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
+import { getCurrentEffectiveAppLocale } from "./i18n"
 import type {
   AgentType,
   ConversationSummary,
@@ -723,15 +724,22 @@ export async function openMergeWindow(
     folderId,
     operation,
     upstreamCommit: upstreamCommit ?? null,
+    locale: getCurrentEffectiveAppLocale(),
   })
 }
 
 export async function openStashWindow(folderId: number): Promise<void> {
-  return invoke("open_stash_window", { folderId })
+  return invoke("open_stash_window", {
+    folderId,
+    locale: getCurrentEffectiveAppLocale(),
+  })
 }
 
 export async function openPushWindow(folderId: number): Promise<void> {
-  return invoke("open_push_window", { folderId })
+  return invoke("open_push_window", {
+    folderId,
+    locale: getCurrentEffectiveAppLocale(),
+  })
 }
 
 export async function gitStashPush(
@@ -903,7 +911,10 @@ export async function openFolder(path: string): Promise<FolderDetail> {
 }
 
 export async function openCommitWindow(folderId: number): Promise<void> {
-  return invoke("open_commit_window", { folderId })
+  return invoke("open_commit_window", {
+    folderId,
+    locale: getCurrentEffectiveAppLocale(),
+  })
 }
 
 export type SettingsSection =
@@ -925,6 +936,7 @@ export async function openSettingsWindow(
   return invoke("open_settings_window", {
     section: section ?? null,
     agentType: options?.agentType ?? null,
+    locale: getCurrentEffectiveAppLocale(),
   })
 }
 

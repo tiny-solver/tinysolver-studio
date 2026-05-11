@@ -335,6 +335,128 @@ fn resolve_settings_target(section: Option<&str>, agent_type: Option<&str>) -> S
     route.to_string()
 }
 
+// ---------------------------------------------------------------------------
+// Window title localization
+// ---------------------------------------------------------------------------
+//
+// Window titles are set at creation time and not refreshed on locale change,
+// which mirrors the behavior of native OS dialogs across the app. Translations
+// live in Rust (not the frontend i18n JSON) because the title is applied via
+// Tauri's window builder before the webview boots.
+
+struct WindowTitles {
+    settings: &'static str,
+    commit: &'static str,
+    merge: &'static str,
+    stash: &'static str,
+    push: &'static str,
+    project_boot: &'static str,
+}
+
+fn window_titles_for(locale: crate::models::system::AppLocale) -> WindowTitles {
+    use crate::models::system::AppLocale;
+    match locale {
+        AppLocale::ZhCn => WindowTitles {
+            settings: "设置",
+            commit: "提交代码",
+            merge: "解决冲突",
+            stash: "储藏",
+            push: "推送",
+            project_boot: "项目启动器",
+        },
+        AppLocale::ZhTw => WindowTitles {
+            settings: "設定",
+            commit: "提交程式碼",
+            merge: "解決衝突",
+            stash: "暫存",
+            push: "推送",
+            project_boot: "專案啟動器",
+        },
+        AppLocale::Ja => WindowTitles {
+            settings: "設定",
+            commit: "コミット",
+            merge: "コンフリクトの解決",
+            stash: "スタッシュ",
+            push: "プッシュ",
+            project_boot: "プロジェクトブート",
+        },
+        AppLocale::Ko => WindowTitles {
+            settings: "설정",
+            commit: "커밋",
+            merge: "충돌 해결",
+            stash: "스태시",
+            push: "푸시",
+            project_boot: "프로젝트 부트",
+        },
+        AppLocale::Es => WindowTitles {
+            settings: "Configuración",
+            commit: "Confirmar",
+            merge: "Resolver conflictos",
+            stash: "Reserva",
+            push: "Enviar",
+            project_boot: "Inicio de Proyecto",
+        },
+        AppLocale::De => WindowTitles {
+            settings: "Einstellungen",
+            commit: "Commit",
+            merge: "Konflikte lösen",
+            stash: "Stash",
+            push: "Push",
+            project_boot: "Projekt-Starter",
+        },
+        AppLocale::Fr => WindowTitles {
+            settings: "Paramètres",
+            commit: "Valider",
+            merge: "Résoudre les conflits",
+            stash: "Réserve",
+            push: "Pousser",
+            project_boot: "Lanceur de projet",
+        },
+        AppLocale::Pt => WindowTitles {
+            settings: "Configurações",
+            commit: "Confirmar",
+            merge: "Resolver conflitos",
+            stash: "Stash",
+            push: "Enviar",
+            project_boot: "Inicializador de Projeto",
+        },
+        AppLocale::Ar => WindowTitles {
+            settings: "الإعدادات",
+            commit: "الالتزام",
+            merge: "حل التعارضات",
+            stash: "إخفاء",
+            push: "دفع",
+            project_boot: "مُنشئ المشروع",
+        },
+        AppLocale::En => WindowTitles {
+            settings: "Settings",
+            commit: "Commit",
+            merge: "Resolve Conflicts",
+            stash: "Stash",
+            push: "Push",
+            project_boot: "Project Boot",
+        },
+    }
+}
+
+// When the frontend passes an explicit `locale`, use it — that's the
+// authoritative effective locale (see lib/i18n.ts::getCurrentEffectiveAppLocale).
+// Falling back to the DB only matters for callers that bypass the JS wrappers
+// (e.g. a future HTTP client, internal tests).
+async fn resolve_window_titles(
+    conn: &DatabaseConnection,
+    explicit: Option<crate::models::system::AppLocale>,
+) -> WindowTitles {
+    if let Some(locale) = explicit {
+        return window_titles_for(locale);
+    }
+    let locale = crate::commands::system_settings::load_system_language_settings(conn)
+        .await
+        .map(|settings| settings.language)
+        .unwrap_or_default();
+    window_titles_for(locale)
+}
+
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_folder_window(
@@ -375,6 +497,7 @@ pub async fn open_commit_window(
     db: tauri::State<'_, AppDatabase>,
     state: tauri::State<'_, CommitWindowState>,
     folder_id: i32,
+    locale: Option<crate::models::system::AppLocale>,
 ) -> Result<(), AppCommandError> {
     let owner_label = window.label().to_string();
     let label = format!("commit-{folder_id}");
@@ -396,9 +519,10 @@ pub async fn open_commit_window(
                 .with_detail(format!("folder_id={folder_id}"))
         })?;
 
+    let titles = resolve_window_titles(&db.conn, locale).await;
     let url = WebviewUrl::App(format!("commit?folderId={folder_id}").into());
     let builder = WebviewWindowBuilder::new(&app, &label, url)
-        .title(format!("提交代码 - {}", folder.name))
+        .title(format!("{} - {}", titles.commit, folder.name))
         .inner_size(1220.0, 820.0)
         .min_inner_size(980.0, 620.0)
         .center();
@@ -422,8 +546,10 @@ pub async fn open_commit_window(
 pub async fn open_settings_window(
     app: AppHandle,
     window: tauri::WebviewWindow,
+    db: tauri::State<'_, AppDatabase>,
     section: Option<String>,
     agent_type: Option<String>,
+    locale: Option<crate::models::system::AppLocale>,
     state: tauri::State<'_, SettingsWindowState>,
 ) -> Result<(), AppCommandError> {
     let target_route = resolve_settings_target(section.as_deref(), agent_type.as_deref());
@@ -449,9 +575,10 @@ pub async fn open_settings_window(
         return Ok(());
     }
 
+    let titles = resolve_window_titles(&db.conn, locale).await;
     let url = WebviewUrl::App(target_route.into());
     let builder = WebviewWindowBuilder::new(&app, "settings", url)
-        .title("Settings")
+        .title(titles.settings)
         .inner_size(1080.0, 700.0)
         .min_inner_size(1080.0, 600.0)
         .center();
@@ -530,6 +657,7 @@ pub async fn open_merge_window(
     folder_id: i32,
     operation: String,
     upstream_commit: Option<String>,
+    locale: Option<crate::models::system::AppLocale>,
 ) -> Result<(), AppCommandError> {
     let owner_label = window.label().to_string();
     let label = format!("merge-{folder_id}");
@@ -551,13 +679,14 @@ pub async fn open_merge_window(
                 .with_detail(format!("folder_id={folder_id}"))
         })?;
 
+    let titles = resolve_window_titles(&db.conn, locale).await;
     let mut url_str = format!("merge?folderId={folder_id}&operation={operation}");
     if let Some(ref commit) = upstream_commit {
         url_str.push_str(&format!("&upstreamCommit={commit}"));
     }
     let url = WebviewUrl::App(url_str.into());
     let builder = WebviewWindowBuilder::new(&app, &label, url)
-        .title(format!("解决冲突 - {}", folder.name))
+        .title(format!("{} - {}", titles.merge, folder.name))
         .inner_size(1400.0, 900.0)
         .min_inner_size(1100.0, 650.0)
         .center();
@@ -641,6 +770,7 @@ pub async fn open_stash_window(
     app: AppHandle,
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
+    locale: Option<crate::models::system::AppLocale>,
 ) -> Result<(), AppCommandError> {
     let label = format!("stash-{folder_id}");
 
@@ -661,9 +791,10 @@ pub async fn open_stash_window(
                 .with_detail(format!("folder_id={folder_id}"))
         })?;
 
+    let titles = resolve_window_titles(&db.conn, locale).await;
     let url = WebviewUrl::App(format!("stash?folderId={folder_id}").into());
     let builder = WebviewWindowBuilder::new(&app, &label, url)
-        .title(format!("Stash - {}", folder.name))
+        .title(format!("{} - {}", titles.stash, folder.name))
         .inner_size(1100.0, 700.0)
         .min_inner_size(800.0, 500.0)
         .center();
@@ -682,6 +813,7 @@ pub async fn open_push_window(
     window: tauri::WebviewWindow,
     db: tauri::State<'_, AppDatabase>,
     folder_id: i32,
+    locale: Option<crate::models::system::AppLocale>,
 ) -> Result<(), AppCommandError> {
     let label = format!("push-{folder_id}");
 
@@ -702,9 +834,10 @@ pub async fn open_push_window(
                 .with_detail(format!("folder_id={folder_id}"))
         })?;
 
+    let titles = resolve_window_titles(&db.conn, locale).await;
     let url = WebviewUrl::App(format!("push?folderId={folder_id}").into());
     let builder = WebviewWindowBuilder::new(&app, &label, url)
-        .title(format!("Push - {}", folder.name))
+        .title(format!("{} - {}", titles.push, folder.name))
         .inner_size(1100.0, 700.0)
         .min_inner_size(800.0, 500.0)
         .center();
@@ -723,7 +856,9 @@ pub async fn open_push_window(
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn open_project_boot_window(
     app: AppHandle,
+    db: tauri::State<'_, AppDatabase>,
     source: Option<String>,
+    locale: Option<crate::models::system::AppLocale>,
 ) -> Result<(), AppCommandError> {
     let _ = source;
     if let Some(existing) = app.get_webview_window("project-boot") {
@@ -735,9 +870,10 @@ pub async fn open_project_boot_window(
         return Ok(());
     }
 
+    let titles = resolve_window_titles(&db.conn, locale).await;
     let url = WebviewUrl::App("project-boot".into());
     let builder = WebviewWindowBuilder::new(&app, "project-boot", url)
-        .title("Project Boot")
+        .title(titles.project_boot)
         .inner_size(1400.0, 900.0)
         .min_inner_size(1100.0, 700.0)
         .center();
