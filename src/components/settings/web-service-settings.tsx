@@ -164,14 +164,18 @@ export function WebServiceSettings() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const [info, savedConfig] = await Promise.all([
+      const fallbackConfig = {
+        token: null,
+        port: null,
+        autoStart: false,
+      }
+      const [info, configResult] = await Promise.all([
         getWebServerStatus(),
-        getWebServiceConfig().catch(() => ({
-          token: null,
-          port: null,
-          autoStart: false,
-        })),
+        getWebServiceConfig()
+          .then((config) => ({ ok: true as const, config }))
+          .catch(() => ({ ok: false as const, config: fallbackConfig })),
       ])
+      const savedConfig = configResult.config
       setStatus(info)
       setAutoStart(savedConfig.autoStart ?? false)
       if (info) {
@@ -188,7 +192,7 @@ export function WebServiceSettings() {
         // user understands why a fresh start may fail with port-in-use.
         probePort(resolvedPort)
       }
-      setConfigLoaded(true)
+      setConfigLoaded(configResult.ok)
     } catch {
       // Server status unavailable
     }
