@@ -863,6 +863,7 @@
       "folderHeaderMenu": {
         "manageConversations": "Gestionar conversaciones…",
         "changeColor": "Cambiar color",
+        "useThemeColor": "Usar tema de la app",
         "removeFromWorkspace": "Quitar del espacio de trabajo"
       },
       "manageConversations": {

@@ -5,6 +5,7 @@ import {
   isDesktop,
 } from "./transport"
 import { getCurrentEffectiveAppLocale } from "./i18n"
+import type { FolderThemeColor } from "./theme-presets"
 import type {
   AgentType,
   ConversationSummary,
@@ -715,7 +716,7 @@ export async function reorderFolders(ids: number[]): Promise<void> {
 
 export async function updateFolderColor(
   folderId: number,
-  color: string
+  color: FolderThemeColor
 ): Promise<FolderDetail> {
   return getTransport().call("update_folder_color", { folderId, color })
 }

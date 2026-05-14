@@ -863,6 +863,7 @@
       "folderHeaderMenu": {
         "manageConversations": "會話管理…",
         "changeColor": "修改顏色",
+        "useThemeColor": "使用設定主題",
         "removeFromWorkspace": "從工作區移除"
       },
       "manageConversations": {

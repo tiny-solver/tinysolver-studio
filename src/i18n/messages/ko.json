@@ -863,6 +863,7 @@
       "folderHeaderMenu": {
         "manageConversations": "대화 관리…",
         "changeColor": "색상 변경",
+        "useThemeColor": "앱 테마 사용",
         "removeFromWorkspace": "워크스페이스에서 제거"
       },
       "manageConversations": {
