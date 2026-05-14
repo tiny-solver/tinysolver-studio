@@ -28,6 +28,13 @@ export class WebTransport implements Transport {
   private wsFailCount = 0
   private readyPromise!: Promise<void>
   private readyResolve!: () => void
+  // Tracks whether `__ready__` has ever arrived on this transport instance.
+  // The first arrival is the initial connect; subsequent arrivals are
+  // reconnects (after `onclose` reset the promise). Reconnect callbacks
+  // run only on subsequent arrivals so consumers can refresh state that
+  // may have desynced during the disconnect window.
+  private hasReadiedOnce = false
+  private reconnectCallbacks = new Set<() => void>()
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl
@@ -43,7 +50,14 @@ export class WebTransport implements Transport {
   // Bounded wait on `readyPromise`. If `__ready__` does not arrive within
   // `READY_TIMEOUT_MS`, log a warning and fall through — degrades to the
   // pre-handshake behavior instead of hanging the UI forever.
-  private async waitForReady(): Promise<void> {
+  //
+  // Public so callers (e.g. `acp_connect` in the ACP context) can gate
+  // HTTP commands on WS readiness, not just the initial `subscribe()`.
+  // The `subscribe()`-only gate covers the initial-connect race but
+  // leaves a window where `acp_connect` fired during a mid-session
+  // reconnect would still race the broadcaster's `receiver_count == 0`
+  // guard. Awaiting this directly before such HTTP calls closes that gap.
+  async waitForReady(): Promise<void> {
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<"timeout">((resolve) => {
       timeoutId = setTimeout(() => resolve("timeout"), READY_TIMEOUT_MS)
@@ -136,6 +150,13 @@ export class WebTransport implements Transport {
     return false
   }
 
+  onReconnect(callback: () => void): UnsubscribeFn {
+    this.reconnectCallbacks.add(callback)
+    return () => {
+      this.reconnectCallbacks.delete(callback)
+    }
+  }
+
   private static redirectToLogin() {
     if (window.location.pathname.startsWith("/login")) return
     localStorage.removeItem("codeg_token")
@@ -158,6 +179,21 @@ export class WebTransport implements Transport {
         const event = JSON.parse(msg.data) as WebEvent
         if (event.channel === WS_READY_CHANNEL) {
           this.readyResolve()
+          if (this.hasReadiedOnce) {
+            // Reconnect path: server-side receiver_count was 0 during the
+            // disconnect window, so any event fired in that gap was dropped.
+            // Notify consumers to recover state (e.g. refetch snapshots).
+            // Errors in user callbacks must not break sibling callbacks.
+            for (const cb of this.reconnectCallbacks) {
+              try {
+                cb()
+              } catch (err) {
+                console.error("[WebTransport] reconnect callback threw:", err)
+              }
+            }
+          } else {
+            this.hasReadiedOnce = true
+          }
           return
         }
         const handlers = this.handlers.get(event.channel)
@@ -196,6 +232,7 @@ export class WebTransport implements Transport {
     this.ws?.close()
     this.ws = null
     this.handlers.clear()
+    this.reconnectCallbacks.clear()
     // Settle any in-flight `subscribe()` awaiters so their promises don't
     // leak alongside the destroyed transport. Safe to call multiple times —
     // resolving an already-settled Promise is a no-op.

@@ -20,6 +20,10 @@ export class RemoteDesktopTransport implements Transport {
   private config: RemoteTransportConfig
   private readyPromise!: Promise<void>
   private readyResolve!: () => void
+  // See WebTransport for rationale. Reconnect callbacks fire only on
+  // subsequent `__ready__` arrivals (not the initial connect).
+  private hasReadiedOnce = false
+  private reconnectCallbacks = new Set<() => void>()
 
   constructor(config: RemoteTransportConfig) {
     this.config = {
@@ -36,8 +40,10 @@ export class RemoteDesktopTransport implements Transport {
   }
 
   // Bounded wait on `readyPromise`; logs and falls through on timeout
-  // rather than hanging the UI. See WebTransport.waitForReady for details.
-  private async waitForReady(): Promise<void> {
+  // rather than hanging the UI. Public for the same reason as
+  // WebTransport.waitForReady — callers gate HTTP commands on WS readiness
+  // to avoid mid-reconnect drops.
+  async waitForReady(): Promise<void> {
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<"timeout">((resolve) => {
       timeoutId = setTimeout(() => resolve("timeout"), READY_TIMEOUT_MS)
@@ -123,6 +129,13 @@ export class RemoteDesktopTransport implements Transport {
     return true
   }
 
+  onReconnect(callback: () => void): UnsubscribeFn {
+    this.reconnectCallbacks.add(callback)
+    return () => {
+      this.reconnectCallbacks.delete(callback)
+    }
+  }
+
   private connectWs() {
     const wsUrl = this.config.baseUrl.replace(/^http/, "ws") + "/ws/events"
     this.ws = new WebSocket(
@@ -139,6 +152,20 @@ export class RemoteDesktopTransport implements Transport {
         const event = JSON.parse(msg.data) as WebEvent
         if (event.channel === WS_READY_CHANNEL) {
           this.readyResolve()
+          if (this.hasReadiedOnce) {
+            for (const cb of this.reconnectCallbacks) {
+              try {
+                cb()
+              } catch (err) {
+                console.error(
+                  "[RemoteDesktopTransport] reconnect callback threw:",
+                  err
+                )
+              }
+            }
+          } else {
+            this.hasReadiedOnce = true
+          }
           return
         }
         const handlers = this.handlers.get(event.channel)
@@ -174,6 +201,7 @@ export class RemoteDesktopTransport implements Transport {
     this.ws?.close()
     this.ws = null
     this.handlers.clear()
+    this.reconnectCallbacks.clear()
     // Settle any in-flight `subscribe()` awaiters so their promises don't
     // leak alongside the destroyed transport.
     this.readyResolve?.()
