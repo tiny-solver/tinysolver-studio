@@ -923,9 +923,14 @@ pub async fn open_project_boot_window(
     db: tauri::State<'_, AppDatabase>,
     source: Option<String>,
     locale: Option<crate::models::system::AppLocale>,
+    remote_connection_id: Option<i32>,
 ) -> Result<(), AppCommandError> {
     let _ = source;
-    if let Some(existing) = app.get_webview_window("project-boot") {
+    let label = match remote_connection_id {
+        Some(id) => format!("remote-project-boot-{id}"),
+        None => "project-boot".to_string(),
+    };
+    if let Some(existing) = app.get_webview_window(&label) {
         post_window_setup(&existing);
         let _ = existing.unminimize();
         existing.set_focus().map_err(|e| {
@@ -935,8 +940,9 @@ pub async fn open_project_boot_window(
     }
 
     let titles = resolve_window_titles(&db.conn, locale).await;
-    let url = WebviewUrl::App("project-boot".into());
-    let builder = WebviewWindowBuilder::new(&app, "project-boot", url)
+    let url_str = append_remote_connection_id("project-boot".to_string(), remote_connection_id);
+    let url = WebviewUrl::App(url_str.into());
+    let builder = WebviewWindowBuilder::new(&app, &label, url)
         .title(titles.project_boot)
         .inner_size(1400.0, 900.0)
         .min_inner_size(1100.0, 700.0)

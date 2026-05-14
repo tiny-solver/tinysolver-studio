@@ -148,11 +148,21 @@ impl RemoteProxyState {
         };
 
         if should_shutdown {
-            // Best-effort signal; if the task already exited (e.g. unauth)
-            // the receiver is dropped and this is a no-op.
+            // Remove from `tasks` BEFORE sending the shutdown signal. This
+            // closes the race window where a concurrent subscribe would find
+            // the dying entry in the fast path, skip spawning a new task, and
+            // then receive no events because the WS task exits shortly after.
+            // With this ordering, any subscribe that races us will see no
+            // entry and go through the slow path to spawn a fresh task.
+            {
+                let mut tasks = self.tasks.lock().await;
+                if let Some(stored) = tasks.get(&connection_id) {
+                    if Arc::ptr_eq(stored, &entry) {
+                        tasks.remove(&connection_id);
+                    }
+                }
+            }
             let _ = entry.shutdown_tx.send(true);
-            // The task self-removes from `tasks` on exit, so we don't
-            // race-clean here.
         }
     }
 }

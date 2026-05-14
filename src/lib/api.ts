@@ -1220,6 +1220,7 @@ export async function openProjectBootWindow(source?: string): Promise<void> {
     return getShellTransport().call("open_project_boot_window", {
       source,
       locale: getCurrentEffectiveAppLocale(),
+      remoteConnectionId: getActiveRemoteConnectionId(),
     })
   }
   if (typeof window !== "undefined") {
