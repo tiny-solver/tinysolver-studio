@@ -108,16 +108,29 @@ read_bin_version() {
   rm -f "$tmp"
 }
 
-# ── Scan PATH for every codeg-server binary ──
+# ── Scan PATH for codeg-server binaries that shadow the target install ──
+#
+# A binary "shadows" the install only if it appears in PATH BEFORE the
+# destination directory: that's the binary `command -v codeg-server` would
+# return after install. Walk PATH and stop at the destination directory —
+# anything past it cannot affect resolution today, so we leave it alone.
 
 DEST_BIN="${INSTALL_DIR}/codeg-server"
 DEST_BIN_REAL="$(canon_path "$DEST_BIN")"
+INSTALL_DIR_REAL="$(canon_path "$INSTALL_DIR")"
 
 PATH_CONFLICTS=()
+DEST_IN_PATH=0
 _SEEN_REAL=":"
 IFS=':' read -ra _PATH_DIRS <<< "${PATH:-}"
 for _dir in "${_PATH_DIRS[@]}"; do
   [ -z "$_dir" ] && continue
+  # Match by canonical path string so the destination is recognized even when
+  # the directory doesn't exist yet (e.g. first install into a fresh prefix).
+  if [ "$(canon_path "$_dir")" = "$INSTALL_DIR_REAL" ]; then
+    DEST_IN_PATH=1
+    break
+  fi
   _bin="$_dir/codeg-server"
   if [ -f "$_bin" ] && [ -x "$_bin" ]; then
     _real="$(canon_path "$_bin")"
@@ -125,11 +138,16 @@ for _dir in "${_PATH_DIRS[@]}"; do
       *":$_real:"*) continue ;;
     esac
     _SEEN_REAL="${_SEEN_REAL}${_real}:"
-    if [ "$_real" != "$DEST_BIN_REAL" ]; then
-      PATH_CONFLICTS+=("$_bin")
-    fi
+    PATH_CONFLICTS+=("$_bin")
   fi
 done
+
+# If the destination directory isn't on PATH, nothing "shadows" the install —
+# the new binary just won't be reachable as `codeg-server`. Drop any collected
+# entries; the post-install check will tell the user to fix PATH instead.
+if [ "$DEST_IN_PATH" -eq 0 ]; then
+  PATH_CONFLICTS=()
+fi
 
 # What does `codeg-server` actually resolve to right now in PATH?
 ACTIVE_BIN=""
@@ -249,6 +267,11 @@ else
   sudo chmod +x "${INSTALL_DIR}/codeg-server"
 fi
 
+# Re-canonicalize destination now that the file exists. Pre-install canon may
+# leave the final non-existent component unresolved (notably macOS readlink -f),
+# which would mis-compare against the post-install `command -v` result.
+DEST_BIN_REAL="$(canon_path "$DEST_BIN")"
+
 # ── Install web assets ──
 
 WEB_SRC="${TMP_DIR}/${ARTIFACT}/web"
@@ -265,17 +288,26 @@ if [ -d "$WEB_SRC" ]; then
   fi
 fi
 
-# ── Remove conflicting binaries from other PATH locations ──
+# ── Remove shadowing binaries from earlier PATH entries ──
+
+EXIT_STATUS=0
 
 if [ "${#PATH_CONFLICTS[@]}" -gt 0 ] && [ "$CLEANUP_CONFLICTS" = "1" ]; then
   echo ""
   echo "Removing stale codeg-server binaries..."
   for _c in "${PATH_CONFLICTS[@]}"; do
     _parent="$(dirname "$_c")"
+    _rm_ok=0
     if [ -w "$_parent" ] && { [ ! -e "$_c" ] || [ -w "$_c" ]; }; then
-      rm -f "$_c" && echo "  removed $_c"
+      if rm -f "$_c" 2>/dev/null; then _rm_ok=1; fi
     else
-      sudo rm -f "$_c" && echo "  removed $_c"
+      if sudo rm -f "$_c" 2>/dev/null; then _rm_ok=1; fi
+    fi
+    if [ "$_rm_ok" -eq 1 ]; then
+      echo "  removed $_c"
+    else
+      echo "  failed to remove $_c (remove it manually so 'codeg-server' resolves to the new install)"
+      EXIT_STATUS=1
     fi
   done
 fi
@@ -307,6 +339,7 @@ if [ -z "$ACTIVE_BIN_AFTER" ]; then
   echo ""
   echo "Note: ${INSTALL_DIR} is not on your PATH. Add it so 'codeg-server' resolves directly:"
   echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+  EXIT_STATUS=1
 elif [ "$ACTIVE_BIN_AFTER_REAL" != "$DEST_BIN_REAL" ]; then
   echo ""
   echo "Warning: typing 'codeg-server' still runs ${ACTIVE_BIN_AFTER}, not ${DEST_BIN}."
@@ -314,6 +347,7 @@ elif [ "$ACTIVE_BIN_AFTER_REAL" != "$DEST_BIN_REAL" ]; then
   echo "  - re-run without --no-cleanup (the default removes shadowing binaries), or"
   echo "  - remove the stale binary manually: rm '${ACTIVE_BIN_AFTER}', or"
   echo "  - put ${INSTALL_DIR} before its directory in PATH."
+  EXIT_STATUS=1
 else
   # Same path: a previous shell session may have cached the old inode.
   echo ""
@@ -328,3 +362,5 @@ echo "Or with custom settings:"
 echo "  CODEG_PORT=3080 CODEG_TOKEN=your-secret CODEG_STATIC_DIR=${WEB_DIR} codeg-server"
 echo ""
 echo "The auth token is printed to stderr on startup if not set via CODEG_TOKEN."
+
+exit "$EXIT_STATUS"

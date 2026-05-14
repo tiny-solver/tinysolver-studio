@@ -68,28 +68,47 @@ if (-not $Version) {
 
 $TargetVer = $Version -replace '^v', ''
 
-# ── Scan PATH for every codeg-server[.exe] binary ──
+# ── Scan PATH for codeg-server binaries that shadow the target install ──
+#
+# A binary "shadows" the install only if it appears in PATH BEFORE the
+# destination directory: that's the binary `Get-Command codeg-server` returns
+# after install. Walk PATH and stop at the destination directory — anything
+# past it cannot affect resolution today, so we leave it alone.
 
 $DestBin = Join-Path $InstallDir "codeg-server.exe"
 $DestBinReal = Get-CanonicalPath $DestBin
+$InstallDirReal = Get-CanonicalPath $InstallDir
 
 $PathConflicts = @()
+$DestInPath = $false
 $seenReal = @{}
 $pathDirs = @()
 if ($env:Path) { $pathDirs = $env:Path.Split(';') }
 foreach ($dir in $pathDirs) {
     if (-not $dir) { continue }
+    # Match by canonical path string so the destination is recognized even when
+    # the directory doesn't exist yet (e.g. first install into a fresh prefix).
+    $dirReal = Get-CanonicalPath $dir
+    if ($dirReal -eq $InstallDirReal) {
+        $DestInPath = $true
+        break
+    }
     foreach ($leaf in @("codeg-server.exe", "codeg-server")) {
         $bin = Join-Path $dir $leaf
         if (Test-Path -LiteralPath $bin -PathType Leaf) {
             $real = Get-CanonicalPath $bin
             if ($seenReal.ContainsKey($real)) { continue }
             $seenReal[$real] = $true
-            if ($real -ne $DestBinReal) {
-                $PathConflicts += $bin
-            }
+            $PathConflicts += $bin
         }
     }
+}
+
+# If the destination directory isn't on PATH, nothing "shadows" the install —
+# the new binary just won't be reachable as `codeg-server`. Drop any collected
+# entries; the post-install check will tell the user to fix PATH instead.
+if (-not $DestInPath) {
+    $PathConflicts = @()
 }
 
 # What does `codeg-server` actually resolve to in the current PATH?
@@ -195,6 +214,11 @@ if (-not (Test-Path $BinarySrc)) {
 }
 Copy-Item $BinarySrc -Destination (Join-Path $InstallDir "codeg-server.exe") -Force
 
+# Re-canonicalize destination now that the file exists. Pre-install canon may
+# leave the final non-existent component unresolved, which would mis-compare
+# against the post-install Get-Command result.
+$DestBinReal = Get-CanonicalPath $DestBin
+
 # Install web assets
 $WebSrc = Join-Path $TmpDir $Artifact "web"
 $WebDir = Join-Path $InstallDir "web"
@@ -211,12 +235,21 @@ if ($UserPath -notlike "*$InstallDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
     Write-Host "Added $InstallDir to user PATH (restart terminal to take effect)"
 }
+# Mirror the change into the current process so the post-install verification
+# below can resolve `codeg-server`. Without this, the first-time install would
+# always exit non-zero on Windows because Get-Command runs against the in-process
+# $env:Path that does not yet include $InstallDir.
+if ($env:Path -notlike "*$InstallDir*") {
+    $env:Path = "$env:Path;$InstallDir"
+}
 
 # ── Cleanup ──
 
 Remove-Item $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
 
-# ── Remove conflicting binaries from other PATH locations ──
+# ── Remove shadowing binaries from earlier PATH entries ──
+
+$ExitStatus = 0
 
 if ($Cleanup -and $PathConflicts.Count -gt 0) {
     Write-Host ""
@@ -226,7 +259,8 @@ if ($Cleanup -and $PathConflicts.Count -gt 0) {
             Remove-Item -LiteralPath $c -Force -ErrorAction Stop
             Write-Host "  removed $c"
         } catch {
-            Write-Host "  failed to remove $c — $($_.Exception.Message)"
+            Write-Host "  failed to remove $c (remove it manually so 'codeg-server' resolves to the new install) — $($_.Exception.Message)"
+            $ExitStatus = 1
         }
     }
 }
@@ -263,6 +297,7 @@ if (-not $ActiveBinAfter) {
     Write-Host "Note: $InstallDir is not on the current session's PATH."
     Write-Host "Open a new terminal (PATH was just updated) or run:"
     Write-Host "  `$env:Path = `"$InstallDir;`$env:Path`""
+    $ExitStatus = 1
 } elseif ($ActiveBinAfterReal -ne $DestBinReal) {
     Write-Host ""
     Write-Host "Warning: typing 'codeg-server' still runs $ActiveBinAfter, not $DestBin."
@@ -270,6 +305,7 @@ if (-not $ActiveBinAfter) {
     Write-Host "  - re-run without -NoCleanup (the default removes shadowing binaries), or"
     Write-Host "  - remove the stale binary manually: Remove-Item '$ActiveBinAfter', or"
     Write-Host "  - put $InstallDir before its directory in PATH."
+    $ExitStatus = 1
 }
 
 Write-Host ""
@@ -278,3 +314,5 @@ Write-Host "  `$env:CODEG_STATIC_DIR=`"$WebDir`"; codeg-server"
 Write-Host ""
 Write-Host "Or with custom settings:"
 Write-Host "  `$env:CODEG_PORT=`"3080`"; `$env:CODEG_TOKEN=`"your-secret`"; `$env:CODEG_STATIC_DIR=`"$WebDir`"; codeg-server"
+
+exit $ExitStatus
