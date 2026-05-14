@@ -70,17 +70,20 @@ $TargetVer = $Version -replace '^v', ''
 
 # ── Scan PATH for codeg-server binaries that shadow the target install ──
 #
-# A binary "shadows" the install only if it appears in PATH BEFORE the
-# destination directory: that's the binary `Get-Command codeg-server` returns
-# after install. Walk PATH and stop at the destination directory — anything
-# past it cannot affect resolution today, so we leave it alone.
+# A binary "shadows" the install if it appears in PATH BEFORE the destination
+# directory: that's the binary `Get-Command codeg-server` returns after install.
+# Unlike install.sh (which doesn't modify PATH), this script appends
+# `$InstallDir` to user PATH below when it's missing, so any pre-existing
+# codeg-server in PATH ends up before the destination after install and must be
+# cleaned. We therefore collect conflicts even when the destination isn't on
+# PATH yet: stop the walk at the destination if present, otherwise scan to the
+# end (post-install, the destination will be at the tail).
 
 $DestBin = Join-Path $InstallDir "codeg-server.exe"
 $DestBinReal = Get-CanonicalPath $DestBin
 $InstallDirReal = Get-CanonicalPath $InstallDir
 
 $PathConflicts = @()
-$DestInPath = $false
 $seenReal = @{}
 $pathDirs = @()
 if ($env:Path) { $pathDirs = $env:Path.Split(';') }
@@ -90,7 +93,6 @@ foreach ($dir in $pathDirs) {
     # the directory doesn't exist yet (e.g. first install into a fresh prefix).
     $dirReal = Get-CanonicalPath $dir
     if ($dirReal -eq $InstallDirReal) {
-        $DestInPath = $true
         break
     }
     foreach ($leaf in @("codeg-server.exe", "codeg-server")) {
@@ -102,13 +104,6 @@ foreach ($dir in $pathDirs) {
             $PathConflicts += $bin
         }
     }
-}
-
-# If the destination directory isn't on PATH, nothing "shadows" the install —
-# the new binary just won't be reachable as `codeg-server`. Drop any collected
-# entries; the post-install check will tell the user to fix PATH instead.
-if (-not $DestInPath) {
-    $PathConflicts = @()
 }
 
 # What does `codeg-server` actually resolve to in the current PATH?
