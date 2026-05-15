@@ -113,6 +113,12 @@ pub struct EventBusMetrics {
     /// Per-attach forwarder tasks that exited with `Lagged`. Each one
     /// triggers a client re-attach (and therefore a snapshot or replay).
     pub forwarder_lagged_count: AtomicU64,
+    /// Lifecycle dispatcher try_send fallthrough — a per-connection worker's
+    /// 64-slot mailbox was full at non-terminal-event delivery time, so the
+    /// event was dropped. Sustained nonzero growth means a worker is stuck
+    /// behind a long DB stall; correlate with `lagged_count` to tell apart
+    /// "bus is fast, one worker is slow" vs "bus itself is overloaded".
+    pub worker_queue_full_count: AtomicU64,
 }
 
 impl EventBusMetrics {
@@ -126,6 +132,7 @@ impl EventBusMetrics {
             snapshot_fallback_count: self.snapshot_fallback_count.load(Ordering::Relaxed),
             snapshot_cold_count: self.snapshot_cold_count.load(Ordering::Relaxed),
             forwarder_lagged_count: self.forwarder_lagged_count.load(Ordering::Relaxed),
+            worker_queue_full_count: self.worker_queue_full_count.load(Ordering::Relaxed),
         }
     }
 }
@@ -143,6 +150,7 @@ pub struct EventBusMetricsSnapshot {
     pub snapshot_fallback_count: u64,
     pub snapshot_cold_count: u64,
     pub forwarder_lagged_count: u64,
+    pub worker_queue_full_count: u64,
 }
 
 #[cfg(test)]

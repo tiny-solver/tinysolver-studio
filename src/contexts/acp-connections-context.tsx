@@ -2559,14 +2559,26 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     let unlisten: (() => void) | null = null
 
+    // Web / remote-desktop transports: the backend no longer fans ACP
+    // events through the WS firehose (Phase 5 dropped the `acp://event`
+    // channel; per-connection attach streams are the sole delivery path).
+    // Skip the legacy listener entirely — keeping it would register a
+    // dead WebSocket subscription and waste a slot on every reconnect.
+    // `waitForListenerReady` becomes an immediate no-op since the path
+    // it was guarding (Tauri's app.emit handshake) doesn't exist here.
+    if (getEventStream() !== null) {
+      listenerReadyRef.current = true
+      resolveListenerReadyWaiters()
+      return
+    }
+
     listenerReadyRef.current = false
 
     subscribe<EventEnvelope>("acp://event", (envelope) => {
       // Tauri webview path: the desktop frontend receives ACP events here
       // via `app.emit("acp://event", ...)`. Web / remote-desktop transports
-      // never see this listener fire (Phase 5 backend dropped the
-      // `acp://event` channel from the WS firehose; per-connection attach
-      // streams are now the sole delivery path for those transports).
+      // skipped this useEffect above and route ACP events solely via the
+      // per-connection attach streams.
       const contextKey = reverseMapRef.current.get(envelope.connection_id)
       if (!contextKey) {
         bufferUnmappedEvent(envelope)

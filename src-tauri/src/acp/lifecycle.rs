@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use sea_orm::DatabaseConnection;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::acp::internal_bus::InternalEventBus;
 use crate::acp::manager::ConnectionManager;
@@ -27,6 +27,13 @@ use crate::db::service::conversation_service;
 use crate::acp::session_state::SessionState;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
 use tokio::sync::RwLock;
+
+/// Per-connection worker queue depth. Sized to absorb a short DB-stall
+/// burst (a `TurnComplete` blocked on the SQLite write lock for a few
+/// hundred ms while ContentDelta keeps streaming) without forcing the
+/// dispatcher to drop. Per-connection burst is naturally bounded by the
+/// agent's own emit rate; 64 slots ≈ ~6s of headroom even at 10 events/s.
+const WORKER_QUEUE_CAPACITY: usize = 64;
 
 /// Per-connection state that survives `ConnectionCleanupGuard::drop` so
 /// `Disconnected` / `Error` handlers can still emit a derived
@@ -245,10 +252,59 @@ async fn handle_terminal_event(
     Ok(())
 }
 
-/// Subscribe to the in-process bus synchronously and return the subscriber
-/// loop future. Caller spawns it onto whichever tokio runtime they manage
-/// (`tokio::spawn` from inside an async context, `tauri::async_runtime::spawn`
-/// from a Tauri `setup` callback that runs outside the runtime).
+/// Per-connection worker that owns the cache for one connection and
+/// serializes its DB writes. Multiple connections run in parallel; within a
+/// connection, ordering is preserved by the mpsc FIFO. Decouples the bus
+/// receiver from DB-write latency — a slow SQLite write on connection A no
+/// longer blocks events for connection B from being drained off the
+/// broadcast buffer (the prior failure mode that pushed `lagged_count`).
+async fn connection_worker_loop(
+    connection_id: String,
+    db: DatabaseConnection,
+    manager: ConnectionManager,
+    mut rx: mpsc::Receiver<Arc<EventEnvelope>>,
+) {
+    // 1-entry HashMap so we can reuse `handle_terminal_event` (also keeps the
+    // existing test surface intact — tests still drive a `&mut HashMap`).
+    let mut cache: HashMap<String, CachedConn> = HashMap::new();
+    while let Some(envelope_arc) = rx.recv().await {
+        let envelope: &EventEnvelope = envelope_arc.as_ref();
+        match &envelope.payload {
+            AcpEvent::ConversationLinked {
+                conversation_id, ..
+            } => {
+                try_cache_link(
+                    &mut cache,
+                    &manager,
+                    &connection_id,
+                    *conversation_id,
+                )
+                .await;
+            }
+            AcpEvent::StatusChanged {
+                status: ConnectionStatus::Disconnected,
+            }
+            | AcpEvent::Error { .. } => {
+                if let Err(e) =
+                    handle_terminal_event(&db, &mut cache, &connection_id).await
+                {
+                    eprintln!(
+                        "[lifecycle][ERROR] terminal event for {connection_id}: {e}"
+                    );
+                }
+            }
+            _ => {
+                handle_event_with_retry(&db, &manager, envelope).await;
+            }
+        }
+    }
+}
+
+/// Subscribe to the in-process bus synchronously and return the dispatcher
+/// loop future. The dispatcher fans events out to per-connection worker
+/// tasks so DB-write latency on one connection doesn't backpressure
+/// receiver draining for the others. Within a single connection, ordering
+/// is preserved by the per-worker mpsc.
 ///
 /// The `subscribe()` call happens here, before the future is returned, so any
 /// events emitted between this call and the first poll are buffered by the
@@ -261,60 +317,103 @@ pub fn lifecycle_subscriber_task(
     let mut rx = bus.subscribe();
     let metrics = Arc::clone(bus.metrics());
     async move {
-        // Per-connection (state, emitter, conversation_id) cache. Populated on
-        // ConversationLinked, drained on first terminal event. See `CachedConn`
-        // for why the cache is needed (cleanup-vs-subscriber race).
-        let mut cache: HashMap<String, CachedConn> = HashMap::new();
+        // connection_id → worker mailbox. Workers are spawned lazily on the
+        // connection's first event and torn down after a terminal event by
+        // dropping the sender (worker drains its queue and exits).
+        let mut workers: HashMap<String, mpsc::Sender<Arc<EventEnvelope>>> =
+            HashMap::new();
         loop {
             match rx.recv().await {
                 Ok(envelope_arc) => {
-                    let envelope: &EventEnvelope = envelope_arc.as_ref();
-                    match &envelope.payload {
-                        AcpEvent::ConversationLinked {
-                            conversation_id, ..
-                        } => {
-                            try_cache_link(
-                                &mut cache,
-                                &manager,
-                                &envelope.connection_id,
-                                *conversation_id,
-                            )
-                            .await;
-                        }
+                    let conn_id = envelope_arc.connection_id.clone();
+                    let is_terminal = matches!(
+                        &envelope_arc.payload,
                         AcpEvent::StatusChanged {
-                            status: ConnectionStatus::Disconnected,
+                            status: ConnectionStatus::Disconnected
+                        } | AcpEvent::Error { .. }
+                    );
+
+                    let tx = workers.entry(conn_id.clone()).or_insert_with(|| {
+                        let (tx, worker_rx) =
+                            mpsc::channel::<Arc<EventEnvelope>>(WORKER_QUEUE_CAPACITY);
+                        let db_clone = db_conn.clone();
+                        let mgr_clone = manager.clone_ref();
+                        let id_clone = conn_id.clone();
+                        tokio::spawn(connection_worker_loop(
+                            id_clone, db_clone, mgr_clone, worker_rx,
+                        ));
+                        tx
+                    });
+
+                    if is_terminal {
+                        // Terminal events drive the conversation row's final
+                        // status transition (InProgress → Cancelled via the
+                        // cached `CachedConn`). Dropping one means the row
+                        // stays stuck on InProgress, so we MUST deliver even
+                        // if the worker mailbox is currently full. Awaiting
+                        // `send` blocks the dispatcher until the worker drains
+                        // enough to make room — bounded by the worker's DB
+                        // throughput (typically <1s under SQLite contention).
+                        // Other connections' workers are unaffected because
+                        // each owns its own mailbox.
+                        if tx.send(envelope_arc).await.is_err() {
+                            // Worker exited between or_insert_with and send
+                            // (panic recovery edge). Clean up the stale entry;
+                            // the conversation row is already in whatever
+                            // state the prior CachedConn drained it to.
+                            workers.remove(&conn_id);
+                        } else {
+                            // Drop the sender; worker drains remaining queue
+                            // then exits. Releases the `CachedConn` (state
+                            // Arc + emitter) it was holding.
+                            workers.remove(&conn_id);
                         }
-                        | AcpEvent::Error { .. } => {
-                            if let Err(e) =
-                                handle_terminal_event(&db_conn, &mut cache, &envelope.connection_id)
-                                    .await
-                            {
+                    } else if let Err(e) = tx.try_send(envelope_arc) {
+                        match e {
+                            mpsc::error::TrySendError::Full(_) => {
+                                // Non-terminal event jammed behind a slow DB
+                                // write. Most non-terminal payloads (Content
+                                // Delta, ToolCall*, PermissionRequest) are
+                                // O(1) no-ops in the worker — only Session
+                                // Started / TurnComplete write — so the
+                                // dropped event is overwhelmingly noise.
+                                // Counted on the metric so operators can
+                                // distinguish "bus overload" (lagged_count)
+                                // from "single connection stalled"
+                                // (worker_queue_full_count).
+                                metrics
+                                    .worker_queue_full_count
+                                    .fetch_add(1, Ordering::Relaxed);
                                 eprintln!(
-                                    "[lifecycle][ERROR] terminal event for {}: {e}",
-                                    envelope.connection_id
+                                    "[lifecycle][WARN] worker queue full for \
+                                     {conn_id}, dropping non-terminal event"
                                 );
                             }
-                        }
-                        _ => {
-                            handle_event_with_retry(&db_conn, &manager, envelope).await;
+                            mpsc::error::TrySendError::Closed(_) => {
+                                // Worker already exited (terminal event
+                                // processed earlier in this loop). Stale
+                                // mailbox; clean up so the next event for
+                                // this conn spawns a fresh worker.
+                                workers.remove(&conn_id);
+                            }
                         }
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                    // Lagged means events were dropped between rx polls because
-                    // the broadcast buffer overflowed. Capacity-shaped by
-                    // emit_with_state's burst rate vs. our DB write speed.
-                    // Logged at WARN — visible-but-non-fatal — and surfaced
-                    // on the metrics counter so operators can spot drift via
-                    // the `/debug/event_metrics` endpoint.
+                    // Lagged at the bus level (not per-connection). With the
+                    // dispatcher now non-blocking on DB writes, this should
+                    // only fire under genuine emit-rate spikes — not because
+                    // of a slow consumer.
                     eprintln!(
                         "[lifecycle][WARN] internal bus lagged, dropped {skipped} events \
-                         (DB writes can't keep up with emit rate)"
+                         (emit rate exceeded broadcast capacity)"
                     );
                     metrics.lagged_count.fetch_add(skipped, Ordering::Relaxed);
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    eprintln!("[lifecycle] internal bus closed; subscriber exiting");
+                    eprintln!("[lifecycle] internal bus closed; dispatcher exiting");
+                    // Drop all worker senders; workers drain & exit on their own.
+                    drop(workers);
                     break;
                 }
             }

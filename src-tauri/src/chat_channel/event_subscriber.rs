@@ -86,9 +86,13 @@ pub fn spawn_event_subscriber(
     manager: ChatChannelManager,
     db_conn: DatabaseConnection,
 ) -> JoinHandle<()> {
+    // Subscribe synchronously before the spawn so the broadcast buffer
+    // catches any events emitted in the gap between `start_background`
+    // returning and the spawned task's first `rx.recv().await` poll.
+    let mut rx = bus.subscribe();
+    let metrics = Arc::clone(bus.metrics());
+
     tokio::spawn(async move {
-        let mut rx = bus.subscribe();
-        let metrics = Arc::clone(bus.metrics());
         let mut last_push: HashMap<(i32, String), Instant> = HashMap::new();
         let mut config = EventConfigCache::new();
 
