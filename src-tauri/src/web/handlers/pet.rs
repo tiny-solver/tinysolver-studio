@@ -26,9 +26,7 @@ pub async fn pet_list() -> Result<Json<Vec<PetSummary>>, AppCommandError> {
     pet_commands::pet_list_core().await.map(Json)
 }
 
-pub async fn pet_get(
-    Json(params): Json<PetIdParams>,
-) -> Result<Json<PetDetail>, AppCommandError> {
+pub async fn pet_get(Json(params): Json<PetIdParams>) -> Result<Json<PetDetail>, AppCommandError> {
     pet_commands::pet_get_core(params.id).await.map(Json)
 }
 
@@ -40,9 +38,7 @@ pub async fn pet_read_spritesheet(
         .map(Json)
 }
 
-pub async fn pet_add(
-    Json(input): Json<NewPetInput>,
-) -> Result<Json<PetSummary>, AppCommandError> {
+pub async fn pet_add(Json(input): Json<NewPetInput>) -> Result<Json<PetSummary>, AppCommandError> {
     pet_commands::pet_add_core(input).await.map(Json)
 }
 
@@ -71,8 +67,7 @@ pub async fn pet_delete(
         .map(Json)
 }
 
-pub async fn pet_list_importable_codex(
-) -> Result<Json<Vec<ImportablePet>>, AppCommandError> {
+pub async fn pet_list_importable_codex() -> Result<Json<Vec<ImportablePet>>, AppCommandError> {
     pet_commands::pet_list_importable_codex_core()
         .await
         .map(Json)
@@ -134,7 +129,9 @@ pub async fn pet_celebrate(
 pub async fn pet_marketplace_list(
     Json(params): Json<MarketplaceListParams>,
 ) -> Result<Json<MarketplaceListResponse>, AppCommandError> {
-    pet_commands::pet_marketplace_list_core(params).await.map(Json)
+    pet_commands::pet_marketplace_list_core(params)
+        .await
+        .map(Json)
 }
 
 pub async fn pet_marketplace_install(

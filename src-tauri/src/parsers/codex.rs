@@ -862,16 +862,12 @@ impl CodexParser {
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("")
                                     .to_string();
-                                let result = payload
-                                    .get("result")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                                let result =
+                                    payload.get("result").and_then(|v| v.as_str()).unwrap_or("");
                                 if result.is_empty() {
                                     continue;
                                 }
-                                if !call_id.is_empty()
-                                    && emitted_image_ids.contains(&call_id)
-                                {
+                                if !call_id.is_empty() && emitted_image_ids.contains(&call_id) {
                                     continue;
                                 }
                                 let mime_type = payload
@@ -1269,10 +1265,8 @@ impl CodexParser {
                                 if !id.is_empty() && emitted_image_ids.contains(&id) {
                                     continue;
                                 }
-                                let result = payload
-                                    .get("result")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                                let result =
+                                    payload.get("result").and_then(|v| v.as_str()).unwrap_or("");
                                 if result.is_empty() {
                                     continue;
                                 }
@@ -2149,14 +2143,10 @@ mod tests {
             .find(|t| matches!(t.role, TurnRole::Assistant))
             .expect("assistant turn");
         let completed_at = assistant.completed_at.expect("completed_at populated");
-        let expected = "2026-03-01T10:00:10.081Z"
-            .parse::<DateTime<Utc>>()
-            .unwrap();
+        let expected = "2026-03-01T10:00:10.081Z".parse::<DateTime<Utc>>().unwrap();
         assert_eq!(completed_at, expected);
         // The naive `timestamp + duration_ms` would produce ~10.00:19.827Z.
-        let wrong = "2026-03-01T10:00:19.827Z"
-            .parse::<DateTime<Utc>>()
-            .unwrap();
+        let wrong = "2026-03-01T10:00:19.827Z".parse::<DateTime<Utc>>().unwrap();
         assert_ne!(completed_at, wrong);
 
         let _ = fs::remove_file(path);
@@ -2372,8 +2362,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time ok")
             .as_nanos();
-        let path: PathBuf =
-            env::temp_dir().join(format!("codeg-codex-img-subagent-{nanos}.jsonl"));
+        let path: PathBuf = env::temp_dir().join(format!("codeg-codex-img-subagent-{nanos}.jsonl"));
 
         // Sequence:
         //   1. user msg

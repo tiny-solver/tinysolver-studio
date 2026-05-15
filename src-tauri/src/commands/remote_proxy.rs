@@ -355,10 +355,7 @@ const REMOTE_UPLOAD_MAX_BASE64_LEN: usize = {
 };
 
 fn upload_i18n_params<const N: usize>(pairs: [(&str, String); N]) -> BTreeMap<String, String> {
-    pairs
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect()
+    pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
 
 /// Strip multipart-hostile bytes from a filename before handing it to
@@ -1170,8 +1167,14 @@ mod tests {
     async fn stale_unsubscribe_only_removes_its_own_subscription() {
         let proxy = Arc::new(RemoteProxyState::new());
         let entry = test_entry(HashMap::from([
-            ("old-sub".to_string(), subscriber("remote-workspace-1", "old")),
-            ("new-sub".to_string(), subscriber("remote-workspace-1", "new")),
+            (
+                "old-sub".to_string(),
+                subscriber("remote-workspace-1", "old"),
+            ),
+            (
+                "new-sub".to_string(),
+                subscriber("remote-workspace-1", "new"),
+            ),
         ]));
         proxy.tasks.lock().await.insert(1, entry.clone());
 
@@ -1188,8 +1191,14 @@ mod tests {
     async fn window_instance_cleanup_preserves_reused_label_with_new_instance() {
         let proxy = Arc::new(RemoteProxyState::new());
         let entry = test_entry(HashMap::from([
-            ("old-sub".to_string(), subscriber("remote-workspace-1", "old")),
-            ("new-sub".to_string(), subscriber("remote-workspace-1", "new")),
+            (
+                "old-sub".to_string(),
+                subscriber("remote-workspace-1", "old"),
+            ),
+            (
+                "new-sub".to_string(),
+                subscriber("remote-workspace-1", "new"),
+            ),
             (
                 "other-label".to_string(),
                 subscriber("remote-settings-1", "settings"),
@@ -1397,10 +1406,7 @@ mod tests {
 
     #[test]
     fn upload_i18n_params_helper_builds_map() {
-        let params = upload_i18n_params([
-            ("a", "1".to_string()),
-            ("b", "two".to_string()),
-        ]);
+        let params = upload_i18n_params([("a", "1".to_string()), ("b", "two".to_string())]);
         assert_eq!(params.get("a").map(String::as_str), Some("1"));
         assert_eq!(params.get("b").map(String::as_str), Some("two"));
         assert_eq!(params.len(), 2);
@@ -1456,7 +1462,10 @@ mod tests {
         assert_eq!(sanitize_upload_file_name(evil), "leak.txtX-Auth: bad");
 
         let punctuation = "foo\"bar\\baz/qux.txt";
-        assert_eq!(sanitize_upload_file_name(punctuation), "foo_bar_baz_qux.txt");
+        assert_eq!(
+            sanitize_upload_file_name(punctuation),
+            "foo_bar_baz_qux.txt"
+        );
 
         // NUL is a control char and gets filtered out — *not* replaced
         // with `_`. Either result kills the header-injection vector;

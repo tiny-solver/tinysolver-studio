@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use sacp::schema::{HttpHeader, McpServer, McpServerHttp, McpServerSse, McpServerStdio};
 use sacp::schema::{
     BlobResourceContents, CancelNotification, ClientCapabilities, ContentBlock, ContentChunk,
     CreateTerminalRequest, CreateTerminalResponse, EmbeddedResource, EmbeddedResourceResource,
@@ -19,6 +18,7 @@ use sacp::schema::{
     ToolCallContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
+use sacp::schema::{HttpHeader, McpServer, McpServerHttp, McpServerSse, McpServerStdio};
 use sacp::util::MatchDispatch;
 use sacp::{
     on_receive_request, Agent, Client, ConnectionTo, Dispatch, Responder, SessionMessage,
@@ -89,7 +89,8 @@ pub enum ConnectionCommand {
         option_id: String,
     },
     Fork {
-        reply: tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkProtocolResult, AcpError>>,
+        reply:
+            tokio::sync::oneshot::Sender<Result<crate::acp::types::ForkProtocolResult, AcpError>>,
     },
     Disconnect,
 }
@@ -1715,12 +1716,8 @@ async fn apply_preferred_session_options(
             .map(|m| m.current_mode_id.to_string() != pref_mode)
             .unwrap_or(false);
         if needs_apply {
-            if let Err(e) =
-                set_session_mode(session, state, emitter, pref_mode.to_string()).await
-            {
-                eprintln!(
-                    "[ACP] failed to apply preferred mode '{pref_mode}' on connect: {e}"
-                );
+            if let Err(e) = set_session_mode(session, state, emitter, pref_mode.to_string()).await {
+                eprintln!("[ACP] failed to apply preferred mode '{pref_mode}' on connect: {e}");
             }
         }
     }
@@ -1746,13 +1743,8 @@ async fn apply_preferred_session_options(
         if already_matches {
             continue;
         }
-        match set_session_config_option_inner(
-            cx,
-            &session_id,
-            config_id.clone(),
-            value_id.clone(),
-        )
-        .await
+        match set_session_config_option_inner(cx, &session_id, config_id.clone(), value_id.clone())
+            .await
         {
             Ok(updated) => options = updated,
             Err(e) => eprintln!(
@@ -1843,11 +1835,9 @@ impl ToolCallOutputCache {
 
         // Update cache snapshot to current state so the next update can
         // still detect a prefix extension.
-        let tail = trim_partial_ansi_tail(truncate_tail_at_char_boundary(
-            curr,
-            MAX_CACHED_TAIL_BYTES,
-        ))
-        .to_string();
+        let tail =
+            trim_partial_ansi_tail(truncate_tail_at_char_boundary(curr, MAX_CACHED_TAIL_BYTES))
+                .to_string();
         let generation = self.next_generation;
         self.next_generation = self.next_generation.wrapping_add(1);
         self.entries.insert(
@@ -1868,11 +1858,9 @@ impl ToolCallOutputCache {
     /// treats `raw_output` as a full replacement.
     fn seed(&mut self, tool_call_id: &str, curr: &str) -> Option<String> {
         let (payload, _append) = build_emit_payload(curr, false);
-        let tail = trim_partial_ansi_tail(truncate_tail_at_char_boundary(
-            curr,
-            MAX_CACHED_TAIL_BYTES,
-        ))
-        .to_string();
+        let tail =
+            trim_partial_ansi_tail(truncate_tail_at_char_boundary(curr, MAX_CACHED_TAIL_BYTES))
+                .to_string();
         let generation = self.next_generation;
         self.next_generation = self.next_generation.wrapping_add(1);
         self.entries.insert(
@@ -1894,10 +1882,7 @@ impl ToolCallOutputCache {
     /// Drop cached state for a tool call that has finished. Keeps the
     /// session-scoped cache bounded in long-running sessions.
     fn remove_if_final(&mut self, tool_call_id: &str, status: Option<&str>) {
-        if matches!(
-            status,
-            Some("completed" | "failed" | "cancelled" | "error")
-        ) {
+        if matches!(status, Some("completed" | "failed" | "cancelled" | "error")) {
             self.entries.remove(tool_call_id);
         }
     }
@@ -1933,10 +1918,8 @@ impl ToolCallOutputCache {
 /// append)`. An empty `text` yields an empty `payload`; callers should
 /// decide whether to suppress the emission in that case.
 fn build_emit_payload(text: &str, append: bool) -> (String, bool) {
-    let truncated = trim_partial_ansi_tail(truncate_tail_at_char_boundary(
-        text,
-        MAX_SINGLE_EMIT_BYTES,
-    ));
+    let truncated =
+        trim_partial_ansi_tail(truncate_tail_at_char_boundary(text, MAX_SINGLE_EMIT_BYTES));
     let out = if truncated.len() < text.len() {
         format!("{TRUNCATION_MARKER}{truncated}")
     } else {
@@ -1982,11 +1965,11 @@ fn trim_partial_ansi_tail(s: &str) -> &str {
         return &s[..esc_pos];
     }
     let terminated = match after[0] {
-        b'[' => after[1..]
-            .iter()
-            .any(|&b| (0x40..=0x7E).contains(&b)),
-        b']' => after[1..].contains(&0x07)
-            || after[1..].windows(2).any(|w| w[0] == 0x1B && w[1] == b'\\'),
+        b'[' => after[1..].iter().any(|&b| (0x40..=0x7E).contains(&b)),
+        b']' => {
+            after[1..].contains(&0x07)
+                || after[1..].windows(2).any(|w| w[0] == 0x1B && w[1] == b'\\')
+        }
         // Two-byte escape sequences (ESC M, ESC D, …) are complete as
         // soon as the second byte is present.
         _ => true,
@@ -2280,14 +2263,8 @@ async fn poll_tracked_terminal_tool_calls(
         }
 
         if let Some(output) = poll_result.output {
-            emit_terminal_output_update(
-                state,
-                emitter,
-                &tool_call_id,
-                output,
-                poll_result.append,
-            )
-            .await;
+            emit_terminal_output_update(state, emitter, &tool_call_id, output, poll_result.append)
+                .await;
         }
 
         if (is_final_tool_call_status(entry.status.as_deref())
@@ -2397,10 +2374,12 @@ async fn handle_fork_or_exit(
 
     // Reply protocol-level result to manager.fork_session, which will combine
     // it with the freshly-created sibling row id to produce the wire ForkResultInfo.
-    let _ = fork_info.reply.send(Ok(crate::acp::types::ForkProtocolResult {
-        forked_session_id: new_sid.clone(),
-        original_session_id: fork_info.original_session_id,
-    }));
+    let _ = fork_info
+        .reply
+        .send(Ok(crate::acp::types::ForkProtocolResult {
+            forked_session_id: new_sid.clone(),
+            original_session_id: fork_info.original_session_id,
+        }));
 
     // Build a NewSessionResponse from the ForkSessionResponse so we can
     // attach directly — the forked session is already live on this process.
@@ -2520,9 +2499,7 @@ fn turn_failure_error_event(reason_str: &str, agent_type: AgentType) -> Option<A
         ),
         "max_turn_requests" => (
             "turn_failed_max_turn_requests",
-            format!(
-                "{agent_type} reached the maximum number of allowed requests for this turn."
-            ),
+            format!("{agent_type} reached the maximum number of allowed requests for this turn."),
         ),
         "unknown" => (
             "turn_failed_unknown",
@@ -3303,12 +3280,7 @@ async fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            emit_with_state(
-                state,
-                emitter,
-                AcpEvent::ContentDelta { text: text.text },
-            )
-            .await;
+            emit_with_state(state, emitter, AcpEvent::ContentDelta { text: text.text }).await;
         }
         SessionUpdate::AgentMessageChunk(_) => {
             // Non-text chunks are currently not surfaced in live streaming UI.
@@ -3317,12 +3289,7 @@ async fn emit_conversation_update(
             content: ContentBlock::Text(text),
             ..
         }) => {
-            emit_with_state(
-                state,
-                emitter,
-                AcpEvent::Thinking { text: text.text },
-            )
-            .await;
+            emit_with_state(state, emitter, AcpEvent::Thinking { text: text.text }).await;
         }
         SessionUpdate::AgentThoughtChunk(_) => {
             // Non-text thought chunks are currently ignored.
@@ -3442,13 +3409,8 @@ async fn emit_conversation_update(
             .await;
         }
         SessionUpdate::ConfigOptionUpdate(update) => {
-            emit_session_config_options_values(
-                state,
-                emitter,
-                agent_type,
-                update.config_options,
-            )
-            .await;
+            emit_session_config_options_values(state, emitter, agent_type, update.config_options)
+                .await;
         }
         SessionUpdate::AvailableCommandsUpdate(update) => {
             // Some agents (e.g. Claude Code with overlapping user/project slash
@@ -3472,12 +3434,7 @@ async fn emit_conversation_update(
                     }
                 })
                 .collect();
-            emit_with_state(
-                state,
-                emitter,
-                AcpEvent::AvailableCommands { commands },
-            )
-            .await;
+            emit_with_state(state, emitter, AcpEvent::AvailableCommands { commands }).await;
         }
         SessionUpdate::UsageUpdate(update) => {
             emit_with_state(
@@ -3532,8 +3489,7 @@ mod tests {
         )
         .unwrap();
 
-        let event =
-            map_claude_sdk_ext_notification(&raw).expect("valid sdk payload should map");
+        let event = map_claude_sdk_ext_notification(&raw).expect("valid sdk payload should map");
 
         match event {
             AcpEvent::ClaudeSdkMessage {
@@ -3613,8 +3569,7 @@ mod tests {
             "args": ["-y", "@mcp_hub_org/cli@latest", "run", "figma-developer-mcp"],
             "env": {"FIGMA_API_KEY": "secret"},
         });
-        let server =
-            canonical_spec_to_mcp_server("figma", &spec).expect("stdio spec should map");
+        let server = canonical_spec_to_mcp_server("figma", &spec).expect("stdio spec should map");
         match server {
             McpServer::Stdio(s) => {
                 assert_eq!(s.name, "figma");
@@ -3636,8 +3591,7 @@ mod tests {
             "type": "stdio",
             "command": "cargo",
         });
-        let server =
-            canonical_spec_to_mcp_server("x", &spec).expect("bare command should resolve");
+        let server = canonical_spec_to_mcp_server("x", &spec).expect("bare command should resolve");
         match server {
             McpServer::Stdio(s) => assert!(
                 s.command.is_absolute(),
@@ -3682,8 +3636,7 @@ mod tests {
             "command": "/usr/local/bin/npx",
             "args": ["-y", "@mcp_hub_org/cli@latest", "run", "figma-developer-mcp"],
         });
-        let server =
-            canonical_spec_to_mcp_server("figma", &spec).expect("stdio spec should map");
+        let server = canonical_spec_to_mcp_server("figma", &spec).expect("stdio spec should map");
         let json = serde_json::to_value(&server).expect("server should serialize");
         assert_eq!(json["name"], "figma");
         assert_eq!(json["command"], "/usr/local/bin/npx");
@@ -3753,7 +3706,10 @@ mod tests {
         let delta = "Z".repeat(16 * 1024);
         let second = format!("{first}{delta}");
         let (payload, append) = cache.consume("t1", &second).expect("should emit");
-        assert!(append, "extension beyond cached tail must still be detected");
+        assert!(
+            append,
+            "extension beyond cached tail must still be detected"
+        );
         // The emitted payload should carry the delta (or its tail when
         // truncated at MAX_SINGLE_EMIT_BYTES). For a 16 KB delta that's
         // well below the 64 KB cap, we expect it verbatim.

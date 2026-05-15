@@ -379,8 +379,7 @@ async fn handle_acp_envelope(
                     let sender_id = session.sender_id.clone();
                     drop(guard);
 
-                    let _ =
-                        sender_context_service::clear_session(db, channel_id, &sender_id).await;
+                    let _ = sender_context_service::clear_session(db, channel_id, &sender_id).await;
                 }
             }
         }

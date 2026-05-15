@@ -209,10 +209,7 @@ fn emit_oneshot(emitter: &EventEmitter, kind: PetState) {
 /// `erroring` set after `PET_FAILED_RECOVERY_MS`. Aborts any in-flight
 /// timer first so successive errors keep the failed animation visible
 /// for the full window after the *latest* error.
-fn schedule_failed_recovery(
-    clear_task: &mut Option<JoinHandle<()>>,
-    clear_tx: &mpsc::Sender<()>,
-) {
+fn schedule_failed_recovery(clear_task: &mut Option<JoinHandle<()>>, clear_tx: &mpsc::Sender<()>) {
     cancel_failed_recovery(clear_task);
     let tx = clear_tx.clone();
     *clear_task = Some(tokio::spawn(async move {
@@ -742,10 +739,7 @@ mod tests {
             },
         ];
         for ev in &ignored {
-            assert!(
-                !is_acp_event_relevant(ev),
-                "expected {ev:?} to be ignored"
-            );
+            assert!(!is_acp_event_relevant(ev), "expected {ev:?} to be ignored");
         }
     }
 
@@ -754,7 +748,11 @@ mod tests {
     /// helper keeps the noise out of the assertion bodies.
     fn spawn_test_subscriber(
         handle: PetStateHandle,
-    ) -> (Arc<InternalEventBus>, Arc<WebEventBroadcaster>, broadcast::Receiver<WebEvent>) {
+    ) -> (
+        Arc<InternalEventBus>,
+        Arc<WebEventBroadcaster>,
+        broadcast::Receiver<WebEvent>,
+    ) {
         let metrics = Arc::new(crate::acp::EventBusMetrics::default());
         let bus = Arc::new(InternalEventBus::new(metrics));
         let broadcaster = Arc::new(WebEventBroadcaster::new());

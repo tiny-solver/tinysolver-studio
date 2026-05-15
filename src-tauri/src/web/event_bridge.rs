@@ -4,9 +4,7 @@ use std::sync::Arc;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use tokio::sync::{broadcast, RwLock};
 
-use crate::acp::{
-    AcpEvent, EventBusMetrics, EventEnvelope, InternalEventBus, SessionState,
-};
+use crate::acp::{AcpEvent, EventBusMetrics, EventEnvelope, InternalEventBus, SessionState};
 
 /// Broadcast-delivered event.
 ///

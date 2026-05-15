@@ -21,7 +21,9 @@ pub(crate) fn resolve_codex_home_dir() -> PathBuf {
     if let Some(custom) = std::env::var_os("CODEX_HOME").filter(|s| !s.is_empty()) {
         return PathBuf::from(custom);
     }
-    dirs::home_dir().map(|h| h.join(".codex")).unwrap_or_default()
+    dirs::home_dir()
+        .map(|h| h.join(".codex"))
+        .unwrap_or_default()
 }
 
 fn codex_pets_dir() -> PathBuf {
@@ -72,7 +74,11 @@ pub fn list_importable_codex_pets() -> Result<Vec<ImportablePet>, AppCommandErro
             already_imported: already,
         });
     }
-    out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+    out.sort_by(|a, b| {
+        a.display_name
+            .to_lowercase()
+            .cmp(&b.display_name.to_lowercase())
+    });
     Ok(out)
 }
 
@@ -211,4 +217,3 @@ pub fn codex_import_available() -> bool {
 pub fn codex_pets_root_for_display() -> PathBuf {
     codex_pets_dir()
 }
-

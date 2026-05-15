@@ -180,9 +180,7 @@ pub enum AcpEvent {
         code: String,
     },
     /// Available slash commands updated
-    AvailableCommands {
-        commands: Vec<AvailableCommandInfo>,
-    },
+    AvailableCommands { commands: Vec<AvailableCommandInfo> },
     /// Session usage/context window updated during conversation
     UsageUpdate { used: u64, size: u64 },
 }

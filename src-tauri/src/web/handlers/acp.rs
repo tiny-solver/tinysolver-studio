@@ -96,9 +96,7 @@ pub async fn acp_connect(
     // the agent (or its child shells) authenticate against the GitHub
     // accounts configured in Settings → Version Control, mirroring what
     // the built-in terminal already does.
-    if let Some(cred_env) =
-        crate::commands::terminal::prepare_credential_env(&state.data_dir)
-    {
+    if let Some(cred_env) = crate::commands::terminal::prepare_credential_env(&state.data_dir) {
         for (key, value) in cred_env {
             runtime_env.insert(key, value);
         }
@@ -161,10 +159,7 @@ pub async fn acp_touch_connection(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<AcpTouchConnectionParams>,
 ) -> Result<Json<bool>, AppCommandError> {
-    let touched = state
-        .connection_manager
-        .touch(&params.connection_id)
-        .await;
+    let touched = state.connection_manager.touch(&params.connection_id).await;
     Ok(Json(touched))
 }
 

@@ -20,11 +20,11 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::acp::internal_bus::InternalEventBus;
 use crate::acp::manager::ConnectionManager;
+use crate::acp::session_state::SessionState;
 use crate::acp::types::{AcpEvent, ConnectionStatus, EventEnvelope};
 use crate::db::entities::conversation::ConversationStatus;
 use crate::db::error::DbError;
 use crate::db::service::conversation_service;
-use crate::acp::session_state::SessionState;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
 use tokio::sync::RwLock;
 
@@ -112,7 +112,11 @@ async fn handle_event_with_retry(
                 eprintln!(
                     "[lifecycle][{level}] handle_event failed (attempt {attempt_num}{}) \
                      for {:?}: {e}",
-                    if is_last { ", giving up" } else { ", will retry" },
+                    if is_last {
+                        ", giving up"
+                    } else {
+                        ", will retry"
+                    },
                     envelope.payload
                 );
             }
@@ -133,8 +137,7 @@ pub(crate) async fn handle_event(
             };
             let conversation_id = state_arc.read().await.conversation_id;
             if let Some(cid) = conversation_id {
-                conversation_service::update_external_id(db_conn, cid, session_id.clone())
-                    .await?;
+                conversation_service::update_external_id(db_conn, cid, session_id.clone()).await?;
             }
             Ok(())
         }
@@ -168,9 +171,8 @@ pub(crate) async fn handle_event(
                 // `cancelled` and any future reason: don't write here.
                 _ => return Ok(()),
             };
-            let Some((state_arc, emitter)) = manager
-                .get_state_and_emitter(&envelope.connection_id)
-                .await
+            let Some((state_arc, emitter)) =
+                manager.get_state_and_emitter(&envelope.connection_id).await
             else {
                 return Ok(());
             };
@@ -295,24 +297,14 @@ async fn connection_worker_loop(
             AcpEvent::ConversationLinked {
                 conversation_id, ..
             } => {
-                try_cache_link(
-                    &mut cache,
-                    &manager,
-                    &connection_id,
-                    *conversation_id,
-                )
-                .await;
+                try_cache_link(&mut cache, &manager, &connection_id, *conversation_id).await;
             }
             AcpEvent::StatusChanged {
                 status: ConnectionStatus::Disconnected,
             }
             | AcpEvent::Error { .. } => {
-                if let Err(e) =
-                    handle_terminal_event(&db, &mut cache, &connection_id).await
-                {
-                    eprintln!(
-                        "[lifecycle][ERROR] terminal event for {connection_id}: {e}"
-                    );
+                if let Err(e) = handle_terminal_event(&db, &mut cache, &connection_id).await {
+                    eprintln!("[lifecycle][ERROR] terminal event for {connection_id}: {e}");
                 }
             }
             _ => {
@@ -352,8 +344,7 @@ pub fn lifecycle_subscriber_task(
         // connection_id → worker mailbox. Workers are spawned lazily on the
         // connection's first relevant event and torn down after a terminal
         // event by dropping the sender (worker drains its queue and exits).
-        let mut workers: HashMap<String, mpsc::Sender<Arc<EventEnvelope>>> =
-            HashMap::new();
+        let mut workers: HashMap<String, mpsc::Sender<Arc<EventEnvelope>>> = HashMap::new();
         loop {
             match rx.recv().await {
                 Ok(envelope_arc) => {
@@ -603,20 +594,21 @@ mod tests {
         // The lifecycle subscriber must flip the conversation to Cancelled
         // for refusal/max_tokens/max_turn_requests/unknown so the user sees
         // a terminal state instead of a misleading PendingReview ("待审查").
-        let cases = ["refusal", "max_tokens", "max_turn_requests", "unknown", "empty"];
+        let cases = [
+            "refusal",
+            "max_tokens",
+            "max_turn_requests",
+            "unknown",
+            "empty",
+        ];
         for stop_reason in cases {
             let db = test_helpers::fresh_in_memory_db().await;
             let folder_id =
                 test_helpers::seed_folder(&db, &format!("/tmp/turn-fail-{stop_reason}")).await;
-            let conv = conversation_service::create(
-                &db.conn,
-                folder_id,
-                AgentType::OpenCode,
-                None,
-                None,
-            )
-            .await
-            .unwrap();
+            let conv =
+                conversation_service::create(&db.conn, folder_id, AgentType::OpenCode, None, None)
+                    .await
+                    .unwrap();
 
             let mgr = ConnectionManager::new();
             {
@@ -751,9 +743,14 @@ mod tests {
         }
         let mut cache: HashMap<String, CachedConn> = HashMap::new();
         seed_cache(&mut cache, &mgr, "c1", conv.id).await;
-        assert!(cache.contains_key("c1"), "ConversationLinked should populate cache");
+        assert!(
+            cache.contains_key("c1"),
+            "ConversationLinked should populate cache"
+        );
 
-        handle_terminal_event(&db.conn, &mut cache, "c1").await.unwrap();
+        handle_terminal_event(&db.conn, &mut cache, "c1")
+            .await
+            .unwrap();
         assert_eq!(
             read_row_status(&db, conv.id).await,
             ConversationStatus::Cancelled,
@@ -789,7 +786,9 @@ mod tests {
         let mut cache: HashMap<String, CachedConn> = HashMap::new();
         seed_cache(&mut cache, &mgr, "c1", conv.id).await;
 
-        handle_terminal_event(&db.conn, &mut cache, "c1").await.unwrap();
+        handle_terminal_event(&db.conn, &mut cache, "c1")
+            .await
+            .unwrap();
         assert_eq!(
             read_row_status(&db, conv.id).await,
             ConversationStatus::PendingReview,
@@ -823,7 +822,9 @@ mod tests {
         let mut cache: HashMap<String, CachedConn> = HashMap::new();
         seed_cache(&mut cache, &mgr, "c1", conv.id).await;
 
-        handle_terminal_event(&db.conn, &mut cache, "c1").await.unwrap();
+        handle_terminal_event(&db.conn, &mut cache, "c1")
+            .await
+            .unwrap();
         assert_eq!(
             read_row_status(&db, conv.id).await,
             ConversationStatus::Completed,
@@ -855,10 +856,14 @@ mod tests {
         seed_cache(&mut cache, &mgr, "c1", conv.id).await;
 
         // First terminal event: cancels, drains.
-        handle_terminal_event(&db.conn, &mut cache, "c1").await.unwrap();
+        handle_terminal_event(&db.conn, &mut cache, "c1")
+            .await
+            .unwrap();
         assert!(!cache.contains_key("c1"));
         // Second terminal event: empty cache, returns Ok with no DB writes.
-        handle_terminal_event(&db.conn, &mut cache, "c1").await.unwrap();
+        handle_terminal_event(&db.conn, &mut cache, "c1")
+            .await
+            .unwrap();
         assert_eq!(
             read_row_status(&db, conv.id).await,
             ConversationStatus::Cancelled
@@ -1002,9 +1007,7 @@ mod tests {
                 .await
                 .unwrap()
                 .external_id;
-            if observed.as_deref() == Some(expected)
-                || std::time::Instant::now() >= deadline
-            {
+            if observed.as_deref() == Some(expected) || std::time::Instant::now() >= deadline {
                 return observed;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -1018,15 +1021,10 @@ mod tests {
     async fn dispatcher_filter_drops_high_frequency_events_at_source() {
         let db = test_helpers::fresh_in_memory_db().await;
         let folder_id = test_helpers::seed_folder(&db, "/tmp/disp-filter").await;
-        let conv = conversation_service::create(
-            &db.conn,
-            folder_id,
-            AgentType::ClaudeCode,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+        let conv =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
 
         let mgr = ConnectionManager::new();
         {
@@ -1087,15 +1085,10 @@ mod tests {
     async fn dispatcher_delivers_session_started_and_turn_complete_to_db() {
         let db = test_helpers::fresh_in_memory_db().await;
         let folder_id = test_helpers::seed_folder(&db, "/tmp/disp-happy").await;
-        let conv = conversation_service::create(
-            &db.conn,
-            folder_id,
-            AgentType::ClaudeCode,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+        let conv =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
 
         let mgr = ConnectionManager::new();
         {
@@ -1131,16 +1124,15 @@ mod tests {
             },
         }));
 
-        let observed_external = poll_external_id(
+        let observed_external =
+            poll_external_id(&db, conv.id, "ext-final", Duration::from_millis(500)).await;
+        let observed_status = poll_status(
             &db,
             conv.id,
-            "ext-final",
+            ConversationStatus::PendingReview,
             Duration::from_millis(500),
         )
         .await;
-        let observed_status =
-            poll_status(&db, conv.id, ConversationStatus::PendingReview, Duration::from_millis(500))
-                .await;
 
         drop(bus);
         let _ = dispatcher.await;
@@ -1165,15 +1157,10 @@ mod tests {
     async fn dispatcher_delivers_turn_complete_after_relevant_event_burst() {
         let db = test_helpers::fresh_in_memory_db().await;
         let folder_id = test_helpers::seed_folder(&db, "/tmp/disp-burst").await;
-        let conv = conversation_service::create(
-            &db.conn,
-            folder_id,
-            AgentType::ClaudeCode,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+        let conv =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .unwrap();
 
         let mgr = ConnectionManager::new();
         {

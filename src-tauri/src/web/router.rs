@@ -302,9 +302,8 @@ pub fn build_router(
             // before our handler ever sees a chunk. Pad by 64KiB so the
             // handler's own chunk-summing check (in `files.rs`) stays the
             // authoritative size boundary.
-            post(handlers::files::upload_attachment).layer(
-                DefaultBodyLimit::max(UPLOAD_MAX_BYTES as usize + 64 * 1024),
-            ),
+            post(handlers::files::upload_attachment)
+                .layer(DefaultBodyLimit::max(UPLOAD_MAX_BYTES as usize + 64 * 1024)),
         )
         // ─── Folder commands ───
         .route(

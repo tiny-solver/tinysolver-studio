@@ -234,7 +234,9 @@ mod tests {
         // Ask for events past a seq the buffer no longer holds.
         assert!(buf.range_after(1).is_none());
         // But a recent seq should still work.
-        assert!(buf.range_after(buf.events.back().unwrap().seq - 1).is_some());
+        assert!(buf
+            .range_after(buf.events.back().unwrap().seq - 1)
+            .is_some());
     }
 
     #[test]

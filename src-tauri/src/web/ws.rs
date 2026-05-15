@@ -10,9 +10,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::shutdown::ShutdownSignal;
-use super::ws_attach::{
-    self, ClientMsg, DetachReason, ServerMsg, OUTBOUND_CAPACITY,
-};
+use super::ws_attach::{self, ClientMsg, DetachReason, ServerMsg, OUTBOUND_CAPACITY};
 use crate::app_state::AppState;
 
 /// One entry per live attach subscription. The `epoch` is the per-WS-session
@@ -291,10 +289,7 @@ async fn handle_client_msg(
                         outbound_tx.clone(),
                         cleanup_tx.clone(),
                     );
-                    subscriptions.insert(
-                        subscription_id,
-                        ActiveSubscription { handle, epoch },
-                    );
+                    subscriptions.insert(subscription_id, ActiveSubscription { handle, epoch });
                 }
                 Err(reason) => {
                     let _ = outbound_tx

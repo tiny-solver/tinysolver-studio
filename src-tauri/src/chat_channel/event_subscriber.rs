@@ -115,9 +115,7 @@ pub fn spawn_event_subscriber(
             // Prune stale debounce entries
             last_push.retain(|_, t| t.elapsed() < Duration::from_secs(DEBOUNCE_SECS * 2));
 
-            if let Some((event_type, msg)) =
-                parse_acp_event(&envelope_arc.payload, config.lang)
-            {
+            if let Some((event_type, msg)) = parse_acp_event(&envelope_arc.payload, config.lang) {
                 // Global event filter check
                 if let Some(filter) = &config.global_filter {
                     if !filter.contains(&event_type) {

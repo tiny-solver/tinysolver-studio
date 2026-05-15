@@ -151,25 +151,20 @@ pub async fn handle_attach(
 
     let initial_msg = match since_seq {
         None => {
-            metrics
-                .snapshot_cold_count
-                .fetch_add(1, Ordering::Relaxed);
+            metrics.snapshot_cold_count.fetch_add(1, Ordering::Relaxed);
             snapshot_msg()
         }
         Some(cursor) if cursor >= s.event_seq => {
             // Cursor at-or-past head — treat as fresh attach. Doesn't bump
             // `snapshot_fallback_count` because there's no gap-too-large
             // semantic; this is just a defensive equivalent of cold start.
-            metrics
-                .snapshot_cold_count
-                .fetch_add(1, Ordering::Relaxed);
+            metrics.snapshot_cold_count.fetch_add(1, Ordering::Relaxed);
             snapshot_msg()
         }
         Some(cursor) => match s.recent_events_after(cursor) {
             Some(events) if events.len() <= REPLAY_BATCH_THRESHOLD && !events.is_empty() => {
                 let event_count = events.len() as u64;
-                let high_water_seq =
-                    events.last().expect("non-empty checked above").seq;
+                let high_water_seq = events.last().expect("non-empty checked above").seq;
                 metrics.replay_count.fetch_add(1, Ordering::Relaxed);
                 metrics
                     .replay_event_total

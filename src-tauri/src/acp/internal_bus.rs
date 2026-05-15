@@ -61,9 +61,7 @@ impl InternalEventBus {
         // dropped envelope in that exact window is benign — there's no one
         // to deliver to anyway.
         let _ = self.sender.send(envelope);
-        self.metrics
-            .emitted_count
-            .fetch_add(1, Ordering::Relaxed);
+        self.metrics.emitted_count.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Subscribe to the bus. The returned receiver buffers up to
@@ -163,9 +161,7 @@ mod tests {
         Arc::new(EventEnvelope {
             seq,
             connection_id: "c1".into(),
-            payload: AcpEvent::ContentDelta {
-                text: "x".into(),
-            },
+            payload: AcpEvent::ContentDelta { text: "x".into() },
         })
     }
 
@@ -202,9 +198,7 @@ mod tests {
         let metrics = Arc::new(EventBusMetrics::default());
         metrics.emitted_count.store(42, Ordering::Relaxed);
         metrics.lagged_count.store(3, Ordering::Relaxed);
-        metrics
-            .snapshot_fallback_count
-            .store(1, Ordering::Relaxed);
+        metrics.snapshot_fallback_count.store(1, Ordering::Relaxed);
         let snap = metrics.snapshot();
         assert_eq!(snap.emitted_count, 42);
         assert_eq!(snap.lagged_count, 3);
