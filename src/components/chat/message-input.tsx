@@ -45,6 +45,8 @@ import {
   readFileBase64,
   quickMessagesList,
   uploadAttachment,
+  uploadLocalPathToRemote,
+  isEmptyAttachmentError,
   UPLOAD_MAX_BYTES,
 } from "@/lib/api"
 import { openFileDialog } from "@/lib/platform"
@@ -355,6 +357,21 @@ export function MessageInput({
   const t = useTranslations("Folder.chat.messageInput")
   const tQueue = useTranslations("Folder.chat.messageQueue")
   const tExperts = useTranslations("ExpertsSettings")
+  // Kept as a separate binding from `t` so its call sites — exclusively
+  // upload / attachment toasts — read as a single coherent group when
+  // scanning the file. Same namespace, no extra runtime cost.
+  const tAttach = useTranslations("Folder.chat.messageInput")
+  const desktopMode = isDesktop()
+  // Cached for the window's lifetime: `getActiveRemoteConnectionId()` is
+  // configured once when a remote-workspace window is created and never
+  // mutates afterwards. A desktop window bound to a remote codeg-server
+  // has to behave like the web client for attachments — local OS paths
+  // would be ENOENT on the remote agent. Only the truly local desktop
+  // shows the native Paperclip picker.
+  const showNativePaperclip = useMemo(
+    () => desktopMode && getActiveRemoteConnectionId() === null,
+    [desktopMode]
+  )
   const locale = useLocale()
   const builtInExperts = useBuiltInExperts()
   const expertIdSet = useMemo(
@@ -808,6 +825,100 @@ export function MessageInput({
     [appendResourceLinks]
   )
 
+  // Shared upload pool used by the menu's "Upload local file" button,
+  // browser drag-drop in web mode, paste in web mode, and the fallback
+  // path of `appendFilesAsResources` for remote-desktop. Splits oversize
+  // from acceptable, runs uploads with bounded concurrency, surfaces
+  // failures via toast, and finally appends the successful paths as
+  // ResourceLinks. Returns nothing — all state changes happen via the
+  // existing setters / toast.
+  const uploadAndAppendFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return
+      const oversized = files.filter((f) => f.size > UPLOAD_MAX_BYTES)
+      const accepted = files.filter((f) => f.size <= UPLOAD_MAX_BYTES)
+      const limitMb = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024))
+      if (oversized.length > 0) {
+        toast.error(
+          tAttach("attachUploadTooLarge", {
+            limit: limitMb,
+            names: oversized.map((f) => f.name).join(", "),
+          })
+        )
+      }
+      if (accepted.length === 0) return
+
+      // Concurrent uploads — one failure doesn't block the rest. Cap at 3:
+      // small enough to keep server load predictable, large enough to feel
+      // responsive for a handful of files.
+      const results: Array<{
+        status: "fulfilled" | "rejected"
+        path?: string
+        name: string
+        reason?: unknown
+      }> = []
+      const CONCURRENCY = 3
+      let cursor = 0
+      const workers = Array.from(
+        { length: Math.min(CONCURRENCY, accepted.length) },
+        async () => {
+          while (cursor < accepted.length) {
+            const idx = cursor++
+            const file = accepted[idx]
+            try {
+              const r = await uploadAttachment(file, attachmentTabId ?? null)
+              results.push({
+                status: "fulfilled",
+                path: r.path,
+                name: file.name,
+              })
+            } catch (error) {
+              if (isEmptyAttachmentError(error)) {
+                // Empty files are explicitly dropped on the floor — log
+                // and move on without a user-facing error toast.
+                console.warn(
+                  `[MessageInput] skipping empty attachment: ${file.name}`
+                )
+                continue
+              }
+              results.push({
+                status: "rejected",
+                name: file.name,
+                reason: error,
+              })
+            }
+          }
+        }
+      )
+      await Promise.all(workers)
+
+      const uploaded = results
+        .filter(
+          (r): r is { status: "fulfilled"; path: string; name: string } =>
+            r.status === "fulfilled" && !!r.path
+        )
+        .map((r) => r.path)
+      const failed = results.filter((r) => r.status === "rejected")
+      if (failed.length > 0) {
+        for (const f of failed) {
+          console.error(
+            `[MessageInput] upload attachment failed (${f.name}):`,
+            f.reason
+          )
+        }
+        toast.error(
+          tAttach("attachUploadFailed", {
+            names: failed.map((r) => r.name).join(", "),
+          })
+        )
+      }
+      if (uploaded.length > 0) {
+        appendResourceAttachments(uploaded)
+      }
+    },
+    [appendResourceAttachments, attachmentTabId, tAttach]
+  )
+
   const appendEmbeddedResources = useCallback(
     (
       resources: Array<{
@@ -836,6 +947,12 @@ export function MessageInput({
     []
   )
 
+  // Path-less files (browser `File` objects: drag-drop in web mode, paste,
+  // or `<input type=file>` in any mode) need a real backing path before
+  // the agent can read them. Only the truly local desktop keeps the legacy
+  // base64/embedded fallback — web and remote-desktop both push through
+  // `uploadAndAppendFiles` so the resulting ResourceLink points at a real
+  // server-side file.
   const appendFilesAsResources = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return
@@ -858,6 +975,7 @@ export function MessageInput({
         text?: string | null
         blob?: string | null
       }> = []
+      const uploadCandidates: File[] = []
 
       for (const file of files) {
         const path = getFilePath(file)
@@ -871,6 +989,11 @@ export function MessageInput({
             mimeType: mimeTypeFromPath(path) ?? mimeType ?? null,
             dedupeKey: uri,
           })
+          continue
+        }
+
+        if (!showNativePaperclip) {
+          uploadCandidates.push(file)
           continue
         }
 
@@ -909,11 +1032,16 @@ export function MessageInput({
       appendResourceLinks(pathLinks)
       appendResourceLinks(fallbackDataLinks)
       appendEmbeddedResources(embeddedResources)
+      if (uploadCandidates.length > 0) {
+        await uploadAndAppendFiles(uploadCandidates)
+      }
     },
     [
       appendEmbeddedResources,
       appendResourceLinks,
       promptCapabilities.embedded_context,
+      showNativePaperclip,
+      uploadAndAppendFiles,
     ]
   )
 
@@ -1006,6 +1134,114 @@ export function MessageInput({
   useEffect(() => {
     appendPathsFromDropRef.current = appendPathsFromDrop
   }, [appendPathsFromDrop])
+
+  // Remote-workspace counterpart of `appendPathsFromDrop`. Reads each
+  // local path through Rust, ships the bytes via the upload proxy, then
+  // appends the resulting server-side paths as ResourceLinks. Failures
+  // (oversize, ENOENT, network) are reported in a single aggregated toast
+  // matching `uploadAndAppendFiles`.
+  const uploadPathsToRemote = useCallback(
+    async (paths: string[]) => {
+      const normalized = paths.filter(
+        (p): p is string => typeof p === "string" && p.length > 0
+      )
+      if (normalized.length === 0) return
+
+      const limitMb = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024))
+      const succeeded: string[] = []
+      const failed: Array<{ name: string; reason: unknown }> = []
+      const oversize: string[] = []
+      const directories: string[] = []
+
+      const CONCURRENCY = 3
+      let cursor = 0
+      const workers = Array.from(
+        { length: Math.min(CONCURRENCY, normalized.length) },
+        async () => {
+          while (cursor < normalized.length) {
+            const idx = cursor++
+            const path = normalized[idx]
+            const name = path.split(/[/\\]/).pop() || path
+            try {
+              const r = await uploadLocalPathToRemote(
+                path,
+                attachmentTabId ?? null
+              )
+              succeeded.push(r.path)
+            } catch (error) {
+              if (isEmptyAttachmentError(error)) {
+                console.warn(
+                  `[MessageInput] skipping empty remote-drop attachment: ${name}`
+                )
+                continue
+              }
+              // The Rust side reports structured errors as IoError with
+              // a `message` describing the failure and (sometimes) a
+              // `detail`. Branch on both so each user-visible category
+              // gets its own toast instead of falling into the generic
+              // "upload failed" bucket.
+              const errObj =
+                typeof error === "object" && error !== null
+                  ? (error as { message?: string; detail?: string })
+                  : null
+              const detail = errObj?.detail ?? null
+              const message = errObj?.message ?? ""
+              if (detail && /size=\d+\s+limit=\d+/.test(detail)) {
+                oversize.push(name)
+              } else if (message === "Not a regular file") {
+                // Dragging a directory or a special file (FIFO, device
+                // node) lands here. The Rust guard short-circuits before
+                // we even read bytes; surface a dedicated toast so the
+                // user understands why nothing was attached.
+                directories.push(name)
+              } else {
+                failed.push({ name, reason: error })
+              }
+            }
+          }
+        }
+      )
+      await Promise.all(workers)
+
+      if (oversize.length > 0) {
+        toast.error(
+          tAttach("attachUploadTooLarge", {
+            limit: limitMb,
+            names: oversize.join(", "),
+          })
+        )
+      }
+      if (directories.length > 0) {
+        toast.error(
+          tAttach("attachUploadNotAFile", {
+            names: directories.join(", "),
+          })
+        )
+      }
+      if (failed.length > 0) {
+        for (const f of failed) {
+          console.error(
+            `[MessageInput] remote path upload failed (${f.name}):`,
+            f.reason
+          )
+        }
+        toast.error(
+          tAttach("attachUploadFailed", {
+            names: failed.map((f) => f.name).join(", "),
+          })
+        )
+      }
+      if (succeeded.length > 0) {
+        appendResourceAttachments(succeeded)
+      }
+    },
+    [appendResourceAttachments, attachmentTabId, tAttach]
+  )
+
+  const uploadPathsToRemoteRef = useRef(uploadPathsToRemote)
+  useEffect(() => {
+    uploadPathsToRemoteRef.current = uploadPathsToRemote
+  }, [uploadPathsToRemote])
 
   const appendFilesFromInput = useCallback(
     async (files: File[]) => {
@@ -1340,19 +1576,10 @@ export function MessageInput({
     ]
   )
 
-  const tAttach = useTranslations("Folder.chat.messageInput")
-
   const handlePickFiles = useCallback(async () => {
     if (disabled) return
-    // The desktop Paperclip path passes raw local paths to the agent. When
-    // running inside a Tauri window that's connected to a remote workspace
-    // the agent lives on the other host, so the local path would be ENOENT
-    // there. Warn the user and bail; the fix is to expose the same upload
-    // flow we use in browser mode, but that's a separate change.
-    if (getActiveRemoteConnectionId() !== null) {
-      toast.warning(tAttach("attachRemoteUnsupported"))
-      return
-    }
+    // Only wired up when `showNativePaperclip` is true (i.e. local desktop),
+    // so we can hand raw OS paths to the local agent without a round-trip.
     try {
       const selected = await openFileDialog({
         multiple: true,
@@ -1365,101 +1592,26 @@ export function MessageInput({
     } catch (error) {
       console.error("[MessageInput] pick files failed:", error)
     }
-  }, [appendResourceAttachments, defaultPath, disabled, tAttach])
+  }, [appendResourceAttachments, defaultPath, disabled])
 
   const [serverFilePickerOpen, setServerFilePickerOpen] = useState(false)
-  const desktopMode = isDesktop()
 
   const handleUploadLocalFiles = useCallback(async () => {
     if (disabled) return
-    // Web mode only: open a hidden <input type="file"> to grab browser File
-    // objects, stream each one to the server upload endpoint, then attach the
-    // returned server-side paths via the common ResourceLink flow so the
-    // agent on the server can actually read them.
+    // Open a hidden <input type="file"> to grab File objects (browsers and
+    // Tauri webviews both produce blob-style File objects from this control,
+    // never raw OS paths), then upload each one — `uploadAttachment` picks
+    // the right transport (direct fetch in web mode, IPC-proxied multipart
+    // in remote-desktop mode).
     const input = document.createElement("input")
     input.type = "file"
     input.multiple = true
     input.onchange = async () => {
       const all = input.files ? Array.from(input.files) : []
-      if (all.length === 0) return
-
-      // Client-side size guard so a 100MB file doesn't make the user wait for
-      // a round-trip just to get rejected. The server enforces the same cap.
-      const oversized = all.filter((f) => f.size > UPLOAD_MAX_BYTES)
-      const accepted = all.filter((f) => f.size <= UPLOAD_MAX_BYTES)
-      const limitMb = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024))
-      if (oversized.length > 0) {
-        toast.error(
-          tAttach("attachUploadTooLarge", {
-            limit: limitMb,
-            names: oversized.map((f) => f.name).join(", "),
-          })
-        )
-      }
-      if (accepted.length === 0) return
-
-      // Concurrent uploads with allSettled so one failure doesn't block the
-      // rest. Cap concurrency at 3 — small enough to keep server load
-      // predictable, large enough to feel responsive for a handful of files.
-      const results: Array<{
-        status: "fulfilled" | "rejected"
-        path?: string
-        name: string
-        reason?: unknown
-      }> = []
-      const CONCURRENCY = 3
-      let cursor = 0
-      const workers = Array.from(
-        { length: Math.min(CONCURRENCY, accepted.length) },
-        async () => {
-          while (cursor < accepted.length) {
-            const idx = cursor++
-            const file = accepted[idx]
-            try {
-              const r = await uploadAttachment(file, attachmentTabId ?? null)
-              results.push({
-                status: "fulfilled",
-                path: r.path,
-                name: file.name,
-              })
-            } catch (error) {
-              results.push({
-                status: "rejected",
-                name: file.name,
-                reason: error,
-              })
-            }
-          }
-        }
-      )
-      await Promise.all(workers)
-
-      const uploaded = results
-        .filter(
-          (r): r is { status: "fulfilled"; path: string; name: string } =>
-            r.status === "fulfilled" && !!r.path
-        )
-        .map((r) => r.path)
-      const failed = results.filter((r) => r.status === "rejected")
-      if (failed.length > 0) {
-        for (const f of failed) {
-          console.error(
-            `[MessageInput] upload attachment failed (${f.name}):`,
-            f.reason
-          )
-        }
-        toast.error(
-          tAttach("attachUploadFailed", {
-            names: failed.map((r) => r.name).join(", "),
-          })
-        )
-      }
-      if (uploaded.length > 0) {
-        appendResourceAttachments(uploaded)
-      }
+      await uploadAndAppendFiles(all)
     }
     input.click()
-  }, [appendResourceAttachments, attachmentTabId, disabled, tAttach])
+  }, [disabled, uploadAndAppendFiles])
 
   const handleServerFilesSelected = useCallback(
     (paths: string[]) => {
@@ -1583,11 +1735,16 @@ export function MessageInput({
         setDragActiveIfChanged(false)
         if (Date.now() - lastDomDropAtRef.current < 250) return
         if (!inside || disabledRef.current) return
-        // Mirror the Paperclip guard: a Tauri webview connected to a remote
-        // workspace would otherwise hand local OS paths to the remote agent,
-        // which produces silent ENOENTs on the other host.
         if (getActiveRemoteConnectionId() !== null) {
-          toast.warning(tAttach("attachRemoteUnsupported"))
+          // Remote workspace: local OS paths are unreachable from the
+          // remote agent, so stream the bytes through the upload proxy and
+          // attach the resulting server-side paths instead.
+          void uploadPathsToRemoteRef.current(payload.paths).catch((error) => {
+            console.error(
+              "[MessageInput] remote drag-drop upload failed:",
+              error
+            )
+          })
           return
         }
         void appendPathsFromDropRef.current(payload.paths).catch((error) => {
@@ -1664,7 +1821,7 @@ export function MessageInput({
       cancelled = true
       cleanupListeners()
     }
-  }, [setDragActiveIfChanged, tAttach])
+  }, [setDragActiveIfChanged])
 
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((item) => item.id !== id))
@@ -2250,7 +2407,7 @@ export function MessageInput({
                 align="start"
                 className="min-w-48"
               >
-                {desktopMode ? (
+                {showNativePaperclip ? (
                   <DropdownMenuItem
                     onClick={() => {
                       handlePickFiles().catch((error) => {
@@ -2541,7 +2698,7 @@ export function MessageInput({
           if (!open) setPreviewAttachmentId(null)
         }}
       />
-      {!desktopMode && (
+      {!showNativePaperclip && (
         <ServerFileBrowserDialog
           open={serverFilePickerOpen}
           onOpenChange={setServerFilePickerOpen}

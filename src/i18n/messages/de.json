@@ -1658,7 +1658,7 @@
         "attachServerFile": "Serverdatei auswählen",
         "attachUploadTooLarge": "{names} überschreitet das Upload-Limit von {limit}MB und wurde übersprungen.",
         "attachUploadFailed": "Upload fehlgeschlagen: {names}.",
-        "attachRemoteUnsupported": "Während einer Verbindung zu einem Remote-Workspace ist das Anhängen lokaler Dateien nicht möglich."
+        "attachUploadNotAFile": "{names} ist keine reguläre Datei (Verzeichnis oder Spezialdatei) und wurde übersprungen."
       },
       "messageQueue": {
         "addToQueue": "Zur Warteschlange",

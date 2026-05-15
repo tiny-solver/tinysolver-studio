@@ -1658,7 +1658,7 @@
         "attachServerFile": "Sélectionner un fichier serveur",
         "attachUploadTooLarge": "{names} dépasse la limite de téléversement de {limit} Mo et a été ignoré.",
         "attachUploadFailed": "Échec du téléversement de {names}.",
-        "attachRemoteUnsupported": "L'ajout de fichiers locaux n'est pas pris en charge lorsque vous êtes connecté à un espace de travail distant."
+        "attachUploadNotAFile": "{names} n'est pas un fichier régulier (répertoire ou fichier spécial) et a été ignoré."
       },
       "messageQueue": {
         "addToQueue": "Mettre en file",

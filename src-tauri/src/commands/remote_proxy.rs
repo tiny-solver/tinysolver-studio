@@ -30,7 +30,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine as _,
+};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, EventTarget, State, WebviewWindow};
@@ -297,6 +300,271 @@ pub async fn remote_http_call(
     response.json::<Value>().await.map_err(|e| {
         AppCommandError::network("Failed to parse remote response").with_detail(e.to_string())
     })
+}
+
+// ─── Multipart upload proxy ───────────────────────────────────────────
+
+/// Hard ceiling for `read_local_file_for_upload`. Mirrors the server-side
+/// `UPLOAD_MAX_BYTES` in `web/handlers/files.rs`; kept here as a local
+/// constant so this command can reject oversize reads *before* incurring
+/// the file I/O cost — the remote `/api/upload_attachment` enforces the
+/// same cap regardless, but a 100 MB read followed by a base64 encode and
+/// an IPC trip would be a noticeable waste compared to early rejection.
+const UPLOAD_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Maximum tolerated base64 payload length, pre-decode. Exactly
+/// `ceil(UPLOAD_MAX_BYTES / 3) * 4`, plus a few bytes of padding slack so
+/// the legitimate 2 MiB-encoded request can't be off-by-one rejected.
+/// Used as a fast guard before `STANDARD.decode` allocates.
+const REMOTE_UPLOAD_MAX_BASE64_LEN: usize = {
+    let raw = UPLOAD_MAX_BYTES as usize;
+    raw.div_ceil(3) * 4 + 16
+};
+
+/// Strip multipart-hostile bytes from a filename before handing it to
+/// `reqwest::multipart::Part::file_name`. reqwest does not sanitize, and
+/// a name containing CR/LF/`"`/`\` can inject extra `Content-Disposition`
+/// headers (or simply corrupt the part boundary). Mirrors the server-side
+/// `sanitize_upload_filename` in spirit but stays defensive — the server
+/// will sanitize again when it stores the bytes, this layer just keeps
+/// our outgoing multipart frame well-formed.
+fn sanitize_upload_file_name(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| !c.is_control())
+        .map(|c| match c {
+            '"' | '\\' | '/' | '\0' => '_',
+            other => other,
+        })
+        .collect();
+    let trimmed: String = cleaned.trim_matches(|c: char| c.is_whitespace()).into();
+    let limited: String = trimmed.chars().take(255).collect();
+    if limited.is_empty() {
+        "file".to_string()
+    } else {
+        limited
+    }
+}
+
+/// Stream a local file into a base64-wrapped JSON envelope ready to be
+/// passed to `remote_upload_attachment`. Two callers need this today: the
+/// Tauri-native drag-drop path (which receives OS paths from the webview
+/// drag handler) and a future "attach this local path" command palette.
+///
+/// Rejects anything larger than `UPLOAD_MAX_BYTES` with a structured
+/// `IoError` carrying the limit in `detail` so the frontend can format an
+/// `attachUploadTooLarge` toast without round-tripping through the actual
+/// upload endpoint.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFileForUpload {
+    pub file_name: String,
+    pub mime_type: Option<String>,
+    pub size: u64,
+    pub data_base64: String,
+}
+
+#[tauri::command]
+pub async fn read_local_file_for_upload(
+    path: String,
+) -> Result<LocalFileForUpload, AppCommandError> {
+    let path_buf = std::path::PathBuf::from(&path);
+    // Use symlink_metadata + explicit `is_file()` so a webview-driven
+    // invoke can't follow a `/tmp/symlink → /etc/shadow` into reading
+    // anything outside the user's intent. The same guard rejects FIFOs
+    // and device nodes — `tokio::fs::read` would otherwise block on a
+    // FIFO until the writing side closes, hanging this command (and the
+    // calling webview's drag-drop handler) indefinitely.
+    let metadata = tokio::fs::symlink_metadata(&path_buf).await.map_err(|e| {
+        AppCommandError::io_error("Failed to stat local file for upload")
+            .with_detail(format!("{}: {e}", path_buf.display()))
+    })?;
+    if !metadata.file_type().is_file() {
+        return Err(AppCommandError::io_error("Not a regular file")
+            .with_detail(path_buf.display().to_string()));
+    }
+    let size = metadata.len();
+    if size > UPLOAD_MAX_BYTES {
+        return Err(
+            AppCommandError::io_error("Local file exceeds the upload size limit").with_detail(
+                format!("size={size} limit={UPLOAD_MAX_BYTES}"),
+            ),
+        );
+    }
+    let bytes = tokio::fs::read(&path_buf).await.map_err(|e| {
+        AppCommandError::io_error("Failed to read local file for upload")
+            .with_detail(format!("{}: {e}", path_buf.display()))
+    })?;
+    let file_name = path_buf
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "file".to_string());
+    let mime_type = guess_mime_from_path(&path_buf);
+    Ok(LocalFileForUpload {
+        file_name: sanitize_upload_file_name(&file_name),
+        mime_type,
+        size,
+        data_base64: STANDARD.encode(&bytes),
+    })
+}
+
+/// Forward a multipart upload (file bytes + optional session bucket) to the
+/// remote codeg-server identified by `connection_id`. Sibling of
+/// `remote_http_call`, but multipart-shaped — the JSON proxy can't carry
+/// binary bodies, and webview `fetch` to a plain `http://` remote is
+/// blocked by mixed-content rules, so we cannot have the frontend hit
+/// `/api/upload_attachment` directly when running inside a Tauri webview.
+///
+/// Error mapping mirrors `remote_http_call`: 401 → `AuthenticationFailed`,
+/// other non-2xx prefers a structured `AppCommandError` body (preserving
+/// `i18n_key` for the user toast), else wraps in `NetworkError`.
+#[tauri::command]
+pub async fn remote_upload_attachment(
+    db: State<'_, AppDatabase>,
+    proxy: State<'_, Arc<RemoteProxyState>>,
+    connection_id: i32,
+    file_name: String,
+    mime_type: Option<String>,
+    session_id: Option<String>,
+    data_base64: String,
+) -> Result<Value, AppCommandError> {
+    let conn = remote_workspace_connection_service::get(&db.conn, connection_id)
+        .await
+        .map_err(AppCommandError::db)?
+        .ok_or_else(|| {
+            AppCommandError::not_found(format!("Remote connection {connection_id} not found"))
+        })?;
+
+    // Reject oversized payloads BEFORE allocating. The remote server
+    // enforces the same cap on the decoded bytes, but a malicious /
+    // buggy webview hitting this command directly would otherwise force
+    // a `Vec<u8>` allocation roughly equal to the base64 length before
+    // the cap fires server-side. Cap at `ceil(UPLOAD_MAX_BYTES * 4/3) +
+    // padding slack` so a legitimate 2 MiB file (which encodes to
+    // exactly `(2 MiB + 2)/3*4` bytes) always passes.
+    if data_base64.len() > REMOTE_UPLOAD_MAX_BASE64_LEN {
+        return Err(
+            AppCommandError::io_error("Upload payload exceeds the size limit").with_detail(
+                format!(
+                    "size={} limit={REMOTE_UPLOAD_MAX_BASE64_LEN}",
+                    data_base64.len()
+                ),
+            ),
+        );
+    }
+    let bytes = STANDARD.decode(data_base64.as_bytes()).map_err(|e| {
+        AppCommandError::io_error("Failed to decode upload payload").with_detail(e.to_string())
+    })?;
+    // Belt-and-suspenders: decoded length must still respect the cap.
+    // The base64 check above is a fast pre-filter; this guarantees that
+    // any padding quirks can't squeeze through.
+    if bytes.len() as u64 > UPLOAD_MAX_BYTES {
+        return Err(
+            AppCommandError::io_error("Upload payload exceeds the size limit").with_detail(
+                format!("size={} limit={UPLOAD_MAX_BYTES}", bytes.len()),
+            ),
+        );
+    }
+
+    let mime = mime_type.unwrap_or_else(|| "application/octet-stream".to_string());
+    // `reqwest::multipart::Part::file_name` does NOT strip CR/LF or
+    // quote-escape — a name like `bad\r\nX-Auth: leak.txt` would inject
+    // additional headers into the `Content-Disposition` line. Sanitize
+    // ourselves before handing the value to reqwest. (The MIME string
+    // goes through `mime_str`, which already rejects non-token chars.)
+    let safe_name = sanitize_upload_file_name(&file_name);
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(safe_name)
+        .mime_str(&mime)
+        .map_err(|e| {
+            AppCommandError::io_error("Invalid MIME type for upload").with_detail(e.to_string())
+        })?;
+    let mut form = reqwest::multipart::Form::new().part("file", part);
+    if let Some(sid) = session_id {
+        if !sid.is_empty() {
+            form = form.text("session_id", sid);
+        }
+    }
+
+    let url = format!(
+        "{}/api/upload_attachment",
+        conn.base_url.trim_end_matches('/'),
+    );
+    let response = proxy
+        .http
+        .post(&url)
+        .bearer_auth(conn.token.trim())
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| {
+            AppCommandError::network("Remote upload request failed").with_detail(e.to_string())
+        })?;
+
+    let status = response.status();
+
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppCommandError::authentication_failed(
+            "Remote Workspace token is invalid",
+        ));
+    }
+
+    if !status.is_success() {
+        let raw_body = response.text().await.unwrap_or_default();
+        if let Ok(structured) = serde_json::from_str::<AppCommandError>(&raw_body) {
+            return Err(structured);
+        }
+        return Err(
+            AppCommandError::network(format!("Remote returned HTTP {status}")).with_detail(
+                if raw_body.is_empty() {
+                    status.canonical_reason().unwrap_or("error").to_string()
+                } else {
+                    raw_body
+                },
+            ),
+        );
+    }
+
+    response.json::<Value>().await.map_err(|e| {
+        AppCommandError::network("Failed to parse remote upload response")
+            .with_detail(e.to_string())
+    })
+}
+
+/// Best-effort MIME guess by extension. Mirrors the frontend's
+/// `MIME_BY_EXT` so a file uploaded via the desktop drag-drop path carries
+/// the same `content-type` it would have if picked through the browser
+/// `<input type=file>`. Falls back to `None` so the upload caller can
+/// substitute `application/octet-stream`.
+fn guess_mime_from_path(path: &std::path::Path) -> Option<String> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "txt" => "text/plain",
+        "md" => "text/markdown",
+        "json" => "application/json",
+        "yaml" | "yml" => "application/yaml",
+        "csv" => "text/csv",
+        "html" | "htm" => "text/html",
+        "css" => "text/css",
+        "js" | "mjs" | "cjs" => "text/javascript",
+        "ts" => "text/typescript",
+        "tsx" => "text/tsx",
+        "jsx" => "text/jsx",
+        "py" => "text/x-python",
+        "rs" => "text/rust",
+        "go" => "text/x-go",
+        "java" => "text/x-java-source",
+        "xml" => "application/xml",
+        "toml" => "application/toml",
+        "pdf" => "application/pdf",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => return None,
+    };
+    Some(mime.to_string())
 }
 
 // ─── WebSocket proxy commands ─────────────────────────────────────────

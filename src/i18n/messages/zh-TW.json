@@ -1658,7 +1658,7 @@
         "attachServerFile": "附加伺服器檔案",
         "attachUploadTooLarge": "{names} 超過 {limit}MB 上傳上限，已略過。",
         "attachUploadFailed": "上傳失敗：{names}。",
-        "attachRemoteUnsupported": "已連線至遠端工作區，暫不支援附加本機檔案。"
+        "attachUploadNotAFile": "{names} 不是常規檔案（目錄或特殊檔案），已略過。"
       },
       "messageQueue": {
         "addToQueue": "加入佇列",

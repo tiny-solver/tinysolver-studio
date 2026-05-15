@@ -1658,7 +1658,7 @@
         "attachServerFile": "서버 파일 첨부",
         "attachUploadTooLarge": "{names}이(가) {limit}MB 업로드 한도를 초과하여 건너뛰었습니다.",
         "attachUploadFailed": "{names} 업로드 실패.",
-        "attachRemoteUnsupported": "원격 작업 영역에 연결되어 있어 로컬 파일 첨부는 지원되지 않습니다."
+        "attachUploadNotAFile": "{names} 은(는) 일반 파일이 아니므로(디렉터리 또는 특수 파일) 건너뛰었습니다."
       },
       "messageQueue": {
         "addToQueue": "대기열에 추가",

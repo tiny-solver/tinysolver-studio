@@ -618,6 +618,8 @@ mod tauri_app {
                 remote_workspace_commands::reorder_remote_workspace_connections,
                 remote_workspace_commands::open_remote_workspace,
                 remote_proxy_commands::remote_http_call,
+                remote_proxy_commands::remote_upload_attachment,
+                remote_proxy_commands::read_local_file_for_upload,
                 remote_proxy_commands::remote_ws_subscribe,
                 remote_proxy_commands::remote_ws_unsubscribe,
                 windows::open_pet_window,

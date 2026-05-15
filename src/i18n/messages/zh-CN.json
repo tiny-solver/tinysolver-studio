@@ -1658,7 +1658,7 @@
         "slashSearchEmpty": "没有匹配的命令",
         "attachUploadTooLarge": "{names} 超过 {limit}MB 上传上限，已跳过。",
         "attachUploadFailed": "上传失败：{names}。",
-        "attachRemoteUnsupported": "已连接到远程工作区，暂不支持附加本地文件。"
+        "attachUploadNotAFile": "{names} 不是常规文件（目录或特殊文件），已跳过。"
       },
       "messageQueue": {
         "addToQueue": "加入队列",

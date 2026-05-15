@@ -1407,18 +1407,80 @@ export async function listDirectoryWithFiles(
 // with the fact that anything larger won't fit a model context anyway).
 export const UPLOAD_MAX_BYTES = 2 * 1024 * 1024
 
+// `btoa` only accepts a binary string, and `String.fromCharCode(...bytes)`
+// hits the call-stack limit somewhere around a few hundred KB. Chunk the
+// buffer so a 2 MB upload encodes without blowing the stack.
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let binary = ""
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const slice = bytes.subarray(i, i + chunkSize) as unknown as number[]
+    binary += String.fromCharCode.apply(null, slice)
+  }
+  return btoa(binary)
+}
+
+// Sentinel error code thrown by the upload functions when an attachment
+// would be empty (0 bytes). Callers should recognize this code and silently
+// skip — attaching a zero-byte ResourceLink would be a no-op for the agent
+// and a confusing chip in the UI. Surfaced as a structured error rather than
+// a `return null` so the existing "one failure shouldn't block the rest"
+// concurrency contract in the upload pools stays uniform.
+export const UPLOAD_ERROR_EMPTY = "attachment_empty"
+
+export function isEmptyAttachmentError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === UPLOAD_ERROR_EMPTY
+  )
+}
+
 // Upload a single attachment to the server.
 //
-// Web mode only: streams the file via multipart/form-data to the same origin
-// the page was served from, then returns the server-side absolute path so the
-// caller can attach it as a `file://` ResourceLink (matching the desktop
-// flow). Not routed through `getTransport()` because the JSON transport can't
-// carry binary bodies; reuses `web-auth` helpers so token retrieval and 401
-// redirect behavior stay in sync with `WebTransport`.
+// Web mode: streams the file via multipart/form-data to the same origin the
+// page was served from. Desktop + remote workspace: routes through the Rust
+// `remote_upload_attachment` command, because the webview's `fetch` can't
+// hit a plain `http://` remote (mixed-content rules block secure-context
+// requests). Returns the server-side absolute path so the caller can attach
+// it as a `file://` ResourceLink — identical shape on both transports.
 export async function uploadAttachment(
   file: File,
   sessionId?: string | null
 ): Promise<UploadAttachmentResult> {
+  if (file.size === 0) {
+    // Skip empty files at the entry — both the web and remote-desktop
+    // transports would otherwise dutifully POST a zero-byte multipart part
+    // (the server records it under `~/.codeg/uploads/<bucket>/...`), and
+    // we'd attach a ResourceLink to an empty file. Throw the sentinel and
+    // let the pool's catch block log + continue.
+    throw {
+      code: UPLOAD_ERROR_EMPTY,
+      message: `Empty file skipped: ${file.name}`,
+      name: file.name,
+    }
+  }
+  const remoteId = getActiveRemoteConnectionId()
+  if (isDesktop() && remoteId !== null) {
+    const buf = await file.arrayBuffer()
+    // `getShellTransport()` resolves to the local Tauri transport even when
+    // a `RemoteDesktopTransport` is configured — we deliberately want the
+    // local IPC here, not the proxy, because `remote_upload_attachment`
+    // lives on this desktop binary.
+    return getShellTransport().call<UploadAttachmentResult>(
+      "remote_upload_attachment",
+      {
+        connectionId: remoteId,
+        fileName: file.name,
+        mimeType: file.type || null,
+        sessionId: sessionId ?? null,
+        dataBase64: arrayBufferToBase64(buf),
+      }
+    )
+  }
+
   const token = getCodegToken()
   const form = new FormData()
   form.append("file", file, file.name)
@@ -1441,6 +1503,48 @@ export async function uploadAttachment(
     throw err
   }
   return res.json()
+}
+
+// Upload a file picked from the desktop machine's filesystem to the remote
+// codeg-server bound to the current window. The Tauri-native drag-drop event
+// hands us OS paths (not `File` objects), so we read the bytes via Rust,
+// then reuse the same `remote_upload_attachment` channel. Only callable from
+// a window that has a remote workspace attached; non-remote callers should
+// continue to use `appendResourceAttachments` with the local path directly.
+export async function uploadLocalPathToRemote(
+  path: string,
+  sessionId?: string | null
+): Promise<UploadAttachmentResult> {
+  const remoteId = getActiveRemoteConnectionId()
+  if (remoteId === null) {
+    throw new Error(
+      "uploadLocalPathToRemote requires an active remote workspace"
+    )
+  }
+  const shell = getShellTransport()
+  const file = await shell.call<{
+    fileName: string
+    mimeType: string | null
+    size: number
+    dataBase64: string
+  }>("read_local_file_for_upload", { path })
+  if (file.size === 0) {
+    // Mirror the `uploadAttachment` empty-file guard. The Rust side
+    // already read the bytes, so we've paid the cost — drop on the
+    // floor here rather than send a zero-byte multipart upstream.
+    throw {
+      code: UPLOAD_ERROR_EMPTY,
+      message: `Empty file skipped: ${file.fileName}`,
+      name: file.fileName,
+    }
+  }
+  return shell.call<UploadAttachmentResult>("remote_upload_attachment", {
+    connectionId: remoteId,
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+    sessionId: sessionId ?? null,
+    dataBase64: file.dataBase64,
+  })
 }
 
 // File tree and git log commands

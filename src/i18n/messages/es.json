@@ -1658,7 +1658,7 @@
         "attachServerFile": "Seleccionar archivo del servidor",
         "attachUploadTooLarge": "{names} supera el límite de carga de {limit}MB y se omitió.",
         "attachUploadFailed": "Error al subir {names}.",
-        "attachRemoteUnsupported": "No se admite adjuntar archivos locales mientras se está conectado a un workspace remoto."
+        "attachUploadNotAFile": "{names} no es un archivo regular (directorio o archivo especial) y se omitió."
       },
       "messageQueue": {
         "addToQueue": "Agregar a la cola",

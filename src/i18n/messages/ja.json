@@ -1658,7 +1658,7 @@
         "attachServerFile": "サーバーファイルを添付",
         "attachUploadTooLarge": "{names} は {limit}MB のアップロード上限を超えたためスキップしました。",
         "attachUploadFailed": "{names} のアップロードに失敗しました。",
-        "attachRemoteUnsupported": "リモートワークスペース接続中はローカルファイルの添付は未対応です。"
+        "attachUploadNotAFile": "{names} は通常ファイルではなく（ディレクトリまたは特殊ファイル）、スキップされました。"
       },
       "messageQueue": {
         "addToQueue": "キューに追加",

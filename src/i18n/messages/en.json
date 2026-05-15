@@ -1658,7 +1658,7 @@
         "slashSearchEmpty": "No matching commands",
         "attachUploadTooLarge": "{names} exceeds the {limit}MB upload limit and was skipped.",
         "attachUploadFailed": "Failed to upload {names}.",
-        "attachRemoteUnsupported": "Attaching local files isn't supported while connected to a remote workspace."
+        "attachUploadNotAFile": "{names} isn't a regular file (directory or special file) and was skipped."
       },
       "messageQueue": {
         "addToQueue": "Queue message",
