@@ -82,6 +82,16 @@ fn main() {
         }
     }
 
+    // Strict-mode quota validation runs before any I/O. Failing fast
+    // here means a misconfigured strict deployment never reaches the
+    // tokio runtime, never binds a port, and never persists config —
+    // the operator sees the FATAL line and a clean exit code 2.
+    codeg_lib::web::handlers::files::log_upload_quota_config_at_startup();
+    if let Err(err) = codeg_lib::web::handlers::files::validate_upload_quota_config() {
+        eprintln!("[uploads][FATAL] {err}; aborting startup.");
+        std::process::exit(2);
+    }
+
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -208,14 +218,10 @@ async fn async_main() {
     }
 
     // Sweep abandoned upload staging files from any prior run before
-    // serving the first request.
+    // serving the first request. The quota log/validate ran earlier in
+    // `main` so strict-mode misconfigurations abort before we touch
+    // disk; no second log line here.
     codeg_lib::web::handlers::files::purge_upload_staging().await;
-
-    // Report the effective upload-quota configuration. Operators have
-    // historically been bitten by env-var typos that silently disable
-    // safety caps; the log line guarantees the actual posture is
-    // visible at boot.
-    codeg_lib::web::handlers::files::log_upload_quota_config_at_startup();
 
     // Build router
     let shutdown_signal = state.web_server_state.shutdown_signal();

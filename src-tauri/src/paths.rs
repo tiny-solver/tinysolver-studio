@@ -5,7 +5,7 @@
 //! user-scoped persistent directory should call into this module instead of
 //! re-deriving `dirs::home_dir().join(".codeg")` themselves.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const CODEG_DIR_NAME: &str = ".codeg";
 const PETS_DIR_NAME: &str = "pets";
@@ -77,6 +77,37 @@ pub fn codeg_uploads_root() -> PathBuf {
     dirs::home_dir()
         .map(|h| h.join(CODEG_DIR_NAME).join(UPLOADS_DIR_NAME))
         .unwrap_or_else(|| PathBuf::from(CODEG_DIR_NAME).join(UPLOADS_DIR_NAME))
+}
+
+/// Single source of truth for "where does the database live, and where
+/// do `paths::*` resolve their roots against."
+///
+/// Resolution:
+/// 1. If `CODEG_DATA_DIR` is set and non-empty, return its absolutized
+///    form. Honors the operator's choice even on desktop, where a
+///    pre-set env var should override Tauri's identifier-derived path.
+/// 2. Otherwise return the absolutized form of `tauri_fallback` —
+///    typically `app.path().app_data_dir()` on desktop or the
+///    server's default data dir.
+///
+/// Always returns an absolute path (`absolutize` re-bases against the
+/// process CWD if needed). Callers should treat the result as
+/// authoritative and not re-read `CODEG_DATA_DIR` themselves; the
+/// startup code in `lib.rs` / `bin/codeg_server.rs` writes the
+/// resolved value back to the env so subprocess inheritance works,
+/// but the in-process source of truth is this function.
+///
+/// This exists because Tauri's `app.path().app_data_dir()` does **not**
+/// consult `CODEG_DATA_DIR` — it returns the identifier-derived path
+/// unconditionally. Call sites that pass `app_data_dir()` straight
+/// into git credential helpers, ACP, terminal sessions, etc. would
+/// otherwise generate scripts pointing at an empty DB when the
+/// operator pre-set `CODEG_DATA_DIR` to a custom location.
+pub fn resolve_effective_data_dir(tauri_fallback: &Path) -> PathBuf {
+    if let Some(custom) = std::env::var_os("CODEG_DATA_DIR").filter(|s| !s.is_empty()) {
+        return crate::git_credential::absolutize(Path::new(&custom));
+    }
+    crate::git_credential::absolutize(tauri_fallback)
 }
 
 // Path resolution depends on global env vars (`CODEG_HOME`, `CODEG_DATA_DIR`),

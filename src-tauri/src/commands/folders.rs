@@ -630,6 +630,10 @@ pub async fn clone_repository(
     let data_dir = app_handle.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
+    // Resolve through the effective data dir so a custom
+    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // this subprocess.
+    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     clone_repository_core(&url, &target_dir, credentials.as_ref(), &db, &data_dir).await
 }
 
@@ -873,6 +877,10 @@ pub async fn git_pull(
     let data_dir = app_handle.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
+    // Resolve through the effective data dir so a custom
+    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // this subprocess.
+    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_pull_core(&path, credentials.as_ref(), &db, &data_dir).await
 }
 
@@ -945,6 +953,10 @@ pub async fn git_fetch(
     let data_dir = app_handle.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
+    // Resolve through the effective data dir so a custom
+    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // this subprocess.
+    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_fetch_core(&path, credentials.as_ref(), &db, &data_dir).await
 }
 
@@ -1104,6 +1116,10 @@ pub async fn git_push(
     let data_dir = app.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
+    // Resolve through the effective data dir so a custom
+    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // this subprocess.
+    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     let emitter = EventEmitter::Tauri(app.clone());
     git_push_core(
         &data_dir,
@@ -1983,6 +1999,10 @@ pub async fn git_fetch_remote(
     let data_dir = app_handle.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
+    // Resolve through the effective data dir so a custom
+    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // this subprocess.
+    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_fetch_remote_core(&path, &name, credentials.as_ref(), &db, &data_dir).await
 }
 
@@ -2177,6 +2197,10 @@ pub async fn git_delete_remote_branch(
     let data_dir = app_handle.path().app_data_dir().map_err(|e| {
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
+    // Resolve through the effective data dir so a custom
+    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // this subprocess.
+    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_delete_remote_branch_core(
         &path,
         &remote,

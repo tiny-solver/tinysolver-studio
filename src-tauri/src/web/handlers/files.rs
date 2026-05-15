@@ -265,20 +265,41 @@ fn upload_quota_strict_from_env() -> bool {
     parse_strict_mode(std::env::var(UPLOAD_STRICT_ENV).ok().as_deref())
 }
 
+/// Reason a strict-mode validation rejected the current quota
+/// configuration. Lets callers (server `main`, desktop web start)
+/// decide how to react — kill the process or surface a UI error.
+#[derive(Debug, Clone)]
+pub struct UploadQuotaStrictError {
+    /// The raw env value that failed to parse, for inclusion in the
+    /// operator-facing message.
+    pub raw_value: String,
+}
+
+impl std::fmt::Display for UploadQuotaStrictError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{UPLOAD_TOTAL_BYTES_ENV}={:?} is not a positive integer and {UPLOAD_STRICT_ENV} is on",
+            self.raw_value
+        )
+    }
+}
+
+impl std::error::Error for UploadQuotaStrictError {}
+
 /// Emit a startup banner describing the current upload-quota
-/// configuration. Operators expect either a clear "cap = N" line or a
-/// loud WARN — silent fallthrough on a typo is exactly the failure
-/// mode we want to eliminate.
+/// configuration. Pure logging — no process abort, no return value —
+/// so it is safe to call from any startup path (server, desktop web
+/// service toggle, future test harness) without surprising side
+/// effects.
 ///
-/// When `CODEG_UPLOAD_QUOTA_STRICT` is truthy and the quota value
-/// parses as `Invalid`, the process exits with code 2 instead of
-/// falling through to fail-open. Strict mode is opt-in because the
-/// default posture must keep an unrelated typo from taking down a
-/// production process.
+/// The strict-mode abort lives in `validate_upload_quota_config`. The
+/// split exists because the server binary should die on strict+invalid
+/// while the desktop must keep running and surface a UI error instead.
 ///
 /// Called once from each binary entry point right after the data
 /// directory and listener are resolved. Cheap: two env reads + one
-/// `eprintln!` (plus `process::exit` on the strict+invalid path).
+/// `eprintln!`.
 pub fn log_upload_quota_config_at_startup() {
     let config = upload_quota_config_from_env();
     let strict = upload_quota_strict_from_env();
@@ -296,19 +317,43 @@ pub fn log_upload_quota_config_at_startup() {
         }
         UploadQuotaConfig::Invalid(raw) => {
             if strict {
+                // Caller will abort via `validate_upload_quota_config`;
+                // here we only narrate so the FATAL line lands in
+                // operator logs alongside the rest of the banner.
                 eprintln!(
                     "[uploads][FATAL] {UPLOAD_TOTAL_BYTES_ENV}={raw:?} is not a positive integer \
-                     and {UPLOAD_STRICT_ENV} is on; aborting startup. Use a plain decimal byte count \
-                     (e.g. 10737418240 for 10 GiB)."
+                     and {UPLOAD_STRICT_ENV} is on. Caller will abort startup. \
+                     Use a plain decimal byte count (e.g. 10737418240 for 10 GiB)."
                 );
-                std::process::exit(2);
+            } else {
+                eprintln!(
+                    "[uploads][WARN] {UPLOAD_TOTAL_BYTES_ENV}={raw:?} is not a positive integer; \
+                     total-size cap is DISABLED. Use a plain decimal byte count (e.g. 10737418240 for 10 GiB), \
+                     or set {UPLOAD_STRICT_ENV}=1 to abort startup on this condition."
+                );
             }
-            eprintln!(
-                "[uploads][WARN] {UPLOAD_TOTAL_BYTES_ENV}={raw:?} is not a positive integer; \
-                 total-size cap is DISABLED. Use a plain decimal byte count (e.g. 10737418240 for 10 GiB), \
-                 or set {UPLOAD_STRICT_ENV}=1 to abort startup on this condition."
-            );
         }
+    }
+}
+
+/// Strict-mode validation: returns `Err` when `CODEG_UPLOAD_QUOTA_STRICT`
+/// is truthy and the quota value is `Invalid`. Every other combination
+/// (unset, disabled, enabled, or invalid-but-strict-off) returns `Ok`.
+///
+/// Callers choose the failure mode:
+///   * `codeg-server` (single-purpose process) — call early in `main`
+///     and `process::exit(2)` on `Err`.
+///   * Desktop web-service start — call before `persist_web_service_config`
+///     and surface `Err` as an `AppCommandError` so the toggle fails
+///     cleanly without taking down the host process.
+pub fn validate_upload_quota_config() -> Result<(), UploadQuotaStrictError> {
+    let config = upload_quota_config_from_env();
+    let strict = upload_quota_strict_from_env();
+    match config {
+        UploadQuotaConfig::Invalid(raw) if strict => {
+            Err(UploadQuotaStrictError { raw_value: raw })
+        }
+        _ => Ok(()),
     }
 }
 
@@ -873,6 +918,17 @@ mod tests {
             parse_upload_quota_config(Some("-1")),
             UploadQuotaConfig::Invalid("-1".to_string())
         );
+    }
+
+    #[test]
+    fn upload_quota_strict_error_display_includes_env_names_and_value() {
+        let err = UploadQuotaStrictError {
+            raw_value: "10GB".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("CODEG_UPLOAD_MAX_TOTAL_BYTES"));
+        assert!(msg.contains("CODEG_UPLOAD_QUOTA_STRICT"));
+        assert!(msg.contains("10GB"));
     }
 
     #[test]
