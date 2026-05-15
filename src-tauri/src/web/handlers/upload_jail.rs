@@ -7,11 +7,11 @@
 //! `ensure_path_inside`) reject pre-placed symlinks at check time, but
 //! a sufficiently fast local attacker with write access to `uploads_root`
 //! could swap a directory for a symlink between the check and the
-//! subsequent file create or rename. This module closes those windows on
+//! subsequent file create or finalize. This module closes those windows on
 //! Unix by performing the security-critical I/O via `openat(2)` and
-//! `renameat(2)` with `O_NOFOLLOW`, so even if the path resolves to a
-//! symlink at the moment of use the syscall fails rather than escaping
-//! the jail.
+//! `linkat(2)` with `O_NOFOLLOW` parent directory handles, so even if the
+//! path resolves to a symlink at the moment of use the syscall fails rather
+//! than escaping the jail.
 //!
 //! On Windows the module falls back to path-based ops (`tokio::fs`).
 //! Reparse points (the Windows analogue of symlinks) require admin or
@@ -85,20 +85,13 @@ mod unix {
     /// Fails with `EEXIST` if the name is already taken (including by a
     /// symlink), `ELOOP` if the resolved path is somehow a symlink,
     /// `ENOENT` if `dir_fd` no longer references a live directory.
-    pub fn create_file_nofollow_at(
-        dir_fd: &OwnedFd,
-        name: &str,
-    ) -> io::Result<std::fs::File> {
+    pub fn create_file_nofollow_at(dir_fd: &OwnedFd, name: &str) -> io::Result<std::fs::File> {
         let cname = cstr_from_name(name)?;
         let fd = unsafe {
             libc::openat(
                 dir_fd.as_raw_fd(),
                 cname.as_ptr(),
-                libc::O_WRONLY
-                    | libc::O_CREAT
-                    | libc::O_EXCL
-                    | libc::O_NOFOLLOW
-                    | libc::O_CLOEXEC,
+                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
                 0o600,
             )
         };
@@ -109,12 +102,32 @@ mod unix {
         }
     }
 
-    /// Atomically rename `old_name` under `old_dir` to `new_name` under
-    /// `new_dir` via `renameat(2)`. Neither directory is re-resolved
-    /// through path lookup, so a concurrent symlink swap of either dir
-    /// cannot redirect the destination. Both names must contain no path
-    /// separator.
-    pub fn rename_at(
+    /// Open an existing regular file for read without following a trailing
+    /// symlink.
+    pub fn open_file_read_nofollow_at(dir_fd: &OwnedFd, name: &str) -> io::Result<std::fs::File> {
+        let cname = cstr_from_name(name)?;
+        let fd = unsafe {
+            libc::openat(
+                dir_fd.as_raw_fd(),
+                cname.as_ptr(),
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+        }
+    }
+
+    /// Atomically link `old_name` under `old_dir` to `new_name` under
+    /// `new_dir` via `linkat(2)`, then best-effort unlink the old staging
+    /// name. `linkat` fails with `EEXIST` instead of replacing an existing
+    /// destination, which lets callers resolve filename collisions without a
+    /// check-then-rename race. Neither directory is re-resolved through path
+    /// lookup, so a concurrent symlink swap of either dir cannot redirect the
+    /// destination. Both names must contain no path separator.
+    pub fn link_at_no_replace(
         old_dir: &OwnedFd,
         old_name: &str,
         new_dir: &OwnedFd,
@@ -123,18 +136,52 @@ mod unix {
         let old_c = cstr_from_name(old_name)?;
         let new_c = cstr_from_name(new_name)?;
         let ret = unsafe {
-            libc::renameat(
+            libc::linkat(
                 old_dir.as_raw_fd(),
                 old_c.as_ptr(),
                 new_dir.as_raw_fd(),
                 new_c.as_ptr(),
+                0,
             )
         };
         if ret < 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(())
+            return Err(io::Error::last_os_error());
         }
+        unsafe {
+            libc::unlinkat(old_dir.as_raw_fd(), old_c.as_ptr(), 0);
+        }
+        Ok(())
+    }
+
+    /// Compatibility fallback for filesystems that do not support hard links.
+    /// Creates the destination with `O_EXCL|O_NOFOLLOW`, copies from the
+    /// staging file opened with `O_NOFOLLOW`, then removes staging. This is
+    /// not as atomic as `linkat`, but it still never replaces an existing
+    /// destination and it preserves the jail guarantees of the openat path.
+    pub fn copy_at_no_replace(
+        old_dir: &OwnedFd,
+        old_name: &str,
+        new_dir: &OwnedFd,
+        new_name: &str,
+    ) -> io::Result<()> {
+        let mut src = open_file_read_nofollow_at(old_dir, old_name)?;
+        let mut dst = create_file_nofollow_at(new_dir, new_name)?;
+        if let Err(e) = io::copy(&mut src, &mut dst) {
+            unlink_at_best_effort(new_dir, new_name);
+            return Err(e);
+        }
+        if let Err(e) = dst.sync_data() {
+            unlink_at_best_effort(new_dir, new_name);
+            return Err(e);
+        }
+        let old_c = cstr_from_name(old_name)?;
+        let ret = unsafe { libc::unlinkat(old_dir.as_raw_fd(), old_c.as_ptr(), 0) };
+        if ret < 0 {
+            let err = io::Error::last_os_error();
+            unlink_at_best_effort(new_dir, new_name);
+            return Err(err);
+        }
+        Ok(())
     }
 
     /// Best-effort `unlinkat` for cleanup paths. Errors are ignored
@@ -177,13 +224,12 @@ pub async fn create_staging_file(
     {
         let tmp_dir = tmp_dir.to_path_buf();
         let staging_name = staging_name.to_string();
-        let std_file =
-            tokio::task::spawn_blocking(move || -> io::Result<std::fs::File> {
-                let tmp_fd = unix::open_dir_nofollow(&tmp_dir)?;
-                unix::create_file_nofollow_at(&tmp_fd, &staging_name)
-            })
-            .await
-            .map_err(map_join_err)??;
+        let std_file = tokio::task::spawn_blocking(move || -> io::Result<std::fs::File> {
+            let tmp_fd = unix::open_dir_nofollow(&tmp_dir)?;
+            unix::create_file_nofollow_at(&tmp_fd, &staging_name)
+        })
+        .await
+        .map_err(map_join_err)??;
         Ok(tokio::fs::File::from_std(std_file))
     }
     #[cfg(not(unix))]
@@ -197,13 +243,14 @@ pub async fn create_staging_file(
     }
 }
 
-/// Move a successfully-staged upload into its final bucket location. On
-/// Unix this uses `renameat` between freshly-opened `O_NOFOLLOW` dirfds
-/// for both source and destination, so a concurrent symlink swap of
-/// either directory between the caller's pre-checks and this call cannot
-/// land the file outside the jail (the swap will instead surface as an
-/// `EEXIST`/`ENOENT`/`ELOOP` error). Windows falls back to path-based
-/// rename per module docs.
+/// Move a successfully-staged upload into its final bucket location without
+/// replacing an existing file. On Unix this first uses `linkat` between
+/// freshly-opened `O_NOFOLLOW` dirfds for both source and destination, then
+/// falls back to an `O_EXCL` copy for filesystems that do not support hard
+/// links. A concurrent symlink swap of either directory between the caller's
+/// pre-checks and this call cannot land the file outside the jail (the swap
+/// will instead surface as an `EEXIST`/`ENOENT`/`ELOOP` error). Windows uses
+/// a path-based hard-link-then-copy strategy per module docs.
 ///
 /// Routed through `spawn_blocking` for the same reason as
 /// `create_staging_file`.
@@ -222,15 +269,47 @@ pub async fn finalize_into_bucket(
         tokio::task::spawn_blocking(move || -> io::Result<()> {
             let tmp_fd = unix::open_dir_nofollow(&tmp_dir)?;
             let bucket_fd = unix::open_dir_nofollow(&bucket_dir)?;
-            unix::rename_at(&tmp_fd, &staging_name, &bucket_fd, &final_name)
+            match unix::link_at_no_replace(&tmp_fd, &staging_name, &bucket_fd, &final_name) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
+                Err(_) => unix::copy_at_no_replace(&tmp_fd, &staging_name, &bucket_fd, &final_name),
+            }
         })
         .await
         .map_err(map_join_err)?
     }
     #[cfg(not(unix))]
     {
-        tokio::fs::rename(tmp_dir.join(staging_name), bucket_dir.join(final_name))
-            .await
+        let src = tmp_dir.join(staging_name);
+        let dst = bucket_dir.join(final_name);
+        match tokio::fs::hard_link(&src, &dst).await {
+            Ok(()) => {
+                let _ = tokio::fs::remove_file(&src).await;
+                Ok(())
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
+            Err(_) => {
+                let mut src_file = tokio::fs::File::open(&src).await?;
+                let mut dst_file = tokio::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&dst)
+                    .await?;
+                if let Err(e) = tokio::io::copy(&mut src_file, &mut dst_file).await {
+                    let _ = tokio::fs::remove_file(&dst).await;
+                    return Err(e);
+                }
+                if let Err(e) = dst_file.sync_data().await {
+                    let _ = tokio::fs::remove_file(&dst).await;
+                    return Err(e);
+                }
+                if let Err(e) = tokio::fs::remove_file(&src).await {
+                    let _ = tokio::fs::remove_file(&dst).await;
+                    return Err(e);
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -304,7 +383,9 @@ mod tests {
         // Pre-place a symlink at the staging name pointing outside.
         symlink(&target, tmp.path().join("foo.part")).unwrap();
 
-        let err = create_staging_file(tmp.path(), "foo.part").await.unwrap_err();
+        let err = create_staging_file(tmp.path(), "foo.part")
+            .await
+            .unwrap_err();
         // O_EXCL fires before O_NOFOLLOW gets a chance — both EEXIST and
         // ELOOP indicate "we did not write through the symlink", which is
         // what we want.
@@ -343,6 +424,68 @@ mod tests {
         assert!(!tmp.join("foo.part").exists());
         let bytes = tokio::fs::read(bucket.join("final.bin")).await.unwrap();
         assert_eq!(bytes, b"data");
+    }
+
+    #[tokio::test]
+    async fn finalize_into_bucket_does_not_replace_existing_file() {
+        let root = TempDir::new().unwrap();
+        let tmp = root.path().join("tmp");
+        let bucket = root.path().join("bucket");
+        std::fs::create_dir(&tmp).unwrap();
+        std::fs::create_dir(&bucket).unwrap();
+        std::fs::write(tmp.join("foo.part"), b"new").unwrap();
+        std::fs::write(bucket.join("final.bin"), b"old").unwrap();
+
+        let err = finalize_into_bucket(&tmp, "foo.part", &bucket, "final.bin")
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            tokio::fs::read(bucket.join("final.bin")).await.unwrap(),
+            b"old"
+        );
+        assert_eq!(tokio::fs::read(tmp.join("foo.part")).await.unwrap(), b"new");
+    }
+
+    #[tokio::test]
+    async fn copy_fallback_moves_file_without_hard_link() {
+        let root = TempDir::new().unwrap();
+        let tmp = root.path().join("tmp");
+        let bucket = root.path().join("bucket");
+        std::fs::create_dir(&tmp).unwrap();
+        std::fs::create_dir(&bucket).unwrap();
+        std::fs::write(tmp.join("foo.part"), b"data").unwrap();
+
+        let tmp_fd = unix::open_dir_nofollow(&tmp).unwrap();
+        let bucket_fd = unix::open_dir_nofollow(&bucket).unwrap();
+        unix::copy_at_no_replace(&tmp_fd, "foo.part", &bucket_fd, "final.bin").unwrap();
+
+        assert!(!tmp.join("foo.part").exists());
+        let bytes = tokio::fs::read(bucket.join("final.bin")).await.unwrap();
+        assert_eq!(bytes, b"data");
+    }
+
+    #[tokio::test]
+    async fn copy_fallback_does_not_replace_existing_file() {
+        let root = TempDir::new().unwrap();
+        let tmp = root.path().join("tmp");
+        let bucket = root.path().join("bucket");
+        std::fs::create_dir(&tmp).unwrap();
+        std::fs::create_dir(&bucket).unwrap();
+        std::fs::write(tmp.join("foo.part"), b"new").unwrap();
+        std::fs::write(bucket.join("final.bin"), b"old").unwrap();
+
+        let tmp_fd = unix::open_dir_nofollow(&tmp).unwrap();
+        let bucket_fd = unix::open_dir_nofollow(&bucket).unwrap();
+        let err =
+            unix::copy_at_no_replace(&tmp_fd, "foo.part", &bucket_fd, "final.bin").unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            tokio::fs::read(bucket.join("final.bin")).await.unwrap(),
+            b"old"
+        );
+        assert_eq!(tokio::fs::read(tmp.join("foo.part")).await.unwrap(), b"new");
     }
 
     #[tokio::test]

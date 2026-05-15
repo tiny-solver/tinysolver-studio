@@ -14,6 +14,10 @@ use crate::paths::codeg_uploads_root;
 
 use super::upload_jail;
 
+const UPLOAD_FILENAME_MAX_CHARS: usize = 120;
+const UPLOAD_COLLISION_SUFFIX_ATTEMPTS: usize = 999;
+const UPLOAD_UUID_FALLBACK_ATTEMPTS: usize = 16;
+
 // ---------------------------------------------------------------------------
 // Param structs
 // ---------------------------------------------------------------------------
@@ -352,9 +356,7 @@ pub fn validate_upload_quota_config() -> Result<(), UploadQuotaStrictError> {
     let config = upload_quota_config_from_env();
     let strict = upload_quota_strict_from_env();
     match config {
-        UploadQuotaConfig::Invalid(raw) if strict => {
-            Err(UploadQuotaStrictError { raw_value: raw })
-        }
+        UploadQuotaConfig::Invalid(raw) if strict => Err(UploadQuotaStrictError { raw_value: raw }),
         _ => Ok(()),
     }
 }
@@ -414,9 +416,7 @@ fn try_reserve_in_flight<'a>(
 ) -> Result<InFlightGuard<'a>, ()> {
     let mut current = counter.load(Ordering::Acquire);
     loop {
-        let projected = used
-            .saturating_add(current)
-            .saturating_add(bytes);
+        let projected = used.saturating_add(current).saturating_add(bytes);
         if projected > cap {
             return Err(());
         }
@@ -518,15 +518,15 @@ pub struct UploadAttachmentResult {
 /// Sanitize a client-supplied filename so it lands inside the target
 /// directory and contains no shell-hostile bytes.
 ///
-/// Strategy: keep only the final path component, strip everything that isn't
-/// a safe printable character, and bound the length. The caller still prefixes
-/// a UUID, so an empty result is fine — `"<uuid>-"` alone is a valid name.
+/// Strategy: keep only the final path component, strip shell-hostile and
+/// cross-platform-hostile characters, and bound the length. Leading dots are
+/// preserved for real dotfiles, but all-dot names fall back to `file`.
 fn sanitize_upload_filename(raw: &str) -> String {
     let base = raw
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or("")
-        .trim_matches(|c: char| c == '.' || c.is_whitespace());
+        .trim_matches(|c: char| c.is_whitespace());
     let cleaned: String = base
         .chars()
         .filter(|c| !c.is_control())
@@ -535,13 +535,98 @@ fn sanitize_upload_filename(raw: &str) -> String {
             other => other,
         })
         .collect();
-    let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
-    let limited: String = trimmed.chars().take(120).collect();
-    if limited.is_empty() {
+    let trimmed = cleaned
+        .trim_matches(|c: char| c.is_whitespace())
+        .trim_end_matches('.');
+    let limited = truncate_chars(trimmed, UPLOAD_FILENAME_MAX_CHARS);
+    if limited.is_empty() || limited.chars().all(|c| c == '.') {
         "file".to_string()
     } else {
         limited
     }
+}
+
+fn truncate_chars(input: &str, max_chars: usize) -> String {
+    input.chars().take(max_chars).collect()
+}
+
+fn split_upload_filename(name: &str) -> (&str, &str) {
+    match name.rfind('.') {
+        Some(dot_idx) if dot_idx > 0 => (&name[..dot_idx], &name[dot_idx..]),
+        _ => (name, ""),
+    }
+}
+
+fn upload_filename_with_stem_suffix(safe_name: &str, stem_suffix: &str) -> String {
+    let (stem, ext) = split_upload_filename(safe_name);
+    let suffix_chars = stem_suffix.chars().count();
+    let ext_budget = UPLOAD_FILENAME_MAX_CHARS.saturating_sub(suffix_chars + 1);
+    let ext_part = truncate_chars(ext, ext_budget);
+    let stem_budget = UPLOAD_FILENAME_MAX_CHARS
+        .saturating_sub(suffix_chars + ext_part.chars().count())
+        .max(1);
+    let stem_part = truncate_chars(stem, stem_budget);
+    let stem_part = if stem_part.is_empty() || stem_part.chars().all(|c| c == '.') {
+        "file".to_string()
+    } else {
+        stem_part
+    };
+    format!("{stem_part}{stem_suffix}{ext_part}")
+}
+
+fn upload_filename_candidate(safe_name: &str, collision_index: usize) -> String {
+    if collision_index == 0 {
+        safe_name.to_string()
+    } else {
+        upload_filename_with_stem_suffix(safe_name, &format!(" ({collision_index})"))
+    }
+}
+
+fn upload_uuid_fallback_candidate(safe_name: &str) -> String {
+    let unique = uuid::Uuid::new_v4().simple().to_string();
+    upload_filename_with_stem_suffix(safe_name, &format!("-{unique}"))
+}
+
+async fn finalize_with_available_upload_name(
+    tmp_dir: &std::path::Path,
+    staging_name: &str,
+    bucket_dir: &std::path::Path,
+    safe_name: &str,
+) -> Result<String, AppCommandError> {
+    for collision_index in 0..=UPLOAD_COLLISION_SUFFIX_ATTEMPTS {
+        let candidate = upload_filename_candidate(safe_name, collision_index);
+        match upload_jail::finalize_into_bucket(tmp_dir, staging_name, bucket_dir, &candidate).await
+        {
+            Ok(()) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(
+                    AppCommandError::io_error("Failed to move staged upload into place")
+                        .with_detail(e.to_string()),
+                );
+            }
+        }
+    }
+
+    for _ in 0..UPLOAD_UUID_FALLBACK_ATTEMPTS {
+        let candidate = upload_uuid_fallback_candidate(safe_name);
+        match upload_jail::finalize_into_bucket(tmp_dir, staging_name, bucket_dir, &candidate).await
+        {
+            Ok(()) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(
+                    AppCommandError::io_error("Failed to move staged upload into place")
+                        .with_detail(e.to_string()),
+                );
+            }
+        }
+    }
+
+    Err(
+        AppCommandError::io_error("Failed to choose an available upload filename")
+            .with_detail(safe_name.to_string()),
+    )
 }
 
 /// Sanitize a session identifier used as the upload bucket directory name.
@@ -576,18 +661,16 @@ async fn ensure_path_inside(
     root: &std::path::Path,
 ) -> Result<std::path::PathBuf, AppCommandError> {
     let candidate_canon = tokio::fs::canonicalize(candidate).await.map_err(|e| {
-        AppCommandError::io_error("Failed to canonicalize upload path")
-            .with_detail(e.to_string())
+        AppCommandError::io_error("Failed to canonicalize upload path").with_detail(e.to_string())
     })?;
     let root_canon = tokio::fs::canonicalize(root).await.map_err(|e| {
-        AppCommandError::io_error("Failed to canonicalize uploads root")
-            .with_detail(e.to_string())
+        AppCommandError::io_error("Failed to canonicalize uploads root").with_detail(e.to_string())
     })?;
     if !candidate_canon.starts_with(&root_canon) {
-        return Err(AppCommandError::io_error(
-            "Resolved upload path escapes uploads root",
-        )
-        .with_detail(candidate_canon.to_string_lossy().to_string()));
+        return Err(
+            AppCommandError::io_error("Resolved upload path escapes uploads root")
+                .with_detail(candidate_canon.to_string_lossy().to_string()),
+        );
     }
     Ok(candidate_canon)
 }
@@ -622,10 +705,11 @@ pub async fn upload_attachment(
 ) -> Result<Json<UploadAttachmentResult>, AppCommandError> {
     let uploads_root = codeg_uploads_root();
     // Ensure root exists before canonicalize/ensure_path_inside can compare.
-    tokio::fs::create_dir_all(&uploads_root).await.map_err(|e| {
-        AppCommandError::io_error("Failed to create uploads root")
-            .with_detail(e.to_string())
-    })?;
+    tokio::fs::create_dir_all(&uploads_root)
+        .await
+        .map_err(|e| {
+            AppCommandError::io_error("Failed to create uploads root").with_detail(e.to_string())
+        })?;
 
     // Quota check, before staging any bytes. We assume the worst-case
     // payload size (`UPLOAD_MAX_BYTES`) since the actual size isn't
@@ -645,11 +729,11 @@ pub async fn upload_attachment(
                 let mut params = BTreeMap::new();
                 params.insert("used".to_string(), used.to_string());
                 params.insert("limit".to_string(), cap.to_string());
-                return Err(AppCommandError::io_error(
-                    "Upload quota exceeded for this server",
-                )
-                .with_detail(format!("used={used} limit={cap}"))
-                .with_i18n(UPLOAD_I18N_KEY_QUOTA_EXCEEDED, params));
+                return Err(
+                    AppCommandError::io_error("Upload quota exceeded for this server")
+                        .with_detail(format!("used={used} limit={cap}"))
+                        .with_i18n(UPLOAD_I18N_KEY_QUOTA_EXCEEDED, params),
+                );
             }
         }
     } else {
@@ -662,8 +746,7 @@ pub async fn upload_attachment(
     // into place; on any error we delete it.
     let tmp_dir = uploads_root.join(".tmp");
     tokio::fs::create_dir_all(&tmp_dir).await.map_err(|e| {
-        AppCommandError::io_error("Failed to create tmp directory")
-            .with_detail(e.to_string())
+        AppCommandError::io_error("Failed to create tmp directory").with_detail(e.to_string())
     })?;
     // Reject a symlinked `.tmp` for the same reason the bucket check
     // below rejects a symlinked bucket: `create_dir_all` is a no-op when
@@ -680,10 +763,10 @@ pub async fn upload_attachment(
         }
         Ok(_) => {}
         Err(e) => {
-            return Err(AppCommandError::io_error(
-                "Failed to inspect uploads tmp directory",
-            )
-            .with_detail(e.to_string()));
+            return Err(
+                AppCommandError::io_error("Failed to inspect uploads tmp directory")
+                    .with_detail(e.to_string()),
+            );
         }
     }
     ensure_path_inside(&tmp_dir, &uploads_root).await?;
@@ -694,8 +777,7 @@ pub async fn upload_attachment(
     // Cleanup goes through `upload_jail::remove_staging_best_effort` so the
     // unlink itself can't be redirected by a swap of `.tmp` between
     // streaming and cleanup.
-    let result =
-        stream_and_finalize(&mut multipart, &uploads_root, &tmp_dir, &staging_name).await;
+    let result = stream_and_finalize(&mut multipart, &uploads_root, &tmp_dir, &staging_name).await;
     if result.is_err() {
         upload_jail::remove_staging_best_effort(&tmp_dir, &staging_name).await;
     }
@@ -776,9 +858,7 @@ async fn stream_and_finalize(
                         return Err(AppCommandError::io_error(
                             "Upload exceeds the maximum allowed size",
                         )
-                        .with_detail(format!(
-                            "size={new_total} limit={UPLOAD_MAX_BYTES}"
-                        ))
+                        .with_detail(format!("size={new_total} limit={UPLOAD_MAX_BYTES}"))
                         .with_i18n(UPLOAD_I18N_KEY_TOO_LARGE, params));
                     }
                     out.write_all(&chunk).await.map_err(|e| {
@@ -812,8 +892,7 @@ async fn stream_and_finalize(
     let bucket = session_id.unwrap_or_else(|| "anon".to_string());
     let dir = uploads_root.join(&bucket);
     tokio::fs::create_dir_all(&dir).await.map_err(|e| {
-        AppCommandError::io_error("Failed to create uploads directory")
-            .with_detail(e.to_string())
+        AppCommandError::io_error("Failed to create uploads directory").with_detail(e.to_string())
     })?;
 
     // Reject the bucket directory itself if it's a symlink — `create_dir_all`
@@ -823,17 +902,17 @@ async fn stream_and_finalize(
     // the bucket path is what's being subverted.
     match tokio::fs::symlink_metadata(&dir).await {
         Ok(meta) if meta.file_type().is_symlink() => {
-            return Err(AppCommandError::io_error(
-                "Refusing to use a symlinked upload bucket",
-            )
-            .with_detail(dir.to_string_lossy().to_string()));
+            return Err(
+                AppCommandError::io_error("Refusing to use a symlinked upload bucket")
+                    .with_detail(dir.to_string_lossy().to_string()),
+            );
         }
         Ok(_) => {}
         Err(e) => {
-            return Err(AppCommandError::io_error(
-                "Failed to inspect uploads bucket directory",
-            )
-            .with_detail(e.to_string()));
+            return Err(
+                AppCommandError::io_error("Failed to inspect uploads bucket directory")
+                    .with_detail(e.to_string()),
+            );
         }
     }
     // And confirm the bucket canonicalizes inside the uploads root before
@@ -842,29 +921,20 @@ async fn stream_and_finalize(
     // defense in depth.
     ensure_path_inside(&dir, uploads_root).await?;
 
-    let unique = uuid::Uuid::new_v4().simple().to_string();
-    let final_name = format!("{}-{}", unique, safe_name);
+    // TOCTOU-safe finalization: `finalize_into_bucket` opens both `tmp_dir`
+    // and `dir` as `O_NOFOLLOW` dirfds and creates the final name without
+    // replacing an existing file. If the original name is already present in
+    // this session bucket, retry with `name (1).ext`, `name (2).ext`, etc.
+    let final_name =
+        finalize_with_available_upload_name(tmp_dir, staging_name, &dir, &safe_name).await?;
     let final_path = dir.join(&final_name);
 
-    // TOCTOU-safe move: `finalize_into_bucket` opens both `tmp_dir` and
-    // `dir` as `O_NOFOLLOW` dirfds and uses `renameat`, so a concurrent
-    // symlink swap of either directory between the pre-checks above and
-    // this call cannot redirect the destination (the syscall fails
-    // instead). On non-Unix the implementation falls back to
-    // `tokio::fs::rename`; see `upload_jail` module docs.
-    upload_jail::finalize_into_bucket(tmp_dir, staging_name, &dir, &final_name)
-        .await
-        .map_err(|e| {
-            AppCommandError::io_error("Failed to move staged upload into place")
-                .with_detail(e.to_string())
-        })?;
-
     // Defense in depth: even though every component above was sanitized AND
-    // the bucket dir was validated pre-rename AND the rename itself went
-    // through `O_NOFOLLOW` dirfds, run the final canonical path through the
-    // jail check too. If somehow this fires, the file is already on disk
-    // at `final_path` — clean it up so we don't leak data outside the
-    // jail just because we noticed late.
+    // the bucket dir was validated pre-finalization AND the commit itself
+    // went through `O_NOFOLLOW` dirfds, run the final canonical path through
+    // the jail check too. If somehow this fires, the file is already on disk
+    // at `final_path` — clean it up so we don't leak data outside the jail
+    // just because we noticed late.
     let canon = match ensure_path_inside(&final_path, uploads_root).await {
         Ok(p) => p,
         Err(err) => {
@@ -875,7 +945,7 @@ async fn stream_and_finalize(
 
     Ok(UploadAttachmentResult {
         path: canon.to_string_lossy().to_string(),
-        name: safe_name,
+        name: final_name,
         size: written,
         mime_type,
     })
@@ -896,11 +966,66 @@ mod tests {
         assert_eq!(sanitize_upload_filename("..."), "file");
         assert_eq!(sanitize_upload_filename(""), "file");
         assert_eq!(sanitize_upload_filename("   "), "file");
+        assert_eq!(sanitize_upload_filename(".env"), ".env");
     }
 
     #[test]
     fn sanitize_filename_replaces_hostile_chars() {
         assert_eq!(sanitize_upload_filename("a:b*c?\"d"), "a_b_c__d");
+    }
+
+    #[test]
+    fn upload_filename_candidate_preserves_original_first() {
+        assert_eq!(upload_filename_candidate("notes.txt", 0), "notes.txt");
+    }
+
+    #[test]
+    fn upload_filename_candidate_suffixes_before_extension() {
+        assert_eq!(upload_filename_candidate("notes.txt", 1), "notes (1).txt");
+        assert_eq!(
+            upload_filename_candidate("archive.tar.gz", 2),
+            "archive.tar (2).gz"
+        );
+        assert_eq!(upload_filename_candidate(".env", 3), ".env (3)");
+    }
+
+    #[test]
+    fn upload_filename_candidate_stays_bounded() {
+        let long = format!("{}.txt", "a".repeat(140));
+        let candidate = upload_filename_candidate(&long, 12);
+        assert_eq!(candidate.chars().count(), UPLOAD_FILENAME_MAX_CHARS);
+        assert!(candidate.ends_with(" (12).txt"));
+    }
+
+    #[tokio::test]
+    async fn finalize_with_available_upload_name_suffixes_collision() {
+        let root = tempfile::tempdir().unwrap();
+        let tmp = root.path().join(".tmp");
+        let bucket = root.path().join("session");
+        tokio::fs::create_dir_all(&tmp).await.unwrap();
+        tokio::fs::create_dir_all(&bucket).await.unwrap();
+        tokio::fs::write(bucket.join("notes.txt"), b"old")
+            .await
+            .unwrap();
+        tokio::fs::write(tmp.join("upload.part"), b"new")
+            .await
+            .unwrap();
+
+        let final_name =
+            finalize_with_available_upload_name(&tmp, "upload.part", &bucket, "notes.txt")
+                .await
+                .unwrap();
+
+        assert_eq!(final_name, "notes (1).txt");
+        assert_eq!(
+            tokio::fs::read(bucket.join("notes.txt")).await.unwrap(),
+            b"old"
+        );
+        assert_eq!(
+            tokio::fs::read(bucket.join("notes (1).txt")).await.unwrap(),
+            b"new"
+        );
+        assert!(!tmp.join("upload.part").exists());
     }
 
     #[test]
@@ -969,9 +1094,18 @@ mod tests {
     #[test]
     fn parse_upload_quota_config_classifies_branches() {
         assert_eq!(parse_upload_quota_config(None), UploadQuotaConfig::Unset);
-        assert_eq!(parse_upload_quota_config(Some("")), UploadQuotaConfig::Unset);
-        assert_eq!(parse_upload_quota_config(Some("   ")), UploadQuotaConfig::Unset);
-        assert_eq!(parse_upload_quota_config(Some("0")), UploadQuotaConfig::Disabled);
+        assert_eq!(
+            parse_upload_quota_config(Some("")),
+            UploadQuotaConfig::Unset
+        );
+        assert_eq!(
+            parse_upload_quota_config(Some("   ")),
+            UploadQuotaConfig::Unset
+        );
+        assert_eq!(
+            parse_upload_quota_config(Some("0")),
+            UploadQuotaConfig::Disabled
+        );
         assert_eq!(
             parse_upload_quota_config(Some("  1048576  ")),
             UploadQuotaConfig::Enabled(1_048_576),
@@ -1020,7 +1154,10 @@ mod tests {
         assert!(!parse_strict_mode(Some("off")), "off → false");
         assert!(parse_strict_mode(Some("1")), "1 → true");
         assert!(parse_strict_mode(Some("true")), "true → true");
-        assert!(parse_strict_mode(Some("TRUE")), "TRUE → true (case-insensitive)");
+        assert!(
+            parse_strict_mode(Some("TRUE")),
+            "TRUE → true (case-insensitive)"
+        );
         assert!(parse_strict_mode(Some(" Yes ")), "trim + case → true");
         assert!(parse_strict_mode(Some("on")), "on → true");
         assert!(
@@ -1096,8 +1233,14 @@ mod tests {
             admits as u64 * bytes,
             "counter must reflect exactly the admits, not stale CAS retries"
         );
-        assert!(admits >= 1, "at least one must admit; CAS shouldn't starve both");
-        assert!(counter_val <= cap, "counter {counter_val} exceeded cap {cap}");
+        assert!(
+            admits >= 1,
+            "at least one must admit; CAS shouldn't starve both"
+        );
+        assert!(
+            counter_val <= cap,
+            "counter {counter_val} exceeded cap {cap}"
+        );
 
         // Hold the guards until after the assert, then explicitly drop
         // to release reservations on the leaked counter.
