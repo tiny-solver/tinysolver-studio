@@ -6,6 +6,7 @@ pub mod router;
 pub mod shutdown;
 pub mod socket_inherit;
 pub mod ws;
+pub mod ws_attach;
 
 pub use port_probe::{PortState, WebServicePortProbe};
 
@@ -592,6 +593,11 @@ pub(crate) async fn do_start_web_server_tauri(
         terminal_manager: (*app.state::<crate::terminal::manager::TerminalManager>()).clone_ref(),
         event_broadcaster: app
             .state::<Arc<crate::web::event_bridge::WebEventBroadcaster>>()
+            .inner()
+            .clone(),
+        // Reuse the same bus the Tauri webview & subscribers read from.
+        acp_event_bus: app
+            .state::<Arc<crate::acp::InternalEventBus>>()
             .inner()
             .clone(),
         emitter: crate::web::event_bridge::EventEmitter::Tauri(app.clone()),

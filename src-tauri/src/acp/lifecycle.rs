@@ -1,24 +1,31 @@
-//! Background subscriber that watches the global `acp://event` broadcaster
-//! for events that need cross-connection DB persistence (e.g. binding the
+//! Background subscriber that watches the in-process `InternalEventBus` for
+//! ACP events that need cross-connection DB persistence (e.g. binding the
 //! agent's external session id onto a conversation row when SessionStarted
 //! fires). Decoupled from `emit_with_state` so the emit hot path stays
 //! lock-tight.
+//!
+//! Phase 5: migrated from `WebEventBroadcaster` (JSON-shape) to
+//! `InternalEventBus` (typed `Arc<EventEnvelope>`). Eliminates the
+//! per-event `serde_json::from_value` reparse and lets us drop the
+//! `acp://event` channel from the global firehose entirely.
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
 use sea_orm::DatabaseConnection;
 use tokio::sync::broadcast;
 
+use crate::acp::internal_bus::InternalEventBus;
 use crate::acp::manager::ConnectionManager;
 use crate::acp::types::{AcpEvent, ConnectionStatus, EventEnvelope};
 use crate::db::entities::conversation::ConversationStatus;
 use crate::db::error::DbError;
 use crate::db::service::conversation_service;
 use crate::acp::session_state::SessionState;
-use crate::web::event_bridge::{emit_with_state, EventEmitter, WebEvent, WebEventBroadcaster};
+use crate::web::event_bridge::{emit_with_state, EventEmitter};
 use tokio::sync::RwLock;
 
 /// Per-connection state that survives `ConnectionCleanupGuard::drop` so
@@ -238,8 +245,8 @@ async fn handle_terminal_event(
     Ok(())
 }
 
-/// Subscribe to the broadcaster synchronously and return the subscriber loop
-/// future. Caller spawns it onto whichever tokio runtime they manage
+/// Subscribe to the in-process bus synchronously and return the subscriber
+/// loop future. Caller spawns it onto whichever tokio runtime they manage
 /// (`tokio::spawn` from inside an async context, `tauri::async_runtime::spawn`
 /// from a Tauri `setup` callback that runs outside the runtime).
 ///
@@ -249,9 +256,10 @@ async fn handle_terminal_event(
 pub fn lifecycle_subscriber_task(
     db_conn: DatabaseConnection,
     manager: ConnectionManager,
-    broadcaster: Arc<WebEventBroadcaster>,
+    bus: Arc<InternalEventBus>,
 ) -> impl Future<Output = ()> + Send + 'static {
-    let mut rx = broadcaster.subscribe();
+    let mut rx = bus.subscribe();
+    let metrics = Arc::clone(bus.metrics());
     async move {
         // Per-connection (state, emitter, conversation_id) cache. Populated on
         // ConversationLinked, drained on first terminal event. See `CachedConn`
@@ -259,17 +267,8 @@ pub fn lifecycle_subscriber_task(
         let mut cache: HashMap<String, CachedConn> = HashMap::new();
         loop {
             match rx.recv().await {
-                Ok(WebEvent { channel, payload }) => {
-                    if channel != "acp://event" {
-                        continue;
-                    }
-                    let envelope: EventEnvelope = match serde_json::from_value((*payload).clone()) {
-                        Ok(env) => env,
-                        Err(e) => {
-                            eprintln!("[lifecycle][ERROR] failed to parse envelope: {e}");
-                            continue;
-                        }
-                    };
+                Ok(envelope_arc) => {
+                    let envelope: &EventEnvelope = envelope_arc.as_ref();
                     match &envelope.payload {
                         AcpEvent::ConversationLinked {
                             conversation_id, ..
@@ -297,22 +296,25 @@ pub fn lifecycle_subscriber_task(
                             }
                         }
                         _ => {
-                            handle_event_with_retry(&db_conn, &manager, &envelope).await;
+                            handle_event_with_retry(&db_conn, &manager, envelope).await;
                         }
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(skipped)) => {
                     // Lagged means events were dropped between rx polls because
-                    // the broadcast buffer (4096) overflowed. Capacity-shaped
-                    // by emit_with_state's burst rate vs. our DB write speed.
-                    // Logged at WARN — visible-but-non-fatal.
+                    // the broadcast buffer overflowed. Capacity-shaped by
+                    // emit_with_state's burst rate vs. our DB write speed.
+                    // Logged at WARN — visible-but-non-fatal — and surfaced
+                    // on the metrics counter so operators can spot drift via
+                    // the `/debug/event_metrics` endpoint.
                     eprintln!(
-                        "[lifecycle][WARN] broadcaster lagged, dropped {skipped} events \
+                        "[lifecycle][WARN] internal bus lagged, dropped {skipped} events \
                          (DB writes can't keep up with emit rate)"
                     );
+                    metrics.lagged_count.fetch_add(skipped, Ordering::Relaxed);
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    eprintln!("[lifecycle] broadcaster closed; subscriber exiting");
+                    eprintln!("[lifecycle] internal bus closed; subscriber exiting");
                     break;
                 }
             }

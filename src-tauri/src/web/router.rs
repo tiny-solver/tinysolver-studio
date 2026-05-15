@@ -30,6 +30,13 @@ pub fn build_router(
 
     let api = Router::new()
         .route("/health", post(health_check))
+        // Debug endpoint: operator-facing snapshot of `EventBusMetrics`
+        // (emit volume, lag/eviction counts, attach decision counts).
+        // Sits behind the same auth middleware as every other route.
+        .route(
+            "/debug/event_metrics",
+            get(handlers::event_metrics::get_event_metrics),
+        )
         // ─── Conversations ───
         .route(
             "/list_conversations",

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::acp::manager::ConnectionManager;
+use crate::acp::InternalEventBus;
 use crate::chat_channel::manager::ChatChannelManager;
 use crate::db::AppDatabase;
 use crate::pet_state_mapper::PetStateHandle;
@@ -14,6 +15,11 @@ pub struct AppState {
     pub connection_manager: ConnectionManager,
     pub terminal_manager: TerminalManager,
     pub event_broadcaster: Arc<WebEventBroadcaster>,
+    /// Process-wide bus for typed `Arc<EventEnvelope>` delivery to
+    /// in-process consumers (lifecycle, pet state mapper, chat-channel
+    /// subscribers). Distinct from `event_broadcaster`, which carries
+    /// JSON-shaped `WebEvent`s for transport-bound delivery.
+    pub acp_event_bus: Arc<InternalEventBus>,
     pub emitter: EventEmitter,
     pub data_dir: PathBuf,
     pub web_server_state: WebServerState,

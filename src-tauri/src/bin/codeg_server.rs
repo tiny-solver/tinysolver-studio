@@ -95,9 +95,13 @@ async fn async_main() {
     // config at build time, so this must run before the first one is constructed.
     codeg_lib::init_proxy_from_db(&db.conn).await;
 
-    // Create shared broadcaster
+    // Create shared broadcaster + internal ACP event bus.
     let broadcaster = Arc::new(WebEventBroadcaster::new());
-    let emitter = EventEmitter::WebOnly(broadcaster.clone());
+    let event_bus_metrics = Arc::new(codeg_lib::acp::EventBusMetrics::default());
+    let acp_event_bus = Arc::new(codeg_lib::acp::InternalEventBus::new(
+        event_bus_metrics.clone(),
+    ));
+    let emitter = EventEmitter::web_only(broadcaster.clone(), acp_event_bus.clone());
 
     // Build AppState
     let pet_state_handle = codeg_lib::pet_state_mapper::new_pet_state_handle();
@@ -106,6 +110,7 @@ async fn async_main() {
         connection_manager: codeg_lib::app_state::default_connection_manager(),
         terminal_manager: codeg_lib::app_state::default_terminal_manager(),
         event_broadcaster: broadcaster,
+        acp_event_bus: acp_event_bus.clone(),
         emitter,
         data_dir,
         web_server_state: WebServerState::new(),
@@ -139,6 +144,7 @@ async fn async_main() {
         .chat_channel_manager
         .start_background(
             state.event_broadcaster.clone(),
+            state.acp_event_bus.clone(),
             state.db.conn.clone(),
             state.connection_manager.clone_ref(),
             state.emitter.clone(),
@@ -149,13 +155,16 @@ async fn async_main() {
     tokio::spawn(codeg_lib::lifecycle_subscriber_task(
         state.db.conn.clone(),
         state.connection_manager.clone_ref(),
-        state.event_broadcaster.clone(),
+        state.acp_event_bus.clone(),
     ));
 
     // Spawn the desktop pet state mapper so server-mode browsers viewing
     // /pet receive `pet://state` and `pet://oneshot` over the WebSocket
-    // bridge, just like the Tauri webview does in desktop mode.
+    // bridge, just like the Tauri webview does in desktop mode. ACP events
+    // come through the typed bus; folder/app side-channels stay on the
+    // JSON broadcaster.
     tokio::spawn(codeg_lib::pet_state_mapper::pet_state_subscriber_task(
+        state.acp_event_bus.clone(),
         state.event_broadcaster.clone(),
         state.emitter.clone(),
         pet_state_handle,

@@ -1,7 +1,14 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 import { WS_READY_CHANNEL } from "./constants"
-import type { RemoteTransportConfig, Transport, UnsubscribeFn } from "./types"
+import type { AttachTransportHost } from "./web-event-stream"
+import { WebEventStream } from "./web-event-stream"
+import type {
+  EventStream,
+  RemoteTransportConfig,
+  Transport,
+  UnsubscribeFn,
+} from "./types"
 
 // See WebTransport for rationale. Bounded so an older remote codeg-server
 // (no `__ready__` support) can't permanently hang the desktop UI.
@@ -74,6 +81,14 @@ export class RemoteDesktopTransport implements Transport {
   /// Latched in `destroy()` so any in-flight `subscribe()` awaiters
   /// settle promptly instead of hanging on `readyPromise`.
   private destroyed = false
+  /// Attach-protocol plumbing — mirrors WebTransport. `wsOpen` is true
+  /// between `__ready__` arrival and the next `__disconnected__`. The
+  /// EventStream uses `wsOpen` and `wsReadyCallbacks` to decide whether
+  /// to send attach frames immediately vs. queue them for the next
+  /// reconnect cycle.
+  private wsOpen = false
+  private wsReadyCallbacks = new Set<() => void>()
+  private eventStreamInstance: WebEventStream | null = null
 
   constructor(config: RemoteTransportConfig) {
     this.config = {
@@ -167,6 +182,50 @@ export class RemoteDesktopTransport implements Transport {
     }
   }
 
+  eventStream(): EventStream {
+    if (!this.eventStreamInstance) {
+      const host: AttachTransportHost = {
+        isWsOpen: () => this.wsOpen,
+        sendFrame: (frame) => this.sendWsFrame(frame),
+        onWsReady: (callback) => {
+          this.wsReadyCallbacks.add(callback)
+          return () => {
+            this.wsReadyCallbacks.delete(callback)
+          }
+        },
+      }
+      this.eventStreamInstance = new WebEventStream(host)
+      // Ensure the proxy WS is being maintained so attach frames have
+      // somewhere to land. Idempotent — the proxy folds duplicate
+      // subscribe calls into the existing entry.
+      if (!this.wsStarted && !this.destroyed) {
+        void this.startWs().catch((err) => {
+          console.warn(
+            "[RemoteDesktopTransport] startWs from eventStream failed:",
+            err
+          )
+        })
+      }
+    }
+    return this.eventStreamInstance
+  }
+
+  private sendWsFrame(frame: object): boolean {
+    if (!this.wsOpen) return false
+    const text = JSON.stringify(frame)
+    // Fire-and-forget. The Rust side queues into the bounded outbound
+    // mpsc; if the queue is full it logs and drops. The frontend's
+    // attach-on-ready loop in WebEventStream re-issues attaches on every
+    // `__ready__`, so a transient drop converges automatically.
+    void invoke("remote_ws_send_text", {
+      connectionId: this.config.id,
+      text,
+    }).catch((err) => {
+      console.warn("[RemoteDesktopTransport] remote_ws_send_text failed:", err)
+    })
+    return true
+  }
+
   private async startWs() {
     this.wsStarted = true
 
@@ -207,8 +266,31 @@ export class RemoteDesktopTransport implements Transport {
     if (this.destroyed) return
 
     const { channel, payload } = envelope
+    // Attach-protocol frames arrive shaped like
+    //   { channel: <discarded>, payload: { type: "snapshot"|"event"|... } }
+    // The proxy's `forward_text_message` parses them as the legacy
+    // `{channel, payload}` envelope and re-emits as a Tauri event. Routing
+    // here checks payload.type to dispatch to the EventStream.
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "type" in (payload as object)
+    ) {
+      this.eventStreamInstance?.handleServerFrame(payload)
+      return
+    }
     if (channel === WS_READY_CHANNEL) {
+      this.wsOpen = true
       this.readyResolve()
+      // Notify EventStream so it can re-issue attach frames for any
+      // active subscriptions. Fires on initial connect AND every reconnect.
+      for (const cb of this.wsReadyCallbacks) {
+        try {
+          cb()
+        } catch (err) {
+          console.error("[RemoteDesktopTransport] wsReady callback threw:", err)
+        }
+      }
       if (this.hasReadiedOnce) {
         // Reconnect path: server-side receiver_count was 0 during the
         // disconnect window, so any event fired in that gap was dropped.
@@ -230,6 +312,7 @@ export class RemoteDesktopTransport implements Transport {
       return
     }
     if (channel === WS_DISCONNECTED_CHANNEL) {
+      this.wsOpen = false
       // New subscribers (and any concurrent subscribe() calls in flight)
       // must wait for the next `__ready__` before resolving.
       this.resetReady()
@@ -251,6 +334,7 @@ export class RemoteDesktopTransport implements Transport {
 
   destroy() {
     this.destroyed = true
+    this.wsOpen = false
     if (this.unlistenWsEvent) {
       this.unlistenWsEvent()
       this.unlistenWsEvent = null
@@ -269,6 +353,9 @@ export class RemoteDesktopTransport implements Transport {
     }
     this.handlers.clear()
     this.reconnectCallbacks.clear()
+    this.wsReadyCallbacks.clear()
+    this.eventStreamInstance?.destroy()
+    this.eventStreamInstance = null
     // Settle any in-flight `subscribe()` awaiters so their promises don't
     // leak alongside the destroyed transport. Safe to call multiple times.
     this.readyResolve?.()

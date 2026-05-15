@@ -1,4 +1,4 @@
-mod acp;
+pub mod acp;
 pub use acp::{
     idle_sweep_task, idle_timeout_from_env, lifecycle_subscriber_task, SWEEP_INTERVAL_SECS,
 };
@@ -171,6 +171,16 @@ mod tauri_app {
             .manage(std::sync::Arc::new(
                 web::event_bridge::WebEventBroadcaster::new(),
             ))
+            // In-process ACP event bus — typed `Arc<EventEnvelope>` delivery
+            // to lifecycle / pet / chat-channel subscribers. Distinct from
+            // the JSON-shape `WebEventBroadcaster` above. The metrics handle
+            // lives inside the bus so the `/debug/event_metrics` endpoint
+            // and shutdown logs can read it.
+            .manage({
+                let metrics =
+                    std::sync::Arc::new(crate::acp::EventBusMetrics::default());
+                std::sync::Arc::new(crate::acp::InternalEventBus::new(metrics))
+            })
             .manage(crate::pet_state_mapper::new_pet_state_handle())
             .setup(|app| {
                 let app_data_dir = app.path().app_data_dir()?;
@@ -241,18 +251,28 @@ mod tauri_app {
                     let db_conn = app.state::<db::AppDatabase>().conn.clone();
                     let ccm_ref = ccm.clone_ref();
                     let br = broadcaster.inner().clone();
+                    let bus = app
+                        .state::<std::sync::Arc<crate::acp::InternalEventBus>>()
+                        .inner()
+                        .clone();
                     let cm = app.state::<ConnectionManager>().clone_ref();
                     let emitter = web::event_bridge::EventEmitter::Tauri(app.handle().clone());
                     tauri::async_runtime::spawn(async move {
-                        ccm_ref.start_background(br, db_conn, cm, emitter).await;
+                        ccm_ref.start_background(br, bus, db_conn, cm, emitter).await;
                     });
                 }
 
                 // Spawn the desktop pet state mapper: subscribes to ACP events
-                // and emits `pet://state` whenever the aggregated pet state
+                // (typed envelopes via the in-process bus) AND folder/app
+                // side-channel notifications (JSON via the broadcaster), and
+                // emits `pet://state` whenever the aggregated pet state
                 // changes. The renderer in the floating pet window listens
                 // for these events to drive its sprite animation row.
                 {
+                    let bus = app
+                        .state::<std::sync::Arc<crate::acp::InternalEventBus>>()
+                        .inner()
+                        .clone();
                     let broadcaster = app
                         .state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>()
                         .inner()
@@ -264,6 +284,7 @@ mod tauri_app {
                         .clone();
                     tauri::async_runtime::spawn(
                         crate::pet_state_mapper::pet_state_subscriber_task(
+                            bus,
                             broadcaster,
                             emitter,
                             pet_state_handle,
@@ -280,14 +301,12 @@ mod tauri_app {
                 {
                     let db_conn = app.state::<db::AppDatabase>().conn.clone();
                     let cm = app.state::<ConnectionManager>().clone_ref();
-                    let broadcaster = app
-                        .state::<std::sync::Arc<web::event_bridge::WebEventBroadcaster>>()
+                    let bus = app
+                        .state::<std::sync::Arc<crate::acp::InternalEventBus>>()
                         .inner()
                         .clone();
                     tauri::async_runtime::spawn(crate::acp::lifecycle_subscriber_task(
-                        db_conn,
-                        cm,
-                        broadcaster,
+                        db_conn, cm, bus,
                     ));
                 }
 
@@ -619,6 +638,7 @@ mod tauri_app {
                 remote_proxy_commands::remote_http_call,
                 remote_proxy_commands::remote_ws_subscribe,
                 remote_proxy_commands::remote_ws_unsubscribe,
+                remote_proxy_commands::remote_ws_send_text,
                 windows::open_pet_window,
                 windows::close_pet_window,
                 windows::pet_window_record_position,

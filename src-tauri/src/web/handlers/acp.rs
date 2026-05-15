@@ -647,7 +647,10 @@ pub async fn opencode_install_plugins(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<OpencodeInstallPluginsParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    let emitter = crate::web::event_bridge::EventEmitter::WebOnly(state.event_broadcaster.clone());
+    let emitter = crate::web::event_bridge::EventEmitter::web_only(
+        state.event_broadcaster.clone(),
+        state.acp_event_bus.clone(),
+    );
     acp_commands::opencode_install_plugins_core(params.names, params.task_id, &emitter)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;

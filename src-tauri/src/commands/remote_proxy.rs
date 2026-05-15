@@ -34,10 +34,16 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, EventTarget, State, WebviewWindow};
-use tokio::sync::{watch, Mutex, RwLock};
+use tokio::sync::{mpsc, watch, Mutex, RwLock};
 use tokio_tungstenite::tungstenite::{
     client::IntoClientRequest, handshake::client::Request, http::HeaderValue, Message,
 };
+
+/// Outbound mpsc capacity per remote WS. Bounded so a runaway frontend
+/// cannot exhaust memory by piling client-→-server messages, but generous
+/// enough to absorb a brief handshake burst (multiple attaches firing at
+/// the same moment when the user opens several conversation tabs).
+const OUTBOUND_CAPACITY: usize = 64;
 
 use crate::app_error::AppCommandError;
 use crate::db::service::remote_workspace_connection_service;
@@ -86,6 +92,14 @@ struct WsTaskEntry {
     ready: RwLock<bool>,
     /// Signals the background WS task to exit.
     shutdown_tx: watch::Sender<bool>,
+    /// Outbound text messages to forward over the WS to the remote server.
+    /// Used by the attach protocol (Phase 4a) so a Tauri frontend can send
+    /// `attach`/`detach`/`ping` frames through the proxy without owning the
+    /// WS itself. Frames are dropped (with a warning log) when the WS is
+    /// not currently OPEN — the JS-side `RemoteEventStream` re-issues
+    /// attach frames on every `__ready__` so a transient WS gap is recovered
+    /// automatically.
+    outbound_tx: mpsc::Sender<String>,
 }
 
 #[derive(Clone)]
@@ -364,6 +378,7 @@ pub async fn remote_ws_subscribe(
         })?;
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    let (outbound_tx, outbound_rx) = mpsc::channel::<String>(OUTBOUND_CAPACITY);
     let entry = Arc::new(WsTaskEntry {
         subscribers: Mutex::new({
             let mut map = HashMap::new();
@@ -372,6 +387,7 @@ pub async fn remote_ws_subscribe(
         }),
         ready: RwLock::new(false),
         shutdown_tx,
+        outbound_tx,
     });
 
     // Insert under the proxy lock. If a concurrent subscribe raced us, fold
@@ -408,10 +424,43 @@ pub async fn remote_ws_subscribe(
             token,
             task_entry,
             shutdown_rx,
+            outbound_rx,
         )
         .await;
     });
 
+    Ok(())
+}
+
+/// Send an arbitrary text frame over the existing WS to the remote server.
+/// Used by the JS-side `RemoteEventStream` to forward `attach` / `detach` /
+/// `ping` messages without owning the WS itself. Returns `Ok(())` whether
+/// or not the frame was actually queued (the proxy may not have an entry,
+/// or its WS may be currently down) — the frontend is responsible for
+/// re-issuing on the next `__ready__` signal so a transient gap recovers
+/// automatically.
+#[tauri::command]
+pub async fn remote_ws_send_text(
+    proxy: State<'_, Arc<RemoteProxyState>>,
+    connection_id: i32,
+    text: String,
+) -> Result<(), AppCommandError> {
+    let proxy_arc: Arc<RemoteProxyState> = (*proxy).clone();
+    let entry = {
+        let tasks = proxy_arc.tasks.lock().await;
+        tasks.get(&connection_id).cloned()
+    };
+    let Some(entry) = entry else {
+        return Ok(());
+    };
+    // try_send rather than send: if the channel is full (slow remote, runaway
+    // sender) we'd rather drop the frame and warn than block the Tauri command
+    // queue. The frontend's reattach-on-ready loop converges anyway.
+    if let Err(e) = entry.outbound_tx.try_send(text) {
+        eprintln!(
+            "[RemoteProxy] outbound queue rejected text frame on connection {connection_id}: {e}"
+        );
+    }
     Ok(())
 }
 
@@ -448,6 +497,11 @@ pub async fn remote_ws_unsubscribe(
 /// On exit (any path), the task removes its entry from `proxy.tasks` —
 /// but only if the entry still matches its own `Arc`, so a racy
 /// resubscribe that already replaced the entry isn't clobbered.
+// `app`/`proxy`/`connection_id`/`base_url`/`token`/`entry`/`shutdown_rx`/
+// `outbound_rx` are all distinct concerns the task needs; bundling into a
+// single struct would just spread the field definitions to a different
+// place without improving readability.
+#[allow(clippy::too_many_arguments)]
 async fn run_ws_task(
     app: AppHandle,
     proxy: Arc<RemoteProxyState>,
@@ -456,6 +510,7 @@ async fn run_ws_task(
     token: String,
     entry: Arc<WsTaskEntry>,
     mut shutdown_rx: watch::Receiver<bool>,
+    mut outbound_rx: mpsc::Receiver<String>,
 ) {
     let event_name = format!("remote-ws-event-{connection_id}");
     let ws_url = http_url_to_ws_url(&base_url);
@@ -509,6 +564,22 @@ async fn run_ws_task(
                         break 'reconnect;
                     }
                 }
+                outbound = outbound_rx.recv() => match outbound {
+                    Some(text) => {
+                        if let Err(err) = socket.send(Message::Text(text.into())).await {
+                            eprintln!(
+                                "[RemoteProxy] outbound send failed on connection {connection_id}: {err}"
+                            );
+                            break;
+                        }
+                    }
+                    None => {
+                        // Sender side dropped — only happens at proxy state
+                        // teardown; treat as graceful exit.
+                        let _ = socket.send(Message::Close(None)).await;
+                        break 'reconnect;
+                    }
+                },
                 msg = socket.next() => match msg {
                     Some(Ok(Message::Text(text))) => {
                         if let Err(err) = forward_text_message(&app, &entry, &event_name, &text).await {
@@ -707,10 +778,12 @@ mod tests {
 
     fn test_entry(subscribers: HashMap<String, WsSubscriber>) -> Arc<WsTaskEntry> {
         let (shutdown_tx, _shutdown_rx) = watch::channel(false);
+        let (outbound_tx, _outbound_rx) = mpsc::channel::<String>(8);
         Arc::new(WsTaskEntry {
             subscribers: Mutex::new(subscribers),
             ready: RwLock::new(false),
             shutdown_tx,
+            outbound_tx,
         })
     }
 
@@ -786,6 +859,7 @@ mod tests {
     async fn window_instance_cleanup_tombstones_and_shuts_down_empty_task() {
         let proxy = Arc::new(RemoteProxyState::new());
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let (outbound_tx, _outbound_rx) = mpsc::channel::<String>(8);
         let entry = Arc::new(WsTaskEntry {
             subscribers: Mutex::new(HashMap::from([(
                 "sub".to_string(),
@@ -793,6 +867,7 @@ mod tests {
             )])),
             ready: RwLock::new(false),
             shutdown_tx,
+            outbound_tx,
         });
         proxy.tasks.lock().await.insert(1, entry);
 

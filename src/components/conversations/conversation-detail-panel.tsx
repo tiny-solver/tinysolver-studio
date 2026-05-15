@@ -37,7 +37,6 @@ import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { acpFork, createConversation, openSettingsWindow } from "@/lib/api"
-import { waitForTransportReady } from "@/lib/platform"
 import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
 import {
@@ -656,9 +655,6 @@ const ConversationTabView = memo(function ConversationTabView({
         // Backend now performs all DB writes in one transaction-shaped call:
         // - current row: external_id=S2, title="[Fork] ..."
         // - sibling row: created with external_id=S1, status=pending_review
-        // Gate on WS readiness so the SessionStarted event emitted by fork
-        // is not lost in a mid-session reconnect window.
-        await waitForTransportReady()
         const { forkedSessionId } = await acpFork(connectionId)
         // Update runtime session id to S2 (frontend in-memory state only)
         sessionIdRef.current = forkedSessionId

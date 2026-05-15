@@ -10,11 +10,11 @@ import {
   type ReactNode,
 } from "react"
 import { useTranslations } from "next-intl"
-import {
-  subscribe,
-  onTransportReconnect,
-  waitForTransportReady,
-} from "@/lib/platform"
+import { subscribe, getEventStream } from "@/lib/platform"
+import type {
+  AttachHandlers,
+  EventStreamSubscription,
+} from "@/lib/transport/types"
 import { randomUUID } from "@/lib/utils"
 import { inferLiveToolName } from "@/lib/tool-call-normalization"
 import {
@@ -766,10 +766,60 @@ function connectionsReducer(
       // from connection A (high seq) would otherwise overwrite a fresh
       // connection B (lastAppliedSeq=0) at the same contextKey.
       if (current.connectionId !== action.patch.connectionId) return state
+
+      // Latched-once / fill-null fields are always safe to merge, even when
+      // the snapshot is stale by event_seq. Their producing events
+      // (`selectors_ready`, `fork_supported`, `session_modes`,
+      // `session_config_options`, `available_commands`, `prompt_capabilities`)
+      // typically fire only once during the initial handshake, so the
+      // snapshot is the only recovery path after a refresh that missed the
+      // original live event. Without this, a mid-stream browser refresh
+      // races the snapshot fetch against new content_delta events: the
+      // deltas advance lastAppliedSeq past the snapshot's event_seq, the
+      // outer guard rejects the patch, and `selectorsReady` never recovers
+      // — leaving the bottom status bar stuck on "正在初始化 xxx 会话".
+      const mergedSelectorsReady =
+        action.patch.selectorsReady || current.selectorsReady
+      const mergedSupportsFork =
+        action.patch.supportsFork || current.supportsFork
+      const mergedModes = current.modes ?? action.patch.modes
+      const mergedConfigOptions =
+        current.configOptions ?? action.patch.configOptions
+      const mergedAvailableCommands =
+        current.availableCommands ?? action.patch.availableCommands
+      const mergedPromptCapabilities =
+        action.patch.promptCapabilities ?? current.promptCapabilities
+
       // Race guard: the snapshot may have been generated BEFORE events
       // that have since arrived and been applied to in-memory state.
-      // Hydrating from a stale snapshot would overwrite fresh state.
-      if (action.patch.eventSeq <= current.lastAppliedSeq) return state
+      // Mutable fields (status, sessionId, liveMessage, pendingPermission,
+      // usage) are fresher in memory than in the snapshot and must NOT be
+      // overwritten — but the latched/fill-null fields above are still
+      // applied so the once-per-lifetime bits can recover.
+      if (action.patch.eventSeq <= current.lastAppliedSeq) {
+        if (
+          mergedSelectorsReady === current.selectorsReady &&
+          mergedSupportsFork === current.supportsFork &&
+          mergedModes === current.modes &&
+          mergedConfigOptions === current.configOptions &&
+          mergedAvailableCommands === current.availableCommands &&
+          mergedPromptCapabilities === current.promptCapabilities
+        ) {
+          return state
+        }
+        const next = new Map(state)
+        next.set(action.contextKey, {
+          ...current,
+          modes: mergedModes,
+          configOptions: mergedConfigOptions,
+          availableCommands: mergedAvailableCommands,
+          promptCapabilities: mergedPromptCapabilities,
+          selectorsReady: mergedSelectorsReady,
+          supportsFork: mergedSupportsFork,
+        })
+        return next
+      }
+
       const next = new Map(state)
       next.set(action.contextKey, {
         ...current,
@@ -781,18 +831,9 @@ function connectionsReducer(
         usage: action.patch.usage,
         liveMessage: action.patch.liveMessage,
         pendingPermission: action.patch.pendingPermission,
-        promptCapabilities:
-          action.patch.promptCapabilities ?? current.promptCapabilities,
-        // Latches once on true. The `selectors_ready` event fires only once
-        // per connection lifetime; a fresh frontend (post-refresh) needs the
-        // snapshot to recover the bit, otherwise the init-session task is
-        // stuck forever.
-        selectorsReady: action.patch.selectorsReady || current.selectorsReady,
-        // Same monotonic-merge as `selectorsReady`. The agent emits
-        // `fork_supported` once during the initial handshake; a post-refresh
-        // frontend that missed the live event needs the snapshot to recover
-        // the capability — without this the Fork button stays hidden forever.
-        supportsFork: action.patch.supportsFork || current.supportsFork,
+        promptCapabilities: mergedPromptCapabilities,
+        selectorsReady: mergedSelectorsReady,
+        supportsFork: mergedSupportsFork,
         lastAppliedSeq: action.patch.eventSeq,
       })
       return next
@@ -1642,8 +1683,20 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     activeKeyListeners: new Set(),
   })
 
-  // connectionId → contextKey reverse mapping
+  // connectionId → contextKey reverse mapping. Used by the legacy global
+  // `acp://event` listener path. Attach-protocol connections (web mode)
+  // bypass this entirely — their events are routed by the per-subscription
+  // handlers registered in `attachSubscriptionsRef`.
   const reverseMapRef = useRef(new Map<string, string>())
+
+  // contextKey → active EventStream subscription handle. Populated only for
+  // connections established via the Subscribe-with-Snapshot attach
+  // protocol (web + remote-desktop). Used to (a) detach on disconnect /
+  // tab close, and (b) re-attach with the current cursor when a connection
+  // is rekeyed (orphan rescue) so handlers reference the new contextKey.
+  const attachSubscriptionsRef = useRef(
+    new Map<string, EventStreamSubscription>()
+  )
 
   // Open tab keys — updated by child TabProvider via registerOpenTabKeys
   const openTabKeysRef = useRef(new Set<string>())
@@ -2394,6 +2447,113 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     ]
   )
 
+  // Apply a single envelope to the store. Shared by the legacy global
+  // listener and the attach-protocol per-subscription handlers so dedup +
+  // dispatch ordering + JS subscriber fan-out stays identical between
+  // the two paths.
+  const applyMappedEnvelope = useCallback(
+    (contextKey: string, envelope: EventEnvelope) => {
+      const conn = storeRef.current.connections.get(contextKey)
+      if (conn && envelope.seq <= conn.lastAppliedSeq) return
+      lastActivityRef.current.set(contextKey, Date.now())
+      handleMappedEvent(contextKey, envelope)
+      dispatch({ type: "EVENT_APPLIED", contextKey, seq: envelope.seq })
+      for (const ref of eventSubscribersRef.current) {
+        try {
+          ref.current(envelope)
+        } catch (err) {
+          console.error("[acp-context] subscriber threw:", err)
+        }
+      }
+    },
+    [dispatch, handleMappedEvent]
+  )
+
+  // Open a Subscribe-with-Snapshot stream for `connectionId` and route its
+  // frames into the store under `contextKey`. Returns the subscription
+  // handle for cleanup, or `null` when the active transport doesn't
+  // implement the attach protocol (caller falls back to the legacy
+  // snapshot-fetch + global-listener flow).
+  //
+  // The subscription survives WS reconnects automatically — see
+  // `WebEventStream.reattachAll`. Detach reasons are handled here:
+  //   - lagged / server_shutdown: re-attach with current cursor so the
+  //     consumer doesn't have to think about transient disconnects
+  //   - connection_gone: terminal; clean up store entry and let the next
+  //     user interaction surface the failure
+  const setupAttachSubscription = useCallback(
+    (
+      contextKey: string,
+      connectionId: string,
+      sinceSeq: number | undefined
+    ): EventStreamSubscription | null => {
+      const stream = getEventStream()
+      if (!stream) return null
+
+      let activeSub: EventStreamSubscription | null = null
+      const handlers: AttachHandlers = {
+        onSnapshot: (snapshot) => {
+          const patch = denormalizeSnapshot(snapshot)
+          dispatch({ type: "HYDRATE_FROM_SNAPSHOT", contextKey, patch })
+          lastActivityRef.current.set(contextKey, Date.now())
+        },
+        onReplay: (events) => {
+          for (const envelope of events) {
+            applyMappedEnvelope(contextKey, envelope)
+          }
+        },
+        onEvent: (envelope) => {
+          applyMappedEnvelope(contextKey, envelope)
+        },
+        onDetached: (reason) => {
+          if (reason === "lagged" || reason === "server_shutdown") {
+            // Transient: re-attach with the latest cursor so we either
+            // replay the gap (small) or hydrate fresh (large). For
+            // server_shutdown the WS is closed, so the new attach frame
+            // queues until reconnect; for lagged the WS is still open.
+            const conn = storeRef.current.connections.get(contextKey)
+            const newSinceSeq = conn?.lastAppliedSeq
+            const newSub = stream.attach(
+              connectionId,
+              { sinceSeq: newSinceSeq },
+              handlers
+            )
+            activeSub = newSub
+            attachSubscriptionsRef.current.set(contextKey, newSub)
+            return
+          }
+          // connection_gone: backend GC'd the connection. Mirror to UI
+          // so the user sees the conversation tab go away rather than
+          // staring at stale state forever.
+          attachSubscriptionsRef.current.delete(contextKey)
+          dispatch({ type: "CONNECTION_REMOVED", contextKey })
+        },
+      }
+
+      activeSub = stream.attach(connectionId, { sinceSeq }, handlers)
+      attachSubscriptionsRef.current.set(contextKey, activeSub)
+      return activeSub
+    },
+    [applyMappedEnvelope, dispatch]
+  )
+
+  // Tear down an attach subscription: detach the WS subscription so the
+  // server-side forwarder task exits, and clear the local handle.
+  // Idempotent — safe to call from disconnect, idle sweep, REKEY, and
+  // REMOVE_ALL paths without checking whether a sub exists. No-op for
+  // legacy (Tauri) connections that never went through
+  // `setupAttachSubscription`.
+  const teardownAttachSubscription = useCallback((contextKey: string) => {
+    const sub = attachSubscriptionsRef.current.get(contextKey)
+    if (!sub) return
+    attachSubscriptionsRef.current.delete(contextKey)
+    try {
+      sub.detach()
+    } catch (err) {
+      console.warn("[acp-context] attach detach threw:", err)
+    }
+  }, [])
+
   // Single global event listener
   useEffect(() => {
     let cancelled = false
@@ -2402,6 +2562,11 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     listenerReadyRef.current = false
 
     subscribe<EventEnvelope>("acp://event", (envelope) => {
+      // Tauri webview path: the desktop frontend receives ACP events here
+      // via `app.emit("acp://event", ...)`. Web / remote-desktop transports
+      // never see this listener fire (Phase 5 backend dropped the
+      // `acp://event` channel from the WS firehose; per-connection attach
+      // streams are now the sole delivery path for those transports).
       const contextKey = reverseMapRef.current.get(envelope.connection_id)
       if (!contextKey) {
         bufferUnmappedEvent(envelope)
@@ -2471,47 +2636,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     handleMappedEvent,
     resolveListenerReadyWaiters,
   ])
-
-  // Recover from missed events after a WS reconnect. The web-mode
-  // broadcaster drops events when `receiver_count == 0`, so anything fired
-  // between `onclose` and the next `__ready__` is lost. After the reconnect
-  // settles, refetch backend snapshots for every non-terminal connection so
-  // the store catches up to whatever happened during the disconnect window.
-  // `HYDRATE_FROM_SNAPSHOT`'s `eventSeq <= lastAppliedSeq` guard already
-  // handles races against live events arriving via the resubscribed WS.
-  // No-op on IPC-only transports (Tauri desktop) — `onTransportReconnect`
-  // returns a no-op unsubscribe there.
-  useEffect(() => {
-    return onTransportReconnect(() => {
-      for (const [contextKey, conn] of storeRef.current.connections) {
-        if (conn.status === "disconnected" || conn.status === "error") {
-          continue
-        }
-        const connectionId = conn.connectionId
-        void acpGetSessionSnapshot(connectionId)
-          .then((snapshot) => {
-            if (!snapshot) return
-            const patch = denormalizeSnapshot(snapshot)
-            dispatch({
-              type: "HYDRATE_FROM_SNAPSHOT",
-              contextKey,
-              patch,
-            })
-          })
-          .catch((e: unknown) => {
-            // Snapshot may 404 if the backend GC'd the connection during
-            // the disconnect window (idle sweep). Logged but not surfaced —
-            // the existing per-connection state remains until the next
-            // explicit interaction reveals it's gone.
-            console.warn(
-              "[acp-context] reconnect snapshot fetch failed for",
-              connectionId,
-              e
-            )
-          })
-      }
-    })
-  }, [dispatch])
 
   // ── Backend keepalive timer ──
   // Frontend is the only side that knows which conversation tabs the
@@ -2583,6 +2707,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       for (const { contextKey, connectionId } of toDisconnect) {
         acpDisconnect(connectionId).catch(() => {})
         reverseMapRef.current.delete(connectionId)
+        teardownAttachSubscription(contextKey)
         lastActivityRef.current.delete(contextKey)
         pendingUnmappedEventsRef.current.delete(connectionId)
         dispatch({ type: "CONNECTION_REMOVED", contextKey })
@@ -2590,14 +2715,22 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     }, IDLE_SWEEP_INTERVAL_MS)
 
     return () => clearInterval(timer)
-  }, [dispatch])
+  }, [dispatch, teardownAttachSubscription])
 
   // Disconnect all on unmount
   useEffect(() => {
     const reverseMap = reverseMapRef.current
+    const attachSubs = attachSubscriptionsRef.current
     return () => {
       for (const [connectionId] of reverseMap) {
         acpDisconnect(connectionId).catch(() => {})
+      }
+      for (const [, sub] of attachSubs) {
+        try {
+          sub.detach()
+        } catch {
+          // best-effort during teardown
+        }
       }
     }
   }, [])
@@ -2678,6 +2811,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           ) {
             await acpDisconnect(existing.connectionId).catch(() => {})
             reverseMapRef.current.delete(existing.connectionId)
+            teardownAttachSubscription(contextKey)
             lastActivityRef.current.delete(contextKey)
             pendingUnmappedEventsRef.current.delete(existing.connectionId)
           }
@@ -2717,27 +2851,35 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             if (storeRef.current.activeKey === orphanKey) {
               setActiveKey(contextKey)
             }
+            // Migrate any active attach subscription from the orphan key to
+            // the new key. The handlers' contextKey was captured by closure
+            // at attach time, so a simple Map rename would leave events
+            // dispatching to the (now-removed) orphan key. Detach + re-attach
+            // with the current cursor is correct: the attach response is
+            // either a (possibly empty) replay or a fresh snapshot, both
+            // converge on the same state.
+            const orphanCursor = orphanConn.lastAppliedSeq
+            teardownAttachSubscription(orphanKey)
             dispatch({
               type: "REKEY_CONNECTION",
               fromKey: orphanKey,
               toKey: contextKey,
             })
+            setupAttachSubscription(
+              contextKey,
+              orphanConn.connectionId,
+              orphanCursor
+            )
             return
           }
         }
 
+        // Wait for the legacy global listener to register so Tauri's drain
+        // path picks up any events emitted between acpConnect returning
+        // and reverseMap.set below. Web/remote use attach which doesn't
+        // need this gate, but the wait is a fast no-op once the initial
+        // subscribe resolves.
         await waitForListenerReady()
-        // `waitForListenerReady` only confirms the global subscribe is set
-        // up — `listenerReadyRef` latches to true after the initial connect
-        // and never resets. During a mid-session WS reconnect, the server
-        // broadcaster's `receiver_count` is briefly 0; firing `acp_connect`
-        // in that window means the backend's `Connecting`/`Connected` events
-        // get silently dropped. Snapshot recovery via `onTransportReconnect`
-        // eventually catches up the state, but the user still sees a few
-        // seconds of "正在连接" while it does. Awaiting the current
-        // `readyPromise` here holds the HTTP call until the WS is back so
-        // no event is dropped in the first place.
-        await waitForTransportReady()
         const connectionId = await acpConnect(agentType, workingDir, sessionId)
 
         // If disconnect was requested while connect was in flight,
@@ -2752,7 +2894,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        reverseMapRef.current.set(connectionId, contextKey)
         lastActivityRef.current.set(contextKey, Date.now())
         dispatch({
           type: "CONNECTION_CREATED",
@@ -2762,54 +2903,55 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           workingDir: nextWorkingDir,
         })
 
-        // Hydrate from backend snapshot. Non-blocking: if the snapshot
-        // response loses the race against the live event stream, the
-        // HYDRATE_FROM_SNAPSHOT reducer arm is a no-op (eventSeq guard).
-        // If the connection is brand-new and SessionState is empty, the
-        // snapshot is structurally empty and HYDRATE is also a no-op.
-        void acpGetSessionSnapshot(connectionId)
-          .then((snapshot) => {
-            if (!snapshot) return
-            const patch = denormalizeSnapshot(snapshot)
-            dispatch({
-              type: "HYDRATE_FROM_SNAPSHOT",
-              contextKey,
-              patch,
-            })
-          })
-          .catch((e: unknown) => {
+        // Subscribe-with-Snapshot path. When the active transport supports
+        // the attach protocol (currently web mode), the per-connection WS
+        // stream delivers snapshot + replay + live events atomically — no
+        // separate snapshot HTTP fetch, no reverse-map, no unmapped buffer.
+        // Returns null on transports without attach support; we fall
+        // through to the legacy snapshot+global-listener path below.
+        const attachSub = setupAttachSubscription(
+          contextKey,
+          connectionId,
+          undefined
+        )
+        if (attachSub) {
+          // Done — the EventStream handles snapshot, replay, live events,
+          // and reconnect entirely in-band over the same WS.
+        } else {
+          // Legacy path (Tauri desktop, RemoteDesktop): same flow as
+          // before Phase 3. Awaits snapshot HTTP first, then registers
+          // reverseMap, then drains any envelopes that arrived on the
+          // global listener while the snapshot was in flight.
+          let snapshotPatch:
+            | import("@/lib/snapshot-denormalize").SnapshotPatch
+            | null = null
+          try {
+            const snapshot = await acpGetSessionSnapshot(connectionId)
+            if (snapshot) {
+              snapshotPatch = denormalizeSnapshot(snapshot)
+            }
+          } catch (e: unknown) {
             console.warn(
               "[acp-context] snapshot fetch failed for",
               connectionId,
               e
             )
-          })
+          }
 
-        const buffered = consumeBufferedEvents(connectionId)
-        if (buffered.length > 0) {
-          for (const event of buffered) {
-            // Mirror the live listener's seq dedup for symmetry. The
-            // synchronous snapshot fetch above is fire-and-forget, so
-            // HYDRATE has not landed yet at this loop entry — the guard
-            // is currently a no-op against a 0 lastAppliedSeq, but it
-            // guards future changes that may await snapshot before drain.
-            const conn = storeRef.current.connections.get(contextKey)
-            if (conn && event.seq <= conn.lastAppliedSeq) continue
-            lastActivityRef.current.set(contextKey, Date.now())
-            handleMappedEvent(contextKey, event)
+          if (snapshotPatch) {
             dispatch({
-              type: "EVENT_APPLIED",
+              type: "HYDRATE_FROM_SNAPSHOT",
               contextKey,
-              seq: event.seq,
+              patch: snapshotPatch,
             })
-            // Mirror the live listener: fan out to JS-level subscribers
-            // after EVENT_APPLIED so subscribers inherit the same dedup.
-            for (const ref of eventSubscribersRef.current) {
-              try {
-                ref.current(event)
-              } catch (err) {
-                console.error("[acp-context] subscriber threw:", err)
-              }
+          }
+
+          reverseMapRef.current.set(connectionId, contextKey)
+
+          const buffered = consumeBufferedEvents(connectionId)
+          if (buffered.length > 0) {
+            for (const event of buffered) {
+              applyMappedEnvelope(contextKey, event)
             }
           }
         }
@@ -2876,13 +3018,15 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       }
     },
     [
+      applyMappedEnvelope,
       buildOpenAgentsSettingsAction,
       consumeBufferedEvents,
       dispatch,
-      handleMappedEvent,
       resolveConnectBlockState,
       setActiveKey,
+      setupAttachSubscription,
       t,
+      teardownAttachSubscription,
       waitForListenerReady,
     ]
   )
@@ -2902,25 +3046,27 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       }
       await acpDisconnect(conn.connectionId)
       reverseMapRef.current.delete(conn.connectionId)
+      teardownAttachSubscription(contextKey)
       lastActivityRef.current.delete(contextKey)
       pendingUnmappedEventsRef.current.delete(conn.connectionId)
       dispatch({ type: "CONNECTION_REMOVED", contextKey })
     },
-    [dispatch]
+    [dispatch, teardownAttachSubscription]
   )
 
   const disconnectAll = useCallback(async () => {
     const promises: Promise<void>[] = []
     pendingConnectRequestsRef.current.clear()
-    for (const [, conn] of storeRef.current.connections) {
+    for (const [contextKey, conn] of storeRef.current.connections) {
       promises.push(acpDisconnect(conn.connectionId).catch(() => {}))
       reverseMapRef.current.delete(conn.connectionId)
+      teardownAttachSubscription(contextKey)
       pendingUnmappedEventsRef.current.delete(conn.connectionId)
     }
     lastActivityRef.current.clear()
     await Promise.all(promises)
     dispatch({ type: "REMOVE_ALL" })
-  }, [dispatch])
+  }, [dispatch, teardownAttachSubscription])
 
   const sendPrompt = useCallback(
     async (
@@ -2931,9 +3077,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       const conn = storeRef.current.connections.get(contextKey)
       if (!conn) return
       lastActivityRef.current.set(contextKey, Date.now())
-      // Gate on WS readiness so backend-emitted content/thinking/tool_call
-      // events for this prompt are not lost in a reconnect window.
-      await waitForTransportReady()
       await acpPrompt(
         conn.connectionId,
         blocks,
@@ -2957,7 +3100,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       })
     }
     lastActivityRef.current.set(contextKey, Date.now())
-    await waitForTransportReady()
     await acpSetMode(conn.connectionId, modeId)
   }, [])
 
@@ -2980,7 +3122,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         saveConfigPreference(conn.agentType, configId, valueId, allOptions)
       }
       lastActivityRef.current.set(contextKey, Date.now())
-      await waitForTransportReady()
       await acpSetConfigOption(conn.connectionId, configId, valueId)
     },
     [dispatch]
@@ -2989,7 +3130,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   const cancel = useCallback(async (contextKey: string) => {
     const conn = storeRef.current.connections.get(contextKey)
     if (!conn) return
-    await waitForTransportReady()
     await acpCancel(conn.connectionId)
   }, [])
 
@@ -3005,7 +3145,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       }
       try {
         lastActivityRef.current.set(contextKey, Date.now())
-        await waitForTransportReady()
         await acpRespondPermission(conn.connectionId, requestId, optionId)
         dispatch({ type: "PERMISSION_CLEARED", contextKey })
       } catch (e) {
