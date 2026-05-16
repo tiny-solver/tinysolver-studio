@@ -305,6 +305,33 @@ pub fn build_router(
             post(handlers::files::upload_attachment)
                 .layer(DefaultBodyLimit::max(UPLOAD_MAX_BYTES as usize + 64 * 1024)),
         )
+        // ─── Workspace files (web upload/download) ───
+        //
+        // Issue #179: when codeg runs in server mode the user has no
+        // native file dialog, so they need HTTP endpoints to move files
+        // between the browser and the workspace. The upload handler
+        // streams to a same-dir staging file then renames into place;
+        // the download handlers stream files and walk-then-zip whole
+        // directories. The body-limit layer here matches the
+        // per-file cap honored by `workspace_files.rs` plus headroom
+        // for multipart framing.
+        .route(
+            "/upload_workspace_file",
+            post(handlers::workspace_files::upload_workspace_file).layer(
+                DefaultBodyLimit::max(
+                    handlers::workspace_files::workspace_upload_max_bytes() as usize
+                        + 1024 * 1024,
+                ),
+            ),
+        )
+        .route(
+            "/download_workspace_file",
+            post(handlers::workspace_files::download_workspace_file),
+        )
+        .route(
+            "/download_workspace_dir",
+            post(handlers::workspace_files::download_workspace_dir),
+        )
         // ─── Folder commands ───
         .route(
             "/list_folder_commands",

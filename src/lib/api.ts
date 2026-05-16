@@ -1574,6 +1574,214 @@ export async function uploadLocalPathToRemote(
   })
 }
 
+// ─── Workspace file upload / download (web mode) ───
+//
+// Issue #179: in server mode the user has no native file dialog, so the
+// file-tree context menu offers explicit upload + download actions
+// against these endpoints. The desktop build uses OS dialogs instead;
+// these helpers are only invoked when `isDesktop()` is false.
+
+export interface UploadWorkspaceFileResult {
+  path: string
+  name: string
+  size: number
+}
+
+function assertWebMode(action: string): void {
+  if (isDesktop()) {
+    throw new Error(
+      `${action} is only available in web mode; use the desktop file system instead.`
+    )
+  }
+}
+
+async function workspaceFileFetch(
+  endpoint: string,
+  body: BodyInit,
+  isMultipart: boolean
+): Promise<Response> {
+  const token = getCodegToken()
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  }
+  if (!isMultipart) {
+    headers["Content-Type"] = "application/json"
+  }
+  const res = await fetch(`${window.location.origin}/api/${endpoint}`, {
+    method: "POST",
+    headers,
+    body,
+  })
+  if (res.status === 401) {
+    redirectToCodegLogin()
+    throw new Error("Unauthorized")
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({
+      code: "network_error",
+      message: `HTTP ${res.status}`,
+    }))
+    throw err
+  }
+  return res
+}
+
+export interface UploadWorkspaceFileArgs {
+  rootPath: string
+  targetPath: string
+  file: File
+  relativePath?: string | null
+  signal?: AbortSignal
+  /**
+   * Byte-level progress callback fired on the request body as the
+   * browser uploads it. `total` may equal 0 on streams where the size
+   * is not pre-computable (rare for `File` objects but possible for
+   * `Blob` slices) — callers should treat 0 as "unknown" rather than
+   * "complete".
+   */
+  onProgress?: (loaded: number, total: number) => void
+}
+
+/**
+ * Upload one workspace file via `XMLHttpRequest` so we can surface
+ * upload progress and respond to an `AbortSignal`. The `fetch` API
+ * doesn't expose a request-body progress event in any browser today,
+ * which is why we hand-roll XHR instead — the rest of the codebase
+ * uses `fetch`, but this is the one route where the UX delta matters.
+ *
+ * Empty files are allowed: a workspace legitimately contains zero-byte
+ * placeholders (`.gitkeep`, `__init__.py`). The chat-attachment uploader
+ * still rejects them because feeding nothing to an LLM is meaningless,
+ * but here we forward whatever the user picked.
+ */
+export async function uploadWorkspaceFile(
+  args: UploadWorkspaceFileArgs
+): Promise<UploadWorkspaceFileResult> {
+  assertWebMode("uploadWorkspaceFile")
+  return new Promise<UploadWorkspaceFileResult>((resolve, reject) => {
+    const token = getCodegToken()
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${window.location.origin}/api/upload_workspace_file`)
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+
+    if (args.onProgress) {
+      const onProgress = args.onProgress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(event.loaded, event.total)
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        redirectToCodegLogin()
+        reject(new Error("Unauthorized"))
+        return
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        let err: unknown
+        try {
+          err = JSON.parse(xhr.responseText) as unknown
+        } catch {
+          err = {
+            code: "network_error",
+            message: `HTTP ${xhr.status}`,
+          }
+        }
+        reject(err)
+        return
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as UploadWorkspaceFileResult)
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)))
+      }
+    }
+    xhr.onerror = () => reject(new Error("Network error during upload"))
+    xhr.onabort = () => reject(new DOMException("Upload aborted", "AbortError"))
+
+    // Wire the AbortSignal. The listener is removed on `loadend` so a
+    // long-lived controller shared across many sequential uploads
+    // doesn't leak listeners (the parent XHR will have been GC'd
+    // anyway, but the listener kept a strong reference until then).
+    if (args.signal) {
+      if (args.signal.aborted) {
+        xhr.abort()
+        return
+      }
+      const signal = args.signal
+      const onAbort = () => xhr.abort()
+      signal.addEventListener("abort", onAbort, { once: true })
+      xhr.addEventListener("loadend", () => {
+        signal.removeEventListener("abort", onAbort)
+      })
+    }
+
+    // Order matters: the backend reads text fields before the `file`
+    // stream so it can resolve the destination before any bytes land.
+    const form = new FormData()
+    form.append("root_path", args.rootPath)
+    form.append("target_path", args.targetPath)
+    if (args.relativePath) {
+      form.append("relative_path", args.relativePath)
+    }
+    form.append("file", args.file, args.file.name)
+    xhr.send(form)
+  })
+}
+
+export function isUploadAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError"
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  try {
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = filename
+    anchor.rel = "noopener"
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    // Defer revocation so Safari has a chance to start the download
+    // before we yank the object URL out from under it.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
+}
+
+export async function downloadWorkspaceFile(
+  rootPath: string,
+  path: string,
+  fileName: string
+): Promise<void> {
+  assertWebMode("downloadWorkspaceFile")
+  const res = await workspaceFileFetch(
+    "download_workspace_file",
+    JSON.stringify({ rootPath, path }),
+    false
+  )
+  const blob = await res.blob()
+  triggerBrowserDownload(blob, fileName)
+}
+
+export async function downloadWorkspaceDir(
+  rootPath: string,
+  path: string,
+  dirName: string
+): Promise<void> {
+  assertWebMode("downloadWorkspaceDir")
+  const res = await workspaceFileFetch(
+    "download_workspace_dir",
+    JSON.stringify({ rootPath, path }),
+    false
+  )
+  const blob = await res.blob()
+  triggerBrowserDownload(blob, `${dirName}.zip`)
+}
+
 // File tree and git log commands
 
 export async function getFileTree(

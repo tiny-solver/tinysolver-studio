@@ -1429,6 +1429,11 @@
       "newDirectory": "Verzeichnis",
       "openIn": "Öffnen in",
       "openInTerminal": "Im Terminal öffnen",
+      "upload": "Hochladen",
+      "uploadFiles": "Dateien hochladen…",
+      "uploadFolder": "Ordner hochladen…",
+      "download": "Herunterladen",
+      "downloadAsZip": "Als ZIP herunterladen",
       "actions": {
         "select": "Auswählen",
         "unselect": "Auswahl aufheben",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "Als Kopie gespeichert",
         "saveCopyFailed": "Speichern als Kopie fehlgeschlagen",
         "watchStartFailed": "Dateiwatch konnte nicht gestartet werden",
-        "createFailed": "Erstellen fehlgeschlagen"
+        "createFailed": "Erstellen fehlgeschlagen",
+        "uploadFailed": "Hochladen von {name} fehlgeschlagen",
+        "uploadSucceeded": "{count, plural, one {# Datei} other {# Dateien}} hochgeladen",
+        "uploadProgress": "Hochladen {completed} / {total}",
+        "uploadCancelled": "Upload abgebrochen — {completed} / {total} fertig",
+        "uploadAllFailed": "Hochladen von {count, plural, one {# Datei} other {# Dateien}} fehlgeschlagen",
+        "uploadPartial": "{succeeded} hochgeladen, {failed} fehlgeschlagen",
+        "uploadInProgress": "Es läuft bereits ein Upload",
+        "downloadFailed": "Herunterladen von {name} fehlgeschlagen"
       },
       "createDialog": {
         "newFile": "Neue Datei",

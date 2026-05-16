@@ -1429,6 +1429,11 @@
       "newDirectory": "Directory",
       "openIn": "Open in",
       "openInTerminal": "Open in terminal",
+      "upload": "Upload",
+      "uploadFiles": "Upload files...",
+      "uploadFolder": "Upload folder...",
+      "download": "Download",
+      "downloadAsZip": "Download as ZIP",
       "actions": {
         "select": "Select",
         "unselect": "Unselect",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "Saved as a copy",
         "saveCopyFailed": "Failed to save as copy",
         "watchStartFailed": "Failed to start file watch",
-        "createFailed": "Failed to create"
+        "createFailed": "Failed to create",
+        "uploadFailed": "Failed to upload {name}",
+        "uploadSucceeded": "Uploaded {count, plural, one {# file} other {# files}}",
+        "uploadProgress": "Uploading {completed} / {total}",
+        "uploadCancelled": "Upload cancelled — {completed} / {total} uploaded",
+        "uploadAllFailed": "Failed to upload {count, plural, one {# file} other {# files}}",
+        "uploadPartial": "{succeeded} uploaded, {failed} failed",
+        "uploadInProgress": "An upload is already running",
+        "downloadFailed": "Failed to download {name}"
       },
       "createDialog": {
         "newFile": "New file",

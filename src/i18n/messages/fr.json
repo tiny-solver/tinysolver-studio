@@ -1429,6 +1429,11 @@
       "newDirectory": "Répertoire",
       "openIn": "Ouvrir dans",
       "openInTerminal": "Ouvrir dans le terminal",
+      "upload": "Téléverser",
+      "uploadFiles": "Téléverser des fichiers…",
+      "uploadFolder": "Téléverser un dossier…",
+      "download": "Télécharger",
+      "downloadAsZip": "Télécharger en ZIP",
       "actions": {
         "select": "Sélectionner",
         "unselect": "Désélectionner",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "Enregistré en copie",
         "saveCopyFailed": "Échec de l'enregistrement en copie",
         "watchStartFailed": "Échec du démarrage de la surveillance de fichiers",
-        "createFailed": "Échec de la création"
+        "createFailed": "Échec de la création",
+        "uploadFailed": "Échec du téléversement de {name}",
+        "uploadSucceeded": "{count, plural, one {# fichier téléversé} other {# fichiers téléversés}}",
+        "uploadProgress": "Téléversement {completed} / {total}",
+        "uploadCancelled": "Téléversement annulé — {completed} / {total} terminés",
+        "uploadAllFailed": "{count, plural, one {Échec du téléversement de # fichier} other {Échec du téléversement de # fichiers}}",
+        "uploadPartial": "{succeeded} téléversés, {failed} en échec",
+        "uploadInProgress": "Un téléversement est déjà en cours",
+        "downloadFailed": "Échec du téléchargement de {name}"
       },
       "createDialog": {
         "newFile": "Nouveau fichier",

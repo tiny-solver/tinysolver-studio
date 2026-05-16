@@ -1429,6 +1429,11 @@
       "newDirectory": "ディレクトリ",
       "openIn": "で開く",
       "openInTerminal": "ターミナルで開く",
+      "upload": "アップロード",
+      "uploadFiles": "ファイルをアップロード…",
+      "uploadFolder": "フォルダをアップロード…",
+      "download": "ダウンロード",
+      "downloadAsZip": "ZIP としてダウンロード",
       "actions": {
         "select": "選択",
         "unselect": "選択解除",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "コピーとして保存しました",
         "saveCopyFailed": "コピーとして保存できませんでした",
         "watchStartFailed": "ファイル監視の開始に失敗しました",
-        "createFailed": "作成に失敗しました"
+        "createFailed": "作成に失敗しました",
+        "uploadFailed": "{name} のアップロードに失敗しました",
+        "uploadSucceeded": "{count} 件のファイルをアップロードしました",
+        "uploadProgress": "アップロード中 {completed} / {total}",
+        "uploadCancelled": "アップロードを取り消しました — {completed} / {total} 完了",
+        "uploadAllFailed": "{count} 件のファイルのアップロードに失敗しました",
+        "uploadPartial": "{succeeded} 件成功、{failed} 件失敗",
+        "uploadInProgress": "別のアップロードが進行中です",
+        "downloadFailed": "{name} のダウンロードに失敗しました"
       },
       "createDialog": {
         "newFile": "新規ファイル",

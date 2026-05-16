@@ -1429,6 +1429,11 @@
       "newDirectory": "Directorio",
       "openIn": "Abrir en",
       "openInTerminal": "Abrir en terminal",
+      "upload": "Subir",
+      "uploadFiles": "Subir archivos…",
+      "uploadFolder": "Subir carpeta…",
+      "download": "Descargar",
+      "downloadAsZip": "Descargar como ZIP",
       "actions": {
         "select": "Seleccionar",
         "unselect": "Deseleccionar",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "Guardado como copia",
         "saveCopyFailed": "No se pudo guardar como copia",
         "watchStartFailed": "No se pudo iniciar la vigilancia de archivos",
-        "createFailed": "Error al crear"
+        "createFailed": "Error al crear",
+        "uploadFailed": "No se pudo subir {name}",
+        "uploadSucceeded": "Se subieron {count, plural, one {# archivo} other {# archivos}}",
+        "uploadProgress": "Subiendo {completed} / {total}",
+        "uploadCancelled": "Subida cancelada — {completed} / {total} completados",
+        "uploadAllFailed": "No se pudieron subir {count, plural, one {# archivo} other {# archivos}}",
+        "uploadPartial": "{succeeded} subidos, {failed} con error",
+        "uploadInProgress": "Ya hay una subida en curso",
+        "downloadFailed": "No se pudo descargar {name}"
       },
       "createDialog": {
         "newFile": "Nuevo archivo",

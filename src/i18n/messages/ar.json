@@ -1429,6 +1429,11 @@
       "newDirectory": "مجلد",
       "openIn": "فتح في",
       "openInTerminal": "فتح في الطرفية",
+      "upload": "رفع",
+      "uploadFiles": "رفع ملفات…",
+      "uploadFolder": "رفع مجلد…",
+      "download": "تنزيل",
+      "downloadAsZip": "تنزيل كملف ZIP",
       "actions": {
         "select": "تحديد",
         "unselect": "إلغاء التحديد",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "تم الحفظ كنسخة",
         "saveCopyFailed": "فشل الحفظ كنسخة",
         "watchStartFailed": "فشل بدء مراقبة الملفات",
-        "createFailed": "فشل في الإنشاء"
+        "createFailed": "فشل في الإنشاء",
+        "uploadFailed": "فشل رفع {name}",
+        "uploadSucceeded": "تم رفع {count} ملف",
+        "uploadProgress": "جاري الرفع {completed} / {total}",
+        "uploadCancelled": "تم إلغاء الرفع — {completed} / {total} مكتمل",
+        "uploadAllFailed": "فشل رفع {count} ملف",
+        "uploadPartial": "{succeeded} ناجح، {failed} فاشل",
+        "uploadInProgress": "هناك عملية رفع جارية بالفعل",
+        "downloadFailed": "فشل تنزيل {name}"
       },
       "createDialog": {
         "newFile": "ملف جديد",

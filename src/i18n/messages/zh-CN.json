@@ -1429,6 +1429,11 @@
       "newDirectory": "目录",
       "openIn": "打开于",
       "openInTerminal": "在终端打开",
+      "upload": "上传",
+      "uploadFiles": "上传文件…",
+      "uploadFolder": "上传文件夹…",
+      "download": "下载",
+      "downloadAsZip": "下载为 ZIP",
       "actions": {
         "select": "选择",
         "unselect": "取消选择",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "已另存为副本",
         "saveCopyFailed": "另存为副本失败",
         "watchStartFailed": "文件监听启动失败",
-        "createFailed": "创建失败"
+        "createFailed": "创建失败",
+        "uploadFailed": "上传 {name} 失败",
+        "uploadSucceeded": "已上传 {count} 个文件",
+        "uploadProgress": "正在上传 {completed} / {total}",
+        "uploadCancelled": "已取消上传 — {completed} / {total} 已上传",
+        "uploadAllFailed": "{count} 个文件上传失败",
+        "uploadPartial": "{succeeded} 个成功，{failed} 个失败",
+        "uploadInProgress": "已有上传任务正在进行",
+        "downloadFailed": "下载 {name} 失败"
       },
       "createDialog": {
         "newFile": "新建文件",

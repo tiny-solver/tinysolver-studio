@@ -1429,6 +1429,11 @@
       "newDirectory": "디렉터리",
       "openIn": "열기",
       "openInTerminal": "터미널에서 열기",
+      "upload": "업로드",
+      "uploadFiles": "파일 업로드…",
+      "uploadFolder": "폴더 업로드…",
+      "download": "다운로드",
+      "downloadAsZip": "ZIP으로 다운로드",
       "actions": {
         "select": "선택",
         "unselect": "선택 해제",
@@ -1457,7 +1462,15 @@
         "savedAsCopy": "사본으로 저장했습니다",
         "saveCopyFailed": "사본으로 저장하지 못했습니다",
         "watchStartFailed": "파일 감시 시작에 실패했습니다",
-        "createFailed": "생성 실패"
+        "createFailed": "생성 실패",
+        "uploadFailed": "{name} 업로드 실패",
+        "uploadSucceeded": "{count}개 파일을 업로드했습니다",
+        "uploadProgress": "업로드 중 {completed} / {total}",
+        "uploadCancelled": "업로드 취소됨 — {completed} / {total} 완료",
+        "uploadAllFailed": "{count}개 파일 업로드 실패",
+        "uploadPartial": "{succeeded}개 성공, {failed}개 실패",
+        "uploadInProgress": "이미 진행 중인 업로드가 있습니다",
+        "downloadFailed": "{name} 다운로드 실패"
       },
       "createDialog": {
         "newFile": "새 파일",
