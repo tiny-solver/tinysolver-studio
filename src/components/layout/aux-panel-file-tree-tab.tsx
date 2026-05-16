@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type ReactNode,
 } from "react"
 import { revealItemInDir } from "@/lib/platform"
@@ -22,6 +21,7 @@ import { useWorkspaceContext } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import { AuxPanelNoFolderEmpty } from "@/components/layout/aux-panel-no-folder-empty"
 import { WorkspaceDegradedBanner } from "@/components/layout/workspace-degraded-banner"
+import { WorkspaceUploadDialog } from "@/components/layout/workspace-upload-dialog"
 import {
   createFileTreeEntry,
   deleteFileTreeEntry,
@@ -33,13 +33,11 @@ import {
   gitListAllBranches,
   gitRollbackFile,
   gitStatus,
-  isUploadAbortError,
   readFileForEdit,
   readFilePreview,
   openCommitWindow,
   renameFileTreeEntry,
   saveFileCopy,
-  uploadWorkspaceFile,
 } from "@/lib/api"
 import { isDesktop } from "@/lib/transport"
 import { emitAttachFileToSession } from "@/lib/session-attachment-events"
@@ -99,39 +97,6 @@ function parentDir(filePath: string): string {
 
 function baseName(path: string): string {
   return path.split(/[/\\]/).pop() || path
-}
-
-/**
- * Render a human-friendly byte count like `850 B`, `12.3 KB`, `4.2 MB`.
- * Used only by the upload progress toast so the operator can tell at a
- * glance how far along a large file is.
- */
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "—"
-  if (bytes < 1024) return `${bytes} B`
-  const kb = bytes / 1024
-  if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`
-  const mb = kb / 1024
-  if (mb < 1024) return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`
-  const gb = mb / 1024
-  return `${gb.toFixed(gb < 10 ? 1 : 0)} GB`
-}
-
-/**
- * Compose the per-file progress description shown inside the running
- * upload toast. We deliberately keep this English-only because it's
- * just `name · loaded / total` — translating "of" / "/" into 10
- * locales would be a lot of strings for very little clarity gain.
- */
-function formatUploadFileLabel(
-  name: string,
-  loaded: number,
-  total: number
-): string {
-  if (total > 0) {
-    return `${name} · ${formatBytes(loaded)} / ${formatBytes(total)}`
-  }
-  return `${name} · ${formatBytes(loaded)}`
 }
 
 const FILE_TREE_ROOT_PATH = "__workspace_root__"
@@ -494,8 +459,7 @@ interface RenderNodeProps {
   onRequestRename: (target: FileActionTarget) => void
   onRequestCreate: (parentPath: string, kind: "file" | "dir") => void
   onRequestDelete: (target: FileActionTarget) => void
-  onRequestUploadFiles: (targetPath: string) => void
-  onRequestUploadFolder: (targetPath: string) => void
+  onRequestUpload: (targetPath: string) => void
   onRequestDownloadFile: (target: FileActionTarget) => void
   onRequestDownloadDir: (target: FileActionTarget) => void
   onRefresh: () => void
@@ -526,8 +490,7 @@ function RenderNode({
   onRequestCreate,
   onRequestRename,
   onRequestDelete,
-  onRequestUploadFiles,
-  onRequestUploadFolder,
+  onRequestUpload,
   onRequestDownloadFile,
   onRequestDownloadDir,
   onRefresh,
@@ -757,8 +720,7 @@ function RenderNode({
                   onRequestAddToVcs={onRequestAddToVcs}
                   onRequestRename={onRequestRename}
                   onRequestDelete={onRequestDelete}
-                  onRequestUploadFiles={onRequestUploadFiles}
-                  onRequestUploadFolder={onRequestUploadFolder}
+                  onRequestUpload={onRequestUpload}
                   onRequestDownloadFile={onRequestDownloadFile}
                   onRequestDownloadDir={onRequestDownloadDir}
                   onRefresh={onRefresh}
@@ -845,23 +807,9 @@ function RenderNode({
         </ContextMenuSub>
         {webMode && (
           <>
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>{t("upload")}</ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                <ContextMenuItem
-                  onSelect={() => onRequestUploadFiles(node.path)}
-                >
-                  {t("uploadFiles")}
-                </ContextMenuItem>
-                {folderUploadSupported && (
-                  <ContextMenuItem
-                    onSelect={() => onRequestUploadFolder(node.path)}
-                  >
-                    {t("uploadFolder")}
-                  </ContextMenuItem>
-                )}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
+            <ContextMenuItem onSelect={() => onRequestUpload(node.path)}>
+              {t("upload")}
+            </ContextMenuItem>
             <ContextMenuItem onSelect={() => onRequestDownloadDir(node)}>
               {t("downloadAsZip")}
             </ContextMenuItem>
@@ -1459,24 +1407,19 @@ export function FileTreeTab() {
 
   // ─── Web upload / download (issue #179) ───
   // In web mode the user has no native file dialog, so the file-tree
-  // context menu drives upload/download through hidden <input> elements.
-  // `uploadTargetPathRef` carries the directory the user right-clicked
-  // from the menu handler over to the input's `onChange` callback.
-  // `uploadAbortRef` carries the AbortController for the currently
-  // running upload session so the cancel toast button and any
-  // component-unmount cleanup can call `.abort()` on it.
-  const fileUploadInputRef = useRef<HTMLInputElement | null>(null)
-  const folderUploadInputRef = useRef<HTMLInputElement | null>(null)
-  const uploadTargetPathRef = useRef<string>("")
-  const uploadAbortRef = useRef<AbortController | null>(null)
+  // context menu opens `WorkspaceUploadDialog`, which owns the queue,
+  // progress UI, and cancellation. We only track which directory the
+  // user right-clicked from and whether the dialog is open.
   const [webMode, setWebMode] = useState(false)
   // `webkitdirectory` is non-standard. Chromium, Edge, Firefox, and
   // desktop Safari support it; iOS Safari does not, and historically
   // some embedded webviews lacked it too. Feature-detect at mount and
-  // hide the "Upload folder" menu item where the picker would silently
+  // hide the "Select folder" affordance where the picker would silently
   // fall back to single-file selection — that would surprise the user
   // mid-flow and risk corrupting the relative-path contract.
   const [folderUploadSupported, setFolderUploadSupported] = useState(false)
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [uploadDialogTarget, setUploadDialogTarget] = useState("")
   useEffect(() => {
     setWebMode(!isDesktop())
     setFolderUploadSupported(
@@ -1484,187 +1427,14 @@ export function FileTreeTab() {
     )
   }, [])
 
-  // Aborting on unmount prevents an in-flight upload from outliving the
-  // component — the XHR would otherwise continue, the toast would
-  // dangle, and the user would have no way to cancel.
-  useEffect(() => {
-    return () => {
-      uploadAbortRef.current?.abort()
-    }
+  const handleRequestUpload = useCallback((targetPath: string) => {
+    setUploadDialogTarget(targetPath)
+    setUploadDialogOpen(true)
   }, [])
 
-  const handleRequestUploadFiles = useCallback((targetPath: string) => {
-    uploadTargetPathRef.current = targetPath
-    fileUploadInputRef.current?.click()
-  }, [])
-
-  const handleRequestUploadFolder = useCallback((targetPath: string) => {
-    uploadTargetPathRef.current = targetPath
-    folderUploadInputRef.current?.click()
-  }, [])
-
-  const processUploadFiles = useCallback(
-    async (
-      fileList: FileList,
-      mode: "files" | "folder",
-      targetPath: string
-    ) => {
-      const folderPath = folder?.path
-      if (!folderPath) return
-      const files = Array.from(fileList)
-      if (files.length === 0) return
-
-      // Refuse to start a second session while one is running. The
-      // hidden inputs can fire while a prior session is still draining
-      // (rare but possible if the user double-clicks fast).
-      if (uploadAbortRef.current) {
-        toast.warning(t("toasts.uploadInProgress"))
-        return
-      }
-
-      const controller = new AbortController()
-      uploadAbortRef.current = controller
-
-      const total = files.length
-      let succeeded = 0
-      const errors: Array<{ name: string; message: string }> = []
-
-      // One toast for the whole session — sonner lets us update it via
-      // the same id. `duration: Infinity` keeps it on screen until we
-      // dismiss/replace it ourselves; the action button drives cancel.
-      const renderLoading = (
-        completedCount: number,
-        currentLabel: string | undefined
-      ) =>
-        toast.loading(
-          t("toasts.uploadProgress", {
-            completed: completedCount,
-            total,
-          }),
-          {
-            id: "workspace-upload",
-            description: currentLabel,
-            duration: Infinity,
-            action: {
-              label: tCommon("cancel"),
-              onClick: () => controller.abort(),
-            },
-          }
-        )
-
-      renderLoading(0, files[0]?.name)
-
-      try {
-        for (let i = 0; i < files.length; i++) {
-          if (controller.signal.aborted) break
-          const file = files[i]
-          // `webkitRelativePath` is only meaningful for folder picks
-          // (where it includes the top-level folder name). For ordinary
-          // multi-file picks the browser still sets it to an empty
-          // string, but we ignore it explicitly to keep the contract
-          // unambiguous when the same File object is passed both ways.
-          const relPath = mode === "folder" ? file.webkitRelativePath || "" : ""
-
-          // Show a per-file label that mixes byte progress (if known)
-          // with the filename, e.g. "report.pdf · 3.2 MB / 8.0 MB".
-          const updateProgressLabel = (loaded: number, fileTotal: number) => {
-            if (controller.signal.aborted) return
-            const label = formatUploadFileLabel(file.name, loaded, fileTotal)
-            renderLoading(i, label)
-          }
-          updateProgressLabel(0, file.size)
-
-          try {
-            await uploadWorkspaceFile({
-              rootPath: folderPath,
-              targetPath,
-              file,
-              relativePath: relPath || null,
-              signal: controller.signal,
-              onProgress: (loaded, fileTotal) =>
-                updateProgressLabel(loaded, fileTotal),
-            })
-            succeeded += 1
-          } catch (error) {
-            if (isUploadAbortError(error) || controller.signal.aborted) {
-              break
-            }
-            errors.push({
-              name: file.name,
-              message: toErrorMessage(error),
-            })
-          }
-        }
-
-        const failed = errors.length
-        const wasAborted = controller.signal.aborted
-        if (wasAborted) {
-          toast.warning(
-            t("toasts.uploadCancelled", { completed: succeeded, total }),
-            { id: "workspace-upload", duration: 5000 }
-          )
-        } else if (failed === 0) {
-          toast.success(t("toasts.uploadSucceeded", { count: succeeded }), {
-            id: "workspace-upload",
-            duration: 4000,
-          })
-        } else if (succeeded === 0) {
-          toast.error(t("toasts.uploadAllFailed", { count: failed }), {
-            id: "workspace-upload",
-            description: errors[0]
-              ? `${errors[0].name}: ${errors[0].message}`
-              : undefined,
-            duration: 8000,
-          })
-        } else {
-          toast.warning(t("toasts.uploadPartial", { succeeded, failed }), {
-            id: "workspace-upload",
-            description: errors[0]
-              ? `${errors[0].name}: ${errors[0].message}`
-              : undefined,
-            duration: 8000,
-          })
-        }
-      } finally {
-        uploadAbortRef.current = null
-        // Always refresh the tree, even on cancel/all-fail — partial
-        // success or a server-side committed-then-crashed write can
-        // still leave files on disk that the workspace watcher hasn't
-        // surfaced yet. The cost of one refresh is small; stale UI is
-        // user confusion.
-        void fetchTree()
-      }
-    },
-    [folder?.path, fetchTree, t, tCommon]
-  )
-
-  const handleFileInputChange = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const target = event.target
-      const fileList = target.files
-      const targetPath = uploadTargetPathRef.current
-      uploadTargetPathRef.current = ""
-      // Reset value so the same file can be re-selected later without
-      // the change event being skipped.
-      target.value = ""
-      if (!fileList || fileList.length === 0) return
-      await processUploadFiles(fileList, "files", targetPath)
-    },
-    [processUploadFiles]
-  )
-
-  const handleFolderInputChange = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const target = event.target
-      const fileList = target.files
-      const targetPath = uploadTargetPathRef.current
-      uploadTargetPathRef.current = ""
-      target.value = ""
-      if (!fileList || fileList.length === 0) return
-      await processUploadFiles(fileList, "folder", targetPath)
-    },
-    [processUploadFiles]
-  )
+  const handleUploadComplete = useCallback(() => {
+    void fetchTree()
+  }, [fetchTree])
 
   const handleRequestDownloadFile = useCallback(
     async (target: FileActionTarget) => {
@@ -2523,8 +2293,7 @@ export function FileTreeTab() {
                           onRequestAddToVcs={handleAddToVcs}
                           onRequestRename={handleRequestRename}
                           onRequestDelete={handleRequestDelete}
-                          onRequestUploadFiles={handleRequestUploadFiles}
-                          onRequestUploadFolder={handleRequestUploadFolder}
+                          onRequestUpload={handleRequestUpload}
                           onRequestDownloadFile={(target) =>
                             void handleRequestDownloadFile(target)
                           }
@@ -2629,25 +2398,11 @@ export function FileTreeTab() {
                     </ContextMenuSub>
                     {webMode && (
                       <>
-                        <ContextMenuSub>
-                          <ContextMenuSubTrigger>
-                            {t("upload")}
-                          </ContextMenuSubTrigger>
-                          <ContextMenuSubContent>
-                            <ContextMenuItem
-                              onSelect={() => handleRequestUploadFiles("")}
-                            >
-                              {t("uploadFiles")}
-                            </ContextMenuItem>
-                            {folderUploadSupported && (
-                              <ContextMenuItem
-                                onSelect={() => handleRequestUploadFolder("")}
-                              >
-                                {t("uploadFolder")}
-                              </ContextMenuItem>
-                            )}
-                          </ContextMenuSubContent>
-                        </ContextMenuSub>
+                        <ContextMenuItem
+                          onSelect={() => handleRequestUpload("")}
+                        >
+                          {t("upload")}
+                        </ContextMenuItem>
                         <ContextMenuItem
                           onSelect={() =>
                             void handleRequestDownloadDir(rootTarget)
@@ -2676,21 +2431,9 @@ export function FileTreeTab() {
             </ContextMenuSubContent>
           </ContextMenuSub>
           {webMode && (
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>{t("upload")}</ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                <ContextMenuItem onSelect={() => handleRequestUploadFiles("")}>
-                  {t("uploadFiles")}
-                </ContextMenuItem>
-                {folderUploadSupported && (
-                  <ContextMenuItem
-                    onSelect={() => handleRequestUploadFolder("")}
-                  >
-                    {t("uploadFolder")}
-                  </ContextMenuItem>
-                )}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
+            <ContextMenuItem onSelect={() => handleRequestUpload("")}>
+              {t("upload")}
+            </ContextMenuItem>
           )}
           <ContextMenuItem
             onSelect={() => {
@@ -2701,29 +2444,15 @@ export function FileTreeTab() {
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      {webMode && (
-        <>
-          <input
-            ref={fileUploadInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => void handleFileInputChange(event)}
-          />
-          <input
-            ref={folderUploadInputRef}
-            type="file"
-            // `webkitdirectory` is non-standard but supported by Chrome,
-            // Edge, Firefox, and Safari. React doesn't know about it, so
-            // pass via the lower-cased DOM attribute name.
-            // @ts-expect-error — non-standard attribute used for folder picks
-            webkitdirectory=""
-            directory=""
-            multiple
-            className="hidden"
-            onChange={(event) => void handleFolderInputChange(event)}
-          />
-        </>
+      {webMode && folder?.path && (
+        <WorkspaceUploadDialog
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+          rootPath={folder.path}
+          targetPath={uploadDialogTarget}
+          folderUploadSupported={folderUploadSupported}
+          onComplete={handleUploadComplete}
+        />
       )}
 
       <Dialog

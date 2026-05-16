@@ -1429,9 +1429,7 @@
       "newDirectory": "Directorio",
       "openIn": "Abrir en",
       "openInTerminal": "Abrir en terminal",
-      "upload": "Subir",
-      "uploadFiles": "Subir archivos…",
-      "uploadFolder": "Subir carpeta…",
+      "upload": "Subir…",
       "download": "Descargar",
       "downloadAsZip": "Descargar como ZIP",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "No se pudo guardar como copia",
         "watchStartFailed": "No se pudo iniciar la vigilancia de archivos",
         "createFailed": "Error al crear",
-        "uploadFailed": "No se pudo subir {name}",
-        "uploadSucceeded": "Se subieron {count, plural, one {# archivo} other {# archivos}}",
-        "uploadProgress": "Subiendo {completed} / {total}",
-        "uploadCancelled": "Subida cancelada — {completed} / {total} completados",
-        "uploadAllFailed": "No se pudieron subir {count, plural, one {# archivo} other {# archivos}}",
-        "uploadPartial": "{succeeded} subidos, {failed} con error",
-        "uploadInProgress": "Ya hay una subida en curso",
         "downloadFailed": "No se pudo descargar {name}"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "Introduce un nuevo nombre (solo nombre, sin ruta).",
         "placeholderDirectory": "nuevo-nombre-carpeta",
         "placeholderFile": "nuevo-nombre-archivo.ext"
+      },
+      "uploadDialog": {
+        "title": "Subir al área de trabajo",
+        "description": "Los archivos se subirán a: {path}",
+        "workspaceRoot": "raíz del área de trabajo",
+        "dropHint": "Arrastra archivos o carpetas aquí, o usa los botones de abajo",
+        "dropHintActive": "Suelta para añadir a la cola",
+        "selectFiles": "Seleccionar archivos",
+        "selectFolder": "Seleccionar carpeta",
+        "clearQueue": "Limpiar finalizados",
+        "removeItem": "Quitar de la cola",
+        "retry": "Reintentar",
+        "dropZoneAria": "Suelta archivos aquí o activa para examinar",
+        "folderEmpty": "No se encontraron archivos en la carpeta soltada",
+        "summary": "Total: {total} · Con éxito: {succeeded} · Con error: {failed}",
+        "status": {
+          "pending": "En espera",
+          "uploading": "Subiendo",
+          "success": "Completado",
+          "error": "Falló",
+          "cancelled": "Cancelado"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "Selecciona archivos del directorio {path} para añadir a VCS.",

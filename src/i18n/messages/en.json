@@ -1429,9 +1429,7 @@
       "newDirectory": "Directory",
       "openIn": "Open in",
       "openInTerminal": "Open in terminal",
-      "upload": "Upload",
-      "uploadFiles": "Upload files...",
-      "uploadFolder": "Upload folder...",
+      "upload": "Upload...",
       "download": "Download",
       "downloadAsZip": "Download as ZIP",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "Failed to save as copy",
         "watchStartFailed": "Failed to start file watch",
         "createFailed": "Failed to create",
-        "uploadFailed": "Failed to upload {name}",
-        "uploadSucceeded": "Uploaded {count, plural, one {# file} other {# files}}",
-        "uploadProgress": "Uploading {completed} / {total}",
-        "uploadCancelled": "Upload cancelled — {completed} / {total} uploaded",
-        "uploadAllFailed": "Failed to upload {count, plural, one {# file} other {# files}}",
-        "uploadPartial": "{succeeded} uploaded, {failed} failed",
-        "uploadInProgress": "An upload is already running",
         "downloadFailed": "Failed to download {name}"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "Enter a new name (name only, no path).",
         "placeholderDirectory": "new-folder-name",
         "placeholderFile": "new-file-name.ext"
+      },
+      "uploadDialog": {
+        "title": "Upload to workspace",
+        "description": "Files will be uploaded to: {path}",
+        "workspaceRoot": "workspace root",
+        "dropHint": "Drag files or folders here, or use the buttons below",
+        "dropHintActive": "Release to add to the queue",
+        "selectFiles": "Select files",
+        "selectFolder": "Select folder",
+        "clearQueue": "Clear finished",
+        "removeItem": "Remove from queue",
+        "retry": "Retry",
+        "dropZoneAria": "Drop files here or activate to browse",
+        "folderEmpty": "No files found in the dropped folder",
+        "summary": "Total: {total} · Succeeded: {succeeded} · Failed: {failed}",
+        "status": {
+          "pending": "Waiting",
+          "uploading": "Uploading",
+          "success": "Done",
+          "error": "Failed",
+          "cancelled": "Cancelled"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "Select files under directory {path} to add to VCS.",

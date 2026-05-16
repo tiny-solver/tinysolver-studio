@@ -1429,9 +1429,7 @@
       "newDirectory": "目录",
       "openIn": "打开于",
       "openInTerminal": "在终端打开",
-      "upload": "上传",
-      "uploadFiles": "上传文件…",
-      "uploadFolder": "上传文件夹…",
+      "upload": "上传…",
       "download": "下载",
       "downloadAsZip": "下载为 ZIP",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "另存为副本失败",
         "watchStartFailed": "文件监听启动失败",
         "createFailed": "创建失败",
-        "uploadFailed": "上传 {name} 失败",
-        "uploadSucceeded": "已上传 {count} 个文件",
-        "uploadProgress": "正在上传 {completed} / {total}",
-        "uploadCancelled": "已取消上传 — {completed} / {total} 已上传",
-        "uploadAllFailed": "{count} 个文件上传失败",
-        "uploadPartial": "{succeeded} 个成功，{failed} 个失败",
-        "uploadInProgress": "已有上传任务正在进行",
         "downloadFailed": "下载 {name} 失败"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "输入新的名称（仅名称，不含路径）。",
         "placeholderDirectory": "新建文件夹名称",
         "placeholderFile": "新建文件名称.ext"
+      },
+      "uploadDialog": {
+        "title": "上传到工作区",
+        "description": "文件将上传到：{path}",
+        "workspaceRoot": "工作区根目录",
+        "dropHint": "拖拽文件或文件夹到此处，或使用下方按钮",
+        "dropHintActive": "释放鼠标以加入上传队列",
+        "selectFiles": "选择文件",
+        "selectFolder": "选择文件夹",
+        "clearQueue": "清除已完成",
+        "removeItem": "从队列移除",
+        "retry": "重试",
+        "dropZoneAria": "拖放文件到此处，或按回车键浏览",
+        "folderEmpty": "拖入的文件夹中没有可上传的文件",
+        "summary": "总数：{total} · 成功：{succeeded} · 失败：{failed}",
+        "status": {
+          "pending": "等待中",
+          "uploading": "上传中",
+          "success": "完成",
+          "error": "失败",
+          "cancelled": "已取消"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "选择目录 {path} 下要添加到 VCS 的文件。",

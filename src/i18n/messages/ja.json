@@ -1429,9 +1429,7 @@
       "newDirectory": "ディレクトリ",
       "openIn": "で開く",
       "openInTerminal": "ターミナルで開く",
-      "upload": "アップロード",
-      "uploadFiles": "ファイルをアップロード…",
-      "uploadFolder": "フォルダをアップロード…",
+      "upload": "アップロード…",
       "download": "ダウンロード",
       "downloadAsZip": "ZIP としてダウンロード",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "コピーとして保存できませんでした",
         "watchStartFailed": "ファイル監視の開始に失敗しました",
         "createFailed": "作成に失敗しました",
-        "uploadFailed": "{name} のアップロードに失敗しました",
-        "uploadSucceeded": "{count} 件のファイルをアップロードしました",
-        "uploadProgress": "アップロード中 {completed} / {total}",
-        "uploadCancelled": "アップロードを取り消しました — {completed} / {total} 完了",
-        "uploadAllFailed": "{count} 件のファイルのアップロードに失敗しました",
-        "uploadPartial": "{succeeded} 件成功、{failed} 件失敗",
-        "uploadInProgress": "別のアップロードが進行中です",
         "downloadFailed": "{name} のダウンロードに失敗しました"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "新しい名前を入力してください（名前のみ、パスは不要）。",
         "placeholderDirectory": "新しいフォルダ名",
         "placeholderFile": "新しいファイル名.ext"
+      },
+      "uploadDialog": {
+        "title": "ワークスペースへアップロード",
+        "description": "アップロード先：{path}",
+        "workspaceRoot": "ワークスペースのルート",
+        "dropHint": "ファイルやフォルダをここにドロップ、または下のボタンから選択",
+        "dropHintActive": "離してキューに追加",
+        "selectFiles": "ファイルを選択",
+        "selectFolder": "フォルダを選択",
+        "clearQueue": "完了したものをクリア",
+        "removeItem": "キューから削除",
+        "retry": "再試行",
+        "dropZoneAria": "ファイルをここにドロップ、または Enter で参照",
+        "folderEmpty": "ドロップされたフォルダにファイルが見つかりません",
+        "summary": "合計：{total} · 成功：{succeeded} · 失敗：{failed}",
+        "status": {
+          "pending": "待機中",
+          "uploading": "アップロード中",
+          "success": "完了",
+          "error": "失敗",
+          "cancelled": "キャンセル済み"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "ディレクトリ {path} 配下で VCS に追加するファイルを選択してください。",

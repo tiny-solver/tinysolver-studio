@@ -1429,9 +1429,7 @@
       "newDirectory": "Répertoire",
       "openIn": "Ouvrir dans",
       "openInTerminal": "Ouvrir dans le terminal",
-      "upload": "Téléverser",
-      "uploadFiles": "Téléverser des fichiers…",
-      "uploadFolder": "Téléverser un dossier…",
+      "upload": "Téléverser…",
       "download": "Télécharger",
       "downloadAsZip": "Télécharger en ZIP",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "Échec de l'enregistrement en copie",
         "watchStartFailed": "Échec du démarrage de la surveillance de fichiers",
         "createFailed": "Échec de la création",
-        "uploadFailed": "Échec du téléversement de {name}",
-        "uploadSucceeded": "{count, plural, one {# fichier téléversé} other {# fichiers téléversés}}",
-        "uploadProgress": "Téléversement {completed} / {total}",
-        "uploadCancelled": "Téléversement annulé — {completed} / {total} terminés",
-        "uploadAllFailed": "{count, plural, one {Échec du téléversement de # fichier} other {Échec du téléversement de # fichiers}}",
-        "uploadPartial": "{succeeded} téléversés, {failed} en échec",
-        "uploadInProgress": "Un téléversement est déjà en cours",
         "downloadFailed": "Échec du téléchargement de {name}"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "Saisissez un nouveau nom (nom uniquement, sans chemin).",
         "placeholderDirectory": "nouveau-nom-dossier",
         "placeholderFile": "nouveau-nom-fichier.ext"
+      },
+      "uploadDialog": {
+        "title": "Téléverser vers l'espace de travail",
+        "description": "Les fichiers seront téléversés vers : {path}",
+        "workspaceRoot": "racine de l'espace de travail",
+        "dropHint": "Déposez des fichiers ou dossiers ici, ou utilisez les boutons ci-dessous",
+        "dropHintActive": "Relâchez pour ajouter à la file d'attente",
+        "selectFiles": "Sélectionner des fichiers",
+        "selectFolder": "Sélectionner un dossier",
+        "clearQueue": "Effacer terminés",
+        "removeItem": "Retirer de la file",
+        "retry": "Réessayer",
+        "dropZoneAria": "Déposez ici ou activez pour parcourir",
+        "folderEmpty": "Aucun fichier trouvé dans le dossier déposé",
+        "summary": "Total : {total} · Réussis : {succeeded} · Échoués : {failed}",
+        "status": {
+          "pending": "En attente",
+          "uploading": "Téléversement",
+          "success": "Terminé",
+          "error": "Échec",
+          "cancelled": "Annulé"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "Sélectionnez des fichiers sous le dossier {path} à ajouter au VCS.",

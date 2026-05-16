@@ -1429,9 +1429,7 @@
       "newDirectory": "Diretório",
       "openIn": "Abrir em",
       "openInTerminal": "Abrir no terminal",
-      "upload": "Enviar",
-      "uploadFiles": "Enviar arquivos…",
-      "uploadFolder": "Enviar pasta…",
+      "upload": "Enviar…",
       "download": "Baixar",
       "downloadAsZip": "Baixar como ZIP",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "Falha ao salvar como cópia",
         "watchStartFailed": "Falha ao iniciar monitoramento de arquivos",
         "createFailed": "Falha ao criar",
-        "uploadFailed": "Falha ao enviar {name}",
-        "uploadSucceeded": "{count, plural, one {# arquivo enviado} other {# arquivos enviados}}",
-        "uploadProgress": "Enviando {completed} / {total}",
-        "uploadCancelled": "Envio cancelado — {completed} / {total} concluídos",
-        "uploadAllFailed": "{count, plural, one {Falha ao enviar # arquivo} other {Falha ao enviar # arquivos}}",
-        "uploadPartial": "{succeeded} enviados, {failed} com falha",
-        "uploadInProgress": "Já existe um envio em andamento",
         "downloadFailed": "Falha ao baixar {name}"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "Digite um novo nome (apenas nome, sem caminho).",
         "placeholderDirectory": "novo-nome-da-pasta",
         "placeholderFile": "novo-nome-do-arquivo.ext"
+      },
+      "uploadDialog": {
+        "title": "Enviar para o workspace",
+        "description": "Os arquivos serão enviados para: {path}",
+        "workspaceRoot": "raiz do workspace",
+        "dropHint": "Arraste arquivos ou pastas aqui, ou use os botões abaixo",
+        "dropHintActive": "Solte para adicionar à fila",
+        "selectFiles": "Selecionar arquivos",
+        "selectFolder": "Selecionar pasta",
+        "clearQueue": "Limpar finalizados",
+        "removeItem": "Remover da fila",
+        "retry": "Tentar novamente",
+        "dropZoneAria": "Solte arquivos aqui ou ative para procurar",
+        "folderEmpty": "Nenhum arquivo encontrado na pasta solta",
+        "summary": "Total: {total} · Sucesso: {succeeded} · Falhas: {failed}",
+        "status": {
+          "pending": "Aguardando",
+          "uploading": "Enviando",
+          "success": "Concluído",
+          "error": "Falhou",
+          "cancelled": "Cancelado"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "Selecione arquivos no diretório {path} para adicionar ao VCS.",

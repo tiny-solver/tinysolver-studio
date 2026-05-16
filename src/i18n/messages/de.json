@@ -1429,9 +1429,7 @@
       "newDirectory": "Verzeichnis",
       "openIn": "Öffnen in",
       "openInTerminal": "Im Terminal öffnen",
-      "upload": "Hochladen",
-      "uploadFiles": "Dateien hochladen…",
-      "uploadFolder": "Ordner hochladen…",
+      "upload": "Hochladen…",
       "download": "Herunterladen",
       "downloadAsZip": "Als ZIP herunterladen",
       "actions": {
@@ -1463,13 +1461,6 @@
         "saveCopyFailed": "Speichern als Kopie fehlgeschlagen",
         "watchStartFailed": "Dateiwatch konnte nicht gestartet werden",
         "createFailed": "Erstellen fehlgeschlagen",
-        "uploadFailed": "Hochladen von {name} fehlgeschlagen",
-        "uploadSucceeded": "{count, plural, one {# Datei} other {# Dateien}} hochgeladen",
-        "uploadProgress": "Hochladen {completed} / {total}",
-        "uploadCancelled": "Upload abgebrochen — {completed} / {total} fertig",
-        "uploadAllFailed": "Hochladen von {count, plural, one {# Datei} other {# Dateien}} fehlgeschlagen",
-        "uploadPartial": "{succeeded} hochgeladen, {failed} fehlgeschlagen",
-        "uploadInProgress": "Es läuft bereits ein Upload",
         "downloadFailed": "Herunterladen von {name} fehlgeschlagen"
       },
       "createDialog": {
@@ -1485,6 +1476,28 @@
         "description": "Geben Sie einen neuen Namen ein (nur Name, kein Pfad).",
         "placeholderDirectory": "neuer-ordnername",
         "placeholderFile": "neuer-dateiname.ext"
+      },
+      "uploadDialog": {
+        "title": "In den Arbeitsbereich hochladen",
+        "description": "Dateien werden hochgeladen nach: {path}",
+        "workspaceRoot": "Arbeitsbereich-Stammverzeichnis",
+        "dropHint": "Dateien oder Ordner hier ablegen oder die Schaltflächen unten verwenden",
+        "dropHintActive": "Loslassen, um zur Warteschlange hinzuzufügen",
+        "selectFiles": "Dateien auswählen",
+        "selectFolder": "Ordner auswählen",
+        "clearQueue": "Erledigte entfernen",
+        "removeItem": "Aus der Warteschlange entfernen",
+        "retry": "Wiederholen",
+        "dropZoneAria": "Dateien hier ablegen oder aktivieren zum Durchsuchen",
+        "folderEmpty": "Keine Dateien im abgelegten Ordner gefunden",
+        "summary": "Gesamt: {total} · Erfolgreich: {succeeded} · Fehlgeschlagen: {failed}",
+        "status": {
+          "pending": "Wartet",
+          "uploading": "Wird hochgeladen",
+          "success": "Fertig",
+          "error": "Fehlgeschlagen",
+          "cancelled": "Abgebrochen"
+        }
       },
       "directoryDialog": {
         "descriptionAdd": "Wählen Sie Dateien im Verzeichnis {path} aus, um sie zu VCS hinzuzufügen.",
