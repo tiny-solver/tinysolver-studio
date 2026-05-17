@@ -90,7 +90,13 @@ function parentDir(filePath: string): string {
   const slashIndex = filePath.lastIndexOf("/")
   const backslashIndex = filePath.lastIndexOf("\\")
   const splitIndex = Math.max(slashIndex, backslashIndex)
-  if (splitIndex < 0) return filePath
+  // No separator at all: the input is a leaf living at its root. For an
+  // OS path that's a degenerate "C:" / "foo" — we can't navigate above
+  // it, so the caller treated the result as the path itself. For a
+  // workspace-relative path like "README.md" the answer is "workspace
+  // root", encoded as empty string. The empty-string convention is the
+  // safer default and matches what every caller currently expects.
+  if (splitIndex < 0) return ""
   if (splitIndex === 0) return filePath.slice(0, 1)
   return filePath.slice(0, splitIndex)
 }
@@ -636,9 +642,16 @@ function RenderNode({
             </ContextMenuSubContent>
           </ContextMenuSub>
           {webMode && (
-            <ContextMenuItem onSelect={() => onRequestDownloadFile(node)}>
-              {t("download")}
-            </ContextMenuItem>
+            <>
+              <ContextMenuItem
+                onSelect={() => onRequestUpload(parentDir(node.path))}
+              >
+                {t("upload")}
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => onRequestDownloadFile(node)}>
+                {t("download")}
+              </ContextMenuItem>
+            </>
           )}
           <ContextMenuItem
             onSelect={() => onRequestDelete(node)}

@@ -31,10 +31,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn, randomUUID } from "@/lib/utils"
 import { isUploadAbortError, uploadWorkspaceFile } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
+import { joinFsPath } from "@/lib/path-utils"
 
 type QueueStatus = "pending" | "uploading" | "success" | "error" | "cancelled"
 
@@ -58,6 +61,19 @@ export interface WorkspaceUploadDialogProps {
   targetPath: string
   folderUploadSupported: boolean
   onComplete: () => void
+}
+
+// Normalize a user-typed workspace-relative path: collapse backslashes,
+// strip leading/trailing/duplicate slashes, drop any "." or ".." segments
+// (".." defended at the server too, but we don't want to even *send* it).
+// An empty result means "workspace root".
+function normalizeTargetPath(input: string): string {
+  const trimmed = input.replace(/\\/g, "/").trim()
+  const segments = trimmed
+    .split("/")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s !== "." && s !== "..")
+  return segments.join("/")
 }
 
 function formatBytes(bytes: number): string {
@@ -140,23 +156,35 @@ export function WorkspaceUploadDialog({
 
   const [items, setItems] = useState<QueueItem[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  // Mirrors `pumpRunningRef` for render-time logic. We need both: the
+  // ref so the pump-spawn guard reads a synchronous, latest value
+  // without depending on a re-render, and the state so the footer
+  // buttons (Cancel / Start / Close) reflect activity without lag.
+  const [pumpActive, setPumpActive] = useState(false)
+  // The user-editable destination. Seeded from the `targetPath` prop
+  // whenever the dialog (re)opens, then drives every upload in the
+  // session. We don't watch the prop after that — overwriting an
+  // in-progress edit would feel like the dialog fighting the user.
+  const [editableTargetPath, setEditableTargetPath] = useState(targetPath)
+  useEffect(() => {
+    if (open) {
+      setEditableTargetPath(targetPath)
+    }
+  }, [open, targetPath])
 
   useEffect(() => {
     itemsRef.current = items
   }, [items])
 
-  const isUploading = useMemo(
-    () => items.some((it) => it.status === "uploading"),
-    [items]
-  )
   const hasPending = useMemo(
     () => items.some((it) => it.status === "pending"),
     [items]
   )
-  // Combined "busy" flag for button state — `isUploading` alone flickers
-  // false between two files, which would briefly swap Cancel back to
-  // Close and let an unlucky double-click dismiss the dialog mid-batch.
-  const isBusy = isUploading || hasPending
+  // Busy = the user has explicitly started an upload session and the
+  // pump is still draining. Distinct from "has pending items" — files
+  // just added to the queue are NOT busy, the user hasn't committed
+  // yet and should still be free to remove them or close the dialog.
+  const isBusy = pumpActive
   const successCount = useMemo(
     () => items.filter((it) => it.status === "success").length,
     [items]
@@ -239,15 +267,13 @@ export function WorkspaceUploadDialog({
     if (!abortRef.current) abortRef.current = new AbortController()
     const controller = abortRef.current
     pumpRunningRef.current = true
-
-    // Intentional closure capture: `rootPath` and `targetPath` are read
-    // once when this pump starts and held for its lifetime. If the parent
-    // ever re-renders with a different target mid-upload, the running
-    // pump keeps draining to the original destination — anything else
-    // would mean a file partially streamed to path A finishing under
-    // path B. The `[rootPath, targetPath]` callback deps cause a new
-    // `ensurePump` identity, but `pumpRunningRef` keeps the new one
-    // from spawning while the old one finishes.
+    setPumpActive(true)
+    // Lock in the destination at pump start. The user can keep editing
+    // the input field after this point, but a session that began
+    // streaming bytes to path A must NOT silently flip to path B
+    // mid-batch — that would split one apparent operation across two
+    // filesystem locations.
+    const sessionTargetPath = normalizeTargetPath(editableTargetPath)
 
     void (async () => {
       let didUpload = false
@@ -270,7 +296,7 @@ export function WorkspaceUploadDialog({
           try {
             await uploadWorkspaceFile({
               rootPath,
-              targetPath,
+              targetPath: sessionTargetPath,
               file: next.file,
               relativePath: next.relativePath || null,
               signal: controller.signal,
@@ -342,6 +368,7 @@ export function WorkspaceUploadDialog({
         // monotonically across a long-lived dialog session.
         removedIdsRef.current = new Set()
         pumpRunningRef.current = false
+        setPumpActive(false)
         // Skip the tree refresh when nothing actually landed on disk —
         // a cancelled batch where no file completed, or a pump pass
         // that found no work, doesn't need a server round-trip. Wrap
@@ -357,14 +384,25 @@ export function WorkspaceUploadDialog({
         }
       }
     })()
-  }, [rootPath, targetPath])
+  }, [rootPath, editableTargetPath])
 
+  // Once the user clicks "Start upload", any files dropped or picked
+  // later in the same session should join the running batch instead
+  // of waiting for another button press. The pump only spawns one
+  // loop, so the second condition is just a no-op safety net for
+  // when the previous batch has already drained.
   useEffect(() => {
     if (!open) return
+    if (!pumpActive) return
     if (hasPending && !pumpRunningRef.current) {
       ensurePump()
     }
-  }, [open, hasPending, ensurePump])
+  }, [open, pumpActive, hasPending, ensurePump])
+
+  const handleStartUpload = useCallback(() => {
+    if (!hasPending) return
+    ensurePump()
+  }, [hasPending, ensurePump])
 
   const enqueueFiles = useCallback(
     (newFiles: { file: File; relativePath: string }[]) => {
@@ -385,11 +423,16 @@ export function WorkspaceUploadDialog({
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const target = event.target
-      const list = target.files
-      // Reset value so the same file can be picked again later.
+      // Snapshot to a plain array BEFORE clearing the input value.
+      // Per the HTML spec, `input.files` has a `[SameObject]` annotation
+      // and is "live" — setting `value = ""` empties the same FileList
+      // we just captured, so `list.length === 0` would early-return and
+      // the queue would never see the files. Array.from copies the
+      // entries out before we touch `target.value`.
+      const files = Array.from(target.files ?? [])
       target.value = ""
-      if (!list || list.length === 0) return
-      enqueueFiles(Array.from(list).map((file) => ({ file, relativePath: "" })))
+      if (files.length === 0) return
+      enqueueFiles(files.map((file) => ({ file, relativePath: "" })))
     },
     [enqueueFiles]
   )
@@ -397,11 +440,11 @@ export function WorkspaceUploadDialog({
   const handleFolderInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const target = event.target
-      const list = target.files
+      const files = Array.from(target.files ?? [])
       target.value = ""
-      if (!list || list.length === 0) return
+      if (files.length === 0) return
       enqueueFiles(
-        Array.from(list).map((file) => ({
+        files.map((file) => ({
           file,
           relativePath: file.webkitRelativePath || "",
         }))
@@ -548,7 +591,13 @@ export function WorkspaceUploadDialog({
     [isBusy, onOpenChange]
   )
 
-  const targetPathLabel = targetPath || t("workspaceRoot")
+  const normalizedTargetForDisplay = normalizeTargetPath(editableTargetPath)
+  // The hint is most useful when it shows where files will actually
+  // land — the workspace absolute path joined with the relative target.
+  // Empty target → just the workspace root.
+  const absoluteTargetPath = normalizedTargetForDisplay
+    ? joinFsPath(rootPath, normalizedTargetForDisplay)
+    : rootPath
 
   const renderStatusIcon = (status: QueueStatus) => {
     switch (status) {
@@ -585,12 +634,30 @@ export function WorkspaceUploadDialog({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("title")}</DialogTitle>
-          <DialogDescription>
-            {t("description", { path: targetPathLabel })}
-          </DialogDescription>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="upload-target-path">{t("targetPathLabel")}</Label>
+            <Input
+              id="upload-target-path"
+              value={editableTargetPath}
+              onChange={(event) => setEditableTargetPath(event.target.value)}
+              placeholder={t("workspaceRoot")}
+              disabled={isBusy}
+              autoComplete="off"
+              spellCheck={false}
+              dir="ltr"
+            />
+            <p
+              className="text-xs text-muted-foreground break-all"
+              aria-live="polite"
+              dir="ltr"
+            >
+              {t("targetPathHint", { path: absoluteTargetPath })}
+            </p>
+          </div>
           <div
             role="button"
             tabIndex={0}
@@ -806,9 +873,20 @@ export function WorkspaceUploadDialog({
                 {tCommon("cancel")}
               </Button>
             ) : (
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                {tCommon("close")}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant={hasPending ? "outline" : "default"}
+                  onClick={() => onOpenChange(false)}
+                >
+                  {tCommon("close")}
+                </Button>
+                {hasPending && (
+                  <Button type="button" onClick={handleStartUpload}>
+                    {t("startUpload")}
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </DialogFooter>

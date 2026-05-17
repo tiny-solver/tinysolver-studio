@@ -365,8 +365,10 @@ pub async fn upload_workspace_file(
                 // still has the narrow race but it's the best we can do
                 // there, and the user is uploading into their own
                 // workspace so the race window has no security impact.
+                let commit_method: &str;
                 match tokio::fs::hard_link(&staging_path, &final_abs).await {
                     Ok(()) => {
+                        commit_method = "hard_link";
                         let _ = tokio::fs::remove_file(&staging_path).await;
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -375,7 +377,7 @@ pub async fn upload_workspace_file(
                             "A file with this name already exists",
                         ));
                     }
-                    Err(_) => {
+                    Err(hard_link_err) => {
                         if let Err(e) =
                             tokio::fs::rename(&staging_path, &final_abs).await
                         {
@@ -383,8 +385,11 @@ pub async fn upload_workspace_file(
                             return Err(AppCommandError::io_error(
                                 "Failed to commit upload",
                             )
-                            .with_detail(e.to_string()));
+                            .with_detail(format!(
+                                "hard_link_err={hard_link_err} rename_err={e}"
+                            )));
                         }
+                        commit_method = "rename";
                     }
                 }
 
@@ -393,6 +398,35 @@ pub async fn upload_workspace_file(
                 if let Err(err) = ensure_inside_root(&root, &final_abs) {
                     let _ = tokio::fs::remove_file(&final_abs).await;
                     return Err(err);
+                }
+
+                // Sanity verification: the API has been observed to
+                // return success while leaving nothing on disk. Stat the
+                // final path BEFORE responding so a regression surfaces
+                // as an error here instead of as a phantom file in the
+                // tree that delete/edit can't touch. Use symlink_metadata
+                // (NOT exists()) so a dangling link is detected too.
+                match tokio::fs::symlink_metadata(&final_abs).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!(
+                            "[workspace_files] upload commit verification FAILED: \
+                             final_abs={} commit_method={} written={} err={}",
+                            final_abs.display(),
+                            commit_method,
+                            written,
+                            err
+                        );
+                        return Err(AppCommandError::io_error(
+                            "Upload appeared to succeed but the file is missing",
+                        )
+                        .with_detail(format!(
+                            "final_abs={} commit_method={} err={}",
+                            final_abs.display(),
+                            commit_method,
+                            err
+                        )));
+                    }
                 }
 
                 let name = final_abs
@@ -589,9 +623,15 @@ fn build_zip_archive(dir: &Path, max_bytes: u64) -> Result<Vec<u8>, AppCommandEr
     use zip::write::SimpleFileOptions;
 
     let mut writer = zip::ZipWriter::new(Cursor::new(Vec::<u8>::new()));
-    let options = SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated)
-        .unix_permissions(0o644);
+    let base_options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    // Directories need the execute bit so extractors set a mode that
+    // lets the user `cd` into them and list their contents. The earlier
+    // blanket 0o644 produced archives whose extracted subdirectories
+    // refused access on Unix, surfacing as "permission denied" when the
+    // operator opened the unzipped tree.
+    let dir_options = base_options.unix_permissions(0o755);
+    let file_options = base_options.unix_permissions(0o644);
 
     let mut total_source_bytes: u64 = 0;
     let mut symlinks_skipped: u64 = 0;
@@ -616,7 +656,7 @@ fn build_zip_archive(dir: &Path, max_bytes: u64) -> Result<Vec<u8>, AppCommandEr
         }
         if file_type.is_dir() {
             writer
-                .add_directory(format!("{rel_str}/"), options)
+                .add_directory(format!("{rel_str}/"), dir_options)
                 .map_err(|e| {
                     AppCommandError::io_error("Failed to add dir to zip")
                         .with_detail(e.to_string())
@@ -635,7 +675,7 @@ fn build_zip_archive(dir: &Path, max_bytes: u64) -> Result<Vec<u8>, AppCommandEr
                     "scanned={total_source_bytes} limit={max_bytes}"
                 )));
             }
-            writer.start_file(&rel_str, options).map_err(|e| {
+            writer.start_file(&rel_str, file_options).map_err(|e| {
                 AppCommandError::io_error("Failed to start zip entry")
                     .with_detail(e.to_string())
             })?;
