@@ -321,6 +321,10 @@ pub fn build_router(
                 .layer(DefaultBodyLimit::disable()),
         )
         .route(
+            "/workspace_download_ticket",
+            post(handlers::workspace_files::create_download_ticket),
+        )
+        .route(
             "/download_workspace_file",
             post(handlers::workspace_files::download_workspace_file),
         )
@@ -799,10 +803,15 @@ pub fn build_router(
     // Public endpoints — no token required.
     // The login page needs to read the user's preferred language before
     // authenticating so it can render in their chosen locale.
-    let public_api = Router::new().route(
-        "/get_system_language_settings",
-        post(handlers::system_settings::get_system_language_settings),
-    );
+    let public_api = Router::new()
+        .route(
+            "/get_system_language_settings",
+            post(handlers::system_settings::get_system_language_settings),
+        )
+        .route(
+            "/workspace_download/{ticket}",
+            get(handlers::workspace_files::consume_download_ticket),
+        );
 
     let api = public_api.merge(api);
 

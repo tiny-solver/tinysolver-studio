@@ -23,6 +23,7 @@ pub mod process;
 mod terminal;
 pub mod web;
 pub mod workspace_state;
+pub mod workspace_transfer;
 
 /// Sweep stale ACP binary cache trash created by the rename-aside fallback in
 /// `acp::binary_cache::clear_agent_cache`. Safe to call any time; intended to
@@ -167,6 +168,9 @@ mod tauri_app {
             // manage per-window subscriptions.
             .manage(std::sync::Arc::new(
                 crate::commands::remote_proxy::RemoteProxyState::new(),
+            ))
+            .manage(std::sync::Arc::new(
+                crate::workspace_transfer::WorkspaceTransferManager::new_from_env(),
             ))
             .manage(std::sync::Arc::new(
                 web::event_bridge::WebEventBroadcaster::new(),
@@ -705,7 +709,8 @@ mod tauri_app {
                 remote_workspace_commands::open_remote_workspace,
                 remote_proxy_commands::remote_http_call,
                 remote_proxy_commands::remote_upload_attachment,
-                remote_proxy_commands::remote_upload_workspace_file,
+                remote_proxy_commands::remote_upload_workspace_paths,
+                remote_proxy_commands::remote_cancel_workspace_transfer,
                 remote_proxy_commands::remote_download_workspace_file,
                 remote_proxy_commands::remote_download_workspace_dir,
                 remote_proxy_commands::read_local_file_for_upload,

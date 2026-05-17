@@ -15,17 +15,23 @@
 //! workspace cannot redirect reads or writes outside it.
 
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
+use async_zip::tokio::write::ZipFileWriter;
+use async_zip::{Compression, ZipEntryBuilder};
 use axum::body::{Body, Bytes};
-use axum::extract::Multipart;
+use axum::extract::{Extension, Multipart, Path as AxumPath};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use futures::stream;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_util::io::ReaderStream;
 
 use crate::app_error::AppCommandError;
+use crate::app_state::AppState;
+use crate::workspace_transfer::{DownloadKind, DownloadTicketIssued, DownloadTicketSpec};
 
 // ---------------------------------------------------------------------------
 // Wire types
@@ -44,6 +50,14 @@ pub struct UploadWorkspaceFileResult {
 pub struct DownloadWorkspaceParams {
     pub root_path: String,
     pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadTicketRequest {
+    pub root_path: String,
+    pub path: String,
+    pub kind: DownloadKind,
 }
 
 // ---------------------------------------------------------------------------
@@ -211,8 +225,18 @@ fn attachment_header(name: &str) -> Option<HeaderValue> {
 ///     present, the browser's filename is ignored.
 ///   * `file` — the file payload.
 pub async fn upload_workspace_file(
+    Extension(state): Extension<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<Json<UploadWorkspaceFileResult>, AppCommandError> {
+    let _permit = state
+        .workspace_transfer
+        .workspace_upload_semaphore
+        .acquire()
+        .await
+        .map_err(|_| {
+            AppCommandError::task_execution_failed("Workspace upload semaphore is closed")
+        })?;
+
     let mut root_path: Option<String> = None;
     let mut target_path: Option<String> = None;
     let mut relative_path: Option<String> = None;
@@ -475,19 +499,110 @@ fn compute_final_rel(
 }
 
 // ---------------------------------------------------------------------------
-// Download (single file)
+// Download tickets
 // ---------------------------------------------------------------------------
 
-pub async fn download_workspace_file(
-    Json(params): Json<DownloadWorkspaceParams>,
+pub async fn create_download_ticket(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<DownloadTicketRequest>,
+) -> Result<Json<DownloadTicketIssued>, AppCommandError> {
+    let issued = create_download_ticket_core(
+        state.workspace_transfer.clone(),
+        params,
+        "/api/workspace_download".to_string(),
+    )
+    .await?;
+    Ok(Json(issued))
+}
+
+async fn create_download_ticket_core(
+    manager: Arc<crate::workspace_transfer::WorkspaceTransferManager>,
+    params: DownloadTicketRequest,
+    base_url: String,
+) -> Result<DownloadTicketIssued, AppCommandError> {
+    let (root_path, target_path, filename) = match params.kind {
+        DownloadKind::File => {
+            let root = PathBuf::from(&params.root_path);
+            let target = resolve_download_file_target(&params.root_path, &params.path)?;
+            let filename = target
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("download")
+                .to_string();
+            (root, target, filename)
+        }
+        DownloadKind::Dir => {
+            let root = PathBuf::from(&params.root_path);
+            let (target, dir_name) = resolve_download_dir_target(&params.root_path, &params.path)?;
+            (root, target, format!("{dir_name}.zip"))
+        }
+    };
+
+    let ticket = manager
+        .issue_download_ticket(DownloadTicketSpec {
+            root_path,
+            target_path,
+            relative_path: params.path,
+            kind: params.kind,
+            filename,
+        })
+        .await;
+
+    let url_base = base_url.trim_end_matches('/');
+    Ok(DownloadTicketIssued {
+        url: format!("{url_base}/{}", ticket.ticket),
+        ..ticket
+    })
+}
+
+pub async fn consume_download_ticket(
+    Extension(state): Extension<Arc<AppState>>,
+    AxumPath(ticket): AxumPath<String>,
 ) -> Result<Response, AppCommandError> {
-    let root = PathBuf::from(&params.root_path);
+    let Some(ticket) = state
+        .workspace_transfer
+        .consume_download_ticket(&ticket)
+        .await
+    else {
+        return Err(AppCommandError::not_found(
+            "Download ticket is invalid or expired",
+        ));
+    };
+
+    match ticket.kind {
+        DownloadKind::File => {
+            let target = resolve_download_file_target(
+                &ticket.root_path.to_string_lossy(),
+                &ticket.relative_path,
+            )?;
+            stream_file_response(&target, &ticket.filename).await
+        }
+        DownloadKind::Dir => {
+            let (target, _) = resolve_download_dir_target(
+                &ticket.root_path.to_string_lossy(),
+                &ticket.relative_path,
+            )?;
+            stream_zip_response(state.workspace_transfer.clone(), target, ticket.filename).await
+        }
+    }
+}
+
+fn ensure_workspace_root(root: &Path) -> Result<(), AppCommandError> {
     if !root.exists() || !root.is_dir() {
         return Err(AppCommandError::not_found(
             "Workspace folder does not exist",
         ));
     }
-    let target = resolve_relative_path(&root, &params.path)?;
+    Ok(())
+}
+
+fn resolve_download_file_target(
+    root_path: &str,
+    rel_path: &str,
+) -> Result<PathBuf, AppCommandError> {
+    let root = PathBuf::from(root_path);
+    ensure_workspace_root(&root)?;
+    let target = resolve_relative_path(&root, rel_path)?;
     if !target.exists() {
         return Err(AppCommandError::not_found("File does not exist"));
     }
@@ -495,7 +610,57 @@ pub async fn download_workspace_file(
         return Err(AppCommandError::invalid_input("Path is not a file"));
     }
     ensure_inside_root(&root, &target)?;
+    Ok(target)
+}
 
+fn resolve_download_dir_target(
+    root_path: &str,
+    rel_path: &str,
+) -> Result<(PathBuf, String), AppCommandError> {
+    let root = PathBuf::from(root_path);
+    ensure_workspace_root(&root)?;
+    if rel_path.is_empty() {
+        let name = root
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("workspace")
+            .to_string();
+        return Ok((root, name));
+    }
+
+    let resolved = resolve_relative_path(&root, rel_path)?;
+    if !resolved.exists() {
+        return Err(AppCommandError::not_found("Directory does not exist"));
+    }
+    if !resolved.is_dir() {
+        return Err(AppCommandError::invalid_input("Path is not a directory"));
+    }
+    ensure_inside_root(&root, &resolved)?;
+    let name = resolved
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("folder")
+        .to_string();
+    Ok((resolved, name))
+}
+
+// ---------------------------------------------------------------------------
+// Download (single file)
+// ---------------------------------------------------------------------------
+
+pub async fn download_workspace_file(
+    Json(params): Json<DownloadWorkspaceParams>,
+) -> Result<Response, AppCommandError> {
+    let target = resolve_download_file_target(&params.root_path, &params.path)?;
+    let name = target
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("download")
+        .to_string();
+    stream_file_response(&target, &name).await
+}
+
+async fn stream_file_response(target: &Path, name: &str) -> Result<Response, AppCommandError> {
     let metadata = tokio::fs::metadata(&target)
         .await
         .map_err(AppCommandError::io)?;
@@ -518,12 +683,6 @@ pub async fn download_workspace_file(
     });
     let body = Body::from_stream(body_stream);
 
-    let name = target
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("download")
-        .to_string();
-
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
@@ -532,7 +691,7 @@ pub async fn download_workspace_file(
     if let Ok(v) = HeaderValue::from_str(&size.to_string()) {
         headers.insert(header::CONTENT_LENGTH, v);
     }
-    if let Some(v) = attachment_header(&name) {
+    if let Some(v) = attachment_header(name) {
         headers.insert(header::CONTENT_DISPOSITION, v);
     }
 
@@ -544,146 +703,79 @@ pub async fn download_workspace_file(
 // ---------------------------------------------------------------------------
 
 pub async fn download_workspace_dir(
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<DownloadWorkspaceParams>,
 ) -> Result<Response, AppCommandError> {
-    let root = PathBuf::from(&params.root_path);
-    if !root.exists() || !root.is_dir() {
-        return Err(AppCommandError::not_found(
-            "Workspace folder does not exist",
-        ));
-    }
-    let (dir_path, dir_name) = if params.path.is_empty() {
-        let name = root
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("workspace")
-            .to_string();
-        (root.clone(), name)
-    } else {
-        let resolved = resolve_relative_path(&root, &params.path)?;
-        if !resolved.exists() {
-            return Err(AppCommandError::not_found("Directory does not exist"));
-        }
-        if !resolved.is_dir() {
-            return Err(AppCommandError::invalid_input("Path is not a directory"));
-        }
-        ensure_inside_root(&root, &resolved)?;
-        let name = resolved
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("folder")
-            .to_string();
-        (resolved, name)
-    };
-    let zip_name = format!("{dir_name}.zip");
+    let (dir_path, dir_name) = resolve_download_dir_target(&params.root_path, &params.path)?;
+    stream_zip_response(
+        state.workspace_transfer.clone(),
+        dir_path,
+        format!("{dir_name}.zip"),
+    )
+    .await
+}
 
-    let dir_for_blocking = dir_path.clone();
-    let (temp_file, content_length): (tempfile::NamedTempFile, u64) =
-        tokio::task::spawn_blocking(move || {
-            let mut temp = tempfile::NamedTempFile::new().map_err(|e| {
-                AppCommandError::io_error("Failed to create zip temp file")
-                    .with_detail(e.to_string())
-            })?;
-            let size = build_zip_archive_to_writer(&dir_for_blocking, temp.as_file_mut())?;
-            Ok::<_, AppCommandError>((temp, size))
-        })
-        .await
-        .map_err(|e| AppCommandError::io_error("Zip task failed").with_detail(e.to_string()))??;
-
-    // Re-open async for streaming. On Linux/macOS, holding two
-    // handles (the NamedTempFile-internal sync File and this async
-    // re-opened File) over the same inode is fine — unlink at stream
-    // end works even with handles open, and the inode is reclaimed
-    // when both close.
-    //
-    // **Windows caveat**: NamedTempFile opens with FILE_SHARE_DELETE
-    // so the re-open succeeds, but the unlink at NamedTempFile drop
-    // requires *all* handles to have been opened with
-    // FILE_SHARE_DELETE — `tokio::fs::File::open` (which delegates to
-    // `std::fs::File::open`) does NOT set that flag. The unlink call
-    // therefore succeeds in the sense that the file is marked for
-    // deletion, but the actual removal is deferred until the async
-    // handle's close completes. In the normal stream-drain path that
-    // close happens microseconds before the NamedTempFile drop (tuple
-    // drop order: `file` → `temp_file`), so the inode is gone by the
-    // time this function returns. The race window only matters if a
-    // Windows-hosted codeg-server takes a hard process kill mid-stream;
-    // orphaned temp files then sit in `%TEMP%` until the OS scheduled
-    // cleanup runs.
-    let file = tokio::fs::File::open(temp_file.path())
-        .await
-        .map_err(AppCommandError::io)?;
-
-    // State carried through the stream: file handle and temp guard
-    // (NamedTempFile is unlinked on drop). Both drop when the stream
-    // ends (`None` branch) or the client disconnects, which is exactly
-    // the cleanup we want.
-    let body_stream = stream::unfold((file, temp_file), |(mut file, temp_file)| async move {
-        let mut buf = vec![0u8; 64 * 1024];
-        match file.read(&mut buf).await {
-            Ok(0) => None,
-            Ok(n) => {
-                buf.truncate(n);
-                Some((Ok::<_, std::io::Error>(Bytes::from(buf)), (file, temp_file)))
-            }
-            Err(e) => Some((Err(e), (file, temp_file))),
-        }
-    });
-    let body = Body::from_stream(body_stream);
+async fn stream_zip_response(
+    manager: Arc<crate::workspace_transfer::WorkspaceTransferManager>,
+    dir_path: PathBuf,
+    zip_name: String,
+) -> Result<Response, AppCommandError> {
+    let body = Body::from_stream(zip_body_stream(manager, dir_path));
 
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/zip"),
     );
-    if let Ok(v) = HeaderValue::from_str(&content_length.to_string()) {
-        headers.insert(header::CONTENT_LENGTH, v);
-    }
     if let Some(v) = attachment_header(&zip_name) {
         headers.insert(header::CONTENT_DISPOSITION, v);
     }
     Ok((StatusCode::OK, headers, body).into_response())
 }
 
-/// Walk `dir` and write a Deflate-compressed zip archive into `sink`.
-///
-/// Runs on the blocking pool because `walkdir` and `zip::ZipWriter` are
-/// sync APIs, and `ZipWriter` requires `Write + Seek` (so we cannot
-/// stream into an mpsc channel directly — the caller uses a temp file
-/// as the seekable sink instead).
-///
-/// Returns the final on-disk archive size in bytes, used for the
-/// `Content-Length` response header.
-///
-/// Symlinks are intentionally skipped (not followed) — `follow_links(false)`
-/// reports a symlink as neither file nor directory, and we leave it that
-/// way to avoid traversing out of the workspace via a misplaced link.
-fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
-    dir: &Path,
-    sink: W,
-) -> Result<u64, AppCommandError> {
-    use std::io::Read;
-    use zip::write::SimpleFileOptions;
+fn zip_body_stream(
+    manager: Arc<crate::workspace_transfer::WorkspaceTransferManager>,
+    dir_path: PathBuf,
+) -> ReaderStream<tokio::io::DuplexStream> {
+    let (reader, writer) = tokio::io::duplex(8 * 64 * 1024);
+    tokio::spawn(async move {
+        let result = write_zip_archive_to_stream(manager, dir_path.clone(), writer).await;
+        if let Err(err) = result {
+            eprintln!(
+                "[workspace_files] streaming zip failed for {}: {}{}",
+                dir_path.display(),
+                err.message,
+                err.detail
+                    .as_deref()
+                    .map(|detail| format!(" ({detail})"))
+                    .unwrap_or_default()
+            );
+        }
+    });
+    ReaderStream::with_capacity(reader, 64 * 1024)
+}
 
-    let mut writer = zip::ZipWriter::new(sink);
-    let base_options =
-        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    // Directories need the execute bit so extractors set a mode that
-    // lets the user `cd` into them and list their contents. The earlier
-    // blanket 0o644 produced archives whose extracted subdirectories
-    // refused access on Unix, surfacing as "permission denied" when the
-    // operator opened the unzipped tree.
-    let dir_options = base_options.unix_permissions(0o755);
-    let file_options = base_options.unix_permissions(0o644);
+async fn write_zip_archive_to_stream(
+    manager: Arc<crate::workspace_transfer::WorkspaceTransferManager>,
+    dir: PathBuf,
+    sink: tokio::io::DuplexStream,
+) -> Result<(), AppCommandError> {
+    use futures_lite::io::AsyncWriteExt as _;
 
+    let _permit =
+        manager.zip_semaphore.acquire().await.map_err(|_| {
+            AppCommandError::task_execution_failed("Workspace ZIP semaphore is closed")
+        })?;
+
+    let mut writer = ZipFileWriter::with_tokio(sink);
     let mut symlinks_skipped: u64 = 0;
 
-    for entry in walkdir::WalkDir::new(dir).follow_links(false) {
+    for entry in walkdir::WalkDir::new(&dir).follow_links(false) {
         let entry = entry.map_err(|e| {
             AppCommandError::io_error("Failed to walk directory").with_detail(e.to_string())
         })?;
         let path = entry.path();
-        let rel = match path.strip_prefix(dir) {
+        let rel = match path.strip_prefix(&dir) {
             Ok(r) => r,
             Err(_) => continue,
         };
@@ -697,28 +789,34 @@ fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
             continue;
         }
         if file_type.is_dir() {
-            writer
-                .add_directory(format!("{rel_str}/"), dir_options)
-                .map_err(|e| {
-                    AppCommandError::io_error("Failed to add dir to zip").with_detail(e.to_string())
-                })?;
+            let entry = ZipEntryBuilder::new(format!("{rel_str}/").into(), Compression::Deflate)
+                .unix_permissions(0o755);
+            writer.write_entry_whole(entry, &[]).await.map_err(|e| {
+                AppCommandError::io_error("Failed to add dir to zip").with_detail(e.to_string())
+            })?;
         } else if file_type.is_file() {
-            writer.start_file(&rel_str, file_options).map_err(|e| {
+            let entry =
+                ZipEntryBuilder::new(rel_str.into(), Compression::Deflate).unix_permissions(0o644);
+            let mut entry_writer = writer.write_entry_stream(entry).await.map_err(|e| {
                 AppCommandError::io_error("Failed to start zip entry").with_detail(e.to_string())
             })?;
-            let mut f = std::fs::File::open(path).map_err(AppCommandError::io)?;
-            let mut buf = [0u8; 64 * 1024];
+            let mut f = tokio::fs::File::open(path)
+                .await
+                .map_err(AppCommandError::io)?;
+            let mut buf = vec![0u8; 64 * 1024];
             loop {
-                let n = f.read(&mut buf).map_err(AppCommandError::io)?;
+                let n = f.read(&mut buf).await.map_err(AppCommandError::io)?;
                 if n == 0 {
                     break;
                 }
-                use std::io::Write;
-                writer.write_all(&buf[..n]).map_err(|e| {
+                entry_writer.write_all(&buf[..n]).await.map_err(|e| {
                     AppCommandError::io_error("Failed to write zip entry")
                         .with_detail(e.to_string())
                 })?;
             }
+            entry_writer.close().await.map_err(|e| {
+                AppCommandError::io_error("Failed to close zip entry").with_detail(e.to_string())
+            })?;
         }
     }
     if symlinks_skipped > 0 {
@@ -728,18 +826,16 @@ fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
             dir.display()
         );
     }
-    let mut finished = writer.finish().map_err(|e| {
+    writer.close().await.map_err(|e| {
         AppCommandError::io_error("Failed to finalize zip").with_detail(e.to_string())
     })?;
-    let size = finished.stream_position().map_err(|e| {
-        AppCommandError::io_error("Failed to measure zip size").with_detail(e.to_string())
-    })?;
-    Ok(size)
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::StreamExt as _;
 
     #[test]
     fn sanitize_segment_replaces_hostile_chars_and_handles_dots() {
@@ -799,6 +895,117 @@ mod tests {
         assert!(validate_relative_components(Path::new("../escape")).is_err());
         assert!(validate_relative_components(Path::new("/etc/passwd")).is_err());
         assert!(validate_relative_components(Path::new("a/b")).is_ok());
+    }
+
+    #[tokio::test]
+    async fn create_download_ticket_rejects_path_traversal() {
+        let root = tempfile::tempdir().unwrap();
+        let manager = std::sync::Arc::new(
+            crate::workspace_transfer::WorkspaceTransferManager::new_for_tests(
+                std::time::Duration::from_secs(60),
+            ),
+        );
+        let err = create_download_ticket_core(
+            manager,
+            DownloadTicketRequest {
+                root_path: root.path().to_string_lossy().to_string(),
+                path: "../escape".to_string(),
+                kind: crate::workspace_transfer::DownloadKind::File,
+            },
+            "/api/workspace_download".to_string(),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.message.contains(".."));
+    }
+
+    #[tokio::test]
+    async fn create_download_ticket_for_file_is_consumed_once() {
+        let root = tempfile::tempdir().unwrap();
+        let file_path = root.path().join("a.txt");
+        tokio::fs::write(&file_path, b"hello").await.unwrap();
+        let manager = std::sync::Arc::new(
+            crate::workspace_transfer::WorkspaceTransferManager::new_for_tests(
+                std::time::Duration::from_secs(60),
+            ),
+        );
+        let issued = create_download_ticket_core(
+            manager.clone(),
+            DownloadTicketRequest {
+                root_path: root.path().to_string_lossy().to_string(),
+                path: "a.txt".to_string(),
+                kind: crate::workspace_transfer::DownloadKind::File,
+            },
+            "/api/workspace_download".to_string(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(issued.filename, "a.txt");
+        assert_eq!(
+            issued.url,
+            format!("/api/workspace_download/{}", issued.ticket)
+        );
+        assert!(manager
+            .consume_download_ticket(&issued.ticket)
+            .await
+            .is_some());
+        assert!(manager
+            .consume_download_ticket(&issued.ticket)
+            .await
+            .is_none());
+    }
+
+    async fn build_zip_bytes_for_test(dir: PathBuf) -> Result<Vec<u8>, AppCommandError> {
+        let manager = std::sync::Arc::new(
+            crate::workspace_transfer::WorkspaceTransferManager::new_for_tests(
+                std::time::Duration::from_secs(60),
+            ),
+        );
+        let mut stream = zip_body_stream(manager, dir);
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(AppCommandError::io)?;
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(bytes)
+    }
+
+    #[tokio::test]
+    async fn streaming_zip_skips_symlinks_and_includes_regular_files() {
+        let root = tempfile::tempdir().unwrap();
+        tokio::fs::create_dir(root.path().join("dir"))
+            .await
+            .unwrap();
+        tokio::fs::write(root.path().join("dir").join("a.txt"), b"hello")
+            .await
+            .unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc/passwd", root.path().join("dir").join("link")).unwrap();
+
+        let bytes = build_zip_bytes_for_test(root.path().join("dir"))
+            .await
+            .unwrap();
+        let reader = std::io::Cursor::new(bytes);
+        let mut archive = zip::ZipArchive::new(reader).unwrap();
+        assert!(archive.by_name("a.txt").is_ok());
+        assert!(archive.by_name("link").is_err());
+    }
+
+    #[tokio::test]
+    async fn streaming_zip_channel_drop_stops_writer() {
+        let root = tempfile::tempdir().unwrap();
+        for i in 0..128 {
+            tokio::fs::write(root.path().join(format!("f{i}.txt")), vec![b'x'; 1024])
+                .await
+                .unwrap();
+        }
+        let manager = std::sync::Arc::new(
+            crate::workspace_transfer::WorkspaceTransferManager::new_for_tests(
+                std::time::Duration::from_secs(60),
+            ),
+        );
+        let stream = zip_body_stream(manager, root.path().to_path_buf());
+        drop(stream);
     }
 
     #[cfg(unix)]

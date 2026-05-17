@@ -1467,6 +1467,7 @@ export function FileTreeTab() {
         )
         // Remote-desktop downloads flow through a save-dialog; surface
         // the cancel-vs-saved outcome instead of silently doing nothing.
+        if (result.status === "started") return
         if (result.status === WORKSPACE_DOWNLOAD_CANCELLED) return
         if (result.savedPath) {
           toast.success(t("toasts.downloadSaved", { name: target.name }), {
@@ -1490,6 +1491,7 @@ export function FileTreeTab() {
       const name = target.name || baseName(folderPath) || "workspace"
       try {
         const result = await downloadWorkspaceDir(folderPath, target.path, name)
+        if (result.status === "started") return
         if (result.status === WORKSPACE_DOWNLOAD_CANCELLED) return
         if (result.savedPath) {
           toast.success(t("toasts.downloadSaved", { name }), {
