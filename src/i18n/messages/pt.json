@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "Falha ao salvar como cópia",
         "watchStartFailed": "Falha ao iniciar monitoramento de arquivos",
         "createFailed": "Falha ao criar",
-        "downloadFailed": "Falha ao baixar {name}"
+        "downloadFailed": "Falha ao baixar {name}",
+        "downloadSaved": "{name} baixado"
       },
       "createDialog": {
         "newFile": "Novo arquivo",

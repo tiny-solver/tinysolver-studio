@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "Speichern als Kopie fehlgeschlagen",
         "watchStartFailed": "Dateiwatch konnte nicht gestartet werden",
         "createFailed": "Erstellen fehlgeschlagen",
-        "downloadFailed": "Herunterladen von {name} fehlgeschlagen"
+        "downloadFailed": "Herunterladen von {name} fehlgeschlagen",
+        "downloadSaved": "{name} heruntergeladen"
       },
       "createDialog": {
         "newFile": "Neue Datei",

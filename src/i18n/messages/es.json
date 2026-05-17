@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "No se pudo guardar como copia",
         "watchStartFailed": "No se pudo iniciar la vigilancia de archivos",
         "createFailed": "Error al crear",
-        "downloadFailed": "No se pudo descargar {name}"
+        "downloadFailed": "No se pudo descargar {name}",
+        "downloadSaved": "{name} descargado"
       },
       "createDialog": {
         "newFile": "Nuevo archivo",

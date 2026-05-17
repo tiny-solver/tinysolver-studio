@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "另存為副本失敗",
         "watchStartFailed": "檔案監聽啟動失敗",
         "createFailed": "建立失敗",
-        "downloadFailed": "下載 {name} 失敗"
+        "downloadFailed": "下載 {name} 失敗",
+        "downloadSaved": "已下載 {name}"
       },
       "createDialog": {
         "newFile": "新建檔案",

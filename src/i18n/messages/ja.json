@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "コピーとして保存できませんでした",
         "watchStartFailed": "ファイル監視の開始に失敗しました",
         "createFailed": "作成に失敗しました",
-        "downloadFailed": "{name} のダウンロードに失敗しました"
+        "downloadFailed": "{name} のダウンロードに失敗しました",
+        "downloadSaved": "{name} をダウンロードしました"
       },
       "createDialog": {
         "newFile": "新規ファイル",

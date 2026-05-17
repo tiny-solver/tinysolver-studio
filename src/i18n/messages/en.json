@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "Failed to save as copy",
         "watchStartFailed": "Failed to start file watch",
         "createFailed": "Failed to create",
-        "downloadFailed": "Failed to download {name}"
+        "downloadFailed": "Failed to download {name}",
+        "downloadSaved": "Downloaded {name}"
       },
       "createDialog": {
         "newFile": "New file",

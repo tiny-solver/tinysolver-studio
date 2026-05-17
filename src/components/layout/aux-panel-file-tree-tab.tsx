@@ -38,8 +38,9 @@ import {
   openCommitWindow,
   renameFileTreeEntry,
   saveFileCopy,
+  WORKSPACE_DOWNLOAD_CANCELLED,
 } from "@/lib/api"
-import { isDesktop } from "@/lib/transport"
+import { isDesktop, isRemoteDesktopMode } from "@/lib/transport"
 import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { FileTreeNode, GitBranchList, GitStatusEntry } from "@/lib/types"
@@ -1434,7 +1435,12 @@ export function FileTreeTab() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [uploadDialogTarget, setUploadDialogTarget] = useState("")
   useEffect(() => {
-    setWebMode(!isDesktop())
+    // "webMode" here is a misnomer for "needs in-app upload/download
+    // affordances because there's no native OS file picker for the
+    // *destination/source* filesystem". That's true in pure-web mode
+    // AND in remote-desktop mode (where the workspace lives on the
+    // remote server, not on the local disk the OS dialog would target).
+    setWebMode(!isDesktop() || isRemoteDesktopMode())
     setFolderUploadSupported(
       "webkitdirectory" in document.createElement("input")
     )
@@ -1454,7 +1460,19 @@ export function FileTreeTab() {
       const folderPath = folder?.path
       if (!folderPath) return
       try {
-        await downloadWorkspaceFile(folderPath, target.path, target.name)
+        const result = await downloadWorkspaceFile(
+          folderPath,
+          target.path,
+          target.name
+        )
+        // Remote-desktop downloads flow through a save-dialog; surface
+        // the cancel-vs-saved outcome instead of silently doing nothing.
+        if (result.status === WORKSPACE_DOWNLOAD_CANCELLED) return
+        if (result.savedPath) {
+          toast.success(t("toasts.downloadSaved", { name: target.name }), {
+            description: result.savedPath,
+          })
+        }
       } catch (error) {
         const message = toErrorMessage(error)
         toast.error(t("toasts.downloadFailed", { name: target.name }), {
@@ -1471,7 +1489,13 @@ export function FileTreeTab() {
       if (!folderPath) return
       const name = target.name || baseName(folderPath) || "workspace"
       try {
-        await downloadWorkspaceDir(folderPath, target.path, name)
+        const result = await downloadWorkspaceDir(folderPath, target.path, name)
+        if (result.status === WORKSPACE_DOWNLOAD_CANCELLED) return
+        if (result.savedPath) {
+          toast.success(t("toasts.downloadSaved", { name }), {
+            description: result.savedPath,
+          })
+        }
       } catch (error) {
         const message = toErrorMessage(error)
         toast.error(t("toasts.downloadFailed", { name }), {

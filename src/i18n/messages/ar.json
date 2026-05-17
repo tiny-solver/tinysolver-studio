@@ -1461,7 +1461,8 @@
         "saveCopyFailed": "فشل الحفظ كنسخة",
         "watchStartFailed": "فشل بدء مراقبة الملفات",
         "createFailed": "فشل في الإنشاء",
-        "downloadFailed": "فشل تنزيل {name}"
+        "downloadFailed": "فشل تنزيل {name}",
+        "downloadSaved": "تم تنزيل {name}"
       },
       "createDialog": {
         "newFile": "ملف جديد",

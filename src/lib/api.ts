@@ -3,6 +3,8 @@ import {
   getShellTransport,
   getTransport,
   isDesktop,
+  isRemoteDesktopMode,
+  notifyRemoteDesktopUnauthorized,
 } from "./transport"
 import { getCodegToken, redirectToCodegLogin } from "./transport/web-auth"
 import { getCurrentEffectiveAppLocale } from "./i18n"
@@ -1574,12 +1576,14 @@ export async function uploadLocalPathToRemote(
   })
 }
 
-// ─── Workspace file upload / download (web mode) ───
+// ─── Workspace file upload / download ───
 //
 // Issue #179: in server mode the user has no native file dialog, so the
 // file-tree context menu offers explicit upload + download actions
-// against these endpoints. The desktop build uses OS dialogs instead;
-// these helpers are only invoked when `isDesktop()` is false.
+// against these endpoints. The local desktop build (no remote) uses OS
+// dialogs instead, so these helpers throw there. A remote-desktop
+// window is a Tauri runtime but its file ops must target the remote
+// host — it goes through the `remote_*_workspace_*` proxy commands.
 
 export interface UploadWorkspaceFileResult {
   path: string
@@ -1587,10 +1591,20 @@ export interface UploadWorkspaceFileResult {
   size: number
 }
 
-function assertWebMode(action: string): void {
-  if (isDesktop()) {
+/**
+ * Returns true when the current window can drive these helpers. Both
+ * pure-web mode and remote-desktop mode qualify; only a local-desktop
+ * Tauri window (no remote binding) is rejected, because it has its own
+ * native file dialogs and these helpers would just be the wrong tool.
+ */
+function isWorkspaceFileApiAvailable(): boolean {
+  return !isDesktop() || isRemoteDesktopMode()
+}
+
+function assertWorkspaceFileApiAvailable(action: string): void {
+  if (!isWorkspaceFileApiAvailable()) {
     throw new Error(
-      `${action} is only available in web mode; use the desktop file system instead.`
+      `${action} is not available in local desktop mode; use the OS file dialogs instead.`
     )
   }
 }
@@ -1638,16 +1652,49 @@ export interface UploadWorkspaceFileArgs {
    * is not pre-computable (rare for `File` objects but possible for
    * `Blob` slices) — callers should treat 0 as "unknown" rather than
    * "complete".
+   *
+   * In remote-desktop mode the request goes through a single
+   * `invoke()` IPC trip with no streaming progress, so the callback
+   * fires exactly twice — `(0, size)` before the call and
+   * `(size, size)` after success.
    */
   onProgress?: (loaded: number, total: number) => void
 }
 
 /**
- * Upload one workspace file via `XMLHttpRequest` so we can surface
- * upload progress and respond to an `AbortSignal`. The `fetch` API
- * doesn't expose a request-body progress event in any browser today,
- * which is why we hand-roll XHR instead — the rest of the codebase
- * uses `fetch`, but this is the one route where the UX delta matters.
+ * Read a File as base64 (no `data:...;base64,` prefix) via FileReader.
+ * Faster and stack-safe vs `btoa(String.fromCharCode(...new Uint8Array))`,
+ * which blows up for files in the tens of MiB.
+ */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result
+      if (typeof result !== "string") {
+        reject(new Error("FileReader produced non-string result"))
+        return
+      }
+      const comma = result.indexOf(",")
+      resolve(comma >= 0 ? result.slice(comma + 1) : result)
+    }
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("FileReader failed"))
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Upload one workspace file. Two transports:
+ *
+ *   - **Web** — `XMLHttpRequest` direct to `/api/upload_workspace_file`,
+ *     so we get byte-level upload progress and `AbortSignal` honoring.
+ *   - **Remote desktop** — base64 + Tauri `invoke()` through
+ *     `remote_upload_workspace_file`, which reconstructs the multipart
+ *     frame and forwards it to the remote codeg-server. Capped at
+ *     50 MiB to keep the IPC envelope from blowing up RSS; users with
+ *     larger files should use SCP/rsync.
  *
  * Empty files are allowed: a workspace legitimately contains zero-byte
  * placeholders (`.gitkeep`, `__init__.py`). The chat-attachment uploader
@@ -1657,7 +1704,12 @@ export interface UploadWorkspaceFileArgs {
 export async function uploadWorkspaceFile(
   args: UploadWorkspaceFileArgs
 ): Promise<UploadWorkspaceFileResult> {
-  assertWebMode("uploadWorkspaceFile")
+  assertWorkspaceFileApiAvailable("uploadWorkspaceFile")
+
+  if (isRemoteDesktopMode()) {
+    return uploadWorkspaceFileViaRemoteProxy(args)
+  }
+
   return new Promise<UploadWorkspaceFileResult>((resolve, reject) => {
     const token = getCodegToken()
     const xhr = new XMLHttpRequest()
@@ -1731,6 +1783,88 @@ export async function uploadWorkspaceFile(
   })
 }
 
+/**
+ * Hard ceiling for remote-desktop workspace uploads. MUST stay in
+ * lockstep with `REMOTE_WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES` in
+ * `src-tauri/src/commands/remote_proxy.rs`. We mirror the cap on the
+ * JS side so the dialog can reject oversized files *before* spending
+ * a few seconds base64-encoding and ferrying them across IPC just to
+ * get rejected by the Rust pre-decode check. The Rust side remains
+ * the authoritative guard; this is a UX shortcut.
+ */
+export const REMOTE_WORKSPACE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+
+async function uploadWorkspaceFileViaRemoteProxy(
+  args: UploadWorkspaceFileArgs
+): Promise<UploadWorkspaceFileResult> {
+  const connectionId = getActiveRemoteConnectionId()
+  if (connectionId === null) {
+    throw new Error("uploadWorkspaceFile (remote): no active remote connection")
+  }
+  if (args.file.size > REMOTE_WORKSPACE_UPLOAD_MAX_BYTES) {
+    // Pre-reject: encoding 200 MiB to base64 just to have the IPC
+    // boundary reject it would waste several seconds and spike RSS.
+    // Shape the error to match what the Rust handler would throw so
+    // the dialog's existing i18n-aware toast surfaces the same message.
+    throw {
+      code: "io_error",
+      message: "Upload payload exceeds the size limit",
+      detail: `size=${args.file.size} limit=${REMOTE_WORKSPACE_UPLOAD_MAX_BYTES}`,
+      i18n_key: "errors.upload.tooLarge",
+      i18n_params: {
+        size: String(args.file.size),
+        limit: String(REMOTE_WORKSPACE_UPLOAD_MAX_BYTES),
+      },
+    }
+  }
+  if (args.signal?.aborted) {
+    throw new DOMException("Upload aborted", "AbortError")
+  }
+  // Best-effort progress: a single invoke() is atomic from the JS side,
+  // so we can only mark "started" and "finished". The dialog uses these
+  // to render an indeterminate spinner during the IPC trip.
+  args.onProgress?.(0, args.file.size)
+
+  const dataBase64 = await fileToBase64(args.file)
+  if (args.signal?.aborted) {
+    throw new DOMException("Upload aborted", "AbortError")
+  }
+  const { invoke } = await import("@tauri-apps/api/core")
+  let result: UploadWorkspaceFileResult
+  try {
+    result = await invoke<UploadWorkspaceFileResult>(
+      "remote_upload_workspace_file",
+      {
+        connectionId,
+        rootPath: args.rootPath,
+        targetPath: args.targetPath,
+        relativePath: args.relativePath ?? null,
+        fileName: args.file.name,
+        dataBase64,
+      }
+    )
+  } catch (err) {
+    // Same auth-expired UX as RemoteDesktopTransport.call: a 401 from
+    // the proxy lifts the "connection expired" dialog instead of just
+    // toasting "token invalid", so the user knows to re-auth.
+    if (isRemoteAuthenticationFailed(err)) {
+      notifyRemoteDesktopUnauthorized()
+    }
+    throw err
+  }
+  args.onProgress?.(args.file.size, args.file.size)
+  return result
+}
+
+function isRemoteAuthenticationFailed(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "authentication_failed"
+  )
+}
+
 export function isUploadAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError"
 }
@@ -1752,12 +1886,33 @@ function triggerBrowserDownload(blob: Blob, filename: string): void {
   }
 }
 
+/**
+ * Sentinel return from a remote-desktop download path when the user
+ * cancels the Tauri save dialog. Web mode never returns this — the
+ * browser owns the download manager and there's no per-call cancel.
+ */
+export const WORKSPACE_DOWNLOAD_CANCELLED = "cancelled" as const
+
+export type WorkspaceDownloadResult =
+  | { status: "done"; savedPath?: string; bytes?: number }
+  | { status: typeof WORKSPACE_DOWNLOAD_CANCELLED }
+
 export async function downloadWorkspaceFile(
   rootPath: string,
   path: string,
   fileName: string
-): Promise<void> {
-  assertWebMode("downloadWorkspaceFile")
+): Promise<WorkspaceDownloadResult> {
+  assertWorkspaceFileApiAvailable("downloadWorkspaceFile")
+
+  if (isRemoteDesktopMode()) {
+    return downloadWorkspaceViaRemoteProxy({
+      endpoint: "remote_download_workspace_file",
+      rootPath,
+      path,
+      suggestedName: fileName,
+    })
+  }
+
   const res = await workspaceFileFetch(
     "download_workspace_file",
     JSON.stringify({ rootPath, path }),
@@ -1765,14 +1920,25 @@ export async function downloadWorkspaceFile(
   )
   const blob = await res.blob()
   triggerBrowserDownload(blob, fileName)
+  return { status: "done" }
 }
 
 export async function downloadWorkspaceDir(
   rootPath: string,
   path: string,
   dirName: string
-): Promise<void> {
-  assertWebMode("downloadWorkspaceDir")
+): Promise<WorkspaceDownloadResult> {
+  assertWorkspaceFileApiAvailable("downloadWorkspaceDir")
+
+  if (isRemoteDesktopMode()) {
+    return downloadWorkspaceViaRemoteProxy({
+      endpoint: "remote_download_workspace_dir",
+      rootPath,
+      path,
+      suggestedName: `${dirName}.zip`,
+    })
+  }
+
   const res = await workspaceFileFetch(
     "download_workspace_dir",
     JSON.stringify({ rootPath, path }),
@@ -1780,6 +1946,42 @@ export async function downloadWorkspaceDir(
   )
   const blob = await res.blob()
   triggerBrowserDownload(blob, `${dirName}.zip`)
+  return { status: "done" }
+}
+
+async function downloadWorkspaceViaRemoteProxy(opts: {
+  endpoint: "remote_download_workspace_file" | "remote_download_workspace_dir"
+  rootPath: string
+  path: string
+  suggestedName: string
+}): Promise<WorkspaceDownloadResult> {
+  const connectionId = getActiveRemoteConnectionId()
+  if (connectionId === null) {
+    throw new Error(
+      "downloadWorkspaceFile (remote): no active remote connection"
+    )
+  }
+  const { save } = await import("@tauri-apps/plugin-dialog")
+  const savePath = await save({ defaultPath: opts.suggestedName })
+  if (!savePath) {
+    return { status: WORKSPACE_DOWNLOAD_CANCELLED }
+  }
+  const { invoke } = await import("@tauri-apps/api/core")
+  let bytes: number
+  try {
+    bytes = await invoke<number>(opts.endpoint, {
+      connectionId,
+      rootPath: opts.rootPath,
+      path: opts.path,
+      savePath,
+    })
+  } catch (err) {
+    if (isRemoteAuthenticationFailed(err)) {
+      notifyRemoteDesktopUnauthorized()
+    }
+    throw err
+  }
+  return { status: "done", savedPath: savePath, bytes }
 }
 
 // File tree and git log commands

@@ -637,6 +637,336 @@ fn guess_mime_from_path(path: &std::path::Path) -> Option<String> {
     Some(mime.to_string())
 }
 
+// ─── Workspace file upload / download proxy ───────────────────────────
+//
+// Issue #179 follow-up: a Tauri client bound to a remote codeg-server
+// previously had no path to upload/download workspace files. The web
+// build hits `/api/upload_workspace_file` etc. directly, but a webview
+// against a plain `http://` remote is blocked by mixed-content rules
+// (same reason `remote_upload_attachment` exists). These three commands
+// proxy the workspace endpoints over reqwest.
+//
+// Size policy is deliberately conservative: 50 MiB per upload, vs the
+// 500 MiB direct-web cap, because the IPC layer base64-wraps the bytes
+// and hands them to reqwest as one `Vec<u8>` — a 500 MiB upload would
+// spike RSS by ~1.5 GiB across the encode/decode/buffer chain. Downloads
+// have no cap because they stream directly to disk; the operator picks
+// the destination via a Tauri save dialog before invoking.
+
+/// Per-file cap for remote-desktop workspace uploads via IPC. Lower
+/// than the direct-web cap on purpose (see module comment). Operators
+/// can raise it via `CODEG_REMOTE_WORKSPACE_UPLOAD_MAX_BYTES` if their
+/// host has the headroom.
+const REMOTE_WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES: u64 = 50 * 1024 * 1024;
+const REMOTE_WORKSPACE_UPLOAD_MAX_BYTES_ENV: &str =
+    "CODEG_REMOTE_WORKSPACE_UPLOAD_MAX_BYTES";
+
+fn remote_workspace_upload_max_bytes() -> u64 {
+    std::env::var(REMOTE_WORKSPACE_UPLOAD_MAX_BYTES_ENV)
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(REMOTE_WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES)
+}
+
+/// Per-request timeout for workspace file ops over the proxy. The
+/// default `HTTP_TIMEOUT` (30s) is way too short for a 50 MiB upload
+/// or a 256 MiB ZIP stream over a typical home connection: at 50 Mbps
+/// downlink a 256 MiB archive takes ~45s just for bytes, plus the
+/// server's walk + zip wall time on a large workspace can add another
+/// 60-120s. 20 minutes covers cold caches and 10 Mbps users without
+/// letting a hung remote pin the IPC indefinitely.
+const REMOTE_WORKSPACE_FILE_OP_TIMEOUT: Duration = Duration::from_secs(1200);
+
+/// Forward a multipart upload into the remote codeg-server's
+/// `/api/upload_workspace_file`. The frontend reads the picked file as
+/// bytes (or arrayBuffer → base64), invokes this command, and we
+/// reconstruct the multipart frame with the text fields in the right
+/// order (`root_path`, `target_path`, optional `relative_path`, then
+/// `file` — the remote handler streams text fields first).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn remote_upload_workspace_file(
+    db: State<'_, AppDatabase>,
+    proxy: State<'_, Arc<RemoteProxyState>>,
+    connection_id: i32,
+    root_path: String,
+    target_path: String,
+    relative_path: Option<String>,
+    file_name: String,
+    data_base64: String,
+) -> Result<Value, AppCommandError> {
+    let conn = remote_workspace_connection_service::get(&db.conn, connection_id)
+        .await
+        .map_err(AppCommandError::db)?
+        .ok_or_else(|| {
+            AppCommandError::not_found(format!(
+                "Remote connection {connection_id} not found"
+            ))
+        })?;
+
+    let max_bytes = remote_workspace_upload_max_bytes();
+    // ceil(max_bytes * 4/3) + 4 slack — same envelope math as
+    // `REMOTE_UPLOAD_MAX_BASE64_LEN`, but computed at runtime because
+    // `max_bytes` can be overridden by env var.
+    let max_base64 = (max_bytes as usize).div_ceil(3) * 4 + 4;
+    if data_base64.len() > max_base64 {
+        return Err(
+            AppCommandError::io_error("Upload payload exceeds the size limit")
+                .with_detail(format!(
+                    "size={} limit={max_base64}",
+                    data_base64.len()
+                ))
+                .with_i18n(
+                    UPLOAD_I18N_KEY_TOO_LARGE,
+                    upload_i18n_params([
+                        ("size", data_base64.len().to_string()),
+                        ("limit", max_bytes.to_string()),
+                    ]),
+                ),
+        );
+    }
+    let bytes = STANDARD.decode(data_base64.as_bytes()).map_err(|e| {
+        AppCommandError::io_error("Failed to decode upload payload")
+            .with_detail(e.to_string())
+    })?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(
+            AppCommandError::io_error("Upload payload exceeds the size limit")
+                .with_detail(format!("size={} limit={max_bytes}", bytes.len()))
+                .with_i18n(
+                    UPLOAD_I18N_KEY_TOO_LARGE,
+                    upload_i18n_params([
+                        ("size", bytes.len().to_string()),
+                        ("limit", max_bytes.to_string()),
+                    ]),
+                ),
+        );
+    }
+
+    let safe_name = sanitize_upload_file_name(&file_name);
+    let part = reqwest::multipart::Part::bytes(bytes).file_name(safe_name);
+    // Text fields MUST come before the file field — the remote handler
+    // (`web/handlers/workspace_files.rs::upload_workspace_file`) reads
+    // them sequentially and needs the destination resolved before any
+    // bytes land on disk. `reqwest::multipart::Form` preserves
+    // insertion order, so the order below is the wire order.
+    let mut form = reqwest::multipart::Form::new()
+        .text("root_path", root_path)
+        .text("target_path", target_path);
+    if let Some(rp) = relative_path {
+        if !rp.is_empty() {
+            form = form.text("relative_path", rp);
+        }
+    }
+    form = form.part("file", part);
+
+    let url = format!(
+        "{}/api/upload_workspace_file",
+        conn.base_url.trim_end_matches('/'),
+    );
+    let response = proxy
+        .http
+        .post(&url)
+        .bearer_auth(conn.token.trim())
+        .timeout(REMOTE_WORKSPACE_FILE_OP_TIMEOUT)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| {
+            AppCommandError::network("Remote workspace upload failed")
+                .with_detail(e.to_string())
+        })?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppCommandError::authentication_failed(
+            "Remote Workspace token is invalid",
+        ));
+    }
+    if !status.is_success() {
+        let raw_body = response.text().await.unwrap_or_default();
+        if let Ok(structured) = serde_json::from_str::<AppCommandError>(&raw_body) {
+            return Err(structured);
+        }
+        return Err(
+            AppCommandError::network(format!("Remote returned HTTP {status}")).with_detail(
+                if raw_body.is_empty() {
+                    status.canonical_reason().unwrap_or("error").to_string()
+                } else {
+                    raw_body
+                },
+            ),
+        );
+    }
+    response.json::<Value>().await.map_err(|e| {
+        AppCommandError::network("Failed to parse remote upload response")
+            .with_detail(e.to_string())
+    })
+}
+
+/// Stream a single workspace file from the remote codeg-server into a
+/// local file at `save_path`. The frontend picks `save_path` via a
+/// Tauri save dialog before invoking — the dialog already verifies the
+/// destination directory exists and the user has write access to it,
+/// so this command just opens the file and pipes bytes.
+///
+/// Returns the number of bytes written, used by the caller for the
+/// completion toast.
+#[tauri::command]
+pub async fn remote_download_workspace_file(
+    db: State<'_, AppDatabase>,
+    proxy: State<'_, Arc<RemoteProxyState>>,
+    connection_id: i32,
+    root_path: String,
+    path: String,
+    save_path: String,
+) -> Result<u64, AppCommandError> {
+    remote_workspace_download_stream(
+        db,
+        proxy,
+        connection_id,
+        "download_workspace_file",
+        root_path,
+        path,
+        save_path,
+    )
+    .await
+}
+
+/// Sibling of `remote_download_workspace_file` for directory archives.
+/// The remote endpoint streams a ZIP body; we mirror it to disk at the
+/// path the user picked.
+#[tauri::command]
+pub async fn remote_download_workspace_dir(
+    db: State<'_, AppDatabase>,
+    proxy: State<'_, Arc<RemoteProxyState>>,
+    connection_id: i32,
+    root_path: String,
+    path: String,
+    save_path: String,
+) -> Result<u64, AppCommandError> {
+    remote_workspace_download_stream(
+        db,
+        proxy,
+        connection_id,
+        "download_workspace_dir",
+        root_path,
+        path,
+        save_path,
+    )
+    .await
+}
+
+/// Shared implementation for the two download proxies. They differ only
+/// in the remote endpoint suffix.
+async fn remote_workspace_download_stream(
+    db: State<'_, AppDatabase>,
+    proxy: State<'_, Arc<RemoteProxyState>>,
+    connection_id: i32,
+    endpoint: &str,
+    root_path: String,
+    path: String,
+    save_path: String,
+) -> Result<u64, AppCommandError> {
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+
+    let conn = remote_workspace_connection_service::get(&db.conn, connection_id)
+        .await
+        .map_err(AppCommandError::db)?
+        .ok_or_else(|| {
+            AppCommandError::not_found(format!(
+                "Remote connection {connection_id} not found"
+            ))
+        })?;
+
+    let url = format!(
+        "{}/api/{}",
+        conn.base_url.trim_end_matches('/'),
+        endpoint
+    );
+    let response = proxy
+        .http
+        .post(&url)
+        .bearer_auth(conn.token.trim())
+        .timeout(REMOTE_WORKSPACE_FILE_OP_TIMEOUT)
+        .json(&serde_json::json!({
+            "rootPath": root_path,
+            "path": path,
+        }))
+        .send()
+        .await
+        .map_err(|e| {
+            AppCommandError::network("Remote workspace download failed")
+                .with_detail(e.to_string())
+        })?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(AppCommandError::authentication_failed(
+            "Remote Workspace token is invalid",
+        ));
+    }
+    if !status.is_success() {
+        let raw_body = response.text().await.unwrap_or_default();
+        if let Ok(structured) = serde_json::from_str::<AppCommandError>(&raw_body) {
+            return Err(structured);
+        }
+        return Err(
+            AppCommandError::network(format!("Remote returned HTTP {status}")).with_detail(
+                if raw_body.is_empty() {
+                    status.canonical_reason().unwrap_or("error").to_string()
+                } else {
+                    raw_body
+                },
+            ),
+        );
+    }
+
+    // Open destination, truncating if it exists (matches save-dialog
+    // "overwrite" semantics — the dialog already prompted the user).
+    let mut file = tokio::fs::File::create(&save_path).await.map_err(|e| {
+        AppCommandError::io_error("Failed to create local download file")
+            .with_detail(format!("{save_path}: {e}"))
+    })?;
+
+    // Stream into the destination, but if anything fails mid-flight we
+    // must unlink the partial file. Without this the user sees a
+    // failure toast but is left with a plausibly-named broken file on
+    // disk — re-opens corrupt, re-downloads silently overwrite, and
+    // the failure mode is invisible until they try to use it.
+    let result: Result<u64, AppCommandError> = async {
+        let mut stream = response.bytes_stream();
+        let mut total: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| {
+                AppCommandError::network("Failed to read remote download stream")
+                    .with_detail(e.to_string())
+            })?;
+            total = total.saturating_add(chunk.len() as u64);
+            file.write_all(&chunk).await.map_err(|e| {
+                AppCommandError::io_error("Failed to write download to disk")
+                    .with_detail(e.to_string())
+            })?;
+        }
+        file.flush().await.map_err(|e| {
+            AppCommandError::io_error("Failed to flush downloaded file")
+                .with_detail(e.to_string())
+        })?;
+        Ok(total)
+    }
+    .await;
+
+    // Close the handle before any unlink so Windows (which keeps an
+    // exclusive lock on open files) lets the remove succeed.
+    drop(file);
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&save_path).await;
+    }
+    result
+}
+
 // ─── WebSocket proxy commands ─────────────────────────────────────────
 
 /// Subscribe the calling webview to the remote server's WS event stream.
