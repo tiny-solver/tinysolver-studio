@@ -312,17 +312,13 @@ pub fn build_router(
         // between the browser and the workspace. The upload handler
         // streams to a same-dir staging file then renames into place;
         // the download handlers stream files and walk-then-zip whole
-        // directories. The body-limit layer here matches the
-        // per-file cap honored by `workspace_files.rs` plus headroom
-        // for multipart framing.
+        // directories. Disable axum's default multipart body limit here:
+        // workspace files are user-owned bytes moving between the user's
+        // browser and filesystem, not model-context attachments.
         .route(
             "/upload_workspace_file",
-            post(handlers::workspace_files::upload_workspace_file).layer(
-                DefaultBodyLimit::max(
-                    handlers::workspace_files::workspace_upload_max_bytes() as usize
-                        + 1024 * 1024,
-                ),
-            ),
+            post(handlers::workspace_files::upload_workspace_file)
+                .layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/download_workspace_file",

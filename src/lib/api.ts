@@ -1783,39 +1783,12 @@ export async function uploadWorkspaceFile(
   })
 }
 
-/**
- * Hard ceiling for remote-desktop workspace uploads. MUST stay in
- * lockstep with `REMOTE_WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES` in
- * `src-tauri/src/commands/remote_proxy.rs`. We mirror the cap on the
- * JS side so the dialog can reject oversized files *before* spending
- * a few seconds base64-encoding and ferrying them across IPC just to
- * get rejected by the Rust pre-decode check. The Rust side remains
- * the authoritative guard; this is a UX shortcut.
- */
-export const REMOTE_WORKSPACE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024
-
 async function uploadWorkspaceFileViaRemoteProxy(
   args: UploadWorkspaceFileArgs
 ): Promise<UploadWorkspaceFileResult> {
   const connectionId = getActiveRemoteConnectionId()
   if (connectionId === null) {
     throw new Error("uploadWorkspaceFile (remote): no active remote connection")
-  }
-  if (args.file.size > REMOTE_WORKSPACE_UPLOAD_MAX_BYTES) {
-    // Pre-reject: encoding 200 MiB to base64 just to have the IPC
-    // boundary reject it would waste several seconds and spike RSS.
-    // Shape the error to match what the Rust handler would throw so
-    // the dialog's existing i18n-aware toast surfaces the same message.
-    throw {
-      code: "io_error",
-      message: "Upload payload exceeds the size limit",
-      detail: `size=${args.file.size} limit=${REMOTE_WORKSPACE_UPLOAD_MAX_BYTES}`,
-      i18n_key: "errors.upload.tooLarge",
-      i18n_params: {
-        size: String(args.file.size),
-        limit: String(REMOTE_WORKSPACE_UPLOAD_MAX_BYTES),
-      },
-    }
   }
   if (args.signal?.aborted) {
     throw new DOMException("Upload aborted", "AbortError")

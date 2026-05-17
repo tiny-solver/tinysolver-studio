@@ -14,9 +14,7 @@
 //! path starts with the canonical root, so a symlink inside the user's
 //! workspace cannot redirect reads or writes outside it.
 
-use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 
 use axum::body::{Body, Bytes};
 use axum::extract::Multipart;
@@ -26,62 +24,8 @@ use axum::Json;
 use futures::stream;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::Semaphore;
 
-use crate::app_error::{AppCommandError, UPLOAD_I18N_KEY_TOO_LARGE};
-
-/// Per-file cap for workspace uploads. Larger than the chat-attachment
-/// cap (2 MiB) because these bytes go straight to disk in the user's
-/// workspace, not into an AI model's context window. Operators can
-/// override via `CODEG_WORKSPACE_UPLOAD_MAX_BYTES`.
-const WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES: u64 = 500 * 1024 * 1024;
-const WORKSPACE_UPLOAD_MAX_BYTES_ENV: &str = "CODEG_WORKSPACE_UPLOAD_MAX_BYTES";
-
-/// Cap on the uncompressed source bytes scanned for a directory ZIP
-/// download. The archive is buffered to a temp file on disk (not RAM)
-/// before streaming, so this cap mostly protects against runaway disk
-/// usage and walk time under concurrency rather than RSS. Lowered from
-/// 1 GiB to 256 MiB to fit ordinary remote-server hosts; operators with
-/// larger workspaces raise it via `CODEG_WORKSPACE_DOWNLOAD_MAX_BYTES`.
-const WORKSPACE_DOWNLOAD_DEFAULT_MAX_BYTES: u64 = 256 * 1024 * 1024;
-const WORKSPACE_DOWNLOAD_MAX_BYTES_ENV: &str = "CODEG_WORKSPACE_DOWNLOAD_MAX_BYTES";
-
-/// Cap on concurrent in-flight directory ZIP builds. The zip task pins
-/// a blocking thread plus a temp file; without this limit a handful of
-/// large-tree requests could saturate the blocking pool and exhaust
-/// disk. Override with `CODEG_WORKSPACE_DOWNLOAD_MAX_CONCURRENCY`.
-const WORKSPACE_DOWNLOAD_DEFAULT_CONCURRENCY: usize = 2;
-const WORKSPACE_DOWNLOAD_CONCURRENCY_ENV: &str =
-    "CODEG_WORKSPACE_DOWNLOAD_MAX_CONCURRENCY";
-
-pub fn workspace_upload_max_bytes() -> u64 {
-    std::env::var(WORKSPACE_UPLOAD_MAX_BYTES_ENV)
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES)
-}
-
-pub fn workspace_download_max_bytes() -> u64 {
-    std::env::var(WORKSPACE_DOWNLOAD_MAX_BYTES_ENV)
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(WORKSPACE_DOWNLOAD_DEFAULT_MAX_BYTES)
-}
-
-fn zip_semaphore() -> Arc<Semaphore> {
-    static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
-    SEM.get_or_init(|| {
-        let n = std::env::var(WORKSPACE_DOWNLOAD_CONCURRENCY_ENV)
-            .ok()
-            .and_then(|s| s.trim().parse::<usize>().ok())
-            .filter(|v| *v > 0)
-            .unwrap_or(WORKSPACE_DOWNLOAD_DEFAULT_CONCURRENCY);
-        Arc::new(Semaphore::new(n))
-    })
-    .clone()
-}
+use crate::app_error::AppCommandError;
 
 // ---------------------------------------------------------------------------
 // Wire types
@@ -151,9 +95,9 @@ fn ensure_inside_root(root: &Path, target: &Path) -> Result<(), AppCommandError>
 /// escape but the side-effect (empty dir at the symlink target) was
 /// already on disk.
 fn ensure_no_symlink_in_chain(root: &Path, target: &Path) -> Result<(), AppCommandError> {
-    let rel = target.strip_prefix(root).map_err(|_| {
-        AppCommandError::invalid_input("Target path is not under workspace root")
-    })?;
+    let rel = target
+        .strip_prefix(root)
+        .map_err(|_| AppCommandError::invalid_input("Target path is not under workspace root"))?;
     let mut current = root.to_path_buf();
     for component in rel.components() {
         let segment = match component {
@@ -273,7 +217,6 @@ pub async fn upload_workspace_file(
     let mut target_path: Option<String> = None;
     let mut relative_path: Option<String> = None;
     let mut result: Option<UploadWorkspaceFileResult> = None;
-    let max_bytes = workspace_upload_max_bytes();
 
     while let Some(mut field) = multipart.next_field().await.map_err(|e| {
         AppCommandError::io_error("Invalid multipart upload").with_detail(e.to_string())
@@ -315,8 +258,7 @@ pub async fn upload_workspace_file(
                         "Workspace folder does not exist",
                     ));
                 }
-                let canonical_root =
-                    std::fs::canonicalize(&root).map_err(AppCommandError::io)?;
+                let canonical_root = std::fs::canonicalize(&root).map_err(AppCommandError::io)?;
 
                 let file_name_hint = field
                     .file_name()
@@ -361,10 +303,7 @@ pub async fn upload_workspace_file(
                     ));
                 }
 
-                let staging_name = format!(
-                    ".codeg-upload-{}.part",
-                    uuid::Uuid::new_v4().simple()
-                );
+                let staging_name = format!(".codeg-upload-{}.part", uuid::Uuid::new_v4().simple());
                 let staging_path = final_abs
                     .parent()
                     .map(|p| p.join(&staging_name))
@@ -389,16 +328,6 @@ pub async fn upload_workspace_file(
                             .with_detail(e.to_string())
                     })? {
                         let new_total = written.saturating_add(chunk.len() as u64);
-                        if new_total > max_bytes {
-                            let mut params = BTreeMap::new();
-                            params.insert("size".to_string(), new_total.to_string());
-                            params.insert("limit".to_string(), max_bytes.to_string());
-                            return Err(AppCommandError::io_error(
-                                "Upload exceeds the maximum allowed size",
-                            )
-                            .with_detail(format!("size={new_total} limit={max_bytes}"))
-                            .with_i18n(UPLOAD_I18N_KEY_TOO_LARGE, params));
-                        }
                         out.write_all(&chunk).await.map_err(|e| {
                             AppCommandError::io_error("Failed to write chunk")
                                 .with_detail(e.to_string())
@@ -447,16 +376,12 @@ pub async fn upload_workspace_file(
                         ));
                     }
                     Err(hard_link_err) => {
-                        if let Err(e) =
-                            tokio::fs::rename(&staging_path, &final_abs).await
-                        {
+                        if let Err(e) = tokio::fs::rename(&staging_path, &final_abs).await {
                             let _ = tokio::fs::remove_file(&staging_path).await;
-                            return Err(AppCommandError::io_error(
-                                "Failed to commit upload",
-                            )
-                            .with_detail(format!(
-                                "hard_link_err={hard_link_err} rename_err={e}"
-                            )));
+                            return Err(AppCommandError::io_error("Failed to commit upload")
+                                .with_detail(format!(
+                                    "hard_link_err={hard_link_err} rename_err={e}"
+                                )));
                         }
                         commit_method = "rename";
                     }
@@ -652,37 +577,18 @@ pub async fn download_workspace_dir(
     };
     let zip_name = format!("{dir_name}.zip");
 
-    // Bound concurrent zip jobs across the whole process. `acquire_owned`
-    // returns an `OwnedSemaphorePermit` we can move into the streaming
-    // state below, so the slot stays held until the client finishes
-    // draining the response (or hangs up).
-    let permit = zip_semaphore()
-        .acquire_owned()
-        .await
-        .map_err(|e| {
-            AppCommandError::io_error("Zip concurrency gate closed")
-                .with_detail(e.to_string())
-        })?;
-
     let dir_for_blocking = dir_path.clone();
-    let max_bytes = workspace_download_max_bytes();
     let (temp_file, content_length): (tempfile::NamedTempFile, u64) =
         tokio::task::spawn_blocking(move || {
             let mut temp = tempfile::NamedTempFile::new().map_err(|e| {
                 AppCommandError::io_error("Failed to create zip temp file")
                     .with_detail(e.to_string())
             })?;
-            let size = build_zip_archive_to_writer(
-                &dir_for_blocking,
-                max_bytes,
-                temp.as_file_mut(),
-            )?;
+            let size = build_zip_archive_to_writer(&dir_for_blocking, temp.as_file_mut())?;
             Ok::<_, AppCommandError>((temp, size))
         })
         .await
-        .map_err(|e| {
-            AppCommandError::io_error("Zip task failed").with_detail(e.to_string())
-        })??;
+        .map_err(|e| AppCommandError::io_error("Zip task failed").with_detail(e.to_string()))??;
 
     // Re-open async for streaming. On Linux/macOS, holding two
     // handles (the NamedTempFile-internal sync File and this async
@@ -699,37 +605,30 @@ pub async fn download_workspace_dir(
     // deletion, but the actual removal is deferred until the async
     // handle's close completes. In the normal stream-drain path that
     // close happens microseconds before the NamedTempFile drop (tuple
-    // drop order: `file` → `temp_file` → `permit`), so the inode is
-    // gone by the time this function returns. The race window only
-    // matters if a Windows-hosted codeg-server takes a hard process
-    // kill mid-stream; orphaned temp files then sit in `%TEMP%` until
-    // the OS scheduled cleanup runs.
+    // drop order: `file` → `temp_file`), so the inode is gone by the
+    // time this function returns. The race window only matters if a
+    // Windows-hosted codeg-server takes a hard process kill mid-stream;
+    // orphaned temp files then sit in `%TEMP%` until the OS scheduled
+    // cleanup runs.
     let file = tokio::fs::File::open(temp_file.path())
         .await
         .map_err(AppCommandError::io)?;
 
-    // State carried through the stream: file handle, temp guard
-    // (NamedTempFile is unlinked on drop), and the permit (released on
-    // drop). All three drop atomically when the stream ends (`None`
-    // branch) or the client disconnects, which is exactly the cleanup
-    // we want.
-    let body_stream = stream::unfold(
-        (file, temp_file, permit),
-        |(mut file, temp_file, permit)| async move {
-            let mut buf = vec![0u8; 64 * 1024];
-            match file.read(&mut buf).await {
-                Ok(0) => None,
-                Ok(n) => {
-                    buf.truncate(n);
-                    Some((
-                        Ok::<_, std::io::Error>(Bytes::from(buf)),
-                        (file, temp_file, permit),
-                    ))
-                }
-                Err(e) => Some((Err(e), (file, temp_file, permit))),
+    // State carried through the stream: file handle and temp guard
+    // (NamedTempFile is unlinked on drop). Both drop when the stream
+    // ends (`None` branch) or the client disconnects, which is exactly
+    // the cleanup we want.
+    let body_stream = stream::unfold((file, temp_file), |(mut file, temp_file)| async move {
+        let mut buf = vec![0u8; 64 * 1024];
+        match file.read(&mut buf).await {
+            Ok(0) => None,
+            Ok(n) => {
+                buf.truncate(n);
+                Some((Ok::<_, std::io::Error>(Bytes::from(buf)), (file, temp_file)))
             }
-        },
-    );
+            Err(e) => Some((Err(e), (file, temp_file))),
+        }
+    });
     let body = Body::from_stream(body_stream);
 
     let mut headers = HeaderMap::new();
@@ -751,9 +650,7 @@ pub async fn download_workspace_dir(
 /// Runs on the blocking pool because `walkdir` and `zip::ZipWriter` are
 /// sync APIs, and `ZipWriter` requires `Write + Seek` (so we cannot
 /// stream into an mpsc channel directly — the caller uses a temp file
-/// as the seekable sink instead). `max_bytes` caps the total
-/// uncompressed source bytes scanned; exceeding it errors out before
-/// any response is sent so the client gets a 400, not a truncated zip.
+/// as the seekable sink instead).
 ///
 /// Returns the final on-disk archive size in bytes, used for the
 /// `Content-Length` response header.
@@ -763,15 +660,14 @@ pub async fn download_workspace_dir(
 /// way to avoid traversing out of the workspace via a misplaced link.
 fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
     dir: &Path,
-    max_bytes: u64,
     sink: W,
 ) -> Result<u64, AppCommandError> {
     use std::io::Read;
     use zip::write::SimpleFileOptions;
 
     let mut writer = zip::ZipWriter::new(sink);
-    let base_options = SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let base_options =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     // Directories need the execute bit so extractors set a mode that
     // lets the user `cd` into them and list their contents. The earlier
     // blanket 0o644 produced archives whose extracted subdirectories
@@ -780,7 +676,6 @@ fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
     let dir_options = base_options.unix_permissions(0o755);
     let file_options = base_options.unix_permissions(0o644);
 
-    let mut total_source_bytes: u64 = 0;
     let mut symlinks_skipped: u64 = 0;
 
     for entry in walkdir::WalkDir::new(dir).follow_links(false) {
@@ -805,26 +700,11 @@ fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
             writer
                 .add_directory(format!("{rel_str}/"), dir_options)
                 .map_err(|e| {
-                    AppCommandError::io_error("Failed to add dir to zip")
-                        .with_detail(e.to_string())
+                    AppCommandError::io_error("Failed to add dir to zip").with_detail(e.to_string())
                 })?;
         } else if file_type.is_file() {
-            let metadata = entry.metadata().map_err(|e| {
-                AppCommandError::io_error("Failed to stat entry")
-                    .with_detail(e.to_string())
-            })?;
-            total_source_bytes = total_source_bytes.saturating_add(metadata.len());
-            if total_source_bytes > max_bytes {
-                return Err(AppCommandError::invalid_input(
-                    "Directory exceeds the maximum download size",
-                )
-                .with_detail(format!(
-                    "scanned={total_source_bytes} limit={max_bytes}"
-                )));
-            }
             writer.start_file(&rel_str, file_options).map_err(|e| {
-                AppCommandError::io_error("Failed to start zip entry")
-                    .with_detail(e.to_string())
+                AppCommandError::io_error("Failed to start zip entry").with_detail(e.to_string())
             })?;
             let mut f = std::fs::File::open(path).map_err(AppCommandError::io)?;
             let mut buf = [0u8; 64 * 1024];
@@ -852,8 +732,7 @@ fn build_zip_archive_to_writer<W: std::io::Write + std::io::Seek>(
         AppCommandError::io_error("Failed to finalize zip").with_detail(e.to_string())
     })?;
     let size = finished.stream_position().map_err(|e| {
-        AppCommandError::io_error("Failed to measure zip size")
-            .with_detail(e.to_string())
+        AppCommandError::io_error("Failed to measure zip size").with_detail(e.to_string())
     })?;
     Ok(size)
 }
@@ -876,10 +755,7 @@ mod tests {
 
     #[test]
     fn sanitize_relative_subpath_joins_clean() {
-        assert_eq!(
-            sanitize_relative_subpath("a/b/c.txt").unwrap(),
-            "a/b/c.txt"
-        );
+        assert_eq!(sanitize_relative_subpath("a/b/c.txt").unwrap(), "a/b/c.txt");
         assert_eq!(
             sanitize_relative_subpath("a\\b\\c.txt").unwrap(),
             "a/b/c.txt"
@@ -900,7 +776,10 @@ mod tests {
             compute_final_rel("dir", "", "report.txt").unwrap(),
             "dir/report.txt"
         );
-        assert_eq!(compute_final_rel("", "", "report.txt").unwrap(), "report.txt");
+        assert_eq!(
+            compute_final_rel("", "", "report.txt").unwrap(),
+            "report.txt"
+        );
     }
 
     #[test]

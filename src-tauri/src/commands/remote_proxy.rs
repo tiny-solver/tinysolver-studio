@@ -124,6 +124,7 @@ pub struct RemoteProxyState {
     tasks: Mutex<HashMap<i32, Arc<WsTaskEntry>>>,
     destroyed_window_instances: Mutex<HashSet<String>>,
     http: reqwest::Client,
+    workspace_http: reqwest::Client,
 }
 
 impl RemoteProxyState {
@@ -135,6 +136,9 @@ impl RemoteProxyState {
                 .timeout(HTTP_TIMEOUT)
                 .build()
                 .expect("failed to build reqwest client for remote proxy"),
+            workspace_http: reqwest::Client::builder()
+                .build()
+                .expect("failed to build reqwest workspace client for remote proxy"),
         }
     }
 
@@ -646,37 +650,10 @@ fn guess_mime_from_path(path: &std::path::Path) -> Option<String> {
 // (same reason `remote_upload_attachment` exists). These three commands
 // proxy the workspace endpoints over reqwest.
 //
-// Size policy is deliberately conservative: 50 MiB per upload, vs the
-// 500 MiB direct-web cap, because the IPC layer base64-wraps the bytes
-// and hands them to reqwest as one `Vec<u8>` — a 500 MiB upload would
-// spike RSS by ~1.5 GiB across the encode/decode/buffer chain. Downloads
-// have no cap because they stream directly to disk; the operator picks
-// the destination via a Tauri save dialog before invoking.
-
-/// Per-file cap for remote-desktop workspace uploads via IPC. Lower
-/// than the direct-web cap on purpose (see module comment). Operators
-/// can raise it via `CODEG_REMOTE_WORKSPACE_UPLOAD_MAX_BYTES` if their
-/// host has the headroom.
-const REMOTE_WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES: u64 = 50 * 1024 * 1024;
-const REMOTE_WORKSPACE_UPLOAD_MAX_BYTES_ENV: &str =
-    "CODEG_REMOTE_WORKSPACE_UPLOAD_MAX_BYTES";
-
-fn remote_workspace_upload_max_bytes() -> u64 {
-    std::env::var(REMOTE_WORKSPACE_UPLOAD_MAX_BYTES_ENV)
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(REMOTE_WORKSPACE_UPLOAD_DEFAULT_MAX_BYTES)
-}
-
-/// Per-request timeout for workspace file ops over the proxy. The
-/// default `HTTP_TIMEOUT` (30s) is way too short for a 50 MiB upload
-/// or a 256 MiB ZIP stream over a typical home connection: at 50 Mbps
-/// downlink a 256 MiB archive takes ~45s just for bytes, plus the
-/// server's walk + zip wall time on a large workspace can add another
-/// 60-120s. 20 minutes covers cold caches and 10 Mbps users without
-/// letting a hung remote pin the IPC indefinitely.
-const REMOTE_WORKSPACE_FILE_OP_TIMEOUT: Duration = Duration::from_secs(1200);
+// Workspace file transfers intentionally have no application-level size
+// limit. These bytes move between the user's own machine/browser and their
+// workspace; OS disk space, network throughput, and the remote server are
+// the natural boundaries.
 
 /// Forward a multipart upload into the remote codeg-server's
 /// `/api/upload_workspace_file`. The frontend reads the picked file as
@@ -700,49 +677,12 @@ pub async fn remote_upload_workspace_file(
         .await
         .map_err(AppCommandError::db)?
         .ok_or_else(|| {
-            AppCommandError::not_found(format!(
-                "Remote connection {connection_id} not found"
-            ))
+            AppCommandError::not_found(format!("Remote connection {connection_id} not found"))
         })?;
 
-    let max_bytes = remote_workspace_upload_max_bytes();
-    // ceil(max_bytes * 4/3) + 4 slack — same envelope math as
-    // `REMOTE_UPLOAD_MAX_BASE64_LEN`, but computed at runtime because
-    // `max_bytes` can be overridden by env var.
-    let max_base64 = (max_bytes as usize).div_ceil(3) * 4 + 4;
-    if data_base64.len() > max_base64 {
-        return Err(
-            AppCommandError::io_error("Upload payload exceeds the size limit")
-                .with_detail(format!(
-                    "size={} limit={max_base64}",
-                    data_base64.len()
-                ))
-                .with_i18n(
-                    UPLOAD_I18N_KEY_TOO_LARGE,
-                    upload_i18n_params([
-                        ("size", data_base64.len().to_string()),
-                        ("limit", max_bytes.to_string()),
-                    ]),
-                ),
-        );
-    }
     let bytes = STANDARD.decode(data_base64.as_bytes()).map_err(|e| {
-        AppCommandError::io_error("Failed to decode upload payload")
-            .with_detail(e.to_string())
+        AppCommandError::io_error("Failed to decode upload payload").with_detail(e.to_string())
     })?;
-    if bytes.len() as u64 > max_bytes {
-        return Err(
-            AppCommandError::io_error("Upload payload exceeds the size limit")
-                .with_detail(format!("size={} limit={max_bytes}", bytes.len()))
-                .with_i18n(
-                    UPLOAD_I18N_KEY_TOO_LARGE,
-                    upload_i18n_params([
-                        ("size", bytes.len().to_string()),
-                        ("limit", max_bytes.to_string()),
-                    ]),
-                ),
-        );
-    }
 
     let safe_name = sanitize_upload_file_name(&file_name);
     let part = reqwest::multipart::Part::bytes(bytes).file_name(safe_name);
@@ -766,16 +706,14 @@ pub async fn remote_upload_workspace_file(
         conn.base_url.trim_end_matches('/'),
     );
     let response = proxy
-        .http
+        .workspace_http
         .post(&url)
         .bearer_auth(conn.token.trim())
-        .timeout(REMOTE_WORKSPACE_FILE_OP_TIMEOUT)
         .multipart(form)
         .send()
         .await
         .map_err(|e| {
-            AppCommandError::network("Remote workspace upload failed")
-                .with_detail(e.to_string())
+            AppCommandError::network("Remote workspace upload failed").with_detail(e.to_string())
         })?;
 
     let status = response.status();
@@ -876,21 +814,14 @@ async fn remote_workspace_download_stream(
         .await
         .map_err(AppCommandError::db)?
         .ok_or_else(|| {
-            AppCommandError::not_found(format!(
-                "Remote connection {connection_id} not found"
-            ))
+            AppCommandError::not_found(format!("Remote connection {connection_id} not found"))
         })?;
 
-    let url = format!(
-        "{}/api/{}",
-        conn.base_url.trim_end_matches('/'),
-        endpoint
-    );
+    let url = format!("{}/api/{}", conn.base_url.trim_end_matches('/'), endpoint);
     let response = proxy
-        .http
+        .workspace_http
         .post(&url)
         .bearer_auth(conn.token.trim())
-        .timeout(REMOTE_WORKSPACE_FILE_OP_TIMEOUT)
         .json(&serde_json::json!({
             "rootPath": root_path,
             "path": path,
@@ -898,8 +829,7 @@ async fn remote_workspace_download_stream(
         .send()
         .await
         .map_err(|e| {
-            AppCommandError::network("Remote workspace download failed")
-                .with_detail(e.to_string())
+            AppCommandError::network("Remote workspace download failed").with_detail(e.to_string())
         })?;
 
     let status = response.status();
@@ -951,8 +881,7 @@ async fn remote_workspace_download_stream(
             })?;
         }
         file.flush().await.map_err(|e| {
-            AppCommandError::io_error("Failed to flush downloaded file")
-                .with_detail(e.to_string())
+            AppCommandError::io_error("Failed to flush downloaded file").with_detail(e.to_string())
         })?;
         Ok(total)
     }
