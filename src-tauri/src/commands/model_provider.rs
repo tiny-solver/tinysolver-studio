@@ -135,9 +135,19 @@ pub async fn update_model_provider_core(
         .map_err(AppCommandError::from)?
         .ok_or_else(|| AppCommandError::not_found(format!("model provider not found: {id}")))?;
 
-    let effective_agent_type = agent_type
-        .as_deref()
-        .unwrap_or(&old_provider.agent_type);
+    // agent_type is immutable after creation: dependent agents bind to a provider by id
+    // and rely on provider.agent_type matching their own. Changing it would silently
+    // mis-parse provider.model (e.g. Claude JSON written into Codex's config.toml).
+    if let Some(ref new_at) = agent_type {
+        if new_at != &old_provider.agent_type {
+            return Err(AppCommandError::invalid_input(format!(
+                "agent_type is immutable after creation (current: {}, requested: {new_at})",
+                old_provider.agent_type
+            )));
+        }
+    }
+
+    let effective_agent_type = old_provider.agent_type.as_str();
     if let Some(ref raw) = model {
         validate_model(effective_agent_type, Some(raw))?;
     }
@@ -158,7 +168,7 @@ pub async fn update_model_provider_core(
         name,
         api_url.clone(),
         api_key.clone(),
-        agent_type,
+        None, // agent_type is immutable; rejected above if differs
         model_patch.clone(),
     )
     .await
