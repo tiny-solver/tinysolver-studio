@@ -88,6 +88,7 @@ import type {
   ModelProviderInfo,
   PreflightResult,
 } from "@/lib/types"
+import { parseClaudeProviderModel } from "@/lib/types"
 import { toErrorMessage } from "@/lib/app-error"
 import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
 import { OpencodePluginsModal } from "./opencode-plugins-modal"
@@ -3483,8 +3484,8 @@ export function AcpAgentSettings() {
 
   const selectedModelProviders = useMemo(() => {
     if (!selectedAgent) return []
-    return modelProviders.filter((p) =>
-      p.agent_types.includes(selectedAgent.agent_type)
+    return modelProviders.filter(
+      (p) => p.agent_type === selectedAgent.agent_type
     )
   }, [modelProviders, selectedAgent])
 
@@ -3817,44 +3818,103 @@ export function AcpAgentSettings() {
       const agentType = selectedAgent.agent_type
 
       if (agentType === "claude_code") {
+        // Provider's model fields are authoritative: missing/empty keys clear
+        // the corresponding draft + env value.
+        const claudeModel = parseClaudeProviderModel(provider?.model ?? null)
+        const claudeMain = claudeModel.main ?? ""
+        const claudeReasoning = claudeModel.reasoning ?? ""
+        const claudeHaiku = claudeModel.haiku ?? ""
+        const claudeSonnet = claudeModel.sonnet ?? ""
+        const claudeOpus = claudeModel.opus ?? ""
         const nextConfigJson = patchImportantConfigText(
           agentType,
           selectedDraft.configText,
-          { apiBaseUrl: apiUrl, apiKey }
+          {
+            apiBaseUrl: apiUrl,
+            apiKey,
+            model: selectedDraft.model,
+            claudeMainModel: claudeMain,
+            claudeReasoningModel: claudeReasoning,
+            claudeDefaultHaikuModel: claudeHaiku,
+            claudeDefaultSonnetModel: claudeSonnet,
+            claudeDefaultOpusModel: claudeOpus,
+          }
         )
         setConfigErrors((prev) => ({
           ...prev,
           [agentType]: null,
         }))
-        updateSelectedDraft((current) => ({
-          ...current,
-          modelProviderId: providerId,
-          apiBaseUrl: apiUrl,
-          apiKey,
-          envText: patchEnvByImportantKey(
+        updateSelectedDraft((current) => {
+          let nextEnvText = patchEnvByImportantKey(
             agentType,
-            patchEnvByImportantKey(
-              agentType,
-              current.envText,
-              "apiBaseUrl",
-              apiUrl
-            ),
+            current.envText,
+            "apiBaseUrl",
+            apiUrl
+          )
+          nextEnvText = patchEnvByImportantKey(
+            agentType,
+            nextEnvText,
             "apiKey",
             apiKey
-          ),
-          configText: nextConfigJson.configText,
-        }))
+          )
+          nextEnvText = patchEnvByImportantKey(
+            agentType,
+            nextEnvText,
+            "claudeMainModel",
+            claudeMain
+          )
+          nextEnvText = patchEnvByImportantKey(
+            agentType,
+            nextEnvText,
+            "claudeReasoningModel",
+            claudeReasoning
+          )
+          nextEnvText = patchEnvByImportantKey(
+            agentType,
+            nextEnvText,
+            "claudeDefaultHaikuModel",
+            claudeHaiku
+          )
+          nextEnvText = patchEnvByImportantKey(
+            agentType,
+            nextEnvText,
+            "claudeDefaultSonnetModel",
+            claudeSonnet
+          )
+          nextEnvText = patchEnvByImportantKey(
+            agentType,
+            nextEnvText,
+            "claudeDefaultOpusModel",
+            claudeOpus
+          )
+          return {
+            ...current,
+            modelProviderId: providerId,
+            apiBaseUrl: apiUrl,
+            apiKey,
+            claudeMainModel: claudeMain,
+            claudeReasoningModel: claudeReasoning,
+            claudeDefaultHaikuModel: claudeHaiku,
+            claudeDefaultSonnetModel: claudeSonnet,
+            claudeDefaultOpusModel: claudeOpus,
+            envText: nextEnvText,
+            configText: nextConfigJson.configText,
+          }
+        })
       } else if (agentType === "codex") {
+        const codexModel = provider?.model?.trim() ?? ""
         const nextAuthPatch = patchCodexAuthJsonText(
           selectedDraft.codexAuthJsonText,
           { apiKey, authMode: null }
         )
         const nextAuthJsonText = nextAuthPatch.authJsonText
+        // Always pass the provider's model (empty string clears it from the toml).
         const nextConfigTomlText = patchCodexConfigTomlText(
           selectedDraft.codexConfigTomlText,
           {
             modelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
             apiBaseUrl: apiUrl,
+            model: codexModel,
           }
         )
         const synced = extractCodexImportantValues(
@@ -3866,6 +3926,7 @@ export function AcpAgentSettings() {
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
+          model: codexModel,
           codexAuthJsonText: nextAuthJsonText,
           codexConfigTomlText: nextConfigTomlText,
           codexModelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
@@ -3876,6 +3937,7 @@ export function AcpAgentSettings() {
           }),
         }))
       } else if (agentType === "gemini") {
+        const geminiModel = provider?.model?.trim() ?? ""
         const nextConfigJson = patchGeminiConfigText(selectedDraft.configText, {
           apiBaseUrl: apiUrl,
           geminiApiKey: apiKey,
@@ -3884,18 +3946,27 @@ export function AcpAgentSettings() {
           ...prev,
           [agentType]: null,
         }))
-        updateSelectedDraft((current) => ({
-          ...current,
-          modelProviderId: providerId,
-          apiBaseUrl: apiUrl,
-          apiKey,
-          geminiApiKey: apiKey,
-          envText: patchGeminiEnvText(current.envText, {
+        updateSelectedDraft((current) => {
+          let nextEnvText = patchGeminiEnvText(current.envText, {
             apiBaseUrl: apiUrl,
             geminiApiKey: apiKey,
-          }),
-          configText: nextConfigJson.configText,
-        }))
+          })
+          // Always overwrite GEMINI_MODEL with the provider's value (empty
+          // string clears it).
+          nextEnvText = patchEnvText(nextEnvText, {
+            GEMINI_MODEL: geminiModel,
+          })
+          return {
+            ...current,
+            modelProviderId: providerId,
+            apiBaseUrl: apiUrl,
+            apiKey,
+            geminiApiKey: apiKey,
+            model: geminiModel,
+            envText: nextEnvText,
+            configText: nextConfigJson.configText,
+          }
+        })
       } else {
         updateSelectedDraft((current) => ({
           ...current,
@@ -3905,6 +3976,21 @@ export function AcpAgentSettings() {
     },
     [selectedAgent, selectedDraft, modelProviders, updateSelectedDraft]
   )
+
+  // Auto-select the first available provider when the user switches an agent to
+  // "model_provider" auth mode and hasn't picked one yet. If the list is empty,
+  // the existing "noModelProviderAvailable" hint handles the empty state.
+  useEffect(() => {
+    if (!selectedNeedsModelProvider) return
+    if (selectedDraft?.modelProviderId != null) return
+    if (selectedModelProviders.length === 0) return
+    handleModelProviderSelect(String(selectedModelProviders[0].id))
+  }, [
+    selectedNeedsModelProvider,
+    selectedDraft?.modelProviderId,
+    selectedModelProviders,
+    handleModelProviderSelect,
+  ])
 
   const handleGeminiFieldChange = useCallback(
     (
@@ -5621,13 +5707,17 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {selectedDraft.codexAuthMode === "api_key" && (
+                    {(selectedDraft.codexAuthMode === "api_key" ||
+                      selectedDraft.codexAuthMode === "model_provider") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API URL
                         </label>
                         <Input
                           value={selectedDraft.apiBaseUrl}
+                          readOnly={
+                            selectedDraft.codexAuthMode === "model_provider"
+                          }
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
                               "apiBaseUrl",
@@ -5639,7 +5729,8 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {selectedDraft.codexAuthMode === "api_key" && (
+                    {(selectedDraft.codexAuthMode === "api_key" ||
+                      selectedDraft.codexAuthMode === "model_provider") && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API Key
@@ -5652,6 +5743,9 @@ export function AcpAgentSettings() {
                                 : "password"
                             }
                             value={selectedDraft.apiKey}
+                            readOnly={
+                              selectedDraft.codexAuthMode === "model_provider"
+                            }
                             onChange={(event) => {
                               handleCodexImportantConfigChange(
                                 "apiKey",
@@ -5695,6 +5789,9 @@ export function AcpAgentSettings() {
                         </label>
                         <Input
                           value={selectedDraft.model}
+                          readOnly={
+                            selectedDraft.codexAuthMode === "model_provider"
+                          }
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
                               "model",
@@ -5954,6 +6051,9 @@ supports_websockets = true`}
                       </label>
                       <Input
                         value={selectedDraft.model}
+                        readOnly={
+                          selectedDraft.geminiAuthMode === "model_provider"
+                        }
                         onChange={(event) => {
                           handleGeminiFieldChange("model", event.target.value)
                         }}
@@ -7274,7 +7374,8 @@ supports_websockets = true`}
                       )}
 
                     {(selectedAgent.agent_type !== "claude_code" ||
-                      selectedDraft.claudeAuthMode === "custom") && (
+                      selectedDraft.claudeAuthMode === "custom" ||
+                      selectedDraft.claudeAuthMode === "model_provider") && (
                       <>
                         <div className="space-y-1.5">
                           <label className="text-[11px] text-muted-foreground">
@@ -7358,6 +7459,10 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeMainModel}
+                              readOnly={
+                                selectedDraft.claudeAuthMode ===
+                                "model_provider"
+                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeMainModel",
@@ -7373,6 +7478,10 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeReasoningModel}
+                              readOnly={
+                                selectedDraft.claudeAuthMode ===
+                                "model_provider"
+                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeReasoningModel",
@@ -7388,6 +7497,10 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeDefaultHaikuModel}
+                              readOnly={
+                                selectedDraft.claudeAuthMode ===
+                                "model_provider"
+                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeDefaultHaikuModel",
@@ -7403,6 +7516,10 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeDefaultSonnetModel}
+                              readOnly={
+                                selectedDraft.claudeAuthMode ===
+                                "model_provider"
+                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeDefaultSonnetModel",
@@ -7418,6 +7535,10 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeDefaultOpusModel}
+                              readOnly={
+                                selectedDraft.claudeAuthMode ===
+                                "model_provider"
+                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeDefaultOpusModel",
@@ -7470,6 +7591,7 @@ supports_websockets = true`}
                         </label>
                         <Input
                           value={selectedDraft.model}
+                          readOnly={selectedDraft.modelProviderId != null}
                           onChange={(event) => {
                             handleImportantConfigChange(
                               "model",
