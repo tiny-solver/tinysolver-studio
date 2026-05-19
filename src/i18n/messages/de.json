@@ -867,6 +867,7 @@
         "useThemeColor": "App-Design verwenden",
         "setDefaultAgent": "Standard-Agent festlegen",
         "defaultAgentNone": "Kein Standard (global verwenden)",
+        "agentUnavailableSuffix": "(nicht verfügbar)",
         "removeFromWorkspace": "Aus Arbeitsbereich entfernen"
       },
       "manageConversations": {

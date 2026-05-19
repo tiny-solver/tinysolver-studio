@@ -867,6 +867,7 @@
         "useThemeColor": "アプリのテーマを使用",
         "setDefaultAgent": "デフォルトエージェントを設定",
         "defaultAgentNone": "設定なし（グローバルを使用）",
+        "agentUnavailableSuffix": "（利用不可）",
         "removeFromWorkspace": "ワークスペースから削除"
       },
       "manageConversations": {

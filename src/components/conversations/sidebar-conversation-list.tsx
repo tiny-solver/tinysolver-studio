@@ -37,6 +37,7 @@ import { useTaskContext } from "@/contexts/task-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import { useThemeColor, useZoomLevel } from "@/hooks/use-appearance"
 import {
+  acpListAgents,
   importLocalConversations,
   openProjectBootWindow,
   updateConversationTitle,
@@ -45,6 +46,7 @@ import {
   updateFolderDefaultAgent,
   deleteConversation,
 } from "@/lib/api"
+import { disposeTauriListener } from "@/lib/tauri-listener"
 import { isDesktop, openFileDialog, revealItemInDir } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
 import type {
@@ -52,7 +54,7 @@ import type {
   ConversationStatus,
   DbConversationSummary,
 } from "@/lib/types"
-import { AGENT_DISPLAY_ORDER, AGENT_LABELS } from "@/lib/types"
+import { AGENT_LABELS } from "@/lib/types"
 import {
   loadFolderExpanded,
   saveFolderExpanded,
@@ -184,6 +186,7 @@ const FolderHeader = memo(function FolderHeader({
   themeColor,
   appThemeColor,
   currentDefaultAgent,
+  availableAgents,
   onToggle,
   onRemoveFromWorkspace,
   onNewConversation,
@@ -206,6 +209,7 @@ const FolderHeader = memo(function FolderHeader({
   themeColor: FolderThemeColor
   appThemeColor: ThemeColor
   currentDefaultAgent: AgentType | null
+  availableAgents: AgentType[]
   onToggle: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
   onNewConversation: (folderId: number) => void
@@ -219,6 +223,9 @@ const FolderHeader = memo(function FolderHeader({
   dragControls: DragControls
   t: ReturnType<typeof useTranslations>
 }) {
+  const showStaleDefault =
+    currentDefaultAgent !== null &&
+    !availableAgents.includes(currentDefaultAgent)
   const tFileTree = useTranslations("Folder.fileTreeTab")
   const systemExplorerLabel =
     typeof navigator === "undefined"
@@ -373,7 +380,7 @@ const FolderHeader = memo(function FolderHeader({
               ) : null}
             </ContextMenuItem>
             <ContextMenuSeparator />
-            {AGENT_DISPLAY_ORDER.map((agent) => {
+            {availableAgents.map((agent) => {
               const active = currentDefaultAgent === agent
               return (
                 <ContextMenuItem
@@ -388,6 +395,18 @@ const FolderHeader = memo(function FolderHeader({
                 </ContextMenuItem>
               )
             })}
+            {showStaleDefault && currentDefaultAgent !== null ? (
+              <ContextMenuItem
+                key={currentDefaultAgent}
+                disabled
+                className="gap-2 opacity-60"
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {`${AGENT_LABELS[currentDefaultAgent]} ${t("folderHeaderMenu.agentUnavailableSuffix")}`}
+                </span>
+                <Check className="h-3.5 w-3.5 shrink-0" />
+              </ContextMenuItem>
+            ) : null}
           </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSub>
@@ -467,6 +486,7 @@ interface FolderGroupItemProps {
   themeColor: FolderThemeColor
   appThemeColor: ThemeColor
   currentDefaultAgent: AgentType | null
+  availableAgents: AgentType[]
   darkMode: boolean
   onToggle: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
@@ -507,6 +527,7 @@ function FolderGroupItem({
   themeColor,
   appThemeColor,
   currentDefaultAgent,
+  availableAgents,
   darkMode,
   onToggle,
   onRemoveFromWorkspace,
@@ -593,6 +614,7 @@ function FolderGroupItem({
             themeColor={themeColor}
             appThemeColor={appThemeColor}
             currentDefaultAgent={currentDefaultAgent}
+            availableAgents={availableAgents}
             onToggle={handleToggle}
             onRemoveFromWorkspace={onRemoveFromWorkspace}
             onNewConversation={onNewConversationForFolder}
@@ -738,6 +760,7 @@ export function SidebarConversationList({
   }, [tabs])
 
   const [importing, setImporting] = useState(false)
+  const [availableAgents, setAvailableAgents] = useState<AgentType[]>([])
   const [folderExpanded, setFolderExpanded] = useState<Record<number, boolean>>(
     {}
   )
@@ -760,6 +783,66 @@ export function SidebarConversationList({
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
 
     setFolderExpanded(loadFolderExpanded())
+  }, [])
+
+  // Track the live list of enabled+available agents so the per-folder
+  // "Set default agent" submenu only offers agents that the conversation
+  // selector would actually accept. Mirrors AgentSelector's reload triggers
+  // (initial fetch + window focus + `app://acp-agents-updated`).
+  useEffect(() => {
+    let cancelled = false
+    let latestRequestId = 0
+
+    const reload = async () => {
+      const requestId = latestRequestId + 1
+      latestRequestId = requestId
+      try {
+        const list = await acpListAgents()
+        if (cancelled || requestId !== latestRequestId) return
+        const usable = [...list]
+          .filter((a) => a.enabled && a.available)
+          .sort(
+            (a, b) =>
+              a.sort_order - b.sort_order || a.name.localeCompare(b.name)
+          )
+          .map((a) => a.agent_type)
+        setAvailableAgents(usable)
+      } catch {
+        if (!cancelled && requestId === latestRequestId) {
+          setAvailableAgents([])
+        }
+      }
+    }
+
+    void reload()
+    const onWindowFocus = () => {
+      void reload()
+    }
+    window.addEventListener("focus", onWindowFocus)
+
+    let unlisten: (() => void) | null = null
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("app://acp-agents-updated", () => {
+          void reload()
+        })
+      )
+      .then((dispose) => {
+        if (cancelled) {
+          disposeTauriListener(dispose, "SidebarConversationList.agentsUpdated")
+          return
+        }
+        unlisten = dispose
+      })
+      .catch(() => {
+        // Ignore when non-tauri runtime.
+      })
+
+    return () => {
+      cancelled = true
+      window.removeEventListener("focus", onWindowFocus)
+      disposeTauriListener(unlisten, "SidebarConversationList.agentsUpdated")
+    }
   }, [])
 
   const handleChangeFolderColor = useCallback(
@@ -1286,6 +1369,7 @@ export function SidebarConversationList({
                         themeColor={themeColor}
                         appThemeColor={appThemeColor}
                         currentDefaultAgent={currentDefaultAgent}
+                        availableAgents={availableAgents}
                         darkMode={resolvedTheme === "dark"}
                         onToggle={toggleFolder}
                         onRemoveFromWorkspace={handleRemoveFolder}

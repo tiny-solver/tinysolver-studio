@@ -867,6 +867,7 @@
         "useThemeColor": "Usar tema de la app",
         "setDefaultAgent": "Establecer agente predeterminado",
         "defaultAgentNone": "Sin valor (usar predeterminado global)",
+        "agentUnavailableSuffix": "(no disponible)",
         "removeFromWorkspace": "Quitar del espacio de trabajo"
       },
       "manageConversations": {

@@ -867,6 +867,7 @@
         "useThemeColor": "استخدام سمة التطبيق",
         "setDefaultAgent": "تعيين الوكيل الافتراضي",
         "defaultAgentNone": "بدون افتراضي (استخدام العام)",
+        "agentUnavailableSuffix": "(غير متاح)",
         "removeFromWorkspace": "إزالة من مساحة العمل"
       },
       "manageConversations": {
