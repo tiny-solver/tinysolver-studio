@@ -841,7 +841,8 @@
         "openFolderFailed": "Ordner konnte nicht geöffnet werden",
         "removeFolderFailed": "Ordner konnte nicht entfernt werden: {message}",
         "reorderFoldersFailed": "Ordner konnten nicht neu sortiert werden: {message}",
-        "changeFolderColorFailed": "Farbe konnte nicht geändert werden: {message}"
+        "changeFolderColorFailed": "Farbe konnte nicht geändert werden: {message}",
+        "changeFolderDefaultAgentFailed": "Standard-Agent konnte nicht gesetzt werden: {message}"
       },
       "statsLabel": "{folders} Ordner · {convos} Konversationen",
       "reorderHandle": "Zum Neuordnen ziehen",
@@ -864,6 +865,8 @@
         "manageConversations": "Konversationen verwalten…",
         "changeColor": "Farbe ändern",
         "useThemeColor": "App-Design verwenden",
+        "setDefaultAgent": "Standard-Agent festlegen",
+        "defaultAgentNone": "Kein Standard (global verwenden)",
         "removeFromWorkspace": "Aus Arbeitsbereich entfernen"
       },
       "manageConversations": {

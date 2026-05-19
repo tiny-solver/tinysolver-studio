@@ -841,7 +841,8 @@
         "openFolderFailed": "打开文件夹失败",
         "removeFolderFailed": "移除文件夹失败：{message}",
         "reorderFoldersFailed": "重新排序文件夹失败：{message}",
-        "changeFolderColorFailed": "修改颜色失败：{message}"
+        "changeFolderColorFailed": "修改颜色失败：{message}",
+        "changeFolderDefaultAgentFailed": "设置默认智能体失败：{message}"
       },
       "statsLabel": "{folders} 个文件夹 · {convos} 个会话",
       "reorderHandle": "拖拽排序",
@@ -864,6 +865,8 @@
         "manageConversations": "会话管理…",
         "changeColor": "修改颜色",
         "useThemeColor": "使用设置主题",
+        "setDefaultAgent": "设置默认智能体",
+        "defaultAgentNone": "不设置（使用全局默认）",
         "removeFromWorkspace": "从工作区移除"
       },
       "manageConversations": {

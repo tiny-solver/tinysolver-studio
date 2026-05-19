@@ -841,7 +841,8 @@
         "openFolderFailed": "Falha ao abrir pasta",
         "removeFolderFailed": "Falha ao remover pasta: {message}",
         "reorderFoldersFailed": "Falha ao reordenar pastas: {message}",
-        "changeFolderColorFailed": "Falha ao alterar a cor: {message}"
+        "changeFolderColorFailed": "Falha ao alterar a cor: {message}",
+        "changeFolderDefaultAgentFailed": "Falha ao definir agente padrão: {message}"
       },
       "statsLabel": "{folders} pastas · {convos} conversas",
       "reorderHandle": "Arraste para reordenar",
@@ -864,6 +865,8 @@
         "manageConversations": "Gerenciar conversas…",
         "changeColor": "Alterar cor",
         "useThemeColor": "Usar tema do app",
+        "setDefaultAgent": "Definir agente padrão",
+        "defaultAgentNone": "Sem padrão (usar global)",
         "removeFromWorkspace": "Remover do espaço de trabalho"
       },
       "manageConversations": {

@@ -841,7 +841,8 @@
         "openFolderFailed": "فشل فتح المجلد",
         "removeFolderFailed": "فشل إزالة المجلد: {message}",
         "reorderFoldersFailed": "فشل إعادة ترتيب المجلدات: {message}",
-        "changeFolderColorFailed": "فشل تغيير اللون: {message}"
+        "changeFolderColorFailed": "فشل تغيير اللون: {message}",
+        "changeFolderDefaultAgentFailed": "فشل تعيين الوكيل الافتراضي: {message}"
       },
       "statsLabel": "{folders} مجلدات · {convos} محادثة",
       "reorderHandle": "اسحب لإعادة الترتيب",
@@ -864,6 +865,8 @@
         "manageConversations": "إدارة المحادثات…",
         "changeColor": "تغيير اللون",
         "useThemeColor": "استخدام سمة التطبيق",
+        "setDefaultAgent": "تعيين الوكيل الافتراضي",
+        "defaultAgentNone": "بدون افتراضي (استخدام العام)",
         "removeFromWorkspace": "إزالة من مساحة العمل"
       },
       "manageConversations": {

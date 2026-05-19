@@ -841,7 +841,8 @@
         "openFolderFailed": "Échec de l'ouverture du dossier",
         "removeFolderFailed": "Échec de la suppression du dossier : {message}",
         "reorderFoldersFailed": "Échec du réordonnancement des dossiers : {message}",
-        "changeFolderColorFailed": "Échec du changement de couleur : {message}"
+        "changeFolderColorFailed": "Échec du changement de couleur : {message}",
+        "changeFolderDefaultAgentFailed": "Échec de la définition de l'agent par défaut : {message}"
       },
       "statsLabel": "{folders} dossiers · {convos} conversations",
       "reorderHandle": "Glisser pour réorganiser",
@@ -864,6 +865,8 @@
         "manageConversations": "Gérer les conversations…",
         "changeColor": "Changer la couleur",
         "useThemeColor": "Utiliser le thème de l'app",
+        "setDefaultAgent": "Définir l'agent par défaut",
+        "defaultAgentNone": "Aucun (utiliser la valeur globale)",
         "removeFromWorkspace": "Retirer de l'espace de travail"
       },
       "manageConversations": {
