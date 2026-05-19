@@ -375,12 +375,14 @@ export function TabProvider({ children }: TabProviderProps) {
         preferred?.workingDir ??
         foldersRef.current.find((f) => f.id === folderId)?.path ??
         ""
+      const agentType: AgentType =
+        preferred?.agentType ?? AGENT_DISPLAY_ORDER[0]
       return {
         id: makeNewConversationTabId(),
         kind: "conversation",
         folderId,
         conversationId: null,
-        agentType: AGENT_DISPLAY_ORDER[0],
+        agentType,
         title: t("newConversation"),
         isPinned: true,
         workingDir,
