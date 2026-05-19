@@ -4283,6 +4283,32 @@ export function AcpAgentSettings() {
         options: {},
         models: {},
       }
+
+      if (
+        Array.isArray(config.enabled_providers) &&
+        config.enabled_providers.length > 0
+      ) {
+        const enabledProviders = config.enabled_providers
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+        if (!enabledProviders.includes(providerId)) {
+          enabledProviders.push(providerId)
+        }
+        config.enabled_providers = enabledProviders
+      }
+
+      if (Array.isArray(config.disabled_providers)) {
+        const disabledProviders = config.disabled_providers
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter((item) => item && item !== providerId)
+        if (disabledProviders.length > 0) {
+          config.disabled_providers = disabledProviders
+        } else {
+          delete config.disabled_providers
+        }
+      }
     })
     setOpenCodeProviderId(providerId)
     setOpenCodeNewProviderId("")
@@ -4444,6 +4470,9 @@ export function AcpAgentSettings() {
       const targetId = providerId.trim()
       if (!targetId) return
       handleOpenCodeConfigPatch((config) => {
+        const hadEnabledAllowlist =
+          Array.isArray(config.enabled_providers) &&
+          config.enabled_providers.length > 0
         const enabledProviders = Array.isArray(config.enabled_providers)
           ? config.enabled_providers
               .filter((item): item is string => typeof item === "string")
@@ -4461,11 +4490,15 @@ export function AcpAgentSettings() {
         const nextDisabled = new Set(disabledProviders)
 
         if (enabled) {
-          nextEnabled.add(targetId)
           nextDisabled.delete(targetId)
+          if (hadEnabledAllowlist) {
+            nextEnabled.add(targetId)
+          }
         } else {
           nextDisabled.add(targetId)
-          nextEnabled.delete(targetId)
+          if (hadEnabledAllowlist) {
+            nextEnabled.delete(targetId)
+          }
         }
 
         const enabledArray = Array.from(nextEnabled)
