@@ -1664,18 +1664,89 @@ fn skill_name_from_id(id: &str) -> String {
     id.to_string()
 }
 
+/// Best-effort extraction of a one-line skill description from a markdown
+/// file's YAML frontmatter. Prefers `short-description` (commonly nested under
+/// a `metadata:` block) and falls back to a top-level `description`. Only the
+/// first 4 KiB is read; frontmatter always fits, and skill bodies can be large.
+fn read_skill_description(content_path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = fs::File::open(content_path).ok()?;
+    let mut buf = [0u8; 4096];
+    let n = file.read(&mut buf).ok()?;
+    let head = std::str::from_utf8(&buf[..n]).ok()?;
+
+    let mut lines = head.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+
+    let mut short: Option<String> = None;
+    let mut long: Option<String> = None;
+    for line in lines {
+        let trimmed_end = line.trim_end();
+        if trimmed_end == "---" || trimmed_end == "..." {
+            break;
+        }
+        let is_top_level = !line.starts_with(|c: char| c.is_whitespace());
+        let stripped = line.trim();
+
+        // `short-description` is allowed at any indent so it resolves when
+        // nested under `metadata:` (Codex's `.system` skills follow this).
+        if short.is_none() {
+            if let Some(rest) = stripped.strip_prefix("short-description:") {
+                if let Some(val) = parse_frontmatter_scalar(rest) {
+                    short = Some(val);
+                    break;
+                }
+            }
+        }
+        // `description` is only honored at the top level to avoid colliding
+        // with unrelated nested `description:` keys.
+        if is_top_level && long.is_none() {
+            if let Some(rest) = line.strip_prefix("description:") {
+                if let Some(val) = parse_frontmatter_scalar(rest) {
+                    long = Some(val);
+                }
+            }
+        }
+    }
+    short.or(long)
+}
+
+/// Read a single-line YAML scalar (with optional matching quotes). Returns
+/// `None` for empty values or block-scalar markers (`|` / `>`) we can't span.
+fn parse_frontmatter_scalar(rest: &str) -> Option<String> {
+    let val = rest.trim();
+    if val.starts_with('|') || val.starts_with('>') {
+        return None;
+    }
+    let unquoted = val
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .or_else(|| val.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+        .unwrap_or(val)
+        .trim();
+    if unquoted.is_empty() {
+        None
+    } else {
+        Some(unquoted.to_string())
+    }
+}
+
 fn build_skill_item(
     id: String,
     scope: AgentSkillScope,
     layout: AgentSkillLayout,
     path: PathBuf,
 ) -> AgentSkillItem {
+    let description = read_skill_description(&skill_content_path(layout, &path));
     AgentSkillItem {
         name: skill_name_from_id(&id),
         id,
         scope,
         layout,
         path: path.to_string_lossy().to_string(),
+        description,
         read_only: false,
     }
 }

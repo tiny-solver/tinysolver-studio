@@ -735,6 +735,7 @@ export interface AgentSkillItem {
   scope: AgentSkillScope
   layout: AgentSkillLayout
   path: string
+  description: string | null
   read_only: boolean
 }
 
