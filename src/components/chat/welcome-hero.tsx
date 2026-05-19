@@ -103,11 +103,19 @@ export function WelcomeHero() {
       <div className="relative flex h-28 w-28 items-center justify-center">
         <div
           aria-hidden
-          className="absolute inset-0 rounded-full bg-primary/30 blur-3xl"
+          className="pointer-events-none absolute h-80 w-[40rem] -rotate-45 blur-2xl"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, color-mix(in oklab, var(--primary) 55%, transparent) 0%, transparent 70%)",
+          }}
         />
         <div
           aria-hidden
-          className="absolute h-20 w-20 rounded-[28%] bg-primary/50 blur-xl"
+          className="pointer-events-none absolute h-56 w-96 -rotate-45 blur-xl"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, color-mix(in oklab, var(--primary) 85%, transparent) 0%, transparent 65%)",
+          }}
         />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -118,13 +126,13 @@ export function WelcomeHero() {
         />
       </div>
 
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex w-full flex-col items-center gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
-        <div className="flex max-w-md items-start gap-2 text-sm text-muted-foreground">
+        <div className="flex max-w-full items-start gap-2 text-sm text-muted-foreground">
           <span className="flex h-[1.375em] shrink-0 items-center">
             <Lightbulb aria-hidden className="h-4 w-4 text-muted-foreground" />
           </span>
-          <p className="leading-snug">{tipNode}</p>
+          <p className="min-w-0 leading-snug">{tipNode}</p>
         </div>
       </div>
     </div>
