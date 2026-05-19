@@ -17,6 +17,7 @@ import { Reorder, useDragControls, type DragControls } from "motion/react"
 import type { OverlayScrollbarsComponentRef } from "overlayscrollbars-react"
 import {
   Folder,
+  Bot,
   Check,
   Download,
   ExternalLink,
@@ -41,11 +42,17 @@ import {
   updateConversationTitle,
   updateConversationStatus,
   updateFolderColor,
+  updateFolderDefaultAgent,
   deleteConversation,
 } from "@/lib/api"
 import { isDesktop, openFileDialog, revealItemInDir } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
-import type { ConversationStatus, DbConversationSummary } from "@/lib/types"
+import type {
+  AgentType,
+  ConversationStatus,
+  DbConversationSummary,
+} from "@/lib/types"
+import { AGENT_DISPLAY_ORDER, AGENT_LABELS } from "@/lib/types"
 import {
   loadFolderExpanded,
   saveFolderExpanded,
@@ -176,12 +183,14 @@ const FolderHeader = memo(function FolderHeader({
   importing,
   themeColor,
   appThemeColor,
+  currentDefaultAgent,
   onToggle,
   onRemoveFromWorkspace,
   onNewConversation,
   onImport,
   onManageConversations,
   onChangeColor,
+  onSetDefaultAgent,
   onOpenInSystemExplorer,
   onOpenInTerminal,
   isDragging,
@@ -196,12 +205,14 @@ const FolderHeader = memo(function FolderHeader({
   importing: boolean
   themeColor: FolderThemeColor
   appThemeColor: ThemeColor
+  currentDefaultAgent: AgentType | null
   onToggle: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
   onNewConversation: (folderId: number) => void
   onImport: (folderId: number) => void
   onManageConversations: (folderId: number) => void
   onChangeColor: (folderId: number, color: FolderThemeColor) => void
+  onSetDefaultAgent: (folderId: number, agentType: AgentType | null) => void
   onOpenInSystemExplorer: (folderId: number) => void
   onOpenInTerminal: (folderId: number) => void
   isDragging?: boolean
@@ -346,6 +357,41 @@ const FolderHeader = memo(function FolderHeader({
         </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger>
+            <Bot className="h-4 w-4" />
+            {t("folderHeaderMenu.setDefaultAgent")}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="min-w-[12rem]">
+            <ContextMenuItem
+              onSelect={() => onSetDefaultAgent(folderId, null)}
+              className="gap-2"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {t("folderHeaderMenu.defaultAgentNone")}
+              </span>
+              {currentDefaultAgent === null ? (
+                <Check className="h-3.5 w-3.5 shrink-0" />
+              ) : null}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            {AGENT_DISPLAY_ORDER.map((agent) => {
+              const active = currentDefaultAgent === agent
+              return (
+                <ContextMenuItem
+                  key={agent}
+                  onSelect={() => onSetDefaultAgent(folderId, agent)}
+                  className="gap-2"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {AGENT_LABELS[agent]}
+                  </span>
+                  {active ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                </ContextMenuItem>
+              )
+            })}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
             <Palette className="h-4 w-4" />
             {t("folderHeaderMenu.changeColor")}
           </ContextMenuSubTrigger>
@@ -420,6 +466,7 @@ interface FolderGroupItemProps {
   openTabKeys: Set<string>
   themeColor: FolderThemeColor
   appThemeColor: ThemeColor
+  currentDefaultAgent: AgentType | null
   darkMode: boolean
   onToggle: (folderId: number) => void
   onRemoveFromWorkspace: (folderId: number) => void
@@ -427,6 +474,7 @@ interface FolderGroupItemProps {
   onImport: (folderId: number) => void
   onManageConversations: (folderId: number) => void
   onChangeColor: (folderId: number, color: FolderThemeColor) => void
+  onSetDefaultAgent: (folderId: number, agentType: AgentType | null) => void
   onOpenInSystemExplorer: (folderId: number) => void
   onOpenInTerminal: (folderId: number) => void
   onSelect: (id: number, agentType: string) => void
@@ -458,6 +506,7 @@ function FolderGroupItem({
   openTabKeys,
   themeColor,
   appThemeColor,
+  currentDefaultAgent,
   darkMode,
   onToggle,
   onRemoveFromWorkspace,
@@ -465,6 +514,7 @@ function FolderGroupItem({
   onImport,
   onManageConversations,
   onChangeColor,
+  onSetDefaultAgent,
   onOpenInSystemExplorer,
   onOpenInTerminal,
   onSelect,
@@ -542,12 +592,14 @@ function FolderGroupItem({
             importing={importing}
             themeColor={themeColor}
             appThemeColor={appThemeColor}
+            currentDefaultAgent={currentDefaultAgent}
             onToggle={handleToggle}
             onRemoveFromWorkspace={onRemoveFromWorkspace}
             onNewConversation={onNewConversationForFolder}
             onImport={onImport}
             onManageConversations={onManageConversations}
             onChangeColor={onChangeColor}
+            onSetDefaultAgent={onSetDefaultAgent}
             onOpenInSystemExplorer={onOpenInSystemExplorer}
             onOpenInTerminal={onOpenInTerminal}
             isDragging={dragging}
@@ -647,9 +699,22 @@ export function SidebarConversationList({
   const { addTask, updateTask } = useTaskContext()
 
   const folderIndex = useMemo(() => {
-    const map = new Map<number, { name: string; path: string; color: string }>()
+    const map = new Map<
+      number,
+      {
+        name: string
+        path: string
+        color: string
+        defaultAgentType: AgentType | null
+      }
+    >()
     for (const f of allFolders)
-      map.set(f.id, { name: f.name, path: f.path, color: f.color })
+      map.set(f.id, {
+        name: f.name,
+        path: f.path,
+        color: f.color,
+        defaultAgentType: f.default_agent_type,
+      })
     return map
   }, [allFolders])
 
@@ -705,6 +770,21 @@ export function SidebarConversationList({
       } catch (err) {
         const msg = toErrorMessage(err)
         toast.error(t("toasts.changeFolderColorFailed", { message: msg }))
+      }
+    },
+    [refreshFolder, t]
+  )
+
+  const handleChangeFolderDefaultAgent = useCallback(
+    async (folderId: number, agentType: AgentType | null) => {
+      try {
+        await updateFolderDefaultAgent(folderId, agentType)
+        await refreshFolder(folderId)
+      } catch (err) {
+        const msg = toErrorMessage(err)
+        toast.error(
+          t("toasts.changeFolderDefaultAgentFailed", { message: msg })
+        )
       }
     },
     [refreshFolder, t]
@@ -1173,6 +1253,8 @@ export function SidebarConversationList({
                     )
                     const folderName = folderEntry?.name ?? String(folderId)
                     const folderPath = folderEntry?.path ?? ""
+                    const currentDefaultAgent =
+                      folderEntry?.defaultAgentType ?? null
                     const convs = byFolder.get(folderId) ?? []
                     const expanded = folderExpanded[folderId] ?? true
                     const convsWithKey = convs.map((conv) => ({
@@ -1203,6 +1285,7 @@ export function SidebarConversationList({
                         openTabKeys={openTabKeys}
                         themeColor={themeColor}
                         appThemeColor={appThemeColor}
+                        currentDefaultAgent={currentDefaultAgent}
                         darkMode={resolvedTheme === "dark"}
                         onToggle={toggleFolder}
                         onRemoveFromWorkspace={handleRemoveFolder}
@@ -1212,6 +1295,7 @@ export function SidebarConversationList({
                         onImport={handleImportForFolder}
                         onManageConversations={handleManageConversations}
                         onChangeColor={handleChangeFolderColor}
+                        onSetDefaultAgent={handleChangeFolderDefaultAgent}
                         onOpenInSystemExplorer={
                           handleOpenFolderInSystemExplorer
                         }
