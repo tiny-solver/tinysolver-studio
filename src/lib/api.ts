@@ -730,6 +730,16 @@ export async function updateFolderColor(
   return getTransport().call("update_folder_color", { folderId, color })
 }
 
+export async function updateFolderDefaultAgent(
+  folderId: number,
+  defaultAgentType: AgentType | null
+): Promise<FolderDetail> {
+  return getTransport().call("update_folder_default_agent", {
+    folderId,
+    defaultAgentType,
+  })
+}
+
 export async function importLocalConversations(
   folderId: number
 ): Promise<ImportResult> {
