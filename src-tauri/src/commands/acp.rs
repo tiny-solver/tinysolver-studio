@@ -3665,7 +3665,7 @@ pub async fn acp_save_agent_skill(
             )));
         }
     }
-    let skill = if let Some(item) = existing {
+    let mut skill = if let Some(item) = existing {
         item
     } else {
         let new_layout = match spec.kind {
@@ -3699,6 +3699,8 @@ pub async fn acp_save_agent_skill(
 
     fs::write(&content_path, content)
         .map_err(|e| AcpError::protocol(format!("failed to write skill content: {e}")))?;
+
+    skill.description = read_skill_description(&content_path);
 
     Ok(skill)
 }
@@ -4065,5 +4067,123 @@ mod tests {
 
         assert_eq!(resolved, None);
         let _ = std::fs::remove_dir_all(prefix);
+    }
+
+    fn write_skill_md(name: &str, body: &str) -> (PathBuf, PathBuf) {
+        let dir = unique_test_dir(name);
+        let path = dir.join("SKILL.md");
+        std::fs::write(&path, body).expect("write skill markdown");
+        (dir, path)
+    }
+
+    #[test]
+    fn frontmatter_scalar_strips_quotes_and_rejects_blocks() {
+        assert_eq!(
+            parse_frontmatter_scalar(" \"hello world\"  ").as_deref(),
+            Some("hello world")
+        );
+        assert_eq!(
+            parse_frontmatter_scalar(" 'single quoted' ").as_deref(),
+            Some("single quoted")
+        );
+        assert_eq!(
+            parse_frontmatter_scalar("  unquoted value  ").as_deref(),
+            Some("unquoted value")
+        );
+        assert_eq!(parse_frontmatter_scalar("   ").as_deref(), None);
+        assert_eq!(parse_frontmatter_scalar(" |").as_deref(), None);
+        assert_eq!(parse_frontmatter_scalar(" > folded").as_deref(), None);
+    }
+
+    #[test]
+    fn skill_description_reads_top_level_description() {
+        let (dir, path) = write_skill_md(
+            "skill-top-desc",
+            "---\nname: demo\ndescription: top level desc\n---\nbody\n",
+        );
+        assert_eq!(
+            read_skill_description(&path).as_deref(),
+            Some("top level desc")
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_prefers_nested_short_description() {
+        let (dir, path) = write_skill_md(
+            "skill-short-desc",
+            "---\nname: demo\ndescription: long fallback\nmetadata:\n  short-description: pithy summary\n---\nbody\n",
+        );
+        assert_eq!(
+            read_skill_description(&path).as_deref(),
+            Some("pithy summary")
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_falls_back_when_no_short() {
+        let (dir, path) = write_skill_md(
+            "skill-fallback",
+            "---\nname: demo\ndescription: \"quoted fallback\"\nmetadata:\n  other: value\n---\nbody\n",
+        );
+        assert_eq!(
+            read_skill_description(&path).as_deref(),
+            Some("quoted fallback")
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_ignores_nested_description_key() {
+        // A nested `description:` (e.g. inside `metadata:` or a tool block)
+        // must not be picked up as the top-level fallback.
+        let (dir, path) = write_skill_md(
+            "skill-nested-desc",
+            "---\nname: demo\nmetadata:\n  description: nested only\n---\nbody\n",
+        );
+        assert_eq!(read_skill_description(&path), None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_requires_frontmatter_fence() {
+        let (dir, path) = write_skill_md(
+            "skill-no-fence",
+            "name: demo\ndescription: not really frontmatter\n",
+        );
+        assert_eq!(read_skill_description(&path), None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_stops_at_closing_fence() {
+        let (dir, path) = write_skill_md(
+            "skill-closed",
+            "---\nname: demo\n---\ndescription: in body, not frontmatter\n",
+        );
+        assert_eq!(read_skill_description(&path), None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_handles_utf8_content() {
+        let (dir, path) = write_skill_md(
+            "skill-utf8",
+            "---\nname: demo\ndescription: 中文 描述 🚀\n---\nbody\n",
+        );
+        assert_eq!(
+            read_skill_description(&path).as_deref(),
+            Some("中文 描述 🚀")
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn skill_description_returns_none_for_missing_file() {
+        let dir = unique_test_dir("skill-missing");
+        let path = dir.join("does-not-exist.md");
+        assert_eq!(read_skill_description(&path), None);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
