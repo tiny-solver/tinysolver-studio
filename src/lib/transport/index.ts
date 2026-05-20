@@ -93,6 +93,10 @@ export function notifyRemoteDesktopUnauthorized(): void {
  * @internal
  */
 export function __resetTransportForTests(): void {
+  // Hard guard: collapses to a no-op outside vitest. Turbopack/webpack DCE
+  // the dead branch in `next build` so the function ships as a single
+  // `return` in the prod bundle instead of reaching into module state.
+  if (process.env.NODE_ENV !== "test") return
   _shellTransport?.destroy?.()
   _remoteTransport?.destroy?.()
   _shellTransport = null

@@ -108,6 +108,12 @@ pub struct ClineParser {
     base_dir: PathBuf,
 }
 
+impl Default for ClineParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClineParser {
     pub fn new() -> Self {
         Self {

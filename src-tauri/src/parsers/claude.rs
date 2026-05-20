@@ -223,6 +223,12 @@ pub struct ClaudeParser {
     base_dir: PathBuf,
 }
 
+impl Default for ClaudeParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClaudeParser {
     pub fn new() -> Self {
         let base_dir = resolve_claude_config_dir().join("projects");

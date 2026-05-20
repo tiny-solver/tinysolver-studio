@@ -342,6 +342,12 @@ pub struct OpenClawParser {
     base_dir: PathBuf,
 }
 
+impl Default for OpenClawParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenClawParser {
     pub fn new() -> Self {
         let base_dir = dirs::home_dir()

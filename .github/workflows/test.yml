@@ -19,6 +19,8 @@ concurrency:
 jobs:
   frontend:
     name: Frontend (lint + vitest + build)
+    # Frontend tests are OS-independent (jsdom + pure TS), keep on Linux
+    # to save CI minutes.
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -48,20 +50,20 @@ jobs:
         run: pnpm build
 
   rust:
-    name: Rust (test + clippy, ${{ matrix.mode }})
-    runs-on: ubuntu-22.04
+    name: Rust ${{ matrix.mode }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+        mode: [desktop, server]
         include:
           - mode: desktop
-            # Default features include `tauri-runtime`; the lib crate
-            # requires the webkit/appindicator system libs to link.
             cargo_args: ""
-            extra_packages: "libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev"
           - mode: server
+            # Server build is feature-gated off the Tauri runtime; no
+            # need for webkit/appindicator system libs.
             cargo_args: "--no-default-features --bin codeg-server --lib"
-            extra_packages: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -74,23 +76,26 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-          shared-key: test-${{ matrix.mode }}
+          shared-key: test-${{ matrix.os }}-${{ matrix.mode }}
 
-      - name: Install system dependencies
-        if: matrix.extra_packages != ''
+      - name: Install Linux desktop dependencies
+        # Only the Linux desktop build needs webkit/appindicator. Windows
+        # ships WebView2 with the OS; macOS uses WKWebView from the SDK.
+        if: matrix.os == 'ubuntu-22.04' && matrix.mode == 'desktop'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ${{ matrix.extra_packages }}
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
 
       - name: cargo test
         working-directory: src-tauri
         run: cargo test ${{ matrix.cargo_args }}
 
       - name: cargo clippy
-        if: matrix.mode == 'desktop'
+        # Clippy on each (os, mode) cell — desktop covers tauri-only code
+        # paths, server covers cfg-gated server-only code. Treat warnings
+        # as errors now that the 8 pre-existing advisories are cleared.
         working-directory: src-tauri
-        # Advisory-only for now: 8 pre-existing warnings (6 parser
-        # `new_without_default`, 1 `len_without_is_empty`, 1
-        # `unnecessary_to_owned`). Tighten with `-- -D warnings` after
-        # those are cleaned up in a follow-up PR.
-        run: cargo clippy --all-targets
+        run: cargo clippy --all-targets ${{ matrix.cargo_args }} -- -D warnings

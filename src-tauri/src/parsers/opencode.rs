@@ -16,6 +16,12 @@ pub struct OpenCodeParser {
     base_dir: PathBuf,
 }
 
+impl Default for OpenCodeParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenCodeParser {
     pub fn new() -> Self {
         let base_dir = resolve_opencode_base_dir();

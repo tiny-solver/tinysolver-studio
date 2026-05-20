@@ -13,6 +13,12 @@ pub struct GeminiParser {
     base_dir: PathBuf,
 }
 
+impl Default for GeminiParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GeminiParser {
     pub fn new() -> Self {
         let base_dir = resolve_gemini_base_dir();

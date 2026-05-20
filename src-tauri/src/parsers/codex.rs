@@ -15,6 +15,12 @@ pub struct CodexParser {
     base_dir: PathBuf,
 }
 
+impl Default for CodexParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CodexParser {
     pub fn new() -> Self {
         let base_dir = resolve_codex_home_dir().join("sessions");
