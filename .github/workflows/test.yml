@@ -1,0 +1,96 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  RUST_BACKTRACE: short
+  # Refuse to silently regenerate snapshots in CI — any drift must be
+  # accepted locally with `cargo insta review` and committed.
+  INSTA_UPDATE: "no"
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint + vitest + build)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm eslint .
+
+      - name: Unit tests (vitest)
+        run: pnpm test
+
+      - name: Static export build
+        run: pnpm build
+
+  rust:
+    name: Rust (test + clippy, ${{ matrix.mode }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: desktop
+            # Default features include `tauri-runtime`; the lib crate
+            # requires the webkit/appindicator system libs to link.
+            cargo_args: ""
+            extra_packages: "libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev"
+          - mode: server
+            cargo_args: "--no-default-features --bin codeg-server --lib"
+            extra_packages: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: test-${{ matrix.mode }}
+
+      - name: Install system dependencies
+        if: matrix.extra_packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.extra_packages }}
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test ${{ matrix.cargo_args }}
+
+      - name: cargo clippy
+        if: matrix.mode == 'desktop'
+        working-directory: src-tauri
+        # Advisory-only for now: 8 pre-existing warnings (6 parser
+        # `new_without_default`, 1 `len_without_is_empty`, 1
+        # `unnecessary_to_owned`). Tighten with `-- -D warnings` after
+        # those are cleaned up in a follow-up PR.
+        run: cargo clippy --all-targets
