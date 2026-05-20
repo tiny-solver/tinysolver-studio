@@ -1178,8 +1178,12 @@ mod tests {
         let text =
             "[Tue 2026-03-17 12:58 GMT+8] [Working directory: ~/forway/agent-workspace]\n\nHello";
         let wd = extract_working_dir(text).unwrap();
-        let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
-        assert_eq!(wd, format!("{}/forway/agent-workspace", home));
+        let expected = dirs::home_dir()
+            .unwrap()
+            .join("forway/agent-workspace")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(wd, expected);
     }
 
     #[test]
