@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import { openUrl } from "@/lib/platform"
 import { getActiveRemoteConnectionId, isDesktop } from "@/lib/transport"
@@ -25,6 +25,10 @@ const ALLOWED_EXTERNAL_PROTOCOLS = new Set([
   "mailto:",
   "tel:",
 ])
+// Protocols handled by the OS (mail client, dialer) rather than a browser
+// page load. They must NOT be opened via `window.open(_, "_blank")` — most
+// browsers leave behind an empty `about:blank` tab once the OS handler fires.
+const OS_HANDLER_PROTOCOLS = new Set(["mailto:", "tel:"])
 
 function normalizeSlashPath(path: string): string {
   return path.replace(/\\/g, "/")
@@ -160,17 +164,48 @@ function parseExternalUrl(rawUrl: string): URL | null {
   }
 }
 
-function isAllowedExternalUrl(rawUrl: string): boolean {
+function getAllowedExternalProtocol(rawUrl: string): string | null {
   const parsed = parseExternalUrl(rawUrl)
-  return parsed
-    ? ALLOWED_EXTERNAL_PROTOCOLS.has(parsed.protocol.toLowerCase())
-    : false
+  if (!parsed) return null
+  const protocol = parsed.protocol.toLowerCase()
+  return ALLOWED_EXTERNAL_PROTOCOLS.has(protocol) ? protocol : null
+}
+
+/**
+ * True when the current window has no access to the Tauri opener plugin
+ * (pure web, or a Tauri window bound to a remote codeg-server).
+ */
+function isWebOpenerEnvironment(): boolean {
+  return !isDesktop() || getActiveRemoteConnectionId() !== null
 }
 
 function shouldLetStreamdownOpenExternalUrl(rawUrl: string): boolean {
   if (parseLocalFileTarget(rawUrl)) return false
-  if (!isAllowedExternalUrl(rawUrl)) return false
-  return !isDesktop() || getActiveRemoteConnectionId() !== null
+  const protocol = getAllowedExternalProtocol(rawUrl)
+  if (!protocol) return false
+  // OS-handler protocols always go through our own path so we can dispatch
+  // them via a synthetic anchor click — streamdown's `window.open(_, "_blank")`
+  // would otherwise leave a blank tab behind.
+  if (OS_HANDLER_PROTOCOLS.has(protocol)) return false
+  return isWebOpenerEnvironment()
+}
+
+/**
+ * Trigger an OS-registered protocol handler (mail client, dialer) from a
+ * browser without leaving an empty tab. The synthetic anchor has no
+ * `target`, so the browser hands the URL to the OS handler and stays on
+ * the current page.
+ */
+function dispatchOsHandlerUrl(url: string): void {
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.rel = "noreferrer noopener"
+  document.body.appendChild(anchor)
+  try {
+    anchor.click()
+  } finally {
+    anchor.remove()
+  }
 }
 
 function toWorkspaceRelativePath(
@@ -202,6 +237,17 @@ function toWorkspaceRelativePath(
   return normalizedPath.slice(normalizedWorkspace.length + 1)
 }
 
+/**
+ * Streamdown's link-safety contract renders this component whenever
+ * `onLinkCheck` declines a click. We render nothing — instead we hijack
+ * the `isOpen` transition to run our open-target action immediately, then
+ * call `onClose()` so streamdown's internal `isOpen` flag flips back to
+ * `false` and the next click on the same link is accepted.
+ *
+ * The handler identities are pinned through refs so a parent re-render
+ * mid-flight (translator function, workspace context, etc.) cannot tear
+ * down the effect and leave streamdown stuck with `isOpen === true`.
+ */
 function DirectLinkOpen({
   url,
   isOpen,
@@ -210,25 +256,29 @@ function DirectLinkOpen({
 }: LinkSafetyModalProps & {
   onAction: (url: string) => Promise<void>
 }) {
-  const openingUrlRef = useRef<string | null>(null)
+  const lastOpenedUrlRef = useRef<string | null>(null)
+  const onActionRef = useRef(onAction)
+  const onCloseRef = useRef(onClose)
+
+  // Sync the latest handler identities into refs after each render so the
+  // trigger effect below can stay scoped to `[isOpen, url]` and survive
+  // mid-flight parent re-renders.
+  useEffect(() => {
+    onActionRef.current = onAction
+    onCloseRef.current = onClose
+  })
 
   useEffect(() => {
     if (!isOpen) {
-      openingUrlRef.current = null
+      lastOpenedUrlRef.current = null
       return
     }
-    if (openingUrlRef.current === url) return
-
-    let cancelled = false
-    openingUrlRef.current = url
-    void onAction(url).finally(() => {
-      if (!cancelled) onClose()
+    if (lastOpenedUrlRef.current === url) return
+    lastOpenedUrlRef.current = url
+    void onActionRef.current(url).finally(() => {
+      onCloseRef.current()
     })
-
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, onAction, onClose, url])
+  }, [isOpen, url])
 
   return null
 }
@@ -273,7 +323,8 @@ function useOpenLinkOrFile() {
         return
       }
 
-      if (!isAllowedExternalUrl(url)) {
+      const protocol = getAllowedExternalProtocol(url)
+      if (!protocol) {
         toast.error(t("errorFailedLink"), {
           description: t("errorUnsupportedLinkProtocol"),
         })
@@ -281,7 +332,11 @@ function useOpenLinkOrFile() {
       }
 
       try {
-        await openUrl(url)
+        if (OS_HANDLER_PROTOCOLS.has(protocol) && isWebOpenerEnvironment()) {
+          dispatchOsHandlerUrl(url)
+        } else {
+          await openUrl(url)
+        }
       } catch (error) {
         toast.error(t("errorFailedLink"), {
           description: toErrorMessage(error),
@@ -360,6 +415,12 @@ export function FilePathLink({
   const { activeFolder: folder } = useActiveFolder()
   const folderPath = folder?.path ?? null
   const { openFilePreview } = useWorkspaceContext()
+  // `opening` drives the visual busy state. `openingRef` is the synchronous
+  // gate that survives rapid double-fires within a single event tick —
+  // React batches the `setOpening(true)` commit, so relying purely on the
+  // `disabled` attribute would leave a window where two clicks dispatched
+  // before commit could both pass the early-return check.
+  const [opening, setOpening] = useState(false)
   const openingRef = useRef(false)
 
   const handleOpen = useCallback(() => {
@@ -379,6 +440,7 @@ export function FilePathLink({
     }
 
     openingRef.current = true
+    setOpening(true)
     void openFilePreview(relativePath, {
       line: line ?? undefined,
     })
@@ -389,6 +451,7 @@ export function FilePathLink({
       })
       .finally(() => {
         openingRef.current = false
+        setOpening(false)
       })
   }, [filePath, folderPath, line, openFilePreview, t])
 
@@ -397,7 +460,9 @@ export function FilePathLink({
       <button
         type="button"
         title={title ?? filePath}
-        className="max-w-full cursor-pointer truncate text-left align-bottom hover:underline focus-visible:underline focus-visible:outline-none"
+        aria-busy={opening}
+        disabled={opening}
+        className="max-w-full cursor-pointer truncate text-left align-bottom hover:underline focus-visible:underline focus-visible:outline-none disabled:cursor-wait disabled:opacity-70 disabled:hover:no-underline"
         onClick={(e) => {
           e.stopPropagation()
           handleOpen()
