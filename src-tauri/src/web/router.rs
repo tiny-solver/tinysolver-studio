@@ -57,6 +57,14 @@ pub fn build_router(
             post(handlers::conversations::list_child_conversations),
         )
         .route(
+            "/get_delegation_settings",
+            post(handlers::delegation::get_delegation_settings),
+        )
+        .route(
+            "/set_delegation_settings",
+            post(handlers::delegation::set_delegation_settings),
+        )
+        .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
         )

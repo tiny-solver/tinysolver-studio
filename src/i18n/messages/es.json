@@ -496,6 +496,21 @@
     "modelHintDefault": "Déjalo vacío para usar el modelo predeterminado del sistema.",
     "generalConfigDescriptionClaude": "Admite configuración rápida de API URL, API Key y modelos de Claude, y sincroniza con la configuración JSON nativa.",
     "generalConfigDescriptionDefault": "Admite entrada de configuración importante (API URL, API Key, Model) y gestión de configuración JSON nativa.",
+    "multiAgent": {
+      "title": "Multi-Agent Collaboration",
+      "description": "Allow active agents to delegate sub-tasks to other agent types via the codeg delegation MCP. Sub-sessions run in their own ACP connections and stream back inline.",
+      "enable": "Enable delegation",
+      "enableHint": "When off, the delegate_to_agent tool is hidden from the agent's MCP catalog.",
+      "depthLimit": "Maximum delegation depth",
+      "depthHint": "Allowed range: {min}–{max}. Caps how deep a chain (root → child → grandchild …) can recurse.",
+      "timeoutSeconds": "Default timeout (seconds)",
+      "timeoutHint": "Allowed range: {min}–{max}. Applied when the calling agent does not specify timeout_seconds.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Delegation settings saved",
+      "saveFailed": "Failed to save delegation settings",
+      "loadFailed": "Failed to load delegation settings: {detail}"
+    },
     "actions": {
       "dragSort": "Arrastrar para reordenar",
       "dragSortAgent": "Arrastrar para reordenar {name}",

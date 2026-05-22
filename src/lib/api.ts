@@ -2419,3 +2419,21 @@ export async function updateModelProvider(params: {
 export async function deleteModelProvider(id: number): Promise<void> {
   return getTransport().call("delete_model_provider", { id })
 }
+
+// ─── Delegation settings ───────────────────────────────────────────────
+
+export interface DelegationSettings {
+  enabled: boolean
+  depth_limit: number
+  default_timeout_seconds: number
+}
+
+export async function getDelegationSettings(): Promise<DelegationSettings> {
+  return getTransport().call("get_delegation_settings")
+}
+
+export async function setDelegationSettings(
+  settings: DelegationSettings
+): Promise<DelegationSettings> {
+  return getTransport().call("set_delegation_settings", { settings })
+}

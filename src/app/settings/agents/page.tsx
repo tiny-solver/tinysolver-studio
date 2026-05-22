@@ -3,6 +3,7 @@
 import { Suspense } from "react"
 import { useTranslations } from "next-intl"
 import { AcpAgentSettings } from "@/components/settings/acp-agent-settings"
+import { DelegationSettingsSection } from "@/components/settings/delegation-settings"
 
 export default function SettingsAgentsPage() {
   const t = useTranslations("SettingsPages")
@@ -15,7 +16,10 @@ export default function SettingsAgentsPage() {
         </div>
       }
     >
-      <AcpAgentSettings />
+      <div className="space-y-6">
+        <AcpAgentSettings />
+        <DelegationSettingsSection />
+      </div>
     </Suspense>
   )
 }

@@ -10,9 +10,8 @@ vi.mock("@/hooks/use-delegated-sub-session", () => ({
   useDelegatedSubSession: vi.fn(),
 }))
 
-const { useDelegatedSubSession } = await import(
-  "@/hooks/use-delegated-sub-session"
-)
+const { useDelegatedSubSession } =
+  await import("@/hooks/use-delegated-sub-session")
 const mockedHook = vi.mocked(useDelegatedSubSession)
 
 function renderWithIntl(ui: React.ReactElement) {
