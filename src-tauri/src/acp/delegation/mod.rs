@@ -31,6 +31,8 @@
 //! `close_session` tools without protocol breakage.
 
 pub mod broker;
+pub mod companion;
 pub mod depth;
 pub mod spawner;
+pub mod transport;
 pub mod types;
