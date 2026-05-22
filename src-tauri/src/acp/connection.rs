@@ -377,6 +377,7 @@ pub async fn spawn_agent_connection(
     connections: Arc<tokio::sync::Mutex<HashMap<String, AgentConnection>>>,
     preferred_mode_id: Option<String>,
     preferred_config_values: BTreeMap<String, String>,
+    delegation_injection: Option<DelegationInjection>,
 ) -> Result<tokio::sync::oneshot::Receiver<()>, AcpError> {
     // Create the authoritative session state up front. Subsequent emit_with_state
     // calls write through this state and increment its seq counter so the first
@@ -452,6 +453,7 @@ pub async fn spawn_agent_connection(
             connection_id: cleanup_connection_id,
         };
 
+        let delegation_for_cleanup = delegation_injection.clone();
         let result = run_connection(
             agent,
             conn_id.clone(),
@@ -464,8 +466,24 @@ pub async fn spawn_agent_connection(
             terminal_base_env,
             preferred_mode_id,
             preferred_config_values,
+            delegation_injection,
         )
         .await;
+
+        // Revoke the per-launch token + cascade cancel any still-pending
+        // delegations owned by this parent connection. Both are best-effort:
+        // a missing token entry is a no-op, and `cancel_by_parent` is safe
+        // to call on an empty pending map.
+        if let Some(inj) = delegation_for_cleanup {
+            let token = {
+                let snap = state_clone.read().await;
+                snap.delegation_token.clone()
+            };
+            if let Some(tok) = token {
+                inj.tokens.revoke(&tok).await;
+            }
+            inj.broker.cancel_by_parent(&conn_id).await;
+        }
 
         if let Err(e) = result {
             let code = e.code().map(String::from);
@@ -815,6 +833,74 @@ fn load_mcp_servers_for_agent(agent_type: AgentType) -> Vec<McpServer> {
     out
 }
 
+/// Context the connection layer needs to inject the built-in `codeg-delegate`
+/// MCP entry. Built once per `run_connection` from the live AppState pieces
+/// (broker config, token registry, UDS path) and passed through.
+///
+/// Optional because some test paths spin up `run_connection` without a
+/// full delegation stack — those just skip injection.
+#[derive(Clone)]
+pub struct DelegationInjection {
+    pub broker: Arc<crate::acp::delegation::broker::DelegationBroker>,
+    pub tokens: Arc<crate::acp::delegation::listener::TokenRegistry>,
+    pub socket_path: PathBuf,
+}
+
+/// Locate the `codeg-mcp` companion binary next to the running executable.
+/// Falls back to the colocated path even when the file doesn't exist so the
+/// spawn failure surfaces inside the agent process (with a clearer error
+/// than a missing-path return here).
+fn locate_codeg_mcp_binary() -> PathBuf {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    let filename = if cfg!(windows) {
+        "codeg-mcp.exe"
+    } else {
+        "codeg-mcp"
+    };
+    exe_dir
+        .map(|d| d.join(filename))
+        .unwrap_or_else(|| PathBuf::from(filename))
+}
+
+/// Append the built-in `codeg-delegate` MCP entry if delegation is enabled.
+/// Returns the per-launch token that was registered (or `None` if injection
+/// was skipped) so the caller can revoke it on connection teardown.
+async fn inject_codeg_delegate_mcp(
+    servers: &mut Vec<McpServer>,
+    injection: &DelegationInjection,
+    parent_connection_id: &str,
+    working_dir: &Path,
+) -> Option<String> {
+    let cfg = injection.broker.config_snapshot().await;
+    if !cfg.enabled {
+        return None;
+    }
+    let token = uuid::Uuid::new_v4().to_string();
+    injection
+        .tokens
+        .register(
+            token.clone(),
+            crate::acp::delegation::listener::TokenEntry {
+                parent_connection_id: parent_connection_id.to_string(),
+                working_dir: working_dir.to_path_buf(),
+            },
+        )
+        .await;
+    let mut server = McpServerStdio::new("codeg-delegate", locate_codeg_mcp_binary());
+    server = server.args(vec![
+        "--parent-connection-id".to_string(),
+        parent_connection_id.to_string(),
+        "--socket-path".to_string(),
+        injection.socket_path.to_string_lossy().to_string(),
+        "--token".to_string(),
+        token.clone(),
+    ]);
+    servers.push(McpServer::Stdio(server));
+    Some(token)
+}
+
 /// Resolve an MCP server `command` to an absolute path.
 ///
 /// The ACP spec requires `McpServerStdio.command` to be an absolute path.
@@ -925,6 +1011,7 @@ async fn run_connection(
     terminal_base_env: BTreeMap<String, String>,
     preferred_mode_id: Option<String>,
     preferred_config_values: BTreeMap<String, String>,
+    delegation_injection: Option<DelegationInjection>,
 ) -> Result<(), AcpError> {
     let pending_perms: PendingPermissions = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     // `terminal_base_env` already filtered to just the credential helper
@@ -1129,7 +1216,7 @@ async fn run_connection(
             // capabilities the agent just declared. Stdio is mandatory per
             // ACP spec; HTTP/SSE are gated on `mcp_capabilities.{http,sse}`.
             let mcp_caps = &init_resp.agent_capabilities.mcp_capabilities;
-            let mcp_servers: Vec<McpServer> = load_mcp_servers_for_agent(agent_type)
+            let mut mcp_servers: Vec<McpServer> = load_mcp_servers_for_agent(agent_type)
                 .into_iter()
                 .filter(|s| match s {
                     McpServer::Stdio(_) => true,
@@ -1158,6 +1245,20 @@ async fn run_connection(
                     _ => false,
                 })
                 .collect();
+
+            // Inject the built-in `codeg-delegate` MCP server. Stdio is
+            // unconditionally supported by the ACP wire — no `mcp_caps`
+            // filter needed. The returned token is stashed on the session
+            // state so connection teardown can revoke it.
+            let delegate_token = if let Some(inj) = delegation_injection.as_ref() {
+                inject_codeg_delegate_mcp(&mut mcp_servers, inj, &conn_id, &cwd).await
+            } else {
+                None
+            };
+            if let Some(ref tok) = delegate_token {
+                let mut s = state.write().await;
+                s.delegation_token = Some(tok.clone());
+            }
 
             // Emit fork support capability
             emit_with_state(

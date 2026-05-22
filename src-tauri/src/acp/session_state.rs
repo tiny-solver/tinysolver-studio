@@ -209,6 +209,18 @@ pub struct SessionState {
     /// read lock to decide between sending a snapshot or a batched replay.
     /// See `event_stream` module for size limits.
     pub(crate) recent_events: RecentEventsBuffer,
+
+    /// Per-launch token registered with the delegation broker's
+    /// `TokenRegistry` when `codeg-delegate` is injected at init.
+    /// Revoked when the connection tears down so a leaked binary can't
+    /// keep round-tripping after the parent session ends.
+    pub delegation_token: Option<String>,
+
+    /// Concatenated text content of the just-completed turn's assistant
+    /// message. Captured at TurnComplete (just before live_message is
+    /// cleared) so the lifecycle subscriber can surface it as the
+    /// `delegation_call_id`-bound child outcome. Cleared on the next prompt.
+    pub last_assistant_text: Option<String>,
 }
 
 impl SessionState {
@@ -244,6 +256,8 @@ impl SessionState {
             last_activity_at: Utc::now(),
             event_stream: Arc::new(ConnectionEventStream::new()),
             recent_events: RecentEventsBuffer::new(),
+            delegation_token: None,
+            last_assistant_text: None,
         }
     }
 
@@ -438,6 +452,25 @@ impl SessionState {
                 }
             }
             AcpEvent::TurnComplete { .. } => {
+                // Snapshot the assistant text from the just-finished turn so
+                // the delegation subscriber can surface it as the child
+                // outcome. Concatenate all Text blocks in order; skip
+                // Thinking/ToolCallRef/Plan — they're either non-final or
+                // structurally separate.
+                if let Some(live) = self.live_message.as_ref() {
+                    let assembled: String = live
+                        .content
+                        .iter()
+                        .filter_map(|b| match b {
+                            LiveContentBlock::Text { text } => Some(text.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<&str>>()
+                        .join("");
+                    if !assembled.is_empty() {
+                        self.last_assistant_text = Some(assembled);
+                    }
+                }
                 self.live_message = None;
                 self.active_tool_calls.clear();
                 self.pending_permission = None;

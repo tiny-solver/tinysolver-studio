@@ -263,6 +263,34 @@ impl DelegationBroker {
         }
     }
 
+    /// Resolve the pending delegation whose child matches
+    /// `child_connection_id` with a `canceled` outcome. Used when a child
+    /// session disconnects or errors out without firing a clean
+    /// TurnComplete — the parent's `tool_use_id` shouldn't dangle.
+    /// No-op when no matching entry exists.
+    pub async fn cancel_by_child_connection(&self, child_connection_id: &str) {
+        let drained: Vec<PendingCall> = {
+            let mut map = self.pending.inner.lock().await;
+            let keys: Vec<String> = map
+                .iter()
+                .filter(|(_, v)| v.child_connection_id == child_connection_id)
+                .map(|(k, _)| k.clone())
+                .collect();
+            keys.into_iter()
+                .map(|k| map.remove(&k).expect("key just observed"))
+                .collect()
+        };
+        for entry in drained {
+            let _ = self.spawner.disconnect(&entry.child_connection_id).await;
+            let _ = entry.tx.send(DelegationOutcome::from_err(
+                DelegationError::Canceled {
+                    reason: "child session ended without TurnComplete".into(),
+                },
+                Some(entry.child_conversation_id),
+            ));
+        }
+    }
+
     /// Cascade-cancel every pending delegation owned by `parent_connection_id`.
     /// Used when a parent session disconnects or the user cancels the parent's
     /// active prompt.

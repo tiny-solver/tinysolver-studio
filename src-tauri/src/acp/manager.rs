@@ -105,6 +105,13 @@ pub struct ConnectionManager {
     /// tests; in production initialized from env via
     /// `spawn_handshake_timeout_from_env`.
     spawn_handshake_timeout: Duration,
+    /// Delegation broker + token registry + UDS path installed during app
+    /// bootstrap (`install_delegation`). When present, `spawn_agent` propagates
+    /// the injection to `spawn_agent_connection`, which makes
+    /// `codeg-delegate` appear in the agent's MCP server list during ACP
+    /// init. `Arc<OnceLock>` so the inner `Self` cloned from `clone_ref` sees
+    /// the install too — the lock is set once at startup and never mutated.
+    delegation_injection: Arc<std::sync::OnceLock<crate::acp::connection::DelegationInjection>>,
 }
 
 impl Default for ConnectionManager {
@@ -119,6 +126,7 @@ impl ConnectionManager {
             connections: Arc::new(Mutex::new(HashMap::new())),
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
             spawn_handshake_timeout: spawn_handshake_timeout_from_env(),
+            delegation_injection: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -128,7 +136,22 @@ impl ConnectionManager {
             connections: self.connections.clone(),
             spawn_locks: self.spawn_locks.clone(),
             spawn_handshake_timeout: self.spawn_handshake_timeout,
+            delegation_injection: self.delegation_injection.clone(),
         }
+    }
+
+    /// Set the delegation injection context exactly once during bootstrap.
+    /// Calling twice is a no-op — protects against accidental re-init in
+    /// the unlikely event a second `build_delegation_stack` runs.
+    pub fn install_delegation(
+        &self,
+        injection: crate::acp::connection::DelegationInjection,
+    ) {
+        let _ = self.delegation_injection.set(injection);
+    }
+
+    fn delegation_snapshot(&self) -> Option<crate::acp::connection::DelegationInjection> {
+        self.delegation_injection.get().cloned()
     }
 
     /// Test-only constructor that overrides the spawn-handshake timeout.
@@ -139,6 +162,7 @@ impl ConnectionManager {
             connections: Arc::new(Mutex::new(HashMap::new())),
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
             spawn_handshake_timeout: timeout,
+            delegation_injection: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -265,6 +289,7 @@ impl ConnectionManager {
             self.connections.clone(),
             preferred_mode_id,
             preferred_config_values,
+            self.delegation_snapshot(),
         )
         .await?;
 
@@ -583,6 +608,28 @@ impl ConnectionManager {
                         },
                     )
                     .await;
+
+                    // Surface DelegationStarted on the child's stream so the
+                    // frontend can paint "Delegating to <agent>…" against the
+                    // parent's tool_use_id while the child's first turn runs.
+                    // The parent_connection_id isn't on the DelegationLink
+                    // payload — derive it via reverse lookup. (For v1 we leave
+                    // it empty; Phase 8's frontend grouper uses parent_tool_use_id
+                    // as the primary key.)
+                    if let Some(link) = delegation.as_ref() {
+                        emit_with_state(
+                            &state_arc,
+                            &emitter,
+                            AcpEvent::DelegationStarted {
+                                parent_connection_id: String::new(),
+                                parent_tool_use_id: link.parent_tool_use_id.clone(),
+                                child_connection_id: conn_id.to_string(),
+                                child_conversation_id: row.id,
+                                agent_type,
+                            },
+                        )
+                        .await;
+                    }
                 }
                 (None, None) => {
                     return Err(AcpError::protocol(
@@ -1165,6 +1212,24 @@ impl crate::acp::delegation::spawner::ConnectionSpawner for ConnectionManagerSpa
             .disconnect(conn_id)
             .await
             .map_err(|e| crate::acp::delegation::spawner::SpawnerError::Disconnect(e.to_string()))
+    }
+}
+
+/// Production impl of `ParentSessionLookup` for the delegation listener.
+/// Resolves the parent's current `conversation_id` by reading its
+/// `SessionState`. Bundled with `ConnectionManagerSpawner` here so the
+/// concrete wiring lives next to the manager it depends on.
+#[derive(Clone)]
+pub struct ConnectionManagerParentLookup {
+    pub manager: Arc<ConnectionManager>,
+}
+
+#[async_trait::async_trait]
+impl crate::acp::delegation::listener::ParentSessionLookup for ConnectionManagerParentLookup {
+    async fn current_conversation_id(&self, parent_connection_id: &str) -> Option<i32> {
+        let state = self.manager.get_state(parent_connection_id).await?;
+        let snapshot = state.read().await;
+        snapshot.conversation_id
     }
 }
 
