@@ -451,10 +451,7 @@ async fn estimate_push_commit_count(path: &str) -> usize {
 // Shared core functions (used by both Tauri commands and web handlers)
 // ---------------------------------------------------------------------------
 
-pub async fn get_folder_core(
-    db: &AppDatabase,
-    folder_id: i32,
-) -> Result<FolderDetail, DbError> {
+pub async fn get_folder_core(db: &AppDatabase, folder_id: i32) -> Result<FolderDetail, DbError> {
     folder_service::get_folder_by_id(&db.conn, folder_id)
         .await?
         .ok_or_else(|| DbError::Migration(format!("Folder {} not found", folder_id)))
@@ -547,10 +544,7 @@ pub async fn remove_folder_from_workspace_core(
         .map_err(AppCommandError::from)
 }
 
-pub async fn reorder_folders_core(
-    db: &AppDatabase,
-    ids: Vec<i32>,
-) -> Result<(), AppCommandError> {
+pub async fn reorder_folders_core(db: &AppDatabase, ids: Vec<i32>) -> Result<(), AppCommandError> {
     folder_service::reorder_folders(&db.conn, ids)
         .await
         .map_err(AppCommandError::from)
@@ -3402,22 +3396,18 @@ pub async fn delete_file_tree_entry(
     let meta = match std::fs::symlink_metadata(&target) {
         Ok(m) => m,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Err(
-                AppCommandError::not_found("Target file does not exist").with_detail(format!(
-                    "resolved={} relative={}",
-                    target.display(),
-                    path
-                )),
-            );
+            return Err(AppCommandError::not_found("Target file does not exist")
+                .with_detail(format!("resolved={} relative={}", target.display(), path)));
         }
         Err(err) => {
-            return Err(AppCommandError::io_error("Failed to stat target")
-                .with_detail(format!(
+            return Err(
+                AppCommandError::io_error("Failed to stat target").with_detail(format!(
                     "resolved={} relative={} error={}",
                     target.display(),
                     path,
                     err
-                )));
+                )),
+            );
         }
     };
     if target == root {
@@ -3993,8 +3983,7 @@ mod tests {
         // or the underlying DbError propagates — both are acceptable for "missing".
         let msg = format!("{err:?}");
         assert!(
-            msg.to_lowercase().contains("not found")
-                || msg.to_lowercase().contains("99999"),
+            msg.to_lowercase().contains("not found") || msg.to_lowercase().contains("99999"),
             "expected not-found-ish error, got: {msg}"
         );
     }
