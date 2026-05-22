@@ -683,6 +683,7 @@ export async function listAllConversations(params?: {
   search?: string | null
   sort_by?: string | null
   status?: string | null
+  include_children?: boolean | null
 }): Promise<DbConversationSummary[]> {
   return getTransport().call("list_all_conversations", {
     folderIds: params?.folder_ids ?? null,
@@ -690,6 +691,15 @@ export async function listAllConversations(params?: {
     search: params?.search ?? null,
     sortBy: params?.sort_by ?? null,
     status: params?.status ?? null,
+    includeChildren: params?.include_children ?? null,
+  })
+}
+
+export async function listChildConversations(
+  parentConversationId: number
+): Promise<DbConversationSummary[]> {
+  return getTransport().call("list_child_conversations", {
+    parentConversationId,
   })
 }
 

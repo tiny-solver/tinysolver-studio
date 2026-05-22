@@ -53,6 +53,10 @@ pub fn build_router(
             post(handlers::conversations::list_all_conversations),
         )
         .route(
+            "/list_child_conversations",
+            post(handlers::conversations::list_child_conversations),
+        )
+        .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
         )

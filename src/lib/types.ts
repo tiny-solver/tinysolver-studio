@@ -248,6 +248,9 @@ export interface DbConversationSummary {
   message_count: number
   created_at: string
   updated_at: string
+  parent_id?: number | null
+  parent_tool_use_id?: string | null
+  delegation_call_id?: string | null
 }
 
 export interface ImportResult {
