@@ -103,6 +103,9 @@ impl OpenCodeParser {
             message_count,
             model: normalize_optional_string(model),
             git_branch: None,
+            parent_id: None,
+            parent_tool_use_id: None,
+            delegation_call_id: None,
         })
     }
 

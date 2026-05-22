@@ -423,6 +423,9 @@ impl GeminiParser {
             message_count: messages.len() as u32,
             model,
             git_branch: None,
+            parent_id: None,
+            parent_tool_use_id: None,
+            delegation_call_id: None,
         })
     }
 

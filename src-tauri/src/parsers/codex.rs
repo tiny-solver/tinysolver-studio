@@ -169,6 +169,9 @@ impl CodexParser {
             message_count,
             model,
             git_branch,
+            parent_id: None,
+            parent_tool_use_id: None,
+            delegation_call_id: None,
         }))
     }
 }
@@ -1381,6 +1384,9 @@ impl CodexParser {
             message_count: turns.len() as u32,
             model,
             git_branch,
+            parent_id: None,
+            parent_tool_use_id: None,
+            delegation_call_id: None,
         };
 
         Ok(ConversationDetail {

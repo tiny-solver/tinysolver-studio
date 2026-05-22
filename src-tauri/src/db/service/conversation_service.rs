@@ -30,6 +30,8 @@ pub async fn create(
         git_branch: Set(git_branch),
         external_id: Set(None),
         parent_id: Set(None),
+        parent_tool_use_id: Set(None),
+        delegation_call_id: Set(None),
         message_count: Set(0),
         created_at: Set(now),
         updated_at: Set(now),
@@ -152,6 +154,9 @@ fn conv_to_summary(r: conversation::Model) -> DbConversationSummary {
         message_count: r.message_count as u32,
         created_at: r.created_at,
         updated_at: r.updated_at,
+        parent_id: r.parent_id,
+        parent_tool_use_id: r.parent_tool_use_id,
+        delegation_call_id: r.delegation_call_id,
     }
 }
 
