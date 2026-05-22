@@ -88,7 +88,6 @@ describe("DelegatedSubThread", () => {
     // present in the visible card header.
     expect(screen.getAllByText("Codex").length).toBeGreaterThan(0)
     expect(screen.getByText("running")).toBeInTheDocument()
-    expect(screen.getByText("· delegated")).toBeInTheDocument()
     // collapsed by default — sub-thread body not present
     expect(screen.queryByText(/Loading/)).not.toBeInTheDocument()
   })
@@ -148,6 +147,37 @@ describe("DelegatedSubThread", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "Result"
     )
+  })
+
+  it("when the delegation binding never arrives but the tool output did, the expanded body shows the outcome — not 'waiting for child'", () => {
+    mockedHook.mockReturnValue({
+      binding: undefined,
+      detail: null,
+      loading: false,
+      error: null,
+    })
+    const inputJson = JSON.stringify({
+      agent_type: "codex",
+      task: "test the build",
+    })
+    const outputJson = JSON.stringify({
+      kind: "ok",
+      text: "Build succeeded.",
+      child_conversation_id: 99,
+    })
+    renderWithIntl(
+      <DelegatedSubThread
+        parentToolUseId="pt-1"
+        input={inputJson}
+        output={outputJson}
+        state="output-available"
+      />
+    )
+    fireEvent.click(screen.getByRole("button"))
+    expect(screen.getByText("Build succeeded.")).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Waiting for the child agent to start/)
+    ).not.toBeInTheDocument()
   })
 
   it("renders an error outcome from the broker as a destructive block", () => {

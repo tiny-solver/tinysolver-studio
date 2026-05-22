@@ -203,9 +203,6 @@ export function DelegatedSubThread({
             <span className="text-sm font-semibold text-foreground">
               {agentType ? AGENT_LABELS[agentType] : t("unknownAgent")}
             </span>
-            <span className="text-[11px] text-muted-foreground">
-              · {t("delegatedLabel")}
-            </span>
             <StatusBadge status={status} errorCode={errorCode} />
           </div>
           {parsed.task && (
@@ -224,43 +221,89 @@ export function DelegatedSubThread({
       </button>
       {expanded && (
         <div className="border-t border-border px-3 py-3 max-h-96 overflow-auto text-xs space-y-3">
-          {!binding && status === "running" && (
-            <div className="text-muted-foreground">{t("waitingForChild")}</div>
-          )}
-          {loading && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>{t("loading")}</span>
-            </div>
-          )}
-          {error && (
-            <div className="text-destructive">
-              {t("loadFailed", { detail: error })}
-            </div>
-          )}
-          {!loading && !error && detail && detail.turns.length > 0 && (
-            <SubThreadPreview turns={detail.turns} />
-          )}
-          {outcome && outcome.text && (
-            <DelegationOutcomeBlock
-              text={outcome.text}
-              isError={outcome.isError}
-            />
-          )}
-          {!loading &&
-            !error &&
-            !outcome &&
-            (!detail || detail.turns.length === 0) &&
-            binding && (
-              <div className="text-muted-foreground">{t("noDetail")}</div>
-            )}
+          <ExpandedBody
+            status={status}
+            loading={loading}
+            error={error}
+            detail={detail}
+            outcome={outcome}
+            tWaitingForChild={t("waitingForChild")}
+            tLoading={t("loading")}
+            tLoadFailed={(detailMsg) => t("loadFailed", { detail: detailMsg })}
+            tNoDetail={t("noDetail")}
+          />
         </div>
       )}
     </div>
   )
 }
 
-function DelegationOutcomeBlock({
+function ExpandedBody({
+  status,
+  loading,
+  error,
+  detail,
+  outcome,
+  tWaitingForChild,
+  tLoading,
+  tLoadFailed,
+  tNoDetail,
+}: {
+  status: "running" | "ok" | "err"
+  loading: boolean
+  error: string | null
+  detail: { turns: MessageTurn[] } | null
+  outcome: { text: string; isError: boolean } | null
+  tWaitingForChild: string
+  tLoading: string
+  tLoadFailed: (detail: string) => string
+  tNoDetail: string
+}) {
+  const hasTurns = !!detail && detail.turns.length > 0
+  const hasOutcome = !!outcome && outcome.text.length > 0
+
+  // Priority:
+  //   1. detail turns from the child conversation (richest view)
+  //   2. parsed outcome from the parent's tool_result (lighter — only the
+  //      final assistant text or the failure message, but always available
+  //      the moment the broker returns even if the live binding never
+  //      reached the UI)
+  //   3. fetch in flight (loading spinner)
+  //   4. fetch failed (error)
+  //   5. still running and the parent ToolCall hasn't produced output yet
+  //      (the "waiting" spinner)
+  //   6. completed but nothing to show (noDetail)
+  if (hasTurns) {
+    return <SubThreadPreview turns={detail!.turns} />
+  }
+  if (hasOutcome) {
+    return (
+      <DelegationOutcomeText text={outcome!.text} isError={outcome!.isError} />
+    )
+  }
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span>{tLoading}</span>
+      </div>
+    )
+  }
+  if (error) {
+    return <div className="text-destructive">{tLoadFailed(error)}</div>
+  }
+  if (status === "running") {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span>{tWaitingForChild}</span>
+      </div>
+    )
+  }
+  return <div className="text-muted-foreground">{tNoDetail}</div>
+}
+
+function DelegationOutcomeText({
   text,
   isError,
 }: {
@@ -271,17 +314,11 @@ function DelegationOutcomeBlock({
     <div
       className={
         isError
-          ? "rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2"
-          : "rounded-md border border-border bg-muted/30 px-3 py-2"
+          ? 'text-destructive prose prose-sm dark:prose-invert max-w-none break-words [&_ul]:list-inside [&_ol]:list-inside [&_[data-streamdown="code-block-body"]]:max-h-96 [&_[data-streamdown="code-block-body"]]:overflow-auto'
+          : 'prose prose-sm dark:prose-invert max-w-none break-words [&_ul]:list-inside [&_ol]:list-inside [&_[data-streamdown="code-block-body"]]:max-h-96 [&_[data-streamdown="code-block-body"]]:overflow-auto'
       }
     >
-      <div
-        className={
-          'prose prose-sm dark:prose-invert max-w-none break-words [&_ul]:list-inside [&_ol]:list-inside [&_[data-streamdown="code-block-body"]]:max-h-96 [&_[data-streamdown="code-block-body"]]:overflow-auto'
-        }
-      >
-        <MessageResponse>{text}</MessageResponse>
-      </div>
+      <MessageResponse>{text}</MessageResponse>
     </div>
   )
 }
