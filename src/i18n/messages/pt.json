@@ -1857,6 +1857,9 @@
         "loading": "Loading sub-session…",
         "loadFailed": "Failed to load sub-session: {detail}",
         "noDetail": "No detail available yet.",
+        "delegatedLabel": "delegado",
+        "unknownAgent": "Subagente",
+        "waitingForChild": "Aguardando o início do agente filho…",
         "status": {
           "running": "running",
           "ok": "done",

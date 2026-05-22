@@ -136,6 +136,24 @@ pub(crate) async fn handle_event(
     broker: Option<&Arc<DelegationBroker>>,
 ) -> Result<(), DbError> {
     match &envelope.payload {
+        AcpEvent::ToolCall {
+            tool_call_id, title, ..
+        } => {
+            // MCP clients don't reliably populate `_meta.tool_use_id`, so we
+            // capture every parent-side `delegate_to_agent` tool_call_id
+            // here. The broker pops the most recent one when the matching
+            // MCP round-trip arrives. See [`DelegationBroker::register_pending_tool_call`].
+            if let Some(b) = broker {
+                if is_delegation_tool_title(title) {
+                    b.register_pending_tool_call(
+                        &envelope.connection_id,
+                        tool_call_id.clone(),
+                    )
+                    .await;
+                }
+            }
+            Ok(())
+        }
         AcpEvent::SessionStarted { session_id } => {
             // Look up conversation_id from the live state.
             let Some(state_arc) = manager.get_state(&envelope.connection_id).await else {
@@ -401,6 +419,42 @@ async fn handle_terminal_event(
 /// active delegations.
 async fn forward_disconnect_to_broker(broker: &DelegationBroker, connection_id: &str) {
     broker.cancel_by_child_connection(connection_id).await;
+}
+
+/// True when the ACP `tool_call.title` looks like an invocation of the
+/// `delegate_to_agent` MCP tool. Matches both the bare schema name and the
+/// `mcp__<server>__delegate_to_agent` prefix Codex/Claude Code emit.
+fn is_delegation_tool_title(title: &str) -> bool {
+    let lower = title.to_ascii_lowercase();
+    let normalized = lower.replace([' ', '-'], "_");
+    normalized == "delegate_to_agent" || normalized.ends_with("__delegate_to_agent")
+}
+
+#[cfg(test)]
+mod delegation_title_tests {
+    use super::is_delegation_tool_title;
+
+    #[test]
+    fn matches_bare_name() {
+        assert!(is_delegation_tool_title("delegate_to_agent"));
+        assert!(is_delegation_tool_title("Delegate To Agent"));
+        assert!(is_delegation_tool_title("delegate-to-agent"));
+    }
+
+    #[test]
+    fn matches_mcp_prefixed_name() {
+        assert!(is_delegation_tool_title(
+            "mcp__codeg-delegate__delegate_to_agent"
+        ));
+        assert!(is_delegation_tool_title("mcp__codeg__delegate_to_agent"));
+    }
+
+    #[test]
+    fn rejects_unrelated_tools() {
+        assert!(!is_delegation_tool_title("write"));
+        assert!(!is_delegation_tool_title("agent"));
+        assert!(!is_delegation_tool_title("delegate_other_thing"));
+    }
 }
 
 /// Per-connection worker that owns the cache for one connection and

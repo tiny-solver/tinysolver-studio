@@ -2294,11 +2294,26 @@ const ToolCallPart = memo(function ToolCallPart({
   }
 
   // Multi-agent delegation tool: surfaces an inline DelegatedSubThread
-  // bound to the child sub-session via parent_tool_use_id. Falls through to
-  // the normal renderer when no toolCallId is available (snapshot replays
-  // without a live binding) so the user still sees the tool input/output.
-  if (toolNameLower === "delegate_to_agent" && part.toolCallId) {
-    return <DelegatedSubThread parentToolUseId={part.toolCallId} />
+  // bound to the child sub-session via parent_tool_use_id. Matches both
+  // the bare `delegate_to_agent` (post-normalization) and the MCP-prefixed
+  // form (`mcp__<server>__delegate_to_agent`) as a defensive fallback.
+  // Falls through to the normal renderer when no toolCallId is available
+  // (snapshot replays without a live binding) so the user still sees the
+  // tool input/output.
+  if (
+    (toolNameLower === "delegate_to_agent" ||
+      toolNameLower.endsWith("__delegate_to_agent")) &&
+    part.toolCallId
+  ) {
+    return (
+      <DelegatedSubThread
+        parentToolUseId={part.toolCallId}
+        input={part.input ?? null}
+        output={part.output ?? null}
+        errorText={part.errorText ?? null}
+        state={part.state}
+      />
+    )
   }
 
   // Cline: attempt_completion — render as an expanded card with result + progress

@@ -24,7 +24,7 @@
 //! [`DelegationBroker::cancel_by_parent`] which fans out cancel + disconnect
 //! to every pending child of that parent.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -75,6 +75,22 @@ struct PendingCalls {
     inner: Mutex<HashMap<String, PendingCall>>,
 }
 
+/// FIFO of `tool_call_id`s that the ACP lifecycle observed firing
+/// `delegate_to_agent` on a given parent connection but for which the
+/// matching broker round-trip has not yet arrived. MCP clients (Codex,
+/// Claude Code) generally do NOT populate `_meta.tool_use_id` when
+/// invoking an MCP tool, so the broker can't read the LLM-issued
+/// `tool_use_id` from the wire — we capture it from the parallel ACP
+/// `tool_call` event stream instead.
+///
+/// ACP `sessionUpdate(tool_call)` almost always lands ahead of the
+/// agent's own MCP `tools/call`, so this LRU resolves the race in
+/// practice. Stale entries (if any) get evicted on parent disconnect.
+#[derive(Default)]
+struct PendingToolCalls {
+    inner: Mutex<HashMap<String, VecDeque<String>>>,
+}
+
 /// The broker is intentionally `Clone` (cheap — only `Arc`s inside) so
 /// listener/handler code can hand copies to spawned tasks without lifetime
 /// gymnastics.
@@ -83,6 +99,7 @@ pub struct DelegationBroker {
     spawner: Arc<dyn ConnectionSpawner>,
     depth_lookup: Arc<dyn ConversationDepthLookup>,
     pending: Arc<PendingCalls>,
+    pending_tool_calls: Arc<PendingToolCalls>,
     config: Arc<Mutex<DelegationConfig>>,
 }
 
@@ -95,8 +112,53 @@ impl DelegationBroker {
             spawner,
             depth_lookup,
             pending: Arc::new(PendingCalls::default()),
+            pending_tool_calls: Arc::new(PendingToolCalls::default()),
             config: Arc::new(Mutex::new(DelegationConfig::default())),
         }
+    }
+
+    /// Record a parent ACP `tool_call_id` whose title indicates the LLM is
+    /// invoking `delegate_to_agent`. The next broker round-trip from the
+    /// same `parent_connection_id` will claim this id as its
+    /// `parent_tool_use_id`. Bounded FIFO per connection.
+    pub async fn register_pending_tool_call(
+        &self,
+        parent_connection_id: &str,
+        tool_call_id: String,
+    ) {
+        let mut map = self.pending_tool_calls.inner.lock().await;
+        let queue = map
+            .entry(parent_connection_id.to_string())
+            .or_insert_with(VecDeque::new);
+        // Defensive cap so an agent that fires many delegations without ever
+        // round-tripping can't grow this map without bound.
+        if queue.len() >= 32 {
+            queue.pop_front();
+        }
+        queue.push_back(tool_call_id);
+    }
+
+    /// Pop the oldest pending `tool_call_id` for the given parent, if any.
+    pub async fn take_pending_tool_call(&self, parent_connection_id: &str) -> Option<String> {
+        let mut map = self.pending_tool_calls.inner.lock().await;
+        let queue = map.get_mut(parent_connection_id)?;
+        let id = queue.pop_front();
+        if queue.is_empty() {
+            map.remove(parent_connection_id);
+        }
+        id
+    }
+
+    /// Forget every pending tool_call id for the given parent. Called when
+    /// the parent connection tears down so stale ids don't bind to a future
+    /// reuse of the same connection_id (UUIDs make that unlikely but cheap
+    /// to defend against).
+    pub async fn drop_pending_tool_calls_for_parent(&self, parent_connection_id: &str) {
+        self.pending_tool_calls
+            .inner
+            .lock()
+            .await
+            .remove(parent_connection_id);
     }
 
     pub async fn set_config(&self, cfg: DelegationConfig) {
@@ -109,7 +171,19 @@ impl DelegationBroker {
 
     /// Entry point. Drives the full lifecycle and returns whatever the parent
     /// LLM should see as the `delegate_to_agent` tool_result.
-    pub async fn handle_request(&self, req: DelegationRequest) -> DelegationOutcome {
+    pub async fn handle_request(&self, mut req: DelegationRequest) -> DelegationOutcome {
+        // MCP clients usually don't populate `_meta.tool_use_id`, so the
+        // listener will pass through an empty string. Best-effort claim the
+        // most recent ACP-side `tool_call_id` for this parent; otherwise
+        // mint a placeholder UUID so the rest of the lifecycle still works
+        // (the only downside of the fallback is the UI not being able to
+        // attach the sub-thread under the parent's ToolCallBlock).
+        if req.parent_tool_use_id.is_empty() {
+            req.parent_tool_use_id = self
+                .take_pending_tool_call(&req.parent_connection_id)
+                .await
+                .unwrap_or_else(|| format!("delegation-{}", uuid::Uuid::new_v4()));
+        }
         let cfg = self.config_snapshot().await;
         if !cfg.enabled {
             return DelegationOutcome::from_err(
@@ -295,6 +369,11 @@ impl DelegationBroker {
     /// Used when a parent session disconnects or the user cancels the parent's
     /// active prompt.
     pub async fn cancel_by_parent(&self, parent_connection_id: &str) {
+        // Also drain any tool_call ids that were captured ahead of an MCP
+        // round-trip that never arrived — keeps the map bounded across
+        // parent reconnects.
+        self.drop_pending_tool_calls_for_parent(parent_connection_id)
+            .await;
         let drained: Vec<PendingCall> = {
             let mut map = self.pending.inner.lock().await;
             let keys: Vec<String> = map
@@ -653,6 +732,123 @@ mod tests {
             DelegationOutcome::Err { code, .. } => assert_eq!(code, "depth_limit"),
             other => panic!("expected depth_limit, got {other:?}"),
         }
+    }
+
+    // -- Pending tool_call_id queue (MCP `_meta.tool_use_id` fallback) ----
+
+    #[tokio::test]
+    async fn pending_tool_call_register_and_take_is_fifo() {
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("p1", "tc-a".into()).await;
+        broker.register_pending_tool_call("p1", "tc-b".into()).await;
+        assert_eq!(broker.take_pending_tool_call("p1").await.as_deref(), Some("tc-a"));
+        assert_eq!(broker.take_pending_tool_call("p1").await.as_deref(), Some("tc-b"));
+        assert!(broker.take_pending_tool_call("p1").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn pending_tool_call_is_isolated_per_parent() {
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("p1", "p1-a".into()).await;
+        broker.register_pending_tool_call("p2", "p2-a".into()).await;
+        assert_eq!(broker.take_pending_tool_call("p1").await.as_deref(), Some("p1-a"));
+        assert_eq!(broker.take_pending_tool_call("p2").await.as_deref(), Some("p2-a"));
+        assert!(broker.take_pending_tool_call("p1").await.is_none());
+        assert!(broker.take_pending_tool_call("p2").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn empty_parent_tool_use_id_claims_pending_then_completes() {
+        let mock = Arc::new(MockSpawner::new());
+        mock.queue_spawn(Ok("c1".into())).await;
+        mock.queue_send(Ok(7)).await;
+        let broker = DelegationBroker::new(
+            mock.clone() as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker
+            .register_pending_tool_call("parent-conn", "tu-from-acp".into())
+            .await;
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move {
+                broker.handle_request(request(1, "")).await
+            })
+        };
+        while broker.pending_count().await == 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        // The captured ACP id was consumed.
+        assert!(broker.take_pending_tool_call("parent-conn").await.is_none());
+        let call_id = broker.peek_first_pending_call_id().await.unwrap();
+        broker
+            .complete_call(
+                &call_id,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "ok".into(),
+                    child_conversation_id: 7,
+                    child_agent_type: AgentType::Codex,
+                    turn_count: 1,
+                    duration_ms: 5,
+                    token_usage: None,
+                }),
+            )
+            .await;
+        let outcome = driver.await.unwrap();
+        assert!(matches!(outcome, DelegationOutcome::Ok(_)));
+    }
+
+    #[tokio::test]
+    async fn empty_parent_tool_use_id_with_no_pending_falls_back_to_uuid() {
+        let mock = Arc::new(MockSpawner::new());
+        mock.queue_spawn(Ok("c1".into())).await;
+        mock.queue_send(Ok(11)).await;
+        let broker = DelegationBroker::new(
+            mock.clone() as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move {
+                broker.handle_request(request(1, "")).await
+            })
+        };
+        while broker.pending_count().await == 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let call_id = broker.peek_first_pending_call_id().await.unwrap();
+        broker
+            .complete_call(
+                &call_id,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "fallback ok".into(),
+                    child_conversation_id: 11,
+                    child_agent_type: AgentType::Codex,
+                    turn_count: 1,
+                    duration_ms: 5,
+                    token_usage: None,
+                }),
+            )
+            .await;
+        let outcome = driver.await.unwrap();
+        assert!(matches!(outcome, DelegationOutcome::Ok(_)));
+    }
+
+    #[tokio::test]
+    async fn cancel_by_parent_also_drops_pending_tool_calls() {
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("parent-conn", "tu-1".into()).await;
+        broker.cancel_by_parent("parent-conn").await;
+        assert!(broker.take_pending_tool_call("parent-conn").await.is_none());
     }
 
     #[tokio::test]

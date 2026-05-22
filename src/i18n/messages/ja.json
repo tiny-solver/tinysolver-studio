@@ -1857,6 +1857,9 @@
         "loading": "Loading sub-session…",
         "loadFailed": "Failed to load sub-session: {detail}",
         "noDetail": "No detail available yet.",
+        "delegatedLabel": "委任済み",
+        "unknownAgent": "サブエージェント",
+        "waitingForChild": "サブエージェントの起動を待機中…",
         "status": {
           "running": "running",
           "ok": "done",

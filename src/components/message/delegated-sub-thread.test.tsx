@@ -35,7 +35,7 @@ function bindingOf(overrides: Partial<DelegationBinding>): DelegationBinding {
 }
 
 describe("DelegatedSubThread", () => {
-  it("renders nothing when no binding exists yet", () => {
+  it("renders nothing when there's no binding and no parseable input", () => {
     mockedHook.mockReturnValue({
       binding: undefined,
       detail: null,
@@ -56,10 +56,30 @@ describe("DelegatedSubThread", () => {
       error: null,
     })
     renderWithIntl(<DelegatedSubThread parentToolUseId="pt-1" />)
-    expect(screen.getByText("Codex")).toBeInTheDocument()
+    // AgentIcon's <title>Codex</title> + the visible label both produce
+    // "Codex" matches; assert there are *some* matches and the name is
+    // present in the visible card header.
+    expect(screen.getAllByText("Codex").length).toBeGreaterThan(0)
     expect(screen.getByText("running")).toBeInTheDocument()
+    expect(screen.getByText("· delegated")).toBeInTheDocument()
     // collapsed by default — sub-thread body not present
     expect(screen.queryByText(/Loading/)).not.toBeInTheDocument()
+  })
+
+  it("renders the task line directly from input even without a binding", () => {
+    mockedHook.mockReturnValue({
+      binding: undefined,
+      detail: null,
+      loading: false,
+      error: null,
+    })
+    const input = JSON.stringify({
+      agent_type: "codex",
+      task: "summarize the failing tests",
+    })
+    renderWithIntl(<DelegatedSubThread parentToolUseId="pt-1" input={input} />)
+    expect(screen.getByText("summarize the failing tests")).toBeInTheDocument()
+    expect(screen.getAllByText("Codex").length).toBeGreaterThan(0)
   })
 
   it("shows the error badge with the localized code", () => {

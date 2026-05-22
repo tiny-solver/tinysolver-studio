@@ -55,6 +55,10 @@ const EXACT_TOOL_NAME_ALIASES: Record<string, string> = {
   close_agent: "task",
   update_plan: "task",
   request_user_input: "question",
+  // codeg multi-agent delegation MCP tool (varies by server prefix)
+  delegate_to_agent: "delegate_to_agent",
+  "mcp__codeg-delegate__delegate_to_agent": "delegate_to_agent",
+  mcp__codeg__delegate_to_agent: "delegate_to_agent",
   // OpenCode
   delegate_task: "task",
   call_omo_agent: "agent",
@@ -255,6 +259,12 @@ export function normalizeToolName(toolName: string): string {
   const canonical = canonicalizeToolName(trimmed)
   const alias = EXACT_TOOL_NAME_ALIASES[canonical]
   if (alias) return alias
+
+  // Multi-agent delegation MCP tool. The MCP server prefix
+  // (`mcp__<server>__`) varies — codeg-delegate today, possibly renamed
+  // tomorrow. Match the suffix so any server name lands on the same
+  // canonical name as the in-tree alias.
+  if (canonical.endsWith("__delegate_to_agent")) return "delegate_to_agent"
 
   const freeform = inferFromFreeformName(trimmed)
   if (freeform) return freeform

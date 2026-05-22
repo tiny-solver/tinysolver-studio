@@ -2,39 +2,87 @@
 
 /**
  * Inline rendering of a delegated child sub-session under the parent's
- * `delegate_to_agent` ToolCallBlock. Default state is a single-row header
- * (agent type + status badge + last-message snippet); clicking the chevron
- * expands a scrollable preview of the child's turns.
+ * `delegate_to_agent` ToolCallBlock. Renders as a self-contained card —
+ * never falls through the generic tool-call shell — so users see "Agent
+ * delegating: task" instead of "mcp__codeg-delegate__delegate_to_agent: codex".
  *
- * Scope intentionally lean for Phase 8:
- *   * Only `text` and `thinking` content blocks are rendered in the
- *     preview body — tool_use / tool_result / image are summarized as a
- *     compact "tool" line. Phase 9 may upgrade to the full
- *     content-parts-renderer if the user-facing value justifies the size.
- *   * No virtualization — typical delegated sessions are small (≤ ~20
- *     turns); if a user delegates a long-running task, the parent block
- *     stays scrollable and the user can navigate to the child conversation
- *     directly.
- *   * `loading` is only shown for the first fetch. The binding's status
- *     transition (running → ok/err) does NOT trigger a re-fetch — callers
- *     who want the latest turns can collapse + re-expand.
+ * Layout:
+ *   * Header (always visible): AgentIcon + agent name · "delegated" label
+ *     + status badge + chevron.
+ *   * Task row: the prompt the parent sent to the child.
+ *   * Expanded body: scrollable preview of the child's turns. Fetched
+ *     lazily on first expand.
  */
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 
+import { AgentIcon } from "@/components/agent-icon"
 import { useDelegatedSubSession } from "@/hooks/use-delegated-sub-session"
 import {
-  AGENT_COLORS,
   AGENT_LABELS,
+  type AgentType,
   type ContentBlock,
   type MessageTurn,
 } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import type { ToolCallState } from "@/lib/adapters/ai-elements-adapter"
 
 interface Props {
   parentToolUseId: string
+  /** Raw JSON arguments the LLM sent to `delegate_to_agent`. Used to
+   *  surface the task and agent_type before the broker's
+   *  DelegationStarted event lands (or when binding never arrives — e.g.
+   *  the wider session was reloaded with an inline child still around). */
+  input?: string | null
+  output?: string | null
+  errorText?: string | null
+  state?: ToolCallState
+}
+
+type ParsedInput = {
+  agentType: AgentType | null
+  task: string | null
+  workingDir: string | null
+  timeoutSeconds: number | null
+}
+
+const KNOWN_AGENT_TYPES: ReadonlySet<string> = new Set<AgentType>([
+  "claude_code",
+  "codex",
+  "open_code",
+  "gemini",
+  "cline",
+  "open_claw",
+])
+
+function parseInput(raw: string | null | undefined): ParsedInput {
+  if (!raw || typeof raw !== "string") {
+    return {
+      agentType: null,
+      task: null,
+      workingDir: null,
+      timeoutSeconds: null,
+    }
+  }
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>
+    const at = typeof obj.agent_type === "string" ? obj.agent_type : null
+    return {
+      agentType: at && KNOWN_AGENT_TYPES.has(at) ? (at as AgentType) : null,
+      task: typeof obj.task === "string" ? obj.task : null,
+      workingDir: typeof obj.working_dir === "string" ? obj.working_dir : null,
+      timeoutSeconds:
+        typeof obj.timeout_seconds === "number" ? obj.timeout_seconds : null,
+    }
+  } catch {
+    return {
+      agentType: null,
+      task: null,
+      workingDir: null,
+      timeoutSeconds: null,
+    }
+  }
 }
 
 function blocksToText(blocks: ContentBlock[]): string {
@@ -45,10 +93,8 @@ function blocksToText(blocks: ContentBlock[]): string {
   return ""
 }
 
-function turnSummary(turns: MessageTurn[] | undefined): string {
+function lastAssistantText(turns: MessageTurn[] | undefined): string {
   if (!turns || turns.length === 0) return ""
-  // Walk back to find the most recent assistant turn with substantive text;
-  // fall back to the last turn's text if every assistant turn was tool-only.
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turns[i].role !== "assistant") continue
     const text = blocksToText(turns[i].blocks)
@@ -62,7 +108,13 @@ function truncate(s: string, max: number): string {
   return s.slice(0, max).trimEnd() + "…"
 }
 
-export function DelegatedSubThread({ parentToolUseId }: Props) {
+export function DelegatedSubThread({
+  parentToolUseId,
+  input,
+  output,
+  errorText,
+  state,
+}: Props) {
   const t = useTranslations("Folder.chat.delegation")
   const [expanded, setExpanded] = useState(false)
   const { binding, detail, loading, error } = useDelegatedSubSession(
@@ -70,49 +122,89 @@ export function DelegatedSubThread({ parentToolUseId }: Props) {
     { enabled: expanded }
   )
 
-  if (!binding) {
+  const parsed = useMemo(() => parseInput(input), [input])
+
+  // Prefer binding-derived state (live event stream) when present, fall
+  // back to the parent ToolCall's own state/output so we still draw a
+  // sensible card even if the delegation events never arrived.
+  const agentType: AgentType | null = binding?.agentType ?? parsed.agentType
+  const status: "running" | "ok" | "err" = (() => {
+    if (binding) return binding.status
+    if (state === "output-error" || errorText) return "err"
+    if (state === "output-available" && output) return "ok"
+    return "running"
+  })()
+  const errorCode = binding?.errorCode
+
+  const summary = useMemo(() => {
+    if (detail?.turns?.length)
+      return truncate(lastAssistantText(detail.turns), 200)
+    if (status === "err" && errorText) return truncate(errorText, 200)
+    if (status === "ok" && output) return truncate(output, 200)
+    return ""
+  }, [detail, status, errorText, output])
+
+  // Caller (ToolCallPart) already guarantees this is a `delegate_to_agent`
+  // tool, but a snapshot replay with an empty/unparseable input AND no live
+  // binding has no useful card to draw — fall through to the standard
+  // renderer instead of showing an "unknown sub-agent" stub. Placed AFTER
+  // all hooks so the hook order stays stable on re-render.
+  if (!binding && !parsed.agentType && !parsed.task) {
     return null
   }
-
-  const summary = truncate(turnSummary(detail?.turns), 120)
-  const turnCount = detail?.turns?.length ?? 0
 
   return (
     <div
       data-testid="delegated-sub-thread"
-      className="rounded-md border border-border bg-muted/30 text-xs"
+      className="rounded-lg border border-border bg-card shadow-sm"
     >
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+        className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors rounded-t-lg"
         aria-expanded={expanded}
       >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0" />
-        )}
-        <span
-          className={cn(
-            "inline-flex h-4 w-4 shrink-0 rounded-sm",
-            AGENT_COLORS[binding.agentType]
+        <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground">
+          {agentType ? (
+            <AgentIcon agentType={agentType} className="h-3.5 w-3.5" />
+          ) : (
+            <span className="h-2 w-2 rounded-sm bg-muted-foreground/60" />
           )}
-          aria-hidden
-        />
-        <span className="font-medium shrink-0">
-          {AGENT_LABELS[binding.agentType]}
         </span>
-        <StatusBadge status={binding.status} errorCode={binding.errorCode} />
-        {summary && (
-          <span className="ml-2 truncate text-muted-foreground">{summary}</span>
-        )}
-        {!summary && turnCount === 0 && binding.status === "running" && (
-          <span className="ml-2 text-muted-foreground">{t("inFlight")}</span>
-        )}
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">
+              {agentType ? AGENT_LABELS[agentType] : t("unknownAgent")}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              · {t("delegatedLabel")}
+            </span>
+            <StatusBadge status={status} errorCode={errorCode} />
+          </div>
+          {parsed.task && (
+            <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-2">
+              {parsed.task}
+            </div>
+          )}
+          {summary && (
+            <div className="text-xs text-foreground/80 whitespace-pre-wrap break-words line-clamp-2 pt-0.5">
+              {summary}
+            </div>
+          )}
+        </div>
+        <span className="mt-1 shrink-0 text-muted-foreground">
+          {expanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </span>
       </button>
       {expanded && (
-        <div className="border-t border-border px-3 py-2 max-h-96 overflow-auto">
+        <div className="border-t border-border px-3 py-2 max-h-96 overflow-auto text-xs">
+          {!binding && status === "running" && (
+            <div className="text-muted-foreground">{t("waitingForChild")}</div>
+          )}
           {loading && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -127,7 +219,7 @@ export function DelegatedSubThread({ parentToolUseId }: Props) {
           {!loading && !error && detail && (
             <SubThreadPreview turns={detail.turns} />
           )}
-          {!loading && !error && !detail && (
+          {!loading && !error && !detail && binding && (
             <div className="text-muted-foreground">{t("noDetail")}</div>
           )}
         </div>
@@ -143,13 +235,10 @@ function StatusBadge({
   status: "running" | "ok" | "err"
   errorCode?: string
 }) {
-  // next-intl's template-literal-typed t() blows up on dynamic keys, so
-  // every label is fetched with a static key string. The known error codes
-  // mirror the Rust `DelegationError` taxonomy.
   const t = useTranslations("Folder.chat.delegation.status")
   if (status === "running") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
         <Loader2 className="h-2.5 w-2.5 animate-spin" />
         {t("running")}
       </span>
@@ -157,14 +246,14 @@ function StatusBadge({
   }
   if (status === "ok") {
     return (
-      <span className="rounded-sm bg-emerald-500/15 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">
+      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
         {t("ok")}
       </span>
     )
   }
   return (
     <span
-      className="rounded-sm bg-destructive/15 px-1.5 py-0.5 text-destructive"
+      className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-medium text-destructive"
       title={errorCode ?? undefined}
     >
       <ErrorLabel code={errorCode} />
@@ -253,6 +342,5 @@ function BlockLine({ block }: { block: ContentBlock }) {
       </div>
     )
   }
-  // image / image_generation — silently omitted in preview
   return null
 }

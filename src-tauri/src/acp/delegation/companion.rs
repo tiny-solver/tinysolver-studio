@@ -140,18 +140,18 @@ async fn handle_tool_call(ctx: &CompanionContext, id: Value, params: Value) -> J
         return err(id, -32602, format!("unknown tool: {name}"));
     }
     let arguments = params.get("arguments").cloned().unwrap_or(Value::Null);
-    // MCP passes the LLM-issued tool_use_id under `_meta.tool_use_id`. Without
-    // it the broker can't bind the eventual child outcome back to the parent's
-    // ToolUse — reject loudly.
+    // MCP clients (Codex / Claude Code) generally do NOT populate
+    // `_meta.tool_use_id` when calling an MCP server. We still surface it
+    // when present (it's the most precise binding), but a missing one is
+    // expected — the broker falls back to claiming the most recent
+    // `delegate_to_agent` tool_call_id observed on the parent's ACP event
+    // stream.
     let tool_use_id = params
         .get("_meta")
         .and_then(|m| m.get("tool_use_id"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    if tool_use_id.is_empty() {
-        return err(id, -32602, "missing _meta.tool_use_id");
-    }
 
     let req = BrokerRequest {
         token: ctx.token.clone(),
@@ -271,7 +271,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_without_tool_use_id_rejected() {
+    async fn tools_call_without_tool_use_id_passes_through_to_broker() {
+        // MCP clients (Codex / Claude Code) generally don't fill
+        // `_meta.tool_use_id`, so the companion must NOT reject the call —
+        // it must forward to the broker, which falls back to claiming the
+        // most recent ACP-side tool_call_id. With a bogus socket path the
+        // round-trip fails downstream, surfacing as -32603 (NOT -32602).
         let line = r#"{
             "jsonrpc":"2.0",
             "id":4,
@@ -283,8 +288,8 @@ mod tests {
         }"#;
         let resp = handle_line(&ctx(), line).await.unwrap();
         let e = resp.error.unwrap();
-        assert_eq!(e.code, -32602);
-        assert!(e.message.contains("_meta.tool_use_id"));
+        assert_eq!(e.code, -32603);
+        assert!(e.message.contains("broker round-trip"));
     }
 
     #[test]

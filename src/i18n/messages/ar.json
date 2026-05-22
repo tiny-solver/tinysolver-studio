@@ -1857,6 +1857,9 @@
         "loading": "Loading sub-session…",
         "loadFailed": "Failed to load sub-session: {detail}",
         "noDetail": "No detail available yet.",
+        "delegatedLabel": "مفوّض",
+        "unknownAgent": "وكيل فرعي",
+        "waitingForChild": "في انتظار بدء الوكيل الفرعي…",
         "status": {
           "running": "running",
           "ok": "done",
