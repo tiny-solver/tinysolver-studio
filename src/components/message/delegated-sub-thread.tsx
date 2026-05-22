@@ -19,6 +19,7 @@ import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { AgentIcon } from "@/components/agent-icon"
+import { MessageResponse } from "@/components/ai-elements/message"
 import { useDelegatedSubSession } from "@/hooks/use-delegated-sub-session"
 import {
   AGENT_LABELS,
@@ -85,27 +86,50 @@ function parseInput(raw: string | null | undefined): ParsedInput {
   }
 }
 
-function blocksToText(blocks: ContentBlock[]): string {
-  for (const b of blocks) {
-    if (b.type === "text" && b.text.trim().length > 0) return b.text
-    if (b.type === "thinking" && b.text.trim().length > 0) return b.text
+/**
+ * Best-effort extraction of human-readable result text from the
+ * `delegate_to_agent` MCP tool's output. The broker's wire shape is
+ *   { kind: "ok", text: "...", child_conversation_id, ... }
+ *   { kind: "err", code: "...", message: "..." }
+ * but the surrounding tool-call layer may JSON-stringify it OR pass it
+ * through verbatim. Try the structured shape first; fall back to the
+ * raw string for plain-text outputs.
+ */
+function parseDelegationOutcome(raw: string | null | undefined): {
+  text: string
+  isError: boolean
+} | null {
+  if (!raw || typeof raw !== "string") return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  try {
+    const v = JSON.parse(trimmed) as unknown
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const obj = v as Record<string, unknown>
+      const kind = typeof obj.kind === "string" ? obj.kind : null
+      if (kind === "ok") {
+        const text = typeof obj.text === "string" ? obj.text : ""
+        return { text, isError: false }
+      }
+      if (kind === "err") {
+        const message = typeof obj.message === "string" ? obj.message : ""
+        const code = typeof obj.code === "string" ? obj.code : ""
+        return {
+          text: message || code || "Delegation failed.",
+          isError: true,
+        }
+      }
+      // Other JSON shapes — pretty-print so we don't surface raw braces.
+      return {
+        text: "```json\n" + JSON.stringify(v, null, 2) + "\n```",
+        isError: false,
+      }
+    }
+    // JSON-parsed primitive — render directly.
+    return { text: String(v), isError: false }
+  } catch {
+    return { text: trimmed, isError: false }
   }
-  return ""
-}
-
-function lastAssistantText(turns: MessageTurn[] | undefined): string {
-  if (!turns || turns.length === 0) return ""
-  for (let i = turns.length - 1; i >= 0; i--) {
-    if (turns[i].role !== "assistant") continue
-    const text = blocksToText(turns[i].blocks)
-    if (text) return text
-  }
-  return blocksToText(turns[turns.length - 1].blocks)
-}
-
-function truncate(s: string, max: number): string {
-  if (s.length <= max) return s
-  return s.slice(0, max).trimEnd() + "…"
 }
 
 export function DelegatedSubThread({
@@ -136,13 +160,16 @@ export function DelegatedSubThread({
   })()
   const errorCode = binding?.errorCode
 
-  const summary = useMemo(() => {
-    if (detail?.turns?.length)
-      return truncate(lastAssistantText(detail.turns), 200)
-    if (status === "err" && errorText) return truncate(errorText, 200)
-    if (status === "ok" && output) return truncate(output, 200)
-    return ""
-  }, [detail, status, errorText, output])
+  // Parse the broker's structured outcome out of the raw tool output so
+  // the expanded body can render markdown text instead of `{"kind":"ok",
+  // "text":"..."}` JSON. Falls back to errorText when the tool errored.
+  const outcome = useMemo(() => {
+    if (errorText) {
+      const parsed = parseDelegationOutcome(errorText)
+      if (parsed) return { ...parsed, isError: true }
+    }
+    return parseDelegationOutcome(output)
+  }, [output, errorText])
 
   // Caller (ToolCallPart) already guarantees this is a `delegate_to_agent`
   // tool, but a snapshot replay with an empty/unparseable input AND no live
@@ -156,7 +183,7 @@ export function DelegatedSubThread({
   return (
     <div
       data-testid="delegated-sub-thread"
-      className="rounded-lg border border-border bg-card shadow-sm"
+      className="rounded-lg border border-border bg-card"
     >
       <button
         type="button"
@@ -186,11 +213,6 @@ export function DelegatedSubThread({
               {parsed.task}
             </div>
           )}
-          {summary && (
-            <div className="text-xs text-foreground/80 whitespace-pre-wrap break-words line-clamp-2 pt-0.5">
-              {summary}
-            </div>
-          )}
         </div>
         <span className="mt-1 shrink-0 text-muted-foreground">
           {expanded ? (
@@ -201,7 +223,7 @@ export function DelegatedSubThread({
         </span>
       </button>
       {expanded && (
-        <div className="border-t border-border px-3 py-2 max-h-96 overflow-auto text-xs">
+        <div className="border-t border-border px-3 py-3 max-h-96 overflow-auto text-xs space-y-3">
           {!binding && status === "running" && (
             <div className="text-muted-foreground">{t("waitingForChild")}</div>
           )}
@@ -216,14 +238,50 @@ export function DelegatedSubThread({
               {t("loadFailed", { detail: error })}
             </div>
           )}
-          {!loading && !error && detail && (
+          {!loading && !error && detail && detail.turns.length > 0 && (
             <SubThreadPreview turns={detail.turns} />
           )}
-          {!loading && !error && !detail && binding && (
-            <div className="text-muted-foreground">{t("noDetail")}</div>
+          {outcome && outcome.text && (
+            <DelegationOutcomeBlock
+              text={outcome.text}
+              isError={outcome.isError}
+            />
           )}
+          {!loading &&
+            !error &&
+            !outcome &&
+            (!detail || detail.turns.length === 0) &&
+            binding && (
+              <div className="text-muted-foreground">{t("noDetail")}</div>
+            )}
         </div>
       )}
+    </div>
+  )
+}
+
+function DelegationOutcomeBlock({
+  text,
+  isError,
+}: {
+  text: string
+  isError: boolean
+}) {
+  return (
+    <div
+      className={
+        isError
+          ? "rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2"
+          : "rounded-md border border-border bg-muted/30 px-3 py-2"
+      }
+    >
+      <div
+        className={
+          'prose prose-sm dark:prose-invert max-w-none break-words [&_ul]:list-inside [&_ol]:list-inside [&_[data-streamdown="code-block-body"]]:max-h-96 [&_[data-streamdown="code-block-body"]]:overflow-auto'
+        }
+      >
+        <MessageResponse>{text}</MessageResponse>
+      </div>
     </div>
   )
 }
@@ -317,11 +375,15 @@ function TurnRow({ turn }: { turn: MessageTurn }) {
 
 function BlockLine({ block }: { block: ContentBlock }) {
   if (block.type === "text") {
+    if (block.text.trim().length === 0) return null
     return (
-      <div className="whitespace-pre-wrap text-foreground/90">{block.text}</div>
+      <div className='break-words text-foreground/90 prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside [&_[data-streamdown="code-block-body"]]:max-h-96 [&_[data-streamdown="code-block-body"]]:overflow-auto'>
+        <MessageResponse>{block.text}</MessageResponse>
+      </div>
     )
   }
   if (block.type === "thinking") {
+    if (block.text.trim().length === 0) return null
     return (
       <div className="whitespace-pre-wrap text-muted-foreground italic">
         {block.text}

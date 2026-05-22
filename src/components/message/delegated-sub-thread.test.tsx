@@ -10,6 +10,33 @@ vi.mock("@/hooks/use-delegated-sub-session", () => ({
   useDelegatedSubSession: vi.fn(),
 }))
 
+// MessageResponse pulls in workspace context + active folder hooks that
+// aren't available in this test's shallow render. We only care that the
+// component shows markdown text — render an h1 for fenced headers + the
+// raw rest, no streaming, no link-safety. Anything richer is covered by
+// MessageResponse's own tests.
+vi.mock("@/components/ai-elements/message", () => ({
+  MessageResponse: ({ children }: { children: string }) => {
+    const text = typeof children === "string" ? children : String(children)
+    const lines = text.split("\n").filter((l) => l.trim().length > 0)
+    return (
+      <div data-testid="markdown-stub">
+        {lines.map((line, i) => {
+          const heading = line.match(/^(#+)\s+(.*)$/)
+          if (heading) {
+            const level = heading[1].length
+            const body = heading[2]
+            if (level === 1) return <h1 key={i}>{body}</h1>
+            if (level === 2) return <h2 key={i}>{body}</h2>
+            return <h3 key={i}>{body}</h3>
+          }
+          return <p key={i}>{line}</p>
+        })}
+      </div>
+    )
+  },
+}))
+
 const { useDelegatedSubSession } =
   await import("@/hooks/use-delegated-sub-session")
 const mockedHook = vi.mocked(useDelegatedSubSession)
@@ -93,7 +120,60 @@ describe("DelegatedSubThread", () => {
     expect(screen.getByText("timeout")).toBeInTheDocument()
   })
 
-  it("toggles the body open and shows the last assistant text as summary", () => {
+  it("collapsed card does NOT render the outcome — only the toggle reveals it", () => {
+    mockedHook.mockReturnValue({
+      binding: bindingOf({ status: "ok" }),
+      detail: null,
+      loading: false,
+      error: null,
+    })
+    const output = JSON.stringify({
+      kind: "ok",
+      text: "# Result\n\nAll good.",
+      child_conversation_id: 99,
+    })
+    renderWithIntl(
+      <DelegatedSubThread
+        parentToolUseId="pt-1"
+        output={output}
+        state="output-available"
+      />
+    )
+    expect(screen.queryByText(/All good\./)).not.toBeInTheDocument()
+    // Markdown header sticks an <h1> inside the body — find via heading role.
+    fireEvent.click(screen.getByRole("button"))
+    expect(screen.getByText(/All good\./)).toBeInTheDocument()
+    // Heading was extracted, not rendered as literal "# Result".
+    expect(screen.queryByText(/^# Result/)).not.toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Result"
+    )
+  })
+
+  it("renders an error outcome from the broker as a destructive block", () => {
+    mockedHook.mockReturnValue({
+      binding: bindingOf({ status: "err", errorCode: "timeout" }),
+      detail: null,
+      loading: false,
+      error: null,
+    })
+    const output = JSON.stringify({
+      kind: "err",
+      code: "timeout",
+      message: "Child timed out after 30s",
+    })
+    renderWithIntl(
+      <DelegatedSubThread
+        parentToolUseId="pt-1"
+        output={output}
+        state="output-error"
+      />
+    )
+    fireEvent.click(screen.getByRole("button"))
+    expect(screen.getByText(/Child timed out after 30s/)).toBeInTheDocument()
+  })
+
+  it("renders sub-session turns with markdown when detail is available", () => {
     mockedHook.mockReturnValue({
       binding: bindingOf({ status: "ok" }),
       detail: {
@@ -129,12 +209,11 @@ describe("DelegatedSubThread", () => {
       error: null,
     })
     renderWithIntl(<DelegatedSubThread parentToolUseId="pt-1" />)
-    // Summary line in the header shows the assistant's last text.
-    expect(screen.getByText("delegated answer body")).toBeInTheDocument()
-    const toggle = screen.getByRole("button")
-    fireEvent.click(toggle)
-    // Once expanded the sub-thread renders the role label.
+    // Collapsed card no longer surfaces the assistant's text in the header.
+    expect(screen.queryByText("delegated answer body")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button"))
     expect(screen.getByText("Assistant")).toBeInTheDocument()
     expect(screen.getByText("User")).toBeInTheDocument()
+    expect(screen.getByText("delegated answer body")).toBeInTheDocument()
   })
 })

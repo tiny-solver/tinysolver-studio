@@ -25,12 +25,19 @@ export const TOOL_KIND_ORDER: ToolKindLabel[] = [
 
 /**
  * Identify agent-like tool calls that own their own card-style rendering
- * (e.g. AgentToolCallPart). These should not be folded into a tool-group;
- * they each break the run and render standalone.
+ * (e.g. AgentToolCallPart, DelegatedSubThread). These should not be folded
+ * into a tool-group; they each break the run and render standalone.
+ *
+ * The delegation MCP tool comes through with a varying server-prefix
+ * (`mcp__<server>__delegate_to_agent`), so we match the suffix to catch
+ * any binding the user configures.
  */
 export function isAgentLikeToolName(toolName: string): boolean {
   const name = toolName.toLowerCase().trim()
-  return name === "agent"
+  if (name === "agent") return true
+  if (name === "delegate_to_agent") return true
+  if (name.endsWith("__delegate_to_agent")) return true
+  return false
 }
 
 export function classifyToolKind(toolName: string): ToolKindLabel {
