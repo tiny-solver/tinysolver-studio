@@ -1930,6 +1930,7 @@
           "search": "{count} 件を検索",
           "command": "{count} 件のコマンドを実行",
           "read": "ファイルを {count} 回読み取り",
+          "memory": "{count} 件の記憶を呼び出し",
           "edit": "ファイルを {count} 回編集",
           "fetch": "{count} 件のリソースを取得",
           "think": "{count} 回思考",

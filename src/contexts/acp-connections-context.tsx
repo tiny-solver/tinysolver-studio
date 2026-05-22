@@ -2269,6 +2269,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
                 title: block.info.title,
                 kind: block.info.kind,
                 rawInput: block.info.raw_input,
+                meta: block.info.meta,
               })
               if (normalized === "question") {
                 const questionText = extractQuestionText(block.info.raw_input)

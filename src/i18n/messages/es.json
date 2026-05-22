@@ -1930,6 +1930,7 @@
           "search": "{count, plural, one {Exploró # búsqueda} other {Exploró # búsquedas}}",
           "command": "{count, plural, one {Ejecutó # comando} other {Ejecutó # comandos}}",
           "read": "{count, plural, one {Leyó archivos # vez} other {Leyó archivos # veces}}",
+          "memory": "{count, plural, one {Recordó # memoria} other {Recordó # memorias}}",
           "edit": "{count, plural, one {Editó archivos # vez} other {Editó archivos # veces}}",
           "fetch": "{count, plural, one {Recuperó # recurso} other {Recuperó # recursos}}",
           "think": "{count, plural, one {Pensó # vez} other {Pensó # veces}}",
