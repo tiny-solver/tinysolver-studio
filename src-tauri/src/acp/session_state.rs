@@ -57,6 +57,22 @@ pub struct ToolCallState {
     /// ACP extensibility metadata. Used by frontend Phase 1 parent
     /// extraction. `None` if the agent didn't supply it. Same partial-update
     /// preservation semantic as `locations`.
+    ///
+    /// Convention used by codeg's multi-agent delegation (the `delegate_to_agent`
+    /// MCP tool) — `DelegationBroker` writes the following object under
+    /// `meta["codeg.delegation"]` on the parent's active tool call:
+    ///
+    /// ```jsonc
+    /// {
+    ///   "child_connection_id": "<uuid>",
+    ///   "child_conversation_id": <i32>,
+    ///   "status": "pending" | "running" | "completed" | "failed"
+    /// }
+    /// ```
+    ///
+    /// The frontend reads this to render "Delegating to <agent>…" on the live
+    /// tool-call, and to anchor the inline `<DelegatedSubThread>` to the
+    /// correct child conversation.
     pub meta: Option<serde_json::Value>,
     /// Latest images attached to this tool call (e.g. codex-acp v0.14+
     /// image generation). Replace-on-update semantics matching `content`:
@@ -430,6 +446,7 @@ impl SessionState {
             AcpEvent::ConversationLinked {
                 conversation_id,
                 folder_id,
+                ..
             } => {
                 self.conversation_id = Some(*conversation_id);
                 self.folder_id = Some(*folder_id);
@@ -464,8 +481,15 @@ impl SessionState {
             }
             AcpEvent::ClaudeSdkMessage { .. }
             | AcpEvent::Error { .. }
-            | AcpEvent::SessionLoadFailed { .. } => {
+            | AcpEvent::SessionLoadFailed { .. }
+            | AcpEvent::DelegationStarted { .. }
+            | AcpEvent::DelegationCompleted { .. } => {
                 // 这些事件不直接修改 SessionState 的可见字段。
+                // Delegation events: parent/child bookkeeping happens in
+                // DelegationBroker; SessionState only mirrors the in-flight
+                // `delegate_to_agent` tool call through `ToolCallState.meta`
+                // (key `codeg.delegation`), updated by the ToolCall /
+                // ToolCallUpdate handlers above.
             }
         }
         self.last_activity_at = Utc::now();
@@ -789,6 +813,8 @@ mod tests {
         s.apply_event(&AcpEvent::ConversationLinked {
             conversation_id: 7,
             folder_id: 3,
+            parent_conversation_id: None,
+            parent_tool_use_id: None,
         });
         let before = s.to_snapshot();
         let before_status = s.status.clone();
@@ -828,6 +854,8 @@ mod tests {
         s.apply_event(&AcpEvent::ConversationLinked {
             conversation_id: 42,
             folder_id: 7,
+            parent_conversation_id: None,
+            parent_tool_use_id: None,
         });
         assert_eq!(s.conversation_id, Some(42));
         assert_eq!(s.folder_id, Some(7));

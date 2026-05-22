@@ -953,6 +953,8 @@ mod tests {
         assert!(is_lifecycle_relevant(&AcpEvent::ConversationLinked {
             conversation_id: 1,
             folder_id: 1,
+            parent_conversation_id: None,
+            parent_tool_use_id: None,
         }));
         assert!(is_lifecycle_relevant(&AcpEvent::StatusChanged {
             status: ConnectionStatus::Disconnected,

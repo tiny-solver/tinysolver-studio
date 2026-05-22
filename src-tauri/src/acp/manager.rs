@@ -529,6 +529,8 @@ impl ConnectionManager {
                         AcpEvent::ConversationLinked {
                             conversation_id: caller_conv_id,
                             folder_id: caller_folder_id,
+                            parent_conversation_id: None,
+                            parent_tool_use_id: None,
                         },
                     )
                     .await;
@@ -553,6 +555,8 @@ impl ConnectionManager {
                         AcpEvent::ConversationLinked {
                             conversation_id: row.id,
                             folder_id,
+                            parent_conversation_id: None,
+                            parent_tool_use_id: None,
                         },
                     )
                     .await;
@@ -1262,6 +1266,7 @@ mod tests {
             AcpEvent::ConversationLinked {
                 conversation_id,
                 folder_id: emitted_folder,
+                ..
             } => {
                 assert_eq!(conversation_id, pre_existing.id);
                 assert_eq!(emitted_folder, folder_id);
@@ -1401,6 +1406,7 @@ mod tests {
             AcpEvent::ConversationLinked {
                 conversation_id,
                 folder_id: emitted_folder,
+                ..
             } => {
                 assert_eq!(emitted_folder, folder_id);
                 conversation_id
