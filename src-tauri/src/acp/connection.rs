@@ -846,27 +846,84 @@ pub struct DelegationInjection {
     pub socket_path: PathBuf,
 }
 
-/// Locate the `codeg-mcp` companion binary next to the running executable.
-/// Falls back to the colocated path even when the file doesn't exist so the
-/// spawn failure surfaces inside the agent process (with a clearer error
-/// than a missing-path return here).
-fn locate_codeg_mcp_binary() -> PathBuf {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf));
+/// Locate the `codeg-mcp` companion binary across the supported deployment
+/// shapes:
+///
+/// 1. `CODEG_MCP_BIN` env override — explicit absolute path. Lets dev shells,
+///    custom installs, and integration tests point at a freshly compiled
+///    binary without touching the install layout.
+/// 2. Sibling of the running executable — the production layout for every
+///    shipping target. Tauri sidecar (`Contents/MacOS/codeg-mcp` on macOS,
+///    next to `codeg.exe` on Windows, next to the unix binary on Linux
+///    deb/rpm), `install.sh`/`install.ps1` (drops `codeg-mcp` next to
+///    `codeg-server`), Docker image (`/usr/local/bin/codeg-mcp` next to
+///    `codeg-server`), and `cargo build` dev output
+///    (`target/<profile>/codeg-mcp`).
+/// 3. `PATH` lookup — last-resort for atypical layouts where ops moved the
+///    two binaries apart but kept both reachable on `PATH`.
+///
+/// Returns `None` when no candidate is an executable file. Callers MUST
+/// treat `None` as "delegation is unavailable at this site" and skip
+/// injection — never paper over with a phantom path, because that fails
+/// inside the agent's MCP spawn loop and may take the entire ACP session
+/// down on stricter agents.
+fn locate_codeg_mcp_binary() -> Option<PathBuf> {
     let filename = if cfg!(windows) {
         "codeg-mcp.exe"
     } else {
         "codeg-mcp"
     };
-    exe_dir
-        .map(|d| d.join(filename))
-        .unwrap_or_else(|| PathBuf::from(filename))
+
+    if let Some(raw) = std::env::var_os("CODEG_MCP_BIN") {
+        let candidate = PathBuf::from(raw);
+        if is_executable_file(&candidate) {
+            return Some(candidate);
+        }
+    }
+
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        let candidate = dir.join(filename);
+        if is_executable_file(&candidate) {
+            return Some(candidate);
+        }
+    }
+
+    which::which(filename).ok().filter(|p| is_executable_file(p))
 }
 
-/// Append the built-in `codeg-delegate` MCP entry if delegation is enabled.
-/// Returns the per-launch token that was registered (or `None` if injection
-/// was skipped) so the caller can revoke it on connection teardown.
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if meta.permissions().mode() & 0o111 == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Append the built-in `codeg-delegate` MCP entry if delegation is enabled
+/// AND the companion binary is present on disk. Returns the per-launch token
+/// that was registered, or `None` when injection was skipped (disabled by
+/// config, or binary missing).
+///
+/// When the binary is missing we log a single-line warning and skip
+/// injection rather than register the token + emit a phantom McpServerStdio
+/// pointing at a non-existent path. Phantom injection would have made every
+/// new ACP session ship a guaranteed-to-fail MCP server entry: stricter
+/// agents (Claude Code) refuse the whole session; lax agents lose the
+/// delegate tool silently. Skipping leaves the agent fully functional minus
+/// `delegate_to_agent`, which is the right degradation when codeg-mcp didn't
+/// make it into the install.
 async fn inject_codeg_delegate_mcp(
     servers: &mut Vec<McpServer>,
     injection: &DelegationInjection,
@@ -877,6 +934,14 @@ async fn inject_codeg_delegate_mcp(
     if !cfg.enabled {
         return None;
     }
+    let Some(binary_path) = locate_codeg_mcp_binary() else {
+        eprintln!(
+            "[delegation][WARN] codeg-mcp companion binary not found (checked CODEG_MCP_BIN, \
+             exe sibling, and PATH); skipping delegate_to_agent tool injection for \
+             connection {parent_connection_id}. Reinstall codeg or set CODEG_MCP_BIN to fix."
+        );
+        return None;
+    };
     let token = uuid::Uuid::new_v4().to_string();
     injection
         .tokens
@@ -888,7 +953,7 @@ async fn inject_codeg_delegate_mcp(
             },
         )
         .await;
-    let mut server = McpServerStdio::new("codeg-delegate", locate_codeg_mcp_binary());
+    let mut server = McpServerStdio::new("codeg-delegate", binary_path);
     server = server.args(vec![
         "--parent-connection-id".to_string(),
         parent_connection_id.to_string(),
