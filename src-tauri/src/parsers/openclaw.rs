@@ -1016,6 +1016,7 @@ fn extract_assistant_content(value: &serde_json::Value) -> Vec<ContentBlock> {
                         tool_use_id,
                         tool_name,
                         input_preview,
+                        meta: None,
                     });
                 }
                 _ => {}

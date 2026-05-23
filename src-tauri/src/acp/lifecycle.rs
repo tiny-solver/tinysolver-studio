@@ -48,12 +48,18 @@ const WORKER_QUEUE_CAPACITY: usize = 64;
 /// uninteresting events) means ContentDelta floods can't crowd out a
 /// TurnComplete in the worker mailbox: only events that may write the DB
 /// or update the per-connection cache enter the queue.
+///
+/// `ToolCall` is in the accept list because the worker's ToolCall arm
+/// captures `delegate_to_agent` invocations for the broker's pending
+/// tool_call_id queue. ToolCall fires a handful of times per turn (not
+/// per-token like ContentDelta), so the queue pressure is bounded.
 fn is_lifecycle_relevant(event: &AcpEvent) -> bool {
     matches!(
         event,
         AcpEvent::SessionStarted { .. }
             | AcpEvent::TurnComplete { .. }
             | AcpEvent::ConversationLinked { .. }
+            | AcpEvent::ToolCall { .. }
             | AcpEvent::StatusChanged {
                 status: ConnectionStatus::Disconnected
             }
@@ -1193,6 +1199,21 @@ mod tests {
             folder_id: 1,
             parent_conversation_id: None,
             parent_tool_use_id: None,
+        }));
+        // ToolCall must enter the queue so the delegation broker's
+        // pending tool_call_id capture (see `handle_event`'s ToolCall
+        // arm) actually runs.
+        assert!(is_lifecycle_relevant(&AcpEvent::ToolCall {
+            tool_call_id: "tc-1".into(),
+            title: "delegate_to_agent".into(),
+            kind: "other".into(),
+            status: "pending".into(),
+            content: None,
+            raw_input: None,
+            raw_output: None,
+            locations: None,
+            meta: None,
+            images: None,
         }));
         assert!(is_lifecycle_relevant(&AcpEvent::StatusChanged {
             status: ConnectionStatus::Disconnected,

@@ -2312,6 +2312,7 @@ const ToolCallPart = memo(function ToolCallPart({
         output={part.output ?? null}
         errorText={part.errorText ?? null}
         state={part.state}
+        meta={part.meta ?? null}
       />
     )
   }

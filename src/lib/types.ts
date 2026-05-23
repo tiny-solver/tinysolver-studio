@@ -135,6 +135,14 @@ export type ContentBlock =
       tool_use_id: string | null
       tool_name: string
       input_preview: string | null
+      /**
+       * ACP extensibility metadata for this tool call. Opaque pass-through
+       * — both the live snapshot (`ToolCallState.meta`) and the persisted
+       * message-row variant carry the same shape. Delegation writes
+       * `meta["codeg.delegation"] = { status, child_connection_id,
+       * child_conversation_id, error_code? }` here.
+       */
+      meta?: Record<string, unknown> | null
     }
   | {
       type: "tool_result"

@@ -14,20 +14,33 @@
  *     lazily on first expand.
  */
 
-import { useMemo, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useSyncExternalStore,
+} from "react"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { AgentIcon } from "@/components/agent-icon"
 import { MessageResponse } from "@/components/ai-elements/message"
 import { useDelegatedSubSession } from "@/hooks/use-delegated-sub-session"
-import {
-  AGENT_LABELS,
-  type AgentType,
-  type ContentBlock,
-  type MessageTurn,
-} from "@/lib/types"
+import { AGENT_LABELS, type AgentType } from "@/lib/types"
 import type { ToolCallState } from "@/lib/adapters/ai-elements-adapter"
+import {
+  type DelegationStatus,
+  useDelegation,
+} from "@/contexts/delegation-context"
+import {
+  useAcpActions,
+  useConnectionStore,
+  type ConnectionState,
+  type PendingPermission as ChildPendingPermission,
+} from "@/contexts/acp-connections-context"
+import { PermissionDialog } from "@/components/chat/permission-dialog"
 
 interface Props {
   parentToolUseId: string
@@ -39,6 +52,15 @@ interface Props {
   output?: string | null
   errorText?: string | null
   state?: ToolCallState
+  /**
+   * ACP extensibility metadata on this tool call. Read here as a
+   * tertiary fallback after the live `DelegationContext` binding when
+   * the parent UI re-mounted on a page refresh and the live
+   * `delegation_started` event was already consumed (lost): the
+   * snapshot's `ToolCallState.meta["codeg.delegation"]` carries enough
+   * to re-bind the card to the child conversation.
+   */
+  meta?: Record<string, unknown> | null
 }
 
 type ParsedInput = {
@@ -56,6 +78,86 @@ const KNOWN_AGENT_TYPES: ReadonlySet<string> = new Set<AgentType>([
   "cline",
   "open_claw",
 ])
+
+/**
+ * Subscribe to the child connection's `ConnectionState` (live message,
+ * pending permission, etc.) from the shared connections store. Returns
+ * `undefined` while no synthetic entry exists yet — caller falls back to
+ * the binding / persisted-turns view. Re-renders on every state change
+ * via `useSyncExternalStore`.
+ */
+function useDelegationChildLive(
+  childConnectionId: string | null
+): ConnectionState | undefined {
+  const store = useConnectionStore()
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      if (!childConnectionId) return () => {}
+      return store.subscribeKey(childConnectionId, cb)
+    },
+    [store, childConnectionId]
+  )
+  const getSnapshot = useCallback(
+    () =>
+      childConnectionId ? store.getConnection(childConnectionId) : undefined,
+    [store, childConnectionId]
+  )
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+type ParsedMeta = {
+  status: DelegationStatus
+  childConnectionId: string | null
+  childConversationId: number | null
+  errorCode: string | null
+}
+
+/**
+ * Extract delegation state from a `ToolCallState.meta` value. Returns
+ * `null` when the meta doesn't carry the `codeg.delegation` sub-object —
+ * caller falls back to the live binding / `parseInput` chain.
+ *
+ * The shape mirrors what the broker writes via `DelegationMetaWriter`:
+ *   `{ "codeg.delegation": { status, child_connection_id?,
+ *     child_conversation_id?, error_code? } }`
+ */
+function parseDelegationMeta(
+  meta: Record<string, unknown> | null | undefined
+): ParsedMeta | null {
+  if (!meta || typeof meta !== "object") return null
+  const inner = meta["codeg.delegation"]
+  if (!inner || typeof inner !== "object" || Array.isArray(inner)) return null
+  const obj = inner as Record<string, unknown>
+  const rawStatus = obj["status"]
+  let status: DelegationStatus
+  switch (rawStatus) {
+    case "running":
+    case "pending":
+      status = "running"
+      break
+    case "completed":
+    case "ok":
+      status = "ok"
+      break
+    case "failed":
+    case "err":
+      status = "err"
+      break
+    default:
+      return null
+  }
+  const child_connection_id = obj["child_connection_id"]
+  const child_conversation_id = obj["child_conversation_id"]
+  const error_code = obj["error_code"]
+  return {
+    status,
+    childConnectionId:
+      typeof child_connection_id === "string" ? child_connection_id : null,
+    childConversationId:
+      typeof child_conversation_id === "number" ? child_conversation_id : null,
+    errorCode: typeof error_code === "string" ? error_code : null,
+  }
+}
 
 function parseInput(raw: string | null | undefined): ParsedInput {
   if (!raw || typeof raw !== "string") {
@@ -138,27 +240,118 @@ export function DelegatedSubThread({
   output,
   errorText,
   state,
+  meta,
 }: Props) {
   const t = useTranslations("Folder.chat.delegation")
-  const [expanded, setExpanded] = useState(false)
-  const { binding, detail, loading, error } = useDelegatedSubSession(
-    parentToolUseId,
-    { enabled: expanded }
+  // expanded is driven by user click OR by the arrival of a child
+  // pending permission. useReducer (not useState) so the in-effect
+  // auto-expand dispatch on first permission appearance doesn't trip
+  // the `react-hooks/set-state-in-effect` lint rule — same pattern as
+  // `use-delegated-sub-session.ts`.
+  const [expanded, dispatchExpand] = useReducer(
+    (prev: boolean, action: "toggle" | "force-open"): boolean => {
+      if (action === "force-open") return true
+      return !prev
+    },
+    false
+  )
+  const parsed = useMemo(() => parseInput(input), [input])
+  const parsedMeta = useMemo(() => parseDelegationMeta(meta), [meta])
+  const { findByParentToolUseId } = useDelegation()
+  const { attachDelegationChild, respondPermission } = useAcpActions()
+  // `enabled: false` — we no longer surface the child conversation's
+  // intermediate turns in the parent UI (only the broker's final outcome
+  // text), so there's no reason to fetch the persisted detail. The hook
+  // is still useful for the `binding` it returns (agent type, status,
+  // child ids derived from the live `DelegationContext` map).
+  const { binding } = useDelegatedSubSession(parentToolUseId, {
+    enabled: false,
+  })
+
+  // Live view of the child connection's streaming state. Drives the
+  // expanded body's "streaming" branch — text/thinking/tool-call deltas
+  // reach this card the moment they arrive on the child's ACP stream,
+  // not just after the broker resolves.
+  const childConnectionId =
+    binding?.childConnectionId ?? parsedMeta?.childConnectionId ?? null
+  const childLive = useDelegationChildLive(childConnectionId)
+  const childPendingPermission = childLive?.pendingPermission ?? null
+
+  // Auto-expand the card the *first* time the child raises a permission
+  // request — the user has to act on it. Tracked via a ref so a user
+  // who deliberately collapses afterwards isn't forced back open on
+  // every reducer notify (the request_id stays the same across
+  // re-renders).
+  const lastSeenPermissionIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const reqId = childPendingPermission?.request_id ?? null
+    if (reqId && reqId !== lastSeenPermissionIdRef.current) {
+      lastSeenPermissionIdRef.current = reqId
+      dispatchExpand("force-open")
+    }
+    if (!reqId) {
+      lastSeenPermissionIdRef.current = null
+    }
+  }, [childPendingPermission])
+
+  // Inline approve/deny — dispatch via the child connection's id, not
+  // the parent's. PermissionDialog already routes via the connectionId
+  // passed at construction time; for delegation the only consumer is
+  // this card, so wiring the child's id directly here is sufficient.
+  const onRespondPermission = useCallback(
+    (requestId: string, optionId: string) => {
+      if (!childConnectionId) return
+      void respondPermission(childConnectionId, requestId, optionId)
+    },
+    [childConnectionId, respondPermission]
   )
 
-  const parsed = useMemo(() => parseInput(input), [input])
+  // Snapshot-recovery seed: when the parent's tool-call snapshot carries
+  // `meta["codeg.delegation"] = { status: "running", child_connection_id }`
+  // but the live `delegation_started` event has already been consumed
+  // (e.g. page refresh mid-delegation), pull the child connection into
+  // the reducer here so its streaming text reaches this card. Idempotent
+  // because `attachDelegationChild` early-returns when the synthetic
+  // entry already exists.
+  useEffect(() => {
+    const liveBinding = findByParentToolUseId(parentToolUseId)
+    if (!parsedMeta) return
+    if (parsedMeta.status !== "running") return
+    if (!parsedMeta.childConnectionId) return
+    if (liveBinding) return
+    if (!parsed.agentType) return
+    attachDelegationChild({
+      connectionId: parsedMeta.childConnectionId,
+      // We don't know the parent's connection_id at this layer (the
+      // ToolCallPart doesn't carry it). Pass an empty string — the
+      // synthetic ConnectionState only uses parentConnectionId for
+      // diagnostic / cascade-cancel hooks; the routing of incoming
+      // events is by child connection_id alone.
+      parentConnectionId: "",
+      parentToolUseId,
+      agentType: parsed.agentType,
+    })
+  }, [
+    attachDelegationChild,
+    findByParentToolUseId,
+    parentToolUseId,
+    parsed.agentType,
+    parsedMeta,
+  ])
 
-  // Prefer binding-derived state (live event stream) when present, fall
-  // back to the parent ToolCall's own state/output so we still draw a
-  // sensible card even if the delegation events never arrived.
+  // Prefer binding-derived state (live event stream) when present, then
+  // the persisted `meta["codeg.delegation"]` from the snapshot (page
+  // refresh recovery), then the parent ToolCall's own state/output as a
+  // last resort.
   const agentType: AgentType | null = binding?.agentType ?? parsed.agentType
   const status: "running" | "ok" | "err" = (() => {
     if (binding) return binding.status
+    if (parsedMeta) return parsedMeta.status
     if (state === "output-error" || errorText) return "err"
     if (state === "output-available") return "ok"
     return "running"
   })()
-  const errorCode = binding?.errorCode
+  const errorCode = binding?.errorCode ?? parsedMeta?.errorCode ?? undefined
 
   // Parse the broker's structured outcome out of the raw tool output so
   // the expanded body can render markdown text instead of `{"kind":"ok",
@@ -170,6 +363,26 @@ export function DelegatedSubThread({
     }
     return parseDelegationOutcome(output)
   }, [output, errorText])
+
+  // Real-time view of the child's assistant text — *all* text segments
+  // concatenated in arrival order, with no separator. We deliberately
+  // strip:
+  //   - thinking blocks (internal reasoning, not the result)
+  //   - tool_call / plan blocks (intermediate steps)
+  // but we keep every text segment so the user sees the child's visible
+  // output grow append-only. Each new segment is appended directly to
+  // whatever has accumulated so far; later segments NEVER overwrite
+  // earlier ones. Once the broker's outcome lands on `output`,
+  // `outcome.text` takes over.
+  const liveStreamText = useMemo<string | null>(() => {
+    const blocks = childLive?.liveMessage?.content ?? []
+    const parts: string[] = []
+    for (const b of blocks) {
+      if (b.type === "text" && b.text.trim().length > 0) parts.push(b.text)
+    }
+    if (parts.length === 0) return null
+    return parts.join("")
+  }, [childLive])
 
   // Caller (ToolCallPart) already guarantees this is a `delegate_to_agent`
   // tool, but a snapshot replay with an empty/unparseable input AND no live
@@ -187,7 +400,7 @@ export function DelegatedSubThread({
     >
       <button
         type="button"
-        onClick={() => setExpanded((e) => !e)}
+        onClick={() => dispatchExpand("toggle")}
         className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors rounded-t-lg"
         aria-expanded={expanded}
       >
@@ -223,13 +436,11 @@ export function DelegatedSubThread({
         <div className="border-t border-border px-3 py-3 max-h-96 overflow-auto text-xs space-y-3">
           <ExpandedBody
             status={status}
-            loading={loading}
-            error={error}
-            detail={detail}
             outcome={outcome}
-            tWaitingForChild={t("waitingForChild")}
-            tLoading={t("loading")}
-            tLoadFailed={(detailMsg) => t("loadFailed", { detail: detailMsg })}
+            liveStreamText={liveStreamText}
+            childPendingPermission={childPendingPermission}
+            onRespondPermission={onRespondPermission}
+            tSubAgentRunning={t("subAgentRunning")}
             tNoDetail={t("noDetail")}
           />
         </div>
@@ -240,63 +451,55 @@ export function DelegatedSubThread({
 
 function ExpandedBody({
   status,
-  loading,
-  error,
-  detail,
   outcome,
-  tWaitingForChild,
-  tLoading,
-  tLoadFailed,
+  liveStreamText,
+  childPendingPermission,
+  onRespondPermission,
+  tSubAgentRunning,
   tNoDetail,
 }: {
   status: "running" | "ok" | "err"
-  loading: boolean
-  error: string | null
-  detail: { turns: MessageTurn[] } | null
   outcome: { text: string; isError: boolean } | null
-  tWaitingForChild: string
-  tLoading: string
-  tLoadFailed: (detail: string) => string
+  liveStreamText: string | null
+  childPendingPermission: ChildPendingPermission | null
+  onRespondPermission: (requestId: string, optionId: string) => void
+  tSubAgentRunning: string
   tNoDetail: string
 }) {
-  const hasTurns = !!detail && detail.turns.length > 0
   const hasOutcome = !!outcome && outcome.text.length > 0
 
   // Priority:
-  //   1. detail turns from the child conversation (richest view)
-  //   2. parsed outcome from the parent's tool_result (lighter — only the
-  //      final assistant text or the failure message, but always available
-  //      the moment the broker returns even if the live binding never
-  //      reached the UI)
-  //   3. fetch in flight (loading spinner)
-  //   4. fetch failed (error)
-  //   5. still running and the parent ToolCall hasn't produced output yet
-  //      (the "waiting" spinner)
-  //   6. completed but nothing to show (noDetail)
-  if (hasTurns) {
-    return <SubThreadPreview turns={detail!.turns} />
+  //   1. pending permission — child can't progress until the user acts.
+  //   2. broker outcome (authoritative final) — replaces any live preview.
+  //   3. running: show whatever text we have (latest segment, persisted
+  //      across tool_call gaps) PLUS a trailing "sub-agent running…"
+  //      indicator below. The indicator is appended, never substituted —
+  //      previously shown text stays in view so the user has a continuous
+  //      surface even while the child is mid-tool.
+  //   4. noDetail — terminal state with nothing to display.
+  if (childPendingPermission) {
+    return (
+      <PermissionDialog
+        permission={childPendingPermission}
+        onRespond={onRespondPermission}
+      />
+    )
   }
   if (hasOutcome) {
     return (
       <DelegationOutcomeText text={outcome!.text} isError={outcome!.isError} />
     )
   }
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        <span>{tLoading}</span>
-      </div>
-    )
-  }
-  if (error) {
-    return <div className="text-destructive">{tLoadFailed(error)}</div>
-  }
   if (status === "running") {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        <span>{tWaitingForChild}</span>
+      <div className="space-y-2">
+        {liveStreamText && (
+          <DelegationOutcomeText text={liveStreamText} isError={false} />
+        )}
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <span>{tSubAgentRunning}</span>
+        </div>
       </div>
     )
   }
@@ -376,70 +579,4 @@ function ErrorLabel({ code }: { code?: string }) {
     default:
       return <>{t("default")}</>
   }
-}
-
-function SubThreadPreview({ turns }: { turns: MessageTurn[] }) {
-  if (turns.length === 0) {
-    return <span className="text-muted-foreground">— no messages yet —</span>
-  }
-  return (
-    <div className="space-y-2">
-      {turns.map((turn) => (
-        <TurnRow key={turn.id} turn={turn} />
-      ))}
-    </div>
-  )
-}
-
-function TurnRow({ turn }: { turn: MessageTurn }) {
-  const roleLabel =
-    turn.role === "user"
-      ? "User"
-      : turn.role === "assistant"
-        ? "Assistant"
-        : "System"
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-        {roleLabel}
-      </div>
-      {turn.blocks.map((b, i) => (
-        <BlockLine key={i} block={b} />
-      ))}
-    </div>
-  )
-}
-
-function BlockLine({ block }: { block: ContentBlock }) {
-  if (block.type === "text") {
-    if (block.text.trim().length === 0) return null
-    return (
-      <div className='break-words text-foreground/90 prose prose-sm dark:prose-invert max-w-none [&_ul]:list-inside [&_ol]:list-inside [&_[data-streamdown="code-block-body"]]:max-h-96 [&_[data-streamdown="code-block-body"]]:overflow-auto'>
-        <MessageResponse>{block.text}</MessageResponse>
-      </div>
-    )
-  }
-  if (block.type === "thinking") {
-    if (block.text.trim().length === 0) return null
-    return (
-      <div className="whitespace-pre-wrap text-muted-foreground italic">
-        {block.text}
-      </div>
-    )
-  }
-  if (block.type === "tool_use") {
-    return (
-      <div className="text-muted-foreground">
-        <span className="font-mono">⚙ {block.tool_name}</span>
-      </div>
-    )
-  }
-  if (block.type === "tool_result") {
-    return (
-      <div className="text-muted-foreground">
-        <span className="font-mono">{block.is_error ? "✕" : "✓"} result</span>
-      </div>
-    )
-  }
-  return null
 }

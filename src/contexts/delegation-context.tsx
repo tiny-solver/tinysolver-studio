@@ -27,11 +27,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react"
 
 import type { AgentType, EventEnvelope } from "@/lib/types"
 import { subscribe } from "@/lib/platform"
+import { useAcpActions } from "@/contexts/acp-connections-context"
 
 export type DelegationStatus = "running" | "ok" | "err"
 
@@ -61,10 +63,46 @@ export function useDelegation(): DelegationContextValue {
   return ctx
 }
 
+/** Grace period after `delegation_completed` before tearing down the
+ *  synthetic child ConnectionState. Long enough for the parent UI to
+ *  finish rendering the child's final assistant text from live state
+ *  before falling through to the DB-persisted view. */
+const CHILD_DETACH_GRACE_MS = 2_000
+
 export function DelegationProvider({ children }: { children: ReactNode }) {
+  const { attachDelegationChild, detachDelegationChild } = useAcpActions()
   const [byToolUseId, setByToolUseId] = useState<
     Map<string, DelegationBinding>
   >(() => new Map())
+
+  // Stable refs so the event-subscription effect doesn't tear down on
+  // every action identity change (the actions object is memoized but
+  // its members are stable callbacks; still, defensive ref-pinning
+  // keeps the subscription stable across React's StrictMode double-effect).
+  const attachRef = useRef(attachDelegationChild)
+  const detachRef = useRef(detachDelegationChild)
+  useEffect(() => {
+    attachRef.current = attachDelegationChild
+  }, [attachDelegationChild])
+  useEffect(() => {
+    detachRef.current = detachDelegationChild
+  }, [detachDelegationChild])
+
+  // Pending detach timers — one per parent_tool_use_id. Started on
+  // `delegation_completed`, cleared if a fresh `delegation_started`
+  // arrives for the same parent_tool_use_id before the timer fires.
+  const detachTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>()
+  )
+
+  const cancelDetachTimer = useCallback((parentToolUseId: string) => {
+    const timers = detachTimersRef.current
+    const t = timers.get(parentToolUseId)
+    if (t) {
+      clearTimeout(t)
+      timers.delete(parentToolUseId)
+    }
+  }, [])
 
   useEffect(() => {
     let unsubscribed = false
@@ -87,6 +125,20 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
               const m = new Map(prev)
               m.set(envelope.parent_tool_use_id, next)
               return m
+            })
+            // Cancel any pending detach for this parent_tool_use_id —
+            // delegation_started can be replayed after a partial flow
+            // (e.g. reconnect), and an in-flight detach would tear the
+            // child state down right as it returns.
+            cancelDetachTimer(envelope.parent_tool_use_id)
+            // Pull the child connection into the reducer so its
+            // streaming text / tool calls / pendingPermission reach
+            // the parent's DelegatedSubThread inline.
+            attachRef.current({
+              connectionId: envelope.child_connection_id,
+              parentConnectionId: envelope.parent_connection_id,
+              parentToolUseId: envelope.parent_tool_use_id,
+              agentType: envelope.agent_type,
             })
             return
           }
@@ -120,6 +172,19 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
               m.set(envelope.parent_tool_use_id, updated)
               return m
             })
+
+            // Schedule detach of the synthetic child entry. We keep it
+            // around briefly so the final assistant text rendered from
+            // live state survives long enough for the user to read it
+            // before the parent UI falls back to the DB-persisted view.
+            const parentToolUseId = envelope.parent_tool_use_id
+            const childConnectionId = envelope.child_connection_id
+            cancelDetachTimer(parentToolUseId)
+            const timer = setTimeout(() => {
+              detachTimersRef.current.delete(parentToolUseId)
+              detachRef.current(childConnectionId)
+            }, CHILD_DETACH_GRACE_MS)
+            detachTimersRef.current.set(parentToolUseId, timer)
           }
         }
       )
@@ -131,11 +196,16 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       }
     })()
 
+    const timers = detachTimersRef.current
     return () => {
       unsubscribed = true
       unsubscribe?.()
+      // Cancel any pending detach timers; the synthetic children will
+      // be cleaned up by the connections context's own teardown.
+      for (const t of timers.values()) clearTimeout(t)
+      timers.clear()
     }
-  }, [])
+  }, [cancelDetachTimer])
 
   const findByParentToolUseId = useCallback(
     (id: string): DelegationBinding | undefined => byToolUseId.get(id),

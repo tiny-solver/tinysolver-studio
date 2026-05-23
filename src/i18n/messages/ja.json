@@ -1853,12 +1853,9 @@
         "result": "結果"
       },
       "delegation": {
-        "inFlight": "delegating…",
-        "loading": "Loading sub-session…",
-        "loadFailed": "Failed to load sub-session: {detail}",
+        "subAgentRunning": "サブエージェント実行中…",
         "noDetail": "No detail available yet.",
         "unknownAgent": "サブエージェント",
-        "waitingForChild": "サブエージェントの起動を待機中…",
         "status": {
           "running": "running",
           "ok": "done",

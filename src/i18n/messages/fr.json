@@ -1853,12 +1853,9 @@
         "result": "Résultat"
       },
       "delegation": {
-        "inFlight": "delegating…",
-        "loading": "Loading sub-session…",
-        "loadFailed": "Failed to load sub-session: {detail}",
+        "subAgentRunning": "Sous-agent en cours…",
         "noDetail": "No detail available yet.",
         "unknownAgent": "Sous-agent",
-        "waitingForChild": "En attente du démarrage du sous-agent…",
         "status": {
           "running": "running",
           "ok": "done",

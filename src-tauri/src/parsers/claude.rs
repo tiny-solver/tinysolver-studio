@@ -710,6 +710,7 @@ impl ClaudeParser {
                             tool_use_id: Some(synthetic_id),
                             tool_name,
                             input_preview,
+                            meta: None,
                         });
                     } else {
                         messages.push(UnifiedMessage {
@@ -719,6 +720,7 @@ impl ClaudeParser {
                                 tool_use_id: Some(synthetic_id),
                                 tool_name,
                                 input_preview,
+                                meta: None,
                             }],
                             timestamp,
                             usage: None,
@@ -1082,6 +1084,7 @@ fn extract_assistant_content(value: &serde_json::Value) -> Vec<ContentBlock> {
                         tool_use_id,
                         tool_name,
                         input_preview,
+                        meta: None,
                     });
                 }
                 _ => {}

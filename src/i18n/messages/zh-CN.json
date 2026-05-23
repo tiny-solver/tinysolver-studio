@@ -1853,12 +1853,9 @@
         "result": "结果"
       },
       "delegation": {
-        "inFlight": "委托中…",
-        "loading": "正在加载子会话…",
-        "loadFailed": "加载子会话失败：{detail}",
+        "subAgentRunning": "子智能体运行中…",
         "noDetail": "暂无详情。",
         "unknownAgent": "子智能体",
-        "waitingForChild": "等待子智能体启动…",
         "status": {
           "running": "运行中",
           "ok": "完成",

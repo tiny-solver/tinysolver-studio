@@ -34,6 +34,7 @@ pub mod broker;
 pub mod companion;
 pub mod depth;
 pub mod listener;
+pub mod meta_writer;
 pub mod spawner;
 pub mod transport;
 pub mod types;

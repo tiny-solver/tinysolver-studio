@@ -486,6 +486,7 @@ impl OpenCodeParser {
                             tool_use_id: call_id.clone(),
                             tool_name: "Agent".to_string(),
                             input_preview: Some(agent_input.to_string()),
+                            meta: None,
                         });
 
                         let output_preview = state
@@ -543,6 +544,7 @@ impl OpenCodeParser {
                             tool_use_id: call_id.clone(),
                             tool_name: raw_tool_name.to_string(),
                             input_preview,
+                            meta: None,
                         });
 
                         let output_preview = state

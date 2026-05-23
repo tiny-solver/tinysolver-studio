@@ -540,6 +540,7 @@ impl GeminiParser {
                     tool_use_id: tool_use_id.clone(),
                     tool_name,
                     input_preview,
+                    meta: None,
                 });
 
                 let output_preview = Self::result_display_preview(call.get("resultDisplay"))
