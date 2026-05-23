@@ -180,6 +180,33 @@ describe("DelegatedSubThread", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("does NOT show the 'waiting for child' line once the tool reached output-available, even if output is an empty string", () => {
+    mockedHook.mockReturnValue({
+      binding: undefined,
+      detail: null,
+      loading: false,
+      error: null,
+    })
+    const inputJson = JSON.stringify({
+      agent_type: "codex",
+      task: "noop",
+    })
+    renderWithIntl(
+      <DelegatedSubThread
+        parentToolUseId="pt-1"
+        input={inputJson}
+        output={""}
+        state="output-available"
+      />
+    )
+    fireEvent.click(screen.getByRole("button"))
+    expect(
+      screen.queryByText(/Waiting for the child agent to start/)
+    ).not.toBeInTheDocument()
+    // Falls back to the "no detail" copy instead of a misleading spinner.
+    expect(screen.getByText(/No detail available yet/)).toBeInTheDocument()
+  })
+
   it("renders an error outcome from the broker as a destructive block", () => {
     mockedHook.mockReturnValue({
       binding: bindingOf({ status: "err", errorCode: "timeout" }),

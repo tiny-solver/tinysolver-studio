@@ -1857,7 +1857,6 @@
         "loading": "正在加载子会话…",
         "loadFailed": "加载子会话失败：{detail}",
         "noDetail": "暂无详情。",
-        "delegatedLabel": "已委托",
         "unknownAgent": "子智能体",
         "waitingForChild": "等待子智能体启动…",
         "status": {

@@ -721,11 +721,16 @@ fn truncate_str(s: &str, max: usize) -> String {
     }
 }
 
-/// Title-side match for `delegate_to_agent`. Matches both the literal MCP
-/// tool name and the human-readable title agents sometimes substitute.
+/// Title-side match for `delegate_to_agent`. Title is free-form text the
+/// host agent composes; some hosts copy the bare MCP method, some prefix
+/// it with `mcp__<server>__`, some rephrase it. Match by substring so any
+/// of those forms get the delegation-announcement path. The completion-
+/// side callsite already pairs this with a raw_input shape check, so a
+/// rare false-positive here just sends one announce message that gets
+/// overwritten by the completion's actual outcome.
 fn is_delegation_title(title: &str) -> bool {
     let normalized = title.to_lowercase().replace([' ', '-'], "_");
-    normalized == "delegate_to_agent"
+    normalized.contains("delegate_to_agent")
 }
 
 /// Pull `agent_type` out of the raw_input JSON (e.g. `{"agent_type":"codex",
@@ -791,6 +796,8 @@ mod delegation_relay_tests {
         assert!(is_delegation_title("delegate_to_agent"));
         assert!(is_delegation_title("Delegate To Agent"));
         assert!(is_delegation_title("delegate-to-agent"));
+        assert!(is_delegation_title("mcp__codeg-delegate__delegate_to_agent"));
+        assert!(is_delegation_title("Run mcp__codeg__delegate_to_agent"));
         assert!(!is_delegation_title("agent"));
         assert!(!is_delegation_title("write"));
     }

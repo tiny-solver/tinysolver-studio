@@ -1857,7 +1857,6 @@
         "loading": "Loading sub-session…",
         "loadFailed": "Failed to load sub-session: {detail}",
         "noDetail": "No detail available yet.",
-        "delegatedLabel": "위임됨",
         "unknownAgent": "하위 에이전트",
         "waitingForChild": "하위 에이전트의 시작을 기다리는 중…",
         "status": {

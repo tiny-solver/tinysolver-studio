@@ -155,7 +155,7 @@ export function DelegatedSubThread({
   const status: "running" | "ok" | "err" = (() => {
     if (binding) return binding.status
     if (state === "output-error" || errorText) return "err"
-    if (state === "output-available" && output) return "ok"
+    if (state === "output-available") return "ok"
     return "running"
   })()
   const errorCode = binding?.errorCode

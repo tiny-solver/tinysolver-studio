@@ -137,14 +137,24 @@ pub(crate) async fn handle_event(
 ) -> Result<(), DbError> {
     match &envelope.payload {
         AcpEvent::ToolCall {
-            tool_call_id, title, ..
+            tool_call_id,
+            title,
+            raw_input,
+            ..
         } => {
             // MCP clients don't reliably populate `_meta.tool_use_id`, so we
             // capture every parent-side `delegate_to_agent` tool_call_id
             // here. The broker pops the most recent one when the matching
             // MCP round-trip arrives. See [`DelegationBroker::register_pending_tool_call`].
+            //
+            // ACP `title` is a free-form human-readable string the agent
+            // composes from the tool name (Codex emits the bare MCP method,
+            // Claude Code emits "Run <method>", others phrase it as
+            // "Delegate to <agent>"). Pair the title match with a raw_input
+            // shape check so we don't miss a delegation just because the
+            // host re-phrased the title.
             if let Some(b) = broker {
-                if is_delegation_tool_title(title) {
+                if is_delegation_invocation(title, raw_input.as_deref()) {
                     b.register_pending_tool_call(
                         &envelope.connection_id,
                         tool_call_id.clone(),
@@ -421,39 +431,77 @@ async fn forward_disconnect_to_broker(broker: &DelegationBroker, connection_id: 
     broker.cancel_by_child_connection(connection_id).await;
 }
 
-/// True when the ACP `tool_call.title` looks like an invocation of the
-/// `delegate_to_agent` MCP tool. Matches both the bare schema name and the
-/// `mcp__<server>__delegate_to_agent` prefix Codex/Claude Code emit.
-fn is_delegation_tool_title(title: &str) -> bool {
-    let lower = title.to_ascii_lowercase();
-    let normalized = lower.replace([' ', '-'], "_");
-    normalized == "delegate_to_agent" || normalized.ends_with("__delegate_to_agent")
+/// True when the ACP `tool_call` smells like an invocation of the
+/// `delegate_to_agent` MCP tool. Defensive on both inputs because the host
+/// agent gets to decide both fields:
+///
+/// * `title` is a free-form human-readable string the host composes. Some
+///   hosts copy the MCP method verbatim (`mcp__codeg-delegate__delegate_to_agent`),
+///   some prefix it with a verb (`Run mcp__…__delegate_to_agent`), some
+///   rephrase it (`Delegate to codex`). We match by substring so any
+///   form containing `delegate_to_agent` is captured.
+/// * `raw_input` is the JSON arg blob the agent sent to the MCP server. The
+///   `delegate_to_agent` schema requires `agent_type` AND `task`; presence
+///   of both is a near-zero false-positive shape check that catches any
+///   host that mangles the title beyond recognition.
+fn is_delegation_invocation(title: &str, raw_input: Option<&str>) -> bool {
+    let normalized_title = title.to_ascii_lowercase().replace([' ', '-'], "_");
+    if normalized_title.contains("delegate_to_agent") {
+        return true;
+    }
+    if let Some(raw) = raw_input {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) {
+            if let Some(obj) = v.as_object() {
+                let has_task = obj.get("task").and_then(|t| t.as_str()).is_some();
+                let has_agent_type = obj.get("agent_type").and_then(|a| a.as_str()).is_some();
+                if has_task && has_agent_type {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]
 mod delegation_title_tests {
-    use super::is_delegation_tool_title;
+    use super::is_delegation_invocation;
 
     #[test]
-    fn matches_bare_name() {
-        assert!(is_delegation_tool_title("delegate_to_agent"));
-        assert!(is_delegation_tool_title("Delegate To Agent"));
-        assert!(is_delegation_tool_title("delegate-to-agent"));
+    fn matches_bare_method_in_title() {
+        assert!(is_delegation_invocation("delegate_to_agent", None));
+        assert!(is_delegation_invocation("Delegate To Agent", None));
+        assert!(is_delegation_invocation("delegate-to-agent", None));
     }
 
     #[test]
-    fn matches_mcp_prefixed_name() {
-        assert!(is_delegation_tool_title(
-            "mcp__codeg-delegate__delegate_to_agent"
+    fn matches_mcp_prefixed_method_in_title() {
+        assert!(is_delegation_invocation(
+            "mcp__codeg-delegate__delegate_to_agent",
+            None
         ));
-        assert!(is_delegation_tool_title("mcp__codeg__delegate_to_agent"));
+        assert!(is_delegation_invocation(
+            "Run mcp__codeg__delegate_to_agent",
+            None
+        ));
+    }
+
+    #[test]
+    fn matches_via_raw_input_shape_when_title_is_unrecognized() {
+        let raw = r#"{"agent_type":"codex","task":"smoke test"}"#;
+        assert!(is_delegation_invocation("Delegate to codex", Some(raw)));
+        assert!(is_delegation_invocation("anything", Some(raw)));
     }
 
     #[test]
     fn rejects_unrelated_tools() {
-        assert!(!is_delegation_tool_title("write"));
-        assert!(!is_delegation_tool_title("agent"));
-        assert!(!is_delegation_tool_title("delegate_other_thing"));
+        assert!(!is_delegation_invocation("write", None));
+        assert!(!is_delegation_invocation("agent", None));
+        assert!(!is_delegation_invocation("delegate_other_thing", None));
+        assert!(!is_delegation_invocation(
+            "write",
+            Some(r#"{"path":"/tmp/x","content":"y"}"#)
+        ));
     }
 }
 
