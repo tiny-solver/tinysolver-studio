@@ -74,19 +74,22 @@ describe("ConversationDetailPanel new conversation layout", () => {
 
     const pickerWrapper = messageInputSource.slice(pickerStart, pickerEnd)
     expect(messageInputSource).toContain(
-      '"overflow-hidden rounded-xl border border-input bg-muted/30 transition-colors focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"'
+      '"overflow-hidden rounded-xl bg-muted/60 transition-colors"'
     )
     expect(messageInputSource).toContain(': "contents"')
     expect(messageInputSource).toContain(
-      '"rounded-xl border-b border-input bg-background"'
+      '"rounded-xl border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"'
     )
-    expect(messageInputSource).not.toContain('"rounded-t-xl"')
     expect(pickerWrapper).not.toContain("border-t border-input")
     expect(pickerWrapper).not.toContain("bg-muted/30")
-    expect(pickerWrapper).toContain("py-1.5")
+    expect(pickerWrapper).toContain("py-1")
     expect(pickerWrapper).toContain("rounded-b-xl")
     expect(pickerWrapper).toContain("mt-1.5")
-    expect(pickerWrapper).not.toContain("border-x border-b")
+    expect(pickerWrapper).toContain("pl-2")
+    expect(pickerWrapper).not.toContain("pl-[")
+    expect(pickerWrapper).not.toContain("pl-1.5")
+    expect(pickerWrapper).not.toMatch(/\bborder-b\b/)
+    expect(pickerWrapper).not.toMatch(/\bborder-x\b/)
   })
 
   it("keeps every chat input bottom padding aligned with the side padding", () => {

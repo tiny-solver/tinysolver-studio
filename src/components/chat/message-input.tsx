@@ -2312,7 +2312,7 @@ export function MessageInput({
       <div
         className={cn(
           folderBranchPickerAttached
-            ? "overflow-hidden rounded-xl border border-input bg-muted/30 transition-colors focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
+            ? "overflow-hidden rounded-xl bg-muted/60 transition-colors"
             : "contents",
           folderBranchPickerAttached &&
             showDragActive &&
@@ -2323,7 +2323,7 @@ export function MessageInput({
           className={cn(
             "@container relative flex flex-col bg-transparent transition-colors",
             folderBranchPickerAttached
-              ? "rounded-xl border-b border-input bg-background"
+              ? "rounded-xl border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"
               : "rounded-xl border border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
             !folderBranchPickerAttached &&
               showDragActive &&
@@ -2709,8 +2709,8 @@ export function MessageInput({
         {hasFolderBranchPicker && (
           <div
             className={cn(
-              "flex items-center gap-1.5 pl-[calc(0.5rem+1px)] text-xs text-muted-foreground",
-              folderBranchPickerAttached ? "rounded-b-xl py-1.5 pr-2" : "mt-1.5"
+              "flex items-center gap-1.5 pl-2 text-xs text-muted-foreground",
+              folderBranchPickerAttached ? "rounded-b-xl py-1 pr-2" : "mt-1.5"
             )}
           >
             <ConversationFolderBranchPicker tabId={attachmentTabId} />
