@@ -2312,7 +2312,7 @@ export function MessageInput({
       <div
         className={cn(
           folderBranchPickerAttached
-            ? "overflow-hidden rounded-xl bg-muted/60 transition-colors"
+            ? "overflow-hidden rounded-xl transition-colors"
             : "contents",
           folderBranchPickerAttached &&
             showDragActive &&
@@ -2710,7 +2710,7 @@ export function MessageInput({
           <div
             className={cn(
               "flex items-center gap-1.5 pl-2 text-xs text-muted-foreground",
-              folderBranchPickerAttached ? "rounded-b-xl py-1 pr-2" : "mt-1.5"
+              folderBranchPickerAttached ? "rounded-b-xl pt-1 pr-2" : "mt-1.5"
             )}
           >
             <ConversationFolderBranchPicker tabId={attachmentTabId} />

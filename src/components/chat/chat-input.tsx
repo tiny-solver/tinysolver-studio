@@ -89,7 +89,7 @@ export const ChatInput = memo(function ChatInput({
 
   return (
     <div
-      className="p-4 pt-0"
+      className="px-4 pt-0 pb-1"
       onContextMenu={(event) => event.stopPropagation()}
     >
       {queue &&
