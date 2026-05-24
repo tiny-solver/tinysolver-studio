@@ -8,16 +8,15 @@
  *   * `depth_limit` — bounds chain depth (1..=8)
  *   * `default_timeout_seconds` — broker fallback when LLM omits it (30..=3600)
  *
- * Lives on its own under `/settings/agents` rather than wedged into the
- * 7,800-line `acp-agent-settings.tsx` because delegation is a global feature
- * — not per-agent — and the existing file has no clean tail anchor that
- * isn't already inside a per-agent collapse.  Mounted as a sibling of
- * `<AcpAgentSettings />` so users land on it from the same nav entry.
+ * Mounted under `/settings/general` next to the terminal and rendering
+ * sections, because delegation is a global feature — not per-agent — and
+ * doesn't belong inside the 7,800-line `acp-agent-settings.tsx` that
+ * powers `/settings/agents`.
  */
 
 import { useCallback, useEffect, useState } from "react"
 import { useTranslations } from "next-intl"
-import { Loader2, Workflow } from "lucide-react"
+import { Bubbles, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -98,7 +97,7 @@ export function DelegationSettingsSection() {
   return (
     <section className="rounded-xl border bg-card p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <Workflow className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <Bubbles className="h-4 w-4 text-muted-foreground" aria-hidden />
         <h2 className="text-sm font-semibold">{t("title")}</h2>
       </div>
       <p className="text-xs text-muted-foreground leading-5">
