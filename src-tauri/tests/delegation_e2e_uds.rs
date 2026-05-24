@@ -19,9 +19,7 @@ use codeg_lib::acp::delegation::listener::{
 };
 use codeg_lib::acp::delegation::spawner::{mock::MockSpawner, ConnectionSpawner};
 use codeg_lib::acp::delegation::transport::{client_round_trip, BrokerRequest};
-use codeg_lib::acp::delegation::types::{
-    DelegationError, DelegationOutcome, DelegationSuccess,
-};
+use codeg_lib::acp::delegation::types::{DelegationError, DelegationOutcome, DelegationSuccess};
 use codeg_lib::models::AgentType;
 use serde_json::json;
 
@@ -98,10 +96,7 @@ async fn end_to_end_uds_happy_path() {
     let broker_for_completion = broker.clone();
     let completer = tokio::spawn(async move {
         loop {
-            if let Some(call_id) = broker_for_completion
-                .peek_first_pending_call_id()
-                .await
-            {
+            if let Some(call_id) = broker_for_completion.peek_first_pending_call_id().await {
                 broker_for_completion
                     .complete_call(
                         &call_id,

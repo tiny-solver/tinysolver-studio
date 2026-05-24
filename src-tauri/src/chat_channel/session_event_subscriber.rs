@@ -796,7 +796,9 @@ mod delegation_relay_tests {
         assert!(is_delegation_title("delegate_to_agent"));
         assert!(is_delegation_title("Delegate To Agent"));
         assert!(is_delegation_title("delegate-to-agent"));
-        assert!(is_delegation_title("mcp__codeg-delegate__delegate_to_agent"));
+        assert!(is_delegation_title(
+            "mcp__codeg-delegate__delegate_to_agent"
+        ));
         assert!(is_delegation_title("Run mcp__codeg__delegate_to_agent"));
         assert!(!is_delegation_title("agent"));
         assert!(!is_delegation_title("write"));
@@ -815,38 +817,27 @@ mod delegation_relay_tests {
     #[test]
     fn format_delegation_outcome_renders_ok_with_preview() {
         let out = r#"{"kind":"ok","text":"  hello world  "}"#;
-        let body = format_delegation_outcome(
-            Some(r#"{"agent_type":"codex"}"#),
-            Some(out),
-        );
+        let body = format_delegation_outcome(Some(r#"{"agent_type":"codex"}"#), Some(out));
         assert_eq!(body, "✅ codex: hello world");
     }
 
     #[test]
     fn format_delegation_outcome_renders_err_with_code() {
         let out = r#"{"kind":"err","code":"timeout"}"#;
-        let body = format_delegation_outcome(
-            Some(r#"{"agent_type":"gemini"}"#),
-            Some(out),
-        );
+        let body = format_delegation_outcome(Some(r#"{"agent_type":"gemini"}"#), Some(out));
         assert_eq!(body, "❌ gemini failed (timeout)");
     }
 
     #[test]
     fn format_delegation_outcome_falls_back_to_plain_text() {
-        let body = format_delegation_outcome(
-            Some(r#"{"agent_type":"cline"}"#),
-            Some("plain reply body"),
-        );
+        let body =
+            format_delegation_outcome(Some(r#"{"agent_type":"cline"}"#), Some("plain reply body"));
         assert_eq!(body, "✅ cline: plain reply body");
     }
 
     #[test]
     fn format_delegation_outcome_empty_output_marks_done() {
-        let body = format_delegation_outcome(
-            Some(r#"{"agent_type":"open_code"}"#),
-            None,
-        );
+        let body = format_delegation_outcome(Some(r#"{"agent_type":"open_code"}"#), None);
         assert_eq!(body, "✅ open_code done");
     }
 
@@ -854,10 +845,7 @@ mod delegation_relay_tests {
     fn format_delegation_outcome_truncates_long_ok_text() {
         let long_text = "x".repeat(400);
         let out = format!(r#"{{"kind":"ok","text":"{long_text}"}}"#);
-        let body = format_delegation_outcome(
-            Some(r#"{"agent_type":"codex"}"#),
-            Some(&out),
-        );
+        let body = format_delegation_outcome(Some(r#"{"agent_type":"codex"}"#), Some(&out));
         // 200-char cap + "..."
         assert!(body.len() < 300);
         assert!(body.starts_with("✅ codex: "));

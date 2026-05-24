@@ -48,11 +48,8 @@ pub async fn list_child_conversations(
     Json(params): Json<ListChildConversationsParams>,
 ) -> Result<Json<Vec<DbConversationSummary>>, AppCommandError> {
     Ok(Json(
-        conv_commands::list_child_conversations_core(
-            &state.db.conn,
-            params.parent_conversation_id,
-        )
-        .await?,
+        conv_commands::list_child_conversations_core(&state.db.conn, params.parent_conversation_id)
+            .await?,
     ))
 }
 

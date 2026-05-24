@@ -19,9 +19,7 @@ use sea_orm::DatabaseConnection;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::acp::delegation::broker::DelegationBroker;
-use crate::acp::delegation::types::{
-    DelegationError, DelegationOutcome, DelegationSuccess,
-};
+use crate::acp::delegation::types::{DelegationError, DelegationOutcome, DelegationSuccess};
 use crate::acp::internal_bus::InternalEventBus;
 use crate::acp::manager::ConnectionManager;
 use crate::acp::session_state::SessionState;
@@ -161,11 +159,8 @@ pub(crate) async fn handle_event(
             // host re-phrased the title.
             if let Some(b) = broker {
                 if is_delegation_invocation(title, raw_input.as_deref()) {
-                    b.register_pending_tool_call(
-                        &envelope.connection_id,
-                        tool_call_id.clone(),
-                    )
-                    .await;
+                    b.register_pending_tool_call(&envelope.connection_id, tool_call_id.clone())
+                        .await;
                 }
             }
             Ok(())
@@ -319,22 +314,17 @@ async fn forward_turn_complete_to_broker(
         // parent UI can show a more useful error label than a generic
         // "subagent error". Mirrors the parent's own
         // `turn_failure_error_event` mapping in `connection.rs`.
-        "refusal" => DelegationOutcome::from_err(
-            DelegationError::ChildRefusal,
-            Some(conversation_id),
-        ),
-        "max_tokens" => DelegationOutcome::from_err(
-            DelegationError::ChildMaxTokens,
-            Some(conversation_id),
-        ),
+        "refusal" => {
+            DelegationOutcome::from_err(DelegationError::ChildRefusal, Some(conversation_id))
+        }
+        "max_tokens" => {
+            DelegationOutcome::from_err(DelegationError::ChildMaxTokens, Some(conversation_id))
+        }
         "max_turn_requests" => DelegationOutcome::from_err(
             DelegationError::ChildMaxTurnRequests,
             Some(conversation_id),
         ),
-        "empty" => DelegationOutcome::from_err(
-            DelegationError::ChildEmpty,
-            Some(conversation_id),
-        ),
+        "empty" => DelegationOutcome::from_err(DelegationError::ChildEmpty, Some(conversation_id)),
         other => DelegationOutcome::from_err(
             DelegationError::ChildUnknown(other.to_string()),
             Some(conversation_id),
@@ -603,7 +593,11 @@ pub fn lifecycle_subscriber_task(
                         let broker_clone = broker.clone();
                         let id_clone = conn_id.clone();
                         tokio::spawn(connection_worker_loop(
-                            id_clone, db_clone, mgr_clone, broker_clone, worker_rx,
+                            id_clone,
+                            db_clone,
+                            mgr_clone,
+                            broker_clone,
+                            worker_rx,
                         ));
                         tx
                     });

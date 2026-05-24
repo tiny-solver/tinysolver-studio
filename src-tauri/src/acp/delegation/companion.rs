@@ -89,11 +89,7 @@ pub async fn handle_line(ctx: &CompanionContext, line: &str) -> Option<JsonRpcRe
     let req: JsonRpcRequest = match serde_json::from_str(line) {
         Ok(r) => r,
         Err(e) => {
-            return Some(err(
-                Value::Null,
-                -32700,
-                format!("parse error: {e}"),
-            ));
+            return Some(err(Value::Null, -32700, format!("parse error: {e}")));
         }
     };
     let id_opt = req.id.clone();

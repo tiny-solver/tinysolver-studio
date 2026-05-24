@@ -891,7 +891,9 @@ fn locate_codeg_mcp_binary() -> Option<PathBuf> {
         }
     }
 
-    which::which(filename).ok().filter(|p| is_executable_file(p))
+    which::which(filename)
+        .ok()
+        .filter(|p| is_executable_file(p))
 }
 
 fn is_executable_file(path: &Path) -> bool {

@@ -75,9 +75,7 @@ pub fn build_delegation_stack(
         ConnectionManagerEventEmitter, DelegationEventEmitter,
     };
     use crate::acp::delegation::listener::default_socket_path;
-    use crate::acp::delegation::meta_writer::{
-        ConnectionManagerMetaWriter, DelegationMetaWriter,
-    };
+    use crate::acp::delegation::meta_writer::{ConnectionManagerMetaWriter, DelegationMetaWriter};
     use crate::acp::delegation::spawner::ConnectionSpawner;
     use crate::acp::manager::ConnectionManagerSpawner;
 
@@ -93,9 +91,8 @@ pub fn build_delegation_stack(
     let meta_writer = Arc::new(ConnectionManagerMetaWriter {
         manager: cm_arc.clone(),
     }) as Arc<dyn DelegationMetaWriter>;
-    let event_emitter = Arc::new(ConnectionManagerEventEmitter {
-        manager: cm_arc,
-    }) as Arc<dyn DelegationEventEmitter>;
+    let event_emitter = Arc::new(ConnectionManagerEventEmitter { manager: cm_arc })
+        as Arc<dyn DelegationEventEmitter>;
     let broker = Arc::new(DelegationBroker::with_writers(
         spawner,
         depth_lookup,

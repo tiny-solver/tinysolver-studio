@@ -114,13 +114,9 @@ pub async fn set_delegation_settings_core(
     desired: DelegationSettings,
 ) -> Result<DelegationSettings, AppCommandError> {
     let clamped = desired.clamped();
-    app_metadata_service::upsert_value(
-        conn,
-        KEY_DELEGATION_ENABLED,
-        &clamped.enabled.to_string(),
-    )
-    .await
-    .map_err(AppCommandError::from)?;
+    app_metadata_service::upsert_value(conn, KEY_DELEGATION_ENABLED, &clamped.enabled.to_string())
+        .await
+        .map_err(AppCommandError::from)?;
     app_metadata_service::upsert_value(
         conn,
         KEY_DELEGATION_DEPTH,
@@ -135,7 +131,9 @@ pub async fn set_delegation_settings_core(
     )
     .await
     .map_err(AppCommandError::from)?;
-    broker.set_config(clamped.clone().into_broker_config()).await;
+    broker
+        .set_config(clamped.clone().into_broker_config())
+        .await;
     Ok(clamped)
 }
 
@@ -152,9 +150,7 @@ pub async fn get_delegation_settings(
     #[cfg(not(feature = "tauri-runtime"))]
     {
         // Server mode reaches this via the web handler, not this command.
-        Err(AppCommandError::configuration_invalid(
-            "tauri-only command",
-        ))
+        Err(AppCommandError::configuration_invalid("tauri-only command"))
     }
 }
 
@@ -171,9 +167,7 @@ pub async fn set_delegation_settings(
     #[cfg(not(feature = "tauri-runtime"))]
     {
         let _ = settings;
-        Err(AppCommandError::configuration_invalid(
-            "tauri-only command",
-        ))
+        Err(AppCommandError::configuration_invalid("tauri-only command"))
     }
 }
 
@@ -240,7 +234,10 @@ mod tests {
         let loaded = load_delegation_settings(&db.conn).await;
         assert_eq!(loaded.enabled, saved.enabled);
         assert_eq!(loaded.depth_limit, saved.depth_limit);
-        assert_eq!(loaded.default_timeout_seconds, saved.default_timeout_seconds);
+        assert_eq!(
+            loaded.default_timeout_seconds,
+            saved.default_timeout_seconds
+        );
 
         let cfg = broker.config_snapshot().await;
         assert!(!cfg.enabled);

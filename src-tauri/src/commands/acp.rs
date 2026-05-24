@@ -2466,7 +2466,14 @@ pub async fn acp_prompt(
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), AcpError> {
     manager
-        .send_prompt_linked(&db, &connection_id, blocks, folder_id, conversation_id, None)
+        .send_prompt_linked(
+            &db,
+            &connection_id,
+            blocks,
+            folder_id,
+            conversation_id,
+            None,
+        )
         .await
         .map(|_| ())
 }

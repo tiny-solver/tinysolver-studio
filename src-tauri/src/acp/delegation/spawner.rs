@@ -176,7 +176,8 @@ pub mod mock {
         async fn mock_consumes_queued_spawn_results() {
             let m = MockSpawner::new();
             m.queue_spawn(Ok("child-1".into())).await;
-            m.queue_spawn(Err(SpawnerError::Spawn("oh no".into()))).await;
+            m.queue_spawn(Err(SpawnerError::Spawn("oh no".into())))
+                .await;
             let r1 = m
                 .spawn("parent-1", AgentType::ClaudeCode, Some("/tmp".into()))
                 .await

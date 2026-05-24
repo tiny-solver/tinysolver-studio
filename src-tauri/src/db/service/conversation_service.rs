@@ -345,13 +345,16 @@ mod tests {
     use crate::db::test_helpers::{fresh_in_memory_db, seed_folder};
 
     /// Build a parent + a delegation child for filter assertions.
-    async fn seed_parent_with_child(
-        conn: &DatabaseConnection,
-        folder_id: i32,
-    ) -> (i32, i32) {
-        let parent = create(conn, folder_id, AgentType::ClaudeCode, Some("P".into()), None)
-            .await
-            .expect("parent");
+    async fn seed_parent_with_child(conn: &DatabaseConnection, folder_id: i32) -> (i32, i32) {
+        let parent = create(
+            conn,
+            folder_id,
+            AgentType::ClaudeCode,
+            Some("P".into()),
+            None,
+        )
+        .await
+        .expect("parent");
         let link = DelegationLink {
             parent_conversation_id: parent.id,
             parent_tool_use_id: "tu-1".into(),
@@ -413,7 +416,12 @@ mod tests {
         let (_parent_b, _child_b) = seed_parent_with_child(&db.conn, folder).await;
 
         let rows = list_children(&db.conn, parent_a).await.expect("list");
-        assert_eq!(rows.len(), 1, "expected 1 child of parent_a, got {}", rows.len());
+        assert_eq!(
+            rows.len(),
+            1,
+            "expected 1 child of parent_a, got {}",
+            rows.len()
+        );
         assert_eq!(rows[0].id, child_a);
         assert_eq!(rows[0].parent_id, Some(parent_a));
     }
@@ -427,6 +435,9 @@ mod tests {
         soft_delete(&db.conn, child).await.expect("soft delete");
 
         let rows = list_children(&db.conn, parent).await.expect("list");
-        assert!(rows.is_empty(), "soft-deleted child must not appear: {rows:?}");
+        assert!(
+            rows.is_empty(),
+            "soft-deleted child must not appear: {rows:?}"
+        );
     }
 }

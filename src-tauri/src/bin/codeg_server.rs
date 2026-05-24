@@ -174,11 +174,8 @@ async fn async_main() {
     // Apply persisted delegation settings (depth, timeout, enabled) before
     // the listener starts accepting so even the first companion request
     // sees the operator's configured behavior.
-    codeg_lib::commands::delegation::apply_persisted_config(
-        &state.db.conn,
-        &delegation_broker,
-    )
-    .await;
+    codeg_lib::commands::delegation::apply_persisted_config(&state.db.conn, &delegation_broker)
+        .await;
 
     // Spawn the delegation listener so companion processes can round-trip
     // through the broker. Path is PID-scoped, so the listener owns it for

@@ -739,11 +739,7 @@ mod tests {
     #[async_trait]
     impl ConversationDepthLookup for MockDepth {
         async fn parent_of(&self, id: i32) -> Result<Option<i32>, DelegationError> {
-            Ok(self
-                .0
-                .iter()
-                .find(|(c, _)| *c == id)
-                .and_then(|(_, p)| *p))
+            Ok(self.0.iter().find(|(c, _)| *c == id).and_then(|(_, p)| *p))
         }
     }
 
@@ -788,10 +784,8 @@ mod tests {
     #[tokio::test]
     async fn disabled_returns_canceled_without_touching_spawner() {
         let mock = Arc::new(MockSpawner::new());
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
         broker
             .set_config(DelegationConfig {
                 enabled: false,
@@ -814,10 +808,8 @@ mod tests {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("child-conn-1".into())).await;
         mock.queue_send(Ok(42)).await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
 
         let driver = {
             let broker = broker.clone();
@@ -865,11 +857,9 @@ mod tests {
     #[tokio::test]
     async fn spawn_failure_maps_to_spawn_failed() {
         let mock = Arc::new(MockSpawner::new());
-        mock.queue_spawn(Err(SpawnerError::Spawn("nope".into()))).await;
-        let broker = DelegationBroker::new(
-            mock as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        mock.queue_spawn(Err(SpawnerError::Spawn("nope".into())))
+            .await;
+        let broker = DelegationBroker::new(mock as Arc<dyn ConnectionSpawner>, shallow_lookup());
         let outcome = broker.handle_request(request(1, "pt-1")).await;
         match outcome {
             DelegationOutcome::Err { code, .. } => assert_eq!(code, "spawn_failed"),
@@ -883,10 +873,8 @@ mod tests {
         mock.queue_spawn(Ok("c1".into())).await;
         mock.queue_send(Err(SpawnerError::Send("agent rejected prompt".into())))
             .await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
         let outcome = broker.handle_request(request(1, "pt-1")).await;
         match outcome {
             DelegationOutcome::Err { code, .. } => assert_eq!(code, "spawn_failed"),
@@ -900,10 +888,8 @@ mod tests {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("c1".into())).await;
         mock.queue_send(Ok(99)).await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
         let mut req = request(1, "pt-1");
         req.timeout_seconds = Some(1);
         let outcome = broker.handle_request(req).await;
@@ -932,10 +918,8 @@ mod tests {
             mock.queue_spawn(Ok(format!("c{i}"))).await;
             mock.queue_send(Ok(100 + i)).await;
         }
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
 
         let mut handles = Vec::new();
         for i in 0..3 {
@@ -968,10 +952,8 @@ mod tests {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("c1".into())).await;
         mock.queue_send(Ok(200)).await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
 
         let driver = {
             let broker = broker.clone();
@@ -1012,11 +994,8 @@ mod tests {
         // chain: 1 (root, None) <- 2 (child of 1) <- 3 (grandchild of 2).
         // Parent = grandchild (id 3): parent_depth = 2. With limit = 2, child
         // would sit at depth 3 → reject.
-        let lookup = Arc::new(MockDepth(vec![
-            (1, None),
-            (2, Some(1)),
-            (3, Some(2)),
-        ])) as Arc<dyn ConversationDepthLookup>;
+        let lookup = Arc::new(MockDepth(vec![(1, None), (2, Some(1)), (3, Some(2))]))
+            as Arc<dyn ConversationDepthLookup>;
         let broker = DelegationBroker::new(mock as Arc<dyn ConnectionSpawner>, lookup);
         broker
             .set_config(DelegationConfig {
@@ -1042,8 +1021,14 @@ mod tests {
         );
         broker.register_pending_tool_call("p1", "tc-a".into()).await;
         broker.register_pending_tool_call("p1", "tc-b".into()).await;
-        assert_eq!(broker.take_pending_tool_call("p1").await.as_deref(), Some("tc-a"));
-        assert_eq!(broker.take_pending_tool_call("p1").await.as_deref(), Some("tc-b"));
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-a")
+        );
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-b")
+        );
         assert!(broker.take_pending_tool_call("p1").await.is_none());
     }
 
@@ -1055,8 +1040,14 @@ mod tests {
         );
         broker.register_pending_tool_call("p1", "p1-a".into()).await;
         broker.register_pending_tool_call("p2", "p2-a".into()).await;
-        assert_eq!(broker.take_pending_tool_call("p1").await.as_deref(), Some("p1-a"));
-        assert_eq!(broker.take_pending_tool_call("p2").await.as_deref(), Some("p2-a"));
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("p1-a")
+        );
+        assert_eq!(
+            broker.take_pending_tool_call("p2").await.as_deref(),
+            Some("p2-a")
+        );
         assert!(broker.take_pending_tool_call("p1").await.is_none());
         assert!(broker.take_pending_tool_call("p2").await.is_none());
     }
@@ -1066,18 +1057,14 @@ mod tests {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("c1".into())).await;
         mock.queue_send(Ok(7)).await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
         broker
             .register_pending_tool_call("parent-conn", "tu-from-acp".into())
             .await;
         let driver = {
             let broker = broker.clone();
-            tokio::spawn(async move {
-                broker.handle_request(request(1, "")).await
-            })
+            tokio::spawn(async move { broker.handle_request(request(1, "")).await })
         };
         while broker.pending_count().await == 0 {
             tokio::time::sleep(Duration::from_millis(5)).await;
@@ -1111,10 +1098,8 @@ mod tests {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("c-late".into())).await;
         mock.queue_send(Ok(13)).await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
 
         let driver = {
             let broker = broker.clone();
@@ -1158,15 +1143,11 @@ mod tests {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("c1".into())).await;
         mock.queue_send(Ok(11)).await;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            shallow_lookup(),
-        );
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
         let driver = {
             let broker = broker.clone();
-            tokio::spawn(async move {
-                broker.handle_request(request(1, "")).await
-            })
+            tokio::spawn(async move { broker.handle_request(request(1, "")).await })
         };
         while broker.pending_count().await == 0 {
             tokio::time::sleep(Duration::from_millis(5)).await;
@@ -1195,7 +1176,9 @@ mod tests {
             Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
             shallow_lookup(),
         );
-        broker.register_pending_tool_call("parent-conn", "tu-1".into()).await;
+        broker
+            .register_pending_tool_call("parent-conn", "tu-1".into())
+            .await;
         broker.cancel_by_parent("parent-conn").await;
         assert!(broker.take_pending_tool_call("parent-conn").await.is_none());
     }
@@ -1206,10 +1189,7 @@ mod tests {
         mock.queue_spawn(Ok("c1".into())).await;
         mock.queue_send(Ok(7)).await;
         let lookup = Arc::new(MockDepth(vec![(1, None)])) as Arc<dyn ConversationDepthLookup>;
-        let broker = DelegationBroker::new(
-            mock.clone() as Arc<dyn ConnectionSpawner>,
-            lookup,
-        );
+        let broker = DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, lookup);
         broker
             .set_config(DelegationConfig {
                 enabled: true,
@@ -1248,10 +1228,7 @@ mod tests {
     use crate::acp::delegation::meta_writer::mock::MockMetaWriter;
     use crate::acp::delegation::meta_writer::DelegationMetaWriter;
 
-    fn broker_with_meta(
-        mock: Arc<MockSpawner>,
-        writer: Arc<MockMetaWriter>,
-    ) -> DelegationBroker {
+    fn broker_with_meta(mock: Arc<MockSpawner>, writer: Arc<MockMetaWriter>) -> DelegationBroker {
         DelegationBroker::with_meta_writer(
             mock as Arc<dyn ConnectionSpawner>,
             shallow_lookup(),
@@ -1303,7 +1280,10 @@ mod tests {
             .unwrap()
             .as_object()
             .unwrap();
-        assert_eq!(inner_first.get("status").unwrap().as_str().unwrap(), "running");
+        assert_eq!(
+            inner_first.get("status").unwrap().as_str().unwrap(),
+            "running"
+        );
         assert_eq!(
             inner_first
                 .get("child_connection_id")
@@ -1663,10 +1643,8 @@ mod tests {
 
         let calls = emitter.snapshot().await;
         assert_eq!(calls.len(), 3, "expected 3 emits, got {calls:?}");
-        let mut parent_tool_use_ids: Vec<String> = calls
-            .iter()
-            .map(|c| c.parent_tool_use_id.clone())
-            .collect();
+        let mut parent_tool_use_ids: Vec<String> =
+            calls.iter().map(|c| c.parent_tool_use_id.clone()).collect();
         parent_tool_use_ids.sort();
         assert_eq!(
             parent_tool_use_ids,
@@ -1841,12 +1819,7 @@ mod tests {
             .acp_event_bus()
             .expect("WebOnly emitter must expose an InternalEventBus");
         manager
-            .insert_test_connection(
-                "parent-conn",
-                AgentType::ClaudeCode,
-                None,
-                parent_emitter,
-            )
+            .insert_test_connection("parent-conn", AgentType::ClaudeCode, None, parent_emitter)
             .await;
 
         // Subscribe BEFORE triggering events — broadcast channels drop

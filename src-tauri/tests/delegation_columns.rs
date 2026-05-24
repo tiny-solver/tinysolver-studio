@@ -56,12 +56,8 @@ async fn delegation_columns_default_to_null_on_existing_create() {
     let db = fresh_in_memory_db().await;
     let folder_id = seed_folder(&db, "/tmp/codeg-delegation-null").await;
     // The existing create helper does not set the new columns; verify they default to None.
-    let conv_id = codeg_lib::db::test_helpers::seed_conversation(
-        &db,
-        folder_id,
-        AgentType::ClaudeCode,
-    )
-    .await;
+    let conv_id =
+        codeg_lib::db::test_helpers::seed_conversation(&db, folder_id, AgentType::ClaudeCode).await;
     let fetched = conversation::Entity::find_by_id(conv_id)
         .one(&db.conn)
         .await

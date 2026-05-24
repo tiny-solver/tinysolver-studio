@@ -143,10 +143,7 @@ impl ConnectionManager {
     /// Set the delegation injection context exactly once during bootstrap.
     /// Calling twice is a no-op — protects against accidental re-init in
     /// the unlikely event a second `build_delegation_stack` runs.
-    pub fn install_delegation(
-        &self,
-        injection: crate::acp::connection::DelegationInjection,
-    ) {
+    pub fn install_delegation(&self, injection: crate::acp::connection::DelegationInjection) {
         let _ = self.delegation_injection.set(injection);
     }
 
@@ -1113,20 +1110,22 @@ impl crate::acp::delegation::spawner::ConnectionSpawner for ConnectionManagerSpa
         // never sees.
         let (emitter, owner_window, parent_working_dir) = {
             let conns = self.manager.connections.lock().await;
-            let parent = conns
-                .get(parent_connection_id)
-                .ok_or_else(|| {
-                    SpawnerError::Spawn(format!(
-                        "parent connection {parent_connection_id} not found"
-                    ))
-                })?;
+            let parent = conns.get(parent_connection_id).ok_or_else(|| {
+                SpawnerError::Spawn(format!(
+                    "parent connection {parent_connection_id} not found"
+                ))
+            })?;
             let pwd = {
                 let s = parent.state.read().await;
                 s.working_dir
                     .as_ref()
                     .map(|p| p.to_string_lossy().to_string())
             };
-            (parent.emitter.clone(), parent.owner_window_label.clone(), pwd)
+            (
+                parent.emitter.clone(),
+                parent.owner_window_label.clone(),
+                pwd,
+            )
         };
         let effective_working_dir = working_dir.or(parent_working_dir);
         self.manager
@@ -1467,7 +1466,14 @@ mod tests {
 
         // Send with caller-supplied conversation_id + folder_id.
         let _ = mgr
-            .send_prompt_linked(&db, conn_id, vec![], Some(folder_id), Some(pre_existing.id), None)
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                vec![],
+                Some(folder_id),
+                Some(pre_existing.id),
+                None,
+            )
             .await;
 
         // No new conversation row was created.

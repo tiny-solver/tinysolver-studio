@@ -169,7 +169,10 @@ pub fn build_delegation_meta(
     error_code: Option<&str>,
 ) -> serde_json::Value {
     let mut inner = serde_json::Map::new();
-    inner.insert("status".to_string(), serde_json::Value::String(status.to_string()));
+    inner.insert(
+        "status".to_string(),
+        serde_json::Value::String(status.to_string()),
+    );
     if let Some(id) = child_connection_id {
         inner.insert(
             "child_connection_id".to_string(),

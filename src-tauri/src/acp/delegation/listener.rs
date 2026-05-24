@@ -94,10 +94,7 @@ impl DelegationListener {
             let _ = tokio::fs::create_dir_all(parent).await;
         }
         let listener = tokio::net::UnixListener::bind(&socket_path)?;
-        eprintln!(
-            "[delegation] listening on UDS {}",
-            socket_path.display()
-        );
+        eprintln!("[delegation] listening on UDS {}", socket_path.display());
         loop {
             match listener.accept().await {
                 Ok((mut conn, _)) => {
@@ -204,10 +201,7 @@ impl DelegationListener {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| Some(entry.working_dir.to_string_lossy().to_string()));
-        let timeout_seconds = req
-            .input
-            .get("timeout_seconds")
-            .and_then(|v| v.as_u64());
+        let timeout_seconds = req.input.get("timeout_seconds").and_then(|v| v.as_u64());
 
         let delegation_req = DelegationRequest {
             parent_connection_id: req.parent_connection_id,
@@ -509,7 +503,8 @@ mod tests {
     #[tokio::test]
     async fn spawn_failure_surfaces_through_listener() {
         let mock = Arc::new(MockSpawner::new());
-        mock.queue_spawn(Err(SpawnerError::Spawn("agent missing".into()))).await;
+        mock.queue_spawn(Err(SpawnerError::Spawn("agent missing".into())))
+            .await;
         let broker = make_broker(mock);
         broker
             .set_config(DelegationConfig {
