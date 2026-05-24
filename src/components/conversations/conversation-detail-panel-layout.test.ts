@@ -74,15 +74,17 @@ describe("ConversationDetailPanel new conversation layout", () => {
 
     const pickerWrapper = messageInputSource.slice(pickerStart, pickerEnd)
     expect(messageInputSource).toContain(
-      '"overflow-hidden rounded-xl bg-muted/60 transition-colors"'
+      '"overflow-hidden rounded-xl transition-colors"'
     )
+    expect(messageInputSource).not.toContain("bg-muted/60")
     expect(messageInputSource).toContain(': "contents"')
     expect(messageInputSource).toContain(
       '"rounded-xl border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"'
     )
     expect(pickerWrapper).not.toContain("border-t border-input")
     expect(pickerWrapper).not.toContain("bg-muted/30")
-    expect(pickerWrapper).toContain("py-1")
+    expect(pickerWrapper).toContain("pt-1")
+    expect(pickerWrapper).not.toContain("py-1")
     expect(pickerWrapper).toContain("rounded-b-xl")
     expect(pickerWrapper).toContain("mt-1.5")
     expect(pickerWrapper).toContain("pl-2")
@@ -92,11 +94,15 @@ describe("ConversationDetailPanel new conversation layout", () => {
     expect(pickerWrapper).not.toMatch(/\bborder-x\b/)
   })
 
-  it("keeps every chat input bottom padding aligned with the side padding", () => {
-    expect(chatInputSource).toContain('className="p-4 pt-0"')
+  it("keeps ordinary chat input constrained to the message column width", () => {
+    expect(conversationShellSource).toContain(
+      'className="mx-auto w-full max-w-3xl"'
+    )
+    expect(chatInputSource).toContain('className="px-4 pt-0 pb-1"')
     expect(chatInputSource).toContain('className="min-h-24 max-h-60"')
     expect(chatInputSource).not.toContain("containerClassName")
     expect(source).not.toContain("containerClassName")
     expect(conversationShellSource).not.toContain("containerClassName")
+    expect(source).toContain("mx-auto flex w-full max-w-2xl")
   })
 })
