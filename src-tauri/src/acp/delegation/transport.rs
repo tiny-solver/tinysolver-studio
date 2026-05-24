@@ -114,7 +114,7 @@ pub async fn client_round_trip(
     use tokio::net::windows::named_pipe::ClientOptions;
     let mut stream = ClientOptions::new()
         .open(socket_path)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("open pipe: {e}")))?;
+        .map_err(|e| io::Error::other(format!("open pipe: {e}")))?;
     write_frame(&mut stream, req).await?;
     read_frame(&mut stream).await
 }
