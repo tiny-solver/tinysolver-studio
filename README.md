@@ -19,12 +19,7 @@
   <a href="./docs/readme/README.ar.md">العربية</a>
 </p>
 
-Codeg (Code Generation) is an enterprise-grade multi-agent coding workspace.
-It unifies local AI coding agents (Claude Code, Codex CLI, OpenCode, Gemini CLI,
-OpenClaw, Cline, etc.) in a desktop app, standalone server, or Docker container — enabling
-remote development from any browser — with conversation aggregation, parallel `git worktree`
-development, MCP/Skills management, chat channel interactions (Telegram, Lark, iLink, etc.),
-and integrated Git/file/terminal workflows.
+Codeg (Code Generation) is a multi-agent coding workspace. It brings multiple agents (Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Cline, etc.) into one workspace, supporting conversation aggregation and multi-agent collaboration, with desktop installation plus server/Docker deployment.
 
 ![gallery](./docs/images/gallery.svg)
 

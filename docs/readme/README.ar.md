@@ -19,10 +19,7 @@
   <strong>العربية</strong>
 </p>
 
-Codeg (Code Generation) هو مساحة عمل مؤسسية متعددة الوكلاء للبرمجة.
-يوحّد وكلاء البرمجة المحليين بالذكاء الاصطناعي (Claude Code، Codex CLI، OpenCode، Gemini CLI،
-OpenClaw، Cline، وغيرها) في تطبيق سطح مكتب أو خادم مستقل أو حاوية Docker — مما يتيح التطوير عن بُعد من أي متصفح — مع تجميع المحادثات، والتطوير المتوازي
-عبر `git worktree`، وإدارة MCP/Skills، والتفاعل عبر قنوات الدردشة (Telegram وLark وiLink وغيرها)، وسير عمل متكامل لـ Git/الملفات/الطرفية.
+Codeg (Code Generation) هو مساحة عمل للبرمجة متعددة الوكلاء. يجمع عدة وكلاء (Claude Code، Codex CLI، OpenCode، Gemini CLI، OpenClaw، Cline، وغيرها) في مساحة عمل واحدة، ويدعم تجميع المحادثات والتعاون بين عدة وكلاء، مع دعم التثبيت على سطح المكتب والنشر على الخادم/Docker.
 
 ![gallery](../images/gallery.svg)
 

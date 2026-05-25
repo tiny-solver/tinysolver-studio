@@ -19,10 +19,7 @@
   <a href="./README.ar.md">العربية</a>
 </p>
 
-Codeg（Code Generation）是一个企业级多 Agent 编码工作台。
-它将本地 AI 编码代理（Claude Code、Codex CLI、OpenCode、Gemini CLI、
-OpenClaw、Cline 等）统一到桌面应用、独立服务器或 Docker 容器中——通过浏览器即可远程开发——支持对话聚合、
-并行 `git worktree` 开发、MCP/Skills 管理、消息渠道交互（Telegram、飞书、iLink 等），以及集成的 Git/文件/终端工作流。
+Codeg（Code Generation）是一个多智能体编码工作台，它将多个智能体（Claude Code、Codex CLI、OpenCode、Gemini CLI、OpenClaw、Cline 等）统一到一个工作区中，支持会话聚合和多智能体协作，支持桌面安装，服务器/Docker 部署。
 
 ![gallery](../images/gallery.svg)
 
