@@ -27,10 +27,10 @@
       },
       "timeout_seconds": {
         "type": "integer",
-        "minimum": 30,
+        "minimum": 0,
         "maximum": 3600,
         "default": 600,
-        "description": "Per-call timeout. Defaults to 600 seconds."
+        "description": "Per-call timeout. Defaults to 600 seconds; 0 disables the timeout."
       }
     }
   }
