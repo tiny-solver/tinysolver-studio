@@ -24,13 +24,14 @@ Codeg（Code Generation）は、マルチエージェント・コーディング
 ![gallery](../images/gallery.svg)
 
 ## メインインターフェース
+
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
 
 ## 設定
-| エージェント | MCP | Skills | バージョン管理 | Web サービス |
-| :---: | :---: | :---: | :---: | :---: |
-| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
+
+![Codeg Light](../images/settings-light.png#gh-light-mode-only)
+![Codeg Dark](../images/settings-dark.png#gh-dark-mode-only)
 
 ## ハイライト
 
@@ -47,7 +48,21 @@ Codeg（Code Generation）は、マルチエージェント・コーディング
 - **Docker サポート** — `docker compose up` または `docker run` に対応、カスタムトークン・ポート設定、データ永続化およびプロジェクトディレクトリのマウントをサポート
 - 統合エンジニアリングループ（ファイルツリー、Diff、Git 変更、コミット、ターミナル）
 
-## プロジェクトブート
+## 対応エージェント
+
+| Agent       | 環境変数パス                          | macOS / Linux デフォルト              | Windows デフォルト                                    |
+| ----------- | ------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects`         | `~/.claude/projects`                  | `%USERPROFILE%\\.claude\\projects`                    |
+| Codex CLI   | `$CODEX_HOME/sessions`                | `~/.codex/sessions`                   | `%USERPROFILE%\\.codex\\sessions`                     |
+| OpenCode    | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
+| Gemini CLI  | `$GEMINI_CLI_HOME/.gemini`            | `~/.gemini`                           | `%USERPROFILE%\\.gemini`                              |
+| OpenClaw    | —                                     | `~/.openclaw/agents`                  | `%USERPROFILE%\\.openclaw\\agents`                    |
+| Cline       | `$CLINE_DIR`                          | `~/.cline/data/tasks`                 | `%USERPROFILE%\\.cline\\data\\tasks`                  |
+
+> 注: 環境変数はフォールバックパスより優先されます。
+
+<details>
+<summary><h2>プロジェクトブート</h2></summary>
 
 分割ペインインターフェースで新規プロジェクトをビジュアルに作成：左側で設定、右側でリアルタイムプレビュー。
 
@@ -64,34 +79,27 @@ Codeg（Code Generation）は、マルチエージェント・コーディング
 
 現在 **shadcn/ui** プロジェクトのスキャフォールディングをサポートしており、タブベースの設計で将来のプロジェクトタイプ追加に対応しています。
 
-## チャットチャンネル
+</details>
+
+<details>
+<summary><h2>チャットチャンネル</h2></summary>
 
 お気に入りのメッセージングアプリ — Telegram、Lark（Feishu）、iLink（Weixin）など — を AI コーディング Agent に接続。チャットからタスクの作成、フォローアップメッセージの送信、権限の承認、セッションの再開、アクティビティの監視が可能です。Agent のレスポンスはツールコール詳細、権限プロンプト、完了サマリーとともにリアルタイムで受信 — ブラウザを開くことなくすべて対応可能。
 
 ### 対応チャンネル
 
-| チャンネル | プロトコル | 状態 |
-| --- | --- | --- |
-| Telegram | Bot API（HTTP ロングポーリング） | 内蔵 |
-| Lark（Feishu） | WebSocket + REST API | 内蔵 |
-| iLink（Weixin） | WebSocket + REST API | 内蔵 |
+| チャンネル      | プロトコル                       | 状態 |
+| --------------- | -------------------------------- | ---- |
+| Telegram        | Bot API（HTTP ロングポーリング） | 内蔵 |
+| Lark（Feishu）  | WebSocket + REST API             | 内蔵 |
+| iLink（Weixin） | WebSocket + REST API             | 内蔵 |
 
 > その他のチャンネル（Discord、Slack、DingTalk など）は今後のリリースで対応予定。
 
-## 対応エージェント
+</details>
 
-| Agent | 環境変数パス | macOS / Linux デフォルト | Windows デフォルト |
-| --- | --- | --- | --- |
-| Claude Code | `$CLAUDE_CONFIG_DIR/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` |
-| Codex CLI | `$CODEX_HOME/sessions` | `~/.codex/sessions` | `%USERPROFILE%\\.codex\\sessions` |
-| OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
-| Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
-| OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
-| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
-
-> 注: 環境変数はフォールバックパスより優先されます。
-
-## クイックスタート
+<details>
+<summary><h2>クイックスタート</h2></summary>
 
 ### 必要条件
 
@@ -190,13 +198,13 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 
 ビルド済みバイナリ（Web アセットをバンドル済み）は [Releases](https://github.com/xintaofei/codeg/releases) ページからダウンロードできます:
 
-| プラットフォーム | ファイル |
-| --- | --- |
-| Linux x64 | `codeg-server-linux-x64.tar.gz` |
-| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
-| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
-| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
-| Windows x64 | `codeg-server-windows-x64.zip` |
+| プラットフォーム | ファイル                           |
+| ---------------- | ---------------------------------- |
+| Linux x64        | `codeg-server-linux-x64.tar.gz`    |
+| Linux arm64      | `codeg-server-linux-arm64.tar.gz`  |
+| macOS x64        | `codeg-server-darwin-x64.tar.gz`   |
+| macOS arm64      | `codeg-server-darwin-arm64.tar.gz` |
+| Windows x64      | `codeg-server-windows-x64.zip`     |
 
 ```bash
 # 例: ダウンロード、解凍、実行
@@ -237,17 +245,20 @@ CODEG_STATIC_DIR=../out ./target/release/codeg-server
 
 環境変数:
 
-| 変数 | デフォルト | 説明 |
-| --- | --- | --- |
-| `CODEG_PORT` | `3080` | HTTP ポート |
-| `CODEG_HOST` | `0.0.0.0` | バインドアドレス |
-| `CODEG_TOKEN` | *(ランダム)* | 認証トークン（起動時に stderr に出力） |
-| `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite データベースディレクトリ（`uploads/`、`pets/` のルートも兼ねる） |
-| `CODEG_STATIC_DIR` | `./web` または `./out` | Next.js 静的エクスポートディレクトリ |
-| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | *（未設定）* | `<data dir>/uploads/` 配下に存在するファイルの合計バイト数のハードキャップ。10進数のバイト数（例: `10737418240` で 10 GiB）。未設定、`0`、または解析できない値の場合、キャップは無効になり、起動時に現在の状態が分かるログ行を出力します。このキャップは単一の `codeg-server` プロセス内でのみ強制されます——同じ `uploads/` ボリュームを共有する水平スケール構成では、外部協調（ファイルロック、Redis、リバースプロキシのクォータ）が必要です。 |
-| `CODEG_UPLOAD_QUOTA_STRICT` | *（未設定）* | 真値（`1` / `true` / `yes` / `on`）の場合、`CODEG_UPLOAD_MAX_TOTAL_BYTES` が解析できない値に設定されているときに、WARN を出して fail-open するのではなく、終了コード 2 で起動を中断します。セキュリティポリシーで「設定されたクォータは有効でなければならない」と要求される場合に使用します。 |
+| 変数                           | デフォルト             | 説明                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CODEG_PORT`                   | `3080`                 | HTTP ポート                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `CODEG_HOST`                   | `0.0.0.0`              | バインドアドレス                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `CODEG_TOKEN`                  | _(ランダム)_           | 認証トークン（起動時に stderr に出力）                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `CODEG_DATA_DIR`               | `~/.local/share/codeg` | SQLite データベースディレクトリ（`uploads/`、`pets/` のルートも兼ねる）                                                                                                                                                                                                                                                                                                                                                                         |
+| `CODEG_STATIC_DIR`             | `./web` または `./out` | Next.js 静的エクスポートディレクトリ                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | _（未設定）_           | `<data dir>/uploads/` 配下に存在するファイルの合計バイト数のハードキャップ。10進数のバイト数（例: `10737418240` で 10 GiB）。未設定、`0`、または解析できない値の場合、キャップは無効になり、起動時に現在の状態が分かるログ行を出力します。このキャップは単一の `codeg-server` プロセス内でのみ強制されます——同じ `uploads/` ボリュームを共有する水平スケール構成では、外部協調（ファイルロック、Redis、リバースプロキシのクォータ）が必要です。 |
+| `CODEG_UPLOAD_QUOTA_STRICT`    | _（未設定）_           | 真値（`1` / `true` / `yes` / `on`）の場合、`CODEG_UPLOAD_MAX_TOTAL_BYTES` が解析できない値に設定されているときに、WARN を出して fail-open するのではなく、終了コード 2 で起動を中断します。セキュリティポリシーで「設定されたクォータは有効でなければならない」と要求される場合に使用します。                                                                                                                                                   |
 
-## アーキテクチャ
+</details>
+
+<details>
+<summary><h2>アーキテクチャ</h2></summary>
 
 ```text
 Next.js 16 (Static Export) + React 19
@@ -280,6 +291,8 @@ Next.js 16 (Static Export) + React 19
   Local Filesystem  Git   Chat Channels
     / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
+
+</details>
 
 ## プライバシーとセキュリティ
 

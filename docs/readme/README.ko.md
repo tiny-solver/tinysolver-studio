@@ -24,13 +24,14 @@ Codeg(Code Generation)는 멀티 에이전트 코딩 워크스페이스입니다
 ![gallery](../images/gallery.svg)
 
 ## 메인 인터페이스
+
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
 
 ## 설정
-| 에이전트 | MCP | Skills | 버전 관리 | 웹 서비스 |
-| :---: | :---: | :---: | :---: | :---: |
-| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
+
+![Codeg Light](../images/settings-light.png#gh-light-mode-only)
+![Codeg Dark](../images/settings-dark.png#gh-dark-mode-only)
 
 ## 하이라이트
 
@@ -47,7 +48,21 @@ Codeg(Code Generation)는 멀티 에이전트 코딩 워크스페이스입니다
 - **Docker 지원** — `docker compose up` 또는 `docker run` 지원, 사용자 정의 토큰/포트, 데이터 영속화 및 프로젝트 디렉토리 마운트 지원
 - 통합 엔지니어링 루프 (파일 트리, Diff, Git 변경사항, 커밋, 터미널)
 
-## 프로젝트 부트
+## 지원 에이전트
+
+| Agent       | 환경 변수 경로                        | macOS / Linux 기본값                  | Windows 기본값                                        |
+| ----------- | ------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects`         | `~/.claude/projects`                  | `%USERPROFILE%\\.claude\\projects`                    |
+| Codex CLI   | `$CODEX_HOME/sessions`                | `~/.codex/sessions`                   | `%USERPROFILE%\\.codex\\sessions`                     |
+| OpenCode    | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
+| Gemini CLI  | `$GEMINI_CLI_HOME/.gemini`            | `~/.gemini`                           | `%USERPROFILE%\\.gemini`                              |
+| OpenClaw    | —                                     | `~/.openclaw/agents`                  | `%USERPROFILE%\\.openclaw\\agents`                    |
+| Cline       | `$CLINE_DIR`                          | `~/.cline/data/tasks`                 | `%USERPROFILE%\\.cline\\data\\tasks`                  |
+
+> 참고: 환경 변수가 기본 경로보다 우선합니다.
+
+<details>
+<summary><h2>프로젝트 부트</h2></summary>
 
 분할 패널 인터페이스로 새 프로젝트를 시각적으로 생성: 왼쪽에서 설정, 오른쪽에서 실시간 미리보기.
 
@@ -64,34 +79,27 @@ Codeg(Code Generation)는 멀티 에이전트 코딩 워크스페이스입니다
 
 현재 **shadcn/ui** 프로젝트 스캐폴딩을 지원하며, 탭 기반 디자인으로 향후 더 많은 프로젝트 유형을 지원할 준비가 되어 있습니다.
 
-## 채팅 채널
+</details>
+
+<details>
+<summary><h2>채팅 채널</h2></summary>
 
 즐겨 사용하는 메신저 앱 — Telegram, Lark(Feishu), iLink(Weixin) 등 — 을 AI 코딩 에이전트에 연결하세요. 채팅에서 직접 작업을 생성하고, 후속 메시지를 보내고, 권한을 승인하고, 세션을 재개하고, 활동을 모니터링할 수 있습니다 — 도구 호출 상세 정보, 권한 프롬프트, 완료 요약이 포함된 실시간 에이전트 응답을 브라우저를 열지 않고도 받을 수 있습니다.
 
 ### 지원 채널
 
-| 채널 | 프로토콜 | 상태 |
-| --- | --- | --- |
-| Telegram | Bot API (HTTP 롱폴링) | 내장 |
-| Lark (Feishu) | WebSocket + REST API | 내장 |
-| iLink (Weixin) | WebSocket + REST API | 내장 |
+| 채널           | 프로토콜              | 상태 |
+| -------------- | --------------------- | ---- |
+| Telegram       | Bot API (HTTP 롱폴링) | 내장 |
+| Lark (Feishu)  | WebSocket + REST API  | 내장 |
+| iLink (Weixin) | WebSocket + REST API  | 내장 |
 
 > 추가 채널(Discord, Slack, DingTalk 등)은 향후 릴리스에서 지원 예정입니다.
 
-## 지원 에이전트
+</details>
 
-| Agent | 환경 변수 경로 | macOS / Linux 기본값 | Windows 기본값 |
-| --- | --- | --- | --- |
-| Claude Code | `$CLAUDE_CONFIG_DIR/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` |
-| Codex CLI | `$CODEX_HOME/sessions` | `~/.codex/sessions` | `%USERPROFILE%\\.codex\\sessions` |
-| OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
-| Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
-| OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
-| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
-
-> 참고: 환경 변수가 기본 경로보다 우선합니다.
-
-## 빠른 시작
+<details>
+<summary><h2>빠른 시작</h2></summary>
 
 ### 요구 사항
 
@@ -190,13 +198,13 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 
 사전 빌드된 바이너리(웹 에셋 포함)는 [Releases](https://github.com/xintaofei/codeg/releases) 페이지에서 다운로드할 수 있습니다:
 
-| 플랫폼 | 파일 |
-| --- | --- |
-| Linux x64 | `codeg-server-linux-x64.tar.gz` |
-| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
-| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| 플랫폼      | 파일                               |
+| ----------- | ---------------------------------- |
+| Linux x64   | `codeg-server-linux-x64.tar.gz`    |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz`  |
+| macOS x64   | `codeg-server-darwin-x64.tar.gz`   |
 | macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
-| Windows x64 | `codeg-server-windows-x64.zip` |
+| Windows x64 | `codeg-server-windows-x64.zip`     |
 
 ```bash
 # 예시: 다운로드, 압축 해제, 실행
@@ -237,17 +245,20 @@ CODEG_STATIC_DIR=../out ./target/release/codeg-server
 
 환경 변수:
 
-| 변수 | 기본값 | 설명 |
-| --- | --- | --- |
-| `CODEG_PORT` | `3080` | HTTP 포트 |
-| `CODEG_HOST` | `0.0.0.0` | 바인드 주소 |
-| `CODEG_TOKEN` | *(랜덤)* | 인증 토큰 (시작 시 stderr에 출력) |
-| `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite 데이터베이스 디렉토리(`uploads/`, `pets/`의 루트 역할도 함) |
-| `CODEG_STATIC_DIR` | `./web` 또는 `./out` | Next.js 정적 내보내기 디렉토리 |
-| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | *(설정 안 됨)* | `<data dir>/uploads/` 아래 상주하는 모든 파일의 총 바이트 수에 대한 하드 한도. 10진수 바이트 수(예: 10 GiB의 경우 `10737418240`). 설정하지 않거나 `0`, 또는 파싱할 수 없는 값이면 한도가 비활성화되며, 현재 상태가 보이도록 시작 시 로그 라인을 출력합니다. 이 한도는 단일 `codeg-server` 프로세스 내에서만 적용됩니다 — 하나의 `uploads/` 볼륨을 공유하는 수평 확장 배포에는 외부 조정(파일 잠금, Redis, 리버스 프록시 쿼터)이 필요합니다. |
-| `CODEG_UPLOAD_QUOTA_STRICT` | *(설정 안 됨)* | 참값(`1` / `true` / `yes` / `on`)으로 설정된 경우, `CODEG_UPLOAD_MAX_TOTAL_BYTES`가 파싱할 수 없는 값으로 설정되어 있으면 WARN과 함께 fail-open 하는 대신 종료 코드 2로 시작을 중단합니다. 보안 정책상 "구성된 쿼터가 반드시 적용되어야 한다"는 요구가 있을 때 사용합니다. |
+| 변수                           | 기본값                 | 설명                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CODEG_PORT`                   | `3080`                 | HTTP 포트                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `CODEG_HOST`                   | `0.0.0.0`              | 바인드 주소                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `CODEG_TOKEN`                  | _(랜덤)_               | 인증 토큰 (시작 시 stderr에 출력)                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `CODEG_DATA_DIR`               | `~/.local/share/codeg` | SQLite 데이터베이스 디렉토리(`uploads/`, `pets/`의 루트 역할도 함)                                                                                                                                                                                                                                                                                                                                                                          |
+| `CODEG_STATIC_DIR`             | `./web` 또는 `./out`   | Next.js 정적 내보내기 디렉토리                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | _(설정 안 됨)_         | `<data dir>/uploads/` 아래 상주하는 모든 파일의 총 바이트 수에 대한 하드 한도. 10진수 바이트 수(예: 10 GiB의 경우 `10737418240`). 설정하지 않거나 `0`, 또는 파싱할 수 없는 값이면 한도가 비활성화되며, 현재 상태가 보이도록 시작 시 로그 라인을 출력합니다. 이 한도는 단일 `codeg-server` 프로세스 내에서만 적용됩니다 — 하나의 `uploads/` 볼륨을 공유하는 수평 확장 배포에는 외부 조정(파일 잠금, Redis, 리버스 프록시 쿼터)이 필요합니다. |
+| `CODEG_UPLOAD_QUOTA_STRICT`    | _(설정 안 됨)_         | 참값(`1` / `true` / `yes` / `on`)으로 설정된 경우, `CODEG_UPLOAD_MAX_TOTAL_BYTES`가 파싱할 수 없는 값으로 설정되어 있으면 WARN과 함께 fail-open 하는 대신 종료 코드 2로 시작을 중단합니다. 보안 정책상 "구성된 쿼터가 반드시 적용되어야 한다"는 요구가 있을 때 사용합니다.                                                                                                                                                                  |
 
-## 아키텍처
+</details>
+
+<details>
+<summary><h2>아키텍처</h2></summary>
 
 ```text
 Next.js 16 (Static Export) + React 19
@@ -280,6 +291,8 @@ Next.js 16 (Static Export) + React 19
   Local Filesystem  Git   Chat Channels
     / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
+
+</details>
 
 ## 개인정보 보호 및 보안
 

@@ -24,13 +24,14 @@ Codeg (Code Generation) est un espace de travail de codage multi-agent. Il réun
 ![gallery](../images/gallery.svg)
 
 ## Interface principale
+
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
 
 ## Paramètres
-| Agents | MCP | Skills | Contrôle de version | Service web |
-| :---: | :---: | :---: | :---: | :---: |
-| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
+
+![Codeg Light](../images/settings-light.png#gh-light-mode-only)
+![Codeg Dark](../images/settings-dark.png#gh-dark-mode-only)
 
 ## Points forts
 
@@ -47,7 +48,21 @@ Codeg (Code Generation) est un espace de travail de codage multi-agent. Il réun
 - **Support Docker** — `docker compose up` ou `docker run`, avec token/port personnalisables, persistance des données et montage de répertoires de projets
 - Boucle d'ingénierie intégrée (arborescence de fichiers, diff, changements git, commit, terminal)
 
-## Lanceur de projet
+## Agents supportés
+
+| Agent       | Chemin via variable d'environnement   | Défaut macOS / Linux                  | Défaut Windows                                        |
+| ----------- | ------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects`         | `~/.claude/projects`                  | `%USERPROFILE%\\.claude\\projects`                    |
+| Codex CLI   | `$CODEX_HOME/sessions`                | `~/.codex/sessions`                   | `%USERPROFILE%\\.codex\\sessions`                     |
+| OpenCode    | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
+| Gemini CLI  | `$GEMINI_CLI_HOME/.gemini`            | `~/.gemini`                           | `%USERPROFILE%\\.gemini`                              |
+| OpenClaw    | —                                     | `~/.openclaw/agents`                  | `%USERPROFILE%\\.openclaw\\agents`                    |
+| Cline       | `$CLINE_DIR`                          | `~/.cline/data/tasks`                 | `%USERPROFILE%\\.cline\\data\\tasks`                  |
+
+> Remarque : les variables d'environnement ont priorité sur les chemins par défaut.
+
+<details>
+<summary><h2>Lanceur de projet</h2></summary>
 
 Créez visuellement de nouveaux projets avec une interface à panneaux divisés : configuration à gauche, aperçu en temps réel à droite.
 
@@ -64,34 +79,27 @@ Créez visuellement de nouveaux projets avec une interface à panneaux divisés 
 
 Prend actuellement en charge le scaffolding de projets **shadcn/ui**, avec un design à onglets prêt pour d'autres types de projets à l'avenir.
 
-## Canaux de chat
+</details>
+
+<details>
+<summary><h2>Canaux de chat</h2></summary>
 
 Connectez vos applications de messagerie préférées — Telegram, Lark (Feishu), iLink (Weixin) et plus — à vos agents de codage IA. Créez des tâches, envoyez des messages de suivi, approuvez les permissions, reprenez des sessions et surveillez l'activité directement depuis votre chat — recevez les réponses des agents en temps réel avec les détails des appels d'outils, les demandes de permissions et les résumés de complétion, le tout sans ouvrir de navigateur.
 
 ### Canaux pris en charge
 
-| Canal | Protocole | Statut |
-| --- | --- | --- |
-| Telegram | Bot API (HTTP long-polling) | Intégré |
-| Lark (Feishu) | WebSocket + REST API | Intégré |
-| iLink (Weixin) | WebSocket + REST API | Intégré |
+| Canal          | Protocole                   | Statut  |
+| -------------- | --------------------------- | ------- |
+| Telegram       | Bot API (HTTP long-polling) | Intégré |
+| Lark (Feishu)  | WebSocket + REST API        | Intégré |
+| iLink (Weixin) | WebSocket + REST API        | Intégré |
 
 > D'autres canaux (Discord, Slack, DingTalk, etc.) sont prévus pour de futures versions.
 
-## Agents supportés
+</details>
 
-| Agent | Chemin via variable d'environnement | Défaut macOS / Linux | Défaut Windows |
-| --- | --- | --- | --- |
-| Claude Code | `$CLAUDE_CONFIG_DIR/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` |
-| Codex CLI | `$CODEX_HOME/sessions` | `~/.codex/sessions` | `%USERPROFILE%\\.codex\\sessions` |
-| OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
-| Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
-| OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
-| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
-
-> Remarque : les variables d'environnement ont priorité sur les chemins par défaut.
-
-## Démarrage rapide
+<details>
+<summary><h2>Démarrage rapide</h2></summary>
 
 ### Prérequis
 
@@ -190,13 +198,13 @@ Ou installer une version spécifique :
 
 Les binaires pré-compilés (avec les ressources web incluses) sont disponibles sur la page [Releases](https://github.com/xintaofei/codeg/releases) :
 
-| Plateforme | Fichier |
-| --- | --- |
-| Linux x64 | `codeg-server-linux-x64.tar.gz` |
-| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
-| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| Plateforme  | Fichier                            |
+| ----------- | ---------------------------------- |
+| Linux x64   | `codeg-server-linux-x64.tar.gz`    |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz`  |
+| macOS x64   | `codeg-server-darwin-x64.tar.gz`   |
 | macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
-| Windows x64 | `codeg-server-windows-x64.zip` |
+| Windows x64 | `codeg-server-windows-x64.zip`     |
 
 ```bash
 # Exemple : télécharger, extraire et exécuter
@@ -237,17 +245,20 @@ CODEG_STATIC_DIR=../out ./target/release/codeg-server
 
 Variables d'environnement :
 
-| Variable | Valeur par défaut | Description |
-| --- | --- | --- |
-| `CODEG_PORT` | `3080` | Port HTTP |
-| `CODEG_HOST` | `0.0.0.0` | Adresse de liaison |
-| `CODEG_TOKEN` | *(aléatoire)* | Jeton d'authentification (affiché sur stderr au démarrage) |
-| `CODEG_DATA_DIR` | `~/.local/share/codeg` | Répertoire de la base de données SQLite (racine également de `uploads/`, `pets/`) |
-| `CODEG_STATIC_DIR` | `./web` ou `./out` | Répertoire d'export statique Next.js |
-| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | *(non défini)* | Limite stricte du nombre total d'octets résidant sous `<data dir>/uploads/`. Nombre d'octets en décimal (p. ex. `10737418240` pour 10 Gio). Non défini, `0` ou une valeur non analysable désactive la limite et imprime une ligne au démarrage pour que la configuration soit visible. La limite est appliquée au sein d'un seul processus `codeg-server` — les déploiements à mise à l'échelle horizontale partageant un même volume `uploads/` nécessitent une coordination externe (verrou de fichier, Redis, quota de proxy inverse). |
-| `CODEG_UPLOAD_QUOTA_STRICT` | *(non défini)* | Lorsque vrai (`1` / `true` / `yes` / `on`), interrompt le démarrage avec le code de sortie 2 si `CODEG_UPLOAD_MAX_TOTAL_BYTES` est défini sur une valeur non analysable, au lieu de continuer avec un WARN. Utilisez ceci lorsque votre politique de sécurité exige que « le quota configuré doit être effectif ». |
+| Variable                       | Valeur par défaut      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CODEG_PORT`                   | `3080`                 | Port HTTP                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `CODEG_HOST`                   | `0.0.0.0`              | Adresse de liaison                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `CODEG_TOKEN`                  | _(aléatoire)_          | Jeton d'authentification (affiché sur stderr au démarrage)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `CODEG_DATA_DIR`               | `~/.local/share/codeg` | Répertoire de la base de données SQLite (racine également de `uploads/`, `pets/`)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `CODEG_STATIC_DIR`             | `./web` ou `./out`     | Répertoire d'export statique Next.js                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | _(non défini)_         | Limite stricte du nombre total d'octets résidant sous `<data dir>/uploads/`. Nombre d'octets en décimal (p. ex. `10737418240` pour 10 Gio). Non défini, `0` ou une valeur non analysable désactive la limite et imprime une ligne au démarrage pour que la configuration soit visible. La limite est appliquée au sein d'un seul processus `codeg-server` — les déploiements à mise à l'échelle horizontale partageant un même volume `uploads/` nécessitent une coordination externe (verrou de fichier, Redis, quota de proxy inverse). |
+| `CODEG_UPLOAD_QUOTA_STRICT`    | _(non défini)_         | Lorsque vrai (`1` / `true` / `yes` / `on`), interrompt le démarrage avec le code de sortie 2 si `CODEG_UPLOAD_MAX_TOTAL_BYTES` est défini sur une valeur non analysable, au lieu de continuer avec un WARN. Utilisez ceci lorsque votre politique de sécurité exige que « le quota configuré doit être effectif ».                                                                                                                                                                                                                        |
 
-## Architecture
+</details>
+
+<details>
+<summary><h2>Architecture</h2></summary>
 
 ```text
 Next.js 16 (Static Export) + React 19
@@ -280,6 +291,8 @@ Next.js 16 (Static Export) + React 19
   Local Filesystem  Git   Chat Channels
     / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
+
+</details>
 
 ## Confidentialité et sécurité
 

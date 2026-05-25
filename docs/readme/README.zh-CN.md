@@ -24,13 +24,14 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 ![gallery](../images/gallery.svg)
 
 ## 主界面
+
 ![Codeg Light](../images/main-light.png#gh-light-mode-only)
 ![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
 
 ## 设置
-| 代理 | MCP | Skills | 版本控制 | Web 服务 |
-| :---: | :---: | :---: | :---: | :---: |
-| ![Agents](../images/1-light.png#gh-light-mode-only) ![Agents](../images/1-dark.png#gh-dark-mode-only) | ![MCP](../images/2-light.png#gh-light-mode-only) ![MCP](../images/2-dark.png#gh-dark-mode-only) | ![Skills](../images/3-light.png#gh-light-mode-only) ![Skills](../images/3-dark.png#gh-dark-mode-only) | ![Version Control](../images/4-light.png#gh-light-mode-only) ![Version Control](../images/4-dark.png#gh-dark-mode-only) | ![Web Service](../images/5-light.png#gh-light-mode-only) ![Web Service](../images/5-dark.png#gh-dark-mode-only) |
+
+![Codeg Light](../images/settings-light.png#gh-light-mode-only)
+![Codeg Dark](../images/settings-dark.png#gh-dark-mode-only)
 
 ## 核心亮点
 
@@ -47,7 +48,21 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 - **Docker 支持** — `docker compose up` 或 `docker run`，可自定义令牌、端口，支持数据持久化及项目目录挂载
 - 集成工程闭环（文件树、Diff、Git 变更、提交、终端）
 
-## 项目启动器
+## 支持的Agent
+
+| Agent       | 环境变量优先路径                      | macOS / Linux 默认路径                | Windows 默认路径                                      |
+| ----------- | ------------------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects`         | `~/.claude/projects`                  | `%USERPROFILE%\\.claude\\projects`                    |
+| Codex CLI   | `$CODEX_HOME/sessions`                | `~/.codex/sessions`                   | `%USERPROFILE%\\.codex\\sessions`                     |
+| OpenCode    | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
+| Gemini CLI  | `$GEMINI_CLI_HOME/.gemini`            | `~/.gemini`                           | `%USERPROFILE%\\.gemini`                              |
+| OpenClaw    | —                                     | `~/.openclaw/agents`                  | `%USERPROFILE%\\.openclaw\\agents`                    |
+| Cline       | `$CLINE_DIR`                          | `~/.cline/data/tasks`                 | `%USERPROFILE%\\.cline\\data\\tasks`                  |
+
+> 注意：环境变量的优先级高于默认路径。
+
+<details>
+<summary><h2>项目启动器</h2></summary>
 
 可视化创建新项目：左侧配置面板，右侧实时预览。
 
@@ -64,34 +79,27 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 
 目前支持 **shadcn/ui** 项目脚手架，选项卡式设计为未来支持更多项目类型做好了准备。
 
-## 消息渠道
+</details>
+
+<details>
+<summary><h2>消息渠道</h2></summary>
 
 连接你喜爱的即时通讯应用——Telegram、飞书、iLink（微信）等——到 AI 编码代理。直接在聊天中创建任务、发送后续消息、审批权限、恢复会话、监控活动。实时接收代理响应（包含工具调用详情、权限提示和完成摘要），无需打开浏览器。
 
 ### 支持的渠道
 
-| 渠道 | 协议 | 状态 |
-| --- | --- | --- |
-| Telegram | Bot API（HTTP 长轮询） | 内置 |
-| 飞书 | WebSocket + REST API | 内置 |
-| iLink（微信） | WebSocket + REST API | 内置 |
+| 渠道          | 协议                   | 状态 |
+| ------------- | ---------------------- | ---- |
+| Telegram      | Bot API（HTTP 长轮询） | 内置 |
+| 飞书          | WebSocket + REST API   | 内置 |
+| iLink（微信） | WebSocket + REST API   | 内置 |
 
 > 更多渠道（Discord、Slack、钉钉等）计划在未来版本中支持。
 
-## 支持的Agent
+</details>
 
-| Agent | 环境变量优先路径 | macOS / Linux 默认路径 | Windows 默认路径 |
-| --- | --- | --- | --- |
-| Claude Code | `$CLAUDE_CONFIG_DIR/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` |
-| Codex CLI | `$CODEX_HOME/sessions` | `~/.codex/sessions` | `%USERPROFILE%\\.codex\\sessions` |
-| OpenCode | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` |
-| Gemini CLI | `$GEMINI_CLI_HOME/.gemini` | `~/.gemini` | `%USERPROFILE%\\.gemini` |
-| OpenClaw | — | `~/.openclaw/agents` | `%USERPROFILE%\\.openclaw\\agents` |
-| Cline | `$CLINE_DIR` | `~/.cline/data/tasks` | `%USERPROFILE%\\.cline\\data\\tasks` |
-
-> 注意：环境变量的优先级高于默认路径。
-
-## 快速开始
+<details>
+<summary><h2>快速开始</h2></summary>
 
 ### 环境要求
 
@@ -190,13 +198,13 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 
 预构建二进制文件（已打包 Web 前端资源）可在 [Releases](https://github.com/xintaofei/codeg/releases) 页面下载：
 
-| 平台 | 文件 |
-| --- | --- |
-| Linux x64 | `codeg-server-linux-x64.tar.gz` |
-| Linux arm64 | `codeg-server-linux-arm64.tar.gz` |
-| macOS x64 | `codeg-server-darwin-x64.tar.gz` |
+| 平台        | 文件                               |
+| ----------- | ---------------------------------- |
+| Linux x64   | `codeg-server-linux-x64.tar.gz`    |
+| Linux arm64 | `codeg-server-linux-arm64.tar.gz`  |
+| macOS x64   | `codeg-server-darwin-x64.tar.gz`   |
 | macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
-| Windows x64 | `codeg-server-windows-x64.zip` |
+| Windows x64 | `codeg-server-windows-x64.zip`     |
 
 ```bash
 # 示例：下载、解压、运行
@@ -237,17 +245,20 @@ CODEG_STATIC_DIR=../out ./target/release/codeg-server
 
 环境变量：
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `CODEG_PORT` | `3080` | HTTP 端口 |
-| `CODEG_HOST` | `0.0.0.0` | 绑定地址 |
-| `CODEG_TOKEN` | *（随机）* | 认证令牌（启动时输出到 stderr） |
-| `CODEG_DATA_DIR` | `~/.local/share/codeg` | SQLite 数据库目录（同时也是 `uploads/`、`pets/` 的根目录） |
-| `CODEG_STATIC_DIR` | `./web` 或 `./out` | Next.js 静态导出目录 |
-| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | *（未设置）* | `<data dir>/uploads/` 下所有文件总字节数的硬上限。十进制字节数（例如 `10737418240` 表示 10 GiB）。未设置、`0` 或无法解析的值会禁用上限，并在启动时打印一行日志以便观察当前状态。该上限仅在单个 `codeg-server` 进程内生效——共享一个 `uploads/` 卷的横向扩展部署需要外部协调（文件锁、Redis、反向代理配额）。 |
-| `CODEG_UPLOAD_QUOTA_STRICT` | *（未设置）* | 当值为真（`1` / `true` / `yes` / `on`）时，若 `CODEG_UPLOAD_MAX_TOTAL_BYTES` 设置为无法解析的值，则以退出码 2 中止启动，而不是发出 WARN 后继续运行。当安全策略要求"配置的配额必须生效"时使用此选项。 |
+| 变量                           | 默认值                 | 说明                                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CODEG_PORT`                   | `3080`                 | HTTP 端口                                                                                                                                                                                                                                                                                                   |
+| `CODEG_HOST`                   | `0.0.0.0`              | 绑定地址                                                                                                                                                                                                                                                                                                    |
+| `CODEG_TOKEN`                  | _（随机）_             | 认证令牌（启动时输出到 stderr）                                                                                                                                                                                                                                                                             |
+| `CODEG_DATA_DIR`               | `~/.local/share/codeg` | SQLite 数据库目录（同时也是 `uploads/`、`pets/` 的根目录）                                                                                                                                                                                                                                                  |
+| `CODEG_STATIC_DIR`             | `./web` 或 `./out`     | Next.js 静态导出目录                                                                                                                                                                                                                                                                                        |
+| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | _（未设置）_           | `<data dir>/uploads/` 下所有文件总字节数的硬上限。十进制字节数（例如 `10737418240` 表示 10 GiB）。未设置、`0` 或无法解析的值会禁用上限，并在启动时打印一行日志以便观察当前状态。该上限仅在单个 `codeg-server` 进程内生效——共享一个 `uploads/` 卷的横向扩展部署需要外部协调（文件锁、Redis、反向代理配额）。 |
+| `CODEG_UPLOAD_QUOTA_STRICT`    | _（未设置）_           | 当值为真（`1` / `true` / `yes` / `on`）时，若 `CODEG_UPLOAD_MAX_TOTAL_BYTES` 设置为无法解析的值，则以退出码 2 中止启动，而不是发出 WARN 后继续运行。当安全策略要求"配置的配额必须生效"时使用此选项。                                                                                                        |
 
-## 架构
+</details>
+
+<details>
+<summary><h2>架构</h2></summary>
 
 ```text
 Next.js 16 (Static Export) + React 19
@@ -280,6 +291,8 @@ Next.js 16 (Static Export) + React 19
   Local Filesystem  Git   Chat Channels
     / Git Repos    Repos  (Telegram, Lark, iLink)
 ```
+
+</details>
 
 ## 隐私与安全
 
