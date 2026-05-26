@@ -396,6 +396,7 @@ fn git_check_ignored_paths(
     }
 
     let mut child = crate::process::std_command("git")
+        .arg("--no-optional-locks")
         .args(["check-ignore", "--stdin", "-z"])
         .current_dir(repo_path)
         .stdin(Stdio::piped())
@@ -707,7 +708,7 @@ async fn collect_git_snapshot(path: &str) -> Result<Vec<WorkspaceGitEntry>, AppC
     // status + numstat don't depend on each other; run concurrently to cut
     // per-flush latency roughly in half on large repos.
     let (status_entries, stats) = tokio::join!(
-        folders::git_status_no_optional_locks(path.to_string(), Some(true)),
+        folders::git_status(path.to_string(), Some(true)),
         git_numstat_map(path),
     );
     let status_entries = status_entries?;
