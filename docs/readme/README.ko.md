@@ -27,6 +27,12 @@ Codeg(Code Generation)는 멀티 에이전트 코딩 워크스페이스입니다
 
 <table>
   <tr>
+    <td colspan="2" align="center">
+      <a href="https://myclaw.ai/?utm_source=github&utm_campaign=codeg" target="_blank"><img src="https://raw.githubusercontent.com/LeoYeAI/myclaw-sponsor-preview/main/banner.svg" alt="MyClaw.ai — Your OpenClaw Agent, Always On." /></a><br/>
+      <strong><a href="https://myclaw.ai/?utm_source=github&utm_campaign=codeg">MyClaw.ai</a></strong> — 완전관리형 OpenClaw 클라우드 인스턴스 서비스. 원클릭 배포, 24/7 상시 운영, 데이터 완전 소유권 보장 — 서버를 직접 관리할 필요가 없습니다.
+    </td>
+  </tr>
+  <tr>
     <td align="center" width="220">
       <a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg" target="_blank"><img src="../images/compshare.png" alt="Compshare" width="160" /></a><br/>
       <strong><a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg">Compshare(UCloud)</a></strong>
