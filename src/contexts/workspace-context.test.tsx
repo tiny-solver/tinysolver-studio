@@ -864,3 +864,249 @@ describe("background reload + stale semantics", () => {
     expect(mockedApi.readFileForEdit).not.toHaveBeenCalled()
   })
 })
+
+interface ApplyExternalProbeSnapshot {
+  activeId: string | null
+  tabs: Array<{
+    id: string
+    content: string
+    etag: string | null | undefined
+    isDirty: boolean
+    stale: boolean
+    loading: boolean
+  }>
+}
+
+function ApplyExternalReloadProbe({
+  onCapture,
+}: {
+  onCapture: (snapshot: ApplyExternalProbeSnapshot) => void
+}) {
+  const {
+    openFilePreview,
+    fileTabs,
+    activeFileTabId,
+    applyExternalReload,
+    updateActiveFileContent,
+    markTabsStale,
+  } = useWorkspaceContext()
+  onCapture({
+    activeId: activeFileTabId,
+    tabs: fileTabs.map((tab) => ({
+      id: tab.id,
+      content: tab.content,
+      etag: tab.etag,
+      isDirty: Boolean(tab.isDirty),
+      stale: Boolean(tab.stale),
+      loading: tab.loading,
+    })),
+  })
+  return (
+    <div>
+      <button onClick={() => void openFilePreview("a.ts")}>open-a</button>
+      <button onClick={() => void openFilePreview("b.ts")}>open-b</button>
+      <button onClick={() => updateActiveFileContent("dirty-local")}>
+        edit
+      </button>
+      <button onClick={() => markTabsStale("a.ts")}>stale-a</button>
+      <button
+        onClick={() =>
+          void applyExternalReload("a.ts", {
+            path: "a.ts",
+            content: "ext-content",
+            etag: "ext-etag",
+            mtime_ms: 99,
+            readonly: false,
+            line_ending: "lf",
+          })
+        }
+      >
+        apply-a
+      </button>
+      <button
+        onClick={() =>
+          void applyExternalReload("missing.ts", {
+            path: "missing.ts",
+            content: "x",
+            etag: "x",
+            mtime_ms: 1,
+            readonly: false,
+            line_ending: "lf",
+          })
+        }
+      >
+        apply-missing
+      </button>
+    </div>
+  )
+}
+
+describe("applyExternalReload prefetched-write semantics", () => {
+  beforeEach(() => {
+    mockedApi.readFileForEdit.mockReset()
+    mockedApi.gitIsTracked.mockReset()
+    mockedApi.gitShowFile.mockReset()
+    mockedApi.gitIsTracked.mockResolvedValue(false)
+  })
+
+  it("writes prefetched content into the matching tab without a second readFileForEdit", async () => {
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "a-v1",
+      etag: "ea1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: ApplyExternalProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyExternalReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    expect(mockedApi.readFileForEdit).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      screen.getByText("apply-a").click()
+    })
+
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.content).toBe("ext-content")
+    expect(tabA?.etag).toBe("ext-etag")
+    expect(tabA?.loading).toBe(false)
+    // The whole point: the prefetched payload is the source of truth, no
+    // additional file read is issued.
+    expect(mockedApi.readFileForEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not change activeFileTabId when reloading a non-active tab", async () => {
+    mockedApi.readFileForEdit
+      .mockResolvedValueOnce({
+        path: "a.ts",
+        content: "a-v1",
+        etag: "ea1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+      .mockResolvedValueOnce({
+        path: "b.ts",
+        content: "b-v1",
+        etag: "eb1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+
+    let snap: ApplyExternalProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyExternalReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    await act(async () => {
+      screen.getByText("open-b").click()
+    })
+    expect(snap.activeId).toBe("file:b.ts")
+
+    await act(async () => {
+      screen.getByText("apply-a").click()
+    })
+
+    expect(snap.activeId).toBe("file:b.ts")
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.content).toBe("ext-content")
+  })
+
+  it("refuses to overwrite a dirty tab", async () => {
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "a-v1",
+      etag: "ea1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: ApplyExternalProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyExternalReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    await act(async () => {
+      screen.getByText("edit").click()
+    })
+
+    await act(async () => {
+      screen.getByText("apply-a").click()
+    })
+
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.isDirty).toBe(true)
+    expect(tabA?.content).toBe("dirty-local")
+  })
+
+  it("clears stale=true on a successful apply", async () => {
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "a-v1",
+      etag: "ea1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: ApplyExternalProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyExternalReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    await act(async () => {
+      screen.getByText("stale-a").click()
+    })
+    expect(snap.tabs.find((t) => t.id === "file:a.ts")?.stale).toBe(true)
+
+    await act(async () => {
+      screen.getByText("apply-a").click()
+    })
+
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.stale).toBe(false)
+    expect(tabA?.content).toBe("ext-content")
+  })
+
+  it("is a no-op when the path has no open tab", async () => {
+    let snap: ApplyExternalProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyExternalReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("apply-missing").click()
+    })
+
+    expect(snap.tabs).toHaveLength(0)
+    expect(mockedApi.readFileForEdit).not.toHaveBeenCalled()
+  })
+})

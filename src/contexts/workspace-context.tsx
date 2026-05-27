@@ -23,6 +23,7 @@ import {
   readFilePreview,
   saveFileContent,
 } from "@/lib/api"
+import type { FileEditContent } from "@/lib/types"
 import { languageFromPath } from "@/lib/language-detect"
 import { toErrorMessage } from "@/lib/app-error"
 
@@ -82,6 +83,12 @@ interface WorkspaceContextValue {
   // No-op when no tab matches or when the tab has unsaved local edits
   // (use markTabsStale for that case).
   reloadOpenFileBackground: (path: string) => Promise<void>
+  // Write prefetched file content into the open tab matching `path` without
+  // issuing a second readFileForEdit. Used by the change-detection watcher
+  // whose resolver has already paid for the read — avoids the I/O double
+  // when many tabs are affected by a single workspace event. Skips dirty
+  // tabs and tabs that aren't open.
+  applyExternalReload: (path: string, fetched: FileEditContent) => Promise<void>
   // Flip stale=true on the tab matching `path`. Activating a stale tab
   // forces a refetch (clean) or triggers conflict resolution (dirty).
   markTabsStale: (path: string) => void
@@ -160,7 +167,7 @@ const IMAGE_MIME: Record<string, string> = {
   ico: "image/x-icon",
 }
 
-function isImageFile(path: string): boolean {
+export function isImageFile(path: string): boolean {
   const ext = path.split(".").pop()?.toLowerCase() ?? ""
   return IMAGE_EXTENSIONS.has(ext)
 }
@@ -672,6 +679,69 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       return updated
     })
   }, [])
+
+  // Write a prefetched FileEditContent into the matching tab. The change-
+  // detection watcher uses this after its resolver has already read the
+  // latest disk content — without this we would re-read every file twice
+  // per workspace event (resolver + reload). Dirty tabs are skipped so
+  // unsaved edits are never silently clobbered. Generation/settle is used
+  // so this write never resurrects a closed tab and concurrent applies
+  // converge to the latest payload.
+  const applyExternalReload = useCallback(
+    async (rawPath: string, fetched: FileEditContent) => {
+      if (!folderPath) return
+      const path = normalizePath(rawPath)
+      const tabId = `file:${path}`
+      const existing = fileTabsRef.current.find((t) => t.id === tabId)
+      if (!existing || existing.kind !== "file") return
+      if (existing.isDirty) return
+
+      const gen = beginFetchGeneration(tabId)
+
+      // Write content synchronously from the prefetched payload. No
+      // settleFetch guard here: the inFlightLoadsRef bump above already
+      // invalidates any concurrent fetch's resolve.
+      setFileTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                content: fetched.content,
+                savedContent: fetched.content,
+                isDirty: false,
+                etag: fetched.etag,
+                mtimeMs: fetched.mtime_ms,
+                readonly: fetched.readonly,
+                lineEnding: fetched.line_ending,
+                loading: false,
+                stale: false,
+                saveState: "idle",
+                saveError: null,
+              }
+            : tab
+        )
+      )
+
+      // Refresh git base in the background. If the tab is closed or a
+      // newer apply/reload supersedes us before this settles, the
+      // settleFetch guard ensures we do not write stale gitBaseContent.
+      try {
+        const tracked = await gitIsTracked(folderPath, path).catch(() => false)
+        const gitBaseContent = tracked
+          ? await gitShowFile(folderPath, path).catch(() => "")
+          : undefined
+        if (!settleFetch(tabId, gen)) return
+        setFileTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === tabId ? { ...tab, gitBaseContent } : tab
+          )
+        )
+      } catch {
+        settleFetch(tabId, gen)
+      }
+    },
+    [folderPath, beginFetchGeneration, settleFetch]
+  )
 
   const openFilePreview = useCallback(
     async (rawPath: string, options?: { line?: number; reload?: boolean }) => {
@@ -1441,6 +1511,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       reorderFileTabs,
       openFilePreview,
       reloadOpenFileBackground,
+      applyExternalReload,
       markTabsStale,
       pendingFileReveal,
       consumePendingFileReveal,
@@ -1474,6 +1545,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       reorderFileTabs,
       openFilePreview,
       reloadOpenFileBackground,
+      applyExternalReload,
       markTabsStale,
       pendingFileReveal,
       consumePendingFileReveal,

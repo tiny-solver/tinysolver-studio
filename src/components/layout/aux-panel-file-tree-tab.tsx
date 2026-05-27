@@ -19,6 +19,7 @@ import { useTabContext } from "@/contexts/tab-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import {
   type FileWorkspaceTab,
+  isImageFile,
   useWorkspaceContext,
 } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
@@ -46,7 +47,12 @@ import {
 import { isDesktop, isRemoteDesktopMode } from "@/lib/transport"
 import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import type { FileTreeNode, GitBranchList, GitStatusEntry } from "@/lib/types"
+import type {
+  FileEditContent,
+  FileTreeNode,
+  GitBranchList,
+  GitStatusEntry,
+} from "@/lib/types"
 import {
   FileTree,
   FileTreeFolder,
@@ -862,6 +868,7 @@ export function FileTreeTab() {
     openFilePreview,
     openWorkingTreeDiff,
     reloadOpenFileBackground,
+    applyExternalReload,
     markTabsStale,
   } = useWorkspaceContext()
   const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
@@ -937,7 +944,6 @@ export function FileTreeTab() {
   const activeFileTabRef = useRef(activeFileTab)
   const fileTabsRef = useRef<FileWorkspaceTab[]>(fileTabs)
   const filePathSetRef = useRef<Set<string>>(new Set())
-  const previousWorkspaceSeqRef = useRef(0)
   const previousExpandedPathsRef = useRef<Set<string>>(
     new Set([FILE_TREE_ROOT_PATH])
   )
@@ -971,7 +977,6 @@ export function FileTreeTab() {
     lazyLoadedChildrenByPathRef.current.clear()
     lazyLoadingDirPathsRef.current.clear()
     externalConflictSignatureByPathRef.current.clear()
-    previousWorkspaceSeqRef.current = 0
   }, [folder?.path])
 
   // Handle pending reveal path: expand all ancestor directories once tree is loaded
@@ -2130,7 +2135,7 @@ export function FileTreeTab() {
 
   type FileChangeDecision =
     | { kind: "none" }
-    | { kind: "reload"; path: string }
+    | { kind: "reload"; path: string; latest: FileEditContent }
     | {
         kind: "conflict"
         path: string
@@ -2143,7 +2148,9 @@ export function FileTreeTab() {
   // the latest disk read for the same path. Independent of activation —
   // callable for any open file tab so the watcher can scan inactive tabs
   // too. Re-reads the tab from `fileTabsRef.current` after the fetch to
-  // guard against close/reopen races during the async window.
+  // guard against close/reopen races during the async window. The `reload`
+  // decision carries the fetched FileEditContent so the watcher can write
+  // it directly via applyExternalReload, avoiding a second readFileForEdit.
   const resolveFileChangeDecision = useCallback(
     async (tabSnapshot: FileWorkspaceTab): Promise<FileChangeDecision> => {
       const rootPath = folder?.path
@@ -2154,7 +2161,6 @@ export function FileTreeTab() {
       if (tabSnapshot.loading) return { kind: "none" }
 
       const tabId = tabSnapshot.id
-      const knownTabEtag = tabSnapshot.etag ?? null
 
       const stillSameTab = (): FileWorkspaceTab | null => {
         const latestTab = fileTabsRef.current.find((t) => t.id === tabId)
@@ -2169,38 +2175,40 @@ export function FileTreeTab() {
         return latestTab
       }
 
+      let latest: FileEditContent
       try {
-        const latest = await readFileForEdit(rootPath, path)
-        const latestTab = stillSameTab()
-        if (!latestTab) return { kind: "none" }
-
-        const latestTabEtag = latestTab.etag ?? null
-        if (latest.etag === latestTabEtag) return { kind: "none" }
-
-        if (latestTab.isDirty) {
-          return {
-            kind: "conflict",
-            path,
-            diskContent: latest.content,
-            unsavedContent: latestTab.content,
-            signature: `${path}:${latest.etag}`,
-          }
-        }
-
-        return { kind: "reload", path }
+        latest = await readFileForEdit(rootPath, path)
       } catch {
-        const latestTab = stillSameTab()
-        if (!latestTab) return { kind: "none" }
-        if (latestTab.isDirty) return { kind: "none" }
-        if (!knownTabEtag) return { kind: "reload", path }
-        return { kind: "reload", path }
+        // Disk read failed (permissions, deleted, locked, …). Stay quiet
+        // and let the next workspace event retry. We do NOT mark stale or
+        // trigger a reload — there is nothing fresh to apply.
+        return { kind: "none" }
       }
+
+      const latestTab = stillSameTab()
+      if (!latestTab) return { kind: "none" }
+
+      const latestTabEtag = latestTab.etag ?? null
+      if (latest.etag === latestTabEtag) return { kind: "none" }
+
+      if (latestTab.isDirty) {
+        return {
+          kind: "conflict",
+          path,
+          diskContent: latest.content,
+          unsavedContent: latestTab.content,
+          signature: `${path}:${latest.etag}`,
+        }
+      }
+
+      return { kind: "reload", path, latest }
     },
     [folder?.path]
   )
 
   // Surface a conflict prompt for `decision`, deduping by signature so a
-  // repeated seq-tick or activation transition does not flicker the UI.
+  // repeated workspace event or activation transition does not flicker
+  // the UI.
   const announceConflict = useCallback(
     (decision: Extract<FileChangeDecision, { kind: "conflict" }>) => {
       const shownSignature = externalConflictSignatureByPathRef.current.get(
@@ -2224,37 +2232,83 @@ export function FileTreeTab() {
     []
   )
 
+  // Envelope-driven change watcher.
+  //
+  // Replaces the prior workspaceState.seq polling loop, which forced a
+  // full open-tab scan on every workspace event and read each candidate
+  // file twice (resolver + reload). The new path:
+  //   • subscribes to envelopes and uses `changed_paths` to scope work to
+  //     tabs whose paths actually changed;
+  //   • falls back to a full sweep only on `resync_hint` or envelopes
+  //     missing changed_paths, so external changes cannot be lost when
+  //     the backend cannot enumerate paths;
+  //   • coalesces bursts (e.g. git checkout) via queueMicrotask and a
+  //     single in-flight drainer, so concurrent reconciliations cannot
+  //     double-fire;
+  //   • skips image tabs (no etag — would otherwise trigger spurious
+  //     full base64 re-reads every workspace event);
+  //   • re-reads activeFileTabRef.current AFTER each per-tab resolve
+  //     await so a user mid-scan tab switch is honored;
+  //   • dispatches reload via applyExternalReload — handing the prefetched
+  //     content from the resolver to the context — instead of triggering
+  //     a second readFileForEdit through openFilePreview.
   useEffect(() => {
-    const rootPath = folder?.path
-    if (!rootPath) return
+    if (!folder?.path) return
+    if (!subscribeWorkspaceEnvelopes) return
 
-    const nextSeq = workspaceState.seq
-    if (nextSeq <= previousWorkspaceSeqRef.current) return
-    previousWorkspaceSeqRef.current = nextSeq
+    const pendingPaths = new Set<string>()
+    let pendingFullScan = false
+    let flushScheduled = false
+    let flushPromise: Promise<void> | null = null
+    let disposed = false
 
-    // Iterate every open file tab — not just the active one — so external
-    // edits to files the user has open but isn't currently viewing are
-    // detected. Clean inactive tabs refresh silently in the background;
-    // dirty inactive tabs are marked stale and surface their conflict
-    // prompt when the user activates them.
-    void (async () => {
-      const activeId = activeFileTabRef.current?.id ?? null
-      for (const tab of fileTabsRef.current) {
-        if (tab.kind !== "file") continue
-        if (!tab.path || tab.loading) continue
+    const reconcileChanges = async (
+      paths: string[],
+      fullScan: boolean
+    ): Promise<void> => {
+      const openFileTabs = fileTabsRef.current.filter(
+        (t) => t.kind === "file" && t.path && !t.loading
+      )
+
+      const candidates = (() => {
+        if (fullScan) return openFileTabs
+        const pathSet = new Set(paths.map(normalizeComparePath))
+        return openFileTabs.filter(
+          (t) => t.path && pathSet.has(normalizeComparePath(t.path))
+        )
+      })()
+
+      for (const tab of candidates) {
+        if (disposed) return
+        const path = tab.path
+        if (!path) continue
+
+        // Image tabs do not carry an etag and load via readFileBase64.
+        // Bypass the text-file resolver: a single path-match is enough
+        // to trigger a refresh, and only when changed_paths actually
+        // names the image (full-scan covers the resync fallback).
+        if (isImageFile(path)) {
+          void reloadOpenFileBackground(path)
+          continue
+        }
 
         const decision = await resolveFileChangeDecision(tab)
+        if (disposed) return
         if (decision.kind === "none") continue
 
-        const isActive = tab.id === activeId
+        // CRITICAL: re-read active tab id AFTER the resolver await. If
+        // we used a snapshot captured before the loop, a tab the user
+        // switched away from could be silently re-activated by a
+        // foreground reload — which is the exact bug this guards.
+        const isActive = tab.id === (activeFileTabRef.current?.id ?? null)
 
         if (decision.kind === "reload") {
+          // Either active or inactive: applyExternalReload writes the
+          // prefetched payload without changing activeFileTabId, so the
+          // user's focus is preserved either way and no second
+          // readFileForEdit fires.
           externalConflictSignatureByPathRef.current.delete(decision.path)
-          if (isActive) {
-            void openFilePreview(decision.path, { reload: true })
-          } else {
-            void reloadOpenFileBackground(decision.path)
-          }
+          void applyExternalReload(decision.path, decision.latest)
           continue
         }
 
@@ -2264,23 +2318,76 @@ export function FileTreeTab() {
           markTabsStale(decision.path)
         }
       }
-    })()
+    }
+
+    const ensureFlushing = () => {
+      if (flushPromise || flushScheduled) return
+      flushScheduled = true
+      queueMicrotask(() => {
+        flushScheduled = false
+        if (disposed) return
+        flushPromise = (async () => {
+          try {
+            // Drain anything pending — including envelopes that arrive
+            // while we're awaiting reconcileChanges. ensureFlushing()
+            // calls from those listener callbacks see flushPromise !=
+            // null and return; their paths land in pendingPaths and the
+            // next loop iteration picks them up.
+            while (!disposed && (pendingPaths.size > 0 || pendingFullScan)) {
+              const paths = Array.from(pendingPaths)
+              pendingPaths.clear()
+              const fullScan = pendingFullScan
+              pendingFullScan = false
+              await reconcileChanges(paths, fullScan)
+            }
+          } finally {
+            flushPromise = null
+          }
+        })()
+      })
+    }
+
+    const unsubscribe = subscribeWorkspaceEnvelopes(
+      ({ changed_paths, kind }) => {
+        if (
+          kind === "resync_hint" ||
+          !changed_paths ||
+          changed_paths.length === 0
+        ) {
+          // Resync or untargeted event — we cannot scope work, so cover
+          // every open tab. Targeted paths from later envelopes are
+          // additive (full scan is a superset).
+          pendingFullScan = true
+        } else {
+          for (const path of changed_paths) {
+            pendingPaths.add(path)
+          }
+        }
+        ensureFlushing()
+      }
+    )
+
+    return () => {
+      disposed = true
+      unsubscribe()
+      pendingPaths.clear()
+    }
   }, [
     folder?.path,
-    openFilePreview,
+    subscribeWorkspaceEnvelopes,
+    resolveFileChangeDecision,
+    applyExternalReload,
     reloadOpenFileBackground,
     markTabsStale,
     announceConflict,
-    resolveFileChangeDecision,
-    workspaceState.seq,
   ])
 
   // Stale-on-activation: when the user switches to (or just opened) a tab
   // that the watcher previously flagged stale, fire the appropriate action
-  // now — without waiting for the next workspace seq tick. Clean stale is
+  // now — without waiting for the next workspace event. Clean stale is
   // promoted to reload by openFilePreview's decideLoad path; this effect
   // covers dirty stale (conflict prompt) and the defensive fallback for
-  // clean stale that somehow survived activation (e.g. switchFileTab path).
+  // clean stale that somehow survived activation (e.g. switchFileTab).
   useEffect(() => {
     const tab = activeFileTab
     if (!tab || tab.kind !== "file" || !tab.path) return
@@ -2297,12 +2404,13 @@ export function FileTreeTab() {
       if (decision.kind === "conflict") {
         announceConflict(decision)
       } else if (decision.kind === "reload") {
-        void openFilePreview(decision.path, { reload: true })
+        void applyExternalReload(decision.path, decision.latest)
       }
     })()
   }, [
     activeFileTab,
     openFilePreview,
+    applyExternalReload,
     resolveFileChangeDecision,
     announceConflict,
   ])

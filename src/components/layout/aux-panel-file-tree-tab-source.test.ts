@@ -29,33 +29,62 @@ describe("aux-panel-file-tree-tab external conflict reload wiring", () => {
   })
 })
 
-describe("aux-panel-file-tree-tab workspace-change watcher coverage", () => {
-  it("destructures the background-reload and stale APIs from the workspace context", () => {
-    // Catching external changes for non-active tabs requires both APIs.
-    // Source-grep them so a future refactor cannot silently regress to
-    // active-tab-only behavior by dropping the imports.
+describe("aux-panel-file-tree-tab external-change watcher coverage", () => {
+  it("destructures the background-reload, stale, and prefetched-apply APIs", () => {
+    // Catching external changes for non-active tabs requires these APIs;
+    // source-grep them so a future refactor cannot silently regress to
+    // active-tab-only behavior by dropping imports.
     expect(source).toMatch(/\breloadOpenFileBackground\b/)
     expect(source).toMatch(/\bmarkTabsStale\b/)
+    expect(source).toMatch(/\bapplyExternalReload\b/)
   })
 
-  it("iterates fileTabs in the workspace-seq watcher effect, not just the active tab", () => {
-    // Locate the seq-gated watcher effect.
-    const guardIdx = source.indexOf("previousWorkspaceSeqRef.current = nextSeq")
-    expect(guardIdx).toBeGreaterThan(-1)
+  it("does not poll workspaceState.seq for change detection", () => {
+    // Seq-tick polling forces a full open-tab scan on every workspace
+    // event — regardless of relevance — and reads each file twice
+    // (resolver + reload). The change-detection watcher must instead be
+    // driven by envelope subscription. previousWorkspaceSeqRef belonged
+    // solely to the old seq-tick effect; its absence locks the change.
+    expect(source).not.toMatch(/previousWorkspaceSeqRef\b/)
+  })
 
-    // Find the end of the surrounding useEffect callback. The effect body
-    // ends at the next "}, [" that opens the dependency array.
-    const effectEnd = source.indexOf("}, [", guardIdx)
-    expect(effectEnd).toBeGreaterThan(guardIdx)
+  it("dispatches applyExternalReload from the change watcher to avoid double-reads", () => {
+    // The resolver already paid for one readFileForEdit. Reloading via
+    // openFilePreview would trigger a second read; applyExternalReload
+    // writes the prefetched payload directly.
+    const awaitIdx = source.indexOf("await resolveFileChangeDecision(")
+    expect(awaitIdx).toBeGreaterThan(-1)
+    const window = source.slice(awaitIdx, awaitIdx + 2000)
+    expect(window).toMatch(/applyExternalReload\s*\(/)
+  })
 
-    const effectBody = source.slice(guardIdx, effectEnd)
+  it("re-reads the active tab id after each per-tab resolve await", () => {
+    // Stale activeId bug: capturing activeFileTabRef.current once at the
+    // start of an async scan lets a tab the user has since switched away
+    // from be re-activated by a foreground reload. The active-id check
+    // MUST dereference activeFileTabRef.current freshly inside the loop.
+    const awaitIdx = source.indexOf("await resolveFileChangeDecision(")
+    expect(awaitIdx).toBeGreaterThan(-1)
+    const window = source.slice(awaitIdx, awaitIdx + 600)
+    expect(window).toMatch(/tab\.id\s*===\s*[^=]*activeFileTabRef\.current/)
+  })
 
-    // The watcher must visit every open file tab; a literal iteration over
-    // the workspace tab list is the simplest invariant to lock. Accept the
-    // ref-flavored reading (fileTabsRef.current) used to guarantee the
-    // latest snapshot after async settles.
-    expect(effectBody).toMatch(
-      /\bfor\s*\(\s*const\s+\w+\s+of\s+fileTabs(?:Ref\.current)?\b/
-    )
+  it("branches image tabs around the etag resolver", () => {
+    // ImagePreview tabs use readFileBase64 (no etag); the etag resolver
+    // would either fail (binary) or report a spurious mismatch, then
+    // trigger a full base64 re-read every workspace event. The watcher
+    // MUST branch on image-ness BEFORE invoking the resolver.
+    const awaitIdx = source.indexOf("await resolveFileChangeDecision(")
+    expect(awaitIdx).toBeGreaterThan(-1)
+    const start = Math.max(0, awaitIdx - 1200)
+    const block = source.slice(start, awaitIdx)
+    expect(block).toMatch(/isImageFile|isImagePath|imageExtensions|IMAGE_EXT/i)
+  })
+
+  it("falls back to a full scan when an envelope signals resync_hint", () => {
+    // Targeted scanning by changed_paths is the fast path. A backend
+    // resync (or any envelope without changed_paths) must trigger a
+    // full sweep, or external changes can be missed silently.
+    expect(source).toMatch(/resync_hint/)
   })
 })
