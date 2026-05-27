@@ -17,7 +17,10 @@ import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
-import { useWorkspaceContext } from "@/contexts/workspace-context"
+import {
+  type FileWorkspaceTab,
+  useWorkspaceContext,
+} from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import { AuxPanelNoFolderEmpty } from "@/components/layout/aux-panel-no-folder-empty"
 import { WorkspaceDegradedBanner } from "@/components/layout/workspace-degraded-banner"
@@ -853,10 +856,13 @@ export function FileTreeTab() {
   const {
     activeFileTab,
     activeFilePath,
+    fileTabs,
     openBranchDiff,
     openExternalConflictDiff,
     openFilePreview,
     openWorkingTreeDiff,
+    reloadOpenFileBackground,
+    markTabsStale,
   } = useWorkspaceContext()
   const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
   const [nodes, setNodes] = useState<FileTreeNode[]>([])
@@ -929,6 +935,7 @@ export function FileTreeTab() {
     Set<string>
   >(new Set())
   const activeFileTabRef = useRef(activeFileTab)
+  const fileTabsRef = useRef<FileWorkspaceTab[]>(fileTabs)
   const filePathSetRef = useRef<Set<string>>(new Set())
   const previousWorkspaceSeqRef = useRef(0)
   const previousExpandedPathsRef = useRef<Set<string>>(
@@ -950,6 +957,10 @@ export function FileTreeTab() {
   useEffect(() => {
     activeFileTabRef.current = activeFileTab
   }, [activeFileTab])
+
+  useEffect(() => {
+    fileTabsRef.current = fileTabs
+  }, [fileTabs])
 
   useEffect(() => {
     setExpandedPaths(new Set([FILE_TREE_ROOT_PATH]))
@@ -2117,7 +2128,7 @@ export function FileTreeTab() {
     [rootNodeName]
   )
 
-  type ActiveFileChangeDecision =
+  type FileChangeDecision =
     | { kind: "none" }
     | { kind: "reload"; path: string }
     | {
@@ -2128,34 +2139,40 @@ export function FileTreeTab() {
         signature: string
       }
 
-  const resolveActiveFileChangeDecision = useCallback(
-    async (path: string): Promise<ActiveFileChangeDecision> => {
+  // Per-tab disk-vs-buffer resolver. Compares the tab's known etag against
+  // the latest disk read for the same path. Independent of activation —
+  // callable for any open file tab so the watcher can scan inactive tabs
+  // too. Re-reads the tab from `fileTabsRef.current` after the fetch to
+  // guard against close/reopen races during the async window.
+  const resolveFileChangeDecision = useCallback(
+    async (tabSnapshot: FileWorkspaceTab): Promise<FileChangeDecision> => {
       const rootPath = folder?.path
       if (!rootPath) return { kind: "none" }
+      if (tabSnapshot.kind !== "file") return { kind: "none" }
+      const path = tabSnapshot.path
+      if (!path) return { kind: "none" }
+      if (tabSnapshot.loading) return { kind: "none" }
 
-      const currentTab = activeFileTabRef.current
-      if (!currentTab || currentTab.kind !== "file") return { kind: "none" }
-      if (
-        normalizeComparePath(currentTab.path ?? "") !==
-        normalizeComparePath(path)
-      ) {
-        return { kind: "none" }
-      }
-      if (currentTab.loading) return { kind: "none" }
+      const tabId = tabSnapshot.id
+      const knownTabEtag = tabSnapshot.etag ?? null
 
-      const knownTabEtag = currentTab.etag ?? null
-
-      try {
-        const latest = await readFileForEdit(rootPath, path)
-        const latestTab = activeFileTabRef.current
-        if (!latestTab || latestTab.kind !== "file") return { kind: "none" }
+      const stillSameTab = (): FileWorkspaceTab | null => {
+        const latestTab = fileTabsRef.current.find((t) => t.id === tabId)
+        if (!latestTab || latestTab.kind !== "file") return null
         if (
           normalizeComparePath(latestTab.path ?? "") !==
           normalizeComparePath(path)
         ) {
-          return { kind: "none" }
+          return null
         }
-        if (latestTab.loading) return { kind: "none" }
+        if (latestTab.loading) return null
+        return latestTab
+      }
+
+      try {
+        const latest = await readFileForEdit(rootPath, path)
+        const latestTab = stillSameTab()
+        if (!latestTab) return { kind: "none" }
 
         const latestTabEtag = latestTab.etag ?? null
         if (latest.etag === latestTabEtag) return { kind: "none" }
@@ -2172,15 +2189,8 @@ export function FileTreeTab() {
 
         return { kind: "reload", path }
       } catch {
-        const latestTab = activeFileTabRef.current
-        if (!latestTab || latestTab.kind !== "file") return { kind: "none" }
-        if (
-          normalizeComparePath(latestTab.path ?? "") !==
-          normalizeComparePath(path)
-        ) {
-          return { kind: "none" }
-        }
-        if (latestTab.loading) return { kind: "none" }
+        const latestTab = stillSameTab()
+        if (!latestTab) return { kind: "none" }
         if (latestTab.isDirty) return { kind: "none" }
         if (!knownTabEtag) return { kind: "reload", path }
         return { kind: "reload", path }
@@ -2189,29 +2199,10 @@ export function FileTreeTab() {
     [folder?.path]
   )
 
-  useEffect(() => {
-    const rootPath = folder?.path
-    if (!rootPath) return
-
-    const nextSeq = workspaceState.seq
-    if (nextSeq <= previousWorkspaceSeqRef.current) return
-    previousWorkspaceSeqRef.current = nextSeq
-
-    const currentTab = activeFileTabRef.current
-    if (!currentTab || currentTab.kind !== "file") return
-    if (!currentTab.path || currentTab.loading) return
-
-    const activePath = currentTab.path
-    void (async () => {
-      const decision = await resolveActiveFileChangeDecision(activePath)
-      if (decision.kind === "none") return
-
-      if (decision.kind === "reload") {
-        externalConflictSignatureByPathRef.current.delete(decision.path)
-        void openFilePreview(decision.path, { reload: true })
-        return
-      }
-
+  // Surface a conflict prompt for `decision`, deduping by signature so a
+  // repeated seq-tick or activation transition does not flicker the UI.
+  const announceConflict = useCallback(
+    (decision: Extract<FileChangeDecision, { kind: "conflict" }>) => {
       const shownSignature = externalConflictSignatureByPathRef.current.get(
         decision.path
       )
@@ -2229,12 +2220,91 @@ export function FileTreeTab() {
           signature: decision.signature,
         }
       })
+    },
+    []
+  )
+
+  useEffect(() => {
+    const rootPath = folder?.path
+    if (!rootPath) return
+
+    const nextSeq = workspaceState.seq
+    if (nextSeq <= previousWorkspaceSeqRef.current) return
+    previousWorkspaceSeqRef.current = nextSeq
+
+    // Iterate every open file tab — not just the active one — so external
+    // edits to files the user has open but isn't currently viewing are
+    // detected. Clean inactive tabs refresh silently in the background;
+    // dirty inactive tabs are marked stale and surface their conflict
+    // prompt when the user activates them.
+    void (async () => {
+      const activeId = activeFileTabRef.current?.id ?? null
+      for (const tab of fileTabsRef.current) {
+        if (tab.kind !== "file") continue
+        if (!tab.path || tab.loading) continue
+
+        const decision = await resolveFileChangeDecision(tab)
+        if (decision.kind === "none") continue
+
+        const isActive = tab.id === activeId
+
+        if (decision.kind === "reload") {
+          externalConflictSignatureByPathRef.current.delete(decision.path)
+          if (isActive) {
+            void openFilePreview(decision.path, { reload: true })
+          } else {
+            void reloadOpenFileBackground(decision.path)
+          }
+          continue
+        }
+
+        if (isActive) {
+          announceConflict(decision)
+        } else {
+          markTabsStale(decision.path)
+        }
+      }
     })()
   }, [
     folder?.path,
     openFilePreview,
-    resolveActiveFileChangeDecision,
+    reloadOpenFileBackground,
+    markTabsStale,
+    announceConflict,
+    resolveFileChangeDecision,
     workspaceState.seq,
+  ])
+
+  // Stale-on-activation: when the user switches to (or just opened) a tab
+  // that the watcher previously flagged stale, fire the appropriate action
+  // now — without waiting for the next workspace seq tick. Clean stale is
+  // promoted to reload by openFilePreview's decideLoad path; this effect
+  // covers dirty stale (conflict prompt) and the defensive fallback for
+  // clean stale that somehow survived activation (e.g. switchFileTab path).
+  useEffect(() => {
+    const tab = activeFileTab
+    if (!tab || tab.kind !== "file" || !tab.path) return
+    if (!tab.stale || tab.loading) return
+
+    const path = tab.path
+    if (!tab.isDirty) {
+      void openFilePreview(path, { reload: true })
+      return
+    }
+
+    void (async () => {
+      const decision = await resolveFileChangeDecision(tab)
+      if (decision.kind === "conflict") {
+        announceConflict(decision)
+      } else if (decision.kind === "reload") {
+        void openFilePreview(decision.path, { reload: true })
+      }
+    })()
+  }, [
+    activeFileTab,
+    openFilePreview,
+    resolveFileChangeDecision,
+    announceConflict,
   ])
 
   if (!folder) {

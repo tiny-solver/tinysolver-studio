@@ -596,3 +596,271 @@ describe("openFilePreview cache semantics", () => {
     expect(mockedApi.readFileForEdit).toHaveBeenCalledTimes(2)
   })
 })
+
+interface BackgroundProbeSnapshot {
+  activeId: string | null
+  tabs: Array<{
+    id: string
+    path: string | null
+    content: string
+    isDirty: boolean
+    stale: boolean
+  }>
+}
+
+function BackgroundReloadProbe({
+  onCapture,
+}: {
+  onCapture: (snapshot: BackgroundProbeSnapshot) => void
+}) {
+  const {
+    openFilePreview,
+    fileTabs,
+    activeFileTabId,
+    reloadOpenFileBackground,
+    markTabsStale,
+    updateActiveFileContent,
+    switchFileTab,
+  } = useWorkspaceContext()
+  onCapture({
+    activeId: activeFileTabId,
+    tabs: fileTabs.map((tab) => ({
+      id: tab.id,
+      path: tab.path,
+      content: tab.content,
+      isDirty: Boolean(tab.isDirty),
+      stale: Boolean(tab.stale),
+    })),
+  })
+  return (
+    <div>
+      <button onClick={() => void openFilePreview("a.ts")}>open-a</button>
+      <button onClick={() => void openFilePreview("b.ts")}>open-b</button>
+      <button onClick={() => void reloadOpenFileBackground("a.ts")}>
+        bg-reload-a
+      </button>
+      <button onClick={() => markTabsStale("a.ts")}>stale-a</button>
+      <button onClick={() => updateActiveFileContent("dirty-local")}>
+        edit
+      </button>
+      <button onClick={() => switchFileTab("file:a.ts")}>switch-a</button>
+    </div>
+  )
+}
+
+describe("background reload + stale semantics", () => {
+  beforeEach(() => {
+    mockedApi.readFileForEdit.mockReset()
+    mockedApi.gitIsTracked.mockReset()
+    mockedApi.gitShowFile.mockReset()
+    mockedApi.gitIsTracked.mockResolvedValue(false)
+  })
+
+  it("reloadOpenFileBackground refreshes content without changing activeFileTabId", async () => {
+    mockedApi.readFileForEdit
+      .mockResolvedValueOnce({
+        path: "a.ts",
+        content: "a-v1",
+        etag: "ea1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+      .mockResolvedValueOnce({
+        path: "b.ts",
+        content: "b-v1",
+        etag: "eb1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+      .mockResolvedValueOnce({
+        path: "a.ts",
+        content: "a-v2",
+        etag: "ea2",
+        mtime_ms: 2,
+        readonly: false,
+        line_ending: "lf",
+      })
+
+    let snap: BackgroundProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <BackgroundReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    await act(async () => {
+      screen.getByText("open-b").click()
+    })
+    expect(snap.activeId).toBe("file:b.ts")
+
+    await act(async () => {
+      screen.getByText("bg-reload-a").click()
+    })
+
+    // active tab stays on B; tab A content refreshed in place.
+    expect(snap.activeId).toBe("file:b.ts")
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.content).toBe("a-v2")
+    expect(mockedApi.readFileForEdit).toHaveBeenCalledTimes(3)
+  })
+
+  it("markTabsStale flips stale=true on the matching tab", async () => {
+    mockedApi.readFileForEdit.mockResolvedValue({
+      path: "a.ts",
+      content: "a-v1",
+      etag: "ea1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: BackgroundProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <BackgroundReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    expect(snap.tabs[0]?.stale).toBe(false)
+
+    await act(async () => {
+      screen.getByText("stale-a").click()
+    })
+    expect(snap.tabs[0]?.stale).toBe(true)
+  })
+
+  it("activates a stale clean tab and refetches as if reload:true was passed", async () => {
+    mockedApi.readFileForEdit
+      .mockResolvedValueOnce({
+        path: "a.ts",
+        content: "a-v1",
+        etag: "ea1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+      .mockResolvedValueOnce({
+        path: "b.ts",
+        content: "b-v1",
+        etag: "eb1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+      .mockResolvedValueOnce({
+        path: "a.ts",
+        content: "a-v2",
+        etag: "ea2",
+        mtime_ms: 2,
+        readonly: false,
+        line_ending: "lf",
+      })
+
+    let snap: BackgroundProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <BackgroundReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    await act(async () => {
+      screen.getByText("open-b").click()
+    })
+    await act(async () => {
+      screen.getByText("stale-a").click()
+    })
+    expect(snap.tabs.find((t) => t.id === "file:a.ts")?.stale).toBe(true)
+
+    // Plain activation (no reload option) must still refetch because stale.
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+
+    expect(snap.activeId).toBe("file:a.ts")
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.content).toBe("a-v2")
+    expect(tabA?.stale).toBe(false)
+    expect(mockedApi.readFileForEdit).toHaveBeenCalledTimes(3)
+  })
+
+  it("activates a stale dirty tab without overwriting local edits", async () => {
+    mockedApi.readFileForEdit
+      .mockResolvedValueOnce({
+        path: "a.ts",
+        content: "a-v1",
+        etag: "ea1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+      .mockResolvedValueOnce({
+        path: "b.ts",
+        content: "b-v1",
+        etag: "eb1",
+        mtime_ms: 1,
+        readonly: false,
+        line_ending: "lf",
+      })
+
+    let snap: BackgroundProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <BackgroundReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    await act(async () => {
+      screen.getByText("edit").click()
+    })
+    await act(async () => {
+      screen.getByText("open-b").click()
+    })
+    await act(async () => {
+      screen.getByText("stale-a").click()
+    })
+
+    const callsBefore = mockedApi.readFileForEdit.mock.calls.length
+
+    // Activate the dirty stale tab. Must NOT refetch (would clobber edits).
+    await act(async () => {
+      screen.getByText("switch-a").click()
+    })
+
+    expect(snap.activeId).toBe("file:a.ts")
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.isDirty).toBe(true)
+    expect(tabA?.content).toBe("dirty-local")
+    expect(tabA?.stale).toBe(true)
+    expect(mockedApi.readFileForEdit.mock.calls.length).toBe(callsBefore)
+  })
+
+  it("reloadOpenFileBackground is a no-op when the path is not open", async () => {
+    let snap: BackgroundProbeSnapshot = { activeId: null, tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <BackgroundReloadProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("bg-reload-a").click()
+    })
+
+    expect(snap.tabs).toHaveLength(0)
+    expect(mockedApi.readFileForEdit).not.toHaveBeenCalled()
+  })
+})

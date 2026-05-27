@@ -53,6 +53,10 @@ export interface FileWorkspaceTab {
   lineEnding?: LineEnding
   saveState?: FileSaveState
   saveError?: string | null
+  // True iff an external change to this tab's path was observed by the
+  // workspace watcher while the tab was inactive or otherwise not yet
+  // resolved against disk. Cleared by any successful content reload.
+  stale?: boolean
 }
 
 interface WorkspaceContextValue {
@@ -74,6 +78,13 @@ interface WorkspaceContextValue {
     path: string,
     options?: { line?: number; reload?: boolean }
   ) => Promise<void>
+  // Refetch the open tab matching `path` without changing activeFileTabId.
+  // No-op when no tab matches or when the tab has unsaved local edits
+  // (use markTabsStale for that case).
+  reloadOpenFileBackground: (path: string) => Promise<void>
+  // Flip stale=true on the tab matching `path`. Activating a stale tab
+  // forces a refetch (clean) or triggers conflict resolution (dirty).
+  markTabsStale: (path: string) => void
   pendingFileReveal: {
     requestId: number
     path: string
@@ -413,7 +424,15 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         return { kind: "fetch", gen: beginFetchGeneration(seed.id) }
       }
 
-      if (!reload) {
+      // Stale clean tab — the watcher saw an external change while we were
+      // inactive. Promote to reload now so the user never sees stale bytes.
+      // Stale dirty tabs are NOT auto-reloaded: conflict resolution belongs
+      // to the watcher, which surfaces the prompt instead of clobbering
+      // unsaved edits.
+      const stalePromotesReload =
+        existing.kind === "file" && existing.stale === true && !existing.isDirty
+
+      if (!reload && !stalePromotesReload) {
         // Cache hit — nothing to do.
         return { kind: "skip" }
       }
@@ -535,6 +554,125 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     )
   }, [])
 
+  // Background reload: refresh an open tab's content without changing
+  // activeFileTabId or activating the file pane. Used by the workspace
+  // watcher when an external change touches a clean tab the user isn't
+  // currently looking at — VS Code / IntelliJ silently absorb such changes
+  // so the next activation sees the latest bytes. Dirty tabs are off-limits
+  // (conflict resolution belongs to the watcher via markTabsStale).
+  const reloadOpenFileBackground = useCallback(
+    async (rawPath: string) => {
+      if (!folderPath) return
+      const path = normalizePath(rawPath)
+      const tabId = `file:${path}`
+      const existing = fileTabsRef.current.find((t) => t.id === tabId)
+      if (!existing || existing.kind !== "file") return
+      if (existing.isDirty) return
+      if (inFlightLoadsRef.current.has(tabId)) return
+
+      const image = isImageFile(path)
+
+      markTabRefreshing(tabId)
+      const gen = beginFetchGeneration(tabId)
+
+      try {
+        if (image) {
+          const absPath = `${folderPath}/${path}`
+          const ext = path.split(".").pop()?.toLowerCase() ?? ""
+          const mime = IMAGE_MIME[ext] ?? "image/png"
+          const b64 = await withTimeout(
+            readFileBase64(absPath),
+            15_000,
+            t("previewRequestTimedOut")
+          )
+          if (!settleFetch(tabId, gen)) return
+          setFileTabs((prev) =>
+            prev.map((tab) =>
+              tab.id === tabId
+                ? {
+                    ...tab,
+                    content: `data:${mime};base64,${b64}`,
+                    readonly: true,
+                    loading: false,
+                    saveState: "idle",
+                    saveError: null,
+                    stale: false,
+                  }
+                : tab
+            )
+          )
+          return
+        }
+
+        const [result, gitBaseContent] = await withTimeout(
+          Promise.all([
+            readFileForEdit(folderPath, path),
+            (async () => {
+              const tracked = await gitIsTracked(folderPath, path).catch(
+                () => false
+              )
+              if (!tracked) return undefined
+              return gitShowFile(folderPath, path).catch(() => "")
+            })(),
+          ]),
+          15_000,
+          t("previewRequestTimedOut")
+        )
+        if (!settleFetch(tabId, gen)) return
+        setFileTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === tabId
+              ? {
+                  ...tab,
+                  content: result.content,
+                  gitBaseContent,
+                  savedContent: result.content,
+                  isDirty: false,
+                  etag: result.etag,
+                  mtimeMs: result.mtime_ms,
+                  readonly: result.readonly,
+                  lineEnding: result.line_ending,
+                  saveState: "idle",
+                  saveError: null,
+                  loading: false,
+                  stale: false,
+                }
+              : tab
+          )
+        )
+      } catch (error) {
+        if (!settleFetch(tabId, gen)) return
+        rejectTab(tabId, toErrorMessage(error))
+      }
+    },
+    [
+      folderPath,
+      beginFetchGeneration,
+      markTabRefreshing,
+      rejectTab,
+      settleFetch,
+      t,
+    ]
+  )
+
+  // Mark the tab matching `path` as stale so the next activation triggers a
+  // reload (clean) or a conflict prompt (dirty). The watcher calls this for
+  // dirty non-active tabs when an external change is observed, since silently
+  // reloading would discard the user's unsaved edits.
+  const markTabsStale = useCallback((rawPath: string) => {
+    const path = normalizePath(rawPath)
+    const tabId = `file:${path}`
+    setFileTabs((prev) => {
+      const idx = prev.findIndex((tab) => tab.id === tabId)
+      if (idx < 0) return prev
+      const tab = prev[idx]
+      if (tab.stale === true) return prev
+      const updated = [...prev]
+      updated[idx] = { ...tab, stale: true }
+      return updated
+    })
+  }, [])
+
   const openFilePreview = useCallback(
     async (rawPath: string, options?: { line?: number; reload?: boolean }) => {
       if (!folderPath) return
@@ -589,6 +727,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
                     loading: false,
                     saveState: "idle",
                     saveError: null,
+                    stale: false,
                   }
                 : tab
             )
@@ -627,6 +766,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
                   saveState: "idle",
                   saveError: null,
                   loading: false,
+                  stale: false,
                 }
               : tab
           )
@@ -1300,6 +1440,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       closeAllFileTabs,
       reorderFileTabs,
       openFilePreview,
+      reloadOpenFileBackground,
+      markTabsStale,
       pendingFileReveal,
       consumePendingFileReveal,
       openWorkingTreeDiff,
@@ -1331,6 +1473,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       closeAllFileTabs,
       reorderFileTabs,
       openFilePreview,
+      reloadOpenFileBackground,
+      markTabsStale,
       pendingFileReveal,
       consumePendingFileReveal,
       openWorkingTreeDiff,
