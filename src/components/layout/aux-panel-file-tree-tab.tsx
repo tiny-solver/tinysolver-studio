@@ -2059,7 +2059,7 @@ export function FileTreeTab() {
       externalConflictPrompt.path
     )
     setExternalConflictPrompt(null)
-    void openFilePreview(externalConflictPrompt.path)
+    void openFilePreview(externalConflictPrompt.path, { reload: true })
   }, [externalConflictPrompt, openFilePreview])
 
   const handleSaveExternalConflictCopy = useCallback(async () => {
@@ -2208,7 +2208,7 @@ export function FileTreeTab() {
 
       if (decision.kind === "reload") {
         externalConflictSignatureByPathRef.current.delete(decision.path)
-        void openFilePreview(decision.path)
+        void openFilePreview(decision.path, { reload: true })
         return
       }
 
