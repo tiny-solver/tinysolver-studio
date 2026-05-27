@@ -706,32 +706,41 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       if (!folderPath) return
       const path = normalizePath(rawPath)
       const tabId = `file:${path}`
+      // Outer existence check — purely to avoid bumping the in-flight gen
+      // for a non-existent path (which would pollute openFilePreview's
+      // dedup). The dirty guard is NOT outer: fileTabsRef can lag a tick
+      // behind a user keystroke whose dirty update is already enqueued
+      // but not yet committed. The atomic check lives inside the
+      // setFileTabs updater below, where prev reflects every earlier
+      // queued updater (including the keystroke).
       const existing = fileTabsRef.current.find((t) => t.id === tabId)
       if (!existing || existing.kind !== "file") return
-      if (existing.isDirty) return
 
       const gen = beginFetchGeneration(tabId)
+      const fetchedEtag = fetched.etag
 
-      // Synchronous canonical write from the prefetched payload.
+      // Atomic write: refuses the apply if the tab became dirty between
+      // our outer existence check and the actual commit (e.g. user typed
+      // in the same React batch as the watcher's apply call).
       setFileTabs((prev) =>
-        prev.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                content: fetched.content,
-                savedContent: fetched.content,
-                isDirty: false,
-                etag: fetched.etag,
-                mtimeMs: fetched.mtime_ms,
-                readonly: fetched.readonly,
-                lineEnding: fetched.line_ending,
-                loading: false,
-                stale: false,
-                saveState: "idle",
-                saveError: null,
-              }
-            : tab
-        )
+        prev.map((tab) => {
+          if (tab.id !== tabId || tab.kind !== "file") return tab
+          if (tab.isDirty) return tab
+          return {
+            ...tab,
+            content: fetched.content,
+            savedContent: fetched.content,
+            isDirty: false,
+            etag: fetched.etag,
+            mtimeMs: fetched.mtime_ms,
+            readonly: fetched.readonly,
+            lineEnding: fetched.line_ending,
+            loading: false,
+            stale: false,
+            saveState: "idle",
+            saveError: null,
+          }
+        })
       )
 
       // Release the in-flight marker NOW. Two-stage invalidation: the
@@ -743,9 +752,16 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       // last applyExternalReload's gen wins, prior gens are stale.)
       settleFetch(tabId, gen)
 
-      // Fire-and-forget git base refresh: bounded by a hard timeout so a
-      // stuck git invocation cannot leak resources, and gated by tab
-      // existence at settle time so we never write into a closed tab.
+      // Fire-and-forget git base refresh, etag-gated.
+      //
+      // The captured fetchedEtag doubles as a staleness token: if our
+      // atomic write above succeeded, the tab now carries fetchedEtag;
+      // if it was refused (dirty), or a later applyExternalReload /
+      // openFilePreview reload / close+reopen changed the tab, the tab
+      // carries a different etag. The final write checks tab.etag ===
+      // fetchedEtag inside the updater so a stale fetch can never paint
+      // gitter decorations onto a tab whose content has moved on. No
+      // separate generation token needed — etag is the natural fingerprint.
       void (async () => {
         try {
           const gitBaseContent = await withTimeout(
@@ -759,11 +775,12 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
             15_000,
             t("previewRequestTimedOut")
           )
-          if (!fileTabsRef.current.find((tab) => tab.id === tabId)) return
           setFileTabs((prev) =>
-            prev.map((tab) =>
-              tab.id === tabId ? { ...tab, gitBaseContent } : tab
-            )
+            prev.map((tab) => {
+              if (tab.id !== tabId || tab.kind !== "file") return tab
+              if (tab.etag !== fetchedEtag) return tab
+              return { ...tab, gitBaseContent }
+            })
           )
         } catch {
           // Timeout or unexpected failure: leave existing gitBaseContent.
@@ -781,26 +798,27 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     (rawPath: string, errorMessage: string) => {
       const path = normalizePath(rawPath)
       const tabId = `file:${path}`
+      // Outer existence check only; the dirty guard is atomic inside the
+      // updater (see applyExternalReload for the same race shape).
       const existing = fileTabsRef.current.find((t) => t.id === tabId)
       if (!existing || existing.kind !== "file") return
-      if (existing.isDirty) return
 
       // Bump generation so any concurrent fetch's settle is invalidated
       // and cannot overwrite the error message we are about to write.
       const gen = beginFetchGeneration(tabId)
       setFileTabs((prev) =>
-        prev.map((tab) =>
-          tab.id === tabId
-            ? {
-                ...tab,
-                content: t("unableLoadContent", { message: errorMessage }),
-                loading: false,
-                stale: false,
-                saveState: "error",
-                saveError: errorMessage,
-              }
-            : tab
-        )
+        prev.map((tab) => {
+          if (tab.id !== tabId || tab.kind !== "file") return tab
+          if (tab.isDirty) return tab
+          return {
+            ...tab,
+            content: t("unableLoadContent", { message: errorMessage }),
+            loading: false,
+            stale: false,
+            saveState: "error",
+            saveError: errorMessage,
+          }
+        })
       )
       settleFetch(tabId, gen)
     },

@@ -1363,3 +1363,277 @@ describe("applyExternalReload does not block subsequent reloads on slow git base
     expect(mockedApi.readFileForEdit).toHaveBeenCalledTimes(2)
   })
 })
+
+interface AtomicGuardSnapshot {
+  tabs: Array<{
+    id: string
+    content: string
+    isDirty: boolean
+    saveState?: string
+    saveError?: string | null
+    etag: string | null | undefined
+    gitBaseContent?: string | undefined
+  }>
+}
+
+function ApplyEditRaceProbe({
+  onCapture,
+}: {
+  onCapture: (snapshot: AtomicGuardSnapshot) => void
+}) {
+  const {
+    openFilePreview,
+    fileTabs,
+    applyExternalReload,
+    updateActiveFileContent,
+    closeAllFileTabs,
+  } = useWorkspaceContext()
+  onCapture({
+    tabs: fileTabs.map((tab) => ({
+      id: tab.id,
+      content: tab.content,
+      isDirty: Boolean(tab.isDirty),
+      saveState: tab.saveState,
+      saveError: tab.saveError ?? null,
+      etag: tab.etag,
+      gitBaseContent: tab.gitBaseContent,
+    })),
+  })
+  return (
+    <div>
+      <button onClick={() => void openFilePreview("a.ts")}>open-a</button>
+      <button
+        onClick={() => {
+          // Single React event handler: both setFileTabs calls land in
+          // the same batch. updater1 (from updateActiveFileContent)
+          // marks the tab dirty; updater2 (from applyExternalReload)
+          // would silently clobber that edit unless its updater performs
+          // an atomic isDirty re-check.
+          updateActiveFileContent("dirty-local")
+          void applyExternalReload("a.ts", {
+            path: "a.ts",
+            content: "ext-content",
+            etag: "ext-etag",
+            mtime_ms: 99,
+            readonly: false,
+            line_ending: "lf",
+          })
+        }}
+      >
+        edit-and-apply
+      </button>
+      <button
+        onClick={() =>
+          void applyExternalReload("a.ts", {
+            path: "a.ts",
+            content: "ext-content",
+            etag: "ext-etag",
+            mtime_ms: 99,
+            readonly: false,
+            line_ending: "lf",
+          })
+        }
+      >
+        apply-a
+      </button>
+      <button onClick={closeAllFileTabs}>close-all</button>
+    </div>
+  )
+}
+
+function RejectEditRaceProbe({
+  onCapture,
+}: {
+  onCapture: (snapshot: AtomicGuardSnapshot) => void
+}) {
+  const { openFilePreview, fileTabs, rejectFileTab, updateActiveFileContent } =
+    useWorkspaceContext()
+  onCapture({
+    tabs: fileTabs.map((tab) => ({
+      id: tab.id,
+      content: tab.content,
+      isDirty: Boolean(tab.isDirty),
+      saveState: tab.saveState,
+      saveError: tab.saveError ?? null,
+      etag: tab.etag,
+      gitBaseContent: tab.gitBaseContent,
+    })),
+  })
+  return (
+    <div>
+      <button onClick={() => void openFilePreview("a.ts")}>open-a</button>
+      <button
+        onClick={() => {
+          // Same race shape as the apply probe above, but the second
+          // queued updater is rejectFileTab — must also gate on
+          // isDirty INSIDE the updater to avoid clobbering the edit.
+          updateActiveFileContent("dirty-local")
+          rejectFileTab("a.ts", "boom")
+        }}
+      >
+        edit-and-reject
+      </button>
+    </div>
+  )
+}
+
+describe("atomic dirty guard in functional updaters", () => {
+  beforeEach(() => {
+    mockedApi.readFileForEdit.mockReset()
+    mockedApi.gitIsTracked.mockReset()
+    mockedApi.gitShowFile.mockReset()
+    mockedApi.gitIsTracked.mockResolvedValue(false)
+  })
+
+  it("applyExternalReload refuses to overwrite a dirty edit enqueued in the same React batch", async () => {
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "v1",
+      etag: "e1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: AtomicGuardSnapshot = { tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyEditRaceProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+
+    await act(async () => {
+      screen.getByText("edit-and-apply").click()
+    })
+
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.isDirty).toBe(true)
+    expect(tabA?.content).toBe("dirty-local")
+    // etag stays at the pre-apply value — proof that the apply was
+    // refused as a whole, not partially.
+    expect(tabA?.etag).toBe("e1")
+  })
+
+  it("rejectFileTab refuses to clobber a dirty edit enqueued in the same React batch", async () => {
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "v1",
+      etag: "e1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: AtomicGuardSnapshot = { tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <RejectEditRaceProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+
+    await act(async () => {
+      screen.getByText("edit-and-reject").click()
+    })
+
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.isDirty).toBe(true)
+    expect(tabA?.content).toBe("dirty-local")
+    expect(tabA?.saveState).not.toBe("error")
+    expect(tabA?.saveError).toBeNull()
+  })
+})
+
+describe("applyExternalReload git base does not stale-write after close+reopen", () => {
+  beforeEach(() => {
+    mockedApi.readFileForEdit.mockReset()
+    mockedApi.gitIsTracked.mockReset()
+    mockedApi.gitShowFile.mockReset()
+  })
+
+  it("does not write a stale gitBaseContent into a reopened tab whose etag differs", async () => {
+    // Initial open: not tracked → skip git base fetch entirely.
+    mockedApi.gitIsTracked.mockResolvedValueOnce(false)
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "v1",
+      etag: "etag-orig",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    let snap: AtomicGuardSnapshot = { tabs: [] }
+    render(
+      <WorkspaceProvider>
+        <ApplyEditRaceProbe onCapture={(s) => (snap = s)} />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+
+    // Now the apply path: tracked, gitShowFile hangs (we'll resolve it
+    // ourselves after close+reopen to simulate a slow git call).
+    let resolveStaleGit: ((value: string) => void) | null = null
+    mockedApi.gitIsTracked.mockResolvedValueOnce(true)
+    mockedApi.gitShowFile.mockImplementationOnce(
+      () => new Promise<string>((res) => (resolveStaleGit = res))
+    )
+
+    await act(async () => {
+      screen.getByText("apply-a").click()
+    })
+    // Tab now has etag "ext-etag" (from apply-a's hardcoded fetched).
+    expect(snap.tabs.find((t) => t.id === "file:a.ts")?.etag).toBe("ext-etag")
+
+    // Close the tab; the stale git fetch is still pending.
+    await act(async () => {
+      screen.getByText("close-all").click()
+    })
+    expect(snap.tabs).toHaveLength(0)
+
+    // Reopen the same path with a different etag and no git base
+    // (so the only writes to gitBaseContent could come from the stale
+    // fetch we have not yet resolved).
+    mockedApi.gitIsTracked.mockResolvedValueOnce(false)
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "v2",
+      etag: "etag-different",
+      mtime_ms: 2,
+      readonly: false,
+      line_ending: "lf",
+    })
+
+    await act(async () => {
+      screen.getByText("open-a").click()
+    })
+    expect(snap.tabs.find((t) => t.id === "file:a.ts")?.etag).toBe(
+      "etag-different"
+    )
+    // Sanity: reopen did not inherit a gitBaseContent (its own git path
+    // was skipped via gitIsTracked → false).
+    expect(snap.tabs.find((t) => t.id === "file:a.ts")?.gitBaseContent).toBe(
+      undefined
+    )
+
+    // Resolve the dangling git fetch from the FIRST (closed) tab's apply.
+    // It targets the same tabId but a different etag — must be rejected.
+    await act(async () => {
+      resolveStaleGit!("stale-base")
+    })
+
+    const tabA = snap.tabs.find((t) => t.id === "file:a.ts")
+    expect(tabA?.gitBaseContent).not.toBe("stale-base")
+    expect(tabA?.gitBaseContent).toBe(undefined)
+  })
+})
