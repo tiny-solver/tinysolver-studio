@@ -124,34 +124,71 @@ struct PreCanceledState {
 
 const PRE_CANCELED_CAP: usize = 256;
 
-/// FIFO of `tool_call_id`s that the ACP lifecycle observed firing
-/// `delegate_to_agent` on a given parent connection but for which the
-/// matching broker round-trip has not yet arrived. MCP clients (Codex,
-/// Claude Code) generally do NOT populate `_meta.tool_use_id` when
-/// invoking an MCP tool, so the broker can't read the LLM-issued
+/// Per-parent tracking of `tool_call_id`s that the ACP lifecycle
+/// observed firing `delegate_to_agent`. MCP clients (Codex, Claude
+/// Code) generally do NOT populate `_meta.tool_use_id` when invoking
+/// an MCP tool, so the broker can't read the LLM-issued
 /// `tool_use_id` from the wire — we capture it from the parallel ACP
 /// `tool_call` event stream instead.
 ///
-/// ACP `sessionUpdate(tool_call)` almost always lands ahead of the
-/// agent's own MCP `tools/call`, so this LRU resolves the race in
-/// practice. Each entry carries an enqueue timestamp so `take_*` can
-/// skip stale ids whose matching MCP round-trip never arrived (e.g.
-/// the host emitted a `tool_call` but ultimately did not invoke the
-/// MCP tool, or the MCP transport dropped) — these would otherwise
-/// linger until parent disconnect and silently mis-bind a later
-/// delegation. Per-parent draining also runs on parent disconnect via
-/// `drop_pending_tool_calls_for_parent`.
+/// Each bucket holds two FIFOs under the SAME mutex:
+///
+/// * `pending` — ids the lifecycle has registered but the matching
+///   broker round-trip has not yet claimed. Subject to
+///   [`PENDING_TOOL_CALL_TTL`] eviction so an ACP id whose MCP
+///   round-trip never arrives doesn't linger forever, and bounded by
+///   [`PENDING_QUEUE_CAP`] FIFO eviction as a defensive memory cap.
+/// * `consumed` — ids that were already claimed by a prior
+///   round-trip. NEITHER subject to TTL eviction NOR to a per-bucket
+///   cap: a delegated child agent may run for minutes to hours, and
+///   the host can re-emit the same `tool_call` (e.g. as a `completed`
+///   status flip) at the end of that run, so the consumed memory
+///   must outlast the entire parent-side tool call lifetime. It is
+///   scoped to the parent connection's lifetime instead, cleared by
+///   `drop_pending_tool_calls_for_parent` on disconnect. The growth
+///   is naturally bounded by how many `delegate_to_agent` calls a
+///   single parent session issues — typically tens at most, with
+///   each `(String, Instant)` entry costing well under 100 bytes —
+///   so an unbounded set is comfortable for realistic high-fan-out
+///   sessions without OOM risk in the typical operating envelope.
+///
+/// Co-locating the two halves under one lock makes the
+/// claim → mark-consumed pair atomic. A host re-emit racing with the
+/// claim cannot observe an empty pending queue AND a consumed memory
+/// that does not yet remember the id; consequently it cannot inject
+/// a stale duplicate that would mis-bind the next delegation.
 #[derive(Default)]
-struct PendingToolCalls {
-    inner: Mutex<HashMap<String, VecDeque<(String, Instant)>>>,
+struct ToolCallTracker {
+    inner: Mutex<HashMap<String, ToolCallTrackerBucket>>,
 }
 
-/// Maximum age of a `pending_tool_calls` entry before `take_*` discards
-/// it as stale. 60 s is far longer than any observed ACP→MCP gap (<5 ms
+#[derive(Default)]
+struct ToolCallTrackerBucket {
+    pending: VecDeque<(String, Instant)>,
+    consumed: VecDeque<(String, Instant)>,
+}
+
+/// Maximum age of a `pending` entry before `take_*` discards it as
+/// stale. 60 s is far longer than any observed ACP→MCP gap (<5 ms
 /// typical, <100 ms in the worst case the polling budget targets) but
 /// short enough that a forgotten id from an earlier delegation cannot
 /// outlast a subsequent one in the same parent session.
+///
+/// Only `pending` ages out under this TTL. The `consumed` side has no
+/// TTL — see [`ToolCallTrackerBucket`] — because long-running
+/// delegations can re-emit the parent-side `tool_call` well past this
+/// window.
 const PENDING_TOOL_CALL_TTL: Duration = Duration::from_secs(60);
+
+/// Hard cap on the `pending` half of a bucket. Defends against a
+/// parent that fires many delegations without ever round-tripping
+/// (so each ACP id would linger until TTL eviction). Eviction is
+/// FIFO via `pop_front`. The `consumed` half deliberately has NO cap
+/// because evicting an older consumed id risks the exact bug this
+/// machinery exists to prevent (a late re-emit slipping through and
+/// mis-binding the next delegation); growth there is bounded by the
+/// parent connection's lifetime instead.
+const PENDING_QUEUE_CAP: usize = 32;
 
 /// The broker is intentionally `Clone` (cheap — only `Arc`s inside) so
 /// listener/handler code can hand copies to spawned tasks without lifetime
@@ -173,7 +210,7 @@ pub struct DelegationBroker {
     /// take the default Noop.
     event_emitter: Arc<dyn DelegationEventEmitter>,
     pending: Arc<PendingCalls>,
-    pending_tool_calls: Arc<PendingToolCalls>,
+    tool_calls: Arc<ToolCallTracker>,
     pre_canceled_handles: Arc<PreCanceledHandles>,
     config: Arc<Mutex<DelegationConfig>>,
 }
@@ -225,7 +262,7 @@ impl DelegationBroker {
             meta_writer,
             event_emitter,
             pending: Arc::new(PendingCalls::default()),
-            pending_tool_calls: Arc::new(PendingToolCalls::default()),
+            tool_calls: Arc::new(ToolCallTracker::default()),
             pre_canceled_handles: Arc::new(PreCanceledHandles::default()),
             config: Arc::new(Mutex::new(DelegationConfig::default())),
         }
@@ -236,34 +273,68 @@ impl DelegationBroker {
     /// same `parent_connection_id` will claim this id as its
     /// `parent_tool_use_id`. Bounded FIFO per connection.
     ///
-    /// De-duplicates against any pending entry with the same id. Some hosts
-    /// re-emit `sessionUpdate(tool_call)` (not `tool_call_update`) for the
-    /// same call as `raw_input` arrives in chunks or as the status flips
-    /// to `completed`. Without this guard the second emit would push a
-    /// duplicate onto the queue; the first push gets claimed by the
-    /// matching MCP round-trip, and the duplicate then mis-binds the
-    /// **next** delegation in the same parent session.
+    /// Two-tier dedupe against host re-emits of `sessionUpdate(tool_call)`
+    /// (some hosts use the non-update variant to ship status flips and
+    /// late-arriving `raw_input` chunks):
+    ///
+    /// 1. **In-queue**: if the id is still waiting to be claimed, drop
+    ///    the re-emit — the first push will be consumed by the matching
+    ///    MCP round-trip.
+    /// 2. **Recently consumed**: if the id was already claimed for an
+    ///    earlier delegation on the same parent, drop the re-emit —
+    ///    otherwise it would sit in the queue as a stale id and mis-
+    ///    bind the **next** delegation's MCP round-trip. The consumed
+    ///    memory persists for the parent connection's lifetime (no
+    ///    TTL, no cap) so a host re-emit at terminal status flip is
+    ///    still rejected even if the delegation ran for hours.
     pub async fn register_pending_tool_call(
         &self,
         parent_connection_id: &str,
         tool_call_id: String,
     ) {
-        let mut map = self.pending_tool_calls.inner.lock().await;
-        let queue = map
-            .entry(parent_connection_id.to_string())
-            .or_insert_with(VecDeque::new);
-        if queue.iter().any(|(id, _)| id == &tool_call_id) {
+        self.register_pending_tool_call_at(parent_connection_id, tool_call_id, Instant::now())
+            .await;
+    }
+
+    /// `register_pending_tool_call` with an injected "as of" instant.
+    /// The public entry point pins it to `Instant::now()`; tests can
+    /// supply a future instant to exercise per-bucket invariants
+    /// (e.g. long-running delegations re-emitting after the pending
+    /// TTL elapsed) without sleeping.
+    ///
+    /// Holds the [`ToolCallTracker`] mutex across both dedupe tiers
+    /// AND the push so no concurrent `take` can split the
+    /// "queue empty + not yet recorded as consumed" window where a
+    /// host re-emit could otherwise inject a stale duplicate.
+    async fn register_pending_tool_call_at(
+        &self,
+        parent_connection_id: &str,
+        tool_call_id: String,
+        now: Instant,
+    ) {
+        let mut map = self.tool_calls.inner.lock().await;
+        let bucket = map.entry(parent_connection_id.to_string()).or_default();
+        // Tier 2: recently consumed. No TTL — the consumed memory must
+        // outlast the entire parent-side tool call lifetime (minutes
+        // to hours) so a host re-emit at terminal status flip is
+        // still rejected. See `ToolCallTrackerBucket` docs.
+        if bucket.consumed.iter().any(|(id, _)| id == &tool_call_id) {
+            eprintln!(
+                "[delegation] dropping ACP tool_call_id={tool_call_id} on conn={parent_connection_id} (already consumed by an earlier delegation)"
+            );
+            return;
+        }
+        // Tier 1: in-queue.
+        if bucket.pending.iter().any(|(id, _)| id == &tool_call_id) {
             eprintln!(
                 "[delegation] dropping duplicate ACP tool_call_id={tool_call_id} on conn={parent_connection_id}"
             );
             return;
         }
-        // Defensive cap so an agent that fires many delegations without ever
-        // round-tripping can't grow this map without bound.
-        if queue.len() >= 32 {
-            queue.pop_front();
+        if bucket.pending.len() >= PENDING_QUEUE_CAP {
+            bucket.pending.pop_front();
         }
-        queue.push_back((tool_call_id, Instant::now()));
+        bucket.pending.push_back((tool_call_id, now));
     }
 
     /// Pop the oldest pending `tool_call_id` for the given parent, if any.
@@ -285,10 +356,10 @@ impl DelegationBroker {
         parent_connection_id: &str,
         now: Instant,
     ) -> Option<String> {
-        let mut map = self.pending_tool_calls.inner.lock().await;
-        let queue = map.get_mut(parent_connection_id)?;
+        let mut map = self.tool_calls.inner.lock().await;
+        let bucket = map.get_mut(parent_connection_id)?;
         let mut claimed: Option<String> = None;
-        while let Some((id, ts)) = queue.pop_front() {
+        while let Some((id, ts)) = bucket.pending.pop_front() {
             if now.duration_since(ts) > PENDING_TOOL_CALL_TTL {
                 let age_secs = now.duration_since(ts).as_secs();
                 eprintln!(
@@ -299,7 +370,16 @@ impl DelegationBroker {
             claimed = Some(id);
             break;
         }
-        if queue.is_empty() {
+        // Same mutex span: record the claim into the consumed memory so
+        // a concurrent re-register cannot observe "pending empty AND
+        // consumed missing" and inject a stale duplicate. Consumed
+        // entries persist for the whole parent connection lifetime
+        // (no TTL, no cap — see `ToolCallTrackerBucket`) and are only
+        // released when the parent disconnects.
+        if let Some(id) = &claimed {
+            bucket.consumed.push_back((id.clone(), now));
+        }
+        if bucket.pending.is_empty() && bucket.consumed.is_empty() {
             map.remove(parent_connection_id);
         }
         claimed
@@ -381,12 +461,14 @@ impl DelegationBroker {
         }
     }
 
-    /// Forget every pending tool_call id for the given parent. Called when
-    /// the parent connection tears down so stale ids don't bind to a future
-    /// reuse of the same connection_id (UUIDs make that unlikely but cheap
-    /// to defend against).
+    /// Forget every pending and recently-consumed tool_call id for the
+    /// given parent. Called when the parent connection tears down so
+    /// stale ids don't bind to a future reuse of the same connection_id
+    /// (UUIDs make that unlikely but cheap to defend against), and so a
+    /// fresh connection on the reused id is not blocked by the
+    /// consumed memory of the previous one.
     pub async fn drop_pending_tool_calls_for_parent(&self, parent_connection_id: &str) {
-        self.pending_tool_calls
+        self.tool_calls
             .inner
             .lock()
             .await
@@ -1443,6 +1525,182 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn register_after_claim_drops_stale_re_emit() {
+        // Regression for the post-claim re-emit race: a host re-sends
+        // `sessionUpdate(tool_call)` for the same id after the matching
+        // MCP round-trip already consumed it (e.g. shipping the
+        // `completed` status flip or a settled `raw_input`). The
+        // in-queue dedupe alone leaves the queue empty at that moment,
+        // so without the recently-consumed memory the re-emit would
+        // sneak into the queue and mis-bind the next delegation.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("p1", "tc-a".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-a")
+        );
+        // Re-emit of the same id after it was already claimed.
+        broker.register_pending_tool_call("p1", "tc-a".into()).await;
+        assert!(
+            broker.take_pending_tool_call("p1").await.is_none(),
+            "post-claim re-emit of the same id must not be re-queued"
+        );
+        // A genuinely new id on the same parent still flows through.
+        broker.register_pending_tool_call("p1", "tc-b".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-b")
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_take_and_re_register_never_leaks_stale_duplicate() {
+        // TOCTOU regression: a host re-emit of the same tool_call_id
+        // racing against the matching take must never inject a stale
+        // duplicate. Co-locating `pending` and `consumed` under the
+        // same mutex guarantees the claim → mark-consumed pair is
+        // atomic, so the only two legal interleavings are:
+        //
+        //   * take wins → pending=[], consumed=[id]; re-register sees
+        //     the id in consumed and drops it.
+        //   * register wins → pending=[id] (still the original entry,
+        //     in-queue dedupe drops the re-emit); take then pops it
+        //     and records it in consumed.
+        //
+        // In neither case may the queue retain a duplicate id once
+        // both futures settle. We drive many rounds with `tokio::spawn`
+        // to stress the interleaving.
+        let broker = std::sync::Arc::new(DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        ));
+        for _ in 0..200 {
+            broker.register_pending_tool_call("p1", "tc-a".into()).await;
+            let b_take = broker.clone();
+            let b_reg = broker.clone();
+            let h_take = tokio::spawn(async move {
+                b_take.take_pending_tool_call("p1").await;
+            });
+            let h_reg = tokio::spawn(async move {
+                b_reg.register_pending_tool_call("p1", "tc-a".into()).await;
+            });
+            let _ = tokio::join!(h_take, h_reg);
+            assert!(
+                broker.take_pending_tool_call("p1").await.is_none(),
+                "stale duplicate of tc-a leaked after concurrent take + re-register"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn consumed_memory_outlives_pending_ttl_for_long_running_delegation() {
+        // Regression: a delegated child agent can run for
+        // minutes-to-hours. When it finishes, the host may re-emit
+        // the parent-side `tool_call` (e.g. as a `completed` status
+        // flip via the non-update `ToolCall` variant). That re-emit
+        // arrives well after PENDING_TOOL_CALL_TTL, so the consumed
+        // memory MUST NOT age out under that TTL — otherwise the
+        // stale id slips back into pending and mis-binds the next
+        // delegation. Consumed entries are scoped to the parent
+        // connection's lifetime instead.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("p1", "tc-a".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-a")
+        );
+        // Simulate the host re-emitting the same tool_call_id 10×
+        // the pending TTL later (i.e. a long-running delegation that
+        // finishes after the pending eviction window).
+        let long_after = Instant::now() + PENDING_TOOL_CALL_TTL * 10;
+        broker
+            .register_pending_tool_call_at("p1", "tc-a".into(), long_after)
+            .await;
+        assert!(
+            broker
+                .take_pending_tool_call_at("p1", long_after)
+                .await
+                .is_none(),
+            "consumed memory must outlast the pending TTL so terminal status re-emits cannot leak through"
+        );
+    }
+
+    #[tokio::test]
+    async fn consumed_memory_unbounded_across_high_fan_out() {
+        // Regression for the cap removal: a parent session with many
+        // delegations (well past PENDING_QUEUE_CAP=32) must still
+        // reject a late re-emit of the very first delegation's id,
+        // because the consumed half has no cap. A bounded consumed
+        // set with FIFO eviction would silently re-enable the
+        // mis-binding bug at high fan-out.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        let first_id = "tc-first".to_string();
+        broker
+            .register_pending_tool_call("p1", first_id.clone())
+            .await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some(first_id.as_str())
+        );
+        // Issue many more delegations to overflow the old per-bucket
+        // cap. With no cap on consumed, the first id must remain
+        // remembered for the lifetime of the parent connection.
+        for i in 0..(PENDING_QUEUE_CAP * 4) {
+            let id = format!("tc-{i}");
+            broker.register_pending_tool_call("p1", id.clone()).await;
+            assert_eq!(
+                broker.take_pending_tool_call("p1").await.as_deref(),
+                Some(id.as_str())
+            );
+        }
+        // Late re-emit of the very first id (would have been evicted
+        // by the prior bounded consumed FIFO).
+        broker
+            .register_pending_tool_call("p1", first_id.clone())
+            .await;
+        assert!(
+            broker.take_pending_tool_call("p1").await.is_none(),
+            "consumed memory must retain the very first id even after high fan-out"
+        );
+    }
+
+    #[tokio::test]
+    async fn consumed_memory_cleared_on_parent_disconnect() {
+        // The companion to the long-running invariant above: consumed
+        // memory is scoped to the parent connection's lifetime, so
+        // `drop_pending_tool_calls_for_parent` (called when the
+        // parent disconnects) must clear it. Otherwise a brand-new
+        // connection reusing the same id (UUID collision is unlikely
+        // but UUIDs are not the only id scheme in play) would be
+        // permanently blocked.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("p1", "tc-a".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-a")
+        );
+        broker.drop_pending_tool_calls_for_parent("p1").await;
+        broker.register_pending_tool_call("p1", "tc-a".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-a"),
+            "parent disconnect must clear consumed memory so id reuse is acceptable"
+        );
+    }
+
+    #[tokio::test]
     async fn take_skips_entries_older_than_ttl() {
         // Regression: an ACP `tool_call` whose matching MCP round-trip
         // never arrives (host changed its mind, transport dropped, etc.)
@@ -1462,10 +1720,10 @@ mod tests {
         // ~now-relative-to-future-now. Direct field access is OK — we're
         // a sibling test in the same module.
         {
-            let mut map = broker.pending_tool_calls.inner.lock().await;
-            let queue = map.get_mut("p1").expect("queue present");
+            let mut map = broker.tool_calls.inner.lock().await;
+            let bucket = map.get_mut("p1").expect("bucket present");
             // Re-stamp the second entry ("fresh") to `future_now`.
-            if let Some(entry) = queue.iter_mut().find(|(id, _)| id == "fresh") {
+            if let Some(entry) = bucket.pending.iter_mut().find(|(id, _)| id == "fresh") {
                 entry.1 = future_now;
             }
         }
