@@ -71,7 +71,7 @@ impl Default for DelegationConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            depth_limit: 2,
+            depth_limit: 1,
             agent_defaults: BTreeMap::new(),
         }
     }
@@ -403,7 +403,8 @@ impl DelegationBroker {
             Err(e) => return DelegationOutcome::from_err(e, None),
         };
         // The child the broker is about to create would sit at `parent_depth + 1`.
-        // Reject when the *child* depth would equal or exceed the limit.
+        // Reject only when the *child* depth would strictly exceed the limit;
+        // a child sitting exactly at `depth_limit` is allowed.
         if parent_depth + 1 > cfg.depth_limit {
             return DelegationOutcome::from_err(
                 DelegationError::DepthLimitExceeded {
