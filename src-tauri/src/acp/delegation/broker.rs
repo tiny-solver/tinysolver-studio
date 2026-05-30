@@ -138,15 +138,18 @@ struct PendingInner {
     /// send-failure path.
     setups: HashMap<String, String>,
     /// Completion outcomes captured by a `TurnComplete` that beat registration
-    /// (gated by `setups`), keyed by `call_id`. Drained at park.
-    early_completes: HashMap<String, DelegationOutcome>,
+    /// (gated by `setups`), keyed by `call_id`. Each carries the `seq` arrival
+    /// stamp taken when it buffered, so the park can order it against a racing
+    /// parent cancel (first-terminal-wins). Drained at park.
+    early_completes: HashMap<String, (u64, DelegationOutcome)>,
     /// Cancel reasons captured by a child failure that beat registration (gated
-    /// by `setups`), keyed by `child_connection_id`. The value is the
-    /// pre-computed `Canceled { reason }` text (same wording the parked
-    /// `cancel_by_child_connection` path produces); `handle_request` rebuilds
-    /// the full outcome at park with the real `child_conversation_id` (which the
-    /// resolver, finding no entry, lacked).
-    early_cancels: HashMap<String, String>,
+    /// by `setups`), keyed by `child_connection_id`. The value pairs the `seq`
+    /// arrival stamp (for the park's first-terminal-wins ordering against a
+    /// racing parent cancel) with the pre-computed `Canceled { reason }` text
+    /// (same wording the parked `cancel_by_child_connection` path produces);
+    /// `handle_request` rebuilds the full outcome at park with the real
+    /// `child_conversation_id` (which the resolver, finding no entry, lacked).
+    early_cancels: HashMap<String, (u64, String)>,
     /// In-flight `handle_request` setups, keyed by a unique per-call id and
     /// registered at entry (BEFORE the claim poll, so the whole claim→park
     /// window is covered). This is the parent-cancel counterpart to `setups`:
@@ -158,19 +161,23 @@ struct PendingInner {
     /// Removed at park and on every early-return (no Drop guard — see
     /// `register_inflight`).
     inflight: HashMap<u64, InflightSetup>,
-    /// Source of unique `inflight` keys. A plain counter, NOT an ordering
-    /// clock: Item-1 parent-cancel coverage only needs a flag, and the park
-    /// tie-break prefers a buffered child terminal regardless of arrival order.
-    next_inflight_id: u64,
+    /// Monotonic arrival clock (see `tick`). Hands out the unique `inflight`
+    /// keys AND the arrival stamps on buffered child terminals / parent cancels,
+    /// so the park can resolve a setup-window race by true first-terminal-wins
+    /// order. Keys and stamps share this sequence but are never cross-compared
+    /// (keys match by identity, stamps only by `<` against other stamps).
+    seq: u64,
 }
 
 /// One in-flight `handle_request` setup tracked for parent-cancel coverage.
 struct InflightSetup {
     parent_connection_id: String,
-    /// Set when a parent cancel lands while this delegation is mid-setup
-    /// (spawned / sending, not yet parked). Monotonic: once set it is never
-    /// cleared, so a cancel can't be lost between `handle_request`'s checkpoints.
-    canceled: bool,
+    /// `Some(stamp)` once a parent cancel lands while this delegation is
+    /// mid-setup (spawned / sending, not yet parked), where `stamp` is the `seq`
+    /// arrival-clock value at that moment. First-write-wins and never cleared,
+    /// so a cancel can't be lost between `handle_request`'s checkpoints, and its
+    /// stamp lets the park order it against a racing child terminal.
+    canceled_at: Option<u64>,
 }
 
 impl PendingInner {
@@ -206,38 +213,55 @@ impl PendingInner {
         self.setups.values().any(|child| child == child_connection_id)
     }
 
-    /// Buffer a completion for a still-reserved delegation. No-op when the
-    /// `call_id` isn't reserved (already resolved by another terminal path), so
-    /// the buffer only ever holds genuine pre-registration races.
+    /// Buffer a completion for a still-reserved delegation, stamped with the
+    /// current arrival clock so the park can order it against a racing parent
+    /// cancel. No-op when the `call_id` isn't reserved (already resolved by
+    /// another terminal path), so the buffer only ever holds genuine
+    /// pre-registration races.
     fn buffer_early_complete(&mut self, call_id: &str, outcome: DelegationOutcome) {
         if self.setups.contains_key(call_id) {
-            self.early_completes.insert(call_id.to_string(), outcome);
+            let stamp = self.tick();
+            self.early_completes
+                .insert(call_id.to_string(), (stamp, outcome));
         }
     }
 
-    /// Buffer a child failure for a still-reserved delegation. No-op when the
-    /// child isn't reserved (normal post-resolution teardown). Stores the
-    /// pre-computed cancel reason so the park rebuilds the same wording the
-    /// parked `cancel_by_child_connection` path produces.
+    /// Buffer a child failure for a still-reserved delegation, stamped with the
+    /// current arrival clock so the park can order it against a racing parent
+    /// cancel. No-op when the child isn't reserved (normal post-resolution
+    /// teardown). Stores the pre-computed cancel reason so the park rebuilds the
+    /// same wording the parked `cancel_by_child_connection` path produces.
     fn buffer_child_failure(&mut self, child_connection_id: &str, detail: Option<String>) {
         if self.is_child_reserved(child_connection_id) {
+            let stamp = self.tick();
             self.early_cancels.insert(
                 child_connection_id.to_string(),
-                child_canceled_reason(detail.as_deref()),
+                (stamp, child_canceled_reason(detail.as_deref())),
             );
         }
     }
 
-    /// Drain a buffered completion (by `call_id`) — used by `handle_request` at
-    /// park.
-    fn take_early_complete(&mut self, call_id: &str) -> Option<DelegationOutcome> {
+    /// Drain a buffered completion with its arrival stamp (by `call_id`) — used
+    /// by `handle_request` at park.
+    fn take_early_complete(&mut self, call_id: &str) -> Option<(u64, DelegationOutcome)> {
         self.early_completes.remove(call_id)
     }
 
-    /// Drain a buffered cancel reason (by `child_connection_id`) — used by
-    /// `handle_request` at park.
-    fn take_early_cancel(&mut self, child_connection_id: &str) -> Option<String> {
+    /// Drain a buffered cancel reason with its arrival stamp (by
+    /// `child_connection_id`) — used by `handle_request` at park.
+    fn take_early_cancel(&mut self, child_connection_id: &str) -> Option<(u64, String)> {
         self.early_cancels.remove(child_connection_id)
+    }
+
+    /// Advance the monotonic arrival clock, returning the pre-increment value.
+    /// Strictly increasing (wraps only after 2^64 calls — unreachable), so two
+    /// events stamped under this lock always compare in their true arrival
+    /// order. Backs both `inflight` keys and terminal/cancel arrival stamps; the
+    /// two uses never cross-compare (keys match by identity, stamps by `<`).
+    fn tick(&mut self) -> u64 {
+        let v = self.seq;
+        self.seq = self.seq.wrapping_add(1);
+        v
     }
 
     /// Register an in-flight setup at `handle_request` entry, returning its
@@ -248,13 +272,12 @@ impl PendingInner {
     /// entry in exactly one of `inflight` or `calls`, and a guard firing after
     /// the lock releases would reopen that window.
     fn register_inflight(&mut self, parent_connection_id: &str) -> u64 {
-        let id = self.next_inflight_id;
-        self.next_inflight_id = self.next_inflight_id.wrapping_add(1);
+        let id = self.tick();
         self.inflight.insert(
             id,
             InflightSetup {
                 parent_connection_id: parent_connection_id.to_string(),
-                canceled: false,
+                canceled_at: None,
             },
         );
         id
@@ -266,21 +289,35 @@ impl PendingInner {
     }
 
     /// Whether a parent cancel flagged this in-flight setup. False once the
-    /// record is gone (already parked / deregistered).
+    /// record is gone (already parked / deregistered). Used by the pre-spawn /
+    /// post-spawn checkpoints, which only need the boolean.
     fn inflight_canceled(&self, id: u64) -> bool {
-        self.inflight.get(&id).map(|s| s.canceled).unwrap_or(false)
+        self.inflight
+            .get(&id)
+            .map(|s| s.canceled_at.is_some())
+            .unwrap_or(false)
     }
 
-    /// Flag every in-flight setup owned by `parent_connection_id` as canceled.
-    /// Called from `drain_for_parent_cancel` in the SAME lock acquisition that
-    /// drains the parked `calls`, so each of the parent's delegations is caught
-    /// either here (still in-flight → flagged; `handle_request` tears its child
-    /// down at the next checkpoint) or by the parked-call drain (already
-    /// parked) — never neither.
+    /// Arrival stamp of the parent cancel that flagged this in-flight setup, if
+    /// any (`None` when not canceled, or the record is already gone). Used at
+    /// park to order the cancel against a buffered child terminal.
+    fn inflight_canceled_at(&self, id: u64) -> Option<u64> {
+        self.inflight.get(&id).and_then(|s| s.canceled_at)
+    }
+
+    /// Flag every in-flight setup owned by `parent_connection_id` as canceled,
+    /// stamping each with one shared arrival-clock value (this cancel is a
+    /// single event). First-write-wins per setup, so a later cancel can't push
+    /// an earlier one's stamp forward. Called from `drain_for_parent_cancel` in
+    /// the SAME lock acquisition that drains the parked `calls`, so each of the
+    /// parent's delegations is caught either here (still in-flight → flagged;
+    /// `handle_request` tears its child down at the next checkpoint) or by the
+    /// parked-call drain (already parked) — never neither.
     fn mark_inflight_canceled_for_parent(&mut self, parent_connection_id: &str) {
+        let stamp = self.tick();
         for setup in self.inflight.values_mut() {
-            if setup.parent_connection_id == parent_connection_id {
-                setup.canceled = true;
+            if setup.parent_connection_id == parent_connection_id && setup.canceled_at.is_none() {
+                setup.canceled_at = Some(stamp);
             }
         }
     }
@@ -1373,14 +1410,17 @@ impl DelegationBroker {
         //   * a parent cancel that flagged this in-flight setup
         //     (`mark_inflight_canceled_for_parent`, which runs in the SAME lock
         //     acquisition that drains the parked `calls`).
-        // Precedence: a real child terminal wins over a parent cancel — the
-        // child already produced a result, so the cancel is moot; this also
-        // matches the existing completion-over-teardown ordering. Only when
-        // NOTHING beat us do we park for a future resolver, deregistering the
-        // in-flight record adjacent to `calls.insert` with no `.await` between —
-        // so a parent cancel serialized AFTER us finds the entry in `calls` and
-        // drains it, while one serialized BEFORE us is seen here as
-        // `parent_canceled`. When a terminal/cancel DID beat us we deliberately
+        // Precedence: strict first-terminal-wins by arrival stamp. Both a child
+        // terminal and a parent cancel carry the `seq` clock value they were
+        // recorded at, so whichever landed FIRST wins — a child that completed
+        // before the cancel keeps its result; a cancel that beat the completion
+        // discards it (the parent had already abandoned the turn). Ties are
+        // impossible: every event draws a distinct stamp under this one lock.
+        // Only when NOTHING beat us do we park for a future resolver,
+        // deregistering the in-flight record adjacent to `calls.insert` with no
+        // `.await` between — so a parent cancel serialized AFTER us finds the
+        // entry in `calls` and drains it, while one serialized BEFORE us is seen
+        // here via its stamp. When a terminal/cancel DID beat us we deliberately
         // DON'T park: resolving inline (never leaving an entry for a second
         // resolver to grab) rules out a double-finalize.
         enum Disposition {
@@ -1391,28 +1431,47 @@ impl DelegationBroker {
         let (tx, rx) = oneshot::channel();
         let disposition = {
             let mut inner = self.pending.inner.lock().await;
-            let child_terminal = if let Some(outcome) = inner.take_early_complete(&call_id) {
-                Some(outcome)
-            } else {
-                inner.take_early_cancel(&child_connection_id).map(|reason| {
-                    DelegationOutcome::from_err(
-                        DelegationError::Canceled { reason },
-                        Some(child_conversation_id),
-                    )
-                })
-            };
-            let parent_canceled = inner.inflight_canceled(inflight_id);
+            // Each buffered child terminal carries (arrival_stamp, outcome).
+            let child_terminal: Option<(u64, DelegationOutcome)> =
+                if let Some((stamp, outcome)) = inner.take_early_complete(&call_id) {
+                    Some((stamp, outcome))
+                } else {
+                    inner
+                        .take_early_cancel(&child_connection_id)
+                        .map(|(stamp, reason)| {
+                            (
+                                stamp,
+                                DelegationOutcome::from_err(
+                                    DelegationError::Canceled { reason },
+                                    Some(child_conversation_id),
+                                ),
+                            )
+                        })
+                };
+            let parent_canceled_at = inner.inflight_canceled_at(inflight_id);
             inner.unreserve(&call_id, &child_connection_id);
-            match child_terminal {
-                Some(outcome) => {
+            match (child_terminal, parent_canceled_at) {
+                // Both raced in the setup window: the earlier arrival stamp wins.
+                (Some((child_stamp, outcome)), Some(cancel_stamp)) => {
+                    inner.deregister_inflight(inflight_id);
+                    if child_stamp < cancel_stamp {
+                        Disposition::ChildTerminal(outcome)
+                    } else {
+                        Disposition::ParentCanceled
+                    }
+                }
+                // Only a child terminal fired.
+                (Some((_, outcome)), None) => {
                     inner.deregister_inflight(inflight_id);
                     Disposition::ChildTerminal(outcome)
                 }
-                None if parent_canceled => {
+                // Only a parent cancel fired.
+                (None, Some(_)) => {
                     inner.deregister_inflight(inflight_id);
                     Disposition::ParentCanceled
                 }
-                None => {
+                // Nothing beat us — park for a future resolver.
+                (None, None) => {
                     inner.calls.insert(
                         call_id.clone(),
                         PendingCall {
@@ -4252,8 +4311,10 @@ mod tests {
         );
     }
 
-    /// First-terminal tie-break (child-priority): when a child completion
-    /// buffers and THEN a parent cancel lands, the real child result wins.
+    /// Strict first-terminal-wins: when a child completion buffers FIRST and a
+    /// parent cancel lands afterward, the child's earlier arrival stamp wins and
+    /// its real result is preserved (the cancel is moot — the child already
+    /// finished before it).
     #[tokio::test]
     async fn child_terminal_wins_over_later_parent_cancel() {
         let mock = Arc::new(MockSpawner::new());
@@ -4302,12 +4363,12 @@ mod tests {
         assert_eq!(broker.early_complete_count().await, 0);
     }
 
-    /// Item-1 tie-break is child-terminal priority (NOT arrival order): even
-    /// when the parent cancel is recorded BEFORE the child completion buffers, a
-    /// real child terminal still wins. (Item 3 would flip this to
-    /// first-terminal-wins; this test pins the Item-1 contract.)
+    /// Strict first-terminal-wins (Item 3): when the parent cancel is recorded
+    /// BEFORE the child completion buffers, the cancel wins — the late
+    /// completion is discarded and the child is torn down, because the parent
+    /// had already abandoned the turn by the time the completion landed.
     #[tokio::test]
-    async fn child_terminal_wins_even_when_parent_cancel_arrived_first() {
+    async fn parent_cancel_wins_when_it_arrives_before_child_terminal() {
         let mock = Arc::new(MockSpawner::new());
         mock.queue_spawn(Ok("c5".into())).await;
         mock.queue_send(Ok(55)).await;
@@ -4327,7 +4388,9 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(5)).await;
         };
 
-        // Parent cancels FIRST; the child completes anyway.
+        // Parent cancels FIRST (earlier arrival stamp); the child completes
+        // afterward (later stamp) — first-terminal-wins judges the cancel the
+        // winner and discards the late completion.
         broker.cancel_by_parent_turn("parent-conn").await;
         broker
             .complete_call(
@@ -4344,11 +4407,86 @@ mod tests {
             .await;
         let _ = release.send(());
 
+        match driver.await.unwrap() {
+            DelegationOutcome::Err {
+                code,
+                child_conversation_id,
+                ..
+            } => {
+                assert_eq!(code, "canceled");
+                assert_eq!(child_conversation_id, Some(55));
+            }
+            other => panic!(
+                "first-terminal-wins: an earlier parent cancel must beat a later completion, got {other:?}"
+            ),
+        }
+        // The abandoned child is torn down (prompt was sent → cancel + disconnect).
+        assert_eq!(mock.cancels.lock().await.as_slice(), &["c5"]);
+        assert_eq!(mock.disconnects.lock().await.as_slice(), &["c5"]);
+        assert_eq!(broker.inflight_count().await, 0);
+        // The buffered completion was drained (and discarded), leaving no leak.
+        assert_eq!(broker.early_complete_count().await, 0);
+    }
+
+    /// Strict first-terminal-wins through the child-FAILURE buffer: a child
+    /// failure that buffers BEFORE a parent cancel keeps its (earlier) arrival
+    /// stamp and wins, so the request resolves with the child's failure detail
+    /// and the child is torn down once (disconnect only — the child already
+    /// failed, so there's no in-flight prompt to cancel). Exercises the
+    /// `early_cancels` stamp path that mirrors the completion case above.
+    #[tokio::test]
+    async fn child_failure_wins_over_later_parent_cancel() {
+        let mock = Arc::new(MockSpawner::new());
+        mock.queue_spawn(Ok("cF".into())).await;
+        mock.queue_send(Ok(66)).await;
+        let release = mock.install_send_gate().await;
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move { broker.handle_request(request(1, "pt-f")).await })
+        };
+        // Spawned + reserved, held inside send_prompt by the gate.
+        loop {
+            if broker.reserved_child_count().await == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        // Child fails FIRST (earlier stamp), then the parent cancels (later
+        // stamp) — the child terminal wins and carries its failure detail.
+        broker
+            .cancel_by_child_connection("cF", Some("boom detail"))
+            .await;
+        broker.cancel_by_parent_turn("parent-conn").await;
+        let _ = release.send(());
+
+        match driver.await.unwrap() {
+            DelegationOutcome::Err {
+                code,
+                message,
+                child_conversation_id,
+            } => {
+                assert_eq!(code, "canceled");
+                assert!(
+                    message.contains("boom detail"),
+                    "child failure detail must survive, got: {message}"
+                );
+                assert_eq!(child_conversation_id, Some(66));
+            }
+            other => panic!("expected child failure Err, got {other:?}"),
+        }
+        // Child-terminal path tears down via disconnect only (no cancel).
+        assert_eq!(mock.disconnects.lock().await.as_slice(), &["cF"]);
         assert!(
-            matches!(driver.await.unwrap(), DelegationOutcome::Ok(_)),
-            "child-terminal priority: a buffered completion wins over the cancel flag"
+            mock.cancels.lock().await.is_empty(),
+            "child already failed — the moot parent cancel must not cancel it"
         );
         assert_eq!(broker.inflight_count().await, 0);
+        assert_eq!(broker.early_cancel_count().await, 0);
     }
 
     /// The teardown variant `cancel_by_parent` covers the same reserve→park
