@@ -958,11 +958,67 @@ impl DelegationBroker {
     /// fresh connection on the reused id is not blocked by the
     /// consumed memory of the previous one.
     pub async fn drop_pending_tool_calls_for_parent(&self, parent_connection_id: &str) {
-        self.tool_calls
-            .inner
-            .lock()
-            .await
-            .remove(parent_connection_id);
+        self.drop_tool_calls_for_parent(parent_connection_id, false)
+            .await;
+    }
+
+    /// Core of the tool_call-tracker drop, shared by the two cancel scopes.
+    ///
+    /// * `keep_consumed == false` — genuine connection teardown: remove the
+    ///   whole bucket (`pending` + `consumed`). The connection is going away,
+    ///   so nothing it remembered can mis-bind a future delegation, and a
+    ///   reused connection_id must start clean.
+    /// * `keep_consumed == true` — turn/prompt cancel with the parent
+    ///   connection STILL ALIVE: TOMBSTONE the cancelled turn's unclaimed
+    ///   `pending` ids into `consumed` and RETAIN the existing `consumed`. Both
+    ///   the already-claimed ids AND the just-cancelled turn's unclaimed ids
+    ///   must keep rejecting a host re-emit (e.g. a terminal status-flip): the
+    ///   Tier-1 consumed check in `register_pending_tool_call_with_key_at` drops
+    ///   the re-emit, so a stale id can't re-register as fresh `pending` and
+    ///   mis-bind the next same-key delegation on this live connection. Merely
+    ///   CLEARING the unclaimed ids would leave them re-registerable, reopening
+    ///   that hole for the unclaimed half (the claimed half was already safe via
+    ///   `consumed`). Retention is connection-scoped and released on teardown —
+    ///   the same unbounded-but-bounded-by-delegation-count envelope `consumed`
+    ///   already lives in for normal end_turn delegations (see
+    ///   [`ToolCallTrackerBucket`]).
+    ///
+    /// Tombstoning ALL of `pending` here is safe (no turn/generation tag
+    /// needed): `run_conversation_loop` drives at most ONE `session/prompt`
+    /// future per connection at a time (see `acp/connection.rs`), and a
+    /// parent-side `tool_call` only streams while its prompt future is in
+    /// flight, so every `pending` id belongs to the single active turn — the one
+    /// being cancelled — or is a stale leftover from an earlier turn that should
+    /// be tombstoned regardless. (The per-connection `prompt_lock` only
+    /// serializes the prompt-SEND handshake, not the turn, so it is NOT the
+    /// source of this invariant.) The cancelled turn's serialized MCP round-trip
+    /// won't arrive after cancel, so nothing legitimate is lost.
+    async fn drop_tool_calls_for_parent(&self, parent_connection_id: &str, keep_consumed: bool) {
+        let mut map = self.tool_calls.inner.lock().await;
+        if !keep_consumed {
+            map.remove(parent_connection_id);
+            return;
+        }
+        if let Some(bucket) = map.get_mut(parent_connection_id) {
+            // Tombstone the cancelled turn's unclaimed pending ids into
+            // `consumed` rather than just dropping them, so a later host re-emit
+            // of one is rejected by the Tier-1 consumed check instead of
+            // re-registering as a claimable stale entry. `drain` empties
+            // `pending` first so the subsequent `consumed` borrow is disjoint.
+            let now = Instant::now();
+            let cleared: Vec<String> = bucket.pending.drain(..).map(|p| p.tool_call_id).collect();
+            for id in cleared {
+                if !bucket.consumed.iter().any(|(c, _)| c == &id) {
+                    bucket.consumed.push_back((id, now));
+                }
+            }
+            // Drop the now-empty bucket only when nothing consumed remains —
+            // otherwise keep it so the retained `consumed` ids keep rejecting
+            // re-emits for the rest of this connection's lifetime.
+            if bucket.consumed.is_empty() {
+                map.remove(parent_connection_id);
+            }
+        }
     }
 
     pub async fn set_config(&self, cfg: DelegationConfig) {
@@ -1606,27 +1662,84 @@ impl DelegationBroker {
         }
     }
 
-    /// Cascade-cancel every pending delegation owned by `parent_connection_id`.
-    /// Used when a parent session disconnects or the user cancels the parent's
-    /// active prompt.
+    /// Cascade-cancel every pending delegation owned by `parent_connection_id`
+    /// when the parent **connection tears down** (disconnect / `run_connection`
+    /// exit). Drops the parent's entire tool_call tracker bucket (`pending` +
+    /// `consumed`) since the connection is going away. Runs fully inline — the
+    /// connection is already exiting, so there is no next prompt to unblock.
     pub async fn cancel_by_parent(&self, parent_connection_id: &str) {
-        // Also drain any tool_call ids that were captured ahead of an MCP
-        // round-trip that never arrived — keeps the map bounded across
-        // parent reconnects.
-        self.drop_pending_tool_calls_for_parent(parent_connection_id)
+        let drained = self
+            .drain_for_parent_cancel(parent_connection_id, false)
             .await;
-        let drained: Vec<PendingCall> = {
-            let mut inner = self.pending.inner.lock().await;
-            let keys: Vec<String> = inner
-                .calls
-                .iter()
-                .filter(|(_, v)| v.parent_connection_id == parent_connection_id)
-                .map(|(k, _)| k.clone())
-                .collect();
-            keys.into_iter()
-                .map(|k| inner.calls.remove(&k).expect("key just observed"))
-                .collect()
-        };
+        self.finalize_parent_cancel(drained).await;
+    }
+
+    /// Cascade-cancel every pending delegation owned by `parent_connection_id`
+    /// for a **turn/prompt cancel** where the parent connection STAYS ALIVE
+    /// (a non-`end_turn` turn end, or a user Cancel between/within prompts).
+    ///
+    /// The fast, turn-scoped part — tombstoning the tool_call tracker and
+    /// removing this parent's parked calls — runs SYNCHRONOUSLY: the caller
+    /// awaits it before the connection loop accepts the next prompt, so it can't
+    /// race a next-turn registration and tombstone/cancel that turn's legitimate
+    /// entries (the safety the `drop_tool_calls_for_parent` invariant relies
+    /// on). Only the slow child teardown (meta/emit + spawner `cancel` /
+    /// `disconnect`, which can block on slow agents) is backgrounded, so the
+    /// user-visible Cancel path stays responsive.
+    ///
+    /// RETAINS the parent's `consumed` tool_call memory (and tombstones the
+    /// cancelled turn's unclaimed `pending` ids into it): dropping it would let
+    /// a host re-emit of an already-handled `tool_call_id` re-register and
+    /// mis-bind the next same-key delegation on this live connection — see
+    /// `drop_tool_calls_for_parent`.
+    pub async fn cancel_by_parent_turn(&self, parent_connection_id: &str) {
+        let drained = self
+            .drain_for_parent_cancel(parent_connection_id, true)
+            .await;
+        // The fast drain above already ran inline (scoped to the just-ended
+        // turn); background only the slow child teardown.
+        let broker = self.clone();
+        tokio::spawn(async move {
+            broker.finalize_parent_cancel(drained).await;
+        });
+    }
+
+    /// Fast, lock-guarded part of a parent cancel: drop/tombstone this parent's
+    /// tool_call tracker (per `keep_consumed`, see `drop_tool_calls_for_parent`)
+    /// and remove every parked `PendingCall` it owns, returning them for the
+    /// (slow) child teardown. Touches only the two broker mutexes — no spawner
+    /// I/O — so it is safe to await inline in the connection loop before the
+    /// next prompt is accepted.
+    async fn drain_for_parent_cancel(
+        &self,
+        parent_connection_id: &str,
+        keep_consumed: bool,
+    ) -> Vec<PendingCall> {
+        // Also drain any tool_call ids captured ahead of an MCP round-trip that
+        // never arrived — keeps the map bounded across parent reconnects.
+        // Teardown drops the whole bucket; a turn cancel keeps `consumed` so a
+        // later re-emit can't mis-bind the next delegation.
+        self.drop_tool_calls_for_parent(parent_connection_id, keep_consumed)
+            .await;
+        let mut inner = self.pending.inner.lock().await;
+        let keys: Vec<String> = inner
+            .calls
+            .iter()
+            .filter(|(_, v)| v.parent_connection_id == parent_connection_id)
+            .map(|(k, _)| k.clone())
+            .collect();
+        keys.into_iter()
+            .map(|k| inner.calls.remove(&k).expect("key just observed"))
+            .collect()
+    }
+
+    /// Slow part of a parent cancel: for each drained `PendingCall`, patch the
+    /// parent meta, emit `DelegationCompleted`, tear down the child, and resolve
+    /// the awaiting `handle_request` with a canceled outcome (sent last, after
+    /// teardown, so a caller awaiting that outcome observes the child fully torn
+    /// down). Split from `drain_for_parent_cancel` so a turn cancel can
+    /// background it without delaying the fast, turn-scoped drain.
+    async fn finalize_parent_cancel(&self, drained: Vec<PendingCall>) {
         for entry in drained {
             // Best-effort meta patch so a parent-side snapshot post-cancel
             // shows the delegation as failed/canceled rather than stuck
@@ -3197,6 +3310,181 @@ mod tests {
             .await;
         broker.cancel_by_parent("parent-conn").await;
         assert!(broker.take_pending_tool_call("parent-conn").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn turn_cancel_keeps_consumed_rejects_reemit() {
+        // A turn/prompt cancel (parent connection STAYS ALIVE) must NOT drop the
+        // `consumed` tool_call memory. Otherwise a host re-emit of an
+        // already-claimed id (e.g. a terminal status-flip) re-registers as fresh
+        // `pending` and the next same-key delegation mis-binds to it — the
+        // dead-card/wrong-child class this correlation machinery exists to
+        // prevent. `cancel_by_parent_turn` retains `consumed`, so the re-emit
+        // stays rejected by the Tier-1 consumed check.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        // Register + claim a keyed id (the delegation that just ran).
+        broker
+            .register_pending_tool_call_with_key("p1", "tc-A".into(), Some(task_key("task A")))
+            .await;
+        assert_eq!(
+            broker
+                .take_matching_tool_call("p1", &task_key("task A"))
+                .await
+                .as_deref(),
+            Some("tc-A"),
+        );
+        // Turn cancel — parent still alive.
+        broker.cancel_by_parent_turn("p1").await;
+        // Host re-emits the now-consumed id with the same key.
+        broker
+            .register_pending_tool_call_with_key("p1", "tc-A".into(), Some(task_key("task A")))
+            .await;
+        assert!(
+            broker
+                .take_matching_tool_call("p1", &task_key("task A"))
+                .await
+                .is_none(),
+            "re-emit of a consumed id must stay rejected across a turn cancel"
+        );
+    }
+
+    #[tokio::test]
+    async fn turn_cancel_drops_unclaimed_pending() {
+        // The unclaimed `pending` half is cleared by a turn cancel (tombstoned
+        // into `consumed`): the cancelled turn's serial round-trip won't arrive,
+        // so the stale keyed entry must not remain claimable by a later same-key
+        // delegation. `take_matching` scans only `pending`, so it returns None.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker
+            .register_pending_tool_call_with_key("p1", "tc-B".into(), Some(task_key("task B")))
+            .await;
+        broker.cancel_by_parent_turn("p1").await;
+        assert!(
+            broker
+                .take_matching_tool_call("p1", &task_key("task B"))
+                .await
+                .is_none(),
+            "unclaimed pending must not stay claimable after a turn cancel"
+        );
+    }
+
+    #[tokio::test]
+    async fn turn_cancel_tombstones_pending_rejects_late_reemit() {
+        // Stronger than the clear test: after a turn cancel clears an UNCLAIMED
+        // keyed pending id, a late host re-emit of that SAME id must not
+        // resurrect it as a claimable entry — otherwise the next same-key
+        // delegation would mis-bind to the stale id. The cancel tombstones the
+        // cleared id into `consumed`, so the re-emit is dropped by the Tier-1
+        // consumed check and never re-enters `pending`.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker
+            .register_pending_tool_call_with_key("p1", "tc-X".into(), Some(task_key("task X")))
+            .await;
+        broker.cancel_by_parent_turn("p1").await;
+        // Late re-emit of the cancelled turn's unclaimed id (same key).
+        broker
+            .register_pending_tool_call_with_key("p1", "tc-X".into(), Some(task_key("task X")))
+            .await;
+        assert!(
+            broker
+                .take_matching_tool_call("p1", &task_key("task X"))
+                .await
+                .is_none(),
+            "a re-emit of a tombstoned (cleared-on-cancel) pending id must not be claimable"
+        );
+    }
+
+    #[tokio::test]
+    async fn teardown_cancel_clears_consumed() {
+        // The teardown variant (`cancel_by_parent`) DOES drop consumed — the
+        // connection is going away, so a reused connection_id must start clean.
+        // Contrast with `turn_cancel_keeps_consumed_rejects_reemit`.
+        let broker = DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+        );
+        broker.register_pending_tool_call("p1", "tc-A".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-A"),
+        );
+        broker.cancel_by_parent("p1").await;
+        // consumed cleared → the same id re-registers and is claimable again.
+        broker.register_pending_tool_call("p1", "tc-A".into()).await;
+        assert_eq!(
+            broker.take_pending_tool_call("p1").await.as_deref(),
+            Some("tc-A"),
+            "teardown cancel must clear consumed so id reuse is acceptable"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_by_parent_turn_drains_synchronously_then_tears_down_child() {
+        // The turn cancel must (a) drop the tracker + remove parked calls
+        // SYNCHRONOUSLY — before the connection loop could accept the next
+        // prompt — so a delayed cancel can't tombstone/cancel a NEXT turn's
+        // entries (the invariant `drop_tool_calls_for_parent` relies on); and
+        // (b) still fully tear the child down (backgrounded), resolving the
+        // awaiting `handle_request` as canceled exactly once.
+        let mock = Arc::new(MockSpawner::new());
+        mock.queue_spawn(Ok("child-1".into())).await;
+        mock.queue_send(Ok(7)).await;
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+
+        // Park a delegation for "parent-conn"...
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move { broker.handle_request(request(1, "pt-1")).await })
+        };
+        while broker.pending_count().await == 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        // ...plus a separate unclaimed keyed tracker entry on the same parent.
+        broker
+            .register_pending_tool_call_with_key(
+                "parent-conn",
+                "tc-Z".into(),
+                Some(task_key("task Z")),
+            )
+            .await;
+
+        broker.cancel_by_parent_turn("parent-conn").await;
+
+        // (a) Synchronously — no sleep: the parked call is removed and the
+        // tracker entry is dropped (tombstoned), so neither can leak into a
+        // next-turn registration that the backgrounded teardown might clobber.
+        assert_eq!(
+            broker.pending_count().await,
+            0,
+            "parked call must be drained synchronously by the turn cancel"
+        );
+        assert!(
+            broker
+                .take_matching_tool_call("parent-conn", &task_key("task Z"))
+                .await
+                .is_none(),
+            "tracker pending must be dropped synchronously by the turn cancel"
+        );
+
+        // (b) The backgrounded child teardown still resolves the driver as
+        // canceled and tears the child down exactly once.
+        match driver.await.unwrap() {
+            DelegationOutcome::Err { code, .. } => assert_eq!(code, "canceled"),
+            other => panic!("expected canceled, got {other:?}"),
+        }
+        assert_eq!(mock.cancels.lock().await.as_slice(), &["child-1"]);
+        assert_eq!(mock.disconnects.lock().await.as_slice(), &["child-1"]);
     }
 
     #[tokio::test]
