@@ -120,6 +120,12 @@ pub mod mock {
         pub cancels: Mutex<Vec<String>>,
         pub disconnects: Mutex<Vec<String>>,
         pub spawn_args: Mutex<Vec<SpawnCallArgs>>,
+        /// When set, `send_prompt_linked_for_delegation` awaits this receiver
+        /// before returning — lets a test hold `handle_request` in the window
+        /// AFTER it has reserved the child (post-spawn) but BEFORE it parks the
+        /// pending entry, so a racing terminal event can be exercised
+        /// deterministically. `None` (default) = no gate, return immediately.
+        pub send_gate: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +148,16 @@ pub mod mock {
 
         pub async fn queue_send(&self, r: Result<i32, SpawnerError>) {
             self.send_results.lock().await.push_back(r);
+        }
+
+        /// Install a one-shot gate that holds the next
+        /// `send_prompt_linked_for_delegation` until the returned sender fires.
+        /// Used to deterministically pin `handle_request` in the
+        /// reserve→park window. See [`MockSpawner::send_gate`].
+        pub async fn install_send_gate(&self) -> tokio::sync::oneshot::Sender<()> {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            *self.send_gate.lock().await = Some(rx);
+            tx
         }
     }
 
@@ -175,6 +191,13 @@ pub mod mock {
             _task: String,
             _link: DelegationLink,
         ) -> Result<i32, SpawnerError> {
+            // Honor a test-installed gate: block here (after the broker has
+            // reserved the child, before it parks the pending entry) until the
+            // test releases it.
+            let gate = self.send_gate.lock().await.take();
+            if let Some(gate) = gate {
+                let _ = gate.await;
+            }
             self.send_results
                 .lock()
                 .await
