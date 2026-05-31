@@ -67,6 +67,7 @@ pub trait DelegationEventEmitter: Send + Sync {
         parent_tool_use_id: &str,
         child_connection_id: &str,
         child_conversation_id: i32,
+        agent_type: AgentType,
         result: DelegationResultSummary,
     );
 }
@@ -97,6 +98,7 @@ impl DelegationEventEmitter for NoopEventEmitter {
         _parent_tool_use_id: &str,
         _child_connection_id: &str,
         _child_conversation_id: i32,
+        _agent_type: AgentType,
         _result: DelegationResultSummary,
     ) {
     }
@@ -152,6 +154,7 @@ impl DelegationEventEmitter for ConnectionManagerEventEmitter {
         parent_tool_use_id: &str,
         child_connection_id: &str,
         child_conversation_id: i32,
+        agent_type: AgentType,
         result: DelegationResultSummary,
     ) {
         let Some((state_arc, emitter)) = self
@@ -169,6 +172,7 @@ impl DelegationEventEmitter for ConnectionManagerEventEmitter {
                 parent_tool_use_id: parent_tool_use_id.to_string(),
                 child_connection_id: child_connection_id.to_string(),
                 child_conversation_id,
+                agent_type,
                 result,
             },
         )
@@ -197,6 +201,7 @@ pub mod mock {
         pub parent_tool_use_id: String,
         pub child_connection_id: String,
         pub child_conversation_id: i32,
+        pub agent_type: AgentType,
         pub result: DelegationResultSummary,
     }
 
@@ -256,6 +261,7 @@ pub mod mock {
             parent_tool_use_id: &str,
             child_connection_id: &str,
             child_conversation_id: i32,
+            agent_type: AgentType,
             result: DelegationResultSummary,
         ) {
             self.calls.lock().await.push(EmitCall {
@@ -263,6 +269,7 @@ pub mod mock {
                 parent_tool_use_id: parent_tool_use_id.to_string(),
                 child_connection_id: child_connection_id.to_string(),
                 child_conversation_id,
+                agent_type,
                 result,
             });
         }

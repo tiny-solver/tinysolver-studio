@@ -2057,6 +2057,7 @@ impl DelegationBroker {
                     &req.parent_tool_use_id,
                     &child_connection_id,
                     child_conversation_id,
+                    req.agent_type,
                     setup_duration_ms,
                     &outcome,
                 )
@@ -2091,6 +2092,7 @@ impl DelegationBroker {
                     &req.parent_tool_use_id,
                     &child_connection_id,
                     child_conversation_id,
+                    req.agent_type,
                     DelegationResultSummary::Err {
                         error_code: "canceled".to_string(),
                     },
@@ -2156,6 +2158,7 @@ impl DelegationBroker {
                         &req.parent_tool_use_id,
                         &child_connection_id,
                         child_conversation_id,
+                        req.agent_type,
                         DelegationResultSummary::Err {
                             error_code: "canceled".to_string(),
                         },
@@ -2230,6 +2233,7 @@ impl DelegationBroker {
                 &task.parent_tool_use_id,
                 &task.child_connection_id,
                 task.child_conversation_id,
+                task.agent_type,
                 duration_ms,
                 &outcome,
             )
@@ -2249,12 +2253,14 @@ impl DelegationBroker {
     ///
     /// `duration_ms` is the broker-measured elapsed time (from `started_at`),
     /// carried onto the event summary so the parent UI shows a real duration.
+    #[allow(clippy::too_many_arguments)]
     async fn finalize_delegation(
         &self,
         parent_connection_id: &str,
         parent_tool_use_id: &str,
         child_connection_id: &str,
         child_conversation_id: i32,
+        agent_type: AgentType,
         duration_ms: u64,
         outcome: &DelegationOutcome,
     ) {
@@ -2281,6 +2287,7 @@ impl DelegationBroker {
             parent_tool_use_id,
             child_connection_id,
             child_conversation_id,
+            agent_type,
             outcome_to_summary(outcome, duration_ms),
         )
         .await;
@@ -2347,6 +2354,7 @@ impl DelegationBroker {
         parent_tool_use_id: &str,
         child_connection_id: &str,
         child_conversation_id: i32,
+        agent_type: AgentType,
         result: DelegationResultSummary,
     ) {
         if is_synthetic_parent_tool_use_id(parent_tool_use_id) {
@@ -2358,6 +2366,7 @@ impl DelegationBroker {
                 parent_tool_use_id,
                 child_connection_id,
                 child_conversation_id,
+                agent_type,
                 result,
             )
             .await;
@@ -2583,6 +2592,7 @@ impl DelegationBroker {
             &task.parent_tool_use_id,
             &task.child_connection_id,
             task.child_conversation_id,
+            task.agent_type,
             DelegationResultSummary::Err {
                 error_code: "canceled".to_string(),
             },
@@ -5605,6 +5615,10 @@ mod tests {
         assert_eq!(call.parent_tool_use_id, "pt-ok");
         assert_eq!(call.child_connection_id, "child-conn-1");
         assert_eq!(call.child_conversation_id, 42);
+        // The completed event carries the child agent_type (from the running
+        // task), so a frontend that missed `DelegationStarted` still binds the
+        // correct agent. `request()` delegates to ClaudeCode.
+        assert_eq!(call.agent_type, AgentType::ClaudeCode);
         // duration_ms is now broker-measured (not the outcome's value); assert
         // the Ok variant + the enriched text_preview instead.
         assert!(

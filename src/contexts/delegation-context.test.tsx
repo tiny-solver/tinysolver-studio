@@ -39,6 +39,7 @@ function BindingProbe({ parentToolUseId }: { parentToolUseId: string }) {
       <div data-testid="status">{binding.status}</div>
       <div data-testid="error-code">{binding.errorCode ?? "-"}</div>
       <div data-testid="duration">{binding.durationMs ?? "-"}</div>
+      <div data-testid="agent">{binding.agentType}</div>
     </div>
   )
 }
@@ -120,6 +121,7 @@ describe("DelegationProvider", () => {
       parent_tool_use_id: "pt-1",
       child_connection_id: "c1",
       child_conversation_id: 99,
+      agent_type: "codex",
       result: { kind: "err", error_code: "canceled" },
     } as unknown as EventEnvelope)
     expect(screen.getByTestId("status")).toHaveTextContent("err")
@@ -156,6 +158,7 @@ describe("DelegationProvider", () => {
       parent_tool_use_id: "pt-1",
       child_connection_id: "c1",
       child_conversation_id: 99,
+      agent_type: "codex",
       result: { kind: "ok", duration_ms: 1234 },
     } as unknown as EventEnvelope)
     expect(screen.getByTestId("status")).toHaveTextContent("ok")
@@ -180,10 +183,15 @@ describe("DelegationProvider", () => {
       parent_tool_use_id: "pt-1",
       child_connection_id: "c1",
       child_conversation_id: 99,
+      agent_type: "codex",
       result: { kind: "err", error_code: "timeout" },
     } as unknown as EventEnvelope)
     expect(screen.getByTestId("status")).toHaveTextContent("err")
     expect(screen.getByTestId("error-code")).toHaveTextContent("timeout")
+    // Regression lock (Medium): with no prior delegation_started, the binding
+    // must take the agent_type the completion now carries — not a hardcoded
+    // default — so the card shows the correct agent icon/label.
+    expect(screen.getByTestId("agent")).toHaveTextContent("codex")
   })
 
   it("cancels a pending detach when delegation_started replays for the same parent_tool_use_id", async () => {
@@ -208,6 +216,7 @@ describe("DelegationProvider", () => {
       parent_tool_use_id: "pt-1",
       child_connection_id: "c1",
       child_conversation_id: 99,
+      agent_type: "codex",
       result: { kind: "ok", duration_ms: 100 },
     } as unknown as EventEnvelope)
     // Re-emit started before grace period expires

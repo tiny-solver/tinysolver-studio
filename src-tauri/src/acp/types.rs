@@ -233,6 +233,12 @@ pub enum AcpEvent {
         parent_tool_use_id: String,
         child_connection_id: String,
         child_conversation_id: i32,
+        /// Child agent type. Carried so a frontend that missed the
+        /// `DelegationStarted` event (context mounted mid-flight, reconnect,
+        /// or web/server snapshot replay that only re-delivered the completion)
+        /// can synthesize the binding with the correct agent instead of a
+        /// hardcoded default. Mirrors `DelegationStarted.agent_type`.
+        agent_type: crate::models::agent::AgentType,
         result: DelegationResultSummary,
     },
 }

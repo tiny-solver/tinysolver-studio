@@ -626,6 +626,10 @@ export type AcpEvent =
       parent_tool_use_id: string
       child_connection_id: string
       child_conversation_id: number
+      /** Child agent type. Carried so a frontend that missed the
+       *  `delegation_started` event (mounted mid-flight, reconnect, or
+       *  snapshot replay) can bind the correct agent instead of a default. */
+      agent_type: AgentType
       result: DelegationResultSummary
     }
 

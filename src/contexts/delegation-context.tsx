@@ -142,15 +142,17 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       if (envelope.type === "delegation_completed") {
         setByToolUseId((prev) => {
           const existing = prev.get(envelope.parent_tool_use_id)
-          // If we missed the start event (e.g. context mounted mid-flight),
-          // synthesize a minimal binding so the parent UI still shows the
-          // result. Fields not in the completion payload stay defaulted.
+          // If we missed the start event (e.g. context mounted mid-flight,
+          // reconnect, or snapshot replay that only re-delivered the
+          // completion), synthesize a minimal binding so the parent UI still
+          // shows the result — with the real agent_type the event now carries,
+          // so the card renders the correct agent icon/label.
           const base: DelegationBinding = existing ?? {
             parentConnectionId: envelope.parent_connection_id,
             parentToolUseId: envelope.parent_tool_use_id,
             childConnectionId: envelope.child_connection_id,
             childConversationId: envelope.child_conversation_id,
-            agentType: "claude_code",
+            agentType: envelope.agent_type,
             status: "running",
           }
           const updated: DelegationBinding =
