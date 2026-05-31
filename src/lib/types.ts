@@ -631,11 +631,14 @@ export type AcpEvent =
 
 /**
  * Mirror of Rust `DelegationResultSummary`. `kind` discriminates Ok vs Err;
- * Ok carries `duration_ms` (broker-measured), Err carries a stable code from
- * the `DelegationError` taxonomy (e.g. `"timeout"`, `"canceled"`).
+ * Ok carries `duration_ms` (broker-measured) and an optional `text_preview`
+ * (≤ ~2 KiB of the child's final assistant text, so the parent card can render
+ * the result inline without re-fetching the child session); Err carries a
+ * stable code from the `DelegationError` taxonomy (e.g. `"timeout"`,
+ * `"canceled"`).
  */
 export type DelegationResultSummary =
-  | { kind: "ok"; duration_ms: number }
+  | { kind: "ok"; duration_ms: number; text_preview?: string | null }
   | { kind: "err"; error_code: string }
 
 /**

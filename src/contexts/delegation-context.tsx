@@ -46,6 +46,10 @@ export interface DelegationBinding {
   status: DelegationStatus
   errorCode?: string
   durationMs?: number
+  /** Bounded preview of the child's final assistant text, from the enriched
+   *  `delegation_completed` event. Lets the card render the result inline
+   *  (including after the live child stream detaches) without re-fetching. */
+  resultPreview?: string
 }
 
 interface DelegationContextValue {
@@ -162,6 +166,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
                       ...base,
                       status: "ok",
                       durationMs: envelope.result.duration_ms,
+                      resultPreview: envelope.result.text_preview ?? undefined,
                     }
                   : {
                       ...base,
