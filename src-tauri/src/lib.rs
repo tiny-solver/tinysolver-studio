@@ -477,7 +477,7 @@ mod tauri_app {
                     let builder = tauri::WebviewWindowBuilder::new(app, "main", url)
                         .title("Codeg")
                         .inner_size(1260.0, 860.0)
-                        .min_inner_size(900.0, 600.0);
+                        .min_inner_size(400.0, 600.0);
                     if let Ok(w) = windows::apply_platform_window_style(builder).build() {
                         windows::post_window_setup(&w);
                     }
@@ -798,6 +798,9 @@ mod tauri_app {
                 pet_commands::pet_get_current_state,
                 project_boot::detect_package_manager,
                 project_boot::create_shadcn_project,
+                project_boot::detect_hyperframes_skills,
+                project_boot::install_hyperframes_skills,
+                project_boot::create_hyperframes_project,
                 system_settings::get_system_proxy_settings,
                 system_settings::update_system_proxy_settings,
                 system_settings::get_system_language_settings,
