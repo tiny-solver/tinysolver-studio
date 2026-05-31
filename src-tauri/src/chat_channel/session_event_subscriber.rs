@@ -866,10 +866,9 @@ fn format_delegation_ack(agent: &str) -> String {
 }
 
 /// A `delegate_to_agent` tool output parsed into the fields the chat relay
-/// needs to classify it (running ack vs terminal, and whether a child exists).
+/// needs to classify it (running ack vs terminal) and render the terminal line.
 struct DelegationReportView {
     status: Option<String>,
-    child_conversation_id: Option<i64>,
     error_code: Option<String>,
     message: Option<String>,
     text: Option<String>,
@@ -898,7 +897,6 @@ fn parse_delegation_report(raw_output: Option<&str>) -> Option<DelegationReportV
             .get("status")
             .and_then(|v| v.as_str())
             .map(str::to_string),
-        child_conversation_id: report.get("child_conversation_id").and_then(|v| v.as_i64()),
         error_code: report
             .get("error_code")
             .and_then(|v| v.as_str())
@@ -1025,21 +1023,18 @@ mod delegation_relay_tests {
         ))
         .unwrap();
         assert!(!running.is_terminal());
-        assert_eq!(running.child_conversation_id, Some(7));
-        // Fast-complete (envelope) → terminal WITH child.
+        // Fast-complete (envelope) → terminal.
         let done = parse_delegation_report(Some(
             r#"{"structuredContent":{"status":"completed","child_conversation_id":7,"text":"ok"}}"#,
         ))
         .unwrap();
         assert!(done.is_terminal());
-        assert_eq!(done.child_conversation_id, Some(7));
-        // Setup failure (top-level report) → terminal with NO child.
+        // Setup failure (top-level report) → terminal.
         let failed = parse_delegation_report(Some(
             r#"{"status":"failed","error_code":"spawn_failed","message":"spawn failed: x"}"#,
         ))
         .unwrap();
         assert!(failed.is_terminal());
-        assert_eq!(failed.child_conversation_id, None);
         // Unparseable / absent → None (treated as a running ack by the caller).
         assert!(parse_delegation_report(Some("plain text")).is_none());
         assert!(parse_delegation_report(None).is_none());
@@ -1057,7 +1052,6 @@ mod delegation_relay_tests {
             let view = parse_delegation_report(Some(&wrapped))
                 .unwrap_or_else(|| panic!("should parse wrapped {status}"));
             assert!(view.is_terminal(), "{status} should be terminal");
-            assert_eq!(view.child_conversation_id, Some(9));
         }
     }
 
