@@ -1,5 +1,6 @@
 //! `DelegationEventEmitter` — broker capability for surfacing
-//! `AcpEvent::DelegationCompleted` to the parent's event stream.
+//! `AcpEvent::DelegationStarted` / `DelegationCompleted` to the parent's
+//! event stream.
 //!
 //! Parallel to [`crate::acp::delegation::meta_writer::DelegationMetaWriter`]:
 //! both abstract over the broker's access to the parent connection's
@@ -8,7 +9,9 @@
 //! capability surface — meta writes patch the persisted `ToolCallState`,
 //! event emits drive the live frontend `DelegationContext`.
 //!
-//! The broker calls this from every terminal path:
+//! The broker calls `emit_started` once from the start path — right after the
+//! child is spawned and its first prompt is in flight — and `emit_completed`
+//! from every terminal path:
 //!
 //! 1. `complete_call` — happy path (kind=ok) and error completions
 //!    (kind=err) propagated by the listener/lifecycle.
@@ -32,6 +35,7 @@ use std::sync::Arc;
 
 use crate::acp::manager::ConnectionManager;
 use crate::acp::types::{AcpEvent, DelegationResultSummary};
+use crate::models::AgentType;
 use crate::web::event_bridge::emit_with_state;
 
 /// Capability the broker uses to publish `AcpEvent::DelegationCompleted`
@@ -43,6 +47,20 @@ use crate::web::event_bridge::emit_with_state;
 /// observe the event.
 #[async_trait]
 pub trait DelegationEventEmitter: Send + Sync {
+    /// Publish `AcpEvent::DelegationStarted` on the parent's stream once the
+    /// child is spawned and its prompt is in flight. Mirrors `emit_completed`
+    /// so both lifecycle ends ride the same parent-stream fanout — the frontend
+    /// `DelegationContext` then receives both via the parent's per-connection
+    /// attach stream in web/server mode, not only via the desktop firehose.
+    async fn emit_started(
+        &self,
+        parent_connection_id: &str,
+        parent_tool_use_id: &str,
+        child_connection_id: &str,
+        child_conversation_id: i32,
+        agent_type: AgentType,
+    );
+
     async fn emit_completed(
         &self,
         parent_connection_id: &str,
@@ -63,6 +81,16 @@ pub struct NoopEventEmitter;
 
 #[async_trait]
 impl DelegationEventEmitter for NoopEventEmitter {
+    async fn emit_started(
+        &self,
+        _parent_connection_id: &str,
+        _parent_tool_use_id: &str,
+        _child_connection_id: &str,
+        _child_conversation_id: i32,
+        _agent_type: AgentType,
+    ) {
+    }
+
     async fn emit_completed(
         &self,
         _parent_connection_id: &str,
@@ -89,6 +117,35 @@ pub struct ConnectionManagerEventEmitter {
 
 #[async_trait]
 impl DelegationEventEmitter for ConnectionManagerEventEmitter {
+    async fn emit_started(
+        &self,
+        parent_connection_id: &str,
+        parent_tool_use_id: &str,
+        child_connection_id: &str,
+        child_conversation_id: i32,
+        agent_type: AgentType,
+    ) {
+        let Some((state_arc, emitter)) = self
+            .manager
+            .get_state_and_emitter(parent_connection_id)
+            .await
+        else {
+            return;
+        };
+        emit_with_state(
+            &state_arc,
+            &emitter,
+            AcpEvent::DelegationStarted {
+                parent_connection_id: parent_connection_id.to_string(),
+                parent_tool_use_id: parent_tool_use_id.to_string(),
+                child_connection_id: child_connection_id.to_string(),
+                child_conversation_id,
+                agent_type,
+            },
+        )
+        .await;
+    }
+
     async fn emit_completed(
         &self,
         parent_connection_id: &str,
@@ -131,6 +188,7 @@ pub mod mock {
     #[derive(Default)]
     pub struct MockEventEmitter {
         pub calls: Mutex<Vec<EmitCall>>,
+        pub started_calls: Mutex<Vec<EmitStartedCall>>,
     }
 
     #[derive(Debug, Clone)]
@@ -140,6 +198,15 @@ pub mod mock {
         pub child_connection_id: String,
         pub child_conversation_id: i32,
         pub result: DelegationResultSummary,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct EmitStartedCall {
+        pub parent_connection_id: String,
+        pub parent_tool_use_id: String,
+        pub child_connection_id: String,
+        pub child_conversation_id: i32,
+        pub agent_type: AgentType,
     }
 
     impl MockEventEmitter {
@@ -154,10 +221,35 @@ pub mod mock {
         pub async fn count(&self) -> usize {
             self.calls.lock().await.len()
         }
+
+        pub async fn started_snapshot(&self) -> Vec<EmitStartedCall> {
+            self.started_calls.lock().await.clone()
+        }
+
+        pub async fn started_count(&self) -> usize {
+            self.started_calls.lock().await.len()
+        }
     }
 
     #[async_trait]
     impl DelegationEventEmitter for MockEventEmitter {
+        async fn emit_started(
+            &self,
+            parent_connection_id: &str,
+            parent_tool_use_id: &str,
+            child_connection_id: &str,
+            child_conversation_id: i32,
+            agent_type: AgentType,
+        ) {
+            self.started_calls.lock().await.push(EmitStartedCall {
+                parent_connection_id: parent_connection_id.to_string(),
+                parent_tool_use_id: parent_tool_use_id.to_string(),
+                child_connection_id: child_connection_id.to_string(),
+                child_conversation_id,
+                agent_type,
+            });
+        }
+
         async fn emit_completed(
             &self,
             parent_connection_id: &str,

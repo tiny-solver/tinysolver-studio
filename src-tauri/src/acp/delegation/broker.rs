@@ -33,7 +33,8 @@
 //!         ([`DelegationBroker::cancel_by_parent`] /
 //!         [`DelegationBroker::cancel_by_parent_turn`]), or the LLM's own
 //!         [`DelegationBroker::cancel_task_by_id`].
-//!    v1 is explicitly one-shot — no session reuse.
+//!
+//! v1 is explicitly one-shot — no session reuse.
 //!
 //! Result durability: child output is NOT stored in codeg's DB, so the broker
 //! caches the completed text in `completed` (parent-scoped, FIFO-capped). Once
@@ -327,7 +328,9 @@ impl PendingInner {
     /// over `setups`, but n is the (tiny) count of concurrently-in-setup
     /// delegations.
     fn is_child_reserved(&self, child_connection_id: &str) -> bool {
-        self.setups.values().any(|child| child == child_connection_id)
+        self.setups
+            .values()
+            .any(|child| child == child_connection_id)
     }
 
     /// Buffer a completion for a still-reserved delegation, stamped with the
@@ -1609,7 +1612,11 @@ impl DelegationBroker {
     /// early-return that isn't a park hand-off (the park region deregisters
     /// inline, atomically with `calls.insert`).
     async fn drop_inflight(&self, inflight_id: u64) {
-        self.pending.inner.lock().await.deregister_inflight(inflight_id);
+        self.pending
+            .inner
+            .lock()
+            .await
+            .deregister_inflight(inflight_id);
     }
 
     /// Async entry point for `delegate_to_agent`. Does the bounded setup
@@ -1898,6 +1905,21 @@ impl DelegationBroker {
                 None,
                 None,
             ),
+        )
+        .await;
+
+        // Announce the live delegation on the PARENT's event stream so the
+        // frontend `DelegationContext` binds the child inline and attaches its
+        // live sub-thread. Symmetric with the terminal `emit_completed_if_real`,
+        // and — unlike the removed child-stream emit in `send_prompt_linked` —
+        // delivered on a stream the parent is already attached to in web/server
+        // mode, carrying the real `parent_connection_id`.
+        self.emit_started_if_real(
+            &req.parent_connection_id,
+            &req.parent_tool_use_id,
+            &child_connection_id,
+            child_conversation_id,
+            req.agent_type,
         )
         .await;
 
@@ -2283,6 +2305,34 @@ impl DelegationBroker {
         }
         self.meta_writer
             .write_meta(parent_connection_id, parent_tool_use_id, meta)
+            .await;
+    }
+
+    /// Internal helper — emit `AcpEvent::DelegationStarted` on the parent's
+    /// stream iff the `parent_tool_use_id` refers to a real ACP tool_call.
+    /// Mirror of `emit_completed_if_real`: same synthetic-id skip, and the
+    /// event rides the parent's stream so the frontend `DelegationContext`
+    /// receives it via the parent's per-connection attach stream in
+    /// web/server mode (not only via the desktop firehose).
+    async fn emit_started_if_real(
+        &self,
+        parent_connection_id: &str,
+        parent_tool_use_id: &str,
+        child_connection_id: &str,
+        child_conversation_id: i32,
+        agent_type: AgentType,
+    ) {
+        if is_synthetic_parent_tool_use_id(parent_tool_use_id) {
+            return;
+        }
+        self.event_emitter
+            .emit_started(
+                parent_connection_id,
+                parent_tool_use_id,
+                child_connection_id,
+                child_conversation_id,
+                agent_type,
+            )
             .await;
     }
 
@@ -2800,11 +2850,13 @@ pub struct DbChildStatusLookup {
 #[async_trait]
 impl ChildStatusLookup for DbChildStatusLookup {
     async fn find_by_call_id(&self, call_id: &str) -> Option<ChildStatusRecord> {
-        let summary =
-            crate::db::service::conversation_service::get_by_delegation_call_id(&self.db.conn, call_id)
-                .await
-                .ok()
-                .flatten()?;
+        let summary = crate::db::service::conversation_service::get_by_delegation_call_id(
+            &self.db.conn,
+            call_id,
+        )
+        .await
+        .ok()
+        .flatten()?;
         // `summary.status` is the serialized `ConversationStatus` string.
         let status = match summary.status.as_str() {
             "in_progress" => TaskStatus::Running,
@@ -2858,11 +2910,7 @@ mod tests {
         }
     }
 
-    fn request_with_handle(
-        parent_conv: i32,
-        tool_use: &str,
-        handle: &str,
-    ) -> DelegationRequest {
+    fn request_with_handle(parent_conv: i32, tool_use: &str, handle: &str) -> DelegationRequest {
         let mut r = request(parent_conv, tool_use);
         r.external_handle = Some(handle.to_string());
         r
@@ -3465,9 +3513,13 @@ mod tests {
             shallow_lookup(),
         );
         let t0 = Instant::now();
-        broker.register_pending_tool_call("p1", "stale".into()).await;
+        broker
+            .register_pending_tool_call("p1", "stale".into())
+            .await;
         // Fresh id registered "just before" the future `now`.
-        broker.register_pending_tool_call("p1", "fresh".into()).await;
+        broker
+            .register_pending_tool_call("p1", "fresh".into())
+            .await;
         let future_now = t0 + PENDING_TOOL_CALL_TTL + Duration::from_millis(50);
         // Forge "fresh" so it survives the TTL: rewrite its timestamp to
         // ~now-relative-to-future-now. Direct field access is OK — we're
@@ -3945,7 +3997,11 @@ mod tests {
             shallow_lookup(),
         );
         broker
-            .register_pending_tool_call_with_key("p1", "tc-late".into(), Some(task_key("slow task")))
+            .register_pending_tool_call_with_key(
+                "p1",
+                "tc-late".into(),
+                Some(task_key("slow task")),
+            )
             .await;
         // Claim "as of" long past the TTL — simulates the round-trip arriving
         // after a many-times-TTL wait behind a serialized sibling.
@@ -3970,7 +4026,9 @@ mod tests {
             Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
             shallow_lookup(),
         );
-        broker.register_pending_tool_call("p1", "tc-stale".into()).await;
+        broker
+            .register_pending_tool_call("p1", "tc-stale".into())
+            .await;
         let way_past_ttl = Instant::now() + PENDING_TOOL_CALL_TTL * 10;
         // Unkeyed + stale → evicted by the match path's GC → nothing to claim.
         assert!(broker
@@ -4049,7 +4107,11 @@ mod tests {
         // keyed entries. The unkeyed one is NOT the oldest — proving the victim
         // is chosen by keyed-ness, not position.
         broker
-            .register_pending_tool_call_with_key("p1", "tc-keyed-oldest".into(), Some(task_key("oldest")))
+            .register_pending_tool_call_with_key(
+                "p1",
+                "tc-keyed-oldest".into(),
+                Some(task_key("oldest")),
+            )
             .await;
         broker
             .register_pending_tool_call("p1", "tc-unkeyed".into())
@@ -4065,20 +4127,33 @@ mod tests {
         }
         // Queue is now full. One more keyed entry overflows.
         broker
-            .register_pending_tool_call_with_key("p1", "tc-overflow".into(), Some(task_key("overflow")))
+            .register_pending_tool_call_with_key(
+                "p1",
+                "tc-overflow".into(),
+                Some(task_key("overflow")),
+            )
             .await;
         let map = broker.tool_calls.inner.lock().await;
         let bucket = map.get("p1").expect("bucket present");
         assert_eq!(bucket.pending.len(), PENDING_QUEUE_CAP);
         assert!(
-            !bucket.pending.iter().any(|p| p.tool_call_id == "tc-unkeyed"),
+            !bucket
+                .pending
+                .iter()
+                .any(|p| p.tool_call_id == "tc-unkeyed"),
             "the unkeyed entry must be the eviction victim"
         );
         assert!(
-            bucket.pending.iter().any(|p| p.tool_call_id == "tc-keyed-oldest"),
+            bucket
+                .pending
+                .iter()
+                .any(|p| p.tool_call_id == "tc-keyed-oldest"),
             "the older keyed entry must be preserved over the newer unkeyed one"
         );
-        assert!(bucket.pending.iter().any(|p| p.tool_call_id == "tc-overflow"));
+        assert!(bucket
+            .pending
+            .iter()
+            .any(|p| p.tool_call_id == "tc-overflow"));
     }
 
     #[tokio::test]
@@ -4783,7 +4858,11 @@ mod tests {
                 }),
             )
             .await;
-        assert_eq!(broker.early_complete_count().await, 1, "completion buffered");
+        assert_eq!(
+            broker.early_complete_count().await,
+            1,
+            "completion buffered"
+        );
 
         // Release send_prompt → handle_request parks, drains the buffered
         // completion, and resolves inline instead of hanging.
@@ -5293,7 +5372,11 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(5)).await;
         };
         // Parked → the in-flight record was handed off (deregistered) at park.
-        assert_eq!(broker.inflight_count().await, 0, "park deregisters in-flight");
+        assert_eq!(
+            broker.inflight_count().await,
+            0,
+            "park deregisters in-flight"
+        );
         broker
             .complete_call(
                 &call_id,
@@ -5532,6 +5615,106 @@ mod tests {
             ),
             "expected Ok with preview, got {:?}",
             call.result
+        );
+    }
+
+    #[tokio::test]
+    async fn emitter_records_started_on_start_delegation_happy_path() {
+        let mock = Arc::new(MockSpawner::new());
+        mock.queue_spawn(Ok("child-conn-start".into())).await;
+        mock.queue_send(Ok(55)).await;
+        let writer = Arc::new(MockMetaWriter::new());
+        let emitter = Arc::new(MockEventEmitter::new());
+        let broker = broker_with_emitter(mock.clone(), writer.clone(), emitter.clone()).await;
+
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move { broker.handle_request(request(1, "pt-start")).await })
+        };
+        let call_id = loop {
+            if let Some(id) = broker.peek_first_pending_call_id().await {
+                break id;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        };
+
+        // `started` fires during setup, BEFORE the task parks — so it is already
+        // recorded by the time a pending entry is visible, and it must not be
+        // conflated with the (not-yet-emitted) terminal.
+        let started = emitter.started_snapshot().await;
+        assert_eq!(started.len(), 1, "exactly one DelegationStarted per task");
+        let s = &started[0];
+        assert_eq!(s.parent_connection_id, "parent-conn");
+        assert_eq!(s.parent_tool_use_id, "pt-start");
+        assert_eq!(s.child_connection_id, "child-conn-start");
+        assert_eq!(s.child_conversation_id, 55);
+        assert_eq!(s.agent_type, AgentType::ClaudeCode);
+        assert_eq!(
+            emitter.count().await,
+            0,
+            "no terminal emit before completion"
+        );
+
+        broker
+            .complete_call(
+                &call_id,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "done".into(),
+                    child_conversation_id: 55,
+                    child_agent_type: AgentType::ClaudeCode,
+                    turn_count: 1,
+                    duration_ms: 10,
+                    token_usage: None,
+                }),
+            )
+            .await;
+        driver.await.unwrap();
+
+        // Completion adds exactly one terminal emit; started stays at 1.
+        assert_eq!(emitter.started_count().await, 1);
+        assert_eq!(emitter.count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn emitter_skips_started_for_synthetic_parent_tool_use_id() {
+        let mock = Arc::new(MockSpawner::new());
+        mock.queue_spawn(Ok("c-synth-start".into())).await;
+        mock.queue_send(Ok(9)).await;
+        let writer = Arc::new(MockMetaWriter::new());
+        let emitter = Arc::new(MockEventEmitter::new());
+        let broker = broker_with_emitter(mock.clone(), writer.clone(), emitter.clone()).await;
+
+        // Empty parent_tool_use_id → broker falls back to a synthetic
+        // `delegation-<uuid>` id (no ACP tool_call to claim in a mock harness).
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move { broker.handle_request(request(1, "")).await })
+        };
+        let call_id = loop {
+            if let Some(id) = broker.peek_first_pending_call_id().await {
+                break id;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        };
+        broker
+            .complete_call(
+                &call_id,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "ok".into(),
+                    child_conversation_id: 9,
+                    child_agent_type: AgentType::Codex,
+                    turn_count: 1,
+                    duration_ms: 5,
+                    token_usage: None,
+                }),
+            )
+            .await;
+        driver.await.unwrap();
+
+        assert_eq!(
+            emitter.started_count().await,
+            0,
+            "started emit must skip synthetic parent_tool_use_id (same rule as the meta writer / completed emit)"
         );
     }
 
@@ -6061,10 +6244,18 @@ mod tests {
 
         // Per-connection stream (WS attach delivery path) must receive the
         // envelope tagged with the right connection + payload shape.
-        let envelope = tokio::time::timeout(Duration::from_millis(500), stream_rx.recv())
-            .await
-            .expect("per-connection stream should receive DelegationCompleted within 500ms")
-            .expect("envelope recv must not error");
+        // The parent stream now also carries the setup-time DelegationStarted;
+        // skip past it to the terminal DelegationCompleted.
+        let envelope = loop {
+            let env = tokio::time::timeout(Duration::from_millis(500), stream_rx.recv())
+                .await
+                .expect("per-connection stream should receive DelegationCompleted within 500ms")
+                .expect("envelope recv must not error");
+            if matches!(env.payload, AcpEvent::DelegationStarted { .. }) {
+                continue;
+            }
+            break env;
+        };
         assert_eq!(envelope.connection_id, "parent-conn");
         match &envelope.payload {
             AcpEvent::DelegationCompleted {
@@ -6090,15 +6281,118 @@ mod tests {
         // InternalEventBus (lifecycle/pet/chat-channel subscriber path) must
         // also receive the same envelope — proves the WebOnly emitter's bus
         // arm in `emit_with_state` is reached.
-        let bus_envelope = tokio::time::timeout(Duration::from_millis(500), bus_rx.recv())
-            .await
-            .expect("InternalEventBus should receive DelegationCompleted within 500ms")
-            .expect("bus recv must not error");
+        let bus_envelope = loop {
+            let env = tokio::time::timeout(Duration::from_millis(500), bus_rx.recv())
+                .await
+                .expect("InternalEventBus should receive DelegationCompleted within 500ms")
+                .expect("bus recv must not error");
+            if matches!(env.payload, AcpEvent::DelegationStarted { .. }) {
+                continue;
+            }
+            break env;
+        };
         assert_eq!(bus_envelope.connection_id, "parent-conn");
         assert!(matches!(
             bus_envelope.payload,
             AcpEvent::DelegationCompleted { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn real_emitter_fans_out_delegation_started_to_parent_stream_and_bus() {
+        use crate::acp::delegation::event_emitter::ConnectionManagerEventEmitter;
+        use crate::acp::manager::ConnectionManager;
+        use crate::acp::types::AcpEvent;
+        use crate::web::event_bridge::{EventEmitter, WebEventBroadcaster};
+
+        // Web/server delivery shape: a real ConnectionManager + a fake parent on
+        // a WebOnly emitter. `DelegationStarted` must land on the PARENT's
+        // per-connection stream (the WS attach path the frontend subscribes to
+        // in web/server mode) AND the InternalEventBus — mirroring the
+        // completed-path invariant. This is the regression lock for the
+        // web-mode live-delegation gap: before moving the emit to the parent
+        // stream, started rode the (un-attached) child stream and was lost here.
+        let manager = ConnectionManager::new();
+        let broadcaster = Arc::new(WebEventBroadcaster::new());
+        let parent_emitter = EventEmitter::test_web_only(broadcaster);
+        let bus = parent_emitter
+            .acp_event_bus()
+            .expect("WebOnly emitter must expose an InternalEventBus");
+        manager
+            .insert_test_connection("parent-conn", AgentType::ClaudeCode, None, parent_emitter)
+            .await;
+
+        // Subscribe BEFORE triggering events — broadcast channels drop sends
+        // that happen with no receivers registered.
+        let mut bus_rx = bus.subscribe();
+        let (parent_state, _) = manager
+            .get_state_and_emitter("parent-conn")
+            .await
+            .expect("parent just inserted");
+        let mut stream_rx = parent_state.read().await.event_stream().subscribe();
+
+        let mock_spawner = Arc::new(MockSpawner::new());
+        mock_spawner
+            .queue_spawn(Ok("child-conn-started".into()))
+            .await;
+        mock_spawner.queue_send(Ok(88)).await;
+        let real_emitter = Arc::new(ConnectionManagerEventEmitter {
+            manager: Arc::new(manager.clone_ref()),
+        });
+        let broker = DelegationBroker::with_writers(
+            mock_spawner.clone() as Arc<dyn ConnectionSpawner>,
+            shallow_lookup(),
+            Arc::new(crate::acp::delegation::meta_writer::NoopMetaWriter)
+                as Arc<dyn crate::acp::delegation::meta_writer::DelegationMetaWriter>,
+            real_emitter as Arc<dyn crate::acp::delegation::event_emitter::DelegationEventEmitter>,
+        );
+        enable_delegation(&broker).await;
+
+        // `started` fires during setup, before park — drive the request, wait
+        // for it to park, then assert the envelope already arrived.
+        let driver = {
+            let broker = broker.clone();
+            tokio::spawn(async move { broker.handle_request(request(1, "pt-started")).await })
+        };
+        while broker.pending_count().await == 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        let envelope = tokio::time::timeout(Duration::from_millis(500), stream_rx.recv())
+            .await
+            .expect("per-connection stream should receive DelegationStarted within 500ms")
+            .expect("envelope recv must not error");
+        assert_eq!(envelope.connection_id, "parent-conn");
+        match &envelope.payload {
+            AcpEvent::DelegationStarted {
+                parent_connection_id,
+                parent_tool_use_id,
+                child_connection_id,
+                child_conversation_id,
+                agent_type,
+            } => {
+                assert_eq!(parent_connection_id, "parent-conn");
+                assert_eq!(parent_tool_use_id, "pt-started");
+                assert_eq!(child_connection_id, "child-conn-started");
+                assert_eq!(*child_conversation_id, 88);
+                assert_eq!(*agent_type, AgentType::ClaudeCode);
+            }
+            other => panic!("expected DelegationStarted, got {other:?}"),
+        }
+
+        let bus_envelope = tokio::time::timeout(Duration::from_millis(500), bus_rx.recv())
+            .await
+            .expect("InternalEventBus should receive DelegationStarted within 500ms")
+            .expect("bus recv must not error");
+        assert_eq!(bus_envelope.connection_id, "parent-conn");
+        assert!(matches!(
+            bus_envelope.payload,
+            AcpEvent::DelegationStarted { .. }
+        ));
+
+        // Drain the parked driver so the test doesn't leak the spawned task.
+        broker.cancel_by_parent("parent-conn").await;
+        let _ = driver.await.unwrap();
     }
 
     #[tokio::test]
@@ -6172,9 +6466,7 @@ mod tests {
             .await;
         // notifications/cancelled lands before the round-trip → buffered (no
         // running task yet).
-        broker
-            .cancel_by_external_handle("h-1", "user".into())
-            .await;
+        broker.cancel_by_external_handle("h-1", "user".into()).await;
         // The MCP round-trip arrives (empty parent_tool_use_id, same key) and
         // bails at the first pre-cancel check.
         let report = broker
@@ -6182,7 +6474,10 @@ mod tests {
             .await;
         assert_eq!(report.status, TaskStatus::Canceled);
         // The keyed entry must have been drained — not claimable afterward.
-        assert_eq!(broker.take_matching_tool_call("parent-conn", &key).await, None);
+        assert_eq!(
+            broker.take_matching_tool_call("parent-conn", &key).await,
+            None
+        );
     }
 
     /// The running ack must carry the literal task_id in its message, so a
@@ -6205,15 +6500,15 @@ mod tests {
     fn previews_and_cached_text_respect_byte_caps() {
         let preview = build_text_preview(&"x".repeat(STATUS_PREVIEW_CAP * 2)).unwrap();
         assert!(
-            preview.as_bytes().len() <= STATUS_PREVIEW_CAP,
+            preview.len() <= STATUS_PREVIEW_CAP,
             "preview {} > cap {STATUS_PREVIEW_CAP}",
-            preview.as_bytes().len()
+            preview.len()
         );
         let cached = cap_completed_text(&"y".repeat(COMPLETED_TEXT_CAP * 2));
-        assert!(cached.as_bytes().len() <= COMPLETED_TEXT_CAP);
+        assert!(cached.len() <= COMPLETED_TEXT_CAP);
         // Multibyte safety: 3-byte chars must not be split, and the cap holds.
         let multibyte = build_text_preview(&"€".repeat(STATUS_PREVIEW_CAP)).unwrap();
-        assert!(multibyte.as_bytes().len() <= STATUS_PREVIEW_CAP);
+        assert!(multibyte.len() <= STATUS_PREVIEW_CAP);
         assert!(std::str::from_utf8(multibyte.as_bytes()).is_ok());
     }
 }
