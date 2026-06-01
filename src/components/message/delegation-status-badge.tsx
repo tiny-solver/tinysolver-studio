@@ -90,6 +90,8 @@ function ErrorLabel({ code }: { code?: string }) {
       return <>{t("child_empty")}</>
     case "child_unknown":
       return <>{t("child_unknown")}</>
+    case "unknown":
+      return <>{t("unknown")}</>
     default:
       return <>{t("default")}</>
   }

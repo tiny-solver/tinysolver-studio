@@ -1884,6 +1884,10 @@
         "openDetail": "Ver conversación",
         "detailTitle": "Conversación del subagente",
         "detailDescription": "Vista de solo lectura de la conversación del subagente delegado.",
+        "waitForResult": "Esperando el resultado de la tarea {task}",
+        "waitForResultNoTask": "Esperando el resultado de la tarea",
+        "cancelTask": "Cancelando la tarea {task}",
+        "cancelTaskNoTask": "Cancelando la tarea",
         "status": {
           "starting": "iniciando",
           "running": "en curso",
@@ -1902,7 +1906,8 @@
             "child_max_tokens": "subagente: límite de tokens",
             "child_max_turn_requests": "subagente: límite de solicitudes",
             "child_empty": "subagente sin salida",
-            "child_unknown": "subagente: error"
+            "child_unknown": "subagente: error",
+            "unknown": "tarea desconocida"
           }
         }
       },
