@@ -1891,6 +1891,7 @@
         "status": {
           "starting": "启动中",
           "running": "运行中",
+          "checked": "已查询",
           "waiting": "待批准",
           "ok": "完成",
           "err": {

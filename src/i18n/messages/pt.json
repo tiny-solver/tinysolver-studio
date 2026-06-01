@@ -1891,6 +1891,7 @@
         "status": {
           "starting": "iniciando",
           "running": "em execução",
+          "checked": "verificado",
           "waiting": "aguardando aprovação",
           "ok": "concluído",
           "err": {

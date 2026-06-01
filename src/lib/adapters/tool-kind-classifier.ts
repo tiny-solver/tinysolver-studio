@@ -55,6 +55,21 @@ export function isAgentLikeToolName(toolName: string): boolean {
   return false
 }
 
+/**
+ * Specifically the `get_delegation_status` companion tool, in either the bare
+ * canonical form (live streaming, post-`inferLiveToolName`) or any host-
+ * prefixed form (historical raw name: `mcp__<server>__get_delegation_status`,
+ * `<server>/get_delegation_status`, …). Used to collapse a run of consecutive
+ * status polls into a single merged card.
+ */
+export function isDelegationStatusToolName(toolName: string): boolean {
+  const name = toolName.toLowerCase().trim()
+  return (
+    name === "get_delegation_status" ||
+    GET_DELEGATION_STATUS_SUFFIX_RE.test(name)
+  )
+}
+
 export function classifyToolKind(toolName: string): ToolKindLabel {
   const name = toolName.toLowerCase().trim()
 

@@ -1891,6 +1891,7 @@
         "status": {
           "starting": "起動中",
           "running": "実行中",
+          "checked": "確認済み",
           "waiting": "承認待ち",
           "ok": "完了",
           "err": {

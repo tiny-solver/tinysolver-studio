@@ -39,6 +39,7 @@ import {
 import { AgentToolCallPart } from "./agent-tool-call"
 import { DelegatedSubThread } from "./delegated-sub-thread"
 import { DelegationStatusCard } from "./delegation-status-card"
+import { DelegationStatusGroupCard } from "./delegation-status-group-card"
 import { GeneratedImagesBlock } from "./generated-images-block"
 import {
   FileTextIcon,
@@ -2593,6 +2594,12 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
 
         if (part.type === "tool-group") {
           return <ToolGroupPart key={`tg-${i}`} part={part} />
+        }
+
+        if (part.type === "delegation-status-group") {
+          return (
+            <DelegationStatusGroupCard key={`dsg-${i}`} polls={part.polls} />
+          )
         }
 
         if (part.type === "tool-result") {

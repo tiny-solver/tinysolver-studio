@@ -236,7 +236,9 @@ describe("DelegationStatusCard", () => {
     expect(screen.getByText("boom")).toBeInTheDocument()
   })
 
-  it("keeps the spinner while a running poll returns an expandable interim message", () => {
+  it("settles a returned running poll to a neutral state (no live spinner), still expandable", () => {
+    // A poll that RETURNED "still running" is a stale snapshot, not live work:
+    // it must not keep spinning, but its interim message is still revealable.
     const { container } = renderWithIntl(
       <DelegationStatusCard
         kind="status"
@@ -249,7 +251,8 @@ describe("DelegationStatusCard", () => {
         state="output-available"
       />
     )
-    expect(container.querySelector(".animate-spin")).toBeInTheDocument()
+    expect(container.querySelector(".animate-spin")).not.toBeInTheDocument()
+    expect(screen.getByText("checked")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button"))
     expect(screen.getByText("still working")).toBeInTheDocument()
   })

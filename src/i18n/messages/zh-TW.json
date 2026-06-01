@@ -1891,6 +1891,7 @@
         "status": {
           "starting": "啟動中",
           "running": "執行中",
+          "checked": "已查詢",
           "waiting": "待批准",
           "ok": "完成",
           "err": {
