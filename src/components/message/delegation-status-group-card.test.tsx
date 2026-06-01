@@ -41,13 +41,21 @@ function envelope(report: Record<string, unknown>, isError = false): string {
 let seq = 0
 function poll(
   taskId: string,
-  opts: { output?: string; state?: ToolCallState } = {}
+  opts: {
+    output?: string
+    state?: ToolCallState
+    /** Override the call arguments (pass `null` to simulate a lost input). */
+    input?: string | null
+  } = {}
 ): AdaptedToolCallPart {
   return {
     type: "tool-call",
     toolCallId: `poll-${taskId}-${seq++}`,
     toolName: "get_delegation_status",
-    input: JSON.stringify({ task_id: taskId }),
+    input:
+      opts.input !== undefined
+        ? opts.input
+        : JSON.stringify({ task_id: taskId }),
     state: opts.state ?? "output-available",
     output: opts.output ?? null,
   }
@@ -147,6 +155,71 @@ describe("DelegationStatusGroupCard", () => {
       screen.getByText("Waiting for task #bbbb2222 result")
     ).toBeInTheDocument()
     expect(screen.getAllByText("done")).toHaveLength(2)
+  })
+
+  it("shows the neutral 'checked' badge for a content-only returned-running poll", () => {
+    // Historical reload: only the backend running sentinel survives (no
+    // structuredContent). It must not read as a false 'done'.
+    const { container } = renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          poll("abc12345", {
+            output: "Sub-agent is still running in the background.",
+          }),
+        ]}
+      />
+    )
+    expect(screen.getByText("checked")).toBeInTheDocument()
+    expect(screen.queryByText("done")).not.toBeInTheDocument()
+    expect(container.querySelector(".animate-spin")).not.toBeInTheDocument()
+  })
+
+  it("keeps polls separate by their output task_id when the input lost the id", () => {
+    // The call arguments carry no task_id, but each output's structured report
+    // does — distinct tasks must NOT collapse into one row where the latest
+    // hides the others.
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          poll("", {
+            input: null,
+            output: envelope({
+              task_id: "aaaa1111",
+              status: "completed",
+              text: "A done",
+            }),
+          }),
+          poll("", {
+            input: null,
+            output: envelope(
+              { task_id: "bbbb2222", status: "failed", error_code: "timeout" },
+              true
+            ),
+          }),
+        ]}
+      />
+    )
+    expect(
+      screen.getByText("Waiting for task #aaaa1111 result")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Waiting for task #bbbb2222 result")
+    ).toBeInTheDocument()
+    expect(screen.getByText("done")).toBeInTheDocument()
+  })
+
+  it("does not collapse unattributable polls (no task_id anywhere) into one row", () => {
+    // Neither input nor output yields a task_id — keep each poll as its own row
+    // rather than letting the latest hide the earlier interim notes.
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          poll("", { input: null, output: "first interim note" }),
+          poll("", { input: null, output: "second interim note" }),
+        ]}
+      />
+    )
+    expect(screen.getAllByText("Waiting for task result")).toHaveLength(2)
   })
 
   it("tints the card destructive when the only task failed", () => {

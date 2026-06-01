@@ -40,41 +40,49 @@ interface TaskRow {
   pollCount: number
 }
 
+interface ParsedPoll {
+  poll: AdaptedToolCallPart
+  report: StatusReport
+}
+
 // Group polls by task_id, preserving first-appearance order, and resolve each
-// task to its LATEST poll. Polls without a parseable task_id collapse under one
-// synthetic bucket rather than fragmenting back into noise (the tool requires a
-// task_id, so this is a rare degrade path).
+// task to its LATEST poll. The call arguments are the primary task ref; when
+// they're missing/garbled we fall back to the structured report's own task_id
+// (a historical row can drop the input while the output still carries it). A
+// poll we STILL can't attribute is keyed by its unique tool-call id rather than
+// a shared bucket — collapsing distinct unknowns would let the latest hide
+// earlier outcomes and merge unrelated parallel waits into one row.
 function buildTaskRows(polls: AdaptedToolCallPart[]): TaskRow[] {
   const order: string[] = []
   const byKey = new Map<
     string,
-    { taskId: string | null; polls: AdaptedToolCallPart[] }
+    { taskId: string | null; polls: ParsedPoll[] }
   >()
   for (const poll of polls) {
-    const taskId = parseTaskId(poll.input)
-    const key = taskId ?? "__no_task__"
+    const report = parseStatusReport(poll.output, poll.errorText)
+    const taskId = parseTaskId(poll.input) ?? report.taskId
+    const key = taskId ?? `__unattributed__:${poll.toolCallId}`
     let entry = byKey.get(key)
     if (!entry) {
       entry = { taskId, polls: [] }
       byKey.set(key, entry)
       order.push(key)
     }
-    entry.polls.push(poll)
+    entry.polls.push({ poll, report })
   }
   return order.map((key) => {
     const entry = byKey.get(key)!
     const latest = entry.polls[entry.polls.length - 1]
-    const report = parseStatusReport(latest.output, latest.errorText)
     const badge = deriveBadge(
       "status",
-      report,
-      latest.state,
-      !!latest.errorText
+      latest.report,
+      latest.poll.state,
+      !!latest.poll.errorText
     )
     return {
       key,
       taskId: entry.taskId,
-      report,
+      report: latest.report,
       badge,
       pollCount: entry.polls.length,
     }

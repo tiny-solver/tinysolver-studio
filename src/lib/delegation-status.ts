@@ -50,12 +50,38 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 
 export type StatusReport = {
   status: TaskStatus | null
+  /** The report's own `task_id` — recovered when the structured report parsed.
+   *  Lets a grouper fall back to it when the call input lost the id. */
+  taskId: string | null
   /** Result/message text to reveal on expand (verbatim for the live-wire shape). */
   text: string | null
   /** Wire-stable error code for a failed/canceled report (badge specificity). */
   errorCode: string | null
   /** Task execution time in ms — set only for terminal cached results. */
   durationMs: number | null
+}
+
+/**
+ * The verbatim message `get_delegation_status` returns for a still-running task
+ * (`running_report` in `src-tauri/src/acp/delegation/broker.rs`). Hosts that
+ * persist only `CallToolResult.content` text drop `structuredContent` — notably
+ * a Claude Code session reloaded from its JSONL transcript, where the parser
+ * keeps only `content[*].text`. On that historical path this sentence is the
+ * ONLY signal that the poll returned "still running" rather than "completed",
+ * so recognize it and synthesize a `running` status — otherwise the badge
+ * degrades to a false `ok` ("done") for a task that is still in flight. It's a
+ * backend protocol string (English-only), never localized UI copy.
+ */
+const RUNNING_SENTINEL = "sub-agent is still running in the background."
+
+// EXACT (normalized) match, not a substring test: a *completed* poll's
+// content-only text is the child's arbitrary result, which could legitimately
+// quote this phrase. The backend emits the sentinel as the whole message, so
+// only text that IS the sentinel means "still running".
+function textRunningStatus(text: string | null): TaskStatus | null {
+  return text != null && text.trim().toLowerCase() === RUNNING_SENTINEL
+    ? "running"
+    : null
 }
 
 export type ResolvedBadge = { status: BadgeStatus; errorCode?: string }
@@ -178,6 +204,7 @@ export function parseStatusReport(
 ): StatusReport {
   const empty: StatusReport = {
     status: null,
+    taskId: null,
     text: null,
     errorCode: null,
     durationMs: null,
@@ -191,7 +218,9 @@ export function parseStatusReport(
   } catch {
     obj = extractEmbeddedJsonObject(raw)
   }
-  if (!obj) return { ...empty, text: raw }
+  // Plain text (no recoverable JSON) — the historical content-only shape. The
+  // only structured hint left is the backend's running sentinel sentence.
+  if (!obj) return { ...empty, status: textRunningStatus(raw), text: raw }
 
   // Locate the structured report across the shapes it can hide in:
   // structuredContent (trusted) → top-level → inlined in content[0].text. The
@@ -217,13 +246,21 @@ export function parseStatusReport(
   if (report) {
     return {
       status: validStatus(report),
+      taskId: str(report, "task_id"),
       text: displayText ?? str(report, "text") ?? str(report, "message"),
       errorCode: str(report, "error_code"),
       durationMs: num(report, "duration_ms"),
     }
   }
 
-  return { ...empty, text: contentText ?? raw }
+  // Parsed JSON but no report (e.g. a content envelope stripped of
+  // structuredContent) — still honor the running sentinel in the display text.
+  const fallbackText = contentText ?? raw
+  return {
+    ...empty,
+    status: textRunningStatus(fallbackText),
+    text: fallbackText,
+  }
 }
 
 /**

@@ -44,10 +44,15 @@ export function DelegationStatusCard({
   errorText,
   state,
 }: Props) {
-  const taskId = useMemo(() => parseTaskId(input), [input])
   const report = useMemo(
     () => parseStatusReport(output, errorText),
     [output, errorText]
+  )
+  // Prefer the call arguments; fall back to the structured report's own task_id
+  // (a historical row can drop the input while the output still carries it).
+  const taskId = useMemo(
+    () => parseTaskId(input) ?? report.taskId,
+    [input, report]
   )
   const badge = useMemo(
     () => deriveBadge(kind, report, state, !!errorText),

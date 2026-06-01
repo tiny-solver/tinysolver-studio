@@ -83,6 +83,45 @@ describe("parseStatusReport", () => {
     expect(report.status).toBeNull()
     expect(report.text).toBe("Sub-agent finished.")
   })
+
+  it("reads the running sentinel from content-only text (no structuredContent)", () => {
+    // Historical Claude reload drops structuredContent; only the backend's
+    // running message survives. It must still resolve to a running status so the
+    // badge becomes the neutral 'checked', not a false 'ok' ("done").
+    const report = parseStatusReport(
+      "Sub-agent is still running in the background.",
+      null
+    )
+    expect(report.status).toBe("running")
+    expect(deriveBadge("status", report, "output-available", false)).toEqual({
+      status: "checked",
+    })
+  })
+
+  it("does NOT treat an ordinary completion result as still-running", () => {
+    const report = parseStatusReport("The migration finished cleanly.", null)
+    expect(report.status).toBeNull()
+  })
+
+  it("does NOT classify a longer result that merely quotes the sentinel as running", () => {
+    // A completed child result could embed the phrase; only an exact-match
+    // sentinel is the backend's running signal.
+    const report = parseStatusReport(
+      "I saw: Sub-agent is still running in the background. So I waited and it finished.",
+      null
+    )
+    expect(report.status).toBeNull()
+  })
+
+  it("surfaces the report's task_id, and null when absent", () => {
+    expect(
+      parseStatusReport(
+        envelope({ task_id: "abc12345", status: "completed", text: "ok" }),
+        null
+      ).taskId
+    ).toBe("abc12345")
+    expect(parseStatusReport("plain output", null).taskId).toBeNull()
+  })
 })
 
 describe("deriveBadge", () => {

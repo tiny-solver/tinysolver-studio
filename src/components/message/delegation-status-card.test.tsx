@@ -257,6 +257,27 @@ describe("DelegationStatusCard", () => {
     expect(screen.getByText("still working")).toBeInTheDocument()
   })
 
+  it("settles a content-only returned-running poll (no structuredContent) to checked, not a false done", () => {
+    // Historical Claude reload keeps only content[0].text — the backend running
+    // sentinel sentence. Without structured status it must still read as the
+    // neutral 'checked' (no spinner), never 'done'.
+    const { container } = renderWithIntl(
+      <DelegationStatusCard
+        kind="status"
+        input={JSON.stringify({ task_id: "abc12345" })}
+        output="Sub-agent is still running in the background."
+        state="output-available"
+      />
+    )
+    expect(container.querySelector(".animate-spin")).not.toBeInTheDocument()
+    expect(screen.getByText("checked")).toBeInTheDocument()
+    expect(screen.queryByText("done")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button"))
+    expect(
+      screen.getByText("Sub-agent is still running in the background.")
+    ).toBeInTheDocument()
+  })
+
   it("parses a double-encoded task_id input", () => {
     const input = JSON.stringify(JSON.stringify({ task_id: "abc12345" }))
     renderWithIntl(
