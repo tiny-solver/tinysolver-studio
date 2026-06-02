@@ -389,7 +389,16 @@ export function inferLiveToolName(params: {
   // the input shape nor the human title carries the real identity. Placed below
   // `inferFromInput` so the more specific subagent_type / patch / command
   // heuristics keep winning when present.
-  if (metaToolName) return metaToolName
+  //
+  // Lower-case it so the canonical name matches the rest of this function's
+  // returns (all lower-case). The SDK reports the Agent/Task tool as `Agent`
+  // (capitalised); before `rawInput` streams in, that is the only signal we
+  // have, and the live agent-card nesting check (`getToolName(...) === "agent"`
+  // in conversation-runtime-context) is case-sensitive — returning `"Agent"`
+  // there left child tool calls un-nested and the card stuck on its fallback
+  // title. We deliberately do NOT run `normalizeToolName` here: its live-title
+  // heuristic rewrites `memory_recall` to `memory_re`.
+  if (metaToolName) return metaToolName.toLowerCase()
 
   const byTitle = normalizeToolName(params.title ?? "")
   if (byTitle !== "tool") return byTitle
