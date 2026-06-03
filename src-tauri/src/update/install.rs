@@ -6,7 +6,7 @@
 //! Every step that touches live files happens *after* the signature is
 //! verified.
 
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
 use futures_util::StreamExt;
@@ -142,9 +142,12 @@ fn mark_upgrade_staged() {
     }
 }
 
-/// Consume the staged-upgrade marker, returning whether it was present. The
-/// supervisor calls this when (re)launching a worker: a present marker means
-/// this launch is the trial of a freshly-swapped version.
+/// Consume the staged-upgrade marker, returning whether it was present.
+///
+/// The supervisor calls this when (re)launching a worker — a present marker
+/// means this launch is the trial of a freshly-swapped version. The
+/// standalone (non-supervised, re-exec) worker also calls it on startup so the
+/// marker doesn't outlive the upgrade it guards and block all future updates.
 pub fn take_upgrade_staged() -> bool {
     match upgrade_marker_path() {
         Some(p) if p.exists() => {
@@ -252,7 +255,7 @@ pub async fn perform_update(
     // Require the full bundle before touching any live file. A signed but
     // mis-packaged release that dropped, say, `web/` must not be allowed to
     // install a half-new mixture (new server, stale frontend).
-    if !new_server.exists() || !new_mcp.exists() || !new_web.is_dir() {
+    if !new_server.is_file() || !new_mcp.is_file() || !new_web.is_dir() {
         return Err(AppCommandError::new(
             crate::app_error::AppErrorCode::TaskExecutionFailed,
             "Downloaded update is incomplete (expected codeg-server, codeg-mcp and a web/ directory)",
@@ -300,6 +303,9 @@ pub fn rollback() -> Result<(), AppCommandError> {
             "No previous version is available to roll back to",
         ));
     }
+    // The staged upgrade has been undone; clear its marker so the next
+    // `perform_update` is not refused as "already staged".
+    let _ = take_upgrade_staged();
     Ok(())
 }
 
@@ -378,13 +384,13 @@ async fn download_text(url: &str) -> Result<String, AppCommandError> {
 
 fn extract_archive(bytes: &[u8], dest: &Path, ext: &str) -> Result<(), AppCommandError> {
     if ext == ".zip" {
-        extract_zip(bytes, dest)
+        extract_zip(bytes, dest, MAX_EXTRACTED_BYTES)
     } else {
-        extract_tar_gz(bytes, dest)
+        extract_tar_gz(bytes, dest, MAX_EXTRACTED_BYTES)
     }
 }
 
-fn extract_tar_gz(bytes: &[u8], dest: &Path) -> Result<(), AppCommandError> {
+fn extract_tar_gz(bytes: &[u8], dest: &Path, max: u64) -> Result<(), AppCommandError> {
     use flate2::read::GzDecoder;
     use tar::Archive;
 
@@ -405,21 +411,29 @@ fn extract_tar_gz(bytes: &[u8], dest: &Path) -> Result<(), AppCommandError> {
         if etype.is_dir() {
             std::fs::create_dir_all(&out).map_err(AppCommandError::io)?;
         } else if etype.is_file() {
-            // Bound cumulative decompressed output before writing anything.
-            extracted = extracted.saturating_add(entry.header().size().unwrap_or(0));
-            if extracted > MAX_EXTRACTED_BYTES {
+            if let Some(parent) = out.parent() {
+                std::fs::create_dir_all(parent).map_err(AppCommandError::io)?;
+            }
+            // Bound the *actual* bytes written, not the declared header size
+            // (PAX/GNU size fields can understate the real stream). Copy through
+            // a hard ceiling and abort if the entry overflows the budget.
+            let remaining = max - extracted;
+            let mode = entry.header().mode().ok();
+            let mut out_file = std::fs::File::create(&out).map_err(AppCommandError::io)?;
+            let written = std::io::copy(&mut entry.by_ref().take(remaining + 1), &mut out_file)
+                .map_err(|e| extract_err("unpack tar entry", e))?;
+            if written > remaining {
                 return Err(AppCommandError::invalid_input(
                     "Update archive decompresses to more than the allowed size",
                 ));
             }
-            if let Some(parent) = out.parent() {
-                std::fs::create_dir_all(parent).map_err(AppCommandError::io)?;
+            extracted += written;
+            // Preserve unix mode so +x on codeg-server / codeg-mcp survives.
+            #[cfg(unix)]
+            if let Some(mode) = mode {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&out, std::fs::Permissions::from_mode(mode));
             }
-            // `tar::Entry::unpack` preserves unix mode bits, so the +x on
-            // codeg-server / codeg-mcp survives.
-            entry
-                .unpack(&out)
-                .map_err(|e| extract_err("unpack tar entry", e))?;
         } else {
             // Reject symlinks, hardlinks, devices, fifos. `unpack` would
             // materialize a symlink, letting a later entry write through it to
@@ -434,7 +448,7 @@ fn extract_tar_gz(bytes: &[u8], dest: &Path) -> Result<(), AppCommandError> {
     Ok(())
 }
 
-fn extract_zip(bytes: &[u8], dest: &Path) -> Result<(), AppCommandError> {
+fn extract_zip(bytes: &[u8], dest: &Path, max: u64) -> Result<(), AppCommandError> {
     use zip::ZipArchive;
 
     let mut archive =
@@ -455,24 +469,26 @@ fn extract_zip(bytes: &[u8], dest: &Path) -> Result<(), AppCommandError> {
             std::fs::create_dir_all(&out).map_err(AppCommandError::io)?;
             continue;
         }
-        // Bound cumulative decompressed output (zip-bomb guard).
-        extracted = extracted.saturating_add(file.size());
-        if extracted > MAX_EXTRACTED_BYTES {
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent).map_err(AppCommandError::io)?;
+        }
+        // Bound the *actual* decompressed bytes (a small compressed entry can
+        // expand without bound — zip bomb), not the declared uncompressed size.
+        let remaining = max - extracted;
+        let mode = file.unix_mode();
+        let mut writer = std::fs::File::create(&out).map_err(AppCommandError::io)?;
+        let written = std::io::copy(&mut file.by_ref().take(remaining + 1), &mut writer)
+            .map_err(AppCommandError::io)?;
+        if written > remaining {
             return Err(AppCommandError::invalid_input(
                 "Update archive decompresses to more than the allowed size",
             ));
         }
-        if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent).map_err(AppCommandError::io)?;
-        }
-        let mut writer = std::fs::File::create(&out).map_err(AppCommandError::io)?;
-        std::io::copy(&mut file, &mut writer).map_err(AppCommandError::io)?;
+        extracted += written;
         #[cfg(unix)]
-        {
+        if let Some(mode) = mode {
             use std::os::unix::fs::PermissionsExt;
-            if let Some(mode) = file.unix_mode() {
-                let _ = std::fs::set_permissions(&out, std::fs::Permissions::from_mode(mode));
-            }
+            let _ = std::fs::set_permissions(&out, std::fs::Permissions::from_mode(mode));
         }
     }
     Ok(())
@@ -658,6 +674,46 @@ mod tests {
         assert_eq!(
             p,
             PathBuf::from("codeg-server-linux-x64/web/index.html")
+        );
+    }
+
+    /// Build a gzip'd tar with the given (path, bytes) regular-file entries.
+    fn make_tar_gz(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut gz =
+            flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut builder = tar::Builder::new(&mut gz);
+            for (name, data) in entries {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(data.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                builder.append_data(&mut header, name, &data[..]).unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        gz.finish().unwrap()
+    }
+
+    #[test]
+    fn extract_caps_actual_decompressed_bytes() {
+        let bytes = make_tar_gz(&[("bundle/big.bin", &[7u8; 2000])]);
+
+        // A cap below the real content is enforced by *actual* bytes written,
+        // so a lying/oversized entry can't slip past.
+        let small = tempfile::tempdir().unwrap();
+        let err = extract_tar_gz(&bytes, small.path(), 500).unwrap_err();
+        assert!(
+            err.to_string().contains("more than the allowed size"),
+            "unexpected error: {err}"
+        );
+
+        // A cap above the content extracts the file intact.
+        let big = tempfile::tempdir().unwrap();
+        extract_tar_gz(&bytes, big.path(), 100_000).unwrap();
+        assert_eq!(
+            std::fs::read(big.path().join("bundle/big.bin")).unwrap(),
+            vec![7u8; 2000]
         );
     }
 

@@ -37,6 +37,7 @@ import {
   checkAppUpdate,
   closeAppUpdate,
   getCurrentAppVersion,
+  getRunningServerVersion,
   installAppUpdate,
   normalizeAppUpdateError,
   performServerUpdate,
@@ -425,17 +426,14 @@ export function SystemNetworkSettings() {
       }
       // The server answered — but the supervisor may have auto-rolled-back a
       // version that couldn't boot, in which case the OLD version is now
-      // serving and healthy. Confirm the running version actually advanced
-      // before claiming success.
-      let rolledBack = false
-      if (result.version) {
-        try {
-          const after = await checkAppUpdate()
-          rolledBack = after.currentVersion !== result.version
-        } catch {
-          // Re-check failed; don't block — assume the upgrade applied.
-        }
-      }
+      // serving and healthy. Confirm via the LOCAL /health version (no remote
+      // manifest fetch, which could itself fail and mask the rollback) that
+      // the running version actually advanced before claiming success.
+      const runningVersion = await getRunningServerVersion()
+      const rolledBack =
+        !!result.version &&
+        !!runningVersion &&
+        runningVersion !== result.version
       if (rolledBack) {
         setUpdateError(t("upgradeRolledBack"))
         toast.error(t("upgradeRolledBack"))

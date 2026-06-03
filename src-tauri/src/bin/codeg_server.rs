@@ -137,6 +137,16 @@ async fn async_main() {
     let static_dir = find_static_dir_standalone(static_dir_env.as_deref());
     let app_version = env!("CARGO_PKG_VERSION");
 
+    // Standalone (non-supervised) self-update re-execs this binary in place,
+    // with no supervisor to consume the staged-upgrade marker. Clear it on
+    // startup so a re-exec'd upgrade doesn't leave the marker behind and block
+    // every future update with "already staged". Under the supervisor the
+    // marker is consumed there before the worker is spawned, so this is a
+    // no-op in that case.
+    if !codeg_lib::update::runtime::is_supervised() {
+        let _ = codeg_lib::update::install::take_upgrade_staged();
+    }
+
     eprintln!("[SERVER] codeg-server v{}", app_version);
     eprintln!("[SERVER] Data directory: {}", data_dir.display());
     eprintln!("[SERVER] Static directory: {}", static_dir.display());

@@ -153,6 +153,26 @@ export async function waitForServerHealthy(opts: {
   return false
 }
 
+/**
+ * Read the running server's version from `/health`. Local-only — no remote
+ * manifest fetch — so it can confirm (even when the update source is
+ * unreachable) that a restart actually landed on the new version rather than
+ * an auto-rolled-back previous one. Returns null if `/health` reports no
+ * version (older server) or the call fails.
+ */
+export async function getRunningServerVersion(): Promise<string | null> {
+  try {
+    const res = await getTransport().call<{ version?: string }>(
+      "health",
+      {},
+      { timeoutMs: 4000 }
+    )
+    return res?.version ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function closeAppUpdate(
   update: NonNullable<Update>
 ): Promise<void> {
