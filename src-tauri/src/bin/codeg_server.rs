@@ -136,13 +136,31 @@ async fn async_main() {
     let static_dir = find_static_dir_standalone(static_dir_env.as_deref());
     let app_version = env!("CARGO_PKG_VERSION");
 
-    // Standalone (non-supervised) self-update re-execs this binary in place,
-    // with no supervisor to consume the staged-upgrade marker. Clear it on
-    // startup so a re-exec'd upgrade doesn't leave the marker behind and block
-    // every future update with "already staged". Under the supervisor the
-    // marker is consumed there before the worker is spawned, so this is a
-    // no-op in that case.
-    if !codeg_lib::update::runtime::is_supervised() {
+    // Staged-upgrade marker lifecycle. The marker is a proof token: it stays on
+    // disk for the whole trial window so a second self-update is refused while
+    // this freshly-swapped version is still unproven (re-swapping would clobber
+    // the only good `.bak` and make a trial-failure rollback restore the
+    // unproven version).
+    if codeg_lib::update::runtime::is_supervised() {
+        // Supervised trial: if this launch is the trial of a freshly-swapped
+        // version (marker present), keep the marker until we have stayed up
+        // past the trial window — at which point the upgrade is proven and the
+        // marker is cleared so future updates are allowed again. The supervisor
+        // only peeks at the marker to set probation; clearing is the worker's
+        // job. If this version can't survive the window the supervisor rolls it
+        // back first (which clears the marker), so this task never fires.
+        if codeg_lib::update::install::upgrade_staged() {
+            let trial = codeg_lib::update::runtime::upgrade_trial_secs();
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(trial)).await;
+                let _ = codeg_lib::update::install::take_upgrade_staged();
+            });
+        }
+    } else {
+        // Standalone (non-supervised) self-update re-execs this binary in place,
+        // with no supervisor and thus no trial/rollback. Clear the marker on
+        // startup so a re-exec'd upgrade doesn't leave it behind and block every
+        // future update with "already staged".
         let _ = codeg_lib::update::install::take_upgrade_staged();
     }
 

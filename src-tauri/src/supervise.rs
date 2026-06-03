@@ -129,12 +129,19 @@ pub fn run() -> ! {
     };
 
     // A worker is "on trial" when this launch is the trial of a freshly
-    // swapped version — i.e. a staged-upgrade marker was present at launch. A
-    // plain restart (no pending upgrade) consumes no marker and is not on
-    // trial, so it is never auto-rolled-back. The initial launch can also be
-    // a trial if a swap completed in a prior lifetime and the container was
-    // restarted before the upgrade-restart fired.
-    let mut on_trial = crate::update::install::take_upgrade_staged();
+    // swapped version — i.e. a staged-upgrade marker is present at launch. A
+    // plain restart (no pending upgrade) has no marker and is not on trial, so
+    // it is never auto-rolled-back. The initial launch can also be a trial if a
+    // swap completed in a prior lifetime and the container was restarted before
+    // the upgrade-restart fired.
+    //
+    // We only *peek* (don't consume): the marker must stay on disk for the
+    // whole trial window so a second `perform_update` on the trial worker is
+    // refused — consuming it here would let that perform clobber `.bak` with
+    // the still-unproven version, so a trial-failure rollback would restore the
+    // bad version. The worker itself clears the marker once it survives the
+    // trial window (proving the upgrade); `rollback` clears it on revert.
+    let mut on_trial = crate::update::install::upgrade_staged();
     let mut child = spawn_trial(&mut on_trial);
     let mut spawned_at = std::time::Instant::now();
     eprintln!("[supervise] worker started (pid {})", child.id());
@@ -188,10 +195,12 @@ pub fn run() -> ! {
                 if TERMINATING.load(Ordering::SeqCst) {
                     std::process::exit(0);
                 }
-                // On trial only if an upgrade was actually staged (consumes
-                // the marker); a plain restart leaves no marker and relaunches
-                // without probation.
-                on_trial = crate::update::install::take_upgrade_staged();
+                // On trial only if an upgrade is staged (marker present); a
+                // plain restart leaves no marker and relaunches without
+                // probation. Peek, don't consume — a restart that lands inside
+                // an in-flight trial keeps the marker, so probation correctly
+                // carries across it (and the second-perform guard stays armed).
+                on_trial = crate::update::install::upgrade_staged();
                 child = spawn_trial(&mut on_trial);
                 spawned_at = std::time::Instant::now();
                 eprintln!("[supervise] worker relaunched (pid {})", child.id());
@@ -256,9 +265,10 @@ pub fn run() -> ! {
     let args = worker_args();
     let delay = runtime::restart_delay_ms();
     let trial = std::time::Duration::from_secs(runtime::upgrade_trial_secs());
-    // On trial only if a swap was actually staged at this launch (see the unix
-    // path for the full rationale); a plain restart is never auto-rolled-back.
-    let mut on_trial = crate::update::install::take_upgrade_staged();
+    // On trial only if a swap is staged at this launch (see the unix path for
+    // the full rationale); a plain restart is never auto-rolled-back. Peek,
+    // don't consume — the worker clears the marker once it survives the trial.
+    let mut on_trial = crate::update::install::upgrade_staged();
 
     loop {
         let spawned_at = std::time::Instant::now();
@@ -282,8 +292,9 @@ pub fn run() -> ! {
             Some(code) if code == runtime::EXIT_RESTART => {
                 eprintln!("[supervise] upgrade restart requested; relaunching in {delay}ms");
                 std::thread::sleep(std::time::Duration::from_millis(delay));
-                // Probation for the next launch only if an upgrade was staged.
-                on_trial = crate::update::install::take_upgrade_staged();
+                // Probation for the next launch only if an upgrade is staged.
+                // Peek, don't consume — see the unix path for the rationale.
+                on_trial = crate::update::install::upgrade_staged();
             }
             Some(code) => {
                 // A freshly-upgraded worker that dies fast can't boot —

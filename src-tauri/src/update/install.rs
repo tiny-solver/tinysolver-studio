@@ -183,10 +183,21 @@ fn mark_upgrade_staged() -> Result<(), AppCommandError> {
 
 /// Consume the staged-upgrade marker, returning whether it was present.
 ///
-/// The supervisor calls this when (re)launching a worker — a present marker
-/// means this launch is the trial of a freshly-swapped version. The
-/// standalone (non-supervised, re-exec) worker also calls it on startup so the
-/// marker doesn't outlive the upgrade it guards and block all future updates.
+/// The marker is a *proof token*: it stays on disk for the whole trial window
+/// so a second `perform_update` is refused while a freshly-swapped version is
+/// still unproven — re-swapping would move the new files into `.bak` and a
+/// trial-failure rollback would then restore the unproven version instead of
+/// the last-known-good one. It is consumed only once the upgrade is proven or
+/// undone:
+///   - the supervised worker clears it after surviving the trial window;
+///   - the standalone (non-supervised, re-exec) worker clears it on startup —
+///     there is no supervisor and thus no trial, so the marker must not outlive
+///     the upgrade it guards and block every future update;
+///   - [`rollback`] clears it after reverting.
+///
+/// The supervisor itself only *peeks* via [`upgrade_staged`] to decide
+/// probation; it must not consume the marker, or the trial window would lose
+/// its second-perform guard and the rollback target could be clobbered.
 pub fn take_upgrade_staged() -> bool {
     match upgrade_marker_path() {
         Some(p) if p.exists() => {
