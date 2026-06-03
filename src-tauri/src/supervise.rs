@@ -8,10 +8,17 @@
 //!
 //! Relaunch contract: the worker performs the file swap and then exits with
 //! [`crate::update::runtime::EXIT_RESTART`]. We wait `CODEG_RESTART_DELAY_MS`
-//! and respawn from the (now replaced) executable path. Any *other* exit is
-//! propagated as-is — a fatal config error or a bad upgrade should stop the
-//! process (and, under a container restart policy, fall back to the image)
-//! rather than hot-loop.
+//! and respawn from the (now replaced) executable path.
+//!
+//! Failed-upgrade self-heal: a worker we just relaunched *because of* an
+//! upgrade is on probation. If it exits abnormally within
+//! `CODEG_UPGRADE_TRIAL_SECS` (the new binary can't even boot), we restore
+//! the previous bundle from its `.bak` artifacts and relaunch that — once.
+//! This is the one recovery path that does **not** depend on the (now dead)
+//! HTTP rollback endpoint. Any other exit is propagated as-is — a fatal
+//! config error or a crash after the trial window should stop the process
+//! (and, under a container restart policy, fall back to the image) rather
+//! than hot-loop.
 
 use crate::update::runtime;
 
@@ -21,6 +28,25 @@ fn worker_args() -> Vec<String> {
         .skip(1)
         .filter(|a| a != "--supervise")
         .collect()
+}
+
+/// Restore the previous bundle from its `.bak` artifacts after a freshly
+/// upgraded worker failed to stay up. Returns `true` if a rollback was
+/// performed (caller should relaunch the restored, previous version).
+/// Best-effort: a missing `.bak` (nothing to revert to) returns `false` and
+/// the caller propagates the original failure.
+fn attempt_rollback(reason: &str) -> bool {
+    eprintln!("[supervise] {reason}; rolling back to the previous version");
+    match crate::update::install::rollback() {
+        Ok(()) => {
+            eprintln!("[supervise] rollback complete; relaunching previous version");
+            true
+        }
+        Err(e) => {
+            eprintln!("[supervise] rollback failed: {e}; propagating original exit");
+            false
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -51,6 +77,7 @@ pub fn run() -> ! {
     let exe = runtime::self_exe();
     let args = worker_args();
     let delay = runtime::restart_delay_ms();
+    let trial = std::time::Duration::from_secs(runtime::upgrade_trial_secs());
 
     let spawn_worker = || -> std::process::Child {
         std::process::Command::new(&exe)
@@ -65,6 +92,11 @@ pub fn run() -> ! {
     };
 
     let mut child = spawn_worker();
+    let mut spawned_at = std::time::Instant::now();
+    // True only for a worker we relaunched *because of* an upgrade — it is on
+    // probation until it survives the trial window. The initial worker is the
+    // baseline (there is nothing earlier to roll back to).
+    let mut on_trial = false;
     WORKER_PID.store(child.id() as i32, Ordering::SeqCst);
     eprintln!("[supervise] worker started (pid {})", child.id());
 
@@ -107,6 +139,8 @@ pub fn run() -> ! {
             std::process::exit(0);
         }
 
+        let elapsed = spawned_at.elapsed();
+
         if libc::WIFEXITED(status) {
             let code = libc::WEXITSTATUS(status);
             if code == runtime::EXIT_RESTART {
@@ -116,8 +150,27 @@ pub fn run() -> ! {
                     std::process::exit(0);
                 }
                 child = spawn_worker();
+                spawned_at = std::time::Instant::now();
+                on_trial = true; // freshly upgraded — on probation
                 WORKER_PID.store(child.id() as i32, Ordering::SeqCst);
                 eprintln!("[supervise] worker relaunched (pid {})", child.id());
+                continue;
+            }
+            // A freshly-upgraded worker that dies fast can't boot — restore
+            // the previous version and relaunch it (once; the restored worker
+            // is no longer on_trial, so a second failure propagates).
+            if on_trial
+                && elapsed < trial
+                && attempt_rollback(&format!(
+                    "new version exited (code {code}) after {:.1}s",
+                    elapsed.as_secs_f64()
+                ))
+            {
+                child = spawn_worker();
+                spawned_at = std::time::Instant::now();
+                on_trial = false;
+                WORKER_PID.store(child.id() as i32, Ordering::SeqCst);
+                eprintln!("[supervise] previous version relaunched (pid {})", child.id());
                 continue;
             }
             eprintln!("[supervise] worker exited with code {code}; propagating");
@@ -126,6 +179,20 @@ pub fn run() -> ! {
 
         if libc::WIFSIGNALED(status) {
             let sig = libc::WTERMSIG(status);
+            if on_trial
+                && elapsed < trial
+                && attempt_rollback(&format!(
+                    "new version was killed by signal {sig} after {:.1}s",
+                    elapsed.as_secs_f64()
+                ))
+            {
+                child = spawn_worker();
+                spawned_at = std::time::Instant::now();
+                on_trial = false;
+                WORKER_PID.store(child.id() as i32, Ordering::SeqCst);
+                eprintln!("[supervise] previous version relaunched (pid {})", child.id());
+                continue;
+            }
             eprintln!("[supervise] worker killed by signal {sig}; exiting");
             // Mirror the conventional 128+signal exit code.
             std::process::exit(128 + sig);
@@ -143,8 +210,11 @@ pub fn run() -> ! {
     let exe = runtime::self_exe();
     let args = worker_args();
     let delay = runtime::restart_delay_ms();
+    let trial = std::time::Duration::from_secs(runtime::upgrade_trial_secs());
+    let mut on_trial = false;
 
     loop {
+        let spawned_at = std::time::Instant::now();
         let mut child = std::process::Command::new(&exe)
             .args(&args)
             .env(runtime::ENV_SUPERVISED, "1")
@@ -159,14 +229,41 @@ pub fn run() -> ! {
             eprintln!("[supervise][FATAL] wait failed: {e}");
             std::process::exit(1);
         });
+        let elapsed = spawned_at.elapsed();
 
         match status.code() {
             Some(code) if code == runtime::EXIT_RESTART => {
                 eprintln!("[supervise] upgrade restart requested; relaunching in {delay}ms");
                 std::thread::sleep(std::time::Duration::from_millis(delay));
+                on_trial = true; // freshly upgraded — on probation
             }
-            Some(code) => std::process::exit(code),
-            None => std::process::exit(1),
+            Some(code) => {
+                // A freshly-upgraded worker that dies fast can't boot —
+                // restore the previous version and relaunch it once.
+                if on_trial
+                    && elapsed < trial
+                    && attempt_rollback(&format!(
+                        "new version exited (code {code}) after {:.1}s",
+                        elapsed.as_secs_f64()
+                    ))
+                {
+                    on_trial = false;
+                    eprintln!("[supervise] relaunching previous version");
+                    continue;
+                }
+                std::process::exit(code);
+            }
+            None => {
+                if on_trial
+                    && elapsed < trial
+                    && attempt_rollback("new version terminated abnormally")
+                {
+                    on_trial = false;
+                    eprintln!("[supervise] relaunching previous version");
+                    continue;
+                }
+                std::process::exit(1);
+            }
         }
     }
 }

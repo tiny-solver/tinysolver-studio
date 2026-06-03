@@ -26,6 +26,19 @@ pub const ENV_RUNTIME: &str = "CODEG_RUNTIME";
 /// Default relaunch delay when `CODEG_RESTART_DELAY_MS` is unset.
 pub const DEFAULT_RESTART_DELAY_MS: u64 = 2000;
 
+/// Grace window (seconds) the supervisor gives a freshly-upgraded worker to
+/// prove it can stay up. A worker spawned *after* an upgrade that exits
+/// abnormally within this window is treated as a failed boot and auto-rolled
+/// back to the previous version; a crash after it has run longer is treated
+/// as an ordinary runtime fault and propagated (the new version had already
+/// demonstrated it can start).
+pub const ENV_UPGRADE_TRIAL_SECS: &str = "CODEG_UPGRADE_TRIAL_SECS";
+
+/// Default trial window when `CODEG_UPGRADE_TRIAL_SECS` is unset. A binary
+/// that cannot boot fails near-instantly; this is generous enough to never
+/// misfire on a server that is genuinely (if slowly) coming up.
+pub const DEFAULT_UPGRADE_TRIAL_SECS: u64 = 30;
+
 /// How the running server applies an in-place update + restart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,6 +95,16 @@ pub fn restart_delay_ms() -> u64 {
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(DEFAULT_RESTART_DELAY_MS)
         .max(200)
+}
+
+/// Upgrade trial window in seconds, read from the environment with a sane
+/// default. See [`ENV_UPGRADE_TRIAL_SECS`].
+pub fn upgrade_trial_secs() -> u64 {
+    std::env::var(ENV_UPGRADE_TRIAL_SECS)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_UPGRADE_TRIAL_SECS)
+        .max(1)
 }
 
 /// Absolute path of our own executable, captured once at startup so it
