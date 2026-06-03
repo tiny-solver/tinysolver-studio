@@ -142,8 +142,15 @@ pub fn run() -> ! {
     // bad version. The worker itself clears the marker once it survives the
     // trial window (proving the upgrade); `rollback` clears it on revert.
     let mut on_trial = crate::update::install::upgrade_staged();
-    let mut child = spawn_trial(&mut on_trial);
+    // Stamp the trial start *before* spawning. The worker clears the marker at
+    // (its own start + trial); the supervisor rolls back on an abnormal exit
+    // within (spawned_at + trial). If `spawned_at` were taken after the spawn
+    // and the parent were preempted past the child's startup, the rollback
+    // window could outlast the marker and a second perform could clobber `.bak`
+    // in the gap. Stamping first guarantees spawned_at <= child start, so the
+    // marker always covers the whole window. (The windows path does the same.)
     let mut spawned_at = std::time::Instant::now();
+    let mut child = spawn_trial(&mut on_trial);
     eprintln!("[supervise] worker started (pid {})", child.id());
 
     loop {
@@ -201,8 +208,10 @@ pub fn run() -> ! {
                 // an in-flight trial keeps the marker, so probation correctly
                 // carries across it (and the second-perform guard stays armed).
                 on_trial = crate::update::install::upgrade_staged();
-                child = spawn_trial(&mut on_trial);
+                // Stamp before spawning (see the initial launch) so the marker
+                // always outlives the supervisor's rollback window.
                 spawned_at = std::time::Instant::now();
+                child = spawn_trial(&mut on_trial);
                 eprintln!("[supervise] worker relaunched (pid {})", child.id());
                 continue;
             }
