@@ -383,6 +383,17 @@ export function SystemNetworkSettings() {
     setDownloadProgress(null)
     setRestartCountdown(null)
 
+    // The version running before this upgrade. A rollback (the supervisor
+    // reverting a version that couldn't boot/stay up) restores exactly this.
+    // We treat "reverted to the baseline" as the rollback signal rather than
+    // "not exactly the reported target": if a newer release is published
+    // between the manifest read and the download, the server can legitimately
+    // install a version newer than result.version, which must still count as
+    // success rather than a false rollback.
+    const baseline = currentVersion
+    const isRollback = (v: string | null): boolean =>
+      !!v && !!baseline && v === baseline
+
     let unsubscribe: (() => void) | undefined
     try {
       unsubscribe = await subscribeServerUpdateProgress(
@@ -431,11 +442,7 @@ export function SystemNetworkSettings() {
       // manifest fetch, which could itself fail and mask the rollback) that
       // the running version actually advanced before claiming success.
       const runningVersion = await getRunningServerVersion()
-      const rolledBack =
-        !!result.version &&
-        !!runningVersion &&
-        runningVersion !== result.version
-      if (rolledBack) {
+      if (isRollback(runningVersion)) {
         setUpdateError(t("upgradeRolledBack"))
         toast.error(t("upgradeRolledBack"))
         return
@@ -455,7 +462,7 @@ export function SystemNetworkSettings() {
           setRestartCountdown(Math.ceil((trialDeadline - Date.now()) / 1000))
           await new Promise<void>((r) => setTimeout(r, 2000))
           const v = await getRunningServerVersion()
-          if (v && v !== result.version) {
+          if (isRollback(v)) {
             reverted = true
             break
           }
@@ -478,7 +485,7 @@ export function SystemNetworkSettings() {
           if (finalVersion) break
           await new Promise<void>((r) => setTimeout(r, 1500))
         }
-        if (finalVersion && finalVersion !== result.version) {
+        if (isRollback(finalVersion)) {
           setUpdateError(t("upgradeRolledBack"))
           toast.error(t("upgradeRolledBack"))
           return
@@ -503,7 +510,7 @@ export function SystemNetworkSettings() {
       setDownloadProgress(null)
       setRestartCountdown(null)
     }
-  }, [availableUpdate, formatUpdateError, restartDelayMs, t])
+  }, [availableUpdate, currentVersion, formatUpdateError, restartDelayMs, t])
 
   if (loading) {
     return (
