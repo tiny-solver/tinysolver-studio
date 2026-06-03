@@ -835,6 +835,54 @@ fn db_report(task_id: &str, rec: &ChildStatusRecord) -> DelegationTaskReport {
     }
 }
 
+/// Per-id classification captured under the pending lock during a (possibly
+/// batched) status query. The async resolution that can't run under the lock —
+/// `attach_live_reply` (a different lock) for a running task, `status_from_db`
+/// (a DB round-trip) for one not in memory — is deferred to `assemble_reports`
+/// AFTER the lock is released, so a status query never nests the pending lock
+/// inside another await. This is the same lock-ordering the single-task path
+/// has always used; batching just captures it per id.
+enum StatusClass {
+    /// Terminal/owned-cached, or a cross-parent `unknown` — the report is final.
+    Settled(DelegationTaskReport),
+    /// Running and owned — the bare running snapshot plus its child connection
+    /// id, so `assemble_reports` can attach the latest live reply out of lock.
+    Running {
+        report: DelegationTaskReport,
+        child_connection_id: String,
+    },
+    /// Neither running nor completed in memory — resolve via the DB fallback in
+    /// `assemble_reports`. A not-in-memory id is, for wait purposes, already
+    /// settled: it can never transition back to running, so a batch wait need
+    /// not park on it (and must not hit the DB on every wake).
+    NotInMemory,
+}
+
+/// Classify one task id against the in-memory maps while the pending lock is
+/// held. Mirrors the single-task resolution order — completed cache (parent
+/// scoped) → running set (parent scoped) → not-in-memory — and yields a
+/// cross-parent hit as `unknown` so a task owned by another parent never leaks.
+fn classify_locked(
+    inner: &PendingInner,
+    parent_connection_id: &str,
+    task_id: &str,
+) -> StatusClass {
+    if let Some(c) = inner.completed.get(task_id) {
+        if c.parent_connection_id == parent_connection_id {
+            return StatusClass::Settled(completed_report(task_id, c));
+        }
+        return StatusClass::Settled(unknown_report(task_id));
+    }
+    match inner.running.get(task_id) {
+        Some(r) if r.parent_connection_id == parent_connection_id => StatusClass::Running {
+            report: running_report(task_id, r),
+            child_connection_id: r.child_connection_id.clone(),
+        },
+        Some(_) => StatusClass::Settled(unknown_report(task_id)),
+        None => StatusClass::NotInMemory,
+    }
+}
+
 /// Map a terminal [`DelegationTaskReport`] back to a [`DelegationOutcome`] for
 /// the test-only `handle_request` shim (so pre-async tests keep asserting on
 /// the old outcome shape).
@@ -2758,13 +2806,11 @@ impl DelegationBroker {
         let _ = self.spawner.disconnect(&task.child_connection_id).await;
     }
 
-    /// Backs the `get_delegation_status` tool. Resolves a task's status from the
-    /// completed-cache, then the running set (optionally blocking per the
-    /// [`StatusWait`] mode — an immediate snapshot, a bounded long-poll, or an
-    /// unbounded wait until the task is terminal), then the DB fallback. Scoped
-    /// to the calling parent: a task owned by a different parent reports
-    /// `Unknown` rather than leaking its existence. `parent_conversation_id` is
-    /// the caller's current conversation, used only to scope the DB fallback.
+    /// Backs the `get_delegation_status` tool for a single task id — a thin
+    /// wrapper over [`Self::get_tasks_status`] so the single- and batch-poll
+    /// paths share one snapshot/wait implementation. A one-id batch's
+    /// "any task settled" wake condition is exactly "this task settled", so the
+    /// blocking semantics are identical to the historical single-task loop.
     pub async fn get_task_status(
         &self,
         parent_connection_id: &str,
@@ -2772,54 +2818,96 @@ impl DelegationBroker {
         task_id: &str,
         wait: StatusWait,
     ) -> DelegationTaskReport {
+        let ids = [task_id.to_string()];
+        self.get_tasks_status(parent_connection_id, parent_conversation_id, &ids, wait)
+            .await
+            .pop()
+            .unwrap_or_else(|| unknown_report(task_id))
+    }
+
+    /// Backs the batch `get_delegation_status` tool. Resolves the status of one
+    /// or many task ids in a single pass — each from the completed-cache, then
+    /// the running set, then the DB fallback — scoped to the calling parent (a
+    /// task owned by another parent reports `Unknown`, never leaking it). Returns
+    /// one report per requested id, in request order.
+    ///
+    /// Blocking obeys [`StatusWait`]: `Immediate` returns the first snapshot;
+    /// `Bounded`/`Infinite` park on `result_notify` and wake as soon as ANY
+    /// requested task that was running transitions to a terminal state (i.e. the
+    /// batch's status changed), or — for `Bounded` — the deadline elapses. When
+    /// no requested task is running (all already terminal / cross-parent /
+    /// not-in-memory) the call returns immediately even under `Infinite`, so an
+    /// all-settled batch never parks forever.
+    pub async fn get_tasks_status(
+        &self,
+        parent_connection_id: &str,
+        parent_conversation_id: Option<i32>,
+        task_ids: &[String],
+        wait: StatusWait,
+    ) -> Vec<DelegationTaskReport> {
+        if task_ids.is_empty() {
+            return Vec::new();
+        }
         // A bounded wait gets a single fixed deadline; Immediate and Infinite
         // carry none — Immediate returns on the first pass, Infinite parks on
-        // `result_notify` until the task is terminal.
+        // `result_notify` until a task is terminal.
         let deadline = match wait {
             StatusWait::Bounded(ms) => Some(Instant::now() + Duration::from_millis(ms)),
             StatusWait::Immediate | StatusWait::Infinite => None,
         };
+        // The count of ids observed `Running` on the PREVIOUS pass. The id set
+        // is fixed and a task can only ever LEAVE the running map during a wait
+        // (it can't (re)enter), so the running count is monotonically
+        // non-increasing — a strict drop means at least one requested task's
+        // status changed, which is the batch's "any task settled" wake signal.
+        // `None` before the first pass seeds it.
+        let mut prev_running_count: Option<usize> = None;
         loop {
-            // Arm the notify BEFORE the check so a completion landing between the
-            // check and the await isn't lost (enable() registers the waiter now).
+            // Arm the notify BEFORE the snapshot so a completion landing between
+            // the snapshot and the await isn't lost (enable() registers now).
             let notified = self.result_notify.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
 
-            let running = {
+            // One lock acquisition classifies every requested id. The async
+            // resolution of running (live reply) / not-in-memory (DB) ids is
+            // deferred to `assemble_reports`, OUTSIDE this lock.
+            let classes: Vec<StatusClass> = {
                 let inner = self.pending.inner.lock().await;
-                if let Some(c) = inner.completed.get(task_id) {
-                    if c.parent_connection_id == parent_connection_id {
-                        return completed_report(task_id, c);
-                    }
-                    return unknown_report(task_id);
-                }
-                match inner.running.get(task_id) {
-                    // Carry the child connection id out of the lock so the live-reply
-                    // peek below runs WITHOUT the pending mutex held (lock ordering).
-                    Some(r) if r.parent_connection_id == parent_connection_id => {
-                        Some((running_report(task_id, r), r.child_connection_id.clone()))
-                    }
-                    Some(_) => return unknown_report(task_id),
-                    None => None,
-                }
+                task_ids
+                    .iter()
+                    .map(|id| classify_locked(&inner, parent_connection_id, id))
+                    .collect()
             };
-            let Some((mut running_report, child_connection_id)) = running else {
-                // Neither running nor completed in memory → DB status fallback.
-                return self.status_from_db(parent_conversation_id, task_id).await;
-            };
-            // Running and owned. Decide whether to keep waiting.
-            if matches!(wait, StatusWait::Immediate) {
-                self.attach_live_reply(&mut running_report, &child_connection_id)
+            let running_count = classes
+                .iter()
+                .filter(|c| matches!(c, StatusClass::Running { .. }))
+                .count();
+
+            // Return now when: the poll is Immediate; or nothing is left that
+            // can change (no owned-running id — every id is terminal /
+            // cross-parent / not-in-memory, the last resolving to a terminal DB
+            // report), which also makes Infinite safe for an all-settled batch.
+            if matches!(wait, StatusWait::Immediate) || running_count == 0 {
+                return self
+                    .assemble_reports(parent_conversation_id, task_ids, classes)
                     .await;
-                return running_report;
             }
             let now = Instant::now();
             if deadline.is_some_and(|d| now >= d) {
-                self.attach_live_reply(&mut running_report, &child_connection_id)
+                return self
+                    .assemble_reports(parent_conversation_id, task_ids, classes)
                     .await;
-                return running_report;
             }
+            // Fewer running than last pass → a task settled; wake the batch and
+            // return the fresh snapshot.
+            if prev_running_count.is_some_and(|prev| running_count < prev) {
+                return self
+                    .assemble_reports(parent_conversation_id, task_ids, classes)
+                    .await;
+            }
+            prev_running_count = Some(running_count);
+
             // Park until the next completion signal, bounded by the deadline
             // when there is one (Infinite waits on the notify alone).
             match deadline {
@@ -2834,9 +2922,40 @@ impl DelegationBroker {
                     notified.await;
                 }
             }
-            // Loop: re-read (the task likely just completed, or the deadline
+            // Loop: re-snapshot (a task likely just completed, or the deadline
             // passed and the next pass returns the running snapshot).
         }
+    }
+
+    /// Finish a batch status pass: resolve each [`StatusClass`] into a final
+    /// report AFTER the pending lock is released. `Running` ids get their latest
+    /// live reply attached; `NotInMemory` ids fall back to the DB status lookup.
+    /// Reports come back in `task_ids` order.
+    async fn assemble_reports(
+        &self,
+        parent_conversation_id: Option<i32>,
+        task_ids: &[String],
+        classes: Vec<StatusClass>,
+    ) -> Vec<DelegationTaskReport> {
+        let mut out = Vec::with_capacity(classes.len());
+        for (id, class) in task_ids.iter().zip(classes.into_iter()) {
+            let report = match class {
+                StatusClass::Settled(report) => report,
+                StatusClass::Running {
+                    mut report,
+                    child_connection_id,
+                } => {
+                    self.attach_live_reply(&mut report, &child_connection_id)
+                        .await;
+                    report
+                }
+                StatusClass::NotInMemory => {
+                    self.status_from_db(parent_conversation_id, id).await
+                }
+            };
+            out.push(report);
+        }
+        out
     }
 
     /// Upgrade a running report's bare `"Running."` message with the child's
@@ -3349,6 +3468,202 @@ mod tests {
             .await;
         assert_eq!(report.status, TaskStatus::Running);
         assert_eq!(report.message.as_deref(), Some("Running."));
+    }
+
+    // -- Batch get_tasks_status --------------------------------------------
+
+    /// Queue one spawn+send pair and start a delegation, returning its task id.
+    /// Each call consumes one queued `(spawn, send)` from the mock.
+    async fn start_running(
+        broker: &DelegationBroker,
+        mock: &MockSpawner,
+        child_conn: &str,
+        child_conv: i32,
+        tool_use: &str,
+    ) -> String {
+        mock.queue_spawn(Ok(child_conn.into())).await;
+        mock.queue_send(Ok(child_conv)).await;
+        broker
+            .start_delegation(request(1, tool_use))
+            .await
+            .task_id
+            .expect("running task carries an id")
+    }
+
+    /// The single-id batch agrees with `get_task_status` for a completed task —
+    /// the refactor that routes the single path through `get_tasks_status` keeps
+    /// the historical contract.
+    #[tokio::test]
+    async fn get_tasks_status_single_matches_get_task_status() {
+        let mock = Arc::new(MockSpawner::new());
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+        let t1 = start_running(&broker, &mock, "child-1", 42, "pt-1").await;
+        broker
+            .complete_call(
+                &t1,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "done".into(),
+                    child_conversation_id: 42,
+                    child_agent_type: AgentType::Codex,
+                    turn_count: 1,
+                    duration_ms: 7,
+                    token_usage: None,
+                }),
+            )
+            .await;
+
+        let single = broker
+            .get_task_status("parent-conn", Some(1), &t1, StatusWait::Immediate)
+            .await;
+        let batch = broker
+            .get_tasks_status(
+                "parent-conn",
+                Some(1),
+                std::slice::from_ref(&t1),
+                StatusWait::Immediate,
+            )
+            .await;
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].status, single.status);
+        assert_eq!(batch[0].text, single.text);
+        assert_eq!(batch[0].task_id, single.task_id);
+    }
+
+    /// An immediate batch poll resolves a mix of completed / running / unknown
+    /// tasks in ONE pass, preserving request order.
+    #[tokio::test]
+    async fn batch_status_immediate_mixed_preserves_order() {
+        let mock = Arc::new(MockSpawner::new());
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+        let t1 = start_running(&broker, &mock, "child-1", 1, "pt-1").await;
+        let t2 = start_running(&broker, &mock, "child-2", 2, "pt-2").await;
+        broker
+            .complete_call(
+                &t1,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "first".into(),
+                    child_conversation_id: 1,
+                    child_agent_type: AgentType::Codex,
+                    turn_count: 1,
+                    duration_ms: 3,
+                    token_usage: None,
+                }),
+            )
+            .await;
+
+        let ids = vec![t1.clone(), t2.clone(), "no-such-id".to_string()];
+        let reports = broker
+            .get_tasks_status("parent-conn", Some(1), &ids, StatusWait::Immediate)
+            .await;
+        assert_eq!(reports.len(), 3);
+        assert_eq!(reports[0].status, TaskStatus::Completed);
+        assert_eq!(reports[0].text.as_deref(), Some("first"));
+        assert_eq!(reports[0].task_id.as_deref(), Some(t1.as_str()));
+        assert_eq!(reports[1].status, TaskStatus::Running);
+        assert_eq!(reports[1].task_id.as_deref(), Some(t2.as_str()));
+        assert_eq!(reports[2].status, TaskStatus::Unknown);
+    }
+
+    /// A batch `Infinite` wait returns as soon as ANY requested task settles,
+    /// leaving the still-running siblings in the snapshot.
+    #[tokio::test]
+    async fn batch_infinite_returns_when_any_settles() {
+        let mock = Arc::new(MockSpawner::new());
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+        let t1 = start_running(&broker, &mock, "child-1", 1, "pt-1").await;
+        let t2 = start_running(&broker, &mock, "child-2", 2, "pt-2").await;
+
+        let waiter = {
+            let broker = broker.clone();
+            let ids = vec![t1.clone(), t2.clone()];
+            tokio::spawn(async move {
+                broker
+                    .get_tasks_status("parent-conn", Some(1), &ids, StatusWait::Infinite)
+                    .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(
+            !waiter.is_finished(),
+            "batch infinite wait must park while both tasks run"
+        );
+
+        broker
+            .complete_call(
+                &t1,
+                DelegationOutcome::Ok(DelegationSuccess {
+                    text: "first-done".into(),
+                    child_conversation_id: 1,
+                    child_agent_type: AgentType::Codex,
+                    turn_count: 1,
+                    duration_ms: 4,
+                    token_usage: None,
+                }),
+            )
+            .await;
+
+        let reports = waiter.await.unwrap();
+        assert_eq!(reports.len(), 2);
+        assert_eq!(reports[0].status, TaskStatus::Completed);
+        assert_eq!(reports[0].text.as_deref(), Some("first-done"));
+        assert_eq!(reports[1].status, TaskStatus::Running);
+    }
+
+    /// A batch `Infinite` wait where NOTHING is running (all ids unknown) must
+    /// return immediately rather than parking forever.
+    #[tokio::test]
+    async fn batch_infinite_all_settled_returns_immediately() {
+        let mock = Arc::new(MockSpawner::new());
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+        let ids = vec!["nope-1".to_string(), "nope-2".to_string()];
+        let reports = tokio::time::timeout(
+            Duration::from_secs(2),
+            broker.get_tasks_status("parent-conn", Some(1), &ids, StatusWait::Infinite),
+        )
+        .await
+        .expect("all-settled infinite batch must not hang");
+        assert_eq!(reports.len(), 2);
+        assert!(reports.iter().all(|r| r.status == TaskStatus::Unknown));
+    }
+
+    /// A bounded batch wait with no completion returns the running snapshot once
+    /// the deadline elapses (the child keeps running; the caller re-polls).
+    #[tokio::test]
+    async fn batch_bounded_deadline_returns_running_snapshot() {
+        let mock = Arc::new(MockSpawner::new());
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+        let t1 = start_running(&broker, &mock, "child-1", 1, "pt-1").await;
+        let reports = broker
+            .get_tasks_status("parent-conn", Some(1), &[t1], StatusWait::Bounded(40))
+            .await;
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].status, TaskStatus::Running);
+    }
+
+    /// A task owned by a different parent reports `Unknown` in a batch — never
+    /// leaking another parent's task, just like the single-task path.
+    #[tokio::test]
+    async fn batch_status_scopes_to_parent() {
+        let mock = Arc::new(MockSpawner::new());
+        let broker =
+            DelegationBroker::new(mock.clone() as Arc<dyn ConnectionSpawner>, shallow_lookup());
+        enable_delegation(&broker).await;
+        let t1 = start_running(&broker, &mock, "child-1", 1, "pt-1").await;
+        let reports = broker
+            .get_tasks_status("other-parent", Some(2), &[t1], StatusWait::Immediate)
+            .await;
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].status, TaskStatus::Unknown);
     }
 
     // -- Task 4.5: error paths ---------------------------------------------

@@ -61,6 +61,32 @@ function poll(
   }
 }
 
+// A batch `{tasks:[...]}` MCP envelope, mirroring the content text into
+// structuredContent so the content-only host path is also exercised.
+function batchEnvelope(tasks: Record<string, unknown>[]): string {
+  return JSON.stringify({
+    content: [{ type: "text", text: JSON.stringify({ tasks }) }],
+    isError: false,
+    structuredContent: { tasks },
+  })
+}
+
+// A single `get_delegation_status` poll that fanned out over many task_ids.
+function batchPoll(
+  taskIds: string[],
+  tasks: Record<string, unknown>[],
+  opts: { state?: ToolCallState } = {}
+): AdaptedToolCallPart {
+  return {
+    type: "tool-call",
+    toolCallId: `batch-${seq++}`,
+    toolName: "get_delegation_status",
+    input: JSON.stringify({ task_ids: taskIds }),
+    state: opts.state ?? "output-available",
+    output: batchEnvelope(tasks),
+  }
+}
+
 describe("DelegationStatusGroupCard", () => {
   it("collapses N polls of one task into a single row with its final outcome", () => {
     renderWithIntl(
@@ -163,6 +189,119 @@ describe("DelegationStatusGroupCard", () => {
       screen.getByText("Waiting for task #bbbb2222 result")
     ).toBeInTheDocument()
     expect(screen.getAllByText("done")).toHaveLength(2)
+  })
+
+  it("expands a single batch poll into one row per task", () => {
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          batchPoll(
+            ["aaaa1111", "bbbb2222"],
+            [
+              { task_id: "aaaa1111", status: "completed", text: "A done" },
+              { task_id: "bbbb2222", status: "running", message: "Running." },
+            ]
+          ),
+        ]}
+      />
+    )
+    expect(
+      screen.getByText("Waiting for task #aaaa1111 result")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Waiting for task #bbbb2222 result")
+    ).toBeInTheDocument()
+    // A completed → done; B returned-running → neutral checked.
+    expect(screen.getByText("done")).toBeInTheDocument()
+    expect(screen.getByText("checked")).toBeInTheDocument()
+  })
+
+  it("groups a task across mixed batch + single polls and counts ×N", () => {
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          batchPoll(
+            ["aaaa1111", "bbbb2222"],
+            [
+              { task_id: "aaaa1111", status: "running", message: "Running." },
+              { task_id: "bbbb2222", status: "running", message: "Running." },
+            ]
+          ),
+          // A later single poll re-checks just task A, now completed.
+          poll("aaaa1111", {
+            output: envelope({
+              task_id: "aaaa1111",
+              status: "completed",
+              text: "A finished",
+            }),
+          }),
+        ]}
+      />
+    )
+    // Two rows; task A was checked twice (batch + single) → ×2 and completed.
+    expect(
+      screen.getByText("Waiting for task #aaaa1111 result")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Waiting for task #bbbb2222 result")
+    ).toBeInTheDocument()
+    expect(screen.getByText("×2")).toBeInTheDocument()
+    expect(screen.getByText("done")).toBeInTheDocument()
+  })
+
+  it("keeps two un-attributable reports in one batch poll as separate rows", () => {
+    // Neither the input nor the per-task reports carry a task_id — keyed by
+    // toolCallId:index, they must not collapse into one row.
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          {
+            type: "tool-call",
+            toolCallId: "batch-x",
+            toolName: "get_delegation_status",
+            input: null,
+            state: "output-available",
+            output: JSON.stringify({
+              content: [{ type: "text", text: "" }],
+              isError: false,
+              structuredContent: {
+                tasks: [
+                  { status: "completed", text: "first" },
+                  { status: "failed", error_code: "timeout" },
+                ],
+              },
+            }),
+          },
+        ]}
+      />
+    )
+    expect(screen.getAllByText("Waiting for task result")).toHaveLength(2)
+  })
+
+  it("renders a row per requested task while a batch poll is still in flight", () => {
+    // No output yet: the poll references two task_ids but parses to a single
+    // empty report. Both tasks must still appear (as spinners) — not just the
+    // first — so a pending fan-out doesn't hide siblings until it resolves.
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          {
+            type: "tool-call",
+            toolCallId: "inflight-batch",
+            toolName: "get_delegation_status",
+            input: JSON.stringify({ task_ids: ["aaaa1111", "bbbb2222"] }),
+            state: "input-available",
+            output: null,
+          },
+        ]}
+      />
+    )
+    expect(
+      screen.getByText("Waiting for task #aaaa1111 result")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Waiting for task #bbbb2222 result")
+    ).toBeInTheDocument()
   })
 
   it("shows the neutral 'checked' badge for a content-only returned-running poll", () => {

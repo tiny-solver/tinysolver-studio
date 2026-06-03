@@ -310,29 +310,39 @@ async fn build_tools_call_spawn(
                 input: arguments,
             };
             let round_trip = Box::pin(async move { client_round_trip(&socket, &req).await });
-            register_and_spawn(inflight, id, Some(external_handle), round_trip).await
+            register_and_spawn(
+                inflight,
+                id,
+                Some(external_handle),
+                round_trip,
+                render_task_report,
+            )
+            .await
         }
         "get_delegation_status" => {
-            let task_id = match arguments.get("task_id").and_then(|v| v.as_str()) {
-                Some(s) if !s.is_empty() => s.to_string(),
-                _ => {
-                    return LineAction::Respond(err(
-                        id,
-                        -32602,
-                        "get_delegation_status requires a non-empty string task_id",
-                    ));
-                }
-            };
+            // Accept a legacy single `task_id` and/or a `task_ids` array; the
+            // helper trims, de-dups (order-preserving) and merges both.
+            let task_ids = normalize_status_task_ids(&arguments);
+            if task_ids.is_empty() {
+                return LineAction::Respond(err(
+                    id,
+                    -32602,
+                    "get_delegation_status requires a non-empty string task_id \
+                     (or a non-empty task_ids array)",
+                ));
+            }
             let wait_ms = arguments.get("wait_ms").and_then(|v| v.as_u64());
             let req = BrokerStatusRequest {
                 token: ctx.token.clone(),
-                task_id,
+                task_ids,
                 wait_ms,
             };
             // No external_handle: canceling a status query only suppresses its
-            // response — it must not touch the task itself.
+            // response — it must not touch the task itself. The status round-trip
+            // returns a `{tasks:[..]}` envelope, so it renders via
+            // `render_status_result` (single → unchanged; batch → one row per task).
             let round_trip = Box::pin(async move { client_status_round_trip(&socket, &req).await });
-            register_and_spawn(inflight, id, None, round_trip).await
+            register_and_spawn(inflight, id, None, round_trip, render_status_result).await
         }
         "cancel_delegation" => {
             let task_id = match arguments.get("task_id").and_then(|v| v.as_str()) {
@@ -351,7 +361,7 @@ async fn build_tools_call_spawn(
             };
             let round_trip =
                 Box::pin(async move { client_cancel_task_round_trip(&socket, &req).await });
-            register_and_spawn(inflight, id, None, round_trip).await
+            register_and_spawn(inflight, id, None, round_trip, render_task_report).await
         }
         other => LineAction::Respond(err(id, -32602, format!("unknown tool: {other}"))),
     }
@@ -361,11 +371,17 @@ async fn build_tools_call_spawn(
 /// broker round-trip against the cancel signal. `external_handle` is `Some` only
 /// for `delegate_to_agent` (so a cancel during setup tears the child down);
 /// `None` for status/cancel queries (a cancel only suppresses the response).
+///
+/// `render` maps the broker's `BrokerResponse.outcome` into the MCP `tools/call`
+/// result body: `delegate_to_agent` / `cancel_delegation` pass
+/// [`render_task_report`] (a single report); `get_delegation_status` passes
+/// [`render_status_result`] (a `{tasks:[..]}` envelope → single or batch).
 async fn register_and_spawn(
     inflight: Arc<InflightCalls>,
     id: Value,
     external_handle: Option<String>,
     round_trip: futures_util::future::BoxFuture<'static, std::io::Result<BrokerResponse>>,
+    render: fn(&Value) -> Value,
 ) -> LineAction {
     let (cancel_tx, cancel_rx) = oneshot::channel();
     let id_key = request_id_key(&id);
@@ -397,7 +413,7 @@ async fn register_and_spawn(
             rt = round_trip => {
                 let _ = inflight_for_task.take(&id_key_for_task).await;
                 match rt {
-                    Ok(resp) => Some(ok(id_for_response, render_task_report(&resp.outcome))),
+                    Ok(resp) => Some(ok(id_for_response, render(&resp.outcome))),
                     Err(e) => Some(err(
                         id_for_response,
                         -32603,
@@ -492,9 +508,73 @@ pub async fn drain_and_cancel_all(
     }
 }
 
+/// Normalize the MCP `get_delegation_status` arguments into the wire `task_ids`
+/// list. Accepts a legacy single `task_id` string and/or a `task_ids` array,
+/// trims each, drops empties / non-strings, and de-duplicates while preserving
+/// first-seen order (the `task_ids` array first, then a lone `task_id`). Returns
+/// an empty Vec when nothing usable was supplied — the caller rejects that with
+/// `-32602`. No upper bound on the count: a fan-out can be arbitrarily wide.
+fn normalize_status_task_ids(arguments: &Value) -> Vec<String> {
+    fn push_id(out: &mut Vec<String>, seen: &mut std::collections::HashSet<String>, raw: &str) {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() && seen.insert(trimmed.to_string()) {
+            out.push(trimmed.to_string());
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(arr) = arguments.get("task_ids").and_then(|v| v.as_array()) {
+        for v in arr {
+            if let Some(s) = v.as_str() {
+                push_id(&mut out, &mut seen, s);
+            }
+        }
+    }
+    if let Some(s) = arguments.get("task_id").and_then(|v| v.as_str()) {
+        push_id(&mut out, &mut seen, s);
+    }
+    out
+}
+
+/// Render the `get_delegation_status` round-trip outcome (a `{ "tasks": [..] }`
+/// envelope) into an MCP `tools/call` result. A single-task batch renders
+/// EXACTLY like the historical single-report path ([`render_task_report`]) for
+/// full backward compatibility; a multi-task batch renders the whole set via
+/// [`render_batch_report`] so the LLM and the frontend both see every task.
+pub fn render_status_result(outcome: &Value) -> Value {
+    match outcome.get("tasks").and_then(|v| v.as_array()) {
+        Some(tasks) if tasks.len() == 1 => render_task_report(&tasks[0]),
+        Some(tasks) => render_batch_report(tasks),
+        // Defensive: a bare report (older / unexpected shape) — render as single.
+        None => render_task_report(outcome),
+    }
+}
+
+/// Render a multi-task `get_delegation_status` batch. The `content` text is the
+/// compact `{ "tasks": [..] }` JSON so hosts that persist only
+/// `CallToolResult.content` text (e.g. Claude Code) can still recover every
+/// task; `structuredContent` carries the same shape for hosts that keep it.
+/// `isError` is set only when EVERY task failed — a coarse signal; the frontend
+/// derives per-task badges from the structured reports, not from this flag.
+fn render_batch_report(tasks: &[Value]) -> Value {
+    let all_failed = !tasks.is_empty()
+        && tasks
+            .iter()
+            .all(|t| t.get("status").and_then(|v| v.as_str()) == Some("failed"));
+    let envelope = json!({ "tasks": tasks });
+    let text =
+        serde_json::to_string(&envelope).unwrap_or_else(|_| String::from("{\"tasks\":[]}"));
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": all_failed,
+        "structuredContent": envelope,
+    })
+}
+
 /// Map a serialized [`super::types::DelegationTaskReport`] into MCP `tools/call`
-/// result content. Shared by all three delegation tools. Kept separate so unit
-/// tests can assert the mapping without a real socket.
+/// result content. Shared by `delegate_to_agent` / `cancel_delegation` and the
+/// single-task `get_delegation_status` path. Kept separate so unit tests can
+/// assert the mapping without a real socket.
 ///
 /// The human-readable `content` text is the result for a `completed` task and
 /// the `message` (status note / failure reason) otherwise. `isError` is set
@@ -585,12 +665,14 @@ mod tests {
             .as_array()
             .unwrap();
         assert_eq!(agents.len(), 6);
-        // get_delegation_status takes task_id + wait_ms.
+        // get_delegation_status takes task_id (legacy single) + task_ids (batch)
+        // + wait_ms.
         let status = tools
             .iter()
             .find(|t| t["name"] == "get_delegation_status")
             .unwrap();
         assert!(status["inputSchema"]["properties"]["task_id"].is_object());
+        assert!(status["inputSchema"]["properties"]["task_ids"].is_object());
         assert!(status["inputSchema"]["properties"]["wait_ms"].is_object());
     }
 
@@ -796,5 +878,111 @@ mod tests {
             rendered["content"][0]["text"],
             "Result no longer cached; open child session 7 for the full output."
         );
+    }
+
+    // -- Batch get_delegation_status normalization + rendering -------------
+
+    #[tokio::test]
+    async fn get_delegation_status_accepts_legacy_task_id() {
+        let line = json!({
+            "jsonrpc": "2.0", "id": 20, "method": "tools/call",
+            "params": { "name": "get_delegation_status", "arguments": { "task_id": "abc" } }
+        })
+        .to_string();
+        assert!(matches!(dispatch_for_test(&line).await, LineAction::Spawn(_)));
+    }
+
+    #[tokio::test]
+    async fn get_delegation_status_accepts_task_ids_array() {
+        let line = json!({
+            "jsonrpc": "2.0", "id": 21, "method": "tools/call",
+            "params": { "name": "get_delegation_status", "arguments": { "task_ids": ["a", "b"] } }
+        })
+        .to_string();
+        assert!(matches!(dispatch_for_test(&line).await, LineAction::Spawn(_)));
+    }
+
+    #[tokio::test]
+    async fn get_delegation_status_empty_task_ids_rejected() {
+        for args in [
+            json!({ "task_ids": [] }),
+            json!({ "task_ids": ["  "] }),
+            json!({ "task_ids": [123] }),
+        ] {
+            let line = json!({
+                "jsonrpc": "2.0", "id": 22, "method": "tools/call",
+                "params": { "name": "get_delegation_status", "arguments": args }
+            })
+            .to_string();
+            let resp = unwrap_respond(dispatch_for_test(&line).await);
+            let e = resp.error.expect("empty/garbage task_ids must be rejected");
+            assert_eq!(e.code, -32602);
+            assert!(e.message.contains("task_id"));
+        }
+    }
+
+    #[test]
+    fn normalize_status_task_ids_merges_dedups_preserves_order() {
+        // task_ids first (trimmed, dropping "", non-string 5, and the duplicate
+        // "a"), then the legacy single task_id "c".
+        let args = json!({ "task_ids": [" a ", "b", "a", "", 5], "task_id": "c" });
+        assert_eq!(normalize_status_task_ids(&args), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn normalize_status_task_ids_empty_when_none_usable() {
+        assert!(normalize_status_task_ids(&json!({})).is_empty());
+        assert!(normalize_status_task_ids(&json!({ "task_ids": [] })).is_empty());
+        assert!(normalize_status_task_ids(&json!({ "task_id": "   " })).is_empty());
+    }
+
+    #[test]
+    fn render_status_result_single_matches_render_task_report() {
+        // A one-task batch renders byte-for-byte like the historical single path.
+        let report = json!({
+            "task_id": "t1", "status": "completed",
+            "child_conversation_id": 42, "text": "the result"
+        });
+        let envelope = json!({ "tasks": [report.clone()] });
+        assert_eq!(render_status_result(&envelope), render_task_report(&report));
+    }
+
+    #[test]
+    fn render_batch_report_carries_tasks_and_parseable_text() {
+        let envelope = json!({ "tasks": [
+            { "task_id": "t1", "status": "completed", "text": "r1" },
+            { "task_id": "t2", "status": "running", "message": "Running." },
+        ] });
+        let rendered = render_status_result(&envelope);
+        // structuredContent carries the whole batch.
+        assert_eq!(
+            rendered["structuredContent"]["tasks"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        // The content text is the compact {tasks:[..]} JSON, recoverable by hosts
+        // that persist only CallToolResult.content text (e.g. Claude Code).
+        let text = rendered["content"][0]["text"].as_str().unwrap();
+        let parsed: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed["tasks"][0]["task_id"], "t1");
+        assert_eq!(parsed["tasks"][1]["status"], "running");
+        // Mixed statuses → not all failed → not flagged as an error.
+        assert_eq!(rendered["isError"], false);
+    }
+
+    #[test]
+    fn render_batch_report_is_error_only_when_all_failed() {
+        let all_failed = json!({ "tasks": [
+            { "task_id": "t1", "status": "failed", "message": "x" },
+            { "task_id": "t2", "status": "failed", "message": "y" },
+        ] });
+        assert_eq!(render_status_result(&all_failed)["isError"], true);
+        let mixed = json!({ "tasks": [
+            { "task_id": "t1", "status": "failed" },
+            { "task_id": "t2", "status": "canceled" },
+        ] });
+        assert_eq!(render_status_result(&mixed)["isError"], false);
     }
 }
