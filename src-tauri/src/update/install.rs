@@ -632,6 +632,13 @@ fn replace_file(target: &Path, new_src: &Path) -> Result<(), AppCommandError> {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755));
     }
+    // Flush the staged file's contents before it is committed by the rename.
+    // The rename + directory fsync below make the *name* durable; without this
+    // a power loss could leave that name pointing at unflushed (empty/garbage)
+    // bytes — a committed-looking but corrupt binary the trial can't catch.
+    std::fs::File::open(&staged)
+        .and_then(|f| f.sync_all())
+        .map_err(AppCommandError::io)?;
 
     let bak = bak_path(target);
     let _ = std::fs::remove_file(&bak);
@@ -739,8 +746,16 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), AppCommandError> {
             copy_dir_recursive(&from, &to)?;
         } else {
             std::fs::copy(&from, &to).map_err(AppCommandError::io)?;
+            // Flush each file's contents before the staged tree is committed,
+            // so a power loss after the swap rename can't leave a
+            // committed-but-empty/garbage asset (e.g. a broken UI bundle).
+            std::fs::File::open(&to)
+                .and_then(|f| f.sync_all())
+                .map_err(AppCommandError::io)?;
         }
     }
+    // Flush this directory's entries so its children survive a crash too.
+    let _ = sync_dir(dst);
     Ok(())
 }
 
