@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "Waiting for task result",
         "cancelTask": "Canceling task {task}",
         "cancelTaskNoTask": "Canceling task",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "Previous result",
+        "nextResult": "Next result",
+        "noResultText": "No result captured for this check.",
         "status": {
           "starting": "starting",
           "running": "running",

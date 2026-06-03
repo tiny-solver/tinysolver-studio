@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "En attente du résultat de la tâche",
         "cancelTask": "Annulation de la tâche {task}",
         "cancelTaskNoTask": "Annulation de la tâche",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "Résultat précédent",
+        "nextResult": "Résultat suivant",
+        "noResultText": "Aucun résultat pour cette vérification.",
         "status": {
           "starting": "démarrage",
           "running": "en cours",

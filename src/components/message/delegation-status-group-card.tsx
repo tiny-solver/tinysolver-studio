@@ -37,7 +37,10 @@ interface TaskRow {
   taskId: string | null
   report: StatusReport
   badge: ResolvedBadge
-  pollCount: number
+  /** One entry per poll of this task, in chronological order (`null` where a
+   *  poll returned no text) — what the expanded row paginates, and whose
+   *  length is the `×N` header hint (the actual check count). */
+  results: (string | null)[]
 }
 
 interface ParsedPoll {
@@ -79,12 +82,16 @@ function buildTaskRows(polls: AdaptedToolCallPart[]): TaskRow[] {
       latest.poll.state,
       !!latest.poll.errorText
     )
+    // One entry per poll, in order — so `×N` and the pager total both equal the
+    // number of times this task was actually checked (`null` where a poll
+    // carried no result text; the row renders a placeholder for those).
+    const results = entry.polls.map(({ report }) => report.text)
     return {
       key,
       taskId: entry.taskId,
       report: latest.report,
       badge,
-      pollCount: entry.polls.length,
+      results,
     }
   })
 }
@@ -122,7 +129,7 @@ export function DelegationStatusGroupCard({ polls }: Props) {
             taskId={r.taskId}
             report={r.report}
             badge={r.badge}
-            pollCount={r.pollCount}
+            results={r.results}
           />
         </div>
       ))}

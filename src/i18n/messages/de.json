@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "Warte auf das Aufgabenergebnis",
         "cancelTask": "Aufgabe {task} wird abgebrochen",
         "cancelTaskNoTask": "Aufgabe wird abgebrochen",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "Vorheriges Ergebnis",
+        "nextResult": "Nächstes Ergebnis",
+        "noResultText": "Kein Ergebnis bei dieser Prüfung.",
         "status": {
           "starting": "startet",
           "running": "läuft",

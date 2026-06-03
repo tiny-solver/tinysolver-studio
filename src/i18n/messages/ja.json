@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "タスクの実行結果を待機中",
         "cancelTask": "タスク {task} をキャンセル中",
         "cancelTaskNoTask": "タスクをキャンセル中",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "前の結果",
+        "nextResult": "次の結果",
+        "noResultText": "このチェックでは結果がありません",
         "status": {
           "starting": "起動中",
           "running": "実行中",

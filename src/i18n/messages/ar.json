@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "في انتظار نتيجة المهمة",
         "cancelTask": "جارٍ إلغاء المهمة {task}",
         "cancelTaskNoTask": "جارٍ إلغاء المهمة",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "النتيجة السابقة",
+        "nextResult": "النتيجة التالية",
+        "noResultText": "لا توجد نتيجة في هذا الفحص.",
         "status": {
           "starting": "قيد البدء",
           "running": "قيد التشغيل",

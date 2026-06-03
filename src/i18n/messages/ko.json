@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "작업 실행 결과 대기 중",
         "cancelTask": "작업 {task} 취소 중",
         "cancelTaskNoTask": "작업 취소 중",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "이전 결과",
+        "nextResult": "다음 결과",
+        "noResultText": "이 확인에서는 결과가 없습니다",
         "status": {
           "starting": "시작 중",
           "running": "실행 중",

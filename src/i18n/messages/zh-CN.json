@@ -1888,6 +1888,10 @@
         "waitForResultNoTask": "等待任务执行结果",
         "cancelTask": "取消 {task} 任务",
         "cancelTaskNoTask": "取消任务",
+        "resultPageOf": "{current} / {total}",
+        "prevResult": "上一个结果",
+        "nextResult": "下一个结果",
+        "noResultText": "本次检查暂无结果",
         "status": {
           "starting": "启动中",
           "running": "运行中",
