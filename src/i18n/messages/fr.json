@@ -281,6 +281,14 @@
         "title": "Fermer tous les onglets de fichiers",
         "description": "Fermer tous les onglets de fichiers ouverts lorsque le panneau de fichiers est actif"
       },
+      "next_tab": {
+        "title": "Onglet suivant",
+        "description": "Passer à l'onglet de conversation ou de fichier suivant"
+      },
+      "prev_tab": {
+        "title": "Onglet précédent",
+        "description": "Passer à l'onglet de conversation ou de fichier précédent"
+      },
       "send_message": {
         "title": "Envoyer le message",
         "description": "Envoyer le message actuel dans la zone de saisie"

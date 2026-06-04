@@ -281,6 +281,14 @@
         "title": "모든 파일 탭 닫기",
         "description": "파일 패널이 활성 상태일 때 열린 모든 파일 탭을 닫습니다"
       },
+      "next_tab": {
+        "title": "다음 탭",
+        "description": "다음 대화 또는 파일 탭으로 전환"
+      },
+      "prev_tab": {
+        "title": "이전 탭",
+        "description": "이전 대화 또는 파일 탭으로 전환"
+      },
       "send_message": {
         "title": "메시지 보내기",
         "description": "입력창에서 현재 메시지를 전송"

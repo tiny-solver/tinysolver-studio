@@ -281,6 +281,14 @@
         "title": "Alle Dateitabs schließen",
         "description": "Schließt alle geöffneten Dateitabs, wenn der Dateibereich aktiv ist"
       },
+      "next_tab": {
+        "title": "Nächster Tab",
+        "description": "Zum nächsten Konversations- oder Datei-Tab wechseln"
+      },
+      "prev_tab": {
+        "title": "Vorheriger Tab",
+        "description": "Zum vorherigen Konversations- oder Datei-Tab wechseln"
+      },
       "send_message": {
         "title": "Nachricht senden",
         "description": "Die aktuelle Nachricht im Eingabefeld senden"
