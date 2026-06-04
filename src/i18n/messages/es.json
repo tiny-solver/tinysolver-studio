@@ -281,6 +281,14 @@
         "title": "Cerrar todas las pestañas de archivos",
         "description": "Cierra todas las pestañas de archivos abiertas cuando el panel de archivos está activo"
       },
+      "next_tab": {
+        "title": "Pestaña siguiente",
+        "description": "Cambiar a la siguiente pestaña de conversación o archivo"
+      },
+      "prev_tab": {
+        "title": "Pestaña anterior",
+        "description": "Cambiar a la pestaña anterior de conversación o archivo"
+      },
       "send_message": {
         "title": "Enviar mensaje",
         "description": "Enviar el mensaje actual en el cuadro de entrada"

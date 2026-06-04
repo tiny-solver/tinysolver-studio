@@ -281,6 +281,14 @@
         "title": "Fechar todas as abas de arquivo",
         "description": "Fecha todas as abas de arquivo abertas quando o painel de arquivos está ativo"
       },
+      "next_tab": {
+        "title": "Próxima aba",
+        "description": "Mudar para a próxima aba de conversa ou arquivo"
+      },
+      "prev_tab": {
+        "title": "Aba anterior",
+        "description": "Mudar para a aba anterior de conversa ou arquivo"
+      },
       "send_message": {
         "title": "Enviar mensagem",
         "description": "Enviar a mensagem atual na caixa de entrada"
