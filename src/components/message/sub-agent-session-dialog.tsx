@@ -112,11 +112,27 @@ function useChildLiveBridge(
   childConversationId: number,
   childConnState: ConnectionState | undefined
 ) {
-  const { setLiveMessage, completeTurn, removeConversation } =
+  const { setLiveMessage, completeTurn, syncTurnMetadata, removeConversation } =
     useConversationRuntime()
 
   const connStatus = childConnState?.status ?? null
   const liveMessage = childConnState?.liveMessage ?? null
+
+  // Backfill token usage / duration / model into the promoted reply once the
+  // child's persisted transcript catches up. `completeTurn` lands the streamed
+  // reply WITHOUT those fields — `buildStreamingTurnsFromLiveMessage` carries no
+  // usage data; it comes from the DB parser — so without this the child's
+  // post-stream stats row stays blank. Mirrors `conversation-detail-panel.tsx`:
+  // a delayed, self-retrying DB roundtrip that PATCHes metadata onto the
+  // existing `localTurns` (it never replaces them, so the kept live reply is not
+  // blanked, unlike a `refetchDetail`). Cancel the previous sync before starting
+  // a new one, and on dialog close, via the ref.
+  const syncCancelRef = useRef<(() => void) | null>(null)
+  const startMetadataSync = useCallback(() => {
+    if (childConversationId <= 0) return
+    syncCancelRef.current?.()
+    syncCancelRef.current = syncTurnMetadata(childConversationId)
+  }, [childConversationId, syncTurnMetadata])
 
   const connStatusRef = useRef(connStatus)
   useEffect(() => {
@@ -139,7 +155,14 @@ function useChildLiveBridge(
     if (connStatus === "prompting") everPromptingRef.current = true
     if (!wasPrompting || connStatus === "prompting") return
     completeTurn(childConversationId, liveMessage)
-  }, [connStatus, liveMessage, childConversationId, completeTurn])
+    startMetadataSync()
+  }, [
+    connStatus,
+    liveMessage,
+    childConversationId,
+    completeTurn,
+    startMetadataSync,
+  ])
 
   useEffect(() => {
     if (liveMessage != null) {
@@ -178,18 +201,23 @@ function useChildLiveBridge(
     adoptedRef.current = true
     setLiveMessage(childConversationId, liveMessage, true)
     completeTurn(childConversationId, liveMessage)
+    startMetadataSync()
   }, [
     connStatus,
     liveMessage,
     childConversationId,
     setLiveMessage,
     completeTurn,
+    startMetadataSync,
   ])
 
-  // Full teardown on dialog close: drop the runtime session so the next
-  // open starts from a fresh `fetchDetail` instead of stale bridged state.
+  // Full teardown on dialog close: cancel any in-flight metadata sync, then
+  // drop the runtime session so the next open starts from a fresh `fetchDetail`
+  // instead of stale bridged state.
   useEffect(() => {
     return () => {
+      syncCancelRef.current?.()
+      syncCancelRef.current = null
       removeConversation(childConversationId)
     }
   }, [childConversationId, removeConversation])

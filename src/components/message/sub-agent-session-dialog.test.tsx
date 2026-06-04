@@ -17,6 +17,10 @@ const mockSetLiveOwnsActiveTurn = vi.fn()
 const mockGetSession = vi.fn()
 const mockGetTimelineTurns = vi.fn(() => [])
 const mockRespondPermission = vi.fn()
+// syncTurnMetadata returns a cancel function; hand back a spy so tests can
+// assert both that the backfill is kicked off and that it's cancelled on close.
+const mockSyncCancel = vi.fn()
+const mockSyncTurnMetadata = vi.fn(() => mockSyncCancel)
 
 vi.mock("@/contexts/conversation-runtime-context", async () => {
   const actual = await vi.importActual<
@@ -33,8 +37,8 @@ vi.mock("@/contexts/conversation-runtime-context", async () => {
       setLiveOwnsActiveTurn: mockSetLiveOwnsActiveTurn,
       getSession: mockGetSession,
       getTimelineTurns: mockGetTimelineTurns,
+      syncTurnMetadata: mockSyncTurnMetadata,
       // Members that the body / list view may call but the bridge doesn't.
-      syncTurnMetadata: vi.fn(),
       appendOptimisticTurn: vi.fn(),
       setExternalId: vi.fn(),
       setSyncState: vi.fn(),
@@ -184,6 +188,9 @@ describe("SubAgentSessionDialog", () => {
     mockGetSession.mockReset()
     mockGetTimelineTurns.mockClear()
     mockRespondPermission.mockReset()
+    mockSyncCancel.mockReset()
+    mockSyncTurnMetadata.mockClear()
+    mockSyncTurnMetadata.mockReturnValue(mockSyncCancel)
     mockChildConnection = undefined
     storeCallbacks = []
     mockDetailState = {
@@ -476,6 +483,86 @@ describe("SubAgentSessionDialog", () => {
       />
     )
     expect(mockCompleteTurn).not.toHaveBeenCalled()
+  })
+
+  it("kicks off syncTurnMetadata after the streaming → settled transition so the reply's token stats backfill", () => {
+    const liveMessage = {
+      id: "live-1",
+      role: "assistant" as const,
+      content: [],
+      startedAt: Date.now(),
+    }
+    mockChildConnection = makeConnState({ status: "prompting", liveMessage })
+    renderWithIntl(
+      <SubAgentSessionDialog
+        open
+        onOpenChange={() => {}}
+        childConversationId={99}
+        childConnectionId="c1"
+        agentType="codex"
+      />
+    )
+    // No backfill while still streaming — only after the turn settles.
+    expect(mockSyncTurnMetadata).not.toHaveBeenCalled()
+
+    mockChildConnection = makeConnState({ status: "connected", liveMessage })
+    act(() => {
+      notifyStore()
+    })
+    // completeTurn promotes the reply WITHOUT usage/duration/model (those come
+    // from the DB parser); syncTurnMetadata is the delayed roundtrip that
+    // patches them in so the post-stream stats row fills.
+    expect(mockSyncTurnMetadata).toHaveBeenCalledWith(99)
+  })
+
+  it("kicks off syncTurnMetadata when adopting a retained reply on reopen-after-completion", () => {
+    const liveMessage = {
+      id: "live-1",
+      role: "assistant" as const,
+      content: [],
+      startedAt: Date.now(),
+    }
+    // Reopened onto an already-settled child still holding its final reply.
+    mockChildConnection = makeConnState({ status: "connected", liveMessage })
+    renderWithIntl(
+      <SubAgentSessionDialog
+        open
+        onOpenChange={() => {}}
+        childConversationId={99}
+        childConnectionId="c1"
+        agentType="codex"
+      />
+    )
+    // The adopt path promotes the retained reply, so its stats must backfill too.
+    expect(mockSyncTurnMetadata).toHaveBeenCalledWith(99)
+  })
+
+  it("cancels the in-flight metadata sync when the dialog closes", () => {
+    const liveMessage = {
+      id: "live-1",
+      role: "assistant" as const,
+      content: [],
+      startedAt: Date.now(),
+    }
+    mockChildConnection = makeConnState({ status: "prompting", liveMessage })
+    const { unmount } = renderWithIntl(
+      <SubAgentSessionDialog
+        open
+        onOpenChange={() => {}}
+        childConversationId={99}
+        childConnectionId="c1"
+        agentType="codex"
+      />
+    )
+    mockChildConnection = makeConnState({ status: "connected", liveMessage })
+    act(() => {
+      notifyStore()
+    })
+    // Sync started → its cancel handle must run on close so a late DB roundtrip
+    // can't patch a session that's been torn down.
+    expect(mockSyncCancel).not.toHaveBeenCalled()
+    unmount()
+    expect(mockSyncCancel).toHaveBeenCalled()
   })
 
   it("does not call setLiveMessage while the dialog is closed", () => {
