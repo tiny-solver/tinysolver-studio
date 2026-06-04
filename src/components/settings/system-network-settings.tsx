@@ -7,6 +7,7 @@ import {
   Languages,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Wifi,
 } from "lucide-react"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,6 +17,16 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
 import { useAppI18n } from "@/components/i18n-provider"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -36,14 +47,17 @@ import type { AppLocale } from "@/lib/types"
 import {
   checkAppUpdate,
   closeAppUpdate,
+  confirmRollbackVersion,
   getCurrentAppVersion,
   getRunningServerVersion,
+  getServerUpdateStatus,
   installAppUpdate,
   normalizeAppUpdateError,
   performServerUpdate,
   readServerVersionStrict,
   relaunchApp,
   restartServer,
+  rollbackServer,
   subscribeServerUpdateProgress,
   usesTauriUpdater,
   waitForServerHealthy,
@@ -120,6 +134,12 @@ export function SystemNetworkSettings() {
   // Non-null while the server is restarting after an upgrade: the seconds
   // remaining on the countdown before we start polling /health.
   const [restartCountdown, setRestartCountdown] = useState<number | null>(null)
+  // Whether a previous version is kept on the server (as `.bak`) and can be
+  // restored — drives the manual "roll back" affordance, which covers
+  // regressions the trial-window auto-rollback can't (they surface later).
+  const [serverRollbackAvailable, setServerRollbackAvailable] = useState(false)
+  const [rollingBack, setRollingBack] = useState(false)
+  const [rollbackConfirmOpen, setRollbackConfirmOpen] = useState(false)
 
   const [appLanguage, setAppLanguage] = useState<LanguageSelectValue>(
     languageSettings.mode === "system" ? "system" : languageSettings.language
@@ -207,6 +227,9 @@ export function SystemNetworkSettings() {
     })
     checkForUpdates().catch((err) => {
       console.error("[Settings] auto check update failed:", err)
+    })
+    loadServerUpdateStatus().catch((err) => {
+      console.error("[Settings] load server update status failed:", err)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -302,6 +325,7 @@ export function SystemNetworkSettings() {
       // handles installs and these fields aren't present).
       setServerSelfUpdate(result.selfUpdateSupported ?? false)
       setServerRuntime(result.runtime)
+      setServerRollbackAvailable(result.rollbackAvailable ?? false)
       if (typeof result.restartDelayMs === "number") {
         setRestartDelayMs(result.restartDelayMs)
       }
@@ -324,6 +348,24 @@ export function SystemNetworkSettings() {
       setCheckingUpdate(false)
     }
   }, [availableUpdate, formatUpdateError, t])
+
+  // Populate the local self-update capability (incl. rollback availability)
+  // independent of the manifest-dependent update check, so the rollback button
+  // stays reachable even when the update source is down. No-op on a genuine
+  // local desktop window (it updates via the Tauri plugin).
+  const loadServerUpdateStatus = useCallback(async () => {
+    try {
+      const status = await getServerUpdateStatus()
+      if (!status) return
+      setCurrentVersion(status.currentVersion)
+      setServerSelfUpdate(status.selfUpdateSupported)
+      setServerRollbackAvailable(status.rollbackAvailable)
+      setServerRuntime(status.runtime)
+      setRestartDelayMs(status.restartDelayMs)
+    } catch (err) {
+      console.error("[Settings] load server update status failed:", err)
+    }
+  }, [])
 
   const installUpdate = useCallback(async () => {
     if (!availableUpdate) return
@@ -373,6 +415,23 @@ export function SystemNetworkSettings() {
       setDownloadProgress(null)
     }
   }, [availableUpdate, formatUpdateError, t])
+
+  // Drive the visible "restarting in N…" countdown over the relaunch delay,
+  // then resolve so the caller can start polling /health. Shared by the
+  // upgrade and rollback flows, which both restart the server.
+  const runRestartCountdown = useCallback((delayMs: number) => {
+    const totalWaitMs = delayMs + 1000
+    const start = Date.now()
+    return new Promise<void>((resolve) => {
+      const tick = () => {
+        const remaining = Math.max(0, totalWaitMs - (Date.now() - start))
+        setRestartCountdown(Math.ceil(remaining / 1000))
+        if (remaining <= 0) resolve()
+        else setTimeout(tick, 250)
+      }
+      tick()
+    })
+  }, [])
 
   // Server / Docker in-place upgrade: download+verify+swap on the server,
   // ask it to restart, then count down and poll /health before reloading.
@@ -437,17 +496,7 @@ export function SystemNetworkSettings() {
       const delayMs = result.restartDelayMs || restartDelayMs
 
       // Phase 1: visible countdown over the configured relaunch delay.
-      const totalWaitMs = delayMs + 1000
-      const start = Date.now()
-      await new Promise<void>((resolve) => {
-        const tick = () => {
-          const remaining = Math.max(0, totalWaitMs - (Date.now() - start))
-          setRestartCountdown(Math.ceil(remaining / 1000))
-          if (remaining <= 0) resolve()
-          else setTimeout(tick, 250)
-        }
-        tick()
-      })
+      await runRestartCountdown(delayMs)
 
       // Phase 2: poll until the new process answers (or give up).
       const healthy = await waitForServerHealthy({
@@ -532,8 +581,98 @@ export function SystemNetworkSettings() {
       setInstallingUpdate(false)
       setDownloadProgress(null)
       setRestartCountdown(null)
+      // A failed attempt may have left a fresh `.bak`; refresh the local
+      // rollback availability (success reloads the page anyway).
+      void loadServerUpdateStatus()
     }
-  }, [availableUpdate, currentVersion, formatUpdateError, restartDelayMs, t])
+  }, [
+    availableUpdate,
+    currentVersion,
+    formatUpdateError,
+    loadServerUpdateStatus,
+    restartDelayMs,
+    runRestartCountdown,
+    t,
+  ])
+
+  // Manual rollback: restore the previous bundle (`.bak`) the server kept and
+  // restart onto it. Covers regressions that surface after the auto-rollback
+  // trial window has closed, where the supervisor will no longer step in.
+  const runServerRollback = useCallback(async () => {
+    setRollingBack(true)
+    setUpdateError(null)
+    setRestartCountdown(null)
+
+    try {
+      // The version running now — the one we are rolling back *from*. A
+      // successful rollback brings the server back on a different (previous)
+      // version, so we treat "the running version changed off this" as the
+      // success signal. Read it live and abort if the server is unreachable.
+      let fromVersion: string | null = null
+      let reachable = false
+      for (let i = 0; i < 3; i++) {
+        try {
+          fromVersion = await readServerVersionStrict()
+          reachable = true
+          break
+        } catch {
+          await new Promise<void>((r) => setTimeout(r, 1000))
+        }
+      }
+      if (!reachable) {
+        setUpdateError(t("serverUnreachable"))
+        toast.error(t("serverUnreachable"))
+        return
+      }
+
+      const result = await rollbackServer()
+      // Trigger the relaunch; the server responds before it exits/re-execs.
+      await restartServer()
+      const delayMs = result.restartDelayMs || restartDelayMs
+
+      await runRestartCountdown(delayMs)
+
+      const healthy = await waitForServerHealthy({
+        timeoutMs: 90_000,
+        intervalMs: 1500,
+      })
+      if (!healthy) {
+        setUpdateError(t("restartTimeout"))
+        toast.error(t("restartTimeout"))
+        return
+      }
+
+      // Confirm the rollback landed. The restored `.bak` is a strictly-older
+      // release, so the running version should move off `fromVersion` — but an
+      // older target may omit the version from `/health`, which still counts as
+      // success (the server is healthy and the previous bundle is restored).
+      // Only a version that stays equal to `fromVersion` is a failed rollback.
+      const outcome = await confirmRollbackVersion(fromVersion)
+      if (outcome === "unchanged") {
+        setUpdateError(t("rollbackFailed"))
+        toast.error(t("rollbackFailed"))
+        return
+      }
+      if (outcome === "unreachable") {
+        setUpdateError(t("restartTimeout"))
+        toast.error(t("restartTimeout"))
+        return
+      }
+
+      toast.success(t("rollbackSuccess"))
+      window.location.reload()
+    } catch (err) {
+      setUpdateError(toErrorMessage(err))
+      toast.error(t("rollbackFailed"))
+      console.error("[Settings] server rollback failed:", err)
+    } finally {
+      setRollingBack(false)
+      setRestartCountdown(null)
+      // Refresh rollback availability: a single-generation `.bak` is consumed
+      // by the rollback, so the button should disappear after a successful one.
+      void loadServerUpdateStatus()
+    }
+  }, [loadServerUpdateStatus, restartDelayMs, runRestartCountdown, t])
 
   if (loading) {
     return (
@@ -621,7 +760,7 @@ export function SystemNetworkSettings() {
                   <Button
                     size="sm"
                     onClick={runServerUpgrade}
-                    disabled={installingUpdate}
+                    disabled={installingUpdate || rollingBack}
                   >
                     {installingUpdate ? (
                       <>
@@ -653,7 +792,7 @@ export function SystemNetworkSettings() {
                   key="check-update"
                   size="sm"
                   onClick={checkForUpdates}
-                  disabled={installingUpdate}
+                  disabled={installingUpdate || rollingBack}
                   className="w-[9.5rem] justify-center transition-none"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -709,6 +848,34 @@ export function SystemNetworkSettings() {
                   : t("waitingForServer")}
               </p>
             )}
+
+            {serverSelfUpdate &&
+              serverRollbackAvailable &&
+              !usesTauriUpdater() && (
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <span className="text-muted-foreground/80 text-[11px] leading-5">
+                    {t("rollbackDescription")}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRollbackConfirmOpen(true)}
+                    disabled={installingUpdate || rollingBack}
+                  >
+                    {rollingBack ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        {t("rollingBack")}
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        {t("rollbackButton")}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
 
             {availableUpdate &&
               serverSelfUpdate &&
@@ -881,6 +1048,38 @@ export function SystemNetworkSettings() {
             </Select>
           </div>
         </section>
+
+        <AlertDialog
+          open={rollbackConfirmOpen}
+          onOpenChange={(open) => {
+            if (!rollingBack) setRollbackConfirmOpen(open)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("rollbackConfirmTitle")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("rollbackConfirmDescription")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={rollingBack}>
+                {t("rollbackCancel")}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault()
+                  setRollbackConfirmOpen(false)
+                  runServerRollback().catch((err) => {
+                    console.error("[Settings] server rollback failed:", err)
+                  })
+                }}
+              >
+                {t("rollbackConfirm")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </ScrollArea>
   )

@@ -35,6 +35,18 @@ export interface AppUpdateCheckResult {
   rollbackAvailable?: boolean
 }
 
+// Local-only server self-update status, separate from {@link checkAppUpdate}
+// (which contacts the release source). Mirrors the backend `app_update_status`
+// handler.
+export interface ServerUpdateStatus {
+  currentVersion: string
+  selfUpdateSupported: boolean
+  capability: ServerUpdateCapability
+  runtime: string
+  restartDelayMs: number
+  rollbackAvailable: boolean
+}
+
 export interface ServerUpdateProgress {
   phase: "downloading" | "verifying" | "extracting" | "swapping"
   downloaded: number
@@ -68,9 +80,20 @@ export interface AppUpdateErrorInfo {
 
 export async function getCurrentAppVersion(): Promise<string> {
   if (!usesTauriUpdater()) {
-    const result =
-      await getTransport().call<AppUpdateCheckResult>("check_app_update")
-    return result.currentVersion
+    // Read the running version from a LOCAL source, never the
+    // manifest-dependent update check: the settings page loads this alongside
+    // unrelated local state (proxy settings). This must fail OPEN — neither a
+    // release-source outage nor an older server missing /app_update_status
+    // (a newer desktop talking to an older remote server) may fail the load.
+    try {
+      const status = await getServerUpdateStatus()
+      if (status?.currentVersion) return status.currentVersion
+    } catch {
+      // Older server without the status route, or a transient failure — fall
+      // through to /health (present on every server build), never to the
+      // manifest check.
+    }
+    return (await getRunningServerVersion()) ?? "unknown"
   }
   try {
     const { getVersion } = await import("@tauri-apps/api/app")
@@ -88,6 +111,18 @@ export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
   const { check } = await import("@tauri-apps/plugin-updater")
   const [currentVersion, update] = await Promise.all([getVersion(), check()])
   return { currentVersion, update }
+}
+
+/**
+ * Local-only self-update status (capability + rollback availability) that does
+ * NOT contact the release source. Drives the manual rollback affordance so it
+ * stays reachable when the update manifest is unreachable (proxy/outage/air-gap)
+ * — `rollback_app` is entirely local. Returns null for a genuine local desktop
+ * window (no server to query; it updates via the Tauri plugin).
+ */
+export async function getServerUpdateStatus(): Promise<ServerUpdateStatus | null> {
+  if (usesTauriUpdater()) return null
+  return getTransport().call<ServerUpdateStatus>("app_update_status")
 }
 
 export async function installAppUpdate(
@@ -195,6 +230,42 @@ export async function readServerVersionStrict(): Promise<string | null> {
     { timeoutMs: 4000 }
   )
   return res?.version ?? null
+}
+
+export type RollbackOutcome = "rolled-back" | "unchanged" | "unreachable"
+
+/**
+ * After a rollback restart (the server is already answering `/health`), confirm
+ * it came back on a *different* (previous) version than the one we rolled back
+ * from. The rollback target can be an older build whose `/health` omits the
+ * version — that still counts as rolled back: the server is up and the backend
+ * has restored the previous bundle, so a missing version (strict-read resolves
+ * null) must NOT be mistaken for a failed restart. Only a version that stays
+ * equal to `fromVersion` is `"unchanged"` (rollback didn't take); only a server
+ * we can never read across all attempts is `"unreachable"`. Polls to ride out
+ * the relaunch.
+ */
+export async function confirmRollbackVersion(
+  fromVersion: string | null,
+  opts?: { attempts?: number; intervalMs?: number }
+): Promise<RollbackOutcome> {
+  const attempts = opts?.attempts ?? 5
+  const interval = opts?.intervalMs ?? 1500
+  let everRead = false
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const landed = await readServerVersionStrict()
+      everRead = true
+      // null = healthy but versionless (older target); any value !== the
+      // pre-rollback version = moved off it. Both mean the rollback landed.
+      if (landed === null || landed !== fromVersion) return "rolled-back"
+      // landed === fromVersion: not yet (or rollback didn't take) — retry.
+    } catch {
+      // Briefly unreachable during the relaunch — retry.
+    }
+    if (i < attempts - 1) await sleep(interval)
+  }
+  return everRead ? "unchanged" : "unreachable"
 }
 
 export async function closeAppUpdate(
