@@ -431,7 +431,8 @@ describe("DelegatedSubThread (async ack semantics)", () => {
     // Live wire: only the CallToolResult content text is forwarded.
     const output =
       "Delegated; the sub-agent is running in the background. " +
-      "task_id=abcdef12-3456-7890. Call get_delegation_status with this task_id."
+      "task_id=abcdef12-3456-7890. Call get_delegation_status with this id in " +
+      "the task_ids array."
     renderWithIntl(
       <DelegatedSubThread
         parentToolUseId="pt-1"

@@ -320,17 +320,23 @@ async fn build_tools_call_spawn(
             .await
         }
         "get_delegation_status" => {
-            // Accept a legacy single `task_id` and/or a `task_ids` array; the
-            // helper trims, de-dups (order-preserving) and merges both.
-            let task_ids = normalize_status_task_ids(&arguments);
-            if task_ids.is_empty() {
-                return LineAction::Respond(err(
-                    id,
-                    -32602,
-                    "get_delegation_status requires a non-empty string task_id \
-                     (or a non-empty task_ids array)",
-                ));
-            }
+            // Normalize the `task_ids` array: trim, drop empty/whitespace
+            // entries, de-dup (order-preserving). A non-string entry violates the
+            // schema's `items: string` contract and is rejected outright (rather
+            // than silently polling a subset); an all-empty / missing array maps
+            // to `Ok(empty)`, rejected below.
+            let task_ids = match normalize_status_task_ids(&arguments) {
+                Ok(ids) if !ids.is_empty() => ids,
+                Ok(_) => {
+                    return LineAction::Respond(err(
+                        id,
+                        -32602,
+                        "get_delegation_status requires a non-empty task_ids array \
+                         (one or more task ids)",
+                    ));
+                }
+                Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
+            };
             let wait_ms = arguments.get("wait_ms").and_then(|v| v.as_u64());
             let req = BrokerStatusRequest {
                 token: ctx.token.clone(),
@@ -340,7 +346,8 @@ async fn build_tools_call_spawn(
             // No external_handle: canceling a status query only suppresses its
             // response — it must not touch the task itself. The status round-trip
             // returns a `{tasks:[..]}` envelope, so it renders via
-            // `render_status_result` (single → unchanged; batch → one row per task).
+            // `render_status_result` — uniformly one `{tasks:[..]}` entry per id,
+            // whether the poll asked for a single id or a whole fan-out.
             let round_trip = Box::pin(async move { client_status_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_status_result).await
         }
@@ -375,7 +382,7 @@ async fn build_tools_call_spawn(
 /// `render` maps the broker's `BrokerResponse.outcome` into the MCP `tools/call`
 /// result body: `delegate_to_agent` / `cancel_delegation` pass
 /// [`render_task_report`] (a single report); `get_delegation_status` passes
-/// [`render_status_result`] (a `{tasks:[..]}` envelope → single or batch).
+/// [`render_status_result`] (always a `{tasks:[..]}` envelope, one entry per id).
 async fn register_and_spawn(
     inflight: Arc<InflightCalls>,
     id: Value,
@@ -509,53 +516,60 @@ pub async fn drain_and_cancel_all(
 }
 
 /// Normalize the MCP `get_delegation_status` arguments into the wire `task_ids`
-/// list. Accepts a legacy single `task_id` string and/or a `task_ids` array,
-/// trims each, drops empties / non-strings, and de-duplicates while preserving
-/// first-seen order (the `task_ids` array first, then a lone `task_id`). Returns
-/// an empty Vec when nothing usable was supplied — the caller rejects that with
-/// `-32602`. No upper bound on the count: a fan-out can be arbitrarily wide.
-fn normalize_status_task_ids(arguments: &Value) -> Vec<String> {
-    fn push_id(out: &mut Vec<String>, seen: &mut std::collections::HashSet<String>, raw: &str) {
-        let trimmed = raw.trim();
+/// list. Reads the `task_ids` array, trims each entry, drops empty / whitespace
+/// strings, and de-duplicates while preserving first-seen order. A non-string
+/// entry violates the schema's `items: string` contract, so the whole call is
+/// rejected (`Err`) instead of silently polling a subset — otherwise a malformed
+/// `{"task_ids":[123,"abc"]}` would quietly resolve to just `abc`. `Ok(empty)`
+/// means nothing usable was supplied (missing array, or all empty/whitespace);
+/// the caller rejects both `Err` and `Ok(empty)` with `-32602`. Empty strings are
+/// dropped (not rejected): `items` carries no `minLength`, so `""` satisfies the
+/// schema and is treated as a formatting nicety. No upper bound on the count: a
+/// fan-out can be arbitrarily wide.
+fn normalize_status_task_ids(arguments: &Value) -> Result<Vec<String>, String> {
+    let Some(arr) = arguments.get("task_ids").and_then(|v| v.as_array()) else {
+        return Ok(Vec::new());
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for v in arr {
+        let Some(s) = v.as_str() else {
+            return Err(
+                "get_delegation_status task_ids must contain only string task ids".to_string(),
+            );
+        };
+        let trimmed = s.trim();
         if !trimmed.is_empty() && seen.insert(trimmed.to_string()) {
             out.push(trimmed.to_string());
         }
     }
-    let mut out: Vec<String> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    if let Some(arr) = arguments.get("task_ids").and_then(|v| v.as_array()) {
-        for v in arr {
-            if let Some(s) = v.as_str() {
-                push_id(&mut out, &mut seen, s);
-            }
-        }
-    }
-    if let Some(s) = arguments.get("task_id").and_then(|v| v.as_str()) {
-        push_id(&mut out, &mut seen, s);
-    }
-    out
+    Ok(out)
 }
 
-/// Render the `get_delegation_status` round-trip outcome (a `{ "tasks": [..] }`
-/// envelope) into an MCP `tools/call` result. A single-task batch renders
-/// EXACTLY like the historical single-report path ([`render_task_report`]) for
-/// full backward compatibility; a multi-task batch renders the whole set via
-/// [`render_batch_report`] so the LLM and the frontend both see every task.
+/// Render the `get_delegation_status` round-trip outcome (always a
+/// `{ "tasks": [..] }` envelope from the broker) into an MCP `tools/call`
+/// result. EVERY poll renders through [`render_batch_report`] — a single id and
+/// a fan-out take the SAME path — so the shape the LLM and frontend see is
+/// uniform: a `{ "tasks": [..] }` object with one entry per requested id (one
+/// entry for a single id), each carrying its `task_id` + `status`. A bare report
+/// with no `tasks` array (older / unexpected shape) is wrapped as a one-element
+/// batch so the output stays uniform.
 pub fn render_status_result(outcome: &Value) -> Value {
     match outcome.get("tasks").and_then(|v| v.as_array()) {
-        Some(tasks) if tasks.len() == 1 => render_task_report(&tasks[0]),
         Some(tasks) => render_batch_report(tasks),
-        // Defensive: a bare report (older / unexpected shape) — render as single.
-        None => render_task_report(outcome),
+        None => render_batch_report(std::slice::from_ref(outcome)),
     }
 }
 
-/// Render a multi-task `get_delegation_status` batch. The `content` text is the
-/// compact `{ "tasks": [..] }` JSON so hosts that persist only
-/// `CallToolResult.content` text (e.g. Claude Code) can still recover every
-/// task; `structuredContent` carries the same shape for hosts that keep it.
-/// `isError` is set only when EVERY task failed — a coarse signal; the frontend
-/// derives per-task badges from the structured reports, not from this flag.
+/// Render a `get_delegation_status` result as a `{ "tasks": [..] }` batch — the
+/// single rendering path for every poll, whether it carries one report or many.
+/// The `content` text is the compact `{ "tasks": [..] }` JSON so hosts that
+/// persist only `CallToolResult.content` text (e.g. Claude Code) can still
+/// recover every task; `structuredContent` carries the same shape for hosts that
+/// keep it. `isError` is set only when EVERY task failed — a coarse signal (a
+/// lone failed task therefore flags `isError`, matching the old single-report
+/// behavior); the frontend derives per-task badges from the structured reports,
+/// not from this flag.
 fn render_batch_report(tasks: &[Value]) -> Value {
     let all_failed = !tasks.is_empty()
         && tasks
@@ -572,9 +586,10 @@ fn render_batch_report(tasks: &[Value]) -> Value {
 }
 
 /// Map a serialized [`super::types::DelegationTaskReport`] into MCP `tools/call`
-/// result content. Shared by `delegate_to_agent` / `cancel_delegation` and the
-/// single-task `get_delegation_status` path. Kept separate so unit tests can
-/// assert the mapping without a real socket.
+/// result content. Shared by `delegate_to_agent` and `cancel_delegation`, which
+/// each resolve to a single report; `get_delegation_status` no longer uses this
+/// path — it always renders via [`render_status_result`] / [`render_batch_report`].
+/// Kept separate so unit tests can assert the mapping without a real socket.
 ///
 /// The human-readable `content` text is the result for a `completed` task and
 /// the `message` (status note / failure reason) otherwise. `isError` is set
@@ -665,19 +680,21 @@ mod tests {
             .as_array()
             .unwrap();
         assert_eq!(agents.len(), 6);
-        // get_delegation_status takes task_id (legacy single) + task_ids (batch)
-        // + wait_ms.
+        // get_delegation_status takes a single id param — task_ids (required) —
+        // plus wait_ms. The legacy single `task_id` param is gone.
         let status = tools
             .iter()
             .find(|t| t["name"] == "get_delegation_status")
             .unwrap();
-        assert!(status["inputSchema"]["properties"]["task_id"].is_object());
+        assert!(status["inputSchema"]["properties"]["task_id"].is_null());
         assert!(status["inputSchema"]["properties"]["task_ids"].is_object());
         assert!(status["inputSchema"]["properties"]["wait_ms"].is_object());
+        let required = status["inputSchema"]["required"].as_array().unwrap();
+        assert!(required.iter().any(|v| v == "task_ids"));
     }
 
     #[tokio::test]
-    async fn get_delegation_status_without_task_id_rejected() {
+    async fn get_delegation_status_without_task_ids_rejected() {
         let line = r#"{
             "jsonrpc":"2.0",
             "id":11,
@@ -687,7 +704,7 @@ mod tests {
         let resp = unwrap_respond(dispatch_for_test(line).await);
         let e = resp.error.unwrap();
         assert_eq!(e.code, -32602);
-        assert!(e.message.contains("task_id"));
+        assert!(e.message.contains("task_ids"));
     }
 
     #[tokio::test]
@@ -883,13 +900,19 @@ mod tests {
     // -- Batch get_delegation_status normalization + rendering -------------
 
     #[tokio::test]
-    async fn get_delegation_status_accepts_legacy_task_id() {
+    async fn get_delegation_status_bare_task_id_now_rejected() {
+        // The legacy single `task_id` param is gone: a bare `{task_id}` no longer
+        // resolves to a poll — it's an empty task set and must be rejected,
+        // steering the caller to `task_ids`.
         let line = json!({
             "jsonrpc": "2.0", "id": 20, "method": "tools/call",
             "params": { "name": "get_delegation_status", "arguments": { "task_id": "abc" } }
         })
         .to_string();
-        assert!(matches!(dispatch_for_test(&line).await, LineAction::Spawn(_)));
+        let resp = unwrap_respond(dispatch_for_test(&line).await);
+        let e = resp.error.unwrap();
+        assert_eq!(e.code, -32602);
+        assert!(e.message.contains("task_ids"));
     }
 
     #[tokio::test]
@@ -904,47 +927,112 @@ mod tests {
 
     #[tokio::test]
     async fn get_delegation_status_empty_task_ids_rejected() {
-        for args in [
-            json!({ "task_ids": [] }),
-            json!({ "task_ids": ["  "] }),
-            json!({ "task_ids": [123] }),
-        ] {
+        // An absent, empty, or all-whitespace array yields no usable ids.
+        for args in [json!({ "task_ids": [] }), json!({ "task_ids": ["  "] })] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 22, "method": "tools/call",
                 "params": { "name": "get_delegation_status", "arguments": args }
             })
             .to_string();
             let resp = unwrap_respond(dispatch_for_test(&line).await);
-            let e = resp.error.expect("empty/garbage task_ids must be rejected");
+            let e = resp.error.expect("empty task_ids must be rejected");
             assert_eq!(e.code, -32602);
-            assert!(e.message.contains("task_id"));
+            assert!(e.message.contains("task_ids"));
+        }
+    }
+
+    #[tokio::test]
+    async fn get_delegation_status_non_string_task_id_rejected() {
+        // A non-string entry violates the schema's `items: string` contract — the
+        // whole call is rejected, NOT silently narrowed to the valid ids. Both a
+        // lone non-string and a mixed `[123, "abc"]` must fail.
+        for args in [json!({ "task_ids": [123] }), json!({ "task_ids": [123, "abc"] })] {
+            let line = json!({
+                "jsonrpc": "2.0", "id": 23, "method": "tools/call",
+                "params": { "name": "get_delegation_status", "arguments": args }
+            })
+            .to_string();
+            let resp = unwrap_respond(dispatch_for_test(&line).await);
+            let e = resp.error.expect("non-string task_ids entry must be rejected");
+            assert_eq!(e.code, -32602);
+            assert!(e.message.contains("task_ids"));
         }
     }
 
     #[test]
-    fn normalize_status_task_ids_merges_dedups_preserves_order() {
-        // task_ids first (trimmed, dropping "", non-string 5, and the duplicate
-        // "a"), then the legacy single task_id "c".
-        let args = json!({ "task_ids": [" a ", "b", "a", "", 5], "task_id": "c" });
-        assert_eq!(normalize_status_task_ids(&args), vec!["a", "b", "c"]);
+    fn normalize_status_task_ids_dedups_preserves_order() {
+        // Trim each entry, drop "", collapse the duplicate "a", keep first-seen
+        // order.
+        let args = json!({ "task_ids": [" a ", "b", "a", "", "c"] });
+        assert_eq!(
+            normalize_status_task_ids(&args).unwrap(),
+            vec!["a", "b", "c"]
+        );
+    }
+
+    #[test]
+    fn normalize_status_task_ids_rejects_non_string_entry() {
+        // A non-string survivor alongside valid ids is a hard error, not a
+        // silent drop.
+        assert!(normalize_status_task_ids(&json!({ "task_ids": [123] })).is_err());
+        assert!(normalize_status_task_ids(&json!({ "task_ids": ["a", 123] })).is_err());
+        assert!(normalize_status_task_ids(&json!({ "task_ids": [true] })).is_err());
     }
 
     #[test]
     fn normalize_status_task_ids_empty_when_none_usable() {
-        assert!(normalize_status_task_ids(&json!({})).is_empty());
-        assert!(normalize_status_task_ids(&json!({ "task_ids": [] })).is_empty());
-        assert!(normalize_status_task_ids(&json!({ "task_id": "   " })).is_empty());
+        // Missing, empty, and all-blank arrays all yield no ids; a bare legacy
+        // `task_id` is no longer read. (These are `Ok(empty)`, not errors.)
+        assert!(normalize_status_task_ids(&json!({})).unwrap().is_empty());
+        assert!(normalize_status_task_ids(&json!({ "task_ids": [] }))
+            .unwrap()
+            .is_empty());
+        assert!(normalize_status_task_ids(&json!({ "task_ids": ["  "] }))
+            .unwrap()
+            .is_empty());
+        assert!(normalize_status_task_ids(&json!({ "task_id": "abc" }))
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
-    fn render_status_result_single_matches_render_task_report() {
-        // A one-task batch renders byte-for-byte like the historical single path.
+    fn render_status_result_single_renders_as_one_element_batch() {
+        // A single-id poll now renders through the SAME `{tasks:[..]}` envelope as
+        // a fan-out (unified shape) — NOT the bare single-report path. The
+        // structured batch carries the one task with its id + status, and the
+        // content text is the `{tasks:[..]}` JSON (not the bare result text).
         let report = json!({
             "task_id": "t1", "status": "completed",
             "child_conversation_id": 42, "text": "the result"
         });
-        let envelope = json!({ "tasks": [report.clone()] });
-        assert_eq!(render_status_result(&envelope), render_task_report(&report));
+        let rendered = render_status_result(&json!({ "tasks": [report.clone()] }));
+        let tasks = rendered["structuredContent"]["tasks"].as_array().unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0]["task_id"], "t1");
+        assert_eq!(tasks[0]["status"], "completed");
+        // Content text is the compact {tasks:[..]} JSON, recoverable by
+        // content-only hosts — not the raw "the result" string.
+        let text = rendered["content"][0]["text"].as_str().unwrap();
+        let parsed: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed["tasks"][0]["text"], "the result");
+        assert_eq!(rendered["isError"], false);
+    }
+
+    #[test]
+    fn render_status_result_bare_report_wrapped_as_one_element_batch() {
+        // Defensive: an outcome with no `tasks` array (older / unexpected shape) is
+        // wrapped into a one-element batch so the output stays uniformly
+        // `{tasks:[..]}`. A lone failed task flags `isError` (all-failed).
+        let report = json!({
+            "task_id": "t1", "status": "failed",
+            "error_code": "spawn_failed", "message": "spawn failed"
+        });
+        let rendered = render_status_result(&report);
+        let tasks = rendered["structuredContent"]["tasks"].as_array().unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0]["task_id"], "t1");
+        assert_eq!(tasks[0]["status"], "failed");
+        assert_eq!(rendered["isError"], true);
     }
 
     #[test]

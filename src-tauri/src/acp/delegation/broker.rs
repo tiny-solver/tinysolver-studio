@@ -730,8 +730,8 @@ fn running_ack(
     // LLM couldn't call get_delegation_status / cancel_delegation.
     let message = format!(
         "Delegation successful. task_id={call_id}. Call get_delegation_status \
-         with this task_id (optionally wait_ms) to collect the result, or \
-         cancel_delegation to stop it."
+         with this id in the task_ids array (optionally wait_ms) to collect the \
+         result, or cancel_delegation to stop it."
     );
     DelegationTaskReport {
         task_id: Some(call_id),

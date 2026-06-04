@@ -345,9 +345,9 @@ fn report_response(report: DelegationTaskReport) -> std::io::Result<BrokerRespon
 }
 
 /// Serialize a batch of [`DelegationTaskReport`]s into a `{ "tasks": [..] }`
-/// envelope for the `Status` arm. The companion reads this back, rendering a
-/// single report (`tasks.len() == 1`) exactly as before for full backward
-/// compatibility, and a batch (`> 1`) as one card row per task.
+/// envelope for the `Status` arm. The companion reads this back and renders it
+/// uniformly as a `{ "tasks": [..] }` result — one entry per requested id,
+/// whether the poll asked for a single id or a whole fan-out.
 fn reports_response(reports: Vec<DelegationTaskReport>) -> std::io::Result<BrokerResponse> {
     Ok(BrokerResponse {
         outcome: serde_json::json!({

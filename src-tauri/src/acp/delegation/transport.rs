@@ -103,10 +103,9 @@ pub struct BrokerCancelRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrokerStatusRequest {
     pub token: String,
-    /// One or many task ids to resolve. The companion normalizes the MCP
-    /// `task_id` (legacy single string) / `task_ids` (array) arguments into this
-    /// list (trimmed, de-duplicated, order-preserving). The listener returns one
-    /// report per id, in this order.
+    /// One or many task ids to resolve. The companion forwards the MCP
+    /// `task_ids` array into this list (trimmed, de-duplicated, order-preserving).
+    /// The listener returns one report per id, in this order.
     pub task_ids: Vec<String>,
     /// How long the listener may block waiting for a task to reach a terminal
     /// state before returning the current (possibly still-running) snapshot.

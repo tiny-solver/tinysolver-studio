@@ -34,7 +34,8 @@ import { DelegationStatusGroupCard } from "@/components/message/delegation-statu
 interface Props {
   /** Which companion tool this card represents — selects the label + icon. */
   kind: "status" | "cancel"
-  /** Raw JSON arguments sent to the tool (`{ task_id | task_ids, wait_ms? }`). */
+  /** Raw JSON arguments sent to the tool — status: `{ task_ids, wait_ms? }` (or
+   *  a legacy `{ task_id }` in historical transcripts); cancel: `{ task_id }`. */
   input?: string | null
   output?: string | null
   errorText?: string | null

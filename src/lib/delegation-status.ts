@@ -241,10 +241,11 @@ function findTaskIds(value: unknown, depth = 0): string[] {
   return out
 }
 
-/** Extract the task id(s) a status poll was called with — `{ task_id }` (one)
- *  or `{ task_ids: [...] }` (batch) — peeling host wrappers and double-encoded
- *  JSON. Returns `[]` on a miss; the report's own `task_id` is the primary ref,
- *  these are only an index-aligned fallback. */
+/** Extract the task id(s) a status poll was called with — `{ task_ids: [...] }`
+ *  (current shape) or a legacy single `{ task_id }` from historical transcripts
+ *  — peeling host wrappers and double-encoded JSON. Returns `[]` on a miss; the
+ *  report's own `task_id` is the primary ref, these are only an index-aligned
+ *  fallback. */
 export function parseTaskIds(raw: string | null | undefined): string[] {
   if (!raw) return []
   try {

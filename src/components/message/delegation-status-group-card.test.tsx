@@ -216,6 +216,30 @@ describe("DelegationStatusGroupCard", () => {
     expect(screen.getByText("checked")).toBeInTheDocument()
   })
 
+  it("renders a single-id poll's one-element {tasks:[..]} envelope as one clean row", () => {
+    // The unified companion output: even a single-id poll
+    // (`{ task_ids: ["x"] }`) now returns a one-element `{tasks:[..]}` envelope
+    // rather than a bare single report. It must still resolve to ONE row, with
+    // the task's badge + result, and no ×N (polled once).
+    renderWithIntl(
+      <DelegationStatusGroupCard
+        polls={[
+          batchPoll(
+            ["abc12345"],
+            [{ task_id: "abc12345", status: "completed", text: "All done." }]
+          ),
+        ]}
+      />
+    )
+    expect(
+      screen.getByText("Waiting for task #abc12345 result")
+    ).toBeInTheDocument()
+    expect(screen.getByText("done")).toBeInTheDocument()
+    expect(screen.queryByText(/^×/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button"))
+    expect(screen.getByText("All done.")).toBeInTheDocument()
+  })
+
   it("groups a task across mixed batch + single polls and counts ×N", () => {
     renderWithIntl(
       <DelegationStatusGroupCard
