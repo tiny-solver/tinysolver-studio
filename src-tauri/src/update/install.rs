@@ -635,6 +635,23 @@ fn sync_dir(dir: &Path) -> std::io::Result<()> {
     }
 }
 
+/// fsync a file's contents so a following `rename` commits durable *bytes*, not
+/// just a durable name. Opens read-only on unix, where `fsync(2)` accepts a
+/// read-only descriptor. No-op on Windows: `FlushFileBuffers` rejects a
+/// read-only handle with `ERROR_ACCESS_DENIED`, and server self-update is
+/// disabled there anyway (matching `sync_dir`).
+fn sync_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::fs::File::open(path)?.sync_all()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
 /// Replace `target` with `new_src`, keeping the previous file at
 /// `target.bak`. Staging happens in `target`'s own directory so the final
 /// rename is same-filesystem (atomic). Renaming over a running executable is
@@ -661,9 +678,7 @@ fn replace_file(target: &Path, new_src: &Path) -> Result<(), AppCommandError> {
     // The rename + directory fsync below make the *name* durable; without this
     // a power loss could leave that name pointing at unflushed (empty/garbage)
     // bytes — a committed-looking but corrupt binary the trial can't catch.
-    std::fs::File::open(&staged)
-        .and_then(|f| f.sync_all())
-        .map_err(AppCommandError::io)?;
+    sync_file(&staged).map_err(AppCommandError::io)?;
 
     let bak = bak_path(target);
     let _ = std::fs::remove_file(&bak);
@@ -690,9 +705,7 @@ fn replace_file(target: &Path, new_src: &Path) -> Result<(), AppCommandError> {
             // staged-new-file path: a power loss must not leave a `.bak` whose
             // name is durable but whose contents are not — a later rollback
             // would then restore that corrupt backup over a working binary.
-            std::fs::File::open(&bak_tmp)
-                .and_then(|f| f.sync_all())
-                .map_err(AppCommandError::io)?;
+            sync_file(&bak_tmp).map_err(AppCommandError::io)?;
             std::fs::rename(&bak_tmp, &bak).map_err(AppCommandError::io)?;
         }
         if let Err(e) = std::fs::rename(&staged, target) {
@@ -850,9 +863,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), AppCommandError> {
             // Flush each file's contents before the staged tree is committed,
             // so a power loss after the swap rename can't leave a
             // committed-but-empty/garbage asset (e.g. a broken UI bundle).
-            std::fs::File::open(&to)
-                .and_then(|f| f.sync_all())
-                .map_err(AppCommandError::io)?;
+            sync_file(&to).map_err(AppCommandError::io)?;
         }
     }
     // Flush this directory's entries so its children survive a crash too.
