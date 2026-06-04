@@ -2938,7 +2938,7 @@ impl DelegationBroker {
         classes: Vec<StatusClass>,
     ) -> Vec<DelegationTaskReport> {
         let mut out = Vec::with_capacity(classes.len());
-        for (id, class) in task_ids.iter().zip(classes.into_iter()) {
+        for (id, class) in task_ids.iter().zip(classes) {
             let report = match class {
                 StatusClass::Settled(report) => report,
                 StatusClass::Running {
