@@ -491,6 +491,7 @@ fn extract_tar_gz(bytes: &[u8], dest: &Path, max: u64) -> Result<(), AppCommandE
             // (PAX/GNU size fields can understate the real stream). Copy through
             // a hard ceiling and abort if the entry overflows the budget.
             let remaining = max - extracted;
+            #[cfg(unix)]
             let mode = entry.header().mode().ok();
             let mut out_file = std::fs::File::create(&out).map_err(AppCommandError::io)?;
             let written = std::io::copy(&mut entry.by_ref().take(remaining + 1), &mut out_file)
@@ -548,6 +549,7 @@ fn extract_zip(bytes: &[u8], dest: &Path, max: u64) -> Result<(), AppCommandErro
         // Bound the *actual* decompressed bytes (a small compressed entry can
         // expand without bound — zip bomb), not the declared uncompressed size.
         let remaining = max - extracted;
+        #[cfg(unix)]
         let mode = file.unix_mode();
         let mut writer = std::fs::File::create(&out).map_err(AppCommandError::io)?;
         let written = std::io::copy(&mut file.by_ref().take(remaining + 1), &mut writer)
