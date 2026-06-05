@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -25,6 +25,19 @@ const CONFIG_CACHE_TTL_SECS: u64 = 30;
 
 const MESSAGE_LANGUAGE_KEY: &str = "chat_message_language";
 const EVENT_FILTER_KEY: &str = "chat_event_filter";
+const EVENT_WEBHOOKS_KEY: &str = "chat_event_webhooks";
+
+/// Bumped whenever the Events-tab config (event filter, webhooks, message
+/// language) is written. The subscriber's config cache compares this against
+/// its last-seen value and refreshes immediately on change, instead of waiting
+/// out the `CONFIG_CACHE_TTL_SECS` window — so e.g. disabling a webhook stops
+/// deliveries on the next event rather than up to 30s later.
+static EVENT_CONFIG_EPOCH: AtomicU64 = AtomicU64::new(0);
+
+/// Signal that the Events-tab config changed; call after a successful write.
+pub fn bump_event_config_epoch() {
+    EVENT_CONFIG_EPOCH.fetch_add(1, Ordering::Relaxed);
+}
 
 struct CachedChannel {
     id: i32,
@@ -35,7 +48,14 @@ struct EventConfigCache {
     lang: Lang,
     global_filter: Option<Vec<String>>,
     enabled_channels: Vec<CachedChannel>,
+    /// Channel-agnostic webhook sinks. Receive the same globally-filtered event
+    /// feed as IM channels, but are not debounced and ignore the per-channel
+    /// filter (an automation consumer wants the complete stream).
+    webhooks: Vec<String>,
     last_refresh: Instant,
+    /// Value of `EVENT_CONFIG_EPOCH` at the last refresh; a mismatch forces an
+    /// immediate refresh even within the TTL window.
+    last_epoch: u64,
 }
 
 impl EventConfigCache {
@@ -44,13 +64,19 @@ impl EventConfigCache {
             lang: Lang::default(),
             global_filter: None,
             enabled_channels: Vec::new(),
+            webhooks: Vec::new(),
             // Force refresh on first use
             last_refresh: Instant::now() - Duration::from_secs(CONFIG_CACHE_TTL_SECS + 1),
+            last_epoch: 0,
         }
     }
 
     async fn refresh_if_needed(&mut self, db: &DatabaseConnection) {
-        if self.last_refresh.elapsed() < Duration::from_secs(CONFIG_CACHE_TTL_SECS) {
+        // Skip only when neither the TTL has elapsed NOR the config epoch moved.
+        let epoch = EVENT_CONFIG_EPOCH.load(Ordering::Relaxed);
+        if epoch == self.last_epoch
+            && self.last_refresh.elapsed() < Duration::from_secs(CONFIG_CACHE_TTL_SECS)
+        {
             return;
         }
 
@@ -69,6 +95,15 @@ impl EventConfigCache {
                     .flatten()
             });
 
+        // Webhook delivery set — only ENABLED URLs. Absent/unparseable means no
+        // webhooks configured.
+        self.webhooks = app_metadata_service::get_value(db, EVENT_WEBHOOKS_KEY)
+            .await
+            .ok()
+            .flatten()
+            .map(|json| super::webhook::enabled_webhook_urls(&json))
+            .unwrap_or_default();
+
         if let Ok(channels) = chat_channel_service::list_enabled(db).await {
             self.enabled_channels = channels
                 .into_iter()
@@ -80,6 +115,7 @@ impl EventConfigCache {
         }
 
         self.last_refresh = Instant::now();
+        self.last_epoch = epoch;
     }
 }
 
@@ -98,6 +134,8 @@ pub fn spawn_event_subscriber(
     tokio::spawn(async move {
         let mut last_push: HashMap<(i32, String), Instant> = HashMap::new();
         let mut config = EventConfigCache::new();
+        // One reqwest client, reused (and cheaply cloned) for every webhook POST.
+        let webhook_client = super::webhook::make_webhook_client();
 
         loop {
             let envelope_arc = match rx.recv().await {
@@ -125,6 +163,7 @@ pub fn spawn_event_subscriber(
                 &db_conn,
                 &config,
                 &mut last_push,
+                &webhook_client,
             )
             .await;
         }
@@ -137,6 +176,7 @@ pub fn spawn_event_subscriber(
 ///
 /// Extracted from the subscriber loop so the filter/dedup/debounce logic is
 /// unit-testable against a recording backend.
+#[allow(clippy::too_many_arguments)]
 async fn process_envelope(
     envelope: &EventEnvelope,
     bridge: &Arc<Mutex<SessionBridge>>,
@@ -144,6 +184,7 @@ async fn process_envelope(
     db_conn: &DatabaseConnection,
     config: &EventConfigCache,
     last_push: &mut HashMap<(i32, String), Instant>,
+    webhook_client: &reqwest::Client,
 ) {
     let Some((event_type, msg)) = parse_acp_event(&envelope.payload, config.lang) else {
         return;
@@ -166,6 +207,20 @@ async fn process_envelope(
         && bridge.lock().await.get(&envelope.connection_id).is_some()
     {
         return;
+    }
+
+    // Webhook fan-out: channel-agnostic, shares the global gates above but is
+    // independent of the per-channel filter and the debounce below. Built once
+    // and delivered fire-and-forget so an unreachable endpoint can't stall the
+    // subscriber loop. Runs even with zero enabled IM channels.
+    if !config.webhooks.is_empty() {
+        let payload =
+            super::webhook::build_webhook_payload(&event_type, &envelope.connection_id, &msg);
+        super::webhook::spawn_webhook_delivery(
+            webhook_client.clone(),
+            config.webhooks.clone(),
+            payload,
+        );
     }
 
     // Permission requests bypass the per-(channel, event) debounce. That debounce
@@ -343,7 +398,63 @@ mod permission_push_tests {
                 id: channel_id,
                 event_filter_json: None,
             }],
+            webhooks: Vec::new(),
             last_refresh: Instant::now(),
+            last_epoch: 0,
+        }
+    }
+
+    /// Shared no-op client for tests that don't configure webhooks; with
+    /// `config.webhooks` empty, `process_envelope` never issues a request.
+    fn test_client() -> reqwest::Client {
+        reqwest::Client::new()
+    }
+
+    /// Accept one connection, read the full HTTP/1.1 request (headers +
+    /// Content-Length body), reply 200 so the detached delivery task resolves,
+    /// and return the raw request text.
+    async fn accept_request(listener: &tokio::net::TcpListener) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                let header_end = pos + 4;
+                let headers = String::from_utf8_lossy(&buf[..header_end]).to_lowercase();
+                let len = headers
+                    .lines()
+                    .find_map(|l| {
+                        l.strip_prefix("content-length:")
+                            .and_then(|v| v.trim().parse::<usize>().ok())
+                    })
+                    .unwrap_or(0);
+                if buf.len() >= header_end + len {
+                    break;
+                }
+            }
+            let n = stream.read(&mut chunk).await.unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+        }
+        let _ = stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            .await;
+        let _ = stream.flush().await;
+        String::from_utf8_lossy(&buf).into_owned()
+    }
+
+    fn turn_complete_envelope(connection_id: &str) -> EventEnvelope {
+        EventEnvelope {
+            seq: 1,
+            connection_id: connection_id.into(),
+            payload: AcpEvent::TurnComplete {
+                session_id: "s".into(),
+                stop_reason: "end_turn".into(),
+                agent_type: "claude_code".into(),
+            },
         }
     }
 
@@ -400,6 +511,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
 
@@ -430,6 +542,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
 
@@ -457,6 +570,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
 
@@ -481,6 +595,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
         process_envelope(
@@ -490,6 +605,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
 
@@ -531,6 +647,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
         process_envelope(
@@ -540,6 +657,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
 
@@ -577,6 +695,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
         process_envelope(
@@ -586,6 +705,7 @@ mod permission_push_tests {
             &db.conn,
             &config,
             &mut last_push,
+            &test_client(),
         )
         .await;
 
@@ -614,8 +734,225 @@ mod permission_push_tests {
                 agent_type: "claude_code".into(),
             },
         };
-        process_envelope(&envelope, &bridge, &chat, &db.conn, &config, &mut last_push).await;
+        process_envelope(
+            &envelope,
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
 
         assert_eq!(sent(&rec).await.len(), 1);
+    }
+
+    /// A configured webhook receives a POST with the structured JSON payload
+    /// when an event passes the global gates — proving the subscriber wiring
+    /// (config.webhooks → spawn_webhook_delivery → HTTP POST) end to end.
+    #[tokio::test]
+    async fn webhook_receives_post_for_event() {
+        use tokio::net::TcpListener;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, _rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut last_push = HashMap::new();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { accept_request(&listener).await });
+
+        let mut config = config_all_on(7);
+        config.webhooks = vec![format!("http://{addr}/hook")];
+
+        process_envelope(
+            &turn_complete_envelope("desktop-conn"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let request = tokio::time::timeout(Duration::from_secs(5), server)
+            .await
+            .expect("webhook should be delivered within 5s")
+            .unwrap();
+        assert!(request.starts_with("POST /hook"), "got: {request}");
+        assert!(
+            request.contains("\"event\":\"turn_complete\""),
+            "got: {request}"
+        );
+        assert!(
+            request.contains("\"connection_id\":\"desktop-conn\""),
+            "got: {request}"
+        );
+    }
+
+    /// The global event filter gates webhooks too: with `turn_complete` toggled
+    /// off, the configured webhook receives nothing (no connection attempt).
+    #[tokio::test]
+    async fn webhook_suppressed_by_global_filter() {
+        use tokio::net::TcpListener;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, _rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut last_push = HashMap::new();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let mut config = config_all_on(7);
+        config.global_filter = Some(vec!["error".to_string()]); // turn_complete off
+        config.webhooks = vec![format!("http://{addr}/hook")];
+
+        process_envelope(
+            &turn_complete_envelope("desktop-conn"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        // No delivery → no inbound connection within the window.
+        let accepted = tokio::time::timeout(Duration::from_millis(400), listener.accept()).await;
+        assert!(
+            accepted.is_err(),
+            "filtered-out event must not reach the webhook"
+        );
+    }
+
+    /// A permission request from a chat-channel-bridged connection is suppressed
+    /// for webhooks as well (dispatch sits behind the same early-return).
+    #[tokio::test]
+    async fn webhook_suppressed_for_bridged_permission() {
+        use tokio::net::TcpListener;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, _rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        bridge
+            .lock()
+            .await
+            .register("im-conn".into(), bridged_session("im-conn", 7));
+        let mut last_push = HashMap::new();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let mut config = config_all_on(7);
+        config.webhooks = vec![format!("http://{addr}/hook")];
+
+        process_envelope(
+            &permission_envelope("im-conn"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let accepted = tokio::time::timeout(Duration::from_millis(400), listener.accept()).await;
+        assert!(
+            accepted.is_err(),
+            "bridged permission request must not reach the webhook"
+        );
+    }
+
+    /// Webhooks are intentionally NOT debounced: two `turn_complete` events
+    /// inside the 5s window each deliver, even though the IM-channel push of the
+    /// second is debounced (contrast `turn_complete_is_debounced_within_window`).
+    #[tokio::test]
+    async fn webhook_is_not_debounced() {
+        use tokio::net::TcpListener;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, _rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut last_push = HashMap::new();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        // Each event opens its own connection; collect both.
+        let server = tokio::spawn(async move {
+            let first = accept_request(&listener).await;
+            let second = accept_request(&listener).await;
+            (first, second)
+        });
+
+        let mut config = config_all_on(7);
+        config.webhooks = vec![format!("http://{addr}/hook")];
+
+        for _ in 0..2 {
+            process_envelope(
+                &turn_complete_envelope("c"),
+                &bridge,
+                &chat,
+                &db.conn,
+                &config,
+                &mut last_push,
+                &test_client(),
+            )
+            .await;
+        }
+
+        let (first, second) = tokio::time::timeout(Duration::from_secs(5), server)
+            .await
+            .expect("both webhook deliveries should arrive within 5s")
+            .unwrap();
+        assert!(first.starts_with("POST /hook"), "got: {first}");
+        assert!(second.starts_with("POST /hook"), "got: {second}");
+    }
+
+    /// Disabling a webhook takes effect on the next event, not up to 30s later:
+    /// the config-epoch bump on write forces `refresh_if_needed` to re-read even
+    /// though the TTL window has not elapsed.
+    #[tokio::test]
+    async fn webhook_disable_refreshes_within_ttl_window() {
+        use crate::chat_channel::webhook::WebhookConfig;
+        use crate::commands::chat_channel::set_chat_event_webhooks_core;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+
+        set_chat_event_webhooks_core(
+            &db,
+            vec![WebhookConfig {
+                url: "https://a.test/h".into(),
+                enabled: true,
+            }],
+        )
+        .await
+        .unwrap();
+
+        let mut config = EventConfigCache::new();
+        config.refresh_if_needed(&db.conn).await;
+        assert_eq!(config.webhooks, vec!["https://a.test/h".to_string()]);
+        // The just-completed refresh resets last_refresh to ~now, so the TTL has
+        // NOT elapsed for the second call — only the epoch bump can force it.
+
+        set_chat_event_webhooks_core(
+            &db,
+            vec![WebhookConfig {
+                url: "https://a.test/h".into(),
+                enabled: false,
+            }],
+        )
+        .await
+        .unwrap();
+        config.refresh_if_needed(&db.conn).await;
+        assert!(
+            config.webhooks.is_empty(),
+            "disabled webhook must drop out of the dispatch set within the TTL window"
+        );
     }
 }

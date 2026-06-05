@@ -736,6 +736,14 @@ pub fn build_router(
             post(handlers::chat_channel::set_chat_event_filter),
         )
         .route(
+            "/get_chat_event_webhooks",
+            post(handlers::chat_channel::get_chat_event_webhooks),
+        )
+        .route(
+            "/set_chat_event_webhooks",
+            post(handlers::chat_channel::set_chat_event_webhooks),
+        )
+        .route(
             "/get_chat_message_language",
             post(handlers::chat_channel::get_chat_message_language),
         )

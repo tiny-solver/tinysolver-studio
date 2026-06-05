@@ -80,6 +80,7 @@ import type {
   ChatChannelInfo,
   ChannelStatusInfo,
   ChatChannelMessageLog,
+  WebhookConfig,
   ModelProviderInfo,
   PluginCheckSummary,
   QuickMessage,
@@ -2421,6 +2422,16 @@ export async function setChatEventFilter(
   filter: string[] | null
 ): Promise<void> {
   return getTransport().call("set_chat_event_filter", { filter })
+}
+
+export async function getChatEventWebhooks(): Promise<WebhookConfig[]> {
+  return getTransport().call("get_chat_event_webhooks")
+}
+
+export async function setChatEventWebhooks(
+  webhooks: WebhookConfig[]
+): Promise<void> {
+  return getTransport().call("set_chat_event_webhooks", { webhooks })
 }
 
 export async function getChatMessageLanguage(): Promise<string> {

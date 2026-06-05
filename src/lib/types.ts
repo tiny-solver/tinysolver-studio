@@ -1347,6 +1347,12 @@ export interface AgentInstallEvent {
 
 export type ChannelType = "lark" | "telegram" | "weixin"
 
+/** One configured event-notification webhook sink. */
+export interface WebhookConfig {
+  url: string
+  enabled: boolean
+}
+
 export type ChannelConnectionStatus =
   | "connected"
   | "connecting"
