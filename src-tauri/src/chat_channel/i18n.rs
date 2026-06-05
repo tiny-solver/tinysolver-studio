@@ -1442,10 +1442,16 @@ pub fn agent_busy_retry(lang: Lang) -> &'static str {
         Lang::ZhTw => "智慧代理正在處理上一則訊息，請稍後再發送。",
         Lang::Ja => "エージェントが前のメッセージを処理中です。少し待ってから再送信してください。",
         Lang::Ko => "에이전트가 이전 메시지를 처리 중입니다. 잠시 후 다시 보내 주세요.",
-        Lang::Es => "El agente sigue procesando el mensaje anterior; vuelve a enviarlo en un momento.",
-        Lang::De => "Der Agent verarbeitet noch die vorherige Nachricht – bitte gleich erneut senden.",
+        Lang::Es => {
+            "El agente sigue procesando el mensaje anterior; vuelve a enviarlo en un momento."
+        }
+        Lang::De => {
+            "Der Agent verarbeitet noch die vorherige Nachricht – bitte gleich erneut senden."
+        }
         Lang::Fr => "L'agent traite encore le message précédent ; renvoyez-le dans un instant.",
-        Lang::Pt => "O agente ainda está processando a mensagem anterior; envie novamente em instantes.",
+        Lang::Pt => {
+            "O agente ainda está processando a mensagem anterior; envie novamente em instantes."
+        }
         Lang::Ar => "لا يزال الوكيل يعالج الرسالة السابقة، يرجى إعادة الإرسال بعد قليل.",
         Lang::En => {
             "The agent is still processing the previous message — please send again in a moment."

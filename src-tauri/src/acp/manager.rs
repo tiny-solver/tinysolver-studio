@@ -51,7 +51,10 @@ fn user_prompt_text_preview(blocks: &[PromptInputBlock]) -> Option<String> {
     if trimmed.is_empty() {
         None
     } else {
-        Some(crate::parsers::truncate_str(trimmed, USER_PROMPT_PREVIEW_MAX_CHARS))
+        Some(crate::parsers::truncate_str(
+            trimmed,
+            USER_PROMPT_PREVIEW_MAX_CHARS,
+        ))
     }
 }
 
@@ -1096,7 +1099,11 @@ impl ConnectionManager {
             let conn = connections
                 .get(conn_id)
                 .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
-            (conn.state.clone(), conn.cmd_tx.clone(), conn.emitter.clone())
+            (
+                conn.state.clone(),
+                conn.cmd_tx.clone(),
+                conn.emitter.clone(),
+            )
         };
 
         // Serialize the fork against concurrent prompts on this connection via
@@ -1160,9 +1167,9 @@ impl ConnectionManager {
                     .send(ConnectionCommand::Fork { reply: reply_tx })
                     .await
                     .map_err(|_| AcpError::ProcessExited)?;
-                let protocol_result = reply_rx.await.map_err(|_| {
-                    AcpError::protocol("Fork reply channel closed".to_string())
-                })??;
+                let protocol_result = reply_rx
+                    .await
+                    .map_err(|_| AcpError::protocol("Fork reply channel closed".to_string()))??;
 
                 let forked_session_id = protocol_result.forked_session_id;
                 let original_session_id = protocol_result.original_session_id;
@@ -1976,11 +1983,16 @@ mod tests {
                 None,
             )
             .await;
-        assert!(result.is_ok(), "enqueue should succeed with a live receiver");
+        assert!(
+            result.is_ok(),
+            "enqueue should succeed with a live receiver"
+        );
 
         let prompts = drain_prompt_user_messages(&mut cmd_rx);
         assert_eq!(prompts.len(), 1, "exactly one Prompt enqueued");
-        let um = prompts[0].as_ref().expect("root Prompt carries a user_message");
+        let um = prompts[0]
+            .as_ref()
+            .expect("root Prompt carries a user_message");
         assert!(
             um.0.starts_with("user-"),
             "connection-scoped id fallback, got {:?}",
@@ -2016,7 +2028,9 @@ mod tests {
             .send_prompt_linked(
                 &db,
                 conn_id,
-                vec![PromptInputBlock::Text { text: "first".into() }],
+                vec![PromptInputBlock::Text {
+                    text: "first".into(),
+                }],
                 Some(folder_id),
                 None,
                 None,
@@ -2127,10 +2141,7 @@ mod tests {
             .turn_in_flight = true;
 
         let res = mgr
-            .send_prompt(
-                conn_id,
-                vec![PromptInputBlock::Text { text: "hi".into() }],
-            )
+            .send_prompt(conn_id, vec![PromptInputBlock::Text { text: "hi".into() }])
             .await;
         assert!(
             matches!(res, Err(AcpError::TurnInProgress)),
@@ -2148,8 +2159,7 @@ mod tests {
         let db = test_helpers::fresh_in_memory_db().await;
         let mgr = ConnectionManager::new();
         let conn_id = "conn-fork-busy";
-        let mut cmd_rx =
-            insert_live_connection(&mgr, conn_id, AgentType::ClaudeCode, None).await;
+        let mut cmd_rx = insert_live_connection(&mgr, conn_id, AgentType::ClaudeCode, None).await;
         {
             let state = mgr.get_state(conn_id).await.unwrap();
             let mut s = state.write().await;
@@ -2298,7 +2308,9 @@ mod tests {
         );
 
         // Nothing persisted yet (reply still withheld) — the row is untouched.
-        let mid = conversation_service::get_by_id(&db.conn, pre.id).await.unwrap();
+        let mid = conversation_service::get_by_id(&db.conn, pre.id)
+            .await
+            .unwrap();
         assert_eq!(
             mid.external_id.as_deref(),
             Some("session-S1"),
@@ -2313,7 +2325,9 @@ mod tests {
         // Poll (bounded) until the two-row layout appears.
         let mut persisted = false;
         for _ in 0..200 {
-            let current = conversation_service::get_by_id(&db.conn, pre.id).await.unwrap();
+            let current = conversation_service::get_by_id(&db.conn, pre.id)
+                .await
+                .unwrap();
             let rows = conversation::Entity::find().all(&db.conn).await.unwrap();
             let has_sibling = rows
                 .iter()
@@ -2341,8 +2355,7 @@ mod tests {
         // remain false — otherwise a cancelled send would wedge the connection.
         let mgr = ConnectionManager::new();
         let conn_id = "conn-cancel";
-        let _rx =
-            insert_live_connection(&mgr, conn_id, AgentType::ClaudeCode, None).await;
+        let _rx = insert_live_connection(&mgr, conn_id, AgentType::ClaudeCode, None).await;
         // Fill the command channel to capacity (4, per insert_live_connection)
         // by sending DIRECTLY on the cloned sender — bypassing the gate — so the
         // next reserve() blocks.
@@ -2421,7 +2434,10 @@ mod tests {
 
         let prompts = drain_prompt_user_messages(&mut cmd_rx);
         assert_eq!(
-            prompts.first().and_then(|um| um.as_ref()).map(|(id, _)| id.as_str()),
+            prompts
+                .first()
+                .and_then(|um| um.as_ref())
+                .map(|(id, _)| id.as_str()),
             Some("optimistic-abc"),
             "Prompt's user_message must carry the client-supplied message_id verbatim"
         );
@@ -2485,15 +2501,10 @@ mod tests {
         use crate::db::test_helpers;
         let db = test_helpers::fresh_in_memory_db().await;
         let folder_id = test_helpers::seed_folder(&db, "/tmp/um-deleg").await;
-        let parent = conversation_service::create(
-            &db.conn,
-            folder_id,
-            AgentType::ClaudeCode,
-            None,
-            None,
-        )
-        .await
-        .expect("parent");
+        let parent =
+            conversation_service::create(&db.conn, folder_id, AgentType::ClaudeCode, None, None)
+                .await
+                .expect("parent");
         let mgr = ConnectionManager::new();
         let conn_id = "conn-um-deleg";
         let mut cmd_rx = insert_live_connection(
@@ -2560,10 +2571,9 @@ mod tests {
     #[test]
     fn user_prompt_text_preview_is_none_for_empty_or_textless() {
         assert!(user_prompt_text_preview(&[]).is_none());
-        assert!(user_prompt_text_preview(&[PromptInputBlock::Text {
-            text: "   ".into()
-        }])
-        .is_none());
+        assert!(
+            user_prompt_text_preview(&[PromptInputBlock::Text { text: "   ".into() }]).is_none()
+        );
         let img = vec![PromptInputBlock::Image {
             data: "x".into(),
             mime_type: "image/png".into(),
@@ -2916,7 +2926,9 @@ mod tests {
             .await
             .conversation_id
             .expect("conversation should be linked");
-        let row = conversation_service::get_by_id(&db.conn, cid).await.unwrap();
+        let row = conversation_service::get_by_id(&db.conn, cid)
+            .await
+            .unwrap();
         assert_eq!(row.external_id.as_deref(), Some("ext-pre"));
         assert!(
             drain_has_upsert_with_external_id(&mut rx, cid, "ext-pre"),
@@ -2951,7 +2963,14 @@ mod tests {
         }
 
         let _ = mgr
-            .send_prompt_linked(&db, conn_id, one_text_block(), Some(folder_id), Some(pre.id), None)
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                one_text_block(),
+                Some(folder_id),
+                Some(pre.id),
+                None,
+            )
             .await;
 
         let row = conversation_service::get_by_id(&db.conn, pre.id)
@@ -3017,7 +3036,14 @@ mod tests {
 
         let before = count_conversation_rows(&db).await;
         let _ = mgr
-            .send_prompt_linked(&db, conn_id, one_text_block(), Some(folder_id), Some(pre.id), None)
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                one_text_block(),
+                Some(folder_id),
+                Some(pre.id),
+                None,
+            )
             .await;
         let after = count_conversation_rows(&db).await;
         assert_eq!(after, before);

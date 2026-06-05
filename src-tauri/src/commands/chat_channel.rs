@@ -863,7 +863,10 @@ mod tests {
         let got = get_chat_event_webhooks_core(&db).await.expect("get");
         assert_eq!(
             got,
-            vec![hook("https://a.test/h", true), hook("https://b.test/h", true)]
+            vec![
+                hook("https://a.test/h", true),
+                hook("https://b.test/h", true)
+            ]
         );
     }
 

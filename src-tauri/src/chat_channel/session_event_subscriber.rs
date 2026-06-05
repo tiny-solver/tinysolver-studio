@@ -135,8 +135,9 @@ async fn handle_acp_envelope(
                             );
                             let channel_id = session.channel_id;
                             let lang = get_lang(db).await;
-                            let msg =
-                                RichMessage::info(super::i18n::task_deferred_busy(lang).to_string());
+                            let msg = RichMessage::info(
+                                super::i18n::task_deferred_busy(lang).to_string(),
+                            );
                             let _ = manager.send_to_channel(channel_id, &msg).await;
                         } else {
                             eprintln!("[SessionEventSub] failed to send pending prompt: {e}");

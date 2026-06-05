@@ -2778,7 +2778,10 @@ pub(crate) async fn acp_find_connection_for_conversation_core(
         // attach a viewer to a different agent's connection sharing a session id.
         None => match session_id {
             Some(sid) if !sid.is_empty() => {
-                match manager.find_connection_by_external_id(sid, agent_type).await {
+                match manager
+                    .find_connection_by_external_id(sid, agent_type)
+                    .await
+                {
                     Some(id) => id,
                     None => return Ok(None),
                 }
@@ -4296,11 +4299,10 @@ mod tests {
             s.event_seq = 7;
         }
 
-        let info =
-            acp_find_connection_for_conversation_core(&mgr, 42, None, AgentType::ClaudeCode)
-                .await
-                .expect("ok")
-                .expect("a live connection is bound to conversation 42");
+        let info = acp_find_connection_for_conversation_core(&mgr, 42, None, AgentType::ClaudeCode)
+            .await
+            .expect("ok")
+            .expect("a live connection is bound to conversation 42");
         assert_eq!(info.connection_id, "c1");
         assert_eq!(info.event_seq, 7);
     }
@@ -4369,31 +4371,24 @@ mod tests {
         assert_eq!(info.event_seq, 3);
 
         // a non-matching session id still misses.
-        assert!(
-            acp_find_connection_for_conversation_core(
-                &mgr,
-                42,
-                Some("other"),
-                AgentType::ClaudeCode
-            )
-            .await
-            .expect("ok")
-            .is_none()
-        );
+        assert!(acp_find_connection_for_conversation_core(
+            &mgr,
+            42,
+            Some("other"),
+            AgentType::ClaudeCode
+        )
+        .await
+        .expect("ok")
+        .is_none());
 
         // the SAME session id but a DIFFERENT agent_type must NOT match
         // (external_id is unique only per agent) — otherwise a viewer could
         // attach to the wrong agent's connection.
         assert!(
-            acp_find_connection_for_conversation_core(
-                &mgr,
-                42,
-                Some("sess-abc"),
-                AgentType::Codex
-            )
-            .await
-            .expect("ok")
-            .is_none(),
+            acp_find_connection_for_conversation_core(&mgr, 42, Some("sess-abc"), AgentType::Codex)
+                .await
+                .expect("ok")
+                .is_none(),
             "external_id fallback must be scoped by agent_type"
         );
     }

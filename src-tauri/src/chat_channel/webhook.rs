@@ -190,7 +190,10 @@ mod tests {
         ]"#;
         assert_eq!(
             enabled_webhook_urls(json),
-            vec!["https://a.test/h".to_string(), "https://c.test/h".to_string()]
+            vec![
+                "https://a.test/h".to_string(),
+                "https://c.test/h".to_string()
+            ]
         );
         assert!(enabled_webhook_urls("not json").is_empty());
         assert!(enabled_webhook_urls("[]").is_empty());
@@ -207,7 +210,10 @@ mod tests {
             "http://192.168.1.10:9000"
         );
         // userinfo and path/query are dropped, not surfaced
-        assert_eq!(redact_url("https://user:pass@host.test/p?q=1"), "https://host.test");
+        assert_eq!(
+            redact_url("https://user:pass@host.test/p?q=1"),
+            "https://host.test"
+        );
         assert_eq!(redact_url("not a url"), "<webhook>");
     }
 
@@ -281,11 +287,19 @@ mod tests {
         let request = server.await.unwrap();
         assert!(request.starts_with("POST /hook"), "got: {request}");
         assert!(
-            request.to_lowercase().contains("content-type: application/json"),
+            request
+                .to_lowercase()
+                .contains("content-type: application/json"),
             "missing json content-type: {request}"
         );
-        assert!(request.contains("\"event\":\"turn_complete\""), "got: {request}");
-        assert!(request.contains("\"connection_id\":\"conn-1\""), "got: {request}");
+        assert!(
+            request.contains("\"event\":\"turn_complete\""),
+            "got: {request}"
+        );
+        assert!(
+            request.contains("\"connection_id\":\"conn-1\""),
+            "got: {request}"
+        );
     }
 
     #[tokio::test]

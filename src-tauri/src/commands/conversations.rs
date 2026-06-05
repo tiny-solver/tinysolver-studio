@@ -6,9 +6,6 @@ use crate::db::service::{conversation_service, folder_service, import_service, t
 #[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::*;
-use crate::web::event_bridge::{
-    emit_event, ConversationChange, EventEmitter, CONVERSATION_CHANGED_EVENT,
-};
 use crate::parsers::claude::ClaudeParser;
 use crate::parsers::cline::ClineParser;
 use crate::parsers::codex::CodexParser;
@@ -16,6 +13,9 @@ use crate::parsers::gemini::GeminiParser;
 use crate::parsers::openclaw::OpenClawParser;
 use crate::parsers::opencode::OpenCodeParser;
 use crate::parsers::{path_eq_for_matching, AgentParser, ParseError};
+use crate::web::event_bridge::{
+    emit_event, ConversationChange, EventEmitter, CONVERSATION_CHANGED_EVENT,
+};
 
 pub async fn list_all_conversations_core(
     conn: &sea_orm::DatabaseConnection,
@@ -1273,8 +1273,7 @@ mod tests {
         std::sync::Arc<crate::web::event_bridge::WebEventBroadcaster>,
         EventEmitter,
     ) {
-        let broadcaster =
-            std::sync::Arc::new(crate::web::event_bridge::WebEventBroadcaster::new());
+        let broadcaster = std::sync::Arc::new(crate::web::event_bridge::WebEventBroadcaster::new());
         let emitter = EventEmitter::test_web_only(broadcaster.clone());
         (broadcaster, emitter)
     }
@@ -1340,7 +1339,9 @@ mod tests {
         let id = create_conversation_core(&db.conn, folder_id, AgentType::Gemini, None)
             .await
             .expect("create");
-        delete_conversation_core(&db.conn, id).await.expect("delete");
+        delete_conversation_core(&db.conn, id)
+            .await
+            .expect("delete");
         let (broadcaster, emitter) = sync_test_emitter();
         let mut rx = broadcaster.subscribe();
         emit_conversation_upsert(&emitter, &db.conn, id).await;

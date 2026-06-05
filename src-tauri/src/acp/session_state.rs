@@ -1278,9 +1278,7 @@ mod tests {
         s.apply_event(&AcpEvent::ContentDelta {
             text: "Answer ".into(),
         });
-        s.apply_event(&AcpEvent::Thinking {
-            text: "hmm".into(),
-        });
+        s.apply_event(&AcpEvent::Thinking { text: "hmm".into() });
         s.apply_event(&AcpEvent::ContentDelta {
             text: "continues here".into(),
         });
@@ -1856,8 +1854,12 @@ mod tests {
             id: "m1".into(),
             role: MessageRole::Assistant,
             content: vec![
-                LiveContentBlock::Text { text: "part 1 ".into() },
-                LiveContentBlock::Text { text: "part 2".into() },
+                LiveContentBlock::Text {
+                    text: "part 1 ".into(),
+                },
+                LiveContentBlock::Text {
+                    text: "part 2".into(),
+                },
             ],
             started_at: Utc::now(),
         });

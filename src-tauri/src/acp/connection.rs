@@ -2838,12 +2838,8 @@ async fn run_conversation_loop<'a>(
                 // `pending_user_message` so a client attaching mid-turn still
                 // renders the user turn from the snapshot.
                 if let Some((message_id, blocks)) = user_message {
-                    emit_with_state(
-                        state,
-                        emitter,
-                        AcpEvent::UserMessage { message_id, blocks },
-                    )
-                    .await;
+                    emit_with_state(state, emitter, AcpEvent::UserMessage { message_id, blocks })
+                        .await;
                 }
 
                 // Clone connection and session ID before entering the

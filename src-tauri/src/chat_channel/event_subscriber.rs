@@ -330,7 +330,10 @@ async fn process_envelope(
     //   - user_prompt_sent: each user message is a distinct action a consumer
     //     wants to see; coalescing two messages sent within 5s would silently
     //     swallow the second.
-    let debounced = !matches!(event_type.as_str(), "permission_request" | "user_prompt_sent");
+    let debounced = !matches!(
+        event_type.as_str(),
+        "permission_request" | "user_prompt_sent"
+    );
 
     for ch in &config.enabled_channels {
         // Per-channel event filter
