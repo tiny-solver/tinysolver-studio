@@ -37,6 +37,11 @@ import type { WebhookConfig } from "@/lib/types"
 
 const ALL_EVENT_TYPES = [
   {
+    id: "user_prompt_sent",
+    labelKey: "userPromptSent",
+    descKey: "userPromptSentDesc",
+  },
+  {
     id: "turn_complete",
     labelKey: "turnComplete",
     descKey: "turnCompleteDesc",
@@ -51,8 +56,18 @@ const ALL_EVENT_TYPES = [
 
 const ALL_IDS = ALL_EVENT_TYPES.map((e) => e.id)
 
+// Events that export user-authored content (the prompt text itself) to external
+// sinks — IM channels, webhooks, the outbound message log. They are OFF in the
+// default ("all events") filter: a null/absent filter does NOT include them, so
+// an existing install does not begin forwarding prompt text after upgrade. The
+// user must enable them deliberately, which persists an explicit filter list.
+// Mirrors the backend `DEFAULT_OFF_EVENTS` (chat_channel/event_subscriber.rs).
+const DEFAULT_OFF_IDS = new Set<string>(["user_prompt_sent"])
+const DEFAULT_ON_IDS = ALL_IDS.filter((id) => !DEFAULT_OFF_IDS.has(id))
+
 function parseFilter(arr: string[] | null): Set<string> {
-  if (!arr) return new Set(ALL_IDS)
+  // null = the default set (everything EXCEPT the opt-in events).
+  if (!arr) return new Set(DEFAULT_ON_IDS)
   return new Set(arr)
 }
 
@@ -72,6 +87,15 @@ export function isValidWebhookUrl(url: string): boolean {
 // translated) so consumers see the exact field names they receive.
 const PAYLOAD_EXAMPLES: Record<(typeof ALL_EVENT_TYPES)[number]["id"], string> =
   {
+    user_prompt_sent: `{
+  "event": "user_prompt_sent",
+  "level": "info",
+  "title": "User Message",
+  "body": "Please refactor the auth module",
+  "fields": [],
+  "connection_id": "conn-abc",
+  "source": "codeg"
+}`,
     turn_complete: `{
   "event": "turn_complete",
   "level": "info",
@@ -104,7 +128,7 @@ const PAYLOAD_EXAMPLES: Record<(typeof ALL_EVENT_TYPES)[number]["id"], string> =
 export function ChannelEventsTab() {
   const t = useTranslations("ChatChannelSettings.events")
   const [enabledEvents, setEnabledEvents] = useState<Set<string>>(
-    new Set(ALL_IDS)
+    new Set(DEFAULT_ON_IDS)
   )
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -145,8 +169,15 @@ export function ChannelEventsTab() {
         } else {
           next.delete(eventId)
         }
-        const isAll = next.size === ALL_EVENT_TYPES.length
-        await setChatEventFilter(isAll ? null : [...next])
+        // Collapse to the null "default" sentinel ONLY when the selection is
+        // exactly the default-on set. Any other selection (an opt-in event
+        // enabled, or a default-on event disabled) must persist as an explicit
+        // list so it round-trips — null would otherwise re-exclude opt-in
+        // events on reload (see backend DEFAULT_OFF_EVENTS).
+        const isDefault =
+          next.size === DEFAULT_ON_IDS.length &&
+          DEFAULT_ON_IDS.every((id) => next.has(id))
+        await setChatEventFilter(isDefault ? null : [...next])
         setEnabledEvents(next)
         toast.success(t("saved"))
       } catch {
@@ -272,6 +303,7 @@ export function ChannelEventsTab() {
             <Switch
               checked={enabledEvents.has(evt.id)}
               disabled={saving}
+              aria-label={t(evt.labelKey)}
               onCheckedChange={(checked) => handleToggle(evt.id, checked)}
             />
           </div>

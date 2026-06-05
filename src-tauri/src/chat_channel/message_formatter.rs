@@ -65,6 +65,14 @@ pub fn format_permission_request(tool_call: &serde_json::Value, lang: Lang) -> R
     }
 }
 
+/// Build the "user message" notification for a prompt the user submitted from
+/// the Codeg conversation UI. `text_preview` is the already-bounded message
+/// text (see `ConnectionManager::send_prompt_linked`); it becomes the body so a
+/// channel / webhook consumer sees what was sent.
+pub fn format_user_prompt_sent(text_preview: &str, lang: Lang) -> RichMessage {
+    RichMessage::info(text_preview.to_string()).with_title(i18n::user_message_title(lang))
+}
+
 pub struct DailyReportData {
     pub date: String,
     pub conversations_by_agent: Vec<(String, u32)>,
@@ -140,5 +148,25 @@ mod permission_request_tests {
     fn falls_back_to_unknown_tool_when_empty() {
         let msg = format_permission_request(&serde_json::json!({}), Lang::En);
         assert!(msg.to_plain_text().contains("Unknown tool"));
+    }
+}
+
+#[cfg(test)]
+mod user_prompt_sent_tests {
+    use super::*;
+
+    #[test]
+    fn renders_localized_title_and_message_as_body() {
+        let msg = format_user_prompt_sent("refactor the auth module", Lang::En);
+        assert_eq!(msg.level, MessageLevel::Info);
+        assert_eq!(msg.title.as_deref(), Some("User Message"));
+        assert_eq!(msg.body, "refactor the auth module");
+    }
+
+    #[test]
+    fn localizes_title_per_language() {
+        let msg = format_user_prompt_sent("你好", Lang::ZhCn);
+        assert_eq!(msg.title.as_deref(), Some("用户消息"));
+        assert!(msg.to_plain_text().contains("你好"));
     }
 }

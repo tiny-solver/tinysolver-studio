@@ -631,9 +631,18 @@ fn build_lark_card(msg: &RichMessage) -> serde_json::Value {
     let mut elements: Vec<serde_json::Value> = Vec::new();
 
     if !msg.body.is_empty() {
+        // Render the body as PLAIN TEXT, never markdown. An event body can carry
+        // user-authored content (e.g. `user_prompt_sent` forwards the prompt
+        // text verbatim), and Lark's `markdown` element would interpret `<at>`
+        // mentions, links, and formatting embedded in it. `plain_text`
+        // neutralizes all of that; existing event bodies are plain sentences, so
+        // their rendering is unchanged.
         elements.push(serde_json::json!({
-            "tag": "markdown",
-            "content": msg.body,
+            "tag": "div",
+            "text": {
+                "tag": "plain_text",
+                "content": msg.body,
+            },
         }));
     }
 
@@ -669,4 +678,35 @@ fn build_lark_card(msg: &RichMessage) -> serde_json::Value {
         },
         "elements": elements,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The card body must render as `plain_text`, never `markdown` — an event
+    /// body can carry user-authored content (e.g. `user_prompt_sent`), and a
+    /// markdown body would let `<at>` mentions / links / formatting inject into
+    /// the Lark card. Guards against a regression back to the markdown element.
+    #[test]
+    fn body_renders_as_plain_text_not_markdown() {
+        let raw = "<at id=all></at> **bold** [x](http://e.test)";
+        let msg = RichMessage::info(raw).with_title("User Message");
+        let card = build_lark_card(&msg);
+
+        let elements = card["elements"].as_array().expect("elements array");
+        let body = &elements[0];
+        assert_eq!(body["tag"], "div", "body must be a div element");
+        assert_eq!(
+            body["text"]["tag"], "plain_text",
+            "body text must be plain_text, not markdown"
+        );
+        // Content is preserved verbatim — there is no markdown element to
+        // interpret the `<at>` / `**` / link syntax.
+        assert_eq!(body["text"]["content"], raw);
+        assert!(
+            elements.iter().all(|e| e["tag"] != "markdown"),
+            "no element may render the body as markdown"
+        );
+    }
 }

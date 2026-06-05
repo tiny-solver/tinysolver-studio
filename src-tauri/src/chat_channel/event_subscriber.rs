@@ -20,6 +20,14 @@ use crate::db::service::{
 
 /// Minimum interval between pushes for the same event type per channel (debounce).
 const DEBOUNCE_SECS: u64 = 5;
+
+/// Events that export user-authored content (the prompt text itself) to
+/// external sinks — IM channels, webhooks, and the outbound message log. They
+/// are NOT part of the default ("all events") feed: a null/absent filter
+/// EXCLUDES them, so an install that never customized its filter does not begin
+/// forwarding prompt text after upgrade. The user must enable them
+/// deliberately, which persists an explicit filter list containing the id.
+const DEFAULT_OFF_EVENTS: &[&str] = &["user_prompt_sent"];
 /// How often to refresh cached config from DB.
 const CONFIG_CACHE_TTL_SECS: u64 = 30;
 
@@ -191,10 +199,19 @@ async fn process_envelope(
     };
 
     // Global event filter first — a filtered-out event needs no bridge lock or
-    // fan-out work.
-    if let Some(filter) = &config.global_filter {
-        if !filter.contains(&event_type) {
-            return;
+    // fan-out work. A null filter is the default set: opt-in events that export
+    // prompt text (DEFAULT_OFF_EVENTS) stay off until the user enables them
+    // (which materializes an explicit filter list containing the id).
+    match &config.global_filter {
+        Some(filter) => {
+            if !filter.contains(&event_type) {
+                return;
+            }
+        }
+        None => {
+            if DEFAULT_OFF_EVENTS.contains(&event_type.as_str()) {
+                return;
+            }
         }
     }
 
@@ -223,13 +240,17 @@ async fn process_envelope(
         );
     }
 
-    // Permission requests bypass the per-(channel, event) debounce. That debounce
-    // throttles high-frequency events like turn_complete, but a permission gate is
-    // a discrete, blocking, actionable event: a second gate on the same connection
-    // (sequential) or a second concurrent agent's gate within the 5s window would
-    // otherwise be silently dropped — and a blocked agent emits no further event
-    // to re-trigger the lost nudge. So each one is always delivered.
-    let debounced = event_type != "permission_request";
+    // Some events bypass the per-(channel, event) debounce. That debounce
+    // throttles high-frequency events like turn_complete, but these are discrete,
+    // individually-meaningful events that must each deliver:
+    //   - permission_request: a blocking gate; a second gate on the same
+    //     connection (sequential) or a concurrent agent's gate within the 5s
+    //     window would otherwise be dropped — and a blocked agent emits no
+    //     further event to re-trigger the lost nudge.
+    //   - user_prompt_sent: each user message is a distinct action a consumer
+    //     wants to see; coalescing two messages sent within 5s would silently
+    //     swallow the second.
+    let debounced = !matches!(event_type.as_str(), "permission_request" | "user_prompt_sent");
 
     for ch in &config.enabled_channels {
         // Per-channel event filter
@@ -311,6 +332,10 @@ fn parse_acp_event(payload: &AcpEvent, lang: Lang) -> Option<(String, RichMessag
         AcpEvent::PermissionRequest { tool_call, .. } => Some((
             "permission_request".to_string(),
             message_formatter::format_permission_request(tool_call, lang),
+        )),
+        AcpEvent::UserPromptSent { text_preview } => Some((
+            "user_prompt_sent".to_string(),
+            message_formatter::format_user_prompt_sent(text_preview, lang),
         )),
         _ => None,
     }
@@ -469,6 +494,16 @@ mod permission_push_tests {
                     "rawInput": { "command": "npm test" }
                 }),
                 options: vec![],
+            },
+        }
+    }
+
+    fn user_prompt_envelope(connection_id: &str, text: &str) -> EventEnvelope {
+        EventEnvelope {
+            seq: 1,
+            connection_id: connection_id.into(),
+            payload: AcpEvent::UserPromptSent {
+                text_preview: text.into(),
             },
         }
     }
@@ -746,6 +781,170 @@ mod permission_push_tests {
         .await;
 
         assert_eq!(sent(&rec).await.len(), 1);
+    }
+
+    /// Once explicitly enabled (filter contains the id), a user_prompt_sent
+    /// event is pushed, carrying the localized title and the message text as the
+    /// body.
+    #[tokio::test]
+    async fn user_prompt_sent_is_pushed() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut config = config_all_on(7);
+        // Opt-in: user_prompt_sent is suppressed under the default null filter,
+        // so an explicit list that includes it is required for delivery.
+        config.global_filter = Some(vec!["user_prompt_sent".to_string()]);
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &user_prompt_envelope("desktop-conn", "refactor the auth module"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let msgs = sent(&rec).await;
+        assert_eq!(msgs.len(), 1, "expected one push, got {msgs:?}");
+        assert!(msgs[0].contains("User Message"), "got {:?}", msgs[0]);
+        assert!(
+            msgs[0].contains("refactor the auth module"),
+            "got {:?}",
+            msgs[0]
+        );
+    }
+
+    /// user_prompt_sent bypasses the debounce: two distinct user messages within
+    /// the 5s window must BOTH deliver (each is a discrete user action).
+    #[tokio::test]
+    async fn user_prompt_sent_is_not_debounced() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut config = config_all_on(7);
+        config.global_filter = Some(vec!["user_prompt_sent".to_string()]);
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &user_prompt_envelope("c", "first message"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+        process_envelope(
+            &user_prompt_envelope("c", "second message"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        assert_eq!(
+            sent(&rec).await.len(),
+            2,
+            "both user messages within 5s must be delivered"
+        );
+    }
+
+    /// The global event filter gates user_prompt_sent: with the id toggled off
+    /// (filter present, not containing it), nothing is pushed.
+    #[tokio::test]
+    async fn user_prompt_sent_respects_global_filter() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut config = config_all_on(7);
+        config.global_filter = Some(vec!["turn_complete".to_string()]);
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &user_prompt_envelope("desktop-conn", "hello"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        assert!(sent(&rec).await.is_empty());
+    }
+
+    /// Opt-in default: with NO explicit filter configured (null = the default
+    /// "all events" set), user_prompt_sent is suppressed — it must not forward
+    /// prompt text to channels until the user enables it deliberately. Contrast
+    /// `turn_complete_still_pushes`, which DOES fire under the same null filter.
+    #[tokio::test]
+    async fn user_prompt_sent_off_by_default() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let config = config_all_on(7); // global_filter = None (the default)
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &user_prompt_envelope("desktop-conn", "secret prompt text"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        assert!(
+            sent(&rec).await.is_empty(),
+            "user_prompt_sent must be off under the default null filter"
+        );
+    }
+
+    /// The opt-in default also gates webhooks: under the null filter, a
+    /// configured webhook receives no user_prompt_sent delivery (no inbound
+    /// connection). Mirrors `webhook_suppressed_by_global_filter`.
+    #[tokio::test]
+    async fn user_prompt_sent_off_by_default_for_webhooks() {
+        use tokio::net::TcpListener;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, _rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let mut last_push = HashMap::new();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let mut config = config_all_on(7); // global_filter = None (the default)
+        config.webhooks = vec![format!("http://{addr}/hook")];
+
+        process_envelope(
+            &user_prompt_envelope("desktop-conn", "secret prompt text"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let accepted = tokio::time::timeout(Duration::from_millis(400), listener.accept()).await;
+        assert!(
+            accepted.is_err(),
+            "default-off user_prompt_sent must not reach a webhook"
+        );
     }
 
     /// A configured webhook receives a POST with the structured JSON payload

@@ -534,6 +534,12 @@ export type AcpEvent =
       stop_reason: string
     }
   | {
+      // Synthetic notification-only event (chat-channel "user message" push).
+      // The frontend reducer has no case for it — it is consumed backend-side.
+      type: "user_prompt_sent"
+      text_preview: string
+    }
+  | {
       type: "session_started"
       session_id: string
     }

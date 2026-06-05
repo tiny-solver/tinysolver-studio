@@ -2324,6 +2324,8 @@
       "errorDesc": "代理遇到错误时",
       "permissionRequest": "权限请求",
       "permissionRequestDesc": "智能体请求操作权限时",
+      "userPromptSent": "用户消息",
+      "userPromptSentDesc": "当你发送消息时——通知中会包含消息内容",
       "saved": "事件过滤已更新。",
       "saveFailed": "保存事件过滤失败。",
       "webhooksTitle": "Webhook",

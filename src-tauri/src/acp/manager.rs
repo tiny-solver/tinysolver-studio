@@ -22,6 +22,39 @@ use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
 
+/// Cap on the number of prompt-text chars kept in the `user_prompt_sent`
+/// preview. Past this, `truncate_str` keeps this many chars and appends a short
+/// `...` marker (so the rendered string can be a few chars longer). Bounds the
+/// event payload so a large paste can't bloat the ring buffer, the per-channel
+/// IM message, or the webhook body.
+const USER_PROMPT_PREVIEW_MAX_CHARS: usize = 500;
+
+/// Build the bounded preview string for a `user_prompt_sent` notification from
+/// the `Text` blocks of a user prompt. Joins the (trimmed, non-empty) text
+/// blocks with a space and caps the kept text at `USER_PROMPT_PREVIEW_MAX_CHARS`
+/// chars (a `...` marker is appended past the cap). Returns `None` when the
+/// prompt carries no text (e.g. image-only) — the notification fires for text
+/// messages only.
+fn user_prompt_text_preview(blocks: &[PromptInputBlock]) -> Option<String> {
+    let joined = blocks
+        .iter()
+        .filter_map(|b| match b {
+            PromptInputBlock::Text { text } => {
+                let t = text.trim();
+                (!t.is_empty()).then_some(t)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let trimmed = joined.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(crate::parsers::truncate_str(trimmed, USER_PROMPT_PREVIEW_MAX_CHARS))
+    }
+}
+
 /// Composite key identifying a logical agent session for spawn-time dedup.
 /// Two `acp_connect` calls with the same triple race for the same `Mutex`,
 /// so the second one observes the first's freshly-spawned connection in
@@ -673,6 +706,17 @@ impl ConnectionManager {
             .await;
         }
 
+        // Capture a bounded preview of the user's message BEFORE `blocks` is
+        // moved into `send_prompt_inner`. Only on the genuine UI path
+        // (`delegation.is_none()`): delegation / sub-agent prompts are not user
+        // messages. Emitted after the send succeeds (below) so a prompt that
+        // never reached the agent produces no "user message" notification.
+        let user_prompt_preview = if delegation.is_none() {
+            user_prompt_text_preview(&blocks)
+        } else {
+            None
+        };
+
         // We hold `_prompt_guard` here, so call the lock-free inner helper —
         // re-entering `send_prompt` would try to acquire the same mutex and
         // deadlock. On failure (channel closed, process exited), flip the
@@ -682,7 +726,20 @@ impl ConnectionManager {
         // PendingReview write also never fires — the row would be stuck
         // until a follow-up `send_prompt_linked` happened to re-flip it.
         match self.send_prompt_inner(conn_id, blocks).await {
-            Ok(()) => Ok(conversation_id_for_status),
+            Ok(()) => {
+                // The prompt reached the agent: surface it to the chat-channel
+                // "user message" event feed. Notification-only — never gates the
+                // send result.
+                if let Some(text_preview) = user_prompt_preview {
+                    emit_with_state(
+                        &state_arc,
+                        &emitter,
+                        AcpEvent::UserPromptSent { text_preview },
+                    )
+                    .await;
+                }
+                Ok(conversation_id_for_status)
+            }
             Err(send_err) => {
                 if let Some(cid) = conversation_id_for_status {
                     match conversation_service::update_status(
@@ -1484,6 +1541,160 @@ mod tests {
             .expect("timed out waiting for acp event")
             .expect("per-connection stream closed");
         (*evt).clone()
+    }
+
+    /// Insert a synthetic connection whose `cmd_tx` receiver is RETAINED and
+    /// returned to the caller, so `send_prompt_inner` actually succeeds —
+    /// exercising the Ok path of `send_prompt_linked` (unlike
+    /// `insert_test_connection`, which drops the receiver so every send fails).
+    /// The caller must keep the returned receiver alive for the send's duration.
+    async fn insert_live_connection(
+        mgr: &ConnectionManager,
+        id: &str,
+        working_dir: Option<PathBuf>,
+    ) -> mpsc::Receiver<ConnectionCommand> {
+        let (tx, rx) = mpsc::channel(8);
+        let mut state = SessionState::new(
+            id.to_string(),
+            crate::models::agent::AgentType::ClaudeCode,
+            working_dir,
+            "test-window".to_string(),
+            None,
+        );
+        state.status = ConnectionStatus::Connected;
+        let conn = AgentConnection {
+            id: id.to_string(),
+            agent_type: crate::models::agent::AgentType::ClaudeCode,
+            status: ConnectionStatus::Connected,
+            owner_window_label: "test-window".to_string(),
+            cmd_tx: tx,
+            state: Arc::new(RwLock::new(state)),
+            emitter: EventEmitter::Noop,
+            prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+        };
+        mgr.connections.lock().await.insert(id.to_string(), conn);
+        rx
+    }
+
+    #[test]
+    fn user_prompt_text_preview_joins_and_trims_text_blocks() {
+        let blocks = vec![
+            PromptInputBlock::Text {
+                text: "  hello  ".into(),
+            },
+            PromptInputBlock::Text {
+                text: "world".into(),
+            },
+        ];
+        assert_eq!(
+            user_prompt_text_preview(&blocks).as_deref(),
+            Some("hello world")
+        );
+    }
+
+    #[test]
+    fn user_prompt_text_preview_is_none_for_empty_or_textless() {
+        assert!(user_prompt_text_preview(&[]).is_none());
+        assert!(user_prompt_text_preview(&[PromptInputBlock::Text {
+            text: "   ".into()
+        }])
+        .is_none());
+        let img = vec![PromptInputBlock::Image {
+            data: "x".into(),
+            mime_type: "image/png".into(),
+            uri: None,
+        }];
+        assert!(user_prompt_text_preview(&img).is_none());
+    }
+
+    #[test]
+    fn user_prompt_text_preview_truncates_long_input() {
+        let long = "a".repeat(USER_PROMPT_PREVIEW_MAX_CHARS + 50);
+        let preview = user_prompt_text_preview(&[PromptInputBlock::Text { text: long }]).unwrap();
+        // truncate_str keeps MAX chars then appends a 3-char "..." marker.
+        assert_eq!(preview.chars().count(), USER_PROMPT_PREVIEW_MAX_CHARS + 3);
+        assert!(preview.ends_with("..."));
+    }
+
+    /// A successful UI send (delegation = None, text present) emits
+    /// `UserPromptSent` carrying the message preview, after the link + status
+    /// events.
+    #[tokio::test]
+    async fn send_prompt_linked_emits_user_prompt_sent_on_success() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/ups").await;
+        let mgr = ConnectionManager::new();
+        let conn_id = "conn-ups-1";
+        let _rx = insert_live_connection(&mgr, conn_id, Some(PathBuf::from("/tmp/ups"))).await;
+        let mut stream = subscribe_conn_stream(&mgr, conn_id).await;
+
+        mgr.send_prompt_linked(
+            &db,
+            conn_id,
+            vec![PromptInputBlock::Text {
+                text: "hello world".into(),
+            }],
+            Some(folder_id),
+            None,
+            None,
+        )
+        .await
+        .expect("send should succeed with a live receiver");
+
+        let mut found = None;
+        for _ in 0..5 {
+            let env = recv_first_acp_event(&mut stream).await;
+            if let AcpEvent::UserPromptSent { text_preview } = env.payload {
+                found = Some(text_preview);
+                break;
+            }
+        }
+        assert_eq!(found.as_deref(), Some("hello world"));
+    }
+
+    /// A textless prompt (image-only) succeeds but emits NO `UserPromptSent` —
+    /// the notification fires for text messages only.
+    #[tokio::test]
+    async fn send_prompt_linked_skips_user_prompt_sent_for_textless_prompt() {
+        use crate::db::test_helpers;
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/ups2").await;
+        let mgr = ConnectionManager::new();
+        let conn_id = "conn-ups-2";
+        let _rx = insert_live_connection(&mgr, conn_id, Some(PathBuf::from("/tmp/ups2"))).await;
+        let mut stream = subscribe_conn_stream(&mgr, conn_id).await;
+
+        mgr.send_prompt_linked(
+            &db,
+            conn_id,
+            vec![PromptInputBlock::Image {
+                data: "deadbeef".into(),
+                mime_type: "image/png".into(),
+                uri: None,
+            }],
+            Some(folder_id),
+            None,
+            None,
+        )
+        .await
+        .expect("send should succeed with a live receiver");
+
+        let mut saw_user_prompt = false;
+        for _ in 0..4 {
+            match tokio::time::timeout(std::time::Duration::from_millis(100), stream.recv()).await {
+                Ok(Ok(env)) => {
+                    if matches!(env.payload, AcpEvent::UserPromptSent { .. }) {
+                        saw_user_prompt = true;
+                    }
+                }
+                _ => break,
+            }
+        }
+        assert!(
+            !saw_user_prompt,
+            "a textless (image-only) prompt must not emit UserPromptSent"
+        );
     }
 
     #[tokio::test]

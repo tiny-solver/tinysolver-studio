@@ -2324,6 +2324,8 @@
       "errorDesc": "When an agent encounters an error",
       "permissionRequest": "Permission Request",
       "permissionRequestDesc": "When an agent requests permission to act",
+      "userPromptSent": "User Message",
+      "userPromptSentDesc": "When you send a message — the message text is included in the notification",
       "saved": "Event filter updated.",
       "saveFailed": "Failed to save event filter.",
       "webhooksTitle": "Webhooks",

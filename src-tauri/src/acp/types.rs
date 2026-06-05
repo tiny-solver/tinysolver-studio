@@ -241,6 +241,15 @@ pub enum AcpEvent {
         agent_type: crate::models::agent::AgentType,
         result: DelegationResultSummary,
     },
+    /// A human submitted a prompt from the Codeg conversation UI (desktop or
+    /// web). Synthetic, notification-only event: it mutates no `SessionState`
+    /// field and exists purely to drive the chat-channel "user message" push.
+    /// Emitted by `send_prompt_linked` on the genuine UI path only
+    /// (`delegation.is_none()`), after the prompt reached the agent, and only
+    /// when the message carried text. `text_preview` is already bounded by the
+    /// emitter so a large paste can't bloat the event payload / ring buffer /
+    /// webhook body.
+    UserPromptSent { text_preview: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

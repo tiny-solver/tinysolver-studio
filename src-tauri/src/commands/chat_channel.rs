@@ -318,7 +318,9 @@ pub async fn set_chat_event_filter_core(
             .map_err(AppCommandError::from)?;
         }
         None => {
-            // null means all events enabled — remove the key
+            // null is the DEFAULT event set: every event EXCEPT the opt-in ones
+            // that export prompt text (see `event_subscriber::DEFAULT_OFF_EVENTS`,
+            // e.g. `user_prompt_sent`). Persist the sentinel "null".
             crate::db::service::app_metadata_service::upsert_value(
                 &db.conn,
                 EVENT_FILTER_KEY,

@@ -21,12 +21,14 @@ import enMessages from "@/i18n/messages/en.json"
 import {
   getChatEventFilter,
   getChatEventWebhooks,
+  setChatEventFilter,
   setChatEventWebhooks,
 } from "@/lib/api"
 import { toast } from "sonner"
 import type { WebhookConfig } from "@/lib/types"
 
 const mockGetFilter = vi.mocked(getChatEventFilter)
+const mockSetFilter = vi.mocked(setChatEventFilter)
 const mockGetWebhooks = vi.mocked(getChatEventWebhooks)
 const mockSetWebhooks = vi.mocked(setChatEventWebhooks)
 
@@ -45,8 +47,63 @@ function hook(url: string, enabled = true): WebhookConfig {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetFilter.mockResolvedValue(null)
+  mockSetFilter.mockResolvedValue(undefined)
   mockGetWebhooks.mockResolvedValue([])
   mockSetWebhooks.mockResolvedValue(undefined)
+})
+
+describe("ChannelEventsTab event filter (opt-in user_prompt_sent)", () => {
+  it("defaults user_prompt_sent OFF under a null filter while other events stay ON", async () => {
+    mockGetFilter.mockResolvedValue(null)
+    renderTab()
+    await waitFor(() => expect(mockGetFilter).toHaveBeenCalled())
+
+    expect(
+      screen.getByRole("switch", { name: "User Message" })
+    ).not.toBeChecked()
+    expect(screen.getByRole("switch", { name: "Turn Complete" })).toBeChecked()
+    expect(
+      screen.getByRole("switch", { name: "Permission Request" })
+    ).toBeChecked()
+  })
+
+  it("enabling user_prompt_sent persists an explicit list including it (never null)", async () => {
+    mockGetFilter.mockResolvedValue(null)
+    renderTab()
+    await waitFor(() => expect(mockGetFilter).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole("switch", { name: "User Message" }))
+
+    await waitFor(() => expect(mockSetFilter).toHaveBeenCalled())
+    const calls = mockSetFilter.mock.calls
+    const arg = calls[calls.length - 1][0]
+    expect(arg).not.toBeNull()
+    expect(new Set(arg as string[])).toEqual(
+      new Set([
+        "turn_complete",
+        "error",
+        "permission_request",
+        "user_prompt_sent",
+      ])
+    )
+  })
+
+  it("disabling user_prompt_sent back to the default-on set collapses to null", async () => {
+    mockGetFilter.mockResolvedValue([
+      "turn_complete",
+      "error",
+      "permission_request",
+      "user_prompt_sent",
+    ])
+    renderTab()
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: "User Message" })).toBeChecked()
+    )
+
+    fireEvent.click(screen.getByRole("switch", { name: "User Message" }))
+
+    await waitFor(() => expect(mockSetFilter).toHaveBeenCalledWith(null))
+  })
 })
 
 describe("isValidWebhookUrl", () => {

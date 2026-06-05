@@ -203,6 +203,23 @@ pub fn permission_operation_label(lang: Lang) -> &'static str {
     }
 }
 
+// ── User message (global event push) ──
+
+pub fn user_message_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "用户消息",
+        Lang::ZhTw => "使用者訊息",
+        Lang::Ja => "ユーザーメッセージ",
+        Lang::Ko => "사용자 메시지",
+        Lang::Es => "Mensaje del usuario",
+        Lang::De => "Benutzernachricht",
+        Lang::Fr => "Message de l'utilisateur",
+        Lang::Pt => "Mensagem do usuário",
+        Lang::Ar => "رسالة المستخدم",
+        Lang::En => "User Message",
+    }
+}
+
 // ── Daily report ──
 
 pub fn daily_report_title(lang: Lang) -> &'static str {

@@ -643,8 +643,11 @@ impl SessionState {
                 // it is deliberately only the in-flight set.
                 self.active_delegations.remove(parent_tool_use_id);
             }
-            AcpEvent::ClaudeSdkMessage { .. } | AcpEvent::SessionLoadFailed { .. } => {
+            AcpEvent::ClaudeSdkMessage { .. }
+            | AcpEvent::SessionLoadFailed { .. }
+            | AcpEvent::UserPromptSent { .. } => {
                 // 这些事件不直接修改 SessionState 的可见字段。
+                // UserPromptSent 是纯通知事件，仅供 chat-channel 推送消费。
             }
         }
         self.last_activity_at = Utc::now();
