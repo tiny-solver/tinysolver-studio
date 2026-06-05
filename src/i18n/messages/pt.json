@@ -1491,6 +1491,7 @@
       "newDirectory": "Diretório",
       "openIn": "Abrir em",
       "openInTerminal": "Abrir no terminal",
+      "copyPath": "Copiar caminho",
       "upload": "Enviar arquivos/pasta",
       "download": "Baixar arquivo",
       "downloadAsZip": "Baixar como ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "Falha ao iniciar monitoramento de arquivos",
         "createFailed": "Falha ao criar",
         "downloadFailed": "Falha ao baixar {name}",
-        "downloadSaved": "{name} baixado"
+        "downloadSaved": "{name} baixado",
+        "pathCopied": "Caminho copiado",
+        "copyPathFailed": "Falha ao copiar o caminho"
       },
       "createDialog": {
         "newFile": "Novo arquivo",

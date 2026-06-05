@@ -1491,6 +1491,7 @@
       "newDirectory": "Directorio",
       "openIn": "Abrir en",
       "openInTerminal": "Abrir en terminal",
+      "copyPath": "Copiar ruta",
       "upload": "Subir archivos/carpeta",
       "download": "Descargar archivo",
       "downloadAsZip": "Descargar como ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "No se pudo iniciar la vigilancia de archivos",
         "createFailed": "Error al crear",
         "downloadFailed": "No se pudo descargar {name}",
-        "downloadSaved": "{name} descargado"
+        "downloadSaved": "{name} descargado",
+        "pathCopied": "Ruta copiada",
+        "copyPathFailed": "No se pudo copiar la ruta"
       },
       "createDialog": {
         "newFile": "Nuevo archivo",

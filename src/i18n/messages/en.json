@@ -1491,6 +1491,7 @@
       "newDirectory": "Directory",
       "openIn": "Open in",
       "openInTerminal": "Open in terminal",
+      "copyPath": "Copy path",
       "upload": "Upload files/folder",
       "download": "Download file",
       "downloadAsZip": "Download as ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "Failed to start file watch",
         "createFailed": "Failed to create",
         "downloadFailed": "Failed to download {name}",
-        "downloadSaved": "Downloaded {name}"
+        "downloadSaved": "Downloaded {name}",
+        "pathCopied": "Path copied",
+        "copyPathFailed": "Failed to copy path"
       },
       "createDialog": {
         "newFile": "New file",

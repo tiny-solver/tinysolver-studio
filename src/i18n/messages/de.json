@@ -1491,6 +1491,7 @@
       "newDirectory": "Verzeichnis",
       "openIn": "Öffnen in",
       "openInTerminal": "Im Terminal öffnen",
+      "copyPath": "Pfad kopieren",
       "upload": "Dateien/Ordner hochladen",
       "download": "Datei herunterladen",
       "downloadAsZip": "Als ZIP herunterladen",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "Dateiwatch konnte nicht gestartet werden",
         "createFailed": "Erstellen fehlgeschlagen",
         "downloadFailed": "Herunterladen von {name} fehlgeschlagen",
-        "downloadSaved": "{name} heruntergeladen"
+        "downloadSaved": "{name} heruntergeladen",
+        "pathCopied": "Pfad kopiert",
+        "copyPathFailed": "Pfad konnte nicht kopiert werden"
       },
       "createDialog": {
         "newFile": "Neue Datei",

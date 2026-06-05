@@ -1491,6 +1491,7 @@
       "newDirectory": "디렉터리",
       "openIn": "열기",
       "openInTerminal": "터미널에서 열기",
+      "copyPath": "경로 복사",
       "upload": "파일/폴더 업로드",
       "download": "파일 다운로드",
       "downloadAsZip": "ZIP으로 다운로드",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "파일 감시 시작에 실패했습니다",
         "createFailed": "생성 실패",
         "downloadFailed": "{name} 다운로드 실패",
-        "downloadSaved": "{name} 다운로드 완료"
+        "downloadSaved": "{name} 다운로드 완료",
+        "pathCopied": "경로가 복사되었습니다",
+        "copyPathFailed": "경로 복사에 실패했습니다"
       },
       "createDialog": {
         "newFile": "새 파일",

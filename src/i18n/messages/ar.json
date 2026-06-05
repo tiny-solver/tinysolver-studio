@@ -1491,6 +1491,7 @@
       "newDirectory": "مجلد",
       "openIn": "فتح في",
       "openInTerminal": "فتح في الطرفية",
+      "copyPath": "نسخ المسار",
       "upload": "رفع ملفات/مجلد",
       "download": "تنزيل ملف",
       "downloadAsZip": "تنزيل كملف ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "فشل بدء مراقبة الملفات",
         "createFailed": "فشل في الإنشاء",
         "downloadFailed": "فشل تنزيل {name}",
-        "downloadSaved": "تم تنزيل {name}"
+        "downloadSaved": "تم تنزيل {name}",
+        "pathCopied": "تم نسخ المسار",
+        "copyPathFailed": "فشل نسخ المسار"
       },
       "createDialog": {
         "newFile": "ملف جديد",

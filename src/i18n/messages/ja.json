@@ -1491,6 +1491,7 @@
       "newDirectory": "ディレクトリ",
       "openIn": "で開く",
       "openInTerminal": "ターミナルで開く",
+      "copyPath": "パスをコピー",
       "upload": "ファイル/フォルダをアップロード",
       "download": "ファイルをダウンロード",
       "downloadAsZip": "ZIP としてダウンロード",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "ファイル監視の開始に失敗しました",
         "createFailed": "作成に失敗しました",
         "downloadFailed": "{name} のダウンロードに失敗しました",
-        "downloadSaved": "{name} をダウンロードしました"
+        "downloadSaved": "{name} をダウンロードしました",
+        "pathCopied": "パスをコピーしました",
+        "copyPathFailed": "パスのコピーに失敗しました"
       },
       "createDialog": {
         "newFile": "新規ファイル",

@@ -1491,6 +1491,7 @@
       "newDirectory": "目錄",
       "openIn": "開啟於",
       "openInTerminal": "在終端開啟",
+      "copyPath": "複製路徑",
       "upload": "上傳檔案/目錄",
       "download": "下載檔案",
       "downloadAsZip": "下載為 ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "檔案監聽啟動失敗",
         "createFailed": "建立失敗",
         "downloadFailed": "下載 {name} 失敗",
-        "downloadSaved": "已下載 {name}"
+        "downloadSaved": "已下載 {name}",
+        "pathCopied": "已複製路徑",
+        "copyPathFailed": "複製路徑失敗"
       },
       "createDialog": {
         "newFile": "新建檔案",

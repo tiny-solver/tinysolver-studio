@@ -1491,6 +1491,7 @@
       "newDirectory": "Répertoire",
       "openIn": "Ouvrir dans",
       "openInTerminal": "Ouvrir dans le terminal",
+      "copyPath": "Copier le chemin",
       "upload": "Téléverser fichiers/dossier",
       "download": "Télécharger le fichier",
       "downloadAsZip": "Télécharger en ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "Échec du démarrage de la surveillance de fichiers",
         "createFailed": "Échec de la création",
         "downloadFailed": "Échec du téléchargement de {name}",
-        "downloadSaved": "{name} téléchargé"
+        "downloadSaved": "{name} téléchargé",
+        "pathCopied": "Chemin copié",
+        "copyPathFailed": "Échec de la copie du chemin"
       },
       "createDialog": {
         "newFile": "Nouveau fichier",

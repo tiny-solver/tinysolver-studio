@@ -1491,6 +1491,7 @@
       "newDirectory": "目录",
       "openIn": "打开于",
       "openInTerminal": "在终端打开",
+      "copyPath": "复制路径",
       "upload": "上传文件/目录",
       "download": "下载文件",
       "downloadAsZip": "下载为 ZIP",
@@ -1524,7 +1525,9 @@
         "watchStartFailed": "文件监听启动失败",
         "createFailed": "创建失败",
         "downloadFailed": "下载 {name} 失败",
-        "downloadSaved": "已下载 {name}"
+        "downloadSaved": "已下载 {name}",
+        "pathCopied": "已复制路径",
+        "copyPathFailed": "复制路径失败"
       },
       "createDialog": {
         "newFile": "新建文件",
