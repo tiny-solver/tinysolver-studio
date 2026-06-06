@@ -1,4 +1,5 @@
 pub mod acp;
+pub mod backup;
 pub mod chat_channel;
 pub mod conversations;
 pub mod delegation;
