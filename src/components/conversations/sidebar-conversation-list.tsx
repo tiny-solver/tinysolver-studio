@@ -67,6 +67,12 @@ import {
   type ThemeColor,
 } from "@/lib/theme-presets"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
+import {
+  formatRelative,
+  groupByFolderWithReuse,
+  reuseSelected,
+  reuseSet,
+} from "./sidebar-conversation-grouping"
 import { ConversationManageDialog } from "./conversation-manage-dialog"
 import { CloneDialog } from "@/components/layout/clone-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
@@ -96,42 +102,12 @@ import {
 import { cn } from "@/lib/utils"
 import { toErrorMessage } from "@/lib/app-error"
 
-function parseTimestamp(value: string): number {
-  const timestamp = Date.parse(value)
-  return Number.isNaN(timestamp) ? 0 : timestamp
-}
-
-function compareByUpdatedAtDesc(
-  left: DbConversationSummary,
-  right: DbConversationSummary
-): number {
-  const updatedDiff =
-    parseTimestamp(right.updated_at) - parseTimestamp(left.updated_at)
-  if (updatedDiff !== 0) return updatedDiff
-
-  const createdDiff =
-    parseTimestamp(right.created_at) - parseTimestamp(left.created_at)
-  if (createdDiff !== 0) return createdDiff
-
-  return right.id - left.id
-}
-
-function compareByCreatedAtDesc(
-  left: DbConversationSummary,
-  right: DbConversationSummary
-): number {
-  const createdDiff =
-    parseTimestamp(right.created_at) - parseTimestamp(left.created_at)
-  if (createdDiff !== 0) return createdDiff
-
-  const updatedDiff =
-    parseTimestamp(right.updated_at) - parseTimestamp(left.updated_at)
-  if (updatedDiff !== 0) return updatedDiff
-
-  return right.id - left.id
-}
-
 const THEME_COLOR_SET = new Set<string>(THEME_COLORS)
+
+// Shared empty bucket so folders with no (visible) conversations always receive
+// the same `conversations` array reference — otherwise a fresh `[]` each render
+// would defeat the `FolderGroupItem` memo for empty folders.
+const EMPTY_CONVERSATIONS: DbConversationSummary[] = []
 
 const LEGACY_FOLDER_COLOR_MAP: Record<string, FolderThemeColor> = {
   foreground: FOLDER_THEME_COLOR_INHERIT,
@@ -156,23 +132,6 @@ function normalizeFolderThemeColor(
   }
   if (THEME_COLOR_SET.has(normalized)) return normalized as ThemeColor
   return LEGACY_FOLDER_COLOR_MAP[normalized] ?? FOLDER_THEME_COLOR_INHERIT
-}
-
-function formatRelative(iso: string): string {
-  const ts = parseTimestamp(iso)
-  if (!ts) return ""
-  const diff = Math.max(0, Date.now() - ts)
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return "now"
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d}d`
-  const mo = Math.floor(d / 30)
-  if (mo < 12) return `${mo}mo`
-  const y = Math.floor(mo / 12)
-  return `${y}y`
 }
 
 const FolderHeader = memo(function FolderHeader({
@@ -506,6 +465,7 @@ interface FolderGroupItemProps {
   reordering: boolean
   dragging: boolean
   sortMode: SidebarSortMode
+  now: number
   selectedConversation: { id: number; agentType: string } | null
   openTabKeys: Set<string>
   themeColor: FolderThemeColor
@@ -523,21 +483,20 @@ interface FolderGroupItemProps {
   onSetDefaultAgent: (folderId: number, agentType: AgentType | null) => void
   onOpenInSystemExplorer: (folderId: number) => void
   onOpenInTerminal: (folderId: number) => void
-  onSelect: (id: number, agentType: string) => void
-  onDoubleClick: (id: number, agentType: string) => void
+  onSelect: (id: number, agentType: string, folderId: number) => void
+  onDoubleClick: (id: number, agentType: string, folderId: number) => void
   onRename: (id: number, newTitle: string) => Promise<void>
-  onDelete: (id: number, agentType: string) => Promise<void>
+  onDelete: (id: number, agentType: string, folderId: number) => Promise<void>
   onStatusChange: (id: number, status: ConversationStatus) => Promise<void>
   onNewConversation: () => void
   onDragStart: (folderId: number) => void
   onDragEnd: () => void
   stackIndex: number
-  t: ReturnType<typeof useTranslations>
 }
 
 const DRAGGING_Z_INDEX = 10_000
 
-function FolderGroupItem({
+const FolderGroupItem = memo(function FolderGroupItem({
   folderId,
   folderName,
   folderPath,
@@ -548,6 +507,7 @@ function FolderGroupItem({
   reordering,
   dragging,
   sortMode,
+  now,
   selectedConversation,
   openTabKeys,
   themeColor,
@@ -574,8 +534,11 @@ function FolderGroupItem({
   onDragStart,
   onDragEnd,
   stackIndex,
-  t,
 }: FolderGroupItemProps) {
+  // Own the translations here rather than receiving `t` as a prop: next-intl
+  // returns a fresh `t` on every parent render, so passing it down would defeat
+  // this component's memo and re-render every folder on each status event.
+  const t = useTranslations("Folder.sidebar")
   const justDraggedRef = useRef(false)
   const dragControls = useDragControls()
 
@@ -680,7 +643,8 @@ function FolderGroupItem({
                 }
                 isOpenInTab={openTabKeys.has(`${conv.agent_type}:${conv.id}`)}
                 timeLabel={formatRelative(
-                  sortMode === "updated" ? conv.updated_at : conv.created_at
+                  sortMode === "updated" ? conv.updated_at : conv.created_at,
+                  now
                 )}
                 onSelect={onSelect}
                 onDoubleClick={onDoubleClick}
@@ -694,7 +658,7 @@ function FolderGroupItem({
       </Reorder.Item>
     </div>
   )
-}
+})
 
 export interface SidebarConversationListHandle {
   scrollToActive: () => void
@@ -768,23 +732,34 @@ export function SidebarConversationList({
     return map
   }, [allFolders])
 
+  // `tabs` gets a fresh array reference on every `conversations` change (the tab
+  // context re-derives titles/status), so these two derivations would otherwise
+  // hand a new object / Set to every FolderGroupItem on each status event and
+  // defeat its memo. Reuse the previous reference when the content is unchanged
+  // (render-phase ref cache; idempotent under StrictMode's double invoke).
+  const selectedConvRef = useRef<{ id: number; agentType: string } | null>(null)
   const selectedConversation = useMemo(() => {
     const activeTab = tabs.find((tab) => tab.id === activeTabId)
-    if (!activeTab || activeTab.conversationId == null) return null
-    return {
-      id: activeTab.conversationId,
-      agentType: activeTab.agentType,
-    }
+    const next =
+      !activeTab || activeTab.conversationId == null
+        ? null
+        : { id: activeTab.conversationId, agentType: activeTab.agentType }
+    const reused = reuseSelected(selectedConvRef.current, next)
+    selectedConvRef.current = reused
+    return reused
   }, [tabs, activeTabId])
 
+  const openTabKeysRef = useRef<Set<string>>(new Set())
   const openTabKeys = useMemo(() => {
-    const set = new Set<string>()
+    const next = new Set<string>()
     for (const tab of tabs) {
       if (tab.conversationId != null) {
-        set.add(`${tab.agentType}:${tab.conversationId}`)
+        next.add(`${tab.agentType}:${tab.conversationId}`)
       }
     }
-    return set
+    const reused = reuseSet(openTabKeysRef.current, next)
+    openTabKeysRef.current = reused
+    return reused
   }, [tabs])
 
   const [importing, setImporting] = useState(false)
@@ -870,22 +845,34 @@ export function SidebarConversationList({
   const scrollToActiveRef = useRef<() => void>(() => {})
   const pendingScrollRef = useRef(false)
 
+  // Single "now" shared by every relative time label, refreshed once a minute.
+  // Threading one value through all rows (instead of each row calling
+  // `Date.now()` during render) keeps `timeLabel` referentially stable within a
+  // render tick, so a single status event re-renders only the affected card.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(interval)
+  }, [])
+
   const filteredConversations = useMemo(() => {
     if (showCompleted) return conversations
     return conversations.filter((c) => c.status !== "completed")
   }, [conversations, showCompleted])
 
+  // Hold the previous grouping so unchanged folders keep their bucket array
+  // reference across renders (lets memoized FolderGroupItems bail out). Updating
+  // the ref inside the memo factory is a deliberate cache, idempotent under
+  // StrictMode's double invoke.
+  const byFolderRef = useRef<Map<number, DbConversationSummary[]>>(new Map())
   const byFolder = useMemo(() => {
-    const map = new Map<number, DbConversationSummary[]>()
-    for (const conv of filteredConversations) {
-      const list = map.get(conv.folder_id)
-      if (list) list.push(conv)
-      else map.set(conv.folder_id, [conv])
-    }
-    const comparator =
-      sortMode === "updated" ? compareByUpdatedAtDesc : compareByCreatedAtDesc
-    for (const list of map.values()) list.sort(comparator)
-    return map
+    const grouped = groupByFolderWithReuse(
+      filteredConversations,
+      sortMode,
+      byFolderRef.current
+    )
+    byFolderRef.current = grouped
+    return grouped
   }, [filteredConversations, sortMode])
 
   const folderTotalCounts = useMemo(() => {
@@ -1024,36 +1011,22 @@ export function SidebarConversationList({
     }
   }, [removeConfirm, closeTabsByFolder, removeFolderFromWorkspace, t])
 
+  // The card already holds the full summary, so it passes `folderId` back to
+  // these callbacks. That removes the `conversations` closure dependency, which
+  // is what keeps these references stable across status events — the linchpin
+  // for the card `memo` actually bailing out (see Phase 1 of the perf plan).
   const handleSelect = useCallback(
-    (id: number, agentType: string) => {
-      const conv = conversations.find(
-        (c) => c.id === id && c.agent_type === agentType
-      )
-      if (!conv) return
-      openTab(
-        conv.folder_id,
-        id,
-        agentType as Parameters<typeof openTab>[2],
-        false
-      )
+    (id: number, agentType: string, folderId: number) => {
+      openTab(folderId, id, agentType as Parameters<typeof openTab>[2], false)
     },
-    [openTab, conversations]
+    [openTab]
   )
 
   const handleDoubleClick = useCallback(
-    (id: number, agentType: string) => {
-      const conv = conversations.find(
-        (c) => c.id === id && c.agent_type === agentType
-      )
-      if (!conv) return
-      openTab(
-        conv.folder_id,
-        id,
-        agentType as Parameters<typeof openTab>[2],
-        true
-      )
+    (id: number, agentType: string, folderId: number) => {
+      openTab(folderId, id, agentType as Parameters<typeof openTab>[2], true)
     },
-    [openTab, conversations]
+    [openTab]
   )
 
   const handleRename = useCallback(
@@ -1065,21 +1038,17 @@ export function SidebarConversationList({
   )
 
   const handleDelete = useCallback(
-    async (id: number, agentType: string) => {
-      const conv = conversations.find(
-        (c) => c.id === id && c.agent_type === agentType
-      )
+    async (id: number, agentType: string, folderId: number) => {
       await deleteConversation(id)
-      if (conv) {
-        closeConversationTab(
-          conv.folder_id,
-          id,
-          agentType as Parameters<typeof openTab>[2]
-        )
-      }
+      // No-op if no matching tab is open (the context guards on its tab ref).
+      closeConversationTab(
+        folderId,
+        id,
+        agentType as Parameters<typeof openTab>[2]
+      )
       refreshConversations()
     },
-    [closeConversationTab, refreshConversations, conversations]
+    [closeConversationTab, refreshConversations]
   )
 
   const handleStatusChange = useCallback(
@@ -1307,11 +1276,8 @@ export function SidebarConversationList({
                     const folderPath = folderEntry?.path ?? ""
                     const currentDefaultAgent =
                       folderEntry?.defaultAgentType ?? null
-                    const convs = byFolder.get(folderId) ?? []
+                    const convs = byFolder.get(folderId) ?? EMPTY_CONVERSATIONS
                     const expanded = folderExpanded[folderId] ?? true
-                    const convsWithKey = convs.map((conv) => ({
-                      ...conv,
-                    }))
                     // Earlier folders get a higher stacking index so their
                     // sticky headers paint above later folders' conversation
                     // cards when scrolled. Framer's `layout` prop sets
@@ -1324,7 +1290,7 @@ export function SidebarConversationList({
                         folderId={folderId}
                         folderName={folderName}
                         folderPath={folderPath}
-                        conversations={convsWithKey}
+                        conversations={convs}
                         totalConversationCount={
                           folderTotalCounts.get(folderId) ?? 0
                         }
@@ -1333,6 +1299,7 @@ export function SidebarConversationList({
                         reordering={reordering}
                         dragging={dragging === folderId}
                         sortMode={sortMode}
+                        now={now}
                         selectedConversation={selectedConversation}
                         openTabKeys={openTabKeys}
                         themeColor={themeColor}
@@ -1363,7 +1330,6 @@ export function SidebarConversationList({
                         onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
                         stackIndex={stackIndex}
-                        t={t}
                       />
                     )
                   })}
