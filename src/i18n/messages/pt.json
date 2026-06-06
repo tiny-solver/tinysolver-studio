@@ -1802,6 +1802,12 @@
         "noEnabledAgents": "Nenhum agente habilitado",
         "openAgentsSettings": "Abrir configurações de agentes"
       },
+      "subAgentOverlay": {
+        "title": "Subagentes",
+        "collapsedSummary": "Subagentes {count}",
+        "collapseAria": "Recolher subagentes",
+        "expandAria": "Expandir subagentes"
+      },
       "agentPlanOverlay": {
         "title": "Plano do agente",
         "collapsePlanAria": "Recolher plano",
@@ -2645,6 +2651,84 @@
     "emptyDirectory": "Este diretório está vazio",
     "errorLoadingDir": "Falha ao carregar o diretório",
     "selectedCount": "{count} selecionado(s)"
+  },
+  "BackupSettings": {
+    "title": "Backup e restauração",
+    "description": "Exporte um backup portátil dos seus dados do codeg ou restaure a partir de um.",
+    "tabs": {
+      "backup": "Backup",
+      "restore": "Restauração"
+    },
+    "export": {
+      "includeExternal": "Incluir o conteúdo das conversas",
+      "includeExternalHint": "Também arquiva as transcrições das CLIs (Claude, Codex, Gemini, …). Aumenta o tamanho.",
+      "passphrase": "Senha (opcional)",
+      "passphrasePlaceholder": "Deixe em branco para um arquivo sem criptografia",
+      "passphraseConfirm": "Confirmar a senha",
+      "passphraseMismatch": "As senhas não coincidem.",
+      "noPassphraseWarning": "Este backup conterá segredos (chaves de API, tokens) em texto puro. Guarde-o em local seguro.",
+      "passphraseLossWarning": "Criptografado com esta senha. Se você perdê-la, o backup não poderá ser recuperado.",
+      "button": "Exportar backup",
+      "inProgress": "Criando backup…",
+      "success": "Backup criado.",
+      "started": "Download do backup iniciado."
+    },
+    "restore": {
+      "selectFile": "Selecionar arquivo de backup",
+      "passphrasePrompt": "Este backup está criptografado. Digite a senha dele.",
+      "unlock": "Desbloquear",
+      "preview": {
+        "title": "Detalhes do backup",
+        "encrypted": "Criptografado",
+        "compatible": "Compatível",
+        "incompatible": "Incompatível",
+        "createdAt": "Criado: {value}",
+        "appVersion": "Versão do app: {value}",
+        "incompatibleHint": "Este backup foi criado por uma versão mais recente do codeg e não pode ser restaurado."
+      },
+      "replaceWarning": "Restaurar substitui todos os dados atuais do codeg (banco de dados e uploads). Seus dados atuais são salvos em um snapshot primeiro, para que possam ser recuperados.",
+      "keyringNote": "Os tokens de GitHub/chat do desktop ficam no chaveiro do sistema e não são incluídos; insira-os novamente após restaurar.",
+      "button": "Restaurar",
+      "staging": "Preparando a restauração…",
+      "staged": "Restauração preparada. Reiniciando…",
+      "restarting": "Restauração preparada. Reiniciando o servidor…",
+      "restartTimeout": "O servidor não voltou a tempo. Recarregue a página quando ele estiver ativo.",
+      "externalSideLocation": "As transcrições de conversas foram restauradas em {path}",
+      "confirmTitle": "Substituir todos os dados?",
+      "confirmBody": "Isto substituirá seu banco de dados e uploads atuais do codeg pelo backup e, em seguida, reiniciará. Seus dados atuais são salvos em um snapshot primeiro.",
+      "cancel": "Cancelar",
+      "confirmAction": "Substituir e reiniciar",
+      "external": {
+        "title": "Conteúdo das conversas",
+        "hint": "Este backup inclui transcrições das CLIs. Escolha para onde restaurá-las.",
+        "modeSkip": "Não restaurar",
+        "modeSide": "Restaurar em uma pasta separada segura",
+        "modeOriginal": "Restaurar nos locais originais das CLIs",
+        "forceOverwrite": "Sobrescrever arquivos existentes",
+        "forceOverwriteHint": "Substitui os arquivos que já existem nas pastas das CLIs.",
+        "scanning": "Verificando conflitos…",
+        "noConflicts": "Nenhum arquivo existente será sobrescrito.",
+        "conflictCount": "{count} arquivo(s) existente(s) seriam afetados.",
+        "conflictSkipNote": "Os arquivos existentes são mantidos (ignorados) a menos que você ative a sobrescrita."
+      },
+      "restartFailed": "Restauração preparada, mas o servidor não conseguiu reiniciar. Reinicie-o manualmente para aplicá-la."
+    },
+    "remoteUnsupported": "O backup e a restauração atuam sobre os dados da máquina que executa o codeg. Você está conectado a um espaço de trabalho remoto — gerencie os backups dele diretamente nesse servidor."
+  },
+  "backup": {
+    "restore": {
+      "error": {
+        "badPassphrase": "Senha incorreta ou backup corrompido.",
+        "corrupted": "O arquivo de backup está corrompido.",
+        "unknownFormat": "Este arquivo não é um backup do codeg reconhecido.",
+        "newerVersion": "Este backup foi criado pelo codeg {backupVersion}, mais recente que esta versão ({appVersion}).",
+        "alreadyPending": "Já existe uma restauração preparada. Reinicie para aplicá-la antes de preparar outra."
+      }
+    },
+    "error": {
+      "diskSpace": "Espaço em disco insuficiente para concluir a operação.",
+      "cancelled": "A operação foi cancelada."
+    }
   },
   "WebConnection": {
     "disconnectedTitle": "Conexão perdida",

@@ -17,19 +17,32 @@ vi.mock("@/lib/transport", () => ({
   getTransport: () => ({ call, subscribe }),
   isDesktop: () => false,
   isRemoteDesktopMode: () => false,
+  getActiveRemoteConnectionId: () => null,
 }))
 
 vi.mock("@/lib/api", () => ({
   getSystemProxySettings: vi.fn(),
   updateSystemProxySettings: vi.fn(),
   updateSystemLanguageSettings: vi.fn(),
+  // The System page now embeds <BackupSettings/>, which subscribes to backup
+  // progress on mount and imports the backup API surface; stub it all.
+  listenBackupProgress: vi.fn(async () => () => {}),
+  exportBackupDesktop: vi.fn(),
+  exportBackupWeb: vi.fn(),
+  inspectBackupDesktop: vi.fn(),
+  inspectBackupWeb: vi.fn(),
+  scanExternalConflictsDesktop: vi.fn(),
+  scanExternalConflictsWeb: vi.fn(),
+  stageRestoreDesktop: vi.fn(),
+  stageRestoreWeb: vi.fn(),
+  uploadBackupWeb: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() },
 }))
 
-vi.mock("@/lib/platform", () => ({ openUrl: vi.fn() }))
+vi.mock("@/lib/platform", () => ({ openUrl: vi.fn(), isDesktop: () => false }))
 
 vi.mock("@/components/i18n-provider", () => ({
   useAppI18n: () => ({

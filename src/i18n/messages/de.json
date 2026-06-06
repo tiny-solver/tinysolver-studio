@@ -1802,6 +1802,12 @@
         "noEnabledAgents": "Keine aktivierten Agenten",
         "openAgentsSettings": "Agenten-Einstellungen öffnen"
       },
+      "subAgentOverlay": {
+        "title": "Subagenten",
+        "collapsedSummary": "Subagenten {count}",
+        "collapseAria": "Subagenten einklappen",
+        "expandAria": "Subagenten ausklappen"
+      },
       "agentPlanOverlay": {
         "title": "Agentenplan",
         "collapsePlanAria": "Plan einklappen",
@@ -2645,6 +2651,84 @@
     "emptyDirectory": "Dieses Verzeichnis ist leer",
     "errorLoadingDir": "Verzeichnis konnte nicht geladen werden",
     "selectedCount": "{count} ausgewählt"
+  },
+  "BackupSettings": {
+    "title": "Sicherung & Wiederherstellung",
+    "description": "Exportiere eine portable Sicherung deiner codeg-Daten oder stelle aus einer Sicherung wieder her.",
+    "tabs": {
+      "backup": "Sicherung",
+      "restore": "Wiederherstellung"
+    },
+    "export": {
+      "includeExternal": "Gesprächsinhalte einschließen",
+      "includeExternalHint": "Archiviert auch die CLI-Transkripte (Claude, Codex, Gemini, …). Erhöht die Größe.",
+      "passphrase": "Passphrase (optional)",
+      "passphrasePlaceholder": "Leer lassen für ein unverschlüsseltes Archiv",
+      "passphraseConfirm": "Passphrase bestätigen",
+      "passphraseMismatch": "Die Passphrasen stimmen nicht überein.",
+      "noPassphraseWarning": "Diese Sicherung enthält Geheimnisse (API-Schlüssel, Tokens) im Klartext. Bewahre sie sicher auf.",
+      "passphraseLossWarning": "Mit dieser Passphrase verschlüsselt. Wenn du sie verlierst, kann die Sicherung nicht wiederhergestellt werden.",
+      "button": "Sicherung exportieren",
+      "inProgress": "Sicherung wird erstellt…",
+      "success": "Sicherung erstellt.",
+      "started": "Download der Sicherung gestartet."
+    },
+    "restore": {
+      "selectFile": "Sicherungsdatei auswählen",
+      "passphrasePrompt": "Diese Sicherung ist verschlüsselt. Gib ihre Passphrase ein.",
+      "unlock": "Entsperren",
+      "preview": {
+        "title": "Sicherungsdetails",
+        "encrypted": "Verschlüsselt",
+        "compatible": "Kompatibel",
+        "incompatible": "Inkompatibel",
+        "createdAt": "Erstellt: {value}",
+        "appVersion": "App-Version: {value}",
+        "incompatibleHint": "Diese Sicherung wurde mit einer neueren Version von codeg erstellt und kann nicht wiederhergestellt werden."
+      },
+      "replaceWarning": "Beim Wiederherstellen werden alle aktuellen codeg-Daten (Datenbank und Uploads) ersetzt. Deine aktuellen Daten werden zuvor als Snapshot gesichert.",
+      "keyringNote": "GitHub-/Chat-Tokens der Desktop-App liegen im Schlüsselbund des Betriebssystems und sind nicht enthalten; gib sie nach dem Wiederherstellen erneut ein.",
+      "button": "Wiederherstellen",
+      "staging": "Wiederherstellung wird vorbereitet…",
+      "staged": "Wiederherstellung vorbereitet. Neustart…",
+      "restarting": "Wiederherstellung vorbereitet. Server wird neu gestartet…",
+      "restartTimeout": "Der Server kam nicht rechtzeitig zurück. Lade die Seite neu, sobald er läuft.",
+      "externalSideLocation": "Gesprächstranskripte wurden nach {path} wiederhergestellt",
+      "confirmTitle": "Alle Daten ersetzen?",
+      "confirmBody": "Dadurch werden deine aktuelle codeg-Datenbank und Uploads durch die Sicherung ersetzt und anschließend neu gestartet. Deine aktuellen Daten werden zuvor als Snapshot gesichert.",
+      "cancel": "Abbrechen",
+      "confirmAction": "Ersetzen & neu starten",
+      "external": {
+        "title": "Gesprächsinhalte",
+        "hint": "Diese Sicherung enthält CLI-Transkripte. Wähle, wohin sie wiederhergestellt werden.",
+        "modeSkip": "Nicht wiederherstellen",
+        "modeSide": "In einen sicheren Nebenordner wiederherstellen",
+        "modeOriginal": "An den ursprünglichen CLI-Speicherorten wiederherstellen",
+        "forceOverwrite": "Vorhandene Dateien überschreiben",
+        "forceOverwriteHint": "Ersetzt Dateien, die bereits in den CLI-Ordnern vorhanden sind.",
+        "scanning": "Konflikte werden geprüft…",
+        "noConflicts": "Es werden keine vorhandenen Dateien überschrieben.",
+        "conflictCount": "{count} vorhandene Datei(en) wären betroffen.",
+        "conflictSkipNote": "Vorhandene Dateien bleiben erhalten (übersprungen), sofern du das Überschreiben nicht aktivierst."
+      },
+      "restartFailed": "Wiederherstellung vorbereitet, aber der Server konnte nicht neu starten. Starte ihn manuell neu, um sie anzuwenden."
+    },
+    "remoteUnsupported": "Sicherung & Wiederherstellung wirken auf die Daten des Rechners, auf dem codeg läuft. Du bist mit einem entfernten Arbeitsbereich verbunden – verwalte dessen Sicherungen direkt auf jenem Server."
+  },
+  "backup": {
+    "restore": {
+      "error": {
+        "badPassphrase": "Falsche Passphrase oder beschädigte Sicherung.",
+        "corrupted": "Das Sicherungsarchiv ist beschädigt.",
+        "unknownFormat": "Diese Datei ist keine erkannte codeg-Sicherung.",
+        "newerVersion": "Diese Sicherung wurde mit codeg {backupVersion} erstellt, neuer als diese Version ({appVersion}).",
+        "alreadyPending": "Es ist bereits eine Wiederherstellung vorbereitet. Starte neu, um sie anzuwenden, bevor du eine weitere vorbereitest."
+      }
+    },
+    "error": {
+      "diskSpace": "Nicht genügend Speicherplatz, um den Vorgang abzuschließen.",
+      "cancelled": "Der Vorgang wurde abgebrochen."
+    }
   },
   "WebConnection": {
     "disconnectedTitle": "Verbindung getrennt",

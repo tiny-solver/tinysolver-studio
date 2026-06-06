@@ -42,7 +42,7 @@ mod tauri_app {
     use crate::acp::manager::ConnectionManager;
     use crate::chat_channel::manager::ChatChannelManager;
     use crate::commands::{
-        acp as acp_commands, app_update as app_update_commands,
+        acp as acp_commands, app_update as app_update_commands, backup,
         chat_channel as chat_channel_commands, conversations, delegation as delegation_commands,
         experts as experts_commands, file_io, folder_commands, folders, mcp as mcp_commands,
         model_provider as model_provider_commands, notification, pet as pet_commands, project_boot,
@@ -902,6 +902,11 @@ mod tauri_app {
                 notification::send_notification,
                 file_io::save_binary_file,
                 file_io::save_text_file,
+                backup::backup_create,
+                backup::backup_inspect,
+                backup::backup_scan_external_conflicts,
+                backup::backup_restore_stage,
+                backup::backup_cancel,
                 chat_channel_commands::list_chat_channels,
                 chat_channel_commands::create_chat_channel,
                 chat_channel_commands::update_chat_channel,
