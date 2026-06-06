@@ -17,6 +17,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
 import { useAppI18n } from "@/components/i18n-provider"
+import { BackupSettings } from "@/components/settings/backup-settings"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1048,6 +1049,8 @@ export function SystemNetworkSettings() {
             </Select>
           </div>
         </section>
+
+        <BackupSettings />
 
         <AlertDialog
           open={rollbackConfirmOpen}

@@ -2642,5 +2642,83 @@
     "emptyDirectory": "Ce dossier est vide",
     "errorLoadingDir": "Échec du chargement du dossier",
     "selectedCount": "{count} sélectionné(s)"
+  },
+  "BackupSettings": {
+    "title": "Sauvegarde et restauration",
+    "description": "Exportez une sauvegarde portable de vos données codeg, ou restaurez à partir d'une sauvegarde.",
+    "tabs": {
+      "backup": "Sauvegarde",
+      "restore": "Restauration"
+    },
+    "export": {
+      "includeExternal": "Inclure le contenu des conversations",
+      "includeExternalHint": "Archive aussi les transcriptions des CLI (Claude, Codex, Gemini, …). Augmente la taille.",
+      "passphrase": "Phrase secrète (facultatif)",
+      "passphrasePlaceholder": "Laissez vide pour une archive non chiffrée",
+      "passphraseConfirm": "Confirmer la phrase secrète",
+      "passphraseMismatch": "Les phrases secrètes ne correspondent pas.",
+      "noPassphraseWarning": "Cette sauvegarde contiendra des secrets (clés d'API, jetons) en clair. Conservez-la en lieu sûr.",
+      "passphraseLossWarning": "Chiffrée avec cette phrase secrète. Si vous la perdez, la sauvegarde ne pourra pas être récupérée.",
+      "button": "Exporter la sauvegarde",
+      "inProgress": "Création de la sauvegarde…",
+      "success": "Sauvegarde créée.",
+      "started": "Téléchargement de la sauvegarde lancé."
+    },
+    "restore": {
+      "selectFile": "Sélectionner le fichier de sauvegarde",
+      "passphrasePrompt": "Cette sauvegarde est chiffrée. Saisissez sa phrase secrète.",
+      "unlock": "Déverrouiller",
+      "preview": {
+        "title": "Détails de la sauvegarde",
+        "encrypted": "Chiffrée",
+        "compatible": "Compatible",
+        "incompatible": "Incompatible",
+        "createdAt": "Créée : {value}",
+        "appVersion": "Version de l'app : {value}",
+        "incompatibleHint": "Cette sauvegarde a été créée par une version plus récente de codeg et ne peut pas être restaurée."
+      },
+      "replaceWarning": "La restauration remplace toutes les données codeg actuelles (base de données et téléversements). Vos données actuelles sont d'abord sauvegardées en instantané pour pouvoir être récupérées.",
+      "keyringNote": "Les jetons GitHub/chat du bureau sont dans le trousseau du système et ne sont pas inclus ; ressaisissez-les après la restauration.",
+      "button": "Restaurer",
+      "staging": "Préparation de la restauration…",
+      "staged": "Restauration préparée. Redémarrage…",
+      "restarting": "Restauration préparée. Redémarrage du serveur…",
+      "restartTimeout": "Le serveur n'est pas revenu à temps. Rechargez la page une fois qu'il est actif.",
+      "externalSideLocation": "Les transcriptions de conversations ont été restaurées dans {path}",
+      "confirmTitle": "Remplacer toutes les données ?",
+      "confirmBody": "Cela remplacera votre base de données et vos téléversements codeg actuels par la sauvegarde, puis redémarrera. Vos données actuelles sont d'abord sauvegardées en instantané.",
+      "cancel": "Annuler",
+      "confirmAction": "Remplacer et redémarrer",
+      "external": {
+        "title": "Contenu des conversations",
+        "hint": "Cette sauvegarde inclut des transcriptions des CLI. Choisissez où les restaurer.",
+        "modeSkip": "Ne pas restaurer",
+        "modeSide": "Restaurer dans un dossier annexe sûr",
+        "modeOriginal": "Restaurer aux emplacements d'origine des CLI",
+        "forceOverwrite": "Écraser les fichiers existants",
+        "forceOverwriteHint": "Remplace les fichiers déjà présents dans les dossiers des CLI.",
+        "scanning": "Vérification des conflits…",
+        "noConflicts": "Aucun fichier existant ne sera écrasé.",
+        "conflictCount": "{count} fichier(s) existant(s) seraient concerné(s).",
+        "conflictSkipNote": "Les fichiers existants sont conservés (ignorés) sauf si vous activez l'écrasement."
+      },
+      "restartFailed": "Restauration préparée, mais le serveur n'a pas pu redémarrer. Redémarrez-le manuellement pour l'appliquer."
+    },
+    "remoteUnsupported": "La sauvegarde et la restauration agissent sur les données de la machine qui exécute codeg. Vous êtes connecté à un espace de travail distant : gérez ses sauvegardes directement depuis ce serveur."
+  },
+  "backup": {
+    "restore": {
+      "error": {
+        "badPassphrase": "Phrase secrète incorrecte ou sauvegarde corrompue.",
+        "corrupted": "L'archive de sauvegarde est corrompue.",
+        "unknownFormat": "Ce fichier n'est pas une sauvegarde codeg reconnue.",
+        "newerVersion": "Cette sauvegarde a été créée par codeg {backupVersion}, plus récent que cette version ({appVersion}).",
+        "alreadyPending": "Une restauration est déjà préparée. Redémarrez pour l'appliquer avant d'en préparer une autre."
+      }
+    },
+    "error": {
+      "diskSpace": "Espace disque insuffisant pour terminer l'opération.",
+      "cancelled": "L'opération a été annulée."
+    }
   }
 }

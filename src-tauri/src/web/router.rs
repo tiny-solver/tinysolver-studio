@@ -348,6 +348,30 @@ pub fn build_router(
             "/workspace_download_ticket",
             post(handlers::workspace_files::create_download_ticket),
         )
+        // ─── Backup & restore ───
+        //
+        // Export builds an archive and returns a download ticket; restore
+        // uploads the archive once (body limit disabled — it can be large),
+        // then inspects + stages it by reference. The data swap happens on the
+        // next process start; the client follows up with `restart_app`.
+        .route(
+            "/backup_create_ticket",
+            post(handlers::backup::backup_create_ticket),
+        )
+        .route(
+            "/backup_upload",
+            post(handlers::backup::backup_upload).layer(DefaultBodyLimit::disable()),
+        )
+        .route("/backup_inspect", post(handlers::backup::backup_inspect))
+        .route(
+            "/backup_scan_external_conflicts",
+            post(handlers::backup::backup_scan_external_conflicts),
+        )
+        .route(
+            "/backup_restore_stage",
+            post(handlers::backup::backup_restore_stage),
+        )
+        .route("/backup_cancel", post(handlers::backup::backup_cancel))
         .route(
             "/download_workspace_file",
             post(handlers::workspace_files::download_workspace_file),
@@ -873,6 +897,10 @@ pub fn build_router(
         .route(
             "/workspace_download/{ticket}",
             get(handlers::workspace_files::consume_download_ticket),
+        )
+        .route(
+            "/backup_download/{ticket}",
+            get(handlers::backup::backup_download),
         );
 
     let api = public_api.merge(api);

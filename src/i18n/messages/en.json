@@ -2642,5 +2642,83 @@
     "openFailed": "Failed to open remote workspace",
     "connectionLoadFailed": "Failed to load remote connection: {message}",
     "connectionExpired": "Remote connection \"{name}\" is expired. Update its token and reload this window."
+  },
+  "BackupSettings": {
+    "title": "Backup & Restore",
+    "description": "Export a portable backup of your codeg data, or restore from one.",
+    "tabs": {
+      "backup": "Backup",
+      "restore": "Restore"
+    },
+    "export": {
+      "includeExternal": "Include conversation content",
+      "includeExternalHint": "Also archive agent CLI transcripts (Claude, Codex, Gemini, …). Increases size.",
+      "passphrase": "Passphrase (optional)",
+      "passphrasePlaceholder": "Leave empty for an unencrypted archive",
+      "passphraseConfirm": "Confirm passphrase",
+      "passphraseMismatch": "Passphrases do not match.",
+      "noPassphraseWarning": "This backup will contain secrets (API keys, tokens) in plaintext. Store it somewhere safe.",
+      "passphraseLossWarning": "Encrypted with this passphrase. If you lose it, the backup cannot be recovered.",
+      "button": "Export backup",
+      "inProgress": "Creating backup…",
+      "success": "Backup created.",
+      "started": "Backup download started."
+    },
+    "restore": {
+      "selectFile": "Select backup file",
+      "passphrasePrompt": "This backup is encrypted. Enter its passphrase.",
+      "unlock": "Unlock",
+      "preview": {
+        "title": "Backup details",
+        "encrypted": "Encrypted",
+        "compatible": "Compatible",
+        "incompatible": "Incompatible",
+        "createdAt": "Created: {value}",
+        "appVersion": "App version: {value}",
+        "incompatibleHint": "This backup was created by a newer version of codeg and cannot be restored."
+      },
+      "replaceWarning": "Restoring replaces all current codeg data (database and uploads). Your current data is snapshotted first so it can be recovered.",
+      "keyringNote": "Desktop GitHub/chat tokens live in your OS keychain and are not included; re-enter them after restoring.",
+      "button": "Restore",
+      "staging": "Preparing restore…",
+      "staged": "Restore staged. Restarting…",
+      "restarting": "Restore staged. Restarting the server…",
+      "restartTimeout": "The server did not come back in time. Reload the page once it is up.",
+      "externalSideLocation": "Conversation transcripts were restored to {path}",
+      "confirmTitle": "Replace all data?",
+      "confirmBody": "This will replace your current codeg database and uploads with the backup, then restart. Your current data is snapshotted first.",
+      "cancel": "Cancel",
+      "confirmAction": "Replace & restart",
+      "external": {
+        "title": "Conversation content",
+        "hint": "This backup includes agent CLI transcripts. Choose where to restore them.",
+        "modeSkip": "Don't restore",
+        "modeSide": "Restore to a safe side folder",
+        "modeOriginal": "Restore to original CLI locations",
+        "forceOverwrite": "Overwrite existing files",
+        "forceOverwriteHint": "Replace files that already exist in the agent CLI folders.",
+        "scanning": "Checking for conflicts…",
+        "noConflicts": "No existing files would be overwritten.",
+        "conflictCount": "{count} existing file(s) would be affected.",
+        "conflictSkipNote": "Existing files are kept (skipped) unless you enable overwrite."
+      },
+      "restartFailed": "Restore staged, but the server couldn't restart. Restart it manually to apply the restore."
+    },
+    "remoteUnsupported": "Backup & restore acts on the data of the machine running codeg. You're connected to a remote workspace — manage its backups from that server directly."
+  },
+  "backup": {
+    "restore": {
+      "error": {
+        "badPassphrase": "Incorrect passphrase or corrupted backup.",
+        "corrupted": "The backup archive is corrupted.",
+        "unknownFormat": "This file is not a recognized codeg backup.",
+        "newerVersion": "This backup was created by codeg {backupVersion}, newer than this version ({appVersion}).",
+        "alreadyPending": "A restore is already staged. Restart to apply it before staging another."
+      }
+    },
+    "error": {
+      "diskSpace": "Not enough disk space to complete the operation.",
+      "cancelled": "The operation was cancelled."
+    }
   }
 }

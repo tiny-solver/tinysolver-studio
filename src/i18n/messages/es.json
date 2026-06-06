@@ -2642,5 +2642,83 @@
     "emptyDirectory": "Este directorio está vacío",
     "errorLoadingDir": "Error al cargar el directorio",
     "selectedCount": "{count} seleccionado(s)"
+  },
+  "BackupSettings": {
+    "title": "Copia de seguridad y restauración",
+    "description": "Exporta una copia de seguridad portátil de tus datos de codeg, o restaura desde una.",
+    "tabs": {
+      "backup": "Copia de seguridad",
+      "restore": "Restaurar"
+    },
+    "export": {
+      "includeExternal": "Incluir el contenido de las conversaciones",
+      "includeExternalHint": "También archiva las transcripciones de las CLI (Claude, Codex, Gemini, …). Aumenta el tamaño.",
+      "passphrase": "Frase de contraseña (opcional)",
+      "passphrasePlaceholder": "Déjala vacía para un archivo sin cifrar",
+      "passphraseConfirm": "Confirmar la frase de contraseña",
+      "passphraseMismatch": "Las frases de contraseña no coinciden.",
+      "noPassphraseWarning": "Esta copia contendrá secretos (claves de API, tokens) en texto plano. Guárdala en un lugar seguro.",
+      "passphraseLossWarning": "Cifrada con esta frase de contraseña. Si la pierdes, la copia no se podrá recuperar.",
+      "button": "Exportar copia",
+      "inProgress": "Creando copia de seguridad…",
+      "success": "Copia de seguridad creada.",
+      "started": "Descarga de la copia iniciada."
+    },
+    "restore": {
+      "selectFile": "Seleccionar archivo de copia",
+      "passphrasePrompt": "Esta copia está cifrada. Introduce su frase de contraseña.",
+      "unlock": "Desbloquear",
+      "preview": {
+        "title": "Detalles de la copia",
+        "encrypted": "Cifrada",
+        "compatible": "Compatible",
+        "incompatible": "Incompatible",
+        "createdAt": "Creada: {value}",
+        "appVersion": "Versión de la app: {value}",
+        "incompatibleHint": "Esta copia fue creada por una versión más reciente de codeg y no se puede restaurar."
+      },
+      "replaceWarning": "Restaurar reemplaza todos los datos actuales de codeg (base de datos y subidas). Tus datos actuales se guardan primero en una instantánea para poder recuperarlos.",
+      "keyringNote": "Los tokens de GitHub/chat del escritorio están en el llavero del sistema y no se incluyen; vuelve a introducirlos tras restaurar.",
+      "button": "Restaurar",
+      "staging": "Preparando la restauración…",
+      "staged": "Restauración preparada. Reiniciando…",
+      "restarting": "Restauración preparada. Reiniciando el servidor…",
+      "restartTimeout": "El servidor no volvió a tiempo. Recarga la página cuando esté activo.",
+      "externalSideLocation": "Las transcripciones de conversaciones se restauraron en {path}",
+      "confirmTitle": "¿Reemplazar todos los datos?",
+      "confirmBody": "Esto reemplazará tu base de datos y subidas actuales de codeg con la copia y luego reiniciará. Tus datos actuales se guardan primero en una instantánea.",
+      "cancel": "Cancelar",
+      "confirmAction": "Reemplazar y reiniciar",
+      "external": {
+        "title": "Contenido de las conversaciones",
+        "hint": "Esta copia incluye transcripciones de las CLI. Elige dónde restaurarlas.",
+        "modeSkip": "No restaurar",
+        "modeSide": "Restaurar en una carpeta aparte segura",
+        "modeOriginal": "Restaurar en las ubicaciones originales de las CLI",
+        "forceOverwrite": "Sobrescribir archivos existentes",
+        "forceOverwriteHint": "Reemplaza los archivos que ya existen en las carpetas de las CLI.",
+        "scanning": "Comprobando conflictos…",
+        "noConflicts": "No se sobrescribirá ningún archivo existente.",
+        "conflictCount": "Se verían afectados {count} archivo(s) existente(s).",
+        "conflictSkipNote": "Los archivos existentes se conservan (se omiten) salvo que actives la sobrescritura."
+      },
+      "restartFailed": "La restauración quedó preparada, pero el servidor no pudo reiniciarse. Reinícialo manualmente para aplicarla."
+    },
+    "remoteUnsupported": "La copia de seguridad y la restauración actúan sobre los datos de la máquina que ejecuta codeg. Estás conectado a un espacio de trabajo remoto: gestiona sus copias desde ese servidor directamente."
+  },
+  "backup": {
+    "restore": {
+      "error": {
+        "badPassphrase": "Frase de contraseña incorrecta o copia dañada.",
+        "corrupted": "El archivo de copia de seguridad está dañado.",
+        "unknownFormat": "Este archivo no es una copia de seguridad de codeg reconocida.",
+        "newerVersion": "Esta copia fue creada por codeg {backupVersion}, más reciente que esta versión ({appVersion}).",
+        "alreadyPending": "Ya hay una restauración preparada. Reinicia para aplicarla antes de preparar otra."
+      }
+    },
+    "error": {
+      "diskSpace": "No hay espacio en disco suficiente para completar la operación.",
+      "cancelled": "La operación fue cancelada."
+    }
   }
 }

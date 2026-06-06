@@ -2642,5 +2642,83 @@
     "emptyDirectory": "此目錄為空",
     "errorLoadingDir": "載入目錄失敗",
     "selectedCount": "已選 {count} 項"
+  },
+  "BackupSettings": {
+    "title": "備份與還原",
+    "description": "匯出一份可攜的 codeg 資料備份，或從備份還原。",
+    "tabs": {
+      "backup": "備份",
+      "restore": "還原"
+    },
+    "export": {
+      "includeExternal": "包含對話內容",
+      "includeExternalHint": "一併打包各 CLI 的對話記錄（Claude、Codex、Gemini 等），體積更大。",
+      "passphrase": "通行碼（選填）",
+      "passphrasePlaceholder": "留空則產生未加密的封存檔",
+      "passphraseConfirm": "確認通行碼",
+      "passphraseMismatch": "兩次輸入的通行碼不一致。",
+      "noPassphraseWarning": "此備份將以明文包含密鑰（API key、token）。請妥善保管。",
+      "passphraseLossWarning": "將以此通行碼加密。通行碼一旦遺失，備份將無法還原。",
+      "button": "匯出備份",
+      "inProgress": "正在建立備份…",
+      "success": "備份已建立。",
+      "started": "已開始下載備份。"
+    },
+    "restore": {
+      "selectFile": "選擇備份檔案",
+      "passphrasePrompt": "此備份已加密，請輸入其通行碼。",
+      "unlock": "解鎖",
+      "preview": {
+        "title": "備份詳情",
+        "encrypted": "已加密",
+        "compatible": "相容",
+        "incompatible": "不相容",
+        "createdAt": "建立時間：{value}",
+        "appVersion": "應用程式版本：{value}",
+        "incompatibleHint": "此備份由較新版本的 codeg 建立，無法還原。"
+      },
+      "replaceWarning": "還原將取代目前全部 codeg 資料（資料庫與上傳檔案）。目前資料會先做快照以便復原。",
+      "keyringNote": "桌面端的 GitHub/聊天 token 存於系統鑰匙圈，不包含在備份中；還原後需重新填寫。",
+      "button": "還原",
+      "staging": "正在準備還原…",
+      "staged": "還原已就緒，正在重新啟動…",
+      "restarting": "還原已就緒，正在重新啟動服務…",
+      "restartTimeout": "服務未能及時恢復。待其啟動後請重新整理頁面。",
+      "externalSideLocation": "對話記錄已還原至 {path}",
+      "confirmTitle": "取代全部資料？",
+      "confirmBody": "這將以備份取代目前的 codeg 資料庫與上傳檔案，然後重新啟動。目前資料會先做快照。",
+      "cancel": "取消",
+      "confirmAction": "取代並重新啟動",
+      "external": {
+        "title": "對話內容",
+        "hint": "此備份包含各 CLI 的對話記錄。請選擇還原到何處。",
+        "modeSkip": "不還原",
+        "modeSide": "還原到安全的旁路資料夾",
+        "modeOriginal": "還原到 CLI 的原始位置",
+        "forceOverwrite": "覆寫已存在的檔案",
+        "forceOverwriteHint": "取代 CLI 資料夾中已存在的檔案。",
+        "scanning": "正在檢查衝突…",
+        "noConflicts": "不會覆寫任何已存在的檔案。",
+        "conflictCount": "將影響 {count} 個已存在的檔案。",
+        "conflictSkipNote": "未啟用覆寫時，已存在的檔案將被保留（略過）。"
+      },
+      "restartFailed": "還原已就緒，但伺服器未能重新啟動。請手動重新啟動以套用此次還原。"
+    },
+    "remoteUnsupported": "備份與還原作用於執行 codeg 的那台機器上的資料。你目前連線的是遠端工作區——請直接在該伺服器上管理其備份。"
+  },
+  "backup": {
+    "restore": {
+      "error": {
+        "badPassphrase": "通行碼錯誤或備份已損毀。",
+        "corrupted": "備份封存檔已損毀。",
+        "unknownFormat": "此檔案不是可識別的 codeg 備份。",
+        "newerVersion": "此備份由 codeg {backupVersion} 建立，比目前版本（{appVersion}）更新。",
+        "alreadyPending": "已有一個還原在等待生效。請先重新啟動套用它，再暫存新的還原。"
+      }
+    },
+    "error": {
+      "diskSpace": "磁碟空間不足，無法完成操作。",
+      "cancelled": "操作已取消。"
+    }
   }
 }
