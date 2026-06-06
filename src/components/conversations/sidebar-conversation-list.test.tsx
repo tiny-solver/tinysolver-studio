@@ -8,8 +8,8 @@ import type { DbConversationSummary, FolderDetail } from "@/lib/types"
 import enMessages from "@/i18n/messages/en.json"
 
 // ── Probes ────────────────────────────────────────────────────────────────
-// AgentIcon renders once per card body → counts card re-renders.
-// useDragControls runs once per FolderGroupItem body → counts folder
+// AgentIcon renders once per card body → counts card re-renders. The Folder /
+// FolderOpen lucide icon renders once per FolderHeader body → counts folder
 // re-renders. Both increment only when the owning memoized component does NOT
 // bail out, so they measure exactly the production memo path.
 const probes = vi.hoisted(() => ({ card: 0, folder: 0 }))
@@ -37,7 +37,7 @@ const stableWorkspaceFns = vi.hoisted(() => ({
   refreshConversations: () => {},
   updateConversationLocal: () => {},
   removeFolderFromWorkspace: () => {},
-  reorderFolders: () => {},
+  reorderFolders: vi.fn(() => Promise.resolve()),
   openFolder: () => {},
   refreshFolder: () => {},
 }))
@@ -69,19 +69,51 @@ vi.mock("@/components/agent-icon", () => ({
   },
 }))
 
-vi.mock("motion/react", () => ({
-  Reorder: {
-    Group: ({ children }: { children?: ReactNode }) => children,
-    Item: ({ children }: { children?: ReactNode }) => children,
-  },
-  useDragControls: () => {
-    probes.folder++
-    return { start: () => {} }
-  },
+// Render EVERY row (data.map) rather than only a window, so the render-count
+// probes stay meaningful in jsdom (which has no real layout/scroll). This is
+// exactly why virtua's windowing itself needs manual QA on a large dataset.
+vi.mock("virtua", () => ({
+  Virtualizer: ({
+    data,
+    children,
+  }: {
+    data: unknown[]
+    children: (row: unknown, index: number) => ReactNode
+  }) => <>{data.map((row, i) => children(row, i))}</>,
 }))
 
+// FolderHeader renders exactly one of Folder/FolderOpen in its body → folder
+// re-render probe. Every other icon stays real.
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
+  return {
+    ...actual,
+    Folder: () => {
+      probes.folder++
+      return null
+    },
+    FolderOpen: () => {
+      probes.folder++
+      return null
+    },
+  }
+})
+
+// The list mounts the Virtualizer only once OverlayScrollbars surfaces its
+// viewport; the mock fires that bridge synchronously after mount.
 vi.mock("@/components/ui/scroll-area", () => ({
-  ScrollArea: ({ children }: { children?: ReactNode }) => children,
+  ScrollArea: ({
+    children,
+    onViewportRef,
+  }: {
+    children?: ReactNode
+    onViewportRef?: (el: HTMLElement | null) => void
+  }) => {
+    useEffect(() => {
+      onViewportRef?.(document.createElement("div"))
+    }, [onViewportRef])
+    return <>{children}</>
+  },
 }))
 
 vi.mock("next-themes", () => ({
@@ -254,9 +286,10 @@ describe("SidebarConversationList — single status event re-render scope", () =
 
     // Card-level gate: only the changed card re-renders (R1 + R1b + shared now).
     expect(probes.card).toBe(1)
-    // Folder-level skip: folder 1 stays memoized despite the tabs ref churn;
-    // only folder 2 (whose bucket array changed) re-runs its map (R3 + R5).
-    expect(probes.folder).toBe(1)
+    // Folder headers are fully decoupled from their conversation rows in the
+    // flat model — a status event leaves every header's props (count, expanded,
+    // stable callbacks) unchanged, so no header re-renders at all.
+    expect(probes.folder).toBe(0)
   })
 
   it("re-renders nothing when conversations are unchanged despite tab churn", () => {
@@ -269,5 +302,137 @@ describe("SidebarConversationList — single status event re-render scope", () =
 
     expect(probes.card).toBe(0)
     expect(probes.folder).toBe(0)
+  })
+})
+
+// jsdom has no PointerEvent and no layout, so the gesture is driven with plain
+// bubbling events plus a mocked getBoundingClientRect. This exercises the
+// component wiring (threshold → surface gating → commit/abort) that the pure
+// index-math unit tests can't reach; real virtua scrolling/autoscroll still
+// needs manual QA.
+function firePointer(
+  target: EventTarget,
+  type: string,
+  props: {
+    clientX?: number
+    clientY?: number
+    pointerId?: number
+    button?: number
+  } = {}
+) {
+  const ev = new Event(type, { bubbles: true, cancelable: true })
+  Object.assign(ev, {
+    pointerId: 1,
+    button: 0,
+    clientX: 0,
+    clientY: 0,
+    ...props,
+  })
+  target.dispatchEvent(ev)
+}
+
+describe("SidebarConversationList — folder drag gesture", () => {
+  let rectSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: FIXED })
+    stableWorkspaceFns.reorderFolders.mockClear()
+    store.folders = [folder(1, "F1"), folder(2, "F2"), folder(3, "F3")]
+    store.allFolders = store.folders
+    store.conversations = [conv(11, 1), conv(21, 2), conv(31, 3)]
+    store.activeTabId = null
+    store.tabSpec = []
+    // Fixed geometry: viewport / drag surface anchored at top=0 and tall enough
+    // that the test pointer Ys stay clear of the autoscroll edges.
+    rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({
+        top: 0,
+        bottom: 600,
+        left: 0,
+        right: 200,
+        width: 200,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect)
+  })
+
+  afterEach(() => {
+    rectSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
+  function grip(folderId: number): HTMLElement {
+    const button = document.querySelector(`[data-folder-id="${folderId}"]`)
+    const el = button?.parentElement
+    if (!el) throw new Error(`grip for folder ${folderId} not found`)
+    return el
+  }
+
+  // Press folder 1, cross the 6px threshold (mounts the collapsed surface), then
+  // move to y=40 → slot floor(40/32)=1 (a MIDDLE slot, distinct from the
+  // bottom-clamp value the old bug produced), i.e. order [1,2,3] → [2,1,3].
+  function dragFolderOneToSlotOne() {
+    act(() => firePointer(grip(1), "pointerdown", { clientY: 100 }))
+    // Threshold crossing flips into drag mode. The surface is not mounted yet,
+    // so this move must NOT retarget (the regression Codex flagged).
+    act(() => firePointer(window, "pointermove", { clientY: 120 }))
+    // Surface mounted now → retarget to slot 1.
+    act(() => firePointer(window, "pointermove", { clientY: 40 }))
+  }
+
+  it("commits the reorder to the targeted slot on pointerup", async () => {
+    render(tree())
+    dragFolderOneToSlotOne()
+    await act(async () => {
+      firePointer(window, "pointerup", { clientY: 40 })
+    })
+    expect(stableWorkspaceFns.reorderFolders).toHaveBeenCalledTimes(1)
+    // A middle slot — not the last — so this can only pass with correct
+    // surface-relative targeting, not the old bottom-clamp behavior.
+    expect(stableWorkspaceFns.reorderFolders).toHaveBeenCalledWith([2, 1, 3])
+  })
+
+  it("does not reorder when released right after crossing the threshold (before the surface can retarget)", async () => {
+    render(tree())
+    act(() => firePointer(grip(1), "pointerdown", { clientY: 100 }))
+    // Cross the threshold from a 'scrolled' position, then release immediately.
+    // The collapsed surface mounts only after this move, so there is no valid
+    // target yet — the old viewport-fallback would have bottom-clamped here.
+    act(() => firePointer(window, "pointermove", { clientY: 200 }))
+    await act(async () => {
+      firePointer(window, "pointerup", { clientY: 200 })
+    })
+    expect(stableWorkspaceFns.reorderFolders).not.toHaveBeenCalled()
+  })
+
+  it("aborts without persisting on pointercancel", () => {
+    render(tree())
+    dragFolderOneToSlotOne()
+    act(() => firePointer(window, "pointercancel", { clientY: 40 }))
+    expect(stableWorkspaceFns.reorderFolders).not.toHaveBeenCalled()
+  })
+
+  it("aborts without persisting on Escape", () => {
+    render(tree())
+    dragFolderOneToSlotOne()
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      )
+    })
+    expect(stableWorkspaceFns.reorderFolders).not.toHaveBeenCalled()
+  })
+
+  it("does nothing when the press never crosses the drag threshold", async () => {
+    render(tree())
+    act(() => firePointer(grip(1), "pointerdown", { clientY: 100 }))
+    act(() => firePointer(window, "pointermove", { clientY: 103 })) // 3px < 6px
+    await act(async () => {
+      firePointer(window, "pointerup", { clientY: 103 })
+    })
+    expect(stableWorkspaceFns.reorderFolders).not.toHaveBeenCalled()
   })
 })

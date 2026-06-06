@@ -13,8 +13,7 @@ import {
 import { useTranslations } from "next-intl"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
-import { Reorder, useDragControls, type DragControls } from "motion/react"
-import type { OverlayScrollbarsComponentRef } from "overlayscrollbars-react"
+import { Virtualizer, type VirtualizerHandle } from "virtua"
 import {
   Folder,
   Bot,
@@ -68,10 +67,15 @@ import {
 } from "@/lib/theme-presets"
 import { SidebarConversationCard } from "./sidebar-conversation-card"
 import {
+  applyReorder,
+  buildRows,
+  flatIndexOfConversation,
   formatRelative,
   groupByFolderWithReuse,
+  pointerYToTargetIndex,
   reuseSelected,
   reuseSet,
+  type SidebarRow,
 } from "./sidebar-conversation-grouping"
 import { ConversationManageDialog } from "./conversation-manage-dialog"
 import { CloneDialog } from "@/components/layout/clone-dialog"
@@ -103,11 +107,6 @@ import { cn } from "@/lib/utils"
 import { toErrorMessage } from "@/lib/app-error"
 
 const THEME_COLOR_SET = new Set<string>(THEME_COLORS)
-
-// Shared empty bucket so folders with no (visible) conversations always receive
-// the same `conversations` array reference — otherwise a fresh `[]` each render
-// would defeat the `FolderGroupItem` memo for empty folders.
-const EMPTY_CONVERSATIONS: DbConversationSummary[] = []
 
 const LEGACY_FOLDER_COLOR_MAP: Record<string, FolderThemeColor> = {
   foreground: FOLDER_THEME_COLOR_INHERIT,
@@ -156,8 +155,7 @@ const FolderHeader = memo(function FolderHeader({
   onOpenInSystemExplorer,
   onOpenInTerminal,
   isDragging,
-  dragControls,
-  t,
+  onGripPointerDown,
 }: {
   folderId: number
   folderName: string
@@ -188,9 +186,16 @@ const FolderHeader = memo(function FolderHeader({
   onOpenInSystemExplorer: (folderId: number) => void
   onOpenInTerminal: (folderId: number) => void
   isDragging?: boolean
-  dragControls: DragControls
-  t: ReturnType<typeof useTranslations>
+  /**
+   * Starts a folder reorder gesture from the header's grip. Omitted on the drag
+   * surface (already dragging) so headers there are pure drop-target visuals.
+   */
+  onGripPointerDown?: (folderId: number, event: React.PointerEvent) => void
 }) {
+  // Own the translations here rather than receiving `t` as a prop: next-intl
+  // returns a fresh `t` on every parent render, so passing it down would defeat
+  // this component's memo and re-render every header on each status event.
+  const t = useTranslations("Folder.sidebar")
   // Only flag a stale default once the live list is known; before fresh,
   // `availableAgents` is the localStorage seed and may legitimately omit a
   // newly-enabled agent.
@@ -217,10 +222,7 @@ const FolderHeader = memo(function FolderHeader({
       <ContextMenuTrigger asChild>
         <div className={cn("relative h-[2rem]", isDragging && "opacity-60")}>
           <div
-            onPointerDown={(e) => {
-              if (e.button !== 0) return
-              dragControls.start(e)
-            }}
+            onPointerDown={(e) => onGripPointerDown?.(folderId, e)}
             className={cn(
               "group flex h-[1.9375rem] w-full items-center",
               "rounded-full",
@@ -454,212 +456,6 @@ const FolderHeader = memo(function FolderHeader({
   )
 })
 
-interface FolderGroupItemProps {
-  folderId: number
-  folderName: string
-  folderPath: string
-  conversations: DbConversationSummary[]
-  totalConversationCount: number
-  expanded: boolean
-  importing: boolean
-  reordering: boolean
-  dragging: boolean
-  sortMode: SidebarSortMode
-  now: number
-  selectedConversation: { id: number; agentType: string } | null
-  openTabKeys: Set<string>
-  themeColor: FolderThemeColor
-  appThemeColor: ThemeColor
-  currentDefaultAgent: AgentType | null
-  availableAgents: AgentType[]
-  availableAgentsFresh: boolean
-  darkMode: boolean
-  onToggle: (folderId: number) => void
-  onRemoveFromWorkspace: (folderId: number) => void
-  onNewConversationForFolder: (folderId: number) => void
-  onImport: (folderId: number) => void
-  onManageConversations: (folderId: number) => void
-  onChangeColor: (folderId: number, color: FolderThemeColor) => void
-  onSetDefaultAgent: (folderId: number, agentType: AgentType | null) => void
-  onOpenInSystemExplorer: (folderId: number) => void
-  onOpenInTerminal: (folderId: number) => void
-  onSelect: (id: number, agentType: string, folderId: number) => void
-  onDoubleClick: (id: number, agentType: string, folderId: number) => void
-  onRename: (id: number, newTitle: string) => Promise<void>
-  onDelete: (id: number, agentType: string, folderId: number) => Promise<void>
-  onStatusChange: (id: number, status: ConversationStatus) => Promise<void>
-  onNewConversation: () => void
-  onDragStart: (folderId: number) => void
-  onDragEnd: () => void
-  stackIndex: number
-}
-
-const DRAGGING_Z_INDEX = 10_000
-
-const FolderGroupItem = memo(function FolderGroupItem({
-  folderId,
-  folderName,
-  folderPath,
-  conversations,
-  totalConversationCount,
-  expanded,
-  importing,
-  reordering,
-  dragging,
-  sortMode,
-  now,
-  selectedConversation,
-  openTabKeys,
-  themeColor,
-  appThemeColor,
-  currentDefaultAgent,
-  availableAgents,
-  availableAgentsFresh,
-  darkMode,
-  onToggle,
-  onRemoveFromWorkspace,
-  onNewConversationForFolder,
-  onImport,
-  onManageConversations,
-  onChangeColor,
-  onSetDefaultAgent,
-  onOpenInSystemExplorer,
-  onOpenInTerminal,
-  onSelect,
-  onDoubleClick,
-  onRename,
-  onDelete,
-  onStatusChange,
-  onNewConversation,
-  onDragStart,
-  onDragEnd,
-  stackIndex,
-}: FolderGroupItemProps) {
-  // Own the translations here rather than receiving `t` as a prop: next-intl
-  // returns a fresh `t` on every parent render, so passing it down would defeat
-  // this component's memo and re-render every folder on each status event.
-  const t = useTranslations("Folder.sidebar")
-  const justDraggedRef = useRef(false)
-  const dragControls = useDragControls()
-
-  const handleToggle = useCallback(
-    (id: number) => {
-      if (justDraggedRef.current) {
-        justDraggedRef.current = false
-        return
-      }
-      onToggle(id)
-    },
-    [onToggle]
-  )
-
-  const handleDragStart = useCallback(() => {
-    justDraggedRef.current = true
-    onDragStart(folderId)
-  }, [folderId, onDragStart])
-
-  // Wrap Reorder.Item in a plain div that owns the zIndex. Framer's Reorder.Item
-  // internally overrides `style.zIndex` (forces 1 while dragging, "unset" at rest),
-  // so any zIndex set directly on the Item is discarded. `isolation: isolate`
-  // forces a real stacking context on each wrapper so earlier folders' sticky
-  // headers always paint above later folders' conversation rows when scrolled.
-  return (
-    <div
-      className={cn(
-        "relative",
-        darkMode && themeColor !== FOLDER_THEME_COLOR_INHERIT && "dark"
-      )}
-      data-theme={
-        themeColor === FOLDER_THEME_COLOR_INHERIT ? undefined : themeColor
-      }
-      style={{
-        isolation: "isolate",
-        zIndex: dragging ? DRAGGING_Z_INDEX : stackIndex,
-      }}
-    >
-      <Reorder.Item
-        as="div"
-        value={folderId}
-        drag={reordering ? false : "y"}
-        dragListener={false}
-        dragControls={dragControls}
-        dragMomentum={false}
-        layout="position"
-        onDragStart={handleDragStart}
-        onDragEnd={onDragEnd}
-      >
-        <div
-          className={cn(
-            "sticky top-0 z-20 bg-sidebar",
-            dragging && "shadow-sm"
-          )}
-        >
-          <FolderHeader
-            folderId={folderId}
-            folderName={folderName}
-            folderPath={folderPath}
-            count={conversations.length}
-            expanded={expanded}
-            importing={importing}
-            themeColor={themeColor}
-            appThemeColor={appThemeColor}
-            currentDefaultAgent={currentDefaultAgent}
-            availableAgents={availableAgents}
-            availableAgentsFresh={availableAgentsFresh}
-            onToggle={handleToggle}
-            onRemoveFromWorkspace={onRemoveFromWorkspace}
-            onNewConversation={onNewConversationForFolder}
-            onImport={onImport}
-            onManageConversations={onManageConversations}
-            onChangeColor={onChangeColor}
-            onSetDefaultAgent={onSetDefaultAgent}
-            onOpenInSystemExplorer={onOpenInSystemExplorer}
-            onOpenInTerminal={onOpenInTerminal}
-            isDragging={dragging}
-            dragControls={dragControls}
-            t={t}
-          />
-        </div>
-        {expanded &&
-          (conversations.length === 0 ? (
-            <div
-              className="py-[0.375rem] text-[0.75rem] text-muted-foreground/70"
-              style={{
-                paddingLeft: "calc(var(--conv-rail-axis) + 0.875rem)",
-              }}
-            >
-              {totalConversationCount === 0
-                ? t("emptyFolderHint")
-                : t("noUnfinishedConversations")}
-            </div>
-          ) : (
-            conversations.map((conv) => (
-              <SidebarConversationCard
-                key={`conv-${conv.agent_type}-${conv.id}`}
-                conversation={conv}
-                isSelected={
-                  selectedConversation?.agentType === conv.agent_type &&
-                  selectedConversation?.id === conv.id
-                }
-                isOpenInTab={openTabKeys.has(`${conv.agent_type}:${conv.id}`)}
-                timeLabel={formatRelative(
-                  sortMode === "updated" ? conv.updated_at : conv.created_at,
-                  now
-                )}
-                onSelect={onSelect}
-                onDoubleClick={onDoubleClick}
-                onRename={onRename}
-                onDelete={onDelete}
-                onStatusChange={onStatusChange}
-                onNewConversation={onNewConversation}
-              />
-            ))
-          ))}
-      </Reorder.Item>
-    </div>
-  )
-})
-
 export interface SidebarConversationListHandle {
   scrollToActive: () => void
   expandAll: () => void
@@ -783,6 +579,25 @@ export function SidebarConversationList({
   const [dragOrder, setDragOrder] = useState<number[] | null>(null)
   const pendingOrderRef = useRef<number[] | null>(null)
 
+  // Custom pointer-based folder reorder (replaces motion `Reorder`, which can't
+  // coexist with virtualization — see the perf plan). Refs are read by the
+  // window pointer listeners so the public callbacks stay referentially stable
+  // (the `FolderHeader` memo depends on a stable `onGripPointerDown`).
+  const dragSurfaceRef = useRef<HTMLDivElement>(null)
+  const dragPointerRef = useRef<{
+    folderId: number
+    pointerId: number
+    startX: number
+    startY: number
+    lastY: number
+    started: boolean
+  } | null>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+  const autoscrollRef = useRef<number | null>(null)
+  // Snapshots read by the imperative drag listeners without re-subscribing them.
+  const orderedFolderIdsRef = useRef<number[]>([])
+  const reorderingRef = useRef(false)
+
   useEffect(() => {
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
 
@@ -841,7 +656,17 @@ export function SidebarConversationList({
     [folderIndex, createTerminalInDirectory, tFileTree]
   )
 
-  const scrollRootRef = useRef<OverlayScrollbarsComponentRef>(null)
+  // virtua binds to the real OverlayScrollbars viewport element (surfaced via
+  // the ScrollArea `onViewportRef` bridge once OS has initialized). We keep both
+  // a ref (for the Virtualizer `scrollRef` prop) and a state flag so the
+  // Virtualizer only mounts after the viewport exists.
+  const viewportRef = useRef<HTMLElement | null>(null)
+  const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null)
+  const handleViewportRef = useCallback((element: HTMLElement | null) => {
+    viewportRef.current = element
+    setViewportEl(element)
+  }, [])
+  const virtualizerRef = useRef<VirtualizerHandle>(null)
   const scrollToActiveRef = useRef<() => void>(() => {})
   const pendingScrollRef = useRef(false)
 
@@ -917,6 +742,24 @@ export function SidebarConversationList({
     return ids
   }, [folders, dragOrder])
 
+  const darkMode = resolvedTheme === "dark"
+
+  // Flat row model for windowing. Deliberately excludes `now` (see buildRows):
+  // the per-minute label tick must not rebuild rows and break the card memo.
+  const rows = useMemo(
+    () =>
+      buildRows(orderedFolderIds, byFolder, folderExpanded, folderTotalCounts),
+    [orderedFolderIds, byFolder, folderExpanded, folderTotalCounts]
+  )
+
+  // Latest snapshots for the imperative scroll/drag code paths, refreshed every
+  // render so the window listeners and scrollToActive read current values
+  // without being torn down and re-subscribed.
+  const rowsRef = useRef<SidebarRow[]>(rows)
+  rowsRef.current = rows
+  orderedFolderIdsRef.current = orderedFolderIds
+  reorderingRef.current = reordering
+
   useImperativeHandle(ref, () => ({
     scrollToActive() {
       scrollToActiveRef.current()
@@ -949,6 +792,9 @@ export function SidebarConversationList({
       )
       if (!conv) return
       if (!(folderExpanded[conv.folder_id] ?? true)) {
+        // Expand first; the row only exists in the flat model once expanded, so
+        // defer the actual scroll to the next render (this effect re-runs on the
+        // folderExpanded change with the rebuilt rows available via rowsRef).
         setFolderExpanded((prev) => {
           const next = { ...prev, [conv.folder_id]: true }
           saveFolderExpanded(next)
@@ -957,13 +803,18 @@ export function SidebarConversationList({
         pendingScrollRef.current = true
         return
       }
-      const root = scrollRootRef.current?.getElement()
-      if (!root) return
-      const selector = `[data-conv-key="${targetAgent}:${targetId}"]`
-      const el = root.querySelector(selector)
-      if (el instanceof HTMLElement) {
-        el.scrollIntoView({ block: "center", behavior: "smooth" })
-      }
+      // Off-screen virtualized rows are not in the DOM, so resolve the flat row
+      // index and let virtua scroll to it.
+      const index = flatIndexOfConversation(
+        rowsRef.current,
+        targetId,
+        targetAgent
+      )
+      if (index < 0) return
+      virtualizerRef.current?.scrollToIndex(index, {
+        align: "center",
+        smooth: true,
+      })
     }
 
     if (pendingScrollRef.current) {
@@ -1128,10 +979,6 @@ export function SidebarConversationList({
     setDragOrder(nextIds)
   }, [])
 
-  const handleDragStart = useCallback((folderId: number) => {
-    setDragging(folderId)
-  }, [])
-
   const handleDragEnd = useCallback(async () => {
     setDragging(null)
     const order = pendingOrderRef.current
@@ -1149,6 +996,203 @@ export function SidebarConversationList({
       setDragOrder(null)
     }
   }, [persistReorder])
+
+  // ── Custom folder-drag gesture ────────────────────────────────────────────
+  // Fixed height of one folder header row (Tailwind `h-[2rem]`); the drag
+  // surface collapses every folder to just its header so the target slot is a
+  // simple `floor(pointerY / FOLDER_ROW_HEIGHT)`.
+  const FOLDER_ROW_HEIGHT = 32
+  const DRAG_THRESHOLD_PX = 6
+  const AUTOSCROLL_EDGE_PX = 28
+  const AUTOSCROLL_STEP_PX = 12
+
+  const stopAutoscroll = useCallback(() => {
+    if (autoscrollRef.current != null) {
+      cancelAnimationFrame(autoscrollRef.current)
+      autoscrollRef.current = null
+    }
+  }, [])
+
+  // Suppress exactly one trailing click after a real drag so the gesture never
+  // also toggles a folder. The grip element that received `pointerdown` unmounts
+  // when the drag surface takes over, so a per-element guard would be unreliable;
+  // a one-shot capture listener is robust and self-cleans (the rAF drops it if
+  // the browser synthesizes no click, leaving later legitimate clicks intact).
+  const suppressNextClick = useCallback(() => {
+    const onClick = (event: MouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    window.addEventListener("click", onClick, { capture: true, once: true })
+    requestAnimationFrame(() => {
+      window.removeEventListener("click", onClick, true)
+    })
+  }, [])
+
+  // Reorder the grabbed folder to the slot under the pointer (optimistically,
+  // via the same `dragOrder` machinery the persisted reorder uses). Targeting is
+  // intentionally gated on the collapsed drag surface existing: until it mounts,
+  // the only available geometry is the *expanded* virtualized list, whose
+  // scrollTop/row mix would map the pointer to a bogus far index (and clamp it
+  // to the last folder). Skipping until the surface is up means a too-quick
+  // release simply leaves the order untouched.
+  const updateDragTarget = useCallback(
+    (clientY: number) => {
+      const state = dragPointerRef.current
+      const surface = dragSurfaceRef.current
+      if (!state || !surface) return
+      const order = orderedFolderIdsRef.current
+      // The surface's live rect already reflects scroll, so no scrollTop term.
+      const targetIndex = pointerYToTargetIndex(
+        clientY,
+        surface.getBoundingClientRect().top,
+        0,
+        FOLDER_ROW_HEIGHT,
+        order.length
+      )
+      const fromIndex = order.indexOf(state.folderId)
+      if (fromIndex < 0 || fromIndex === targetIndex) return
+      handleReorder(applyReorder(order, fromIndex, targetIndex))
+    },
+    [handleReorder]
+  )
+
+  // While the pointer rests near a viewport edge, scroll and keep retargeting so
+  // off-screen folders remain reachable as drop targets.
+  const maybeAutoscroll = useCallback(
+    (clientY: number) => {
+      const viewport = viewportRef.current
+      if (!viewport) return
+      const rect = viewport.getBoundingClientRect()
+      const atTop = clientY < rect.top + AUTOSCROLL_EDGE_PX
+      const atBottom = clientY > rect.bottom - AUTOSCROLL_EDGE_PX
+      if (!atTop && !atBottom) {
+        stopAutoscroll()
+        return
+      }
+      if (autoscrollRef.current != null) return
+      const step = () => {
+        const v = viewportRef.current
+        const state = dragPointerRef.current
+        if (!v || !state) {
+          stopAutoscroll()
+          return
+        }
+        const r = v.getBoundingClientRect()
+        const dir = state.lastY < r.top + AUTOSCROLL_EDGE_PX ? -1 : 1
+        v.scrollTop += dir * AUTOSCROLL_STEP_PX
+        updateDragTarget(state.lastY)
+        autoscrollRef.current = requestAnimationFrame(step)
+      }
+      autoscrollRef.current = requestAnimationFrame(step)
+    },
+    [stopAutoscroll, updateDragTarget]
+  )
+
+  const teardownDragListeners = useCallback(() => {
+    dragCleanupRef.current?.()
+    dragCleanupRef.current = null
+    stopAutoscroll()
+  }, [stopAutoscroll])
+
+  const cancelDrag = useCallback(() => {
+    teardownDragListeners()
+    dragPointerRef.current = null
+    pendingOrderRef.current = null
+    setDragging(null)
+    setDragOrder(null)
+  }, [teardownDragListeners])
+
+  const finishDrag = useCallback(() => {
+    teardownDragListeners()
+    const state = dragPointerRef.current
+    dragPointerRef.current = null
+    if (state?.started) {
+      // A real drag occurred → commit the optimistic order and swallow the
+      // trailing click so it doesn't also toggle a folder. A pointerup that
+      // never crossed the threshold falls through to the normal toggle click.
+      suppressNextClick()
+      void handleDragEnd()
+    }
+  }, [teardownDragListeners, handleDragEnd, suppressNextClick])
+
+  const onDragPointerMove = useCallback(
+    (event: PointerEvent) => {
+      const state = dragPointerRef.current
+      if (!state || event.pointerId !== state.pointerId) return
+      state.lastY = event.clientY
+      if (!state.started) {
+        const moved = Math.hypot(
+          event.clientX - state.startX,
+          event.clientY - state.startY
+        )
+        if (moved < DRAG_THRESHOLD_PX) return
+        state.started = true
+        setDragging(state.folderId)
+        setDragOrder(orderedFolderIdsRef.current.slice())
+      }
+      updateDragTarget(event.clientY)
+      maybeAutoscroll(event.clientY)
+    },
+    [updateDragTarget, maybeAutoscroll]
+  )
+
+  const onDragPointerUp = useCallback(
+    (event: PointerEvent) => {
+      const state = dragPointerRef.current
+      if (state && event.pointerId !== state.pointerId) return
+      finishDrag()
+    },
+    [finishDrag]
+  )
+
+  // Pointer cancellation (touch interruption, browser takeover) aborts the drag
+  // rather than committing a possibly-incomplete reorder.
+  const onDragPointerCancel = useCallback(
+    (event: PointerEvent) => {
+      const state = dragPointerRef.current
+      if (state && event.pointerId !== state.pointerId) return
+      cancelDrag()
+    },
+    [cancelDrag]
+  )
+
+  const onDragKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelDrag()
+    },
+    [cancelDrag]
+  )
+
+  const beginFolderDrag = useCallback(
+    (folderId: number, event: React.PointerEvent) => {
+      if (event.button !== 0) return
+      if (reorderingRef.current) return
+      if (dragPointerRef.current) return
+      dragPointerRef.current = {
+        folderId,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastY: event.clientY,
+        started: false,
+      }
+      window.addEventListener("pointermove", onDragPointerMove)
+      window.addEventListener("pointerup", onDragPointerUp)
+      window.addEventListener("pointercancel", onDragPointerCancel)
+      window.addEventListener("keydown", onDragKeyDown)
+      dragCleanupRef.current = () => {
+        window.removeEventListener("pointermove", onDragPointerMove)
+        window.removeEventListener("pointerup", onDragPointerUp)
+        window.removeEventListener("pointercancel", onDragPointerCancel)
+        window.removeEventListener("keydown", onDragKeyDown)
+      }
+    },
+    [onDragPointerMove, onDragPointerUp, onDragPointerCancel, onDragKeyDown]
+  )
+
+  // Safety net: drop listeners / stop autoscroll if the list unmounts mid-drag.
+  useEffect(() => () => teardownDragListeners(), [teardownDragListeners])
 
   const handleOpenFolderAction = useCallback(async () => {
     // Native Tauri dialog only when running on local desktop (no active
@@ -1193,6 +1237,113 @@ export function SidebarConversationList({
 
   const showEmptyWorkspaceActions =
     folders.length === 0 && conversations.length === 0
+
+  const folderThemeColor = (folderId: number): FolderThemeColor =>
+    normalizeFolderThemeColor(folderIndex.get(folderId)?.color)
+
+  // A per-row theme wrapper replaces the old per-folder-group wrapper: it scopes
+  // the folder's accent color (and dark-mode flip) to that single virtual row.
+  const themeWrap = (folderId: number, child: React.ReactNode) => {
+    const themeColor = folderThemeColor(folderId)
+    return (
+      <div
+        className={cn(
+          darkMode && themeColor !== FOLDER_THEME_COLOR_INHERIT && "dark"
+        )}
+        data-theme={
+          themeColor === FOLDER_THEME_COLOR_INHERIT ? undefined : themeColor
+        }
+      >
+        {child}
+      </div>
+    )
+  }
+
+  const folderHeaderElement = (
+    folderId: number,
+    opts: { dragging: boolean; collapsed?: boolean; grip: boolean }
+  ) => {
+    const folderEntry = folderIndex.get(folderId)
+    return (
+      <FolderHeader
+        folderId={folderId}
+        folderName={folderEntry?.name ?? String(folderId)}
+        folderPath={folderEntry?.path ?? ""}
+        count={byFolder.get(folderId)?.length ?? 0}
+        expanded={opts.collapsed ? false : (folderExpanded[folderId] ?? true)}
+        importing={importing}
+        themeColor={folderThemeColor(folderId)}
+        appThemeColor={appThemeColor}
+        currentDefaultAgent={folderEntry?.defaultAgentType ?? null}
+        availableAgents={availableAgents}
+        availableAgentsFresh={availableAgentsFresh}
+        onToggle={toggleFolder}
+        onRemoveFromWorkspace={handleRemoveFolder}
+        onNewConversation={handleNewConversationForFolder}
+        onImport={handleImportForFolder}
+        onManageConversations={handleManageConversations}
+        onChangeColor={handleChangeFolderColor}
+        onSetDefaultAgent={handleChangeFolderDefaultAgent}
+        onOpenInSystemExplorer={handleOpenFolderInSystemExplorer}
+        onOpenInTerminal={handleOpenFolderInTerminal}
+        isDragging={opts.dragging}
+        onGripPointerDown={opts.grip ? beginFolderDrag : undefined}
+      />
+    )
+  }
+
+  const renderRow = (row: SidebarRow) => {
+    if (row.kind === "folder") {
+      return themeWrap(
+        row.folderId,
+        folderHeaderElement(row.folderId, {
+          dragging: dragging === row.folderId,
+          grip: true,
+        })
+      )
+    }
+    if (row.kind === "empty") {
+      return themeWrap(
+        row.folderId,
+        <div
+          className="py-[0.375rem] text-[0.75rem] text-muted-foreground/70"
+          style={{ paddingLeft: "calc(var(--conv-rail-axis) + 0.875rem)" }}
+        >
+          {row.totalConversationCount === 0
+            ? t("emptyFolderHint")
+            : t("noUnfinishedConversations")}
+        </div>
+      )
+    }
+    const conv = row.conversation
+    return themeWrap(
+      conv.folder_id,
+      <SidebarConversationCard
+        conversation={conv}
+        isSelected={
+          selectedConversation?.agentType === conv.agent_type &&
+          selectedConversation?.id === conv.id
+        }
+        isOpenInTab={openTabKeys.has(`${conv.agent_type}:${conv.id}`)}
+        timeLabel={formatRelative(
+          sortMode === "updated" ? conv.updated_at : conv.created_at,
+          now
+        )}
+        onSelect={handleSelect}
+        onDoubleClick={handleDoubleClick}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        onStatusChange={handleStatusChange}
+        onNewConversation={handleNewConversation}
+      />
+    )
+  }
+
+  const rowKey = (row: SidebarRow): string => {
+    if (row.kind === "folder") return `folder-${row.folderId}`
+    if (row.kind === "empty") return `empty-${row.folderId}`
+    return `conv-${row.conversation.agent_type}-${row.conversation.id}`
+  }
 
   return (
     <div className="relative flex flex-col flex-1 min-h-0">
@@ -1249,91 +1400,53 @@ export function SidebarConversationList({
           <ContextMenuTrigger asChild>
             <div className="flex-1 min-h-0 relative">
               <ScrollArea
-                ref={scrollRootRef}
+                onViewportRef={handleViewportRef}
                 className={cn(
                   "h-full min-h-0 px-1.5 pb-1.5",
-                  "[overflow-anchor:none]"
+                  "[overflow-anchor:none]",
+                  "[--conv-rail-axis:0.875rem]"
                 )}
               >
-                <Reorder.Group
-                  as="div"
-                  axis="y"
-                  values={orderedFolderIds}
-                  onReorder={handleReorder}
-                  className="flex flex-col"
-                  style={
-                    {
-                      "--conv-rail-axis": "0.875rem",
-                    } as React.CSSProperties
-                  }
-                >
-                  {orderedFolderIds.map((folderId, index) => {
-                    const folderEntry = folderIndex.get(folderId)
-                    const themeColor = normalizeFolderThemeColor(
-                      folderEntry?.color
-                    )
-                    const folderName = folderEntry?.name ?? String(folderId)
-                    const folderPath = folderEntry?.path ?? ""
-                    const currentDefaultAgent =
-                      folderEntry?.defaultAgentType ?? null
-                    const convs = byFolder.get(folderId) ?? EMPTY_CONVERSATIONS
-                    const expanded = folderExpanded[folderId] ?? true
-                    // Earlier folders get a higher stacking index so their
-                    // sticky headers paint above later folders' conversation
-                    // cards when scrolled. Framer's `layout` prop sets
-                    // `will-change: transform`, which would otherwise trap
-                    // each sticky inside its own Reorder.Item.
-                    const stackIndex = orderedFolderIds.length - index
-                    return (
-                      <FolderGroupItem
-                        key={folderId}
-                        folderId={folderId}
-                        folderName={folderName}
-                        folderPath={folderPath}
-                        conversations={convs}
-                        totalConversationCount={
-                          folderTotalCounts.get(folderId) ?? 0
-                        }
-                        expanded={expanded}
-                        importing={importing}
-                        reordering={reordering}
-                        dragging={dragging === folderId}
-                        sortMode={sortMode}
-                        now={now}
-                        selectedConversation={selectedConversation}
-                        openTabKeys={openTabKeys}
-                        themeColor={themeColor}
-                        appThemeColor={appThemeColor}
-                        currentDefaultAgent={currentDefaultAgent}
-                        availableAgents={availableAgents}
-                        availableAgentsFresh={availableAgentsFresh}
-                        darkMode={resolvedTheme === "dark"}
-                        onToggle={toggleFolder}
-                        onRemoveFromWorkspace={handleRemoveFolder}
-                        onNewConversationForFolder={
-                          handleNewConversationForFolder
-                        }
-                        onImport={handleImportForFolder}
-                        onManageConversations={handleManageConversations}
-                        onChangeColor={handleChangeFolderColor}
-                        onSetDefaultAgent={handleChangeFolderDefaultAgent}
-                        onOpenInSystemExplorer={
-                          handleOpenFolderInSystemExplorer
-                        }
-                        onOpenInTerminal={handleOpenFolderInTerminal}
-                        onSelect={handleSelect}
-                        onDoubleClick={handleDoubleClick}
-                        onRename={handleRename}
-                        onDelete={handleDelete}
-                        onStatusChange={handleStatusChange}
-                        onNewConversation={handleNewConversation}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                        stackIndex={stackIndex}
+                {dragging !== null ? (
+                  // Drag surface: every folder collapsed to its header so any
+                  // folder (even one that was virtualized off-screen) is a valid
+                  // drop target. Non-virtualized — folder counts are small.
+                  <div ref={dragSurfaceRef} className="flex flex-col">
+                    {orderedFolderIds.map((folderId) => (
+                      <div key={folderId}>
+                        {themeWrap(
+                          folderId,
+                          folderHeaderElement(folderId, {
+                            dragging: dragging === folderId,
+                            collapsed: true,
+                            grip: false,
+                          })
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : viewportEl ? (
+                  <Virtualizer
+                    ref={virtualizerRef}
+                    scrollRef={viewportRef}
+                    data={rows}
+                    itemSize={32}
+                    bufferSize={400}
+                  >
+                    {(row: SidebarRow) => (
+                      <div key={rowKey(row)}>{renderRow(row)}</div>
+                    )}
+                  </Virtualizer>
+                ) : (
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <Skeleton
+                        key={i}
+                        className="h-[2rem] w-full rounded-md"
                       />
-                    )
-                  })}
-                </Reorder.Group>
+                    ))}
+                  </div>
+                )}
               </ScrollArea>
             </div>
           </ContextMenuTrigger>
