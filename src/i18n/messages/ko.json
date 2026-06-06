@@ -2642,5 +2642,13 @@
     "emptyDirectory": "이 디렉토리는 비어 있습니다",
     "errorLoadingDir": "디렉토리 로드 실패",
     "selectedCount": "{count}개 선택됨"
+  },
+  "WebConnection": {
+    "disconnectedTitle": "연결이 끊어졌습니다",
+    "reconnectingDescription": "서버에 다시 연결하는 중입니다. 보통 몇 초 내에 자동으로 복구됩니다.",
+    "reconnectNow": "지금 다시 연결",
+    "sessionExpiredTitle": "세션이 만료되었습니다",
+    "sessionExpiredDescription": "세션이 더 이상 유효하지 않습니다. 계속하려면 다시 로그인하세요.",
+    "goToLogin": "로그인으로 이동"
   }
 }

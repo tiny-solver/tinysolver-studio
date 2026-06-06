@@ -6,7 +6,8 @@ import {
   isRemoteDesktopMode,
   notifyRemoteDesktopUnauthorized,
 } from "./transport"
-import { getCodegToken, redirectToCodegLogin } from "./transport/web-auth"
+import { getCodegToken } from "./transport/web-auth"
+import { notifyWebUnauthorized } from "./transport/web-connection-store"
 import { getCurrentEffectiveAppLocale } from "./i18n"
 import { TurnBusyError, isTurnInProgressRejection } from "./turn-busy"
 import type { FolderThemeColor } from "./theme-presets"
@@ -1650,7 +1651,7 @@ export async function uploadAttachment(
     body: form,
   })
   if (res.status === 401) {
-    redirectToCodegLogin()
+    notifyWebUnauthorized()
     throw new Error("Unauthorized")
   }
   if (!res.ok) {
@@ -1752,7 +1753,7 @@ async function workspaceFileFetch(
     body,
   })
   if (res.status === 401) {
-    redirectToCodegLogin()
+    notifyWebUnauthorized()
     throw new Error("Unauthorized")
   }
   if (!res.ok) {
@@ -1823,7 +1824,7 @@ export async function uploadWorkspaceFile(
 
     xhr.onload = () => {
       if (xhr.status === 401) {
-        redirectToCodegLogin()
+        notifyWebUnauthorized()
         reject(new Error("Unauthorized"))
         return
       }

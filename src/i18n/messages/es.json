@@ -2642,5 +2642,13 @@
     "emptyDirectory": "Este directorio está vacío",
     "errorLoadingDir": "Error al cargar el directorio",
     "selectedCount": "{count} seleccionado(s)"
+  },
+  "WebConnection": {
+    "disconnectedTitle": "Conexión perdida",
+    "reconnectingDescription": "Intentando volver a conectar con el servidor. Normalmente se recupera solo en unos segundos.",
+    "reconnectNow": "Volver a conectar ahora",
+    "sessionExpiredTitle": "Sesión caducada",
+    "sessionExpiredDescription": "Tu sesión ya no es válida. Inicia sesión de nuevo para continuar.",
+    "goToLogin": "Ir al inicio de sesión"
   }
 }

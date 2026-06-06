@@ -2642,5 +2642,13 @@
     "emptyDirectory": "Ce dossier est vide",
     "errorLoadingDir": "Échec du chargement du dossier",
     "selectedCount": "{count} sélectionné(s)"
+  },
+  "WebConnection": {
+    "disconnectedTitle": "Connexion perdue",
+    "reconnectingDescription": "Tentative de reconnexion au serveur. Cela se rétablit généralement tout seul en quelques secondes.",
+    "reconnectNow": "Se reconnecter maintenant",
+    "sessionExpiredTitle": "Session expirée",
+    "sessionExpiredDescription": "Votre session n'est plus valide. Veuillez vous reconnecter pour continuer.",
+    "goToLogin": "Aller à la connexion"
   }
 }

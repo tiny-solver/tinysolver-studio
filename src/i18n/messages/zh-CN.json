@@ -2642,5 +2642,13 @@
     "openFailed": "打开远端工作区失败",
     "connectionLoadFailed": "加载远端连接失败：{message}",
     "connectionExpired": "远端连接“{name}”已失效。请更新 Token 后重新加载此窗口。"
+  },
+  "WebConnection": {
+    "disconnectedTitle": "连接已断开",
+    "reconnectingDescription": "正在尝试重新连接服务器，通常会在几秒内自动恢复。",
+    "reconnectNow": "立即重连",
+    "sessionExpiredTitle": "会话已过期",
+    "sessionExpiredDescription": "登录状态已失效，请重新登录以继续。",
+    "goToLogin": "前往登录"
   }
 }

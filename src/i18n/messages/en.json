@@ -2642,5 +2642,13 @@
     "openFailed": "Failed to open remote workspace",
     "connectionLoadFailed": "Failed to load remote connection: {message}",
     "connectionExpired": "Remote connection \"{name}\" is expired. Update its token and reload this window."
+  },
+  "WebConnection": {
+    "disconnectedTitle": "Connection lost",
+    "reconnectingDescription": "Trying to reconnect to the server. This usually recovers on its own within a few seconds.",
+    "reconnectNow": "Reconnect now",
+    "sessionExpiredTitle": "Session expired",
+    "sessionExpiredDescription": "Your session is no longer valid. Please sign in again to continue.",
+    "goToLogin": "Go to login"
   }
 }

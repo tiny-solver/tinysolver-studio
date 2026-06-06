@@ -2642,5 +2642,13 @@
     "emptyDirectory": "هذا المجلد فارغ",
     "errorLoadingDir": "فشل تحميل المجلد",
     "selectedCount": "{count} محدد"
+  },
+  "WebConnection": {
+    "disconnectedTitle": "انقطع الاتصال",
+    "reconnectingDescription": "تتم محاولة إعادة الاتصال بالخادم. عادةً ما يُستعاد الاتصال تلقائيًا خلال ثوانٍ قليلة.",
+    "reconnectNow": "إعادة الاتصال الآن",
+    "sessionExpiredTitle": "انتهت الجلسة",
+    "sessionExpiredDescription": "لم تعد جلستك صالحة. يُرجى تسجيل الدخول مرة أخرى للمتابعة.",
+    "goToLogin": "الانتقال إلى تسجيل الدخول"
   }
 }
