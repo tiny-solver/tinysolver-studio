@@ -126,6 +126,7 @@ const SubAgentOverlayRow = memo(function SubAgentOverlayRow({
   const {
     agentType,
     task,
+    taskId,
     status,
     errorCode,
     childConversationId,
@@ -154,6 +155,14 @@ const SubAgentOverlayRow = memo(function SubAgentOverlayRow({
           <span className="truncate text-xs font-semibold text-foreground">
             {agentType ? AGENT_LABELS[agentType] : t("unknownAgent")}
           </span>
+          {taskId && (
+            <span
+              className="shrink-0 font-mono text-[11px] text-muted-foreground"
+              title={taskId}
+            >
+              #{taskId.slice(0, 8)}
+            </span>
+          )}
           <StatusBadge status={status} errorCode={errorCode} />
         </div>
         {task && (

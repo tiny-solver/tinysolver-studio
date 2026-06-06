@@ -193,4 +193,40 @@ describe("SubAgentOverlay", () => {
     expect(screen.getAllByTestId("sub-agent-row")).toHaveLength(2)
     expect(screen.getAllByText("Sub-agent")).toHaveLength(2)
   })
+
+  it("shows the broker task id (short, #-prefixed) after each agent name", () => {
+    const delegations: DelegationCardSource[] = [
+      {
+        ...source("pt-1", { agent_type: "codex", task: "Investigate" }),
+        // The ack output carries the broker-minted task_id.
+        output: JSON.stringify({ task_id: "abc12345def67890" }),
+      },
+    ]
+    renderWithIntl(
+      <SubAgentOverlay
+        delegations={delegations}
+        overlayKey="k-taskid"
+        defaultExpanded
+      />
+    )
+    // Truncated to 8 chars in the row, full id in the tooltip.
+    const badge = screen.getByText("#abc12345")
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveAttribute("title", "abc12345def67890")
+  })
+
+  it("omits the task id badge when no id has been minted yet", () => {
+    const delegations = [
+      source("pt-1", { agent_type: "codex", task: "Investigate" }),
+    ]
+    renderWithIntl(
+      <SubAgentOverlay
+        delegations={delegations}
+        overlayKey="k-noid"
+        defaultExpanded
+      />
+    )
+    expect(screen.getByTestId("sub-agent-row")).toBeInTheDocument()
+    expect(screen.queryByText(/^#/)).not.toBeInTheDocument()
+  })
 })
