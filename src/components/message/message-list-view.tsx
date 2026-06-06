@@ -679,7 +679,16 @@ export function MessageListView({
     [hideEmptyState, t]
   )
 
-  const agentPlanOverlayKey = liveMessage?.id ?? `history-${conversationId}`
+  // Namespaced with `plan-` so this key can never equal `subAgentOverlayKey`
+  // below: the two overlays are siblings in one container, and both fall back
+  // to a per-conversation string when there's no live message / assistant reply
+  // yet (the state a freshly-opened sub-agent dialog starts in). Without
+  // disjoint namespaces those fallbacks collide → React "two children with the
+  // same key".
+  const agentPlanOverlayKey =
+    liveMessage?.id != null
+      ? `plan-${liveMessage.id}`
+      : `plan-history-${conversationId}`
 
   // Sub-agents delegated in the LAST agent reply. Scan the merged timeline
   // backward for the most recent assistant turn (the live streaming turn is
@@ -706,7 +715,7 @@ export function MessageListView({
   )
   const subAgentOverlayKey = lastAssistantGroup
     ? `subagents-${lastAssistantGroup.id}`
-    : `history-${conversationId}`
+    : `subagents-history-${conversationId}`
 
   const hasRenderableContent = threadItems.length > 0 || Boolean(liveMessage)
 
