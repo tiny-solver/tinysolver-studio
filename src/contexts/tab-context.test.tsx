@@ -79,6 +79,7 @@ const defaultFoldersMock: FolderDetail[] = [
     last_opened_at: "2026-05-24T00:00:00Z",
     sort_order: 0,
     color: "blue",
+    parent_id: null,
   },
   {
     id: 2,
@@ -89,6 +90,7 @@ const defaultFoldersMock: FolderDetail[] = [
     last_opened_at: "2026-05-24T00:00:00Z",
     sort_order: 1,
     color: "green",
+    parent_id: null,
   },
 ]
 

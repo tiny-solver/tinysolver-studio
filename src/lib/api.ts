@@ -1242,6 +1242,19 @@ export async function openFolder(path: string): Promise<FolderDetail> {
   return getTransport().call("open_folder", { path })
 }
 
+/**
+ * Open a freshly created git worktree directory as a folder, recording the root
+ * folder it descends from (`sourceFolderId` is the folder the worktree was
+ * created from; the backend flattens to the root). Lets the worktree folder be
+ * merged under its parent in the sidebar.
+ */
+export async function openWorktreeFolder(
+  path: string,
+  sourceFolderId: number
+): Promise<FolderDetail> {
+  return getTransport().call("open_worktree_folder", { path, sourceFolderId })
+}
+
 export async function openCommitWindow(folderId: number): Promise<void> {
   const locale = getCurrentEffectiveAppLocale()
   if (isDesktop()) {
