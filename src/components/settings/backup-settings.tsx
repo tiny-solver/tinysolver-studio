@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { isDesktop } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
-import { relaunchApp, restartServer, waitForServerHealthy } from "@/lib/updater"
+import { relaunchApp, restartApp, waitForServerHealthy } from "@/lib/updater"
 import {
   toLocalizedErrorMessage,
   type AppErrorTranslator,
@@ -311,7 +311,7 @@ export function BackupSettings() {
         // process and look like success while the restore never applied. Tell
         // the user to restart manually instead.
         try {
-          await restartServer()
+          await restartApp()
         } catch {
           toast.error(t("restore.restartFailed"))
           setRestoring(false)
