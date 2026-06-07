@@ -1214,6 +1214,10 @@ const ConversationTabView = memo(function ConversationTabView({
               attachmentTabId={tabId}
               draftStorageKey={draftStorageKey}
               isActive={isActive}
+              onAddFeedback={
+                feedback.featureEnabled ? feedback.openDialog : undefined
+              }
+              feedbackAddDisabled={!feedback.canSubmit}
             />
           </div>
           <div className="flex-1" />

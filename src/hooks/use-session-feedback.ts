@@ -114,8 +114,11 @@ export function useSessionFeedback({
     void acpGetSessionSnapshot(connectionId)
       .then((snap) => {
         if (cancelled || !snap) return
-        // Tool availability is fixed at launch, so it's valid regardless of turn.
-        setToolAvailable(snap.feedback_tool_available ?? false)
+        // Tool availability is fixed at launch and only ever upgrades to true.
+        // Never overwrite a confirmed `true` with a stale `false` from a read
+        // that raced the spawn — the synchronous reset above is the only place
+        // it goes back to false (on connection / feature-flag change).
+        if (snap.feedback_tool_available) setToolAvailable(true)
         // A new turn started while the fetch was in flight — the snapshot holds
         // the previous turn's (already-cleared) notes; drop them.
         if (turnGenRef.current !== startGen) return
@@ -134,6 +137,30 @@ export function useSessionFeedback({
       cancelled = true
     }
   }, [connectionId, enabled])
+
+  // Self-heal tool availability. The hydrate above is keyed on `connectionId`,
+  // which appears the moment a NEW conversation's connection is created — while
+  // it's still "connecting", BEFORE the backend sets `feedback_tool_available`
+  // at spawn. That first read returns false and would never refresh, leaving the
+  // "+" entry permanently disabled. Once the connection is actually live, re-read
+  // it (only while still unknown — a `false` no-ops so this can't loop, and it
+  // stops the moment it flips true).
+  useEffect(() => {
+    if (!enabled || !connectionId || toolAvailable) return
+    if (connStatus !== "connected" && connStatus !== "prompting") return
+    let cancelled = false
+    void acpGetSessionSnapshot(connectionId)
+      .then((snap) => {
+        // Monotonic upgrade only (see hydrate effect) — no downgrade, no flicker.
+        if (!cancelled && snap?.feedback_tool_available) {
+          setToolAvailable(true)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, connectionId, connStatus, toolAvailable])
 
   // Build the note list from the live event stream, scoped to this connection.
   useAcpEvent(
