@@ -2500,6 +2500,19 @@
     }
   },
   "Pet": {
+    "badge": {
+      "running": "실행 중 {count}개",
+      "waiting": "승인 대기 {count}개",
+      "error": "오류 {count}개"
+    },
+    "panel": {
+      "title": "활성 세션",
+      "empty": "활성 세션 없음",
+      "emptyHint": "실행 중이거나 사용자의 조치가 필요한 세션이 여기에 표시됩니다.",
+      "statusRunning": "실행 중",
+      "statusWaiting": "대기 중",
+      "statusError": "오류"
+    },
     "menu": {
       "scale": "크기",
       "openManager": "펫 관리",

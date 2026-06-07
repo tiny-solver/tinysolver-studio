@@ -2500,6 +2500,19 @@
     }
   },
   "Pet": {
+    "badge": {
+      "running": "{count} en ejecución",
+      "waiting": "{count} esperando aprobación",
+      "error": "{count} con error"
+    },
+    "panel": {
+      "title": "Sesiones activas",
+      "empty": "No hay sesiones activas",
+      "emptyHint": "Aquí aparecen los agentes en ejecución y los que te necesitan.",
+      "statusRunning": "En ejecución",
+      "statusWaiting": "En espera",
+      "statusError": "Error"
+    },
     "menu": {
       "scale": "Escala",
       "openManager": "Gestionar mascotas",

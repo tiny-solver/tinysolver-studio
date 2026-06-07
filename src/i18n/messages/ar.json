@@ -2500,6 +2500,19 @@
     }
   },
   "Pet": {
+    "badge": {
+      "running": "{count} قيد التشغيل",
+      "waiting": "{count} في انتظار الموافقة",
+      "error": "{count} بها خطأ"
+    },
+    "panel": {
+      "title": "الجلسات النشطة",
+      "empty": "لا توجد جلسات نشطة",
+      "emptyHint": "تظهر هنا الوكلاء قيد التشغيل وتلك التي تحتاج إليك.",
+      "statusRunning": "قيد التشغيل",
+      "statusWaiting": "في الانتظار",
+      "statusError": "خطأ"
+    },
     "menu": {
       "scale": "الحجم",
       "openManager": "إدارة الحيوانات الأليفة",

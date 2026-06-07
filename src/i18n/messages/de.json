@@ -2500,6 +2500,19 @@
     }
   },
   "Pet": {
+    "badge": {
+      "running": "{count} laufend",
+      "waiting": "{count} warten auf Freigabe",
+      "error": "{count} fehlgeschlagen"
+    },
+    "panel": {
+      "title": "Aktive Sitzungen",
+      "empty": "Keine aktiven Sitzungen",
+      "emptyHint": "Laufende Agenten und solche, die dich brauchen, erscheinen hier.",
+      "statusRunning": "Läuft",
+      "statusWaiting": "Wartet",
+      "statusError": "Fehler"
+    },
     "menu": {
       "scale": "Skalierung",
       "openManager": "Pets verwalten",
