@@ -2196,6 +2196,7 @@
     }
   },
   "WebServiceSettings": {
+    "addressSwitchHint": "切換只會改變這裡顯示與開啟的位址；服務會監聽所有網路介面，每個位址都可存取。",
     "sectionTitle": "Web 服務",
     "sectionDescription": "啟用後可透過瀏覽器遠端存取 Codeg",
     "port": "連接埠",

@@ -2196,6 +2196,7 @@
     }
   },
   "WebServiceSettings": {
+    "addressSwitchHint": "Cambiar solo modifica la dirección que se muestra y se abre aquí; el servicio escucha en todas las interfaces y sigue accesible en cada dirección.",
     "sectionTitle": "Servicio Web",
     "sectionDescription": "Habilitar para acceder a Codeg de forma remota a través del navegador",
     "port": "Puerto",

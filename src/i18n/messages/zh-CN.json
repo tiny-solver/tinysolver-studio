@@ -2196,6 +2196,7 @@
     }
   },
   "WebServiceSettings": {
+    "addressSwitchHint": "切换只改变这里显示和打开的地址；服务监听所有网卡，每个地址都可访问。",
     "sectionTitle": "Web 服务",
     "sectionDescription": "启用后可通过浏览器远程访问 Codeg",
     "port": "端口",

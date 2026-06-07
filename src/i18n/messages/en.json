@@ -2196,6 +2196,7 @@
     }
   },
   "WebServiceSettings": {
+    "addressSwitchHint": "Switching only changes the address shown and opened here — the service listens on all interfaces and stays reachable at every address.",
     "sectionTitle": "Web Service",
     "sectionDescription": "Enable to access Codeg remotely via browser",
     "port": "Port",
