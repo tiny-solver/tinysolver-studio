@@ -2196,6 +2196,7 @@
     }
   },
   "WebServiceSettings": {
+    "addressSwitchHint": "전환해도 여기에 표시되고 열리는 주소만 바뀝니다. 서비스는 모든 인터페이스에서 수신하며 어떤 주소로도 접속할 수 있습니다.",
     "sectionTitle": "웹 서비스",
     "sectionDescription": "활성화하면 브라우저를 통해 Codeg에 원격으로 접속할 수 있습니다",
     "port": "포트",
