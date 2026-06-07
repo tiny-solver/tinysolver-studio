@@ -267,4 +267,31 @@ describe("useSessionFeedback", () => {
     expect(mockSubmit).not.toHaveBeenCalled()
     expect(result.current.dialogOpen).toBe(false)
   })
+
+  it("re-reads tool availability once the connection becomes live", async () => {
+    // A new connection's id appears while it's still "connecting", before the
+    // backend has set feedback_tool_available — the first read says false; the
+    // later (live) read says true.
+    mockSnapshot.mockResolvedValueOnce(
+      snapshot({ feedback_tool_available: false })
+    )
+    mockSnapshot.mockResolvedValue(snapshot({ feedback_tool_available: true }))
+
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useSessionFeedback>[0]) =>
+        useSessionFeedback(props),
+      {
+        initialProps: {
+          ...baseProps,
+          connStatus: "connecting" as ConnectionStatus,
+        },
+      }
+    )
+    await waitFor(() => expect(mockSnapshot).toHaveBeenCalled())
+    expect(result.current.canSubmit).toBe(false)
+
+    // Connection goes live (streaming) → tool availability is re-read.
+    rerender({ ...baseProps, connStatus: "prompting" })
+    await waitFor(() => expect(result.current.canSubmit).toBe(true))
+  })
 })
