@@ -518,6 +518,34 @@ pub async fn open_folder_core(
         .ok_or_else(|| AppCommandError::not_found("Folder not found after add"))
 }
 
+/// Open a freshly created git worktree directory as a folder, recording the
+/// *root* folder it descends from. Parents are flattened: a worktree created
+/// from another worktree still records the original root, so every worktree of a
+/// repo groups under that one repo folder. An unknown / non-positive
+/// `source_folder_id` degrades to a top-level folder (`parent_id = None`) rather
+/// than erroring.
+pub async fn open_worktree_folder_core(
+    db: &AppDatabase,
+    path: String,
+    source_folder_id: i32,
+) -> Result<FolderDetail, AppCommandError> {
+    let parent_id = if source_folder_id > 0 {
+        folder_service::get_folder_by_id(&db.conn, source_folder_id)
+            .await
+            .map_err(AppCommandError::from)?
+            .map(|src| src.parent_id.unwrap_or(src.id))
+    } else {
+        None
+    };
+    let entry = folder_service::add_folder_with_parent(&db.conn, &path, parent_id)
+        .await
+        .map_err(AppCommandError::from)?;
+    folder_service::get_folder_by_id(&db.conn, entry.id)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found("Folder not found after add"))
+}
+
 /// Open a folder into the workspace and announce it so the workspace window
 /// can surface it. Used by the project launcher, which lives in its own
 /// window/tab and can't reach the workspace's React state directly. Emitting
@@ -671,6 +699,16 @@ pub async fn open_folder(
     path: String,
 ) -> Result<FolderDetail, AppCommandError> {
     open_folder_core(&db, path).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn open_worktree_folder(
+    db: tauri::State<'_, AppDatabase>,
+    path: String,
+    source_folder_id: i32,
+) -> Result<FolderDetail, AppCommandError> {
+    open_worktree_folder_core(&db, path, source_folder_id).await
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -4140,6 +4178,101 @@ mod tests {
         assert!(
             msg.to_lowercase().contains("not found") || msg.to_lowercase().contains("99999"),
             "expected not-found-ish error, got: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_worktree_folder_core_records_parent_as_root() {
+        let db = fresh_in_memory_db().await;
+        let root = open_folder_core(&db, "/tmp/codeg-wt-root".into())
+            .await
+            .expect("open root");
+        assert_eq!(root.parent_id, None, "root folder has no parent");
+
+        let wt = open_worktree_folder_core(&db, "/tmp/codeg-wt-a".into(), root.id)
+            .await
+            .expect("open worktree");
+        assert_eq!(
+            wt.parent_id,
+            Some(root.id),
+            "worktree records its source root folder"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_worktree_folder_core_flattens_nested_worktrees() {
+        let db = fresh_in_memory_db().await;
+        let root = open_folder_core(&db, "/tmp/codeg-wt-flat-root".into())
+            .await
+            .expect("open root");
+        let child = open_worktree_folder_core(&db, "/tmp/codeg-wt-flat-1".into(), root.id)
+            .await
+            .expect("open child worktree");
+        // A worktree created *from* the child must still point at the root, not
+        // the intermediate child.
+        let grandchild = open_worktree_folder_core(&db, "/tmp/codeg-wt-flat-2".into(), child.id)
+            .await
+            .expect("open grandchild worktree");
+        assert_eq!(child.parent_id, Some(root.id));
+        assert_eq!(
+            grandchild.parent_id,
+            Some(root.id),
+            "worktree of a worktree flattens to the original root"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_worktree_folder_core_unknown_source_is_root() {
+        let db = fresh_in_memory_db().await;
+        let wt = open_worktree_folder_core(&db, "/tmp/codeg-wt-orphan".into(), 0)
+            .await
+            .expect("open worktree with no source");
+        assert_eq!(
+            wt.parent_id, None,
+            "non-positive / unknown source degrades to a top-level folder"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_folder_core_preserves_existing_worktree_parent() {
+        let db = fresh_in_memory_db().await;
+        let root = open_folder_core(&db, "/tmp/codeg-wt-preserve-root".into())
+            .await
+            .expect("open root");
+        let wt = open_worktree_folder_core(&db, "/tmp/codeg-wt-preserve".into(), root.id)
+            .await
+            .expect("open worktree");
+        assert_eq!(wt.parent_id, Some(root.id));
+        // A plain reopen of the same path must not clear the recorded parent.
+        let reopened = open_folder_core(&db, "/tmp/codeg-wt-preserve".into())
+            .await
+            .expect("reopen plain");
+        assert_eq!(
+            reopened.parent_id,
+            Some(root.id),
+            "plain open_folder must preserve an existing worktree parent"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_worktree_folder_core_unknown_source_demotes_existing_to_root() {
+        let db = fresh_in_memory_db().await;
+        let root = open_folder_core(&db, "/tmp/codeg-wt-demote-root".into())
+            .await
+            .expect("open root");
+        let path = "/tmp/codeg-wt-demote".to_string();
+        let wt = open_worktree_folder_core(&db, path.clone(), root.id)
+            .await
+            .expect("open worktree");
+        assert_eq!(wt.parent_id, Some(root.id));
+        // Reopening the same path as a worktree with an unknown source writes the
+        // authoritative value (top-level) rather than keeping the stale parent.
+        let demoted = open_worktree_folder_core(&db, path, 0)
+            .await
+            .expect("reopen worktree with no source");
+        assert_eq!(
+            demoted.parent_id, None,
+            "explicit worktree open with unknown source demotes to top-level"
         );
     }
 

@@ -57,6 +57,29 @@ pub async fn open_folder(
     ))
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenWorktreeFolderParams {
+    pub path: String,
+    pub source_folder_id: i32,
+}
+
+/// Open a freshly created worktree directory as a folder, recording the root
+/// folder it descends from. See `open_worktree_folder_core`.
+pub async fn open_worktree_folder(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<OpenWorktreeFolderParams>,
+) -> Result<Json<FolderDetail>, AppCommandError> {
+    Ok(Json(
+        folder_commands::open_worktree_folder_core(
+            &state.db,
+            params.path,
+            params.source_folder_id,
+        )
+        .await?,
+    ))
+}
+
 /// Open a folder into the workspace and broadcast it to workspace clients so
 /// the (separate) launcher tab's handoff lands. See
 /// `open_folder_in_workspace_core`.

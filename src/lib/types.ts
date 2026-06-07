@@ -232,6 +232,12 @@ export interface FolderDetail {
   last_opened_at: string
   sort_order: number
   color: string
+  /**
+   * Root folder this one was created under (worktree folders only); null for
+   * top-level folders. Flattened — a worktree of a worktree still points at the
+   * original root. Drives the sidebar merge and worktree-branch detection.
+   */
+  parent_id: number | null
 }
 
 export interface OpenedTab {
