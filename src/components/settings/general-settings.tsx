@@ -30,6 +30,7 @@ import { usePlatform } from "@/hooks/use-platform"
 import { relaunchApp } from "@/lib/updater"
 import { toErrorMessage } from "@/lib/app-error"
 import { DelegationSettingsSection } from "@/components/settings/delegation-settings"
+import { SessionFeedbackSettingsSection } from "@/components/settings/session-feedback-settings"
 
 const TERMINAL_SHELL_OPTION_SYSTEM = "system"
 const TERMINAL_SHELL_OPTION_CUSTOM = "custom"
@@ -386,6 +387,8 @@ export function GeneralSettings() {
         )}
 
         <DelegationSettingsSection />
+
+        <SessionFeedbackSettingsSection />
       </div>
     </ScrollArea>
   )

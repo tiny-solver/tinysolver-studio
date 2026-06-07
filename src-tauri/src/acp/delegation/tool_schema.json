@@ -63,5 +63,19 @@
         }
       }
     }
+  },
+  {
+    "name": "check_user_feedback",
+    "description": "Check for real-time notes or course-corrections the user has typed WHILE you are working on the current turn. Returns any user messages that arrived since your last check, or an empty result. Call this proactively at natural checkpoints — before starting each major step, after finishing a sub-task, before any large or irreversible action (deleting files, force-pushing, running migrations), and periodically during long-running work — so you can adjust course early instead of finishing down the wrong path. Treat anything returned as HIGH-PRIORITY steering from the user: acknowledge it briefly and incorporate it before continuing. This does NOT interrupt you and is never a substitute for the user's next prompt — it is a lightweight side channel for mid-task guidance. Optional wait_ms briefly pauses at a decision point to give the user a moment to weigh in; omit it (or pass 0) for an instant, non-blocking check, which is the right default.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "wait_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional checkpoint wait. Omit (or 0) for an instant snapshot of any pending feedback — the right default. A positive value blocks up to that many milliseconds (capped at 30000) and returns early the moment a note arrives, letting you pause briefly at a decision point. There is no unbounded wait: feedback may never come, so this never blocks your turn indefinitely."
+        }
+      }
+    }
   }
 ]

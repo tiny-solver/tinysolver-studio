@@ -261,6 +261,22 @@ pub enum AcpEvent {
         message_id: String,
         blocks: Vec<UserMessageBlock>,
     },
+    /// The user submitted a live-feedback note while the agent is mid-turn (the
+    /// `check_user_feedback` MCP-tool steering path). Broadcast so every client
+    /// viewing this conversation renders the pending note, and captured into
+    /// `SessionState.feedback` so a mid-turn snapshot attach recovers it.
+    /// Idempotent by `item.id` on apply (replay-safe).
+    FeedbackSubmitted {
+        item: crate::acp::feedback::FeedbackItem,
+    },
+    /// The agent read one or more pending feedback notes via
+    /// `check_user_feedback`. Carries only the note ids + the delivery instant;
+    /// clients already hold the note text (from `FeedbackSubmitted` / snapshot)
+    /// and just flip those ids to `Delivered`. Idempotent on apply.
+    FeedbackConsumed {
+        ids: Vec<String>,
+        delivered_at: chrono::DateTime<chrono::Utc>,
+    },
 }
 
 /// A block of the user's submitted prompt, broadcast via [`AcpEvent::UserMessage`]

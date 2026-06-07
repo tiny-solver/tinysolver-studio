@@ -44,7 +44,8 @@ mod tauri_app {
     use crate::commands::{
         acp as acp_commands, app_update as app_update_commands, backup,
         chat_channel as chat_channel_commands, conversations, delegation as delegation_commands,
-        experts as experts_commands, file_io, folder_commands, folders, mcp as mcp_commands,
+        experts as experts_commands, feedback as feedback_commands, file_io, folder_commands,
+        folders, mcp as mcp_commands,
         model_provider as model_provider_commands, notification, pet as pet_commands, project_boot,
         quick_messages as quick_messages_commands, remote_proxy as remote_proxy_commands,
         remote_workspace as remote_workspace_commands, system_settings, terminal as terminal_commands,
@@ -378,24 +379,33 @@ mod tauri_app {
                 let broker_for_lifecycle = {
                     let cm_state = app.state::<ConnectionManager>();
                     let db_conn = app.state::<db::AppDatabase>().conn.clone();
-                    let (broker, tokens, socket_path) = crate::app_state::build_delegation_stack(
-                        &cm_state,
-                        db_conn.clone(),
-                        effective_data_dir.clone(),
-                    );
+                    let (broker, tokens, socket_path, feedback_config) =
+                        crate::app_state::build_delegation_stack(
+                            &cm_state,
+                            db_conn.clone(),
+                            effective_data_dir.clone(),
+                        );
                     app.manage(broker.clone());
                     app.manage(tokens.clone());
+                    app.manage(feedback_config.clone());
                     app.manage(crate::commands::delegation::DelegationSocketPath(
                         socket_path.clone(),
                     ));
 
-                    // Push persisted settings into the broker before listener accept.
+                    // Push persisted settings into the broker + feedback config
+                    // before listener accept.
                     let broker_for_init = broker.clone();
                     let db_for_init = db_conn.clone();
+                    let feedback_for_init = feedback_config.clone();
                     tauri::async_runtime::block_on(async move {
                         delegation_commands::apply_persisted_config(
                             &db_for_init,
                             &broker_for_init,
+                        )
+                        .await;
+                        crate::commands::feedback::apply_persisted_feedback_config(
+                            &db_for_init,
+                            &feedback_for_init,
                         )
                         .await;
                     });
@@ -406,6 +416,11 @@ mod tauri_app {
                         tokens,
                         std::sync::Arc::new(
                             crate::acp::manager::ConnectionManagerParentLookup {
+                                manager: std::sync::Arc::new(cm_state.clone_ref()),
+                            },
+                        ),
+                        std::sync::Arc::new(
+                            crate::acp::manager::ConnectionManagerFeedbackLookup {
                                 manager: std::sync::Arc::new(cm_state.clone_ref()),
                             },
                         ),
@@ -823,6 +838,9 @@ mod tauri_app {
                 system_settings::update_system_rendering_settings,
                 delegation_commands::get_delegation_settings,
                 delegation_commands::set_delegation_settings,
+                feedback_commands::get_feedback_settings,
+                feedback_commands::set_feedback_settings,
+                feedback_commands::submit_session_feedback,
                 version_control::detect_git,
                 version_control::test_git_path,
                 version_control::get_git_settings,

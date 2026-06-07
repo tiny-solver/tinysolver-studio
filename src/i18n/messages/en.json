@@ -2737,5 +2737,30 @@
     "sessionExpiredTitle": "Session expired",
     "sessionExpiredDescription": "Your session is no longer valid. Please sign in again to continue.",
     "goToLogin": "Go to login"
+  },
+  "SessionFeedbackSettings": {
+    "title": "Live Feedback",
+    "description": "Let an agent sense your notes and corrections while it's working. When enabled, the agent gets a tool to check for feedback you send mid-task, and conversations show a bar for sending a quick note. It's a cooperative side channel — the agent picks up your note the next time it checks, without interrupting the current step.",
+    "enable": "Enable live feedback",
+    "enableHint": "Adds a check-for-feedback tool to agents started after this is turned on. Off by default.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Feedback settings saved",
+    "saveFailed": "Failed to save feedback settings",
+    "loadFailed": "Failed to load: {detail}"
+  },
+  "LiveFeedback": {
+    "placeholder": "Send a note to {agent} while it works…",
+    "agentFallback": "the agent",
+    "ariaLabel": "Live feedback note",
+    "send": "Send",
+    "pending": "waiting",
+    "delivered": "received",
+    "turnEndedUnread": "The agent finished before reading your feedback.",
+    "sendAsMessage": "Send as message",
+    "dismiss": "Dismiss",
+    "turnEndedResent": "The turn ended — sent as a new message instead.",
+    "turnEnded": "The turn already ended.",
+    "submitFailed": "Couldn't send your note"
   }
 }

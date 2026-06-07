@@ -859,6 +859,11 @@ pub struct DelegationInjection {
     pub broker: Arc<crate::acp::delegation::broker::DelegationBroker>,
     pub tokens: Arc<crate::acp::delegation::listener::TokenRegistry>,
     pub socket_path: PathBuf,
+    /// Hot-swappable "is live-feedback enabled?" flag. Read at injection time
+    /// alongside the broker's delegation flag so `codeg-mcp` is injected when
+    /// EITHER feature is on, and the companion is told which tool groups to
+    /// expose. Shares the same `tokens` registry and UDS socket as delegation.
+    pub feedback: crate::acp::feedback::FeedbackRuntimeConfig,
 }
 
 /// Locate the `codeg-mcp` companion binary across the supported deployment
@@ -941,21 +946,52 @@ fn is_executable_file(path: &Path) -> bool {
 /// delegate tool silently. Skipping leaves the agent fully functional minus
 /// `delegate_to_agent`, which is the right degradation when codeg-mcp didn't
 /// make it into the install.
+/// The `--features` value for a companion launch given the two feature flags,
+/// or `None` when neither is enabled (the companion isn't injected at all).
+/// Pulled out as a pure function so the inject/skip decision is unit-testable
+/// without a real binary on disk or a live broker.
+fn companion_features_arg(delegation_enabled: bool, feedback_enabled: bool) -> Option<String> {
+    if !delegation_enabled && !feedback_enabled {
+        return None;
+    }
+    let mut features: Vec<&str> = Vec::new();
+    if delegation_enabled {
+        features.push("delegation");
+    }
+    if feedback_enabled {
+        features.push("feedback");
+    }
+    Some(features.join(","))
+}
+
+/// Outcome of injecting the `codeg-delegate` companion: the per-launch token to
+/// stash for revocation, plus whether the `check_user_feedback` tool was exposed
+/// to this agent (so the session can gate submit + UI on its real capability).
+struct CompanionInjection {
+    token: String,
+    feedback_available: bool,
+}
+
 async fn inject_codeg_delegate_mcp(
     servers: &mut Vec<McpServer>,
     injection: &DelegationInjection,
     parent_connection_id: &str,
     working_dir: &Path,
-) -> Option<String> {
-    let cfg = injection.broker.config_snapshot().await;
-    if !cfg.enabled {
-        return None;
-    }
+) -> Option<CompanionInjection> {
+    // codeg-mcp carries BOTH the delegation tools and the live-feedback tool.
+    // Inject it when EITHER feature is enabled; the `--features` arg tells the
+    // companion which tool groups to expose so a disabled feature's tools never
+    // surface to the LLM. (Historically this was gated on delegation alone.)
+    let delegation_enabled = injection.broker.config_snapshot().await.enabled;
+    let feedback_enabled = injection.feedback.is_enabled().await;
+    // `None` (neither feature enabled) short-circuits the whole injection.
+    let features_arg = companion_features_arg(delegation_enabled, feedback_enabled)?;
     let Some(binary_path) = locate_codeg_mcp_binary() else {
         eprintln!(
             "[delegation][WARN] codeg-mcp companion binary not found (checked CODEG_MCP_BIN, \
-             exe sibling, and PATH); skipping delegate_to_agent tool injection for \
-             connection {parent_connection_id}. Reinstall codeg or set CODEG_MCP_BIN to fix."
+             exe sibling, and PATH); skipping delegate_to_agent / check_user_feedback tool \
+             injection for connection {parent_connection_id}. Reinstall codeg or set \
+             CODEG_MCP_BIN to fix."
         );
         return None;
     };
@@ -984,9 +1020,15 @@ async fn inject_codeg_delegate_mcp(
         // (any platform).
         "--parent-pid".to_string(),
         std::process::id().to_string(),
+        // Tool groups to expose this launch (delegation and/or feedback).
+        "--features".to_string(),
+        features_arg,
     ]);
     servers.push(McpServer::Stdio(server));
-    Some(token)
+    Some(CompanionInjection {
+        token,
+        feedback_available: feedback_enabled,
+    })
 }
 
 /// Resolve an MCP server `command` to an absolute path.
@@ -1338,14 +1380,17 @@ async fn run_connection(
             // unconditionally supported by the ACP wire — no `mcp_caps`
             // filter needed. The returned token is stashed on the session
             // state so connection teardown can revoke it.
-            let delegate_token = if let Some(inj) = delegation_injection.as_ref() {
+            let delegate_injection = if let Some(inj) = delegation_injection.as_ref() {
                 inject_codeg_delegate_mcp(&mut mcp_servers, inj, &conn_id, &cwd).await
             } else {
                 None
             };
-            if let Some(ref tok) = delegate_token {
+            if let Some(ref injected) = delegate_injection {
                 let mut s = state.write().await;
-                s.delegation_token = Some(tok.clone());
+                s.delegation_token = Some(injected.token.clone());
+                // The agent's actual feedback capability for this session — the
+                // authoritative gate for submit + UI, fixed at launch.
+                s.feedback_tool_available = injected.feedback_available;
             }
 
             // Emit fork support capability
@@ -4388,11 +4433,13 @@ mod tests {
         // No set_config call: broker carries its default config, which is
         // `enabled: false` after the product-default flip. This is the
         // exact state a fresh install reaches before the user touches the
-        // settings panel.
+        // settings panel. Feedback is likewise disabled by default, so with
+        // BOTH features off the companion isn't injected at all.
         let injection = DelegationInjection {
             broker,
             tokens: Arc::new(TokenRegistry::default()),
             socket_path: std::path::PathBuf::from("/tmp/codeg-delegate.sock"),
+            feedback: crate::acp::feedback::FeedbackRuntimeConfig::new(),
         };
 
         let mut servers: Vec<McpServer> = Vec::new();
@@ -4414,6 +4461,35 @@ mod tests {
         assert!(
             injection.tokens.lookup("any-token").await.is_none(),
             "disabled broker must not register a delegate token"
+        );
+    }
+
+    // ─── companion_features_arg: inject/skip decision + --features value ──
+    //
+    // The companion now carries two independently-toggled tool groups. It is
+    // injected when EITHER is on, and the `--features` arg names exactly the
+    // enabled groups so the companion hides the rest. Crucially, feedback alone
+    // must still inject the companion (the historical delegation-only gate would
+    // have skipped it).
+    #[test]
+    fn companion_features_arg_inject_skip_decision() {
+        // Both off → no companion at all.
+        assert_eq!(companion_features_arg(false, false), None);
+        // Delegation only.
+        assert_eq!(
+            companion_features_arg(true, false),
+            Some("delegation".to_string())
+        );
+        // Feedback only — the decoupling: companion injected for feedback even
+        // when delegation is off.
+        assert_eq!(
+            companion_features_arg(false, true),
+            Some("feedback".to_string())
+        );
+        // Both on → comma-joined, delegation first.
+        assert_eq!(
+            companion_features_arg(true, true),
+            Some("delegation,feedback".to_string())
         );
     }
 }

@@ -2737,5 +2737,30 @@
     "sessionExpiredTitle": "Session expirée",
     "sessionExpiredDescription": "Votre session n'est plus valide. Veuillez vous reconnecter pour continuer.",
     "goToLogin": "Aller à la connexion"
+  },
+  "SessionFeedbackSettings": {
+    "title": "Retour en direct",
+    "description": "Permettez à un agent de percevoir vos notes et corrections pendant qu'il travaille. Une fois activé, l'agent dispose d'un outil pour consulter les retours que vous envoyez en cours de tâche, et les conversations affichent une barre pour envoyer une note rapide. C'est un canal secondaire coopératif : l'agent prend votre note lors de sa prochaine vérification, sans interrompre l'étape en cours.",
+    "enable": "Activer le retour en direct",
+    "enableHint": "Ajoute un outil de consultation des retours aux agents démarrés après l'activation. Désactivé par défaut.",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Paramètres de retour enregistrés",
+    "saveFailed": "Échec de l'enregistrement des paramètres de retour",
+    "loadFailed": "Échec du chargement : {detail}"
+  },
+  "LiveFeedback": {
+    "placeholder": "Envoyez une note à {agent} pendant qu'il travaille…",
+    "agentFallback": "l'agent",
+    "ariaLabel": "Note de retour en direct",
+    "send": "Envoyer",
+    "pending": "en attente",
+    "delivered": "reçue",
+    "turnEndedUnread": "L'agent a terminé avant de lire votre retour.",
+    "sendAsMessage": "Envoyer comme message",
+    "dismiss": "Ignorer",
+    "turnEndedResent": "Le tour est terminé : envoyé comme nouveau message.",
+    "turnEnded": "Le tour est déjà terminé.",
+    "submitFailed": "Impossible d'envoyer votre note"
   }
 }

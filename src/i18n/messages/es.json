@@ -2737,5 +2737,30 @@
     "sessionExpiredTitle": "Sesión caducada",
     "sessionExpiredDescription": "Tu sesión ya no es válida. Inicia sesión de nuevo para continuar.",
     "goToLogin": "Ir al inicio de sesión"
+  },
+  "SessionFeedbackSettings": {
+    "title": "Comentarios en vivo",
+    "description": "Permite que un agente perciba tus notas y correcciones mientras trabaja. Cuando está activado, el agente obtiene una herramienta para consultar los comentarios que envías durante la tarea, y las conversaciones muestran una barra para enviar una nota rápida. Es un canal lateral cooperativo: el agente recoge tu nota la próxima vez que consulta, sin interrumpir el paso actual.",
+    "enable": "Activar comentarios en vivo",
+    "enableHint": "Inyecta una herramienta para consultar comentarios en los agentes iniciados después de activarlo. Desactivado por defecto.",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "saved": "Ajustes de comentarios guardados",
+    "saveFailed": "No se pudieron guardar los ajustes de comentarios",
+    "loadFailed": "Error al cargar: {detail}"
+  },
+  "LiveFeedback": {
+    "placeholder": "Envía una nota a {agent} mientras trabaja…",
+    "agentFallback": "el agente",
+    "ariaLabel": "Nota de comentarios en vivo",
+    "send": "Enviar",
+    "pending": "esperando",
+    "delivered": "recibida",
+    "turnEndedUnread": "El agente terminó antes de leer tus comentarios.",
+    "sendAsMessage": "Enviar como mensaje",
+    "dismiss": "Descartar",
+    "turnEndedResent": "El turno terminó: se envió como un mensaje nuevo.",
+    "turnEnded": "El turno ya terminó.",
+    "submitFailed": "No se pudo enviar tu nota"
   }
 }

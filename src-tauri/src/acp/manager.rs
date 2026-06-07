@@ -12,6 +12,10 @@ use sea_orm::{
 
 use crate::acp::connection::{spawn_agent_connection, AgentConnection, ConnectionCommand};
 use crate::acp::error::AcpError;
+use crate::acp::feedback::{
+    bounded_feedback_batch, FeedbackItem, FeedbackStatus, FeedbackWait, PendingFeedback,
+    SessionFeedbackAccess, MAX_FEEDBACK_CHARS, MAX_FEEDBACK_RESPONSE_BYTES,
+};
 use crate::acp::types::{
     AcpEvent, AgentOptionsSnapshot, ConnectionInfo, ConnectionStatus, ForkResultInfo,
     PromptInputBlock,
@@ -20,7 +24,7 @@ use crate::db::entities::conversation::{self, ConversationStatus};
 use crate::db::service::conversation_service;
 use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
-use crate::web::event_bridge::{emit_with_state, EventEmitter};
+use crate::web::event_bridge::{emit_with_state, emit_with_state_gated, EventEmitter};
 
 /// Cap on the number of prompt-text chars kept in the `user_prompt_sent`
 /// preview. Past this, `truncate_str` keeps this many chars and appends a short
@@ -1582,6 +1586,175 @@ impl ConnectionManager {
             .map(|conn| (conn.state.clone(), conn.emitter.clone()))
     }
 
+    /// Append a live-feedback note to a connection's session and broadcast it.
+    ///
+    /// Validation: the text is trimmed and rejected when empty
+    /// ([`AcpError::InvalidFeedback`]) or longer than [`MAX_FEEDBACK_CHARS`] —
+    /// the full text rides in the broadcast event, the snapshot, and the MCP
+    /// response, so a sanity bound keeps one pathological note from bloating
+    /// them. (There is deliberately no per-turn COUNT cap: the set is cleared
+    /// every turn, so its size scales with human typing, not unboundedly.)
+    ///
+    /// Rejected with [`AcpError::NoActiveTurn`] unless a turn is in flight —
+    /// feedback is mid-turn steering, pulled by the agent via the
+    /// `check_user_feedback` MCP tool; with no active turn there is nothing to
+    /// steer and the note would strand (the frontend falls back to an ordinary
+    /// prompt). The append rides `emit_with_state` so `SessionState.feedback`,
+    /// the ring buffer, and every attached client stay in lockstep.
+    pub async fn submit_feedback(
+        &self,
+        conn_id: &str,
+        text: String,
+    ) -> Result<FeedbackItem, AcpError> {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return Err(AcpError::InvalidFeedback("empty note".into()));
+        }
+        if trimmed.chars().count() > MAX_FEEDBACK_CHARS {
+            return Err(AcpError::InvalidFeedback(format!(
+                "note exceeds {MAX_FEEDBACK_CHARS} characters"
+            )));
+        }
+        let text = trimmed.to_string();
+        let (state, emitter) = self
+            .get_state_and_emitter(conn_id)
+            .await
+            .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.to_string()))?;
+        // Per-connection capability gate: reject if THIS agent never got the
+        // `check_user_feedback` tool (e.g. its session started before the feature
+        // was enabled) — the note could never be read. `feedback_tool_available`
+        // is fixed at launch, so a plain read is race-free.
+        if !state.read().await.feedback_tool_available {
+            return Err(AcpError::FeedbackDisabled);
+        }
+        let item = FeedbackItem::new_pending(
+            uuid::Uuid::new_v4().to_string(),
+            text,
+            chrono::Utc::now(),
+        );
+        // Gate on `turn_in_flight` and append in ONE critical section (via the
+        // gated emit): a `TurnComplete` (flips the flag) or `UserMessage`
+        // (clears `feedback`) can't slip between the gate and the append+seq, so
+        // a note is never stranded on a finished turn nor re-added to a new one.
+        let applied = emit_with_state_gated(
+            &state,
+            &emitter,
+            AcpEvent::FeedbackSubmitted { item: item.clone() },
+            |s| s.turn_in_flight,
+        )
+        .await;
+        if !applied {
+            return Err(AcpError::NoActiveTurn);
+        }
+        Ok(item)
+    }
+
+    /// Read the pending feedback for a connection WITHOUT marking it delivered,
+    /// optionally blocking (bounded) until a note arrives. Read-only — backs the
+    /// READ half of the `check_user_feedback` round-trip so the listener can
+    /// commit delivery only after the response is actually written (a dropped /
+    /// failed write leaves the notes pending for the agent's next check).
+    ///
+    /// `wait` allows a bounded checkpoint pause: with nothing pending it polls
+    /// (200 ms cadence) until a note lands or the deadline passes.
+    pub async fn read_pending_feedback(
+        &self,
+        conn_id: &str,
+        wait: FeedbackWait,
+    ) -> Vec<PendingFeedback> {
+        let Some(state) = self.get_state(conn_id).await else {
+            return Vec::new();
+        };
+        let deadline = match wait {
+            FeedbackWait::Immediate => None,
+            FeedbackWait::Bounded(ms) => {
+                Some(std::time::Instant::now() + Duration::from_millis(ms))
+            }
+        };
+        loop {
+            let pending: Vec<PendingFeedback> = {
+                let s = state.read().await;
+                s.feedback
+                    .iter()
+                    .filter(|f| f.status == FeedbackStatus::Pending)
+                    .map(|f| PendingFeedback {
+                        id: f.id.clone(),
+                        text: f.text.clone(),
+                        created_at: f.created_at,
+                    })
+                    .collect()
+            };
+            if !pending.is_empty() {
+                // Chunk the response so its serialized frame stays under the
+                // transport cap; the remainder stay pending for the next check.
+                return bounded_feedback_batch(pending, MAX_FEEDBACK_RESPONSE_BYTES);
+            }
+            match deadline {
+                Some(d) => {
+                    let now = std::time::Instant::now();
+                    if now >= d {
+                        return Vec::new();
+                    }
+                    tokio::time::sleep((d - now).min(Duration::from_millis(200))).await;
+                }
+                None => return Vec::new(),
+            }
+        }
+    }
+
+    /// Mark the named notes `Delivered` and broadcast the consumption. Called by
+    /// the listener ONLY after the `check_user_feedback` response was written to
+    /// the companion, so a dropped / failed write leaves the notes pending and
+    /// the agent's next check re-delivers them (at-least-once).
+    ///
+    /// Delivery boundary: "delivered" means the response reached the agent's MCP
+    /// companion over the UDS. The one remaining hop (companion → agent stdout)
+    /// can only fail when the agent process is gone/closing — i.e. the turn is
+    /// being torn down, at which point the note is moot (the agent won't act on
+    /// it). A mid-wait cancel is already handled upstream by the listener's
+    /// peer-close race (no commit), and a cancel after the round-trip completes
+    /// cannot suppress the response (the companion's inflight entry is already
+    /// consumed). So this is the right boundary for a best-effort steering
+    /// side-channel; an end-to-end ack would only cover the moot teardown tail.
+    ///
+    /// The mark happens under a single write lock; only notes still `Pending`
+    /// flip (idempotent — a repeated commit, or a note already consumed by a
+    /// racing call, is skipped) and only the ids actually flipped are emitted,
+    /// so a double-commit can't double-broadcast.
+    pub async fn commit_feedback_delivered(&self, conn_id: &str, ids: Vec<String>) {
+        if ids.is_empty() {
+            return;
+        }
+        let Some((state, emitter)) = self.get_state_and_emitter(conn_id).await else {
+            return;
+        };
+        let id_set: std::collections::HashSet<&String> = ids.iter().collect();
+        let delivered_at = chrono::Utc::now();
+        let marked: Vec<String> = {
+            let mut s = state.write().await;
+            let mut marked = Vec::new();
+            for f in s.feedback.iter_mut() {
+                if f.status == FeedbackStatus::Pending && id_set.contains(&f.id) {
+                    f.status = FeedbackStatus::Delivered;
+                    f.delivered_at = Some(delivered_at);
+                    marked.push(f.id.clone());
+                }
+            }
+            marked
+        };
+        if !marked.is_empty() {
+            emit_with_state(
+                &state,
+                &emitter,
+                AcpEvent::FeedbackConsumed {
+                    ids: marked,
+                    delivered_at,
+                },
+            )
+            .await;
+        }
+    }
+
     /// Resolve a conversation_id to its currently-active connection id, if any.
     /// Used by the by-conversation snapshot endpoint and the LifecycleSubscriber.
     /// Per-session state is acquired via `read().await` to avoid the
@@ -1833,6 +2006,36 @@ impl crate::acp::delegation::listener::ParentSessionLookup for ConnectionManager
         let state = self.manager.get_state(parent_connection_id).await?;
         let snapshot = state.read().await;
         snapshot.conversation_id
+    }
+}
+
+/// Production impl of `SessionFeedbackAccess` for the delegation listener's
+/// `check_user_feedback` arm. Resolves the parent connection's pending feedback
+/// by delegating to `ConnectionManager::read_pending_feedback` /
+/// `commit_feedback_delivered`. Mirrors
+/// `ConnectionManagerParentLookup` so the listener stays unit-testable with an
+/// in-memory stub.
+#[derive(Clone)]
+pub struct ConnectionManagerFeedbackLookup {
+    pub manager: Arc<ConnectionManager>,
+}
+
+#[async_trait::async_trait]
+impl SessionFeedbackAccess for ConnectionManagerFeedbackLookup {
+    async fn read_pending_feedback(
+        &self,
+        parent_connection_id: &str,
+        wait: FeedbackWait,
+    ) -> Vec<PendingFeedback> {
+        self.manager
+            .read_pending_feedback(parent_connection_id, wait)
+            .await
+    }
+
+    async fn commit_feedback_delivered(&self, parent_connection_id: &str, ids: Vec<String>) {
+        self.manager
+            .commit_feedback_delivered(parent_connection_id, ids)
+            .await
     }
 }
 
@@ -4198,5 +4401,178 @@ mod tests {
         let captured = s.last_error.as_ref().unwrap();
         assert_eq!(captured.message, "second failure");
         assert!(captured.code.is_none());
+    }
+
+    // --- live feedback: submit gate + consume drain --------------------
+
+    /// Make a test connection feedback-capable AND mid-turn (the happy state).
+    async fn mark_feedback_ready(mgr: &ConnectionManager, conn_id: &str) {
+        let state = mgr.get_state(conn_id).await.unwrap();
+        let mut s = state.write().await;
+        s.feedback_tool_available = true;
+        s.turn_in_flight = true;
+    }
+
+    async fn set_feedback_tool_available(mgr: &ConnectionManager, conn_id: &str) {
+        let state = mgr.get_state(conn_id).await.unwrap();
+        state.write().await.feedback_tool_available = true;
+    }
+
+    #[tokio::test]
+    async fn submit_feedback_rejected_when_tool_unavailable() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("c1", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        // feedback_tool_available defaults false: the agent never got the tool
+        // (e.g. its session started before the feature was enabled), even mid-turn.
+        let state = mgr.get_state("c1").await.unwrap();
+        state.write().await.turn_in_flight = true;
+        let err = mgr.submit_feedback("c1", "note".into()).await.unwrap_err();
+        assert!(matches!(err, AcpError::FeedbackDisabled));
+        assert!(state.read().await.feedback.is_empty());
+    }
+
+    #[tokio::test]
+    async fn submit_feedback_rejected_when_no_turn_in_flight() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("c1", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        // Tool available but no turn in flight → nothing to steer.
+        set_feedback_tool_available(&mgr, "c1").await;
+        let err = mgr.submit_feedback("c1", "note".into()).await.unwrap_err();
+        assert!(matches!(err, AcpError::NoActiveTurn));
+        // And nothing was appended.
+        let state = mgr.get_state("c1").await.unwrap();
+        assert!(state.read().await.feedback.is_empty());
+    }
+
+    #[tokio::test]
+    async fn submit_feedback_missing_connection_errors() {
+        let mgr = ConnectionManager::new();
+        let err = mgr
+            .submit_feedback("nope", "note".into())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AcpError::ConnectionNotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn submit_feedback_appends_when_turn_in_flight() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("c1", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        mark_feedback_ready(&mgr, "c1").await;
+        let item = mgr
+            .submit_feedback("c1", "  use UserService  ".into())
+            .await
+            .unwrap();
+        assert_eq!(item.status, FeedbackStatus::Pending);
+        // Stored text is trimmed.
+        assert_eq!(item.text, "use UserService");
+        let state = mgr.get_state("c1").await.unwrap();
+        let s = state.read().await;
+        assert_eq!(s.feedback.len(), 1);
+        assert_eq!(s.feedback[0].text, "use UserService");
+    }
+
+    #[tokio::test]
+    async fn submit_feedback_rejects_empty_and_oversized() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("c1", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        mark_feedback_ready(&mgr, "c1").await;
+        // Empty / whitespace-only → rejected, nothing appended.
+        for empty in ["", "   ", "\n\t "] {
+            let err = mgr.submit_feedback("c1", empty.into()).await.unwrap_err();
+            assert!(matches!(err, AcpError::InvalidFeedback(_)));
+        }
+        // Oversized → rejected.
+        let huge = "x".repeat(MAX_FEEDBACK_CHARS + 1);
+        let err = mgr.submit_feedback("c1", huge).await.unwrap_err();
+        assert!(matches!(err, AcpError::InvalidFeedback(_)));
+        // Exactly at the bound is accepted.
+        let at_bound = "y".repeat(MAX_FEEDBACK_CHARS);
+        assert!(mgr.submit_feedback("c1", at_bound).await.is_ok());
+        let state = mgr.get_state("c1").await.unwrap();
+        assert_eq!(state.read().await.feedback.len(), 1, "only the valid note stuck");
+    }
+
+    #[tokio::test]
+    async fn read_pending_is_readonly_commit_marks_delivered() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("c1", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        mark_feedback_ready(&mgr, "c1").await;
+        let a = mgr.submit_feedback("c1", "a".into()).await.unwrap();
+        let b = mgr.submit_feedback("c1", "b".into()).await.unwrap();
+
+        // READ returns both pending notes (insert order) WITHOUT mutating state.
+        let pending = mgr.read_pending_feedback("c1", FeedbackWait::Immediate).await;
+        let texts: Vec<&str> = pending.iter().map(|p| p.text.as_str()).collect();
+        assert_eq!(texts, vec!["a", "b"]);
+        // A second read still returns them — read is non-destructive, so an
+        // abandoned (peer-closed) call leaves the notes retryable.
+        assert_eq!(
+            mgr.read_pending_feedback("c1", FeedbackWait::Immediate)
+                .await
+                .len(),
+            2
+        );
+        {
+            let state = mgr.get_state("c1").await.unwrap();
+            assert!(state
+                .read()
+                .await
+                .feedback
+                .iter()
+                .all(|f| f.status == FeedbackStatus::Pending));
+        }
+
+        // COMMIT marks the named notes delivered.
+        mgr.commit_feedback_delivered("c1", vec![a.id.clone(), b.id.clone()])
+            .await;
+        // Now READ returns nothing (delivered notes are filtered out).
+        assert!(mgr
+            .read_pending_feedback("c1", FeedbackWait::Immediate)
+            .await
+            .is_empty());
+        let state = mgr.get_state("c1").await.unwrap();
+        assert!(state
+            .read()
+            .await
+            .feedback
+            .iter()
+            .all(|f| f.status == FeedbackStatus::Delivered));
+
+        // COMMIT is idempotent — re-committing already-delivered ids is a no-op.
+        mgr.commit_feedback_delivered("c1", vec![a.id, b.id]).await;
+    }
+
+    #[tokio::test]
+    async fn read_pending_missing_connection_returns_empty() {
+        let mgr = ConnectionManager::new();
+        assert!(mgr
+            .read_pending_feedback("nope", FeedbackWait::Immediate)
+            .await
+            .is_empty());
+        // Commit on a missing connection is a safe no-op.
+        mgr.commit_feedback_delivered("nope", vec!["x".into()]).await;
+    }
+
+    #[tokio::test]
+    async fn read_pending_bounded_wait_returns_empty_when_none_arrives() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("c1", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        mark_feedback_ready(&mgr, "c1").await;
+        // A short bounded wait with nothing pending returns empty after the
+        // deadline (it must not hang).
+        let start = std::time::Instant::now();
+        let pending = mgr.read_pending_feedback("c1", FeedbackWait::Bounded(120)).await;
+        assert!(pending.is_empty());
+        assert!(
+            start.elapsed() >= Duration::from_millis(100),
+            "bounded wait should have polled until the deadline"
+        );
     }
 }

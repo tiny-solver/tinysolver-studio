@@ -2737,5 +2737,30 @@
     "sessionExpiredTitle": "Sessão expirada",
     "sessionExpiredDescription": "Sua sessão não é mais válida. Faça login novamente para continuar.",
     "goToLogin": "Ir para o login"
+  },
+  "SessionFeedbackSettings": {
+    "title": "Feedback ao vivo",
+    "description": "Permita que um agente perceba suas notas e correções enquanto trabalha. Quando ativado, o agente ganha uma ferramenta para verificar o feedback que você envia durante a tarefa, e as conversas mostram uma barra para enviar uma nota rápida. É um canal lateral colaborativo: o agente lê sua nota na próxima vez que verificar, sem interromper a etapa atual.",
+    "enable": "Ativar feedback ao vivo",
+    "enableHint": "Injeta uma ferramenta de verificação de feedback nos agentes iniciados após a ativação. Desativado por padrão.",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saved": "Configurações de feedback salvas",
+    "saveFailed": "Falha ao salvar as configurações de feedback",
+    "loadFailed": "Falha ao carregar: {detail}"
+  },
+  "LiveFeedback": {
+    "placeholder": "Envie uma nota para {agent} enquanto ele trabalha…",
+    "agentFallback": "o agente",
+    "ariaLabel": "Nota de feedback ao vivo",
+    "send": "Enviar",
+    "pending": "aguardando",
+    "delivered": "recebida",
+    "turnEndedUnread": "O agente terminou antes de ler o seu feedback.",
+    "sendAsMessage": "Enviar como mensagem",
+    "dismiss": "Dispensar",
+    "turnEndedResent": "O turno terminou — enviado como nova mensagem.",
+    "turnEnded": "O turno já terminou.",
+    "submitFailed": "Não foi possível enviar a sua nota"
   }
 }

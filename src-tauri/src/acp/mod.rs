@@ -3,6 +3,7 @@ pub mod connection;
 pub mod delegation;
 pub mod error;
 pub mod event_stream;
+pub mod feedback;
 pub mod file_system_runtime;
 pub mod fork;
 pub mod idle_sweep;

@@ -17,10 +17,12 @@ use tokio::sync::RwLock;
 
 use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::delegation::transport::{
-    read_frame, write_frame, BrokerCancelRequest, BrokerCancelTaskRequest, BrokerMessage,
-    BrokerRequest, BrokerResponse, BrokerStatusRequest,
+    read_frame, write_frame, BrokerCancelRequest, BrokerCancelTaskRequest,
+    BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
+    BrokerResponse, BrokerStatusRequest,
 };
 use crate::acp::delegation::types::{DelegationRequest, DelegationTaskReport, TaskStatus};
+use crate::acp::feedback::{FeedbackWait, PendingFeedback, SessionFeedbackAccess};
 use crate::models::AgentType;
 use serde_json::Value;
 
@@ -29,6 +31,13 @@ use serde_json::Value;
 /// keeps running past this; the LLM simply re-issues the wait. An explicit
 /// `wait_ms = 0` opts out of the ceiling and blocks until the task is terminal.
 const STATUS_WAIT_MAX_MS: u64 = 60_000;
+
+/// Hard ceiling on a `check_user_feedback` checkpoint wait. Shorter than the
+/// status ceiling: this blocks the agent's own turn (not a background child),
+/// so a long pause directly stalls user-visible work. Unlike status there is no
+/// `0`-means-infinite opt-out — feedback may never arrive, so every wait is
+/// bounded. The LLM re-issues the call to keep waiting.
+const FEEDBACK_WAIT_MAX_MS: u64 = 30_000;
 
 /// Pluggable "what conversation is this parent currently in?" lookup. The
 /// production impl wraps `ConnectionManager.get_state`; tests use an
@@ -79,6 +88,10 @@ pub struct DelegationListener {
     pub broker: Arc<DelegationBroker>,
     pub tokens: Arc<TokenRegistry>,
     pub parent_lookup: Arc<dyn ParentSessionLookup>,
+    /// Pulls pending live-feedback notes for the `check_user_feedback` tool.
+    /// Shares the same `tokens` registry and parent-connection scoping as the
+    /// delegation arms — one companion, one socket, two features.
+    pub feedback: Arc<dyn SessionFeedbackAccess>,
 }
 
 impl DelegationListener {
@@ -86,11 +99,13 @@ impl DelegationListener {
         broker: Arc<DelegationBroker>,
         tokens: Arc<TokenRegistry>,
         parent_lookup: Arc<dyn ParentSessionLookup>,
+        feedback: Arc<dyn SessionFeedbackAccess>,
     ) -> Arc<Self> {
         Arc::new(Self {
             broker,
             tokens,
             parent_lookup,
+            feedback,
         })
     }
 
@@ -189,6 +204,49 @@ impl DelegationListener {
                 reports_response(reports)?
             }
             BrokerMessage::CancelTask(req) => report_response(self.process_cancel_task(req).await)?,
+            BrokerMessage::Feedback(req) => {
+                // at-least-once delivery: READ pending notes (no mutation),
+                // WRITE the response, and COMMIT them delivered ONLY on a
+                // successful write. A dropped/failed write skips the commit, so
+                // the notes stay pending for the agent's next check.
+                //
+                // The `wait` can park up to FEEDBACK_WAIT_MAX_MS; race the
+                // (read-only) read against peer-close on this one-shot connection
+                // so a companion that cancels (drops the request socket) doesn't
+                // leave this task parked until the deadline. Abandoning a
+                // read-only wait is free — no state was touched.
+                match self.feedback_target(&req).await {
+                    None => {
+                        // Invalid token: return an empty envelope (no leak of
+                        // whether any feedback exists), nothing to commit.
+                        write_frame(conn, &feedback_response(&[])?).await?;
+                    }
+                    Some((parent_conn_id, wait)) => {
+                        let read_fut = self.feedback.read_pending_feedback(&parent_conn_id, wait);
+                        tokio::pin!(read_fut);
+                        let mut probe = [0u8; 1];
+                        let pending = tokio::select! {
+                            biased;
+                            pending = &mut read_fut => pending,
+                            _ = conn.read(&mut probe) => return Ok(()),
+                        };
+                        // Read-only: the response carries the note ids
+                        // (`_commit_ids`); delivery is committed LATER, by the
+                        // companion's `CommitFeedback` once it actually returns
+                        // the result to the agent. So a cancel that suppresses
+                        // the agent-facing response leaves the notes pending.
+                        write_frame(conn, &feedback_response(&pending)?).await?;
+                    }
+                }
+                return Ok(());
+            }
+            BrokerMessage::CommitFeedback(req) => {
+                self.process_commit_feedback(req).await;
+                // Empty ack so the companion can confirm the listener saw it.
+                BrokerResponse {
+                    outcome: Value::Null,
+                }
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -253,6 +311,32 @@ impl DelegationListener {
                 &req.task_id,
             )
             .await
+    }
+
+    /// Validate the token and resolve the `check_user_feedback` target: the
+    /// caller's parent connection id plus the mapped wait mode (omitted / `0` →
+    /// immediate snapshot, a positive value → bounded checkpoint wait clamped to
+    /// [`FEEDBACK_WAIT_MAX_MS`]). `None` on an invalid token — the LLM can't
+    /// usefully distinguish "no notes" from "bad token", and we don't leak which.
+    async fn feedback_target(&self, req: &BrokerFeedbackRequest) -> Option<(String, FeedbackWait)> {
+        let entry = self.tokens.lookup(&req.token).await?;
+        let wait = match req.wait_ms {
+            None | Some(0) => FeedbackWait::Immediate,
+            Some(ms) => FeedbackWait::Bounded(ms.min(FEEDBACK_WAIT_MAX_MS)),
+        };
+        Some((entry.parent_connection_id, wait))
+    }
+
+    /// Mark the named feedback notes delivered, after the companion confirms it
+    /// returned them to the agent. Token-scoped to the parent connection. Unknown
+    /// tokens are dropped (no LLM on the receiving end to react).
+    async fn process_commit_feedback(&self, req: BrokerCommitFeedbackRequest) {
+        let Some(entry) = self.tokens.lookup(&req.token).await else {
+            return;
+        };
+        self.feedback
+            .commit_feedback_delivered(&entry.parent_connection_id, req.ids)
+            .await;
     }
 
     /// Validate token + dispatch cancel to the broker. Unknown tokens and
@@ -354,6 +438,27 @@ fn reports_response(reports: Vec<DelegationTaskReport>) -> std::io::Result<Broke
             "tasks": serde_json::to_value(&reports).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
             })?,
+        }),
+    })
+}
+
+/// Serialize the pending feedback notes into a
+/// `{ "count": N, "feedback": [..], "_commit_ids": [..] }` envelope for the
+/// `Feedback` arm. Only the lean `text` + `created_at` reach the agent; the
+/// `_commit_ids` are internal — the companion echoes them back in a
+/// `CommitFeedback` once it delivers the result, and `render_feedback_result`
+/// strips them from the agent-facing output. `count == 0` is "no new feedback".
+fn feedback_response(items: &[PendingFeedback]) -> std::io::Result<BrokerResponse> {
+    let notes: Vec<Value> = items
+        .iter()
+        .map(|p| serde_json::json!({ "text": p.text, "created_at": p.created_at }))
+        .collect();
+    let ids: Vec<&str> = items.iter().map(|p| p.id.as_str()).collect();
+    Ok(BrokerResponse {
+        outcome: serde_json::json!({
+            "count": notes.len(),
+            "feedback": notes,
+            "_commit_ids": ids,
         }),
     })
 }
@@ -461,6 +566,35 @@ mod tests {
         }
     }
 
+    /// In-memory feedback stub. `read_pending_feedback` returns the seeded notes
+    /// WITHOUT draining (read-only, matching production), recording the conn id;
+    /// `commit_feedback_delivered` records the (conn_id, ids) it was committed
+    /// with so tests can assert delivery happens only after a successful write.
+    /// Default is empty (the delegation tests don't exercise feedback).
+    #[derive(Default)]
+    struct StubFeedback {
+        items: tokio::sync::Mutex<Vec<PendingFeedback>>,
+        read_conn: tokio::sync::Mutex<Option<String>>,
+        committed: tokio::sync::Mutex<Vec<(String, Vec<String>)>>,
+    }
+    #[async_trait]
+    impl SessionFeedbackAccess for StubFeedback {
+        async fn read_pending_feedback(
+            &self,
+            parent_connection_id: &str,
+            _wait: FeedbackWait,
+        ) -> Vec<PendingFeedback> {
+            *self.read_conn.lock().await = Some(parent_connection_id.to_string());
+            self.items.lock().await.clone()
+        }
+        async fn commit_feedback_delivered(&self, parent_connection_id: &str, ids: Vec<String>) {
+            self.committed
+                .lock()
+                .await
+                .push((parent_connection_id.to_string(), ids));
+        }
+    }
+
     async fn make_broker(mock: Arc<MockSpawner>) -> Arc<DelegationBroker> {
         let broker = Arc::new(DelegationBroker::new(
             mock as Arc<dyn ConnectionSpawner>,
@@ -488,7 +622,21 @@ mod tests {
             broker,
             tokens,
             Arc::new(StaticParentLookup(parent_conversation)),
+            Arc::new(StubFeedback::default()),
         )
+    }
+
+    /// Build a listener whose feedback access is the given stub, so feedback
+    /// tests can seed notes and assert the drain. Delegation pieces are minimal.
+    fn make_feedback_listener(
+        tokens: Arc<TokenRegistry>,
+        feedback: Arc<StubFeedback>,
+    ) -> Arc<DelegationListener> {
+        let broker = Arc::new(DelegationBroker::new(
+            Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+            Arc::new(AlwaysRootLookup) as Arc<dyn ConversationDepthLookup>,
+        ));
+        DelegationListener::new(broker, tokens, Arc::new(StaticParentLookup(Some(1))), feedback)
     }
 
     async fn make_request(input: serde_json::Value) -> BrokerRequest {
@@ -1105,5 +1253,259 @@ mod tests {
             .await;
         assert_eq!(report.status, TaskStatus::Failed);
         assert_eq!(report.error_code.as_deref(), Some("spawn_failed"));
+    }
+
+    // --- check_user_feedback over the listener -----------------------------
+
+    use crate::acp::feedback::PendingFeedback;
+
+    fn pending(id: &str, text: &str) -> PendingFeedback {
+        PendingFeedback {
+            id: id.into(),
+            text: text.into(),
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    /// The manager chunks each response via `bounded_feedback_batch`. The
+    /// serialized `feedback_response` of any such chunk must stay under the
+    /// transport cap (`MAX_FRAME_BYTES` = 16 MiB) so the companion's `read_frame`
+    /// never rejects it after the listener committed delivery — for BOTH
+    /// worst-case-escaping notes AND a flood of tiny notes (whose per-note JSON
+    /// overhead, not text length, is what a naive text-only bound would miss).
+    #[test]
+    fn bounded_feedback_response_always_fits_a_transport_frame() {
+        use crate::acp::delegation::transport::MAX_FRAME_BYTES;
+        use crate::acp::feedback::{bounded_feedback_batch, MAX_FEEDBACK_RESPONSE_BYTES};
+
+        // Worst-case escaping: many MAX_FEEDBACK_CHARS-sized control-char notes.
+        let worst = "\u{0001}".repeat(4096);
+        let big: Vec<PendingFeedback> = (0..5_000)
+            .map(|i| pending(&format!("b{i}"), &worst))
+            .collect();
+        // A flood of tiny notes: little text, lots of per-note JSON overhead.
+        let tiny: Vec<PendingFeedback> = (0..200_000)
+            .map(|i| pending(&format!("t{i}"), "x"))
+            .collect();
+
+        for (label, set) in [("worst-case", big), ("tiny-flood", tiny)] {
+            let total = set.len();
+            let batch = bounded_feedback_batch(set, MAX_FEEDBACK_RESPONSE_BYTES);
+            assert!(batch.len() < total, "{label}: batch must be chunked");
+            let encoded = serde_json::to_vec(&feedback_response(&batch).unwrap()).unwrap();
+            assert!(
+                encoded.len() < MAX_FRAME_BYTES,
+                "{label}: bounded response must fit a transport frame: {} >= {}",
+                encoded.len(),
+                MAX_FRAME_BYTES
+            );
+        }
+    }
+
+    /// A valid `check_user_feedback` returns the parent's notes in a
+    /// `{ count, feedback: [..] }` envelope (lean text, no ids) scoped to the
+    /// token's parent connection, and — crucially — commits them delivered ONLY
+    /// after the response is written, with the exact note ids.
+    #[tokio::test]
+    async fn feedback_returns_notes_then_commits_after_write() {
+        let feedback = Arc::new(StubFeedback::default());
+        *feedback.items.lock().await = vec![
+            pending("f1", "use the existing UserService"),
+            pending("f2", "skip the migration"),
+        ];
+        let tokens = Arc::new(TokenRegistry::default());
+        tokens
+            .register(
+                "tok".into(),
+                TokenEntry {
+                    parent_connection_id: "parent-conn".into(),
+                    working_dir: PathBuf::from("/tmp"),
+                },
+            )
+            .await;
+        let listener = make_feedback_listener(tokens, feedback.clone());
+
+        let (mut client, mut server) = duplex(8 * 1024);
+        let server_task = tokio::spawn(async move {
+            listener.serve_one(&mut server).await.unwrap();
+        });
+        let msg = BrokerMessage::Feedback(BrokerFeedbackRequest {
+            token: "tok".into(),
+            wait_ms: None,
+        });
+        write_frame(&mut client, &msg).await.unwrap();
+        let resp: BrokerResponse = read_frame(&mut client).await.unwrap();
+        server_task.await.unwrap();
+
+        assert_eq!(resp.outcome["count"], 2);
+        let notes = resp.outcome["feedback"].as_array().unwrap();
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0]["text"], "use the existing UserService");
+        // The lean note shape carries no internal id...
+        assert!(notes[0].get("id").is_none());
+        // ...but the envelope carries `_commit_ids` for the companion to echo
+        // back in a CommitFeedback after it delivers the result.
+        let commit_ids = resp.outcome["_commit_ids"].as_array().unwrap();
+        assert_eq!(commit_ids, &vec!["f1", "f2"]);
+        // Read was scoped to the token's parent connection id.
+        assert_eq!(feedback.read_conn.lock().await.as_deref(), Some("parent-conn"));
+        // The Feedback arm is READ-ONLY — it does NOT commit (delivery is
+        // committed later, by the companion's CommitFeedback).
+        assert!(feedback.committed.lock().await.is_empty());
+    }
+
+    /// `CommitFeedback` marks the named ids delivered, scoped (via the token) to
+    /// the parent connection — the companion sends this only after it delivers.
+    #[tokio::test]
+    async fn commit_feedback_marks_delivered_scoped_to_parent() {
+        let feedback = Arc::new(StubFeedback::default());
+        let tokens = Arc::new(TokenRegistry::default());
+        tokens
+            .register(
+                "tok".into(),
+                TokenEntry {
+                    parent_connection_id: "parent-conn".into(),
+                    working_dir: PathBuf::from("/tmp"),
+                },
+            )
+            .await;
+        let listener = make_feedback_listener(tokens, feedback.clone());
+
+        let (mut client, mut server) = duplex(8 * 1024);
+        let server_task = tokio::spawn(async move {
+            listener.serve_one(&mut server).await.unwrap();
+        });
+        let msg = BrokerMessage::CommitFeedback(BrokerCommitFeedbackRequest {
+            token: "tok".into(),
+            ids: vec!["f1".into(), "f2".into()],
+        });
+        write_frame(&mut client, &msg).await.unwrap();
+        let resp: BrokerResponse = read_frame(&mut client).await.unwrap();
+        server_task.await.unwrap();
+        assert!(resp.outcome.is_null(), "commit ack is empty");
+
+        let committed = feedback.committed.lock().await;
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].0, "parent-conn");
+        assert_eq!(committed[0].1, vec!["f1".to_string(), "f2".to_string()]);
+    }
+
+    /// An invalid token on `CommitFeedback` is a silent no-op (no commit).
+    #[tokio::test]
+    async fn commit_feedback_invalid_token_is_noop() {
+        let feedback = Arc::new(StubFeedback::default());
+        let listener = make_feedback_listener(Arc::new(TokenRegistry::default()), feedback.clone());
+        let (mut client, mut server) = duplex(8 * 1024);
+        let server_task = tokio::spawn(async move {
+            listener.serve_one(&mut server).await.unwrap();
+        });
+        write_frame(
+            &mut client,
+            &BrokerMessage::CommitFeedback(BrokerCommitFeedbackRequest {
+                token: "bad".into(),
+                ids: vec!["f1".into()],
+            }),
+        )
+        .await
+        .unwrap();
+        let _: BrokerResponse = read_frame(&mut client).await.unwrap();
+        server_task.await.unwrap();
+        assert!(feedback.committed.lock().await.is_empty());
+    }
+
+    /// An invalid token returns an empty `{ count: 0 }` envelope (no leak of
+    /// whether any feedback exists), never reads the store, and commits nothing.
+    #[tokio::test]
+    async fn feedback_invalid_token_returns_empty() {
+        let feedback = Arc::new(StubFeedback::default());
+        *feedback.items.lock().await = vec![pending("f1", "should never be returned")];
+        let tokens = Arc::new(TokenRegistry::default());
+        let listener = make_feedback_listener(tokens, feedback.clone());
+
+        let (mut client, mut server) = duplex(8 * 1024);
+        let server_task = tokio::spawn(async move {
+            listener.serve_one(&mut server).await.unwrap();
+        });
+        let msg = BrokerMessage::Feedback(BrokerFeedbackRequest {
+            token: "bad-token".into(),
+            wait_ms: Some(5),
+        });
+        write_frame(&mut client, &msg).await.unwrap();
+        let resp: BrokerResponse = read_frame(&mut client).await.unwrap();
+        server_task.await.unwrap();
+
+        assert_eq!(resp.outcome["count"], 0);
+        assert!(resp.outcome["feedback"].as_array().unwrap().is_empty());
+        // The store was never read or committed for an unknown token.
+        assert!(feedback.read_conn.lock().await.is_none());
+        assert!(feedback.committed.lock().await.is_empty());
+    }
+
+    /// at-least-once: if the companion drops the request socket while the
+    /// feedback read is parked (a `wait_ms` checkpoint), the notes are NEVER
+    /// committed delivered — the read is abandoned with no mutation, so the
+    /// agent's next check re-delivers them.
+    #[tokio::test]
+    async fn feedback_peer_close_during_wait_does_not_commit() {
+        // A stub whose read blocks until the deadline (no notes), simulating a
+        // checkpoint wait that the companion cancels mid-flight.
+        #[derive(Default)]
+        struct BlockingRead {
+            committed: tokio::sync::Mutex<Vec<(String, Vec<String>)>>,
+        }
+        #[async_trait]
+        impl SessionFeedbackAccess for BlockingRead {
+            async fn read_pending_feedback(
+                &self,
+                _conn: &str,
+                _wait: FeedbackWait,
+            ) -> Vec<PendingFeedback> {
+                // Park long enough that the test can drop the client first.
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                Vec::new()
+            }
+            async fn commit_feedback_delivered(&self, conn: &str, ids: Vec<String>) {
+                self.committed.lock().await.push((conn.to_string(), ids));
+            }
+        }
+        let feedback = Arc::new(BlockingRead::default());
+        let tokens = Arc::new(TokenRegistry::default());
+        tokens
+            .register(
+                "tok".into(),
+                TokenEntry {
+                    parent_connection_id: "parent-conn".into(),
+                    working_dir: PathBuf::from("/tmp"),
+                },
+            )
+            .await;
+        let listener = DelegationListener::new(
+            Arc::new(DelegationBroker::new(
+                Arc::new(MockSpawner::new()) as Arc<dyn ConnectionSpawner>,
+                Arc::new(AlwaysRootLookup) as Arc<dyn ConversationDepthLookup>,
+            )),
+            tokens,
+            Arc::new(StaticParentLookup(Some(1))),
+            feedback.clone(),
+        );
+
+        let (mut client, mut server) = duplex(8 * 1024);
+        let server_task = tokio::spawn(async move { listener.serve_one(&mut server).await });
+        let msg = BrokerMessage::Feedback(BrokerFeedbackRequest {
+            token: "tok".into(),
+            wait_ms: Some(0),
+        });
+        write_frame(&mut client, &msg).await.unwrap();
+
+        // Let the server park in the read, then the companion cancels.
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        drop(client);
+
+        let result = tokio::time::timeout(Duration::from_secs(2), server_task)
+            .await
+            .expect("serve_one must return after peer-close");
+        result.unwrap().unwrap();
+        // No write happened → nothing committed. The notes remain retryable.
+        assert!(feedback.committed.lock().await.is_empty());
     }
 }

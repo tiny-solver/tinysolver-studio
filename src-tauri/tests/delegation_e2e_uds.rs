@@ -43,6 +43,20 @@ impl ParentSessionLookup for FixedParent {
     }
 }
 
+/// No-op feedback access — this e2e suite exercises delegation, not feedback.
+struct NoFeedback;
+#[async_trait]
+impl codeg_lib::acp::feedback::SessionFeedbackAccess for NoFeedback {
+    async fn read_pending_feedback(
+        &self,
+        _parent_connection_id: &str,
+        _wait: codeg_lib::acp::feedback::FeedbackWait,
+    ) -> Vec<codeg_lib::acp::feedback::PendingFeedback> {
+        Vec::new()
+    }
+    async fn commit_feedback_delivered(&self, _parent_connection_id: &str, _ids: Vec<String>) {}
+}
+
 #[tokio::test]
 async fn end_to_end_uds_happy_path() {
     let mock = Arc::new(MockSpawner::new());
@@ -76,6 +90,7 @@ async fn end_to_end_uds_happy_path() {
         broker.clone(),
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
+        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
     );
 
     // PID-scoped socket inside the OS temp dir — no clashes across test bins.
@@ -188,6 +203,7 @@ async fn end_to_end_uds_batch_status() {
         broker.clone(),
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
+        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
     );
 
     let dir = tempfile::tempdir().unwrap();
@@ -271,6 +287,7 @@ async fn end_to_end_uds_invalid_token_rejected() {
         broker,
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
+        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
     );
 
     let dir = tempfile::tempdir().unwrap();

@@ -129,6 +129,33 @@ pub struct BrokerCancelTaskRequest {
     pub task_id: String,
 }
 
+/// Pull the pending live-feedback notes for the parent session. Backs the
+/// `check_user_feedback` MCP tool. Authenticated by the same per-launch
+/// `token`; the listener resolves the parent connection from it and scopes the
+/// drain to that connection so one parent can't read another's feedback.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerFeedbackRequest {
+    pub token: String,
+    /// Bounded checkpoint wait, in milliseconds. `None` (omitted) returns an
+    /// immediate snapshot; a positive value blocks up to that many ms (the
+    /// listener clamps it), returning early once any note lands. There is no
+    /// "infinite" mode — feedback may never arrive, so an unbounded wait would
+    /// hang the agent's turn forever.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wait_ms: Option<u64>,
+}
+
+/// Confirm delivery of feedback notes, marking them `Delivered`. Sent by the
+/// companion AFTER its `check_user_feedback` round-trip wins (i.e. it is
+/// returning the result to the agent), NOT by the listener at UDS-write time —
+/// so a per-request cancel that suppresses the agent-facing response (the agent
+/// staying alive) leaves the notes pending for the next check (at-least-once).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerCommitFeedbackRequest {
+    pub token: String,
+    pub ids: Vec<String>,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -139,6 +166,8 @@ pub enum BrokerMessage {
     Cancel(BrokerCancelRequest),
     Status(BrokerStatusRequest),
     CancelTask(BrokerCancelTaskRequest),
+    Feedback(BrokerFeedbackRequest),
+    CommitFeedback(BrokerCommitFeedbackRequest),
 }
 
 /// The wrapped outcome the main process returns over the same socket.
@@ -242,6 +271,26 @@ pub async fn client_cancel_task_round_trip(
     req: &BrokerCancelTaskRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::CancelTask(req.clone())).await
+}
+
+/// Dispatch a `check_user_feedback` query and read back the
+/// `{ "feedback": [..], "count": N }` envelope (the pending notes drained for
+/// the parent session, possibly empty).
+pub async fn client_feedback_round_trip(
+    socket_path: &str,
+    req: &BrokerFeedbackRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::Feedback(req.clone())).await
+}
+
+/// Confirm delivery of feedback notes (fire-and-forget). Reads the empty ack so
+/// the listener can flush before the socket drops; the body carries nothing.
+pub async fn client_commit_feedback(
+    socket_path: &str,
+    req: &BrokerCommitFeedbackRequest,
+) -> io::Result<()> {
+    let _ = message_round_trip(socket_path, &BrokerMessage::CommitFeedback(req.clone())).await?;
+    Ok(())
 }
 
 /// Total budget for `open()` retries on Windows named pipes. Has to be

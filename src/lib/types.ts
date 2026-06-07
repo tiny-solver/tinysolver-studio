@@ -271,6 +271,12 @@ export type ConversationChange =
 
 export const CONVERSATION_CHANGED_EVENT = "conversation://changed"
 
+/** Global side-channel announcing a live-feedback enable/disable (payload is
+ *  `FeedbackSettings`). The settings UI runs in a separate window, so the
+ *  conversation feedback bar converges on this backend broadcast rather than a
+ *  frontend-only cache. Mirrors the Rust `FEEDBACK_SETTINGS_CHANGED_EVENT`. */
+export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a
@@ -699,6 +705,25 @@ export type AcpEvent =
       message_id: string
       blocks: UserMessageBlock[]
     }
+  /**
+   * The user submitted a live-feedback note while the agent is mid-turn (the
+   * `check_user_feedback` steering path). Broadcast so every client viewing
+   * this conversation renders the pending note; also captured in the snapshot.
+   */
+  | {
+      type: "feedback_submitted"
+      item: FeedbackItem
+    }
+  /**
+   * The agent read one or more pending feedback notes via `check_user_feedback`.
+   * Carries the note ids + the delivery instant; clients flip those notes to
+   * `delivered` (they already hold the text from `feedback_submitted` / snapshot).
+   */
+  | {
+      type: "feedback_consumed"
+      ids: string[]
+      delivered_at: string
+    }
 
 /** A block of a broadcast user prompt (mirror of Rust `UserMessageBlock`).
  *  Narrower than the persisted `ContentBlock`: only what a viewer needs to
@@ -823,6 +848,22 @@ export interface ActiveDelegationState {
   agent_type: AgentType
 }
 
+/** Lifecycle of a live-feedback note (mirror of Rust `FeedbackStatus`). */
+export type FeedbackStatus = "pending" | "delivered"
+
+/**
+ * A user-submitted live-feedback ("steering") note (mirror of Rust
+ * `FeedbackItem`). Turn-scoped: the backend clears the set when the next turn's
+ * `user_message` arrives. `delivered_at` is set once the agent reads it.
+ */
+export interface FeedbackItem {
+  id: string
+  text: string
+  created_at: string
+  status: FeedbackStatus
+  delivered_at?: string | null
+}
+
 export interface LiveSessionSnapshot {
   connection_id: string
   conversation_id: number | null
@@ -841,6 +882,13 @@ export interface LiveSessionSnapshot {
   /** Live sub-agent delegations recoverable from the snapshot. May be absent
    *  on older server payloads (then treated as `[]`). */
   active_delegations?: ActiveDelegationState[]
+  /** Live-feedback notes for the current turn. Absent on older payloads /
+   *  when empty (then treated as `[]`). */
+  feedback?: FeedbackItem[]
+  /** Whether this agent has the `check_user_feedback` tool (fixed at launch).
+   *  The frontend gates the feedback bar on this — the agent's real capability —
+   *  not the (possibly later-toggled) global setting. Absent → `false`. */
+  feedback_tool_available?: boolean
   modes: SessionModeStateInfo | null
   current_mode: string | null
   config_options: SessionConfigOptionInfo[] | null

@@ -65,6 +65,18 @@ pub fn build_router(
             post(handlers::delegation::set_delegation_settings),
         )
         .route(
+            "/get_feedback_settings",
+            post(handlers::feedback::get_feedback_settings),
+        )
+        .route(
+            "/set_feedback_settings",
+            post(handlers::feedback::set_feedback_settings),
+        )
+        .route(
+            "/submit_session_feedback",
+            post(handlers::feedback::submit_session_feedback),
+        )
+        .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
         )

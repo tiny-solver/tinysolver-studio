@@ -708,6 +708,12 @@ pub(crate) async fn do_start_web_server_tauri(
             .state::<crate::commands::delegation::DelegationSocketPath>()
             .0
             .clone(),
+        // Reuse the same live-feedback config handle the desktop MCP injection
+        // reads, so HTTP-side feedback settings target the identical flag.
+        feedback_config: app
+            .state::<crate::acp::feedback::FeedbackRuntimeConfig>()
+            .inner()
+            .clone(),
         system_op_lock: crate::app_state::default_system_op_lock(),
         // Reuse the same handle the desktop `app_update` commands write to so
         // HTTP and webview readers see the identical update snapshot.

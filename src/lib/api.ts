@@ -24,6 +24,7 @@ import type {
   ConnectionInfo,
   ConversationConnectionInfo,
   LiveSessionSnapshot,
+  FeedbackItem,
   AcpAgentInfo,
   AcpAgentStatus,
   AgentSkillScope,
@@ -2582,6 +2583,39 @@ export async function setDelegationSettings(
   settings: DelegationSettings
 ): Promise<DelegationSettings> {
   return getTransport().call("set_delegation_settings", { settings })
+}
+
+// ─── Live feedback settings + submit ───────────────────────────────────
+
+/** Mirror of Rust `FeedbackSettings`. */
+export interface FeedbackSettings {
+  enabled: boolean
+}
+
+export async function getFeedbackSettings(): Promise<FeedbackSettings> {
+  return getTransport().call("get_feedback_settings")
+}
+
+export async function setFeedbackSettings(
+  settings: FeedbackSettings
+): Promise<FeedbackSettings> {
+  return getTransport().call("set_feedback_settings", { settings })
+}
+
+/**
+ * Submit a live-feedback note to a running connection (the `check_user_feedback`
+ * steering path). Returns the stored note (it also arrives via the
+ * `feedback_submitted` event). Rejects when no turn is in flight — callers
+ * detect that with `isNoActiveTurnRejection` and fall back to a normal prompt.
+ */
+export async function submitSessionFeedback(
+  connectionId: string,
+  text: string
+): Promise<FeedbackItem> {
+  return getTransport().call("submit_session_feedback", {
+    connectionId,
+    text,
+  })
 }
 
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what

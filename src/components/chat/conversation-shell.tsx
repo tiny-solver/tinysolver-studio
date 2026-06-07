@@ -48,6 +48,9 @@ interface ConversationShellProps {
   attachmentTabId?: string | null
   draftStorageKey?: string | null
   hideInput?: boolean
+  /** Optional live-feedback bar rendered just above the composer (see
+   *  `LiveFeedbackBar`). Renders nothing when the feature is off / idle. */
+  feedbackBar?: ReactNode
   isActive?: boolean
   queue?: QueuedMessage[]
   onEnqueue?: (draft: PromptDraft, modeId: string | null) => void
@@ -90,6 +93,7 @@ export function ConversationShell({
   attachmentTabId,
   draftStorageKey,
   hideInput = false,
+  feedbackBar,
   isActive,
   queue,
   onEnqueue,
@@ -169,6 +173,10 @@ export function ConversationShell({
       />
 
       <QuestionDialog question={pendingQuestion} onAnswer={onAnswerQuestion} />
+
+      {!hideInput && feedbackBar && (
+        <div className="mx-auto w-full max-w-3xl">{feedbackBar}</div>
+      )}
 
       {!hideInput && (
         <div className="mx-auto w-full max-w-3xl">
