@@ -1504,6 +1504,7 @@ pub async fn resize_pet_panel(app: AppHandle, height: f64) -> Result<(), AppComm
     let _ = panel.set_size(LogicalSize::new(PET_PANEL_WIDTH, panel_h));
     let _ = panel.set_position(LogicalPosition::new(panel_x, panel_y));
     let _ = panel.show();
+    let _ = panel.set_focus();
     Ok(())
 }
 
