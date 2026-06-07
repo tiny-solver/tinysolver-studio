@@ -2073,7 +2073,6 @@
         "expand": "Expandir navegación de mensajes",
         "collapse": "Contraer navegación de mensajes",
         "jumpToMessage": "Ir a: {label}",
-        "noChanges": "Sin cambios de archivos",
         "fileCount": "{count, plural, one {# archivo} other {# archivos}}",
         "remove": "Quitar",
         "noDiffDataAvailable": "No hay datos de diff disponibles para {filePath}"

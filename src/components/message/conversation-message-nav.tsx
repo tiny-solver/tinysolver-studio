@@ -34,6 +34,9 @@ interface ConversationMessageNavProps {
   scrollApiRef: RefObject<MessageScrollContextValue | null>
   /** Thread index nearest the top of the viewport (for active highlight). */
   activeThreadIndex: number | null
+  /** Called with the clicked entry's threadIndex so the parent can
+   *  optimistically highlight it before the (possibly clamped) scroll settles. */
+  onActivate?: (threadIndex: number) => void
 }
 
 const STORAGE_KEY = "workspace:message-nav"
@@ -96,6 +99,7 @@ export function ConversationMessageNav({
   entries,
   scrollApiRef,
   activeThreadIndex,
+  onActivate,
 }: ConversationMessageNavProps) {
   const t = useTranslations("Folder.chat.messageNav")
   const { openSessionFileDiff } = useWorkspaceContext()
@@ -122,12 +126,13 @@ export function ConversationMessageNav({
 
   const jump = useCallback(
     (threadIndex: number) => {
+      onActivate?.(threadIndex)
       scrollApiRef.current?.scrollToIndex(threadIndex, {
         align: "start",
         smooth: true,
       })
     },
-    [scrollApiRef]
+    [onActivate, scrollApiRef]
   )
 
   const handleFileClick = useCallback(
@@ -149,20 +154,20 @@ export function ConversationMessageNav({
   if (entries.length === 0) return null
 
   return (
-    <div className="relative flex h-full w-7 shrink-0 flex-col border-l border-border bg-sidebar/40 text-sidebar-foreground">
+    <div className="group absolute right-2 top-1/2 z-20 flex max-h-[80%] -translate-y-1/2 flex-col items-center">
       <button
         type="button"
         aria-label={expanded ? t("collapse") : t("expand")}
         aria-expanded={expanded}
         title={t("title")}
         onClick={() => setExpandedPersist(!expanded)}
-        className="flex h-7 w-full shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-60 transition-colors hover:bg-accent/40 hover:text-foreground hover:opacity-100 focus-visible:opacity-100"
       >
         <ListTree className="h-3.5 w-3.5" />
       </button>
 
       <ScrollArea className="flex-1 min-h-0">
-        <div className="flex flex-col items-stretch py-1">
+        <div className="flex flex-col items-center py-1">
           {entries.map((entry) => {
             const active = activeThreadIndex === entry.threadIndex
             return (
@@ -173,12 +178,12 @@ export function ConversationMessageNav({
                 aria-current={active ? "true" : undefined}
                 title={`#${entry.ordinal} ${entry.label}`}
                 onClick={() => jump(entry.threadIndex)}
-                className="group/marker flex h-5 w-full items-center justify-center"
+                className="group/marker flex h-4 w-5 items-center justify-center"
               >
                 <span
                   className={cn(
-                    "h-1 rounded-full transition-all",
-                    active ? "w-5" : "w-3.5",
+                    "h-0.5 rounded-full transition-all",
+                    active ? "w-4" : "w-3",
                     entry.hasChanges
                       ? active
                         ? "bg-primary"
@@ -196,7 +201,7 @@ export function ConversationMessageNav({
       </ScrollArea>
 
       {expanded && (
-        <div className="absolute right-full top-0 bottom-0 z-30 flex w-72 max-w-[80vw] flex-col border-l border-border bg-popover text-popover-foreground shadow-xl">
+        <div className="absolute right-full top-1/2 z-30 mr-1 flex max-h-[80vh] w-72 max-w-[80vw] -translate-y-1/2 flex-col rounded-lg border border-border bg-popover text-popover-foreground shadow-xl">
           <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3">
             <span className="text-xs font-medium">{t("title")}</span>
             <button
@@ -242,29 +247,23 @@ export function ConversationMessageNav({
                           <span className="line-clamp-2 text-xs leading-5 text-foreground">
                             {entry.label}
                           </span>
-                          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            {entry.hasChanges ? (
-                              <>
-                                <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                  {t("fileCount", { count: uniqueFileCount })}
-                                </span>
-                                {/* Always render BOTH counts (incl. zeros) so a
-                                    one-sided change still shows its +N and -N. */}
-                                <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]">
-                                  <span className="text-green-600 dark:text-green-400">
-                                    +{entry.additions}
-                                  </span>
-                                  <span className="text-red-600 dark:text-red-400">
-                                    -{entry.deletions}
-                                  </span>
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">
-                                {t("noChanges")}
+                          {entry.hasChanges && (
+                            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {t("fileCount", { count: uniqueFileCount })}
                               </span>
-                            )}
-                          </span>
+                              {/* Always render BOTH counts (incl. zeros) so a
+                                  one-sided change still shows its +N and -N. */}
+                              <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]">
+                                <span className="text-green-600 dark:text-green-400">
+                                  +{entry.additions}
+                                </span>
+                                <span className="text-red-600 dark:text-red-400">
+                                  -{entry.deletions}
+                                </span>
+                              </span>
+                            </span>
+                          )}
                         </span>
                       </button>
 

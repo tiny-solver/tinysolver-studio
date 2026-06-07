@@ -2073,7 +2073,6 @@
         "expand": "توسيع تنقل الرسائل",
         "collapse": "طي تنقل الرسائل",
         "jumpToMessage": "الانتقال إلى: {label}",
-        "noChanges": "لا توجد تغييرات في الملفات",
         "fileCount": "{count, plural, one {# ملف} other {# ملفات}}",
         "remove": "إزالة",
         "noDiffDataAvailable": "لا توجد بيانات diff متاحة لـ {filePath}"

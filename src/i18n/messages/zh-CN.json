@@ -2073,7 +2073,6 @@
         "expand": "展开消息导航",
         "collapse": "收起消息导航",
         "jumpToMessage": "跳转到：{label}",
-        "noChanges": "无文件改动",
         "fileCount": "{count} 个文件",
         "remove": "移除",
         "noDiffDataAvailable": "未找到 {filePath} 的差异数据"

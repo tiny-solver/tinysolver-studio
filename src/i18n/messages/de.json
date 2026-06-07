@@ -2073,7 +2073,6 @@
         "expand": "Nachrichtennavigation einblenden",
         "collapse": "Nachrichtennavigation ausblenden",
         "jumpToMessage": "Springen zu: {label}",
-        "noChanges": "Keine Dateiänderungen",
         "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",
         "remove": "Entfernen",
         "noDiffDataAvailable": "Keine Diff-Daten verfügbar für {filePath}"
