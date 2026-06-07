@@ -2073,7 +2073,6 @@
         "expand": "メッセージナビを開く",
         "collapse": "メッセージナビを閉じる",
         "jumpToMessage": "移動: {label}",
-        "noChanges": "ファイル変更なし",
         "fileCount": "{count, plural, one {# 個のファイル} other {# 個のファイル}}",
         "remove": "削除",
         "noDiffDataAvailable": "{filePath} の差分データがありません"
