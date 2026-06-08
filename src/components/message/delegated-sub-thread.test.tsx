@@ -95,6 +95,7 @@ function childConnWith(pendingPermission: unknown) {
     liveMessage: null,
     pendingPermission,
     pendingQuestion: null,
+    pendingAskQuestion: null,
     claudeApiRetry: null,
     error: null,
     loadError: null,

@@ -49,6 +49,11 @@ pub struct AppState {
     /// the feedback settings command on save. Populated at startup by
     /// `apply_persisted_feedback_config`.
     pub feedback_config: crate::acp::feedback::FeedbackRuntimeConfig,
+    /// Hot-swappable ask-user-question (`ask_user_question`) enable flag. Shared
+    /// with the `DelegationInjection` so MCP injection reads it, and updated by
+    /// the question settings command on save. Populated at startup by
+    /// `apply_persisted_question_config`.
+    pub question_config: crate::acp::question::QuestionRuntimeConfig,
     /// Serializes mutually-exclusive system operations — in-place
     /// self-update, restart, rollback — so a second click can't race a
     /// download/swap already in flight. Handlers `try_lock` and reject when
@@ -97,6 +102,7 @@ pub fn build_delegation_stack(
     Arc<TokenRegistry>,
     PathBuf,
     crate::acp::feedback::FeedbackRuntimeConfig,
+    crate::acp::question::QuestionRuntimeConfig,
 ) {
     use crate::acp::connection::DelegationInjection;
     use crate::acp::delegation::broker::{
@@ -141,6 +147,7 @@ pub fn build_delegation_stack(
     let tokens = Arc::new(TokenRegistry::default());
     let socket_path = default_socket_path(&std::env::temp_dir());
     let feedback = crate::acp::feedback::FeedbackRuntimeConfig::new();
+    let ask = crate::acp::question::QuestionRuntimeConfig::new();
 
     // Install the injection on the manager so spawn_agent picks it up
     // without an extra parameter at every call site.
@@ -149,9 +156,15 @@ pub fn build_delegation_stack(
         tokens: tokens.clone(),
         socket_path: socket_path.clone(),
         feedback: feedback.clone(),
+        ask: ask.clone(),
+        // Same backing manager as the listener's question lookup; used only by
+        // the run_connection teardown guard to reclaim a parked ask.
+        questions: Arc::new(crate::acp::manager::ConnectionManagerQuestionLookup {
+            manager: Arc::new(connection_manager.clone_ref()),
+        }) as Arc<dyn crate::acp::question::SessionQuestionAccess>,
     });
 
-    (broker, tokens, socket_path, feedback)
+    (broker, tokens, socket_path, feedback, ask)
 }
 
 impl AppState {
@@ -172,8 +185,13 @@ impl AppState {
         let emitter = EventEmitter::web_only(broadcaster.clone(), acp_event_bus.clone());
 
         let connection_manager = default_connection_manager();
-        let (delegation_broker, delegation_tokens, delegation_socket_path, feedback_config) =
-            build_delegation_stack(&connection_manager, db.conn.clone(), data_dir.clone());
+        let (
+            delegation_broker,
+            delegation_tokens,
+            delegation_socket_path,
+            feedback_config,
+            question_config,
+        ) = build_delegation_stack(&connection_manager, db.conn.clone(), data_dir.clone());
 
         Self {
             db,
@@ -195,6 +213,7 @@ impl AppState {
             delegation_tokens,
             delegation_socket_path,
             feedback_config,
+            question_config,
             system_op_lock: default_system_op_lock(),
             update_state: default_update_state(),
         }

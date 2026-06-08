@@ -25,6 +25,7 @@ import type {
   ConversationConnectionInfo,
   LiveSessionSnapshot,
   FeedbackItem,
+  QuestionAnswer,
   AcpAgentInfo,
   AcpAgentStatus,
   AgentSkillScope,
@@ -89,6 +90,7 @@ import type {
   ChatChannelMessageLog,
   WebhookConfig,
   ModelProviderInfo,
+  UpdateModelProviderResult,
   PluginCheckSummary,
   QuickMessage,
 } from "./types"
@@ -218,6 +220,24 @@ export async function acpRespondPermission(
   })
 }
 
+/**
+ * Submit the user's answer to a blocking `ask_user_question`. Resolves the
+ * parked tool call on the backend (and clears the card on every client via the
+ * `question_resolved` event). Idempotent: answering an already-resolved /
+ * unknown `questionId` is a no-op success.
+ */
+export async function acpAnswerQuestion(
+  connectionId: string,
+  questionId: string,
+  answer: QuestionAnswer
+): Promise<void> {
+  return getTransport().call("acp_answer_question", {
+    connectionId,
+    questionId,
+    answer,
+  })
+}
+
 export async function acpDisconnect(connectionId: string): Promise<void> {
   return getTransport().call("acp_disconnect", { connectionId })
 }
@@ -323,7 +343,7 @@ export async function acpUpdateAgentPreferences(
     codex_auth_json?: string | null
     codex_config_toml?: string | null
   }
-): Promise<void> {
+): Promise<number> {
   return getTransport().call("acp_update_agent_preferences", {
     agentType,
     enabled: params.enabled,
@@ -335,6 +355,8 @@ export async function acpUpdateAgentPreferences(
   })
 }
 
+/** Returns the number of running sessions left on stale config by this save
+ *  (for the settings-side "N sessions need restart" toast). */
 export async function acpUpdateAgentEnv(
   agentType: AgentType,
   params: {
@@ -342,7 +364,7 @@ export async function acpUpdateAgentEnv(
     env: Record<string, string>
     modelProviderId?: number | null
   }
-): Promise<void> {
+): Promise<number> {
   return getTransport().call("acp_update_agent_env", {
     agentType,
     enabled: params.enabled,
@@ -351,6 +373,8 @@ export async function acpUpdateAgentEnv(
   })
 }
 
+/** Returns the number of running sessions left on stale config by this save
+ *  (for the settings-side "N sessions need restart" toast). */
 export async function acpUpdateAgentConfig(
   agentType: AgentType,
   params: {
@@ -359,7 +383,7 @@ export async function acpUpdateAgentConfig(
     codex_auth_json?: string | null
     codex_config_toml?: string | null
   }
-): Promise<void> {
+): Promise<number> {
   return getTransport().call("acp_update_agent_config", {
     agentType,
     configJson: params.config_json ?? null,
@@ -2575,7 +2599,7 @@ export async function updateModelProvider(params: {
   apiKey?: string | null
   agentType?: string | null
   model?: string | null
-}): Promise<ModelProviderInfo> {
+}): Promise<UpdateModelProviderResult> {
   return getTransport().call("update_model_provider", {
     id: params.id,
     name: params.name ?? null,
@@ -2644,6 +2668,23 @@ export async function submitSessionFeedback(
     connectionId,
     text,
   })
+}
+
+// ─── Ask-user-question settings ────────────────────────────────────────────
+
+/** Mirror of Rust `QuestionSettings` (default ON). */
+export interface QuestionSettings {
+  enabled: boolean
+}
+
+export async function getQuestionSettings(): Promise<QuestionSettings> {
+  return getTransport().call("get_question_settings")
+}
+
+export async function setQuestionSettings(
+  settings: QuestionSettings
+): Promise<QuestionSettings> {
+  return getTransport().call("set_question_settings", { settings })
 }
 
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what

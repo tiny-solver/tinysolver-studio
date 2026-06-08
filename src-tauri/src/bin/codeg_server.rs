@@ -205,12 +205,17 @@ async fn async_main() {
     // Build AppState
     let pet_state_handle = codeg_lib::pet_state_mapper::new_pet_state_handle();
     let connection_manager = codeg_lib::app_state::default_connection_manager();
-    let (delegation_broker, delegation_tokens, delegation_socket_path, feedback_config) =
-        codeg_lib::app_state::build_delegation_stack(
-            &connection_manager,
-            db.conn.clone(),
-            data_dir.clone(),
-        );
+    let (
+        delegation_broker,
+        delegation_tokens,
+        delegation_socket_path,
+        feedback_config,
+        question_config,
+    ) = codeg_lib::app_state::build_delegation_stack(
+        &connection_manager,
+        db.conn.clone(),
+        data_dir.clone(),
+    );
     let state = Arc::new(AppState {
         db,
         connection_manager,
@@ -229,6 +234,7 @@ async fn async_main() {
         delegation_tokens: delegation_tokens.clone(),
         delegation_socket_path: delegation_socket_path.clone(),
         feedback_config: feedback_config.clone(),
+        question_config: question_config.clone(),
         system_op_lock: codeg_lib::app_state::default_system_op_lock(),
         update_state: codeg_lib::app_state::default_update_state(),
     });
@@ -247,6 +253,12 @@ async fn async_main() {
         &feedback_config,
     )
     .await;
+    // Same for the ask-user-question enable flag.
+    codeg_lib::commands::question::apply_persisted_question_config(
+        &state.db.conn,
+        &question_config,
+    )
+    .await;
 
     // Spawn the delegation listener so companion processes can round-trip
     // through the broker. Path is PID-scoped, so the listener owns it for
@@ -259,6 +271,9 @@ async fn async_main() {
                 manager: Arc::new(state.connection_manager.clone_ref()),
             }),
             Arc::new(codeg_lib::acp::manager::ConnectionManagerFeedbackLookup {
+                manager: Arc::new(state.connection_manager.clone_ref()),
+            }),
+            Arc::new(codeg_lib::acp::manager::ConnectionManagerQuestionLookup {
                 manager: Arc::new(state.connection_manager.clone_ref()),
             }),
         );

@@ -91,6 +91,22 @@
       "placeholder": "Zoomstufe wählen",
       "default": "Standard",
       "current": "Aktueller Zoom: {zoom}%"
+    },
+    "fonts": {
+      "sectionTitle": "Schriftarten",
+      "sectionDescription": "Wähle Schriftarten für Oberfläche, Code-Editor und Terminal. Mitgelieferte Schriftarten werden bei Bedarf geladen; wähle „Benutzerdefiniert…“, um eine beliebige auf deinem System installierte Schriftart zu verwenden.",
+      "interface": "Oberfläche",
+      "editor": "Editor",
+      "terminal": "Terminal",
+      "groupSans": "Serifenlos",
+      "groupMono": "Monospace",
+      "custom": "Benutzerdefiniert…",
+      "customPlaceholder": "Schriftartname, z. B. Fira Code",
+      "fontSize": "Schriftgröße",
+      "ligatures": "Ligaturen aktivieren",
+      "ligaturesUnavailable": "Diese Schriftart hat keine Ligaturen",
+      "terminalLigaturesHint": "Terminal-Ligaturen gelten nur für mitgelieferte Programmierschriftarten.",
+      "preview": "Vorschau"
     }
   },
   "SystemSettings": {
@@ -734,7 +750,8 @@
       "saveConfigManagementFailed": "Speichern der Konfigurationsverwaltung fehlgeschlagen",
       "clineSaved": "Cline-Konfiguration gespeichert",
       "saveClineFailed": "Cline-Konfiguration konnte nicht gespeichert werden",
-      "modelProviderRequired": "Bitte wählen Sie vor dem Speichern einen Modellanbieter aus."
+      "modelProviderRequired": "Bitte wählen Sie vor dem Speichern einen Modellanbieter aus.",
+      "affectedRunningSessions": "{count, plural, one {# laufende Sitzung muss zum Anwenden neu verbunden werden} other {# laufende Sitzungen müssen zum Anwenden neu verbunden werden}}"
     },
     "version": {
       "statusLabel": "Versionsstatus",
@@ -891,6 +908,8 @@
       "completing": "Abschließen...",
       "toasts": {
         "importedSessions": "{imported, plural, one {# Sitzung} other {# Sitzungen}} importiert, {skipped} übersprungen",
+        "importedAndUpdated": "{imported, plural, one {# Sitzung} other {# Sitzungen}} importiert, {updated, plural, one {# Titel} other {# Titel}} aktualisiert, {skipped} übersprungen",
+        "updatedTitles": "{updated, plural, one {# Titel} other {# Titel}} aktualisiert, {skipped} übersprungen",
         "noNewSessionsFound": "Keine neuen Sitzungen gefunden ({skipped} übersprungen)",
         "importFailed": "Import fehlgeschlagen: {message}",
         "reviewCompleted": "{count, plural, one {# Review-Sitzung} other {# Review-Sitzungen}} als abgeschlossen markiert",
@@ -2080,6 +2099,30 @@
         "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",
         "remove": "Entfernen",
         "noDiffDataAvailable": "Keine Diff-Daten verfügbar für {filePath}"
+      },
+      "askQuestion": {
+        "title": "Der Agent benötigt deine Auswahl",
+        "subtitle": "Antworten und absenden. Du kannst jederzeit überspringen.",
+        "recommended": "Empfohlen",
+        "other": "Andere",
+        "otherPlaceholder": "Antwort eingeben…",
+        "singleSelect": "Einfach",
+        "multiSelect": "Mehrfach",
+        "skip": "Überspringen",
+        "next": "Weiter",
+        "submit": "Senden",
+        "submitError": "Senden fehlgeschlagen. Bitte versuche es erneut."
+      },
+      "configStale": {
+        "agentConfigTitle": "Agent-Einstellungen aktualisiert",
+        "modelProviderTitle": "Modellanbieter aktualisiert",
+        "description": "Diese Sitzung verwendet weiterhin die bisherige Konfiguration. Zum Anwenden neu verbinden (der Gesprächsverlauf bleibt erhalten).",
+        "reconnect": "Zum Anwenden neu verbinden",
+        "reconnecting": "Wird neu verbunden…",
+        "reconnectDisabledDuringTurn": "Verfügbar, sobald die aktuelle Runde abgeschlossen ist",
+        "dismiss": "Schließen",
+        "reconnectFailed": "Sitzung konnte nicht neu verbunden werden",
+        "applied": "Neue Konfiguration angewendet"
       }
     },
     "diffPreview": {
@@ -2420,7 +2463,8 @@
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "create": "Erstellen",
-    "save": "Speichern"
+    "save": "Speichern",
+    "affectedRunningSessions": "{count, plural, one {# laufende Sitzung muss zum Anwenden neu verbunden werden} other {# laufende Sitzungen müssen zum Anwenden neu verbunden werden}}"
   },
   "ExpertsSettings": {
     "title": "Experten-Skills",
@@ -2784,5 +2828,16 @@
     "turnEndedResent": "Die Runde endete – stattdessen als neue Nachricht gesendet.",
     "turnEnded": "Die Runde ist bereits beendet.",
     "submitFailed": "Deine Notiz konnte nicht gesendet werden"
+  },
+  "AskQuestionSettings": {
+    "title": "Benutzer fragen",
+    "description": "Erlaubt Agenten, anzuhalten und dir eine Multiple-Choice-Frage zu stellen, die über dem Eingabefeld der Unterhaltung erscheint. Der Agent wartet, bis du antwortest (oder überspringst). Standardmäßig aktiviert.",
+    "enable": "Benutzerfrage aktivieren",
+    "enableHint": "Fügt Agenten, die nach dem Aktivieren gestartet werden, das ask_user_question-Tool hinzu.",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Frageeinstellungen gespeichert",
+    "saveFailed": "Frageeinstellungen konnten nicht gespeichert werden",
+    "loadFailed": "Laden fehlgeschlagen: {detail}"
   }
 }

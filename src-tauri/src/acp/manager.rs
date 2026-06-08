@@ -16,9 +16,13 @@ use crate::acp::feedback::{
     bounded_feedback_batch, FeedbackItem, FeedbackStatus, PendingFeedback,
     SessionFeedbackAccess, MAX_FEEDBACK_CHARS, MAX_FEEDBACK_RESPONSE_BYTES,
 };
+use crate::acp::question::{
+    build_outcome, QuestionAnswer, QuestionOutcome, QuestionSpec, RegisteredQuestion,
+    SessionQuestionAccess,
+};
 use crate::acp::types::{
-    AcpEvent, AgentOptionsSnapshot, ConnectionInfo, ConnectionStatus, ForkResultInfo,
-    PromptInputBlock,
+    AcpEvent, AgentOptionsSnapshot, ConfigStaleKind, ConnectionInfo, ConnectionStatus,
+    ForkResultInfo, PromptInputBlock,
 };
 use crate::db::entities::conversation::{self, ConversationStatus};
 use crate::db::service::conversation_service;
@@ -169,6 +173,24 @@ pub struct ConnectionManager {
     /// mutex bounds concurrent probes for the same agent_type to one;
     /// different agent_types remain parallel.
     probe_locks: Arc<Mutex<HashMap<AgentType, Arc<tokio::sync::Mutex<()>>>>>,
+    /// In-flight `ask_user_question` calls awaiting the user's answer, keyed by
+    /// the globally-unique `question_id`. The listener parks on the receiver;
+    /// the answer / cancel path resolves (and removes) the matching sender.
+    /// Shared across `clone_ref` clones so the listener-facing
+    /// `register_question` and the command-facing `answer_question` touch the
+    /// same map. Size tracks live concurrency (the agent is blocked per ask) —
+    /// no cap, no cumulative growth; entries are removed on answer / cancel /
+    /// connection teardown.
+    pending_questions: Arc<Mutex<HashMap<String, PendingQuestionEntry>>>,
+}
+
+/// A parked `ask_user_question` awaiting its answer. The `sender` resolves the
+/// blocked listener round-trip; `questions` is retained so `answer_question` can
+/// build the self-describing outcome without a `SessionState` read (race-free).
+struct PendingQuestionEntry {
+    parent_connection_id: String,
+    questions: Vec<QuestionSpec>,
+    sender: tokio::sync::oneshot::Sender<QuestionOutcome>,
 }
 
 impl Default for ConnectionManager {
@@ -185,6 +207,7 @@ impl ConnectionManager {
             spawn_handshake_timeout: spawn_handshake_timeout_from_env(),
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
+            pending_questions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -196,6 +219,7 @@ impl ConnectionManager {
             spawn_handshake_timeout: self.spawn_handshake_timeout,
             delegation_injection: self.delegation_injection.clone(),
             probe_locks: self.probe_locks.clone(),
+            pending_questions: self.pending_questions.clone(),
         }
     }
 
@@ -220,6 +244,7 @@ impl ConnectionManager {
             spawn_handshake_timeout: timeout,
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
+            pending_questions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -260,6 +285,8 @@ impl ConnectionManager {
             state: Arc::new(tokio::sync::RwLock::new(state)),
             emitter,
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            config_fingerprint: String::new(),
+            last_observed_fingerprint: String::new(),
         };
         let mut map = self.connections.lock().await;
         map.insert(id.to_string(), conn);
@@ -300,6 +327,8 @@ impl ConnectionManager {
             state: Arc::new(tokio::sync::RwLock::new(state)),
             emitter,
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            config_fingerprint: String::new(),
+            last_observed_fingerprint: String::new(),
         };
         self.connections.lock().await.insert(id.to_string(), conn);
         rx
@@ -485,6 +514,55 @@ impl ConnectionManager {
             }
         }
         disconnected
+    }
+
+    /// Compare each running connection's spawn-time config fingerprint against a
+    /// freshly recomputed one (keyed by agent type in `fresh`) and notify those
+    /// that drifted. Drives the conversation-side "restart to apply" banner after
+    /// a settings save.
+    ///
+    /// Emit policy, per connection:
+    /// - emit `SessionConfigStale { stale }` only when the current fingerprint
+    ///   differs from the one we last observed for it — a no-op save (identical
+    ///   values) stays silent, while a second real change re-emits so a dismissed
+    ///   banner reappears.
+    /// - `stale = (current != spawn)`, so reverting a setting back to its
+    ///   launch-time value emits `stale = false` and clears the banner.
+    ///
+    /// Returns the count of running connections currently on stale config across
+    /// the affected agents (for the settings-side "N sessions need restart"
+    /// toast). Connections whose agent type isn't in `fresh` are left untouched.
+    ///
+    /// `emit_with_state` is deferred until AFTER the connections-map lock is
+    /// released (we collect targets first) so the SessionState write lock is
+    /// never taken while holding the map lock.
+    pub async fn refresh_connection_staleness(
+        &self,
+        fresh: &HashMap<AgentType, String>,
+        kind: ConfigStaleKind,
+    ) -> usize {
+        let mut targets = Vec::new();
+        let mut stale_count = 0usize;
+        {
+            let mut connections = self.connections.lock().await;
+            for conn in connections.values_mut() {
+                let Some(current) = fresh.get(&conn.agent_type) else {
+                    continue;
+                };
+                let stale = *current != conn.config_fingerprint;
+                if stale {
+                    stale_count += 1;
+                }
+                if *current != conn.last_observed_fingerprint {
+                    conn.last_observed_fingerprint = current.clone();
+                    targets.push((Arc::clone(&conn.state), conn.emitter.clone(), stale));
+                }
+            }
+        }
+        for (state, emitter, stale) in targets {
+            emit_with_state(&state, &emitter, AcpEvent::SessionConfigStale { stale, kind }).await;
+        }
+        stale_count
     }
 
     /// Look up an existing live connection that we can reuse instead of
@@ -1312,6 +1390,7 @@ impl ConnectionManager {
                         id: NotSet,
                         folder_id: Set(folder_id),
                         title: Set(clean_title),
+                        title_locked: Set(false),
                         agent_type: Set(agent_type_str),
                         status: Set(ConversationStatus::PendingReview),
                         model: Set(None),
@@ -1775,6 +1854,207 @@ impl ConnectionManager {
         }
     }
 
+    /// Register a blocking `ask_user_question` on a connection: park a one-shot
+    /// in `pending_questions` keyed by a fresh `question_id`, broadcast the
+    /// `QuestionRequest` (so every attached client renders the interactive card
+    /// and a mid-turn attach recovers it from the snapshot), and hand the
+    /// receiver back to the listener to await. `None` when the connection is
+    /// gone (nothing to ask) OR when this connection already has a pending ask
+    /// — see below.
+    ///
+    /// One pending ask per connection: `SessionState.pending_question` and the
+    /// frontend card are single slots, so a second concurrent ask would
+    /// overwrite the first's card/snapshot and orphan the first (still-parked)
+    /// tool call with no way to answer it. A single agent is blocked in its
+    /// `ask_user_question` call and cannot issue a second, so this only guards a
+    /// parallel / misbehaving MCP client; the refused second call resolves as
+    /// `declined` (the listener's None path) so its agent proceeds with its own
+    /// judgment instead of hanging. The check + insert are atomic under the
+    /// registry lock.
+    pub async fn register_question(
+        &self,
+        conn_id: &str,
+        questions: Vec<QuestionSpec>,
+    ) -> Option<RegisteredQuestion> {
+        // Defense-in-depth: the companion validates, but the broker socket is
+        // only token-gated, so refuse to broadcast malformed/oversized specs
+        // (None → the listener declines the ask, as for any other None path).
+        if crate::acp::question::validate_specs(&questions).is_err() {
+            return None;
+        }
+        let (state, emitter) = self.get_state_and_emitter(conn_id).await?;
+        let question_id = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut reg = self.pending_questions.lock().await;
+            if reg.values().any(|e| e.parent_connection_id == conn_id) {
+                return None;
+            }
+            reg.insert(
+                question_id.clone(),
+                PendingQuestionEntry {
+                    parent_connection_id: conn_id.to_string(),
+                    questions: questions.clone(),
+                    sender: tx,
+                },
+            );
+        }
+        // Ungated emit: the agent is blocked in the tool call, so the card must
+        // show regardless of any turn-flag timing.
+        emit_with_state(
+            &state,
+            &emitter,
+            AcpEvent::QuestionRequest {
+                question_id: question_id.clone(),
+                questions,
+            },
+        )
+        .await;
+        // Teardown event-ordering race: `cancel_questions_by_parent` may have
+        // drained this entry between the insert above and the emit just now. The
+        // QuestionRequest we broadcast would then have no waiter, and the sweep's
+        // QuestionResolved may have raced ahead of it — leaving a card up with no
+        // live backend waiter. Emit a compensating QuestionResolved (ordered after
+        // our QuestionRequest) and decline. (The listener's post-register token
+        // re-check covers the complementary case: a register that lands entirely
+        // after the sweep, which this presence check would not catch.)
+        if self
+            .compensate_if_question_drained(&question_id, &state, &emitter)
+            .await
+        {
+            return None;
+        }
+        Some(RegisteredQuestion {
+            question_id,
+            answer_rx: rx,
+        })
+    }
+
+    /// Returns `true` — after emitting a clearing `QuestionResolved` — when
+    /// `question_id` is no longer pending, i.e. a teardown sweep drained it in the
+    /// window after its `QuestionRequest` was broadcast. The compensating event is
+    /// ordered after the request so no client keeps a card with no live backend
+    /// waiter. Returns `false` (no emit) while the entry is still parked.
+    async fn compensate_if_question_drained(
+        &self,
+        question_id: &str,
+        state: &std::sync::Arc<tokio::sync::RwLock<crate::acp::SessionState>>,
+        emitter: &EventEmitter,
+    ) -> bool {
+        if self.pending_questions.lock().await.contains_key(question_id) {
+            return false;
+        }
+        emit_with_state(
+            state,
+            emitter,
+            AcpEvent::QuestionResolved {
+                question_id: question_id.to_string(),
+            },
+        )
+        .await;
+        true
+    }
+
+    /// Resolve a pending `ask_user_question` with the user's submission (from any
+    /// client). Removes the one-shot atomically (first answer wins; a duplicate /
+    /// already-resolved id is an idempotent no-op), sends the self-describing
+    /// outcome to the blocked listener, and broadcasts `QuestionResolved` so the
+    /// card clears on every client. Routing uses the entry's stored parent
+    /// connection (the `question_id` is the authoritative key), so a stale
+    /// `conn_id` from the caller can't misroute.
+    pub async fn answer_question(
+        &self,
+        conn_id: &str,
+        question_id: &str,
+        answer: QuestionAnswer,
+    ) -> Result<(), AcpError> {
+        let _ = conn_id;
+        let entry = self.pending_questions.lock().await.remove(question_id);
+        let Some(entry) = entry else {
+            // Already answered / canceled / gone elsewhere — idempotent success.
+            return Ok(());
+        };
+        let outcome = build_outcome(&entry.questions, &answer);
+        // Ignore a dropped receiver: the listener may have abandoned the wait
+        // (peer-close) at the same instant; the resolved-event below still clears
+        // the card.
+        let _ = entry.sender.send(outcome);
+        if let Some((state, emitter)) = self.get_state_and_emitter(&entry.parent_connection_id).await
+        {
+            emit_with_state(
+                &state,
+                &emitter,
+                AcpEvent::QuestionResolved {
+                    question_id: question_id.to_string(),
+                },
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    /// Cancel a pending `ask_user_question` — the companion's tool call was
+    /// canceled (peer-close) or the connection is tearing down. Removes the
+    /// one-shot (dropping the sender unblocks the listener with a declined
+    /// outcome) and broadcasts `QuestionResolved` so the card clears. No-op if
+    /// the question was already answered / gone.
+    pub async fn cancel_question(&self, conn_id: &str, question_id: &str) {
+        let _ = conn_id;
+        let removed = self.pending_questions.lock().await.remove(question_id);
+        let Some(entry) = removed else {
+            return;
+        };
+        if let Some((state, emitter)) = self.get_state_and_emitter(&entry.parent_connection_id).await
+        {
+            emit_with_state(
+                &state,
+                &emitter,
+                AcpEvent::QuestionResolved {
+                    question_id: question_id.to_string(),
+                },
+            )
+            .await;
+        }
+    }
+
+    /// Cancel every pending `ask_user_question` parked on a connection that is
+    /// tearing down. The `run_connection` cleanup guard calls this (alongside
+    /// the delegation `DelegationBroker::cancel_by_parent` cascade) so question
+    /// entries — and the listener tasks parked on them — are reclaimed
+    /// synchronously on disconnect, instead of lingering until the companion's
+    /// ask socket happens to close. Dropping each entry's sender unblocks its
+    /// listener with a declined outcome; the `QuestionResolved` broadcast clears
+    /// the card on every client. No-op when nothing is pending for this parent.
+    pub async fn cancel_questions_by_parent(&self, conn_id: &str) {
+        // Remove every entry for this parent under the lock (dropping their
+        // senders unblocks the parked listeners), then emit outside the lock —
+        // the registry mutex is never held across an await.
+        let drained: Vec<String> = {
+            let mut reg = self.pending_questions.lock().await;
+            let ids: Vec<String> = reg
+                .iter()
+                .filter(|(_, e)| e.parent_connection_id == conn_id)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &ids {
+                reg.remove(id);
+            }
+            ids
+        };
+        if drained.is_empty() {
+            return;
+        }
+        // Best-effort card clear: depending on the teardown path the connection
+        // may already be out of the map (`disconnect` removes it before the
+        // run_connection cleanup guard fires this sweep), so tolerate `None` — the
+        // core removal above already ran and the frontend clears on disconnect.
+        if let Some((state, emitter)) = self.get_state_and_emitter(conn_id).await {
+            for question_id in drained {
+                emit_with_state(&state, &emitter, AcpEvent::QuestionResolved { question_id }).await;
+            }
+        }
+    }
+
     /// Resolve a conversation_id to its currently-active connection id, if any.
     /// Used by the by-conversation snapshot endpoint and the LifecycleSubscriber.
     /// Per-session state is acquired via `read().await` to avoid the
@@ -2058,6 +2338,41 @@ impl SessionFeedbackAccess for ConnectionManagerFeedbackLookup {
     }
 }
 
+/// Production impl of `SessionQuestionAccess` for the delegation listener's
+/// `ask_user_question` arm. Registers / cancels the parent connection's pending
+/// question by delegating to `ConnectionManager`. Mirrors
+/// `ConnectionManagerFeedbackLookup` so the listener stays unit-testable with an
+/// in-memory stub.
+#[derive(Clone)]
+pub struct ConnectionManagerQuestionLookup {
+    pub manager: Arc<ConnectionManager>,
+}
+
+#[async_trait::async_trait]
+impl SessionQuestionAccess for ConnectionManagerQuestionLookup {
+    async fn register_question(
+        &self,
+        parent_connection_id: &str,
+        questions: Vec<QuestionSpec>,
+    ) -> Option<RegisteredQuestion> {
+        self.manager
+            .register_question(parent_connection_id, questions)
+            .await
+    }
+
+    async fn cancel_question(&self, parent_connection_id: &str, question_id: &str) {
+        self.manager
+            .cancel_question(parent_connection_id, question_id)
+            .await
+    }
+
+    async fn cancel_questions_by_parent(&self, parent_connection_id: &str) {
+        self.manager
+            .cancel_questions_by_parent(parent_connection_id)
+            .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2105,6 +2420,8 @@ mod tests {
             state: Arc::new(RwLock::new(state)),
             emitter: EventEmitter::Noop,
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            config_fingerprint: String::new(),
+            last_observed_fingerprint: String::new(),
         }
     }
 
@@ -2129,6 +2446,49 @@ mod tests {
     ) {
         mgr.insert_test_connection(id, agent_type, working_dir, emitter)
             .await;
+    }
+
+    #[tokio::test]
+    async fn refresh_connection_staleness_flags_only_drifted_running_sessions() {
+        let mgr = ConnectionManager::new();
+        // Test connections spawn with an empty fingerprint (insert_test_connection).
+        insert_fake_connection(&mgr, "c1", AgentType::Codex, None, EventEmitter::Noop).await;
+        // A different agent type that must stay untouched.
+        insert_fake_connection(&mgr, "c2", AgentType::ClaudeCode, None, EventEmitter::Noop).await;
+
+        // A real config change for Codex (fresh fp differs from the "" spawn fp).
+        let mut fresh = HashMap::new();
+        fresh.insert(AgentType::Codex, "codex-v2".to_string());
+        let n = mgr
+            .refresh_connection_staleness(&fresh, ConfigStaleKind::AgentConfig)
+            .await;
+        assert_eq!(n, 1, "only the Codex session is stale");
+        assert!(
+            mgr.get_state("c1").await.unwrap().read().await.config_stale,
+            "Codex session flagged stale"
+        );
+        assert!(
+            !mgr.get_state("c2").await.unwrap().read().await.config_stale,
+            "ClaudeCode session untouched (agent not in the fresh set)"
+        );
+
+        // Re-running with the SAME fingerprint keeps it stale but is idempotent.
+        let n2 = mgr
+            .refresh_connection_staleness(&fresh, ConfigStaleKind::AgentConfig)
+            .await;
+        assert_eq!(n2, 1);
+
+        // Reverting Codex back to its spawn fingerprint ("") clears staleness.
+        let mut reverted = HashMap::new();
+        reverted.insert(AgentType::Codex, String::new());
+        let n3 = mgr
+            .refresh_connection_staleness(&reverted, ConfigStaleKind::AgentConfig)
+            .await;
+        assert_eq!(n3, 0, "reverted config is no longer stale");
+        assert!(
+            !mgr.get_state("c1").await.unwrap().read().await.config_stale,
+            "staleness cleared after revert"
+        );
     }
 
     /// Subscribe directly to the per-connection event stream. Phase 4b
@@ -2232,6 +2592,8 @@ mod tests {
             state: Arc::new(RwLock::new(state)),
             emitter: EventEmitter::Noop,
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            config_fingerprint: String::new(),
+            last_observed_fingerprint: String::new(),
         };
         mgr.connections
             .lock()
@@ -2563,6 +2925,8 @@ mod tests {
             state: Arc::new(RwLock::new(state)),
             emitter: EventEmitter::Noop,
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            config_fingerprint: String::new(),
+            last_observed_fingerprint: String::new(),
         };
         let mgr = ConnectionManager::new();
         mgr.connections
@@ -4053,6 +4417,8 @@ mod tests {
             state: Arc::new(RwLock::new(state)),
             emitter: EventEmitter::Noop,
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            config_fingerprint: String::new(),
+            last_observed_fingerprint: String::new(),
         };
         let mgr = Arc::new(ConnectionManager::new());
         {
@@ -4514,6 +4880,235 @@ mod tests {
         assert!(mgr.submit_feedback("c1", at_bound).await.is_ok());
         let state = mgr.get_state("c1").await.unwrap();
         assert_eq!(state.read().await.feedback.len(), 1, "only the valid note stuck");
+    }
+
+    // --- ask_user_question: register / answer / cancel -------------------
+
+    fn q_spec() -> Vec<QuestionSpec> {
+        vec![crate::acp::question::QuestionSpec {
+            id: "qa".into(),
+            question: "Which approach?".into(),
+            header: "Approach".into(),
+            multi_select: false,
+            options: vec![
+                crate::acp::question::QuestionOption {
+                    label: "A".into(),
+                    description: String::new(),
+                },
+                crate::acp::question::QuestionOption {
+                    label: "B".into(),
+                    description: String::new(),
+                },
+            ],
+        }]
+    }
+
+    #[tokio::test]
+    async fn register_then_answer_question_resolves_and_clears() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cq", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        let reg = mgr
+            .register_question("cq", q_spec())
+            .await
+            .expect("registered");
+        // SessionState reflects the pending question for snapshot recovery.
+        assert!(mgr
+            .get_state("cq")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_question
+            .is_some());
+
+        let answer = crate::acp::question::QuestionAnswer {
+            answers: vec![crate::acp::question::QuestionAnswerItem {
+                question_id: "qa".into(),
+                labels: vec!["A".into()],
+            }],
+            declined: false,
+        };
+        mgr.answer_question("cq", &reg.question_id, answer)
+            .await
+            .unwrap();
+
+        // The blocked listener's receiver resolves with the self-describing
+        // outcome (question text joined in).
+        let outcome = reg.answer_rx.await.expect("answer delivered");
+        assert!(!outcome.declined);
+        assert_eq!(outcome.answers.len(), 1);
+        assert_eq!(outcome.answers[0].question, "Which approach?");
+        assert_eq!(outcome.answers[0].selected, vec!["A".to_string()]);
+        // pending_question cleared after resolve.
+        assert!(mgr
+            .get_state("cq")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_question
+            .is_none());
+
+        // Idempotent: answering an already-resolved id is a no-op success.
+        mgr.answer_question("cq", &reg.question_id, Default::default())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancel_question_clears_and_drops_sender() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cqx", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        let reg = mgr.register_question("cqx", q_spec()).await.unwrap();
+        mgr.cancel_question("cqx", &reg.question_id).await;
+        // Dropping the sender surfaces to the parked listener as a recv error
+        // (which it renders as a declined outcome).
+        assert!(reg.answer_rx.await.is_err());
+        assert!(mgr
+            .get_state("cqx")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_question
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn cancel_questions_by_parent_drops_only_matching_connection() {
+        // The run_connection teardown guard sweeps a tearing-down connection's
+        // parked ask without touching other connections' pending questions.
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("ca", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        mgr.insert_test_connection("cb", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        let reg_a = mgr.register_question("ca", q_spec()).await.unwrap();
+        let reg_b = mgr.register_question("cb", q_spec()).await.unwrap();
+
+        // Tear down only connection "ca".
+        mgr.cancel_questions_by_parent("ca").await;
+
+        // ca's parked listener is unblocked (sender dropped → recv error) and its
+        // card cleared; cb is untouched.
+        assert!(reg_a.answer_rx.await.is_err());
+        assert!(mgr
+            .get_state("ca")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_question
+            .is_none());
+        assert!(mgr
+            .get_state("cb")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_question
+            .is_some());
+
+        // cb still resolves normally afterwards.
+        mgr.answer_question("cb", &reg_b.question_id, Default::default())
+            .await
+            .unwrap();
+        assert!(reg_b.answer_rx.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn compensate_clears_card_when_entry_drained_before_request_emit() {
+        // Regression for the teardown event-ordering race: register inserts, the
+        // sweep drains the entry, THEN register's QuestionRequest emit lands. The
+        // post-emit presence check must emit a compensating QuestionResolved so no
+        // client keeps a card with no live backend waiter, and signal decline.
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cc", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        let (state, emitter) = mgr.get_state_and_emitter("cc").await.unwrap();
+
+        // Simulate register's QuestionRequest emit for an entry that has already
+        // been drained (never inserted here): the card shows, nothing is parked.
+        emit_with_state(
+            &state,
+            &emitter,
+            AcpEvent::QuestionRequest {
+                question_id: "q1".into(),
+                questions: q_spec(),
+            },
+        )
+        .await;
+        assert!(state.read().await.pending_question.is_some(), "card shown");
+
+        // Missing entry → compensate clears the card and reports decline.
+        assert!(
+            mgr.compensate_if_question_drained("q1", &state, &emitter)
+                .await,
+            "missing entry is compensated"
+        );
+        assert!(
+            state.read().await.pending_question.is_none(),
+            "compensating QuestionResolved cleared the card"
+        );
+
+        // A genuinely-parked entry is left alone (no false compensation).
+        let reg = mgr.register_question("cc", q_spec()).await.unwrap();
+        assert!(
+            !mgr.compensate_if_question_drained(&reg.question_id, &state, &emitter)
+                .await,
+            "present entry is not compensated"
+        );
+        assert!(state.read().await.pending_question.is_some());
+    }
+
+    #[tokio::test]
+    async fn register_question_unknown_connection_is_none() {
+        let mgr = ConnectionManager::new();
+        assert!(mgr.register_question("nope", q_spec()).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn second_concurrent_ask_is_refused_and_first_stays_answerable() {
+        // A parallel/misbehaving client could fire two asks on one connection
+        // before the first resolves. The single-slot card/snapshot can't hold
+        // two, so the second is refused (None → declined) and the FIRST stays
+        // intact and answerable — never orphaned.
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cc2", AgentType::ClaudeCode, None, EventEmitter::Noop)
+            .await;
+        let first = mgr
+            .register_question("cc2", q_spec())
+            .await
+            .expect("first registers");
+        // Second concurrent ask on the same connection is refused.
+        assert!(
+            mgr.register_question("cc2", q_spec()).await.is_none(),
+            "second concurrent ask must be refused"
+        );
+        // The first is still the pending one and still answerable.
+        let state = mgr.get_state("cc2").await.unwrap();
+        assert_eq!(
+            state.read().await.pending_question.as_ref().map(|p| p.question_id.clone()),
+            Some(first.question_id.clone())
+        );
+        mgr.answer_question(
+            "cc2",
+            &first.question_id,
+            crate::acp::question::QuestionAnswer {
+                answers: vec![crate::acp::question::QuestionAnswerItem {
+                    question_id: "qa".into(),
+                    labels: vec!["A".into()],
+                }],
+                declined: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(first.answer_rx.await.is_ok(), "first ask resolves");
+        // After resolve, a new ask is accepted again.
+        assert!(mgr.register_question("cc2", q_spec()).await.is_some());
     }
 
     #[tokio::test]

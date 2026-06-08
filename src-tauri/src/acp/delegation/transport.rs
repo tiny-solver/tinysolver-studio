@@ -55,6 +55,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+use crate::acp::question::QuestionSpec;
+
 /// One delegation call's worth of input forwarded from the companion to the
 /// main process. The main process re-validates `token` and maps
 /// `parent_connection_id` to the live ACP connection.
@@ -150,6 +152,19 @@ pub struct BrokerCommitFeedbackRequest {
     pub ids: Vec<String>,
 }
 
+/// Ask the user one or more multiple-choice questions and BLOCK until they
+/// answer. Backs the `ask_user_question` MCP tool. Authenticated by the same
+/// per-launch `token`; the listener resolves the parent connection from it,
+/// registers the questions (broadcasting the card to every attached client),
+/// and parks the response until the user answers (or the tool call is canceled,
+/// detected via peer-close on this connection). The companion has already
+/// validated the schema, so `questions` is well-formed and carries stable ids.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerAskRequest {
+    pub token: String,
+    pub questions: Vec<QuestionSpec>,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -162,6 +177,7 @@ pub enum BrokerMessage {
     CancelTask(BrokerCancelTaskRequest),
     Feedback(BrokerFeedbackRequest),
     CommitFeedback(BrokerCommitFeedbackRequest),
+    Ask(BrokerAskRequest),
 }
 
 /// The wrapped outcome the main process returns over the same socket.
@@ -285,6 +301,20 @@ pub async fn client_commit_feedback(
 ) -> io::Result<()> {
     let _ = message_round_trip(socket_path, &BrokerMessage::CommitFeedback(req.clone())).await?;
     Ok(())
+}
+
+/// Dispatch an `ask_user_question` request and BLOCK reading the response until
+/// the user answers (or the question is canceled). The listener holds this
+/// connection open for the whole wait — there is no `wait_ms`, the block is
+/// inherent (waiting on a human). If the tool call is canceled, the companion
+/// drops this future, closing the socket; the listener observes the peer-close
+/// and tears the pending question down. Returns a `{ answers, declined }`
+/// envelope.
+pub async fn client_ask_round_trip(
+    socket_path: &str,
+    req: &BrokerAskRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::Ask(req.clone())).await
 }
 
 /// Total budget for `open()` retries on Windows named pipes. Has to be

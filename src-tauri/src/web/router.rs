@@ -77,6 +77,14 @@ pub fn build_router(
             post(handlers::feedback::submit_session_feedback),
         )
         .route(
+            "/get_question_settings",
+            post(handlers::question::get_question_settings),
+        )
+        .route(
+            "/set_question_settings",
+            post(handlers::question::set_question_settings),
+        )
+        .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
         )
@@ -547,6 +555,10 @@ pub fn build_router(
         .route(
             "/acp_respond_permission",
             post(handlers::acp::acp_respond_permission),
+        )
+        .route(
+            "/acp_answer_question",
+            post(handlers::acp::acp_answer_question),
         )
         .route(
             "/acp_list_connections",

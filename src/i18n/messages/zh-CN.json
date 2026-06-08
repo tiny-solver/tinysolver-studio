@@ -91,6 +91,22 @@
       "placeholder": "请选择缩放档位",
       "default": "默认",
       "current": "当前缩放：{zoom}%"
+    },
+    "fonts": {
+      "sectionTitle": "字体",
+      "sectionDescription": "为界面、代码编辑器和终端分别选择字体。内置字体按需加载；选择“自定义…”可使用系统已安装的任意字体。",
+      "interface": "界面",
+      "editor": "编辑器",
+      "terminal": "终端",
+      "groupSans": "无衬线",
+      "groupMono": "等宽",
+      "custom": "自定义…",
+      "customPlaceholder": "字体名称，如 Fira Code",
+      "fontSize": "字号",
+      "ligatures": "启用连字",
+      "ligaturesUnavailable": "该字体不含连字",
+      "terminalLigaturesHint": "终端连字仅对内置编程字体生效。",
+      "preview": "预览"
     }
   },
   "SystemSettings": {
@@ -734,7 +750,8 @@
       "saveConfigManagementFailed": "保存配置管理失败",
       "clineSaved": "Cline 配置已保存",
       "saveClineFailed": "保存 Cline 配置失败",
-      "modelProviderRequired": "请先选择一个模型供应商再保存。"
+      "modelProviderRequired": "请先选择一个模型供应商再保存。",
+      "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改"
     },
     "version": {
       "statusLabel": "版本状态",
@@ -891,6 +908,8 @@
       "completing": "处理中...",
       "toasts": {
         "importedSessions": "已导入 {imported} 个会话，跳过 {skipped} 个",
+        "importedAndUpdated": "已导入 {imported} 个会话，更新 {updated} 个标题，跳过 {skipped} 个",
+        "updatedTitles": "已更新 {updated} 个标题，跳过 {skipped} 个",
         "noNewSessionsFound": "没有新会话（已跳过 {skipped} 个）",
         "importFailed": "导入失败：{message}",
         "reviewCompleted": "已将 {count} 个复查会话标记为已完成",
@@ -2080,6 +2099,30 @@
         "fileCount": "{count} 个文件",
         "remove": "移除",
         "noDiffDataAvailable": "未找到 {filePath} 的差异数据"
+      },
+      "askQuestion": {
+        "title": "智能体需要你的选择",
+        "subtitle": "回答后点击提交，可随时跳过",
+        "recommended": "推荐",
+        "other": "其他",
+        "otherPlaceholder": "输入你的回答…",
+        "singleSelect": "单选",
+        "multiSelect": "多选",
+        "skip": "跳过",
+        "next": "下一题",
+        "submit": "提交",
+        "submitError": "提交失败，请重试。"
+      },
+      "configStale": {
+        "agentConfigTitle": "智能体配置已更新",
+        "modelProviderTitle": "模型供应商已更新",
+        "description": "当前会话仍在使用旧配置，重连后生效（对话历史不会丢失）。",
+        "reconnect": "重连以应用",
+        "reconnecting": "正在重连…",
+        "reconnectDisabledDuringTurn": "当前回合结束后可重连",
+        "dismiss": "忽略",
+        "reconnectFailed": "重连会话失败",
+        "applied": "新配置已应用"
       }
     },
     "diffPreview": {
@@ -2432,7 +2475,8 @@
     "cancel": "取消",
     "delete": "删除",
     "create": "创建",
-    "save": "保存"
+    "save": "保存",
+    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改"
   },
   "ExpertsSettings": {
     "title": "专家技能",
@@ -2784,5 +2828,16 @@
     "turnEndedResent": "本轮已结束——已改为作为新消息发送。",
     "turnEnded": "本轮已结束。",
     "submitFailed": "留言发送失败"
+  },
+  "AskQuestionSettings": {
+    "title": "向用户提问",
+    "description": "允许智能体暂停并向你提出多选问题，问题会显示在会话输入框上方。智能体会一直等待，直到你作答（或跳过）。默认开启。",
+    "enable": "启用向用户提问",
+    "enableHint": "为开启后启动的智能体添加 ask_user_question 工具。",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "提问设置已保存",
+    "saveFailed": "保存提问设置失败",
+    "loadFailed": "加载失败：{detail}"
   }
 }

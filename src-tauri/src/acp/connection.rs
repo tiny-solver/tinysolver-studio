@@ -159,6 +159,19 @@ pub struct AgentConnection {
     /// conversation rows or a confused agent that received two prompts
     /// in the same turn.
     pub prompt_lock: Arc<tokio::sync::Mutex<()>>,
+
+    /// Canonical fingerprint of the agent's effective config (env vars + model
+    /// provider creds + native config file content) captured at spawn. The
+    /// running process is locked to THIS config; comparing it against a freshly
+    /// recomputed fingerprint after a settings save tells us whether the session
+    /// has drifted onto stale config. Immutable for the connection's lifetime.
+    pub config_fingerprint: String,
+    /// The most recent fingerprint seen by `refresh_connection_staleness`.
+    /// Tracks "did anything change since we last looked" so a second settings
+    /// save re-emits `SessionConfigStale` (re-showing a dismissed banner) while a
+    /// no-op save (identical values) stays silent. Starts equal to
+    /// `config_fingerprint`.
+    pub last_observed_fingerprint: String,
 }
 
 impl AgentConnection {
@@ -437,6 +450,13 @@ pub async fn spawn_agent_connection(
     let cleanup_connection_id = connection_id.clone();
     let state_clone = Arc::clone(&session_state);
 
+    // Canonical config fingerprint of what this process is launching with.
+    // Derived from the same `runtime_env` we hand the agent (minus per-launch
+    // volatile keys) plus the agent's native config file content, so a later
+    // settings save can be compared against it to detect a stale running session.
+    let config_fingerprint =
+        crate::commands::acp::fingerprint_config(agent_type, &runtime_env);
+
     // Insert the entry BEFORE spawning the background task so that a
     // fast-failing `run_connection` can never remove it before it was
     // inserted (would otherwise leak the entry).
@@ -451,6 +471,8 @@ pub async fn spawn_agent_connection(
             state: Arc::clone(&session_state),
             emitter: emitter.clone(),
             prompt_lock: Arc::new(tokio::sync::Mutex::new(())),
+            last_observed_fingerprint: config_fingerprint.clone(),
+            config_fingerprint,
         },
     );
 
@@ -480,9 +502,9 @@ pub async fn spawn_agent_connection(
         .await;
 
         // Revoke the per-launch token + cascade cancel any still-pending
-        // delegations owned by this parent connection. Both are best-effort:
-        // a missing token entry is a no-op, and `cancel_by_parent` is safe
-        // to call on an empty pending map.
+        // delegations AND questions owned by this parent connection. All are
+        // best-effort: a missing token entry is a no-op, and both
+        // `cancel_by_parent` calls are safe on an empty pending map.
         if let Some(inj) = delegation_for_cleanup {
             let token = {
                 let snap = state_clone.read().await;
@@ -492,6 +514,10 @@ pub async fn spawn_agent_connection(
                 inj.tokens.revoke(&tok).await;
             }
             inj.broker.cancel_by_parent(&conn_id).await;
+            // Reclaim a parked `ask_user_question` instead of waiting for the
+            // companion's ask socket to close (which a reparented/hard-killed
+            // agent may never do); the dropped sender declines the tool cleanly.
+            inj.questions.cancel_questions_by_parent(&conn_id).await;
         }
 
         if let Err(e) = result {
@@ -864,6 +890,17 @@ pub struct DelegationInjection {
     /// EITHER feature is on, and the companion is told which tool groups to
     /// expose. Shares the same `tokens` registry and UDS socket as delegation.
     pub feedback: crate::acp::feedback::FeedbackRuntimeConfig,
+    /// Hot-swappable "is ask-user-question enabled?" flag. Read at injection
+    /// time alongside delegation + feedback so `codeg-mcp` is injected when ANY
+    /// of the three is on, and the companion's `--features` lists `ask` to expose
+    /// the `ask_user_question` tool.
+    pub ask: crate::acp::question::QuestionRuntimeConfig,
+    /// Question registry handle for the teardown cascade. The `run_connection`
+    /// cleanup guard calls `cancel_questions_by_parent` through this so a pending
+    /// `ask_user_question` is reclaimed synchronously on disconnect, mirroring
+    /// the delegation `broker.cancel_by_parent` cleanup. Shares the same backing
+    /// `ConnectionManager` as the listener's question lookup.
+    pub questions: Arc<dyn crate::acp::question::SessionQuestionAccess>,
 }
 
 /// Locate the `codeg-mcp` companion binary across the supported deployment
@@ -946,12 +983,16 @@ fn is_executable_file(path: &Path) -> bool {
 /// delegate tool silently. Skipping leaves the agent fully functional minus
 /// `delegate_to_agent`, which is the right degradation when codeg-mcp didn't
 /// make it into the install.
-/// The `--features` value for a companion launch given the two feature flags,
-/// or `None` when neither is enabled (the companion isn't injected at all).
+/// The `--features` value for a companion launch given the three feature flags,
+/// or `None` when none is enabled (the companion isn't injected at all).
 /// Pulled out as a pure function so the inject/skip decision is unit-testable
 /// without a real binary on disk or a live broker.
-fn companion_features_arg(delegation_enabled: bool, feedback_enabled: bool) -> Option<String> {
-    if !delegation_enabled && !feedback_enabled {
+fn companion_features_arg(
+    delegation_enabled: bool,
+    feedback_enabled: bool,
+    ask_enabled: bool,
+) -> Option<String> {
+    if !delegation_enabled && !feedback_enabled && !ask_enabled {
         return None;
     }
     let mut features: Vec<&str> = Vec::new();
@@ -960,6 +1001,9 @@ fn companion_features_arg(delegation_enabled: bool, feedback_enabled: bool) -> O
     }
     if feedback_enabled {
         features.push("feedback");
+    }
+    if ask_enabled {
+        features.push("ask");
     }
     Some(features.join(","))
 }
@@ -984,14 +1028,16 @@ async fn inject_codeg_mcp(
     // surface to the LLM. (Historically this was gated on delegation alone.)
     let delegation_enabled = injection.broker.config_snapshot().await.enabled;
     let feedback_enabled = injection.feedback.is_enabled().await;
-    // `None` (neither feature enabled) short-circuits the whole injection.
-    let features_arg = companion_features_arg(delegation_enabled, feedback_enabled)?;
+    let ask_enabled = injection.ask.is_enabled().await;
+    // `None` (no feature enabled) short-circuits the whole injection.
+    let features_arg =
+        companion_features_arg(delegation_enabled, feedback_enabled, ask_enabled)?;
     let Some(binary_path) = locate_codeg_mcp_binary() else {
         eprintln!(
             "[delegation][WARN] codeg-mcp companion binary not found (checked CODEG_MCP_BIN, \
-             exe sibling, and PATH); skipping delegate_to_agent / check_user_feedback tool \
-             injection for connection {parent_connection_id}. Reinstall codeg or set \
-             CODEG_MCP_BIN to fix."
+             exe sibling, and PATH); skipping delegate_to_agent / check_user_feedback / \
+             ask_user_question tool injection for connection {parent_connection_id}. Reinstall \
+             codeg or set CODEG_MCP_BIN to fix."
         );
         return None;
     };
@@ -4435,11 +4481,27 @@ mod tests {
         // exact state a fresh install reaches before the user touches the
         // settings panel. Feedback is likewise disabled by default, so with
         // BOTH features off the companion isn't injected at all.
+        struct NoQuestions;
+        #[async_trait::async_trait]
+        impl crate::acp::question::SessionQuestionAccess for NoQuestions {
+            async fn register_question(
+                &self,
+                _parent_connection_id: &str,
+                _questions: Vec<crate::acp::question::QuestionSpec>,
+            ) -> Option<crate::acp::question::RegisteredQuestion> {
+                None
+            }
+            async fn cancel_question(&self, _parent_connection_id: &str, _question_id: &str) {}
+            async fn cancel_questions_by_parent(&self, _parent_connection_id: &str) {}
+        }
         let injection = DelegationInjection {
             broker,
             tokens: Arc::new(TokenRegistry::default()),
             socket_path: std::path::PathBuf::from("/tmp/codeg-mcp.sock"),
             feedback: crate::acp::feedback::FeedbackRuntimeConfig::new(),
+            ask: crate::acp::question::QuestionRuntimeConfig::new(),
+            questions: Arc::new(NoQuestions)
+                as Arc<dyn crate::acp::question::SessionQuestionAccess>,
         };
 
         let mut servers: Vec<McpServer> = Vec::new();
@@ -4473,23 +4535,28 @@ mod tests {
     // have skipped it).
     #[test]
     fn companion_features_arg_inject_skip_decision() {
-        // Both off → no companion at all.
-        assert_eq!(companion_features_arg(false, false), None);
+        // All off → no companion at all.
+        assert_eq!(companion_features_arg(false, false, false), None);
         // Delegation only.
         assert_eq!(
-            companion_features_arg(true, false),
+            companion_features_arg(true, false, false),
             Some("delegation".to_string())
         );
         // Feedback only — the decoupling: companion injected for feedback even
         // when delegation is off.
         assert_eq!(
-            companion_features_arg(false, true),
+            companion_features_arg(false, true, false),
             Some("feedback".to_string())
         );
-        // Both on → comma-joined, delegation first.
+        // Ask only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(true, true),
-            Some("delegation,feedback".to_string())
+            companion_features_arg(false, false, true),
+            Some("ask".to_string())
+        );
+        // All on → comma-joined, in declaration order.
+        assert_eq!(
+            companion_features_arg(true, true, true),
+            Some("delegation,feedback,ask".to_string())
         );
     }
 }
