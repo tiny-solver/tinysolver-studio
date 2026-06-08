@@ -31,6 +31,7 @@ import { relaunchApp } from "@/lib/updater"
 import { toErrorMessage } from "@/lib/app-error"
 import { DelegationSettingsSection } from "@/components/settings/delegation-settings"
 import { SessionFeedbackSettingsSection } from "@/components/settings/session-feedback-settings"
+import { AskQuestionSettingsSection } from "@/components/settings/ask-question-settings"
 
 const TERMINAL_SHELL_OPTION_SYSTEM = "system"
 const TERMINAL_SHELL_OPTION_CUSTOM = "custom"
@@ -389,6 +390,8 @@ export function GeneralSettings() {
         <DelegationSettingsSection />
 
         <SessionFeedbackSettingsSection />
+
+        <AskQuestionSettingsSection />
       </div>
     </ScrollArea>
   )

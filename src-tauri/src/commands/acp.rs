@@ -2681,6 +2681,19 @@ pub async fn acp_respond_permission(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_answer_question(
+    connection_id: String,
+    question_id: String,
+    answer: crate::acp::question::QuestionAnswer,
+    manager: State<'_, ConnectionManager>,
+) -> Result<(), AcpError> {
+    manager
+        .answer_question(&connection_id, &question_id, answer)
+        .await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_disconnect(
     connection_id: String,
     manager: State<'_, ConnectionManager>,

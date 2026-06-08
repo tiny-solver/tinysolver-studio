@@ -3,8 +3,10 @@ import { useTranslations } from "next-intl"
 import type {
   AgentType,
   ConnectionStatus,
+  PendingQuestionState,
   PromptCapabilitiesInfo,
   PromptDraft,
+  QuestionAnswer,
   SessionConfigOptionInfo,
   SessionModeInfo,
   AvailableCommandInfo,
@@ -19,6 +21,7 @@ import { Loader2 } from "lucide-react"
 import { ChatInput } from "@/components/chat/chat-input"
 import { PermissionDialog } from "@/components/chat/permission-dialog"
 import { QuestionDialog } from "@/components/chat/question-dialog"
+import { AskQuestionCard } from "@/components/chat/ask-question-card"
 
 interface ConversationShellProps {
   status: ConnectionStatus | null
@@ -29,11 +32,17 @@ interface ConversationShellProps {
   claudeApiRetry: ClaudeApiRetryState | null
   pendingPermission: PendingPermission | null
   pendingQuestion: PendingQuestion | null
+  /** Awaiting-answer multiple-choice `ask_user_question`. */
+  pendingAskQuestion: PendingQuestionState | null
   onFocus: () => void
   onSend: (draft: PromptDraft, modeId?: string | null) => void
   onCancel: () => void
   onRespondPermission: (requestId: string, optionId: string) => void
   onAnswerQuestion: (answer: string) => void
+  onAnswerAskQuestion: (
+    questionId: string,
+    answer: QuestionAnswer
+  ) => void | Promise<void>
   children: ReactNode
   modes?: SessionModeInfo[]
   configOptions?: SessionConfigOptionInfo[]
@@ -80,11 +89,13 @@ export function ConversationShell({
   claudeApiRetry,
   pendingPermission,
   pendingQuestion,
+  pendingAskQuestion,
   onFocus,
   onSend,
   onCancel,
   onRespondPermission,
   onAnswerQuestion,
+  onAnswerAskQuestion,
   children,
   modes,
   configOptions,
@@ -181,6 +192,12 @@ export function ConversationShell({
       />
 
       <QuestionDialog question={pendingQuestion} onAnswer={onAnswerQuestion} />
+
+      <AskQuestionCard
+        key={pendingAskQuestion?.question_id ?? "none"}
+        question={pendingAskQuestion}
+        onAnswer={onAnswerAskQuestion}
+      />
 
       {!hideInput && feedbackList && (
         <div className="mx-auto w-full max-w-3xl px-4">{feedbackList}</div>

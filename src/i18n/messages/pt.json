@@ -2080,6 +2080,15 @@
         "fileCount": "{count, plural, one {# arquivo} other {# arquivos}}",
         "remove": "Remover",
         "noDiffDataAvailable": "Nenhum dado de diff disponível para {filePath}"
+      },
+      "askQuestion": {
+        "title": "O agente precisa da sua escolha",
+        "recommended": "Recomendado",
+        "other": "Outro",
+        "otherPlaceholder": "Digite sua resposta…",
+        "skip": "Pular",
+        "submit": "Enviar",
+        "submitError": "Falha ao enviar. Tente novamente."
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "O turno terminou — enviado como nova mensagem.",
     "turnEnded": "O turno já terminou.",
     "submitFailed": "Não foi possível enviar a sua nota"
+  },
+  "AskQuestionSettings": {
+    "title": "Perguntar ao usuário",
+    "description": "Permite que os agentes pausem e façam uma pergunta de múltipla escolha que aparece acima da caixa de entrada da conversa. O agente aguarda até você responder (ou pular). Ativado por padrão.",
+    "enable": "Ativar perguntas ao usuário",
+    "enableHint": "Adiciona a ferramenta ask_user_question aos agentes iniciados após a ativação.",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saved": "Configurações de pergunta salvas",
+    "saveFailed": "Falha ao salvar as configurações de pergunta",
+    "loadFailed": "Falha ao carregar: {detail}"
   }
 }

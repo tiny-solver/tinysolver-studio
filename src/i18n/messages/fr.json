@@ -2080,6 +2080,15 @@
         "fileCount": "{count, plural, one {# fichier} other {# fichiers}}",
         "remove": "Retirer",
         "noDiffDataAvailable": "Aucune donnée de diff disponible pour {filePath}"
+      },
+      "askQuestion": {
+        "title": "L'agent attend votre choix",
+        "recommended": "Recommandé",
+        "other": "Autre",
+        "otherPlaceholder": "Saisissez votre réponse…",
+        "skip": "Ignorer",
+        "submit": "Envoyer",
+        "submitError": "Échec de l'envoi. Veuillez réessayer."
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "Le tour est terminé : envoyé comme nouveau message.",
     "turnEnded": "Le tour est déjà terminé.",
     "submitFailed": "Impossible d'envoyer votre note"
+  },
+  "AskQuestionSettings": {
+    "title": "Poser une question à l'utilisateur",
+    "description": "Permet aux agents de s'interrompre et de vous poser une question à choix multiples affichée au-dessus de la zone de saisie de la conversation. L'agent attend votre réponse (ou que vous ignoriez). Activé par défaut.",
+    "enable": "Activer les questions à l'utilisateur",
+    "enableHint": "Ajoute l'outil ask_user_question aux agents démarrés après l'activation.",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Paramètres de question enregistrés",
+    "saveFailed": "Échec de l'enregistrement des paramètres de question",
+    "loadFailed": "Échec du chargement : {detail}"
   }
 }

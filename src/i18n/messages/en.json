@@ -2080,6 +2080,15 @@
         "fileCount": "{count, plural, one {# file} other {# files}}",
         "remove": "Remove",
         "noDiffDataAvailable": "No diff data available for {filePath}"
+      },
+      "askQuestion": {
+        "title": "The agent needs your input",
+        "recommended": "Recommended",
+        "other": "Other",
+        "otherPlaceholder": "Type your answer…",
+        "skip": "Skip",
+        "submit": "Submit",
+        "submitError": "Couldn't submit. Please try again."
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "The turn ended — sent as a new message instead.",
     "turnEnded": "The turn already ended.",
     "submitFailed": "Couldn't send your note"
+  },
+  "AskQuestionSettings": {
+    "title": "Ask user question",
+    "description": "Let agents pause and ask you a multiple-choice question that appears above the conversation input box. The agent waits until you answer (or skip). On by default.",
+    "enable": "Enable ask user question",
+    "enableHint": "Adds the ask_user_question tool to agents started after this is turned on.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Question settings saved",
+    "saveFailed": "Failed to save question settings",
+    "loadFailed": "Failed to load: {detail}"
   }
 }

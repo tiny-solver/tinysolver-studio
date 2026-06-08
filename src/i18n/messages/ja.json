@@ -2080,6 +2080,15 @@
         "fileCount": "{count, plural, one {# 個のファイル} other {# 個のファイル}}",
         "remove": "削除",
         "noDiffDataAvailable": "{filePath} の差分データがありません"
+      },
+      "askQuestion": {
+        "title": "エージェントが選択を求めています",
+        "recommended": "推奨",
+        "other": "その他",
+        "otherPlaceholder": "回答を入力…",
+        "skip": "スキップ",
+        "submit": "送信",
+        "submitError": "送信できませんでした。もう一度お試しください。"
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "ターンが終了したため、新しいメッセージとして送信しました。",
     "turnEnded": "ターンはすでに終了しています。",
     "submitFailed": "メモを送信できませんでした"
+  },
+  "AskQuestionSettings": {
+    "title": "ユーザーに質問",
+    "description": "エージェントが処理を一時停止し、会話の入力欄の上に表示される選択式の質問をできるようにします。回答（またはスキップ）するまでエージェントは待機します。デフォルトで有効。",
+    "enable": "ユーザーへの質問を有効化",
+    "enableHint": "有効化後に開始したエージェントに ask_user_question ツールを追加します。",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "質問設定を保存しました",
+    "saveFailed": "質問設定の保存に失敗しました",
+    "loadFailed": "読み込みに失敗しました：{detail}"
   }
 }

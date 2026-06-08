@@ -818,6 +818,12 @@ pub(crate) async fn do_start_web_server_tauri(
             .state::<crate::acp::feedback::FeedbackRuntimeConfig>()
             .inner()
             .clone(),
+        // Reuse the same ask-user-question config handle the desktop MCP
+        // injection reads, so HTTP-side question settings target the same flag.
+        question_config: app
+            .state::<crate::acp::question::QuestionRuntimeConfig>()
+            .inner()
+            .clone(),
         system_op_lock: crate::app_state::default_system_op_lock(),
         // Reuse the same handle the desktop `app_update` commands write to so
         // HTTP and webview readers see the identical update snapshot.

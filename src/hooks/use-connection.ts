@@ -16,7 +16,9 @@ import type {
   AgentType,
   AvailableCommandInfo,
   ConnectionStatus,
+  PendingQuestionState,
   PromptCapabilitiesInfo,
+  QuestionAnswer,
   SessionConfigOptionInfo,
   SessionModeStateInfo,
   PromptInputBlock,
@@ -50,6 +52,7 @@ export interface UseConnectionReturn {
   pendingPermission: PendingPermission | null
   pendingUserMessage: PendingUserMessage | null
   pendingQuestion: PendingQuestion | null
+  pendingAskQuestion: PendingQuestionState | null
   claudeApiRetry: ClaudeApiRetryState | null
   error: string | null
   loadError: string | null
@@ -72,6 +75,7 @@ export interface UseConnectionReturn {
   setConfigOption: (configId: string, valueId: string) => Promise<void>
   cancel: () => Promise<void>
   respondPermission: (requestId: string, optionId: string) => Promise<void>
+  answerQuestion: (questionId: string, answer: QuestionAnswer) => Promise<void>
 }
 
 function derive(conn: ConnectionState | undefined) {
@@ -113,6 +117,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const pendingPermission = connection?.pendingPermission ?? null
   const pendingUserMessage = connection?.pendingUserMessage ?? null
   const pendingQuestion = connection?.pendingQuestion ?? null
+  const pendingAskQuestion = connection?.pendingAskQuestion ?? null
   const claudeApiRetry = connection?.claudeApiRetry ?? null
   const error = connection?.error ?? null
   const loadError = connection?.loadError ?? null
@@ -173,6 +178,12 @@ export function useConnection(contextKey: string): UseConnectionReturn {
     [actions, contextKey]
   )
 
+  const answerQuestion = useCallback(
+    (questionId: string, answer: QuestionAnswer) =>
+      actions.answerQuestion(contextKey, questionId, answer),
+    [actions, contextKey]
+  )
+
   return useMemo(
     () => ({
       connectionId,
@@ -190,6 +201,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       pendingPermission,
       pendingUserMessage,
       pendingQuestion,
+      pendingAskQuestion,
       claudeApiRetry,
       error,
       loadError,
@@ -200,6 +212,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       setConfigOption,
       cancel,
       respondPermission,
+      answerQuestion,
     }),
     [
       connectionId,
@@ -217,6 +230,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       pendingPermission,
       pendingUserMessage,
       pendingQuestion,
+      pendingAskQuestion,
       claudeApiRetry,
       error,
       loadError,
@@ -227,6 +241,7 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       setConfigOption,
       cancel,
       respondPermission,
+      answerQuestion,
     ]
   )
 }

@@ -2080,6 +2080,15 @@
         "fileCount": "{count} 個檔案",
         "remove": "移除",
         "noDiffDataAvailable": "找不到 {filePath} 的差異資料"
+      },
+      "askQuestion": {
+        "title": "智能體需要你的選擇",
+        "recommended": "推薦",
+        "other": "其他",
+        "otherPlaceholder": "輸入你的回答…",
+        "skip": "略過",
+        "submit": "提交",
+        "submitError": "提交失敗，請重試。"
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "本輪已結束——已改為作為新訊息送出。",
     "turnEnded": "本輪已結束。",
     "submitFailed": "留言送出失敗"
+  },
+  "AskQuestionSettings": {
+    "title": "向使用者提問",
+    "description": "允許智能體暫停並向你提出多選問題，問題會顯示在對話輸入框上方。智能體會一直等待，直到你作答（或略過）。預設開啟。",
+    "enable": "啟用向使用者提問",
+    "enableHint": "為開啟後啟動的智能體加入 ask_user_question 工具。",
+    "save": "儲存",
+    "saving": "儲存中…",
+    "saved": "提問設定已儲存",
+    "saveFailed": "儲存提問設定失敗",
+    "loadFailed": "載入失敗：{detail}"
   }
 }

@@ -2080,6 +2080,15 @@
         "fileCount": "{count} 个文件",
         "remove": "移除",
         "noDiffDataAvailable": "未找到 {filePath} 的差异数据"
+      },
+      "askQuestion": {
+        "title": "智能体需要你的选择",
+        "recommended": "推荐",
+        "other": "其他",
+        "otherPlaceholder": "输入你的回答…",
+        "skip": "跳过",
+        "submit": "提交",
+        "submitError": "提交失败，请重试。"
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "本轮已结束——已改为作为新消息发送。",
     "turnEnded": "本轮已结束。",
     "submitFailed": "留言发送失败"
+  },
+  "AskQuestionSettings": {
+    "title": "向用户提问",
+    "description": "允许智能体暂停并向你提出多选问题，问题会显示在会话输入框上方。智能体会一直等待，直到你作答（或跳过）。默认开启。",
+    "enable": "启用向用户提问",
+    "enableHint": "为开启后启动的智能体添加 ask_user_question 工具。",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "提问设置已保存",
+    "saveFailed": "保存提问设置失败",
+    "loadFailed": "加载失败：{detail}"
   }
 }

@@ -62,6 +62,7 @@ import {
   type EventEnvelope,
   type MessageTurn,
   type PromptDraft,
+  type QuestionAnswer,
   type UserMessageBlock,
 } from "@/lib/types"
 import {
@@ -1000,6 +1001,16 @@ const ConversationTabView = memo(function ConversationTabView({
     ]
   )
 
+  // Answer a blocking multiple-choice `ask_user_question`. Routes straight to
+  // the dedicated answer endpoint (NOT a prompt) so it resolves the parked tool
+  // call; the backend broadcasts `question_resolved` to clear the card on every
+  // client.
+  const handleAnswerAskQuestion = useCallback(
+    (questionId: string, answer: QuestionAnswer) =>
+      acpActions.answerQuestion(tabId, questionId, answer),
+    [acpActions, tabId]
+  )
+
   // Queue edit flow: derive editing draft text from queue state
   const editingQueueDraftText = useMemo(() => {
     if (!mqEditingItemId) return null
@@ -1113,11 +1124,13 @@ const ConversationTabView = memo(function ConversationTabView({
       claudeApiRetry={conn.claudeApiRetry}
       pendingPermission={conn.pendingPermission}
       pendingQuestion={conn.pendingQuestion}
+      pendingAskQuestion={conn.pendingAskQuestion}
       onFocus={handleFocus}
       onSend={handleSend}
       onCancel={handleCancel}
       onRespondPermission={handleRespondPermission}
       onAnswerQuestion={handleAnswerQuestion}
+      onAnswerAskQuestion={handleAnswerAskQuestion}
       modes={connectionModes}
       configOptions={connectionConfigOptions}
       modeLoading={modeLoading}

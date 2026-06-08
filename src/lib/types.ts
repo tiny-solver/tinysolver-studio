@@ -461,6 +461,45 @@ export interface PermissionOptionInfo {
   kind: string
 }
 
+// --- ask_user_question (mirror of Rust `crate::acp::question`) ---
+
+/** One selectable choice in an `ask_user_question` (mirror of `QuestionOption`). */
+export interface QuestionOption {
+  label: string
+  description: string
+}
+
+/** A single multiple-choice question (mirror of Rust `QuestionSpec`). `id` is
+ *  the backend-minted correlation key the answer is submitted against. */
+export interface QuestionSpec {
+  id: string
+  question: string
+  header: string
+  multi_select: boolean
+  options: QuestionOption[]
+}
+
+/** Awaiting-answer question set on the session (mirror of `PendingQuestionState`). */
+export interface PendingQuestionState {
+  question_id: string
+  questions: QuestionSpec[]
+  created_at: string
+}
+
+/** One question's answer submitted to `acp_answer_question`. `labels` carries
+ *  the selected option labels plus any free-text "Other" the user typed. */
+export interface QuestionAnswerItem {
+  questionId: string
+  labels: string[]
+}
+
+/** The full submission to `acp_answer_question`. `declined` is set when the
+ *  user dismissed the card without choosing. */
+export interface QuestionAnswer {
+  answers: QuestionAnswerItem[]
+  declined: boolean
+}
+
 export interface SessionModeInfo {
   id: string
   name: string
@@ -730,6 +769,24 @@ export type AcpEvent =
       ids: string[]
       delivered_at: string
     }
+  /**
+   * An agent called `ask_user_question`: a blocking multiple-choice prompt the
+   * user must answer. Broadcast so every client renders the interactive card
+   * above the input box; also captured in the snapshot for mid-turn attach.
+   */
+  | {
+      type: "question_request"
+      question_id: string
+      questions: QuestionSpec[]
+    }
+  /**
+   * A pending question was answered (from any client) or canceled (tool call
+   * aborted / connection drained). Clients clear the matching card.
+   */
+  | {
+      type: "question_resolved"
+      question_id: string
+    }
 
 /** A block of a broadcast user prompt (mirror of Rust `UserMessageBlock`).
  *  Narrower than the persisted `ContentBlock`: only what a viewer needs to
@@ -879,6 +936,9 @@ export interface LiveSessionSnapshot {
   live_message: LiveMessage | null
   active_tool_calls: ToolCallState[]
   pending_permission: PendingPermissionState | null
+  /** Awaiting-answer `ask_user_question`, recoverable on mid-turn attach.
+   *  Absent (omitted) when no question is pending. */
+  pending_question?: PendingQuestionState | null
   /** In-flight user prompt for the current turn — lets a client attaching
    *  mid-turn render the user turn. Absent (omitted) when no turn is in flight. */
   pending_user_message?: {

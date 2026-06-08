@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::acp::event_stream::{ConnectionEventStream, RecentEventsBuffer};
 use crate::acp::feedback::{FeedbackItem, FeedbackStatus};
+use crate::acp::question::PendingQuestionState;
 use crate::acp::types::{
     AcpEvent, AvailableCommandInfo, ConnectionStatus, EventEnvelope, PromptCapabilitiesInfo,
     SessionConfigOptionInfo, SessionModeStateInfo, ToolCallImageInfo,
@@ -220,6 +221,15 @@ pub struct SessionState {
     pub active_tool_calls: BTreeMap<String, ToolCallState>,
     pub pending_permission: Option<PendingPermissionState>,
 
+    /// The agent's in-flight `ask_user_question` (one set of multiple-choice
+    /// questions awaiting the user's answer). Set by `QuestionRequest`, cleared
+    /// by a matching `QuestionResolved` (and defensively on `TurnComplete` /
+    /// `UserMessage`). Carried on `to_snapshot()` so a client attaching mid-turn
+    /// re-renders the interactive card the one-shot event won't replay for it.
+    /// At most one is pending at a time (the agent is blocked in the tool call);
+    /// the backend's `pending_questions` registry keys the answer one-shot.
+    pub pending_question: Option<PendingQuestionState>,
+
     /// In-flight (running) sub-agent delegations keyed by `parent_tool_use_id`.
     /// `DelegationStarted` inserts; `DelegationCompleted` removes. UNLIKE
     /// `active_tool_calls`, NOT cleared on `TurnComplete` (an async delegation
@@ -367,6 +377,7 @@ impl SessionState {
             live_message: None,
             active_tool_calls: BTreeMap::new(),
             pending_permission: None,
+            pending_question: None,
             active_delegations: BTreeMap::new(),
             feedback: Vec::new(),
             modes: None,
@@ -582,6 +593,27 @@ impl SessionState {
                     self.pending_permission = None;
                 }
             }
+            AcpEvent::QuestionRequest {
+                question_id,
+                questions,
+            } => {
+                self.pending_question = Some(PendingQuestionState {
+                    question_id: question_id.clone(),
+                    questions: questions.clone(),
+                    created_at: Utc::now(),
+                });
+            }
+            AcpEvent::QuestionResolved { question_id } => {
+                // Mirror `PermissionResolved`: only clear when the resolved id
+                // matches the current one, so a late event for an already-
+                // replaced question can't wipe a live card from under the user.
+                if matches!(
+                    &self.pending_question,
+                    Some(p) if p.question_id == *question_id,
+                ) {
+                    self.pending_question = None;
+                }
+            }
             AcpEvent::TurnComplete { .. } => {
                 // Snapshot the just-finished turn's FINAL assistant text — what
                 // `get_delegation_status` returns as the child result. We take
@@ -634,6 +666,11 @@ impl SessionState {
                 // the snapshot the instant the parent turn ends (the original
                 // web-only bug). It's removed per-entry by `DelegationCompleted`.
                 self.pending_permission = None;
+                // A blocked `ask_user_question` can't outlive its turn: if the
+                // turn ends (cancel / stop) the card is moot. The backend's
+                // answer one-shot is cleaned via the listener's peer-close race;
+                // this just keeps the snapshot honest.
+                self.pending_question = None;
                 self.status = ConnectionStatus::Connected;
             }
             AcpEvent::UserMessage { message_id, blocks } => {
@@ -654,6 +691,8 @@ impl SessionState {
                 // read your note → resend" fallback already had its post-turn
                 // window before this next prompt arrives.
                 self.feedback.clear();
+                // A new user turn supersedes any stale pending question.
+                self.pending_question = None;
             }
             AcpEvent::ConversationLinked {
                 conversation_id,
@@ -1013,6 +1052,7 @@ impl SessionState {
             live_message: self.live_message.clone(),
             active_tool_calls: self.active_tool_calls.values().cloned().collect(),
             pending_permission: self.pending_permission.clone(),
+            pending_question: self.pending_question.clone(),
             pending_user_message: self.pending_user_message.clone(),
             active_delegations: self.active_delegations.values().cloned().collect(),
             feedback: self.feedback.clone(),
@@ -1041,6 +1081,12 @@ pub struct LiveSessionSnapshot {
     pub live_message: Option<LiveMessage>,
     pub active_tool_calls: Vec<ToolCallState>,
     pub pending_permission: Option<PendingPermissionState>,
+    /// The agent's in-flight `ask_user_question` (see
+    /// `SessionState.pending_question`). `#[serde(default)]` so older payloads
+    /// deserialize; `skip_serializing_if` keeps the common no-question case off
+    /// the wire so every snapshot stays byte-identical with the pre-feature shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_question: Option<PendingQuestionState>,
     /// The in-flight user prompt for the current turn (see
     /// `SessionState.pending_user_message`). `#[serde(default)]` so older
     /// payloads still deserialize; `skip_serializing_if` so the no-pending case

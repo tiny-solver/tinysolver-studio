@@ -2080,6 +2080,15 @@
         "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",
         "remove": "Entfernen",
         "noDiffDataAvailable": "Keine Diff-Daten verfügbar für {filePath}"
+      },
+      "askQuestion": {
+        "title": "Der Agent benötigt deine Auswahl",
+        "recommended": "Empfohlen",
+        "other": "Andere",
+        "otherPlaceholder": "Antwort eingeben…",
+        "skip": "Überspringen",
+        "submit": "Senden",
+        "submitError": "Senden fehlgeschlagen. Bitte versuche es erneut."
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "Die Runde endete – stattdessen als neue Nachricht gesendet.",
     "turnEnded": "Die Runde ist bereits beendet.",
     "submitFailed": "Deine Notiz konnte nicht gesendet werden"
+  },
+  "AskQuestionSettings": {
+    "title": "Benutzer fragen",
+    "description": "Erlaubt Agenten, anzuhalten und dir eine Multiple-Choice-Frage zu stellen, die über dem Eingabefeld der Unterhaltung erscheint. Der Agent wartet, bis du antwortest (oder überspringst). Standardmäßig aktiviert.",
+    "enable": "Benutzerfrage aktivieren",
+    "enableHint": "Fügt Agenten, die nach dem Aktivieren gestartet werden, das ask_user_question-Tool hinzu.",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Frageeinstellungen gespeichert",
+    "saveFailed": "Frageeinstellungen konnten nicht gespeichert werden",
+    "loadFailed": "Laden fehlgeschlagen: {detail}"
   }
 }

@@ -277,6 +277,21 @@ pub enum AcpEvent {
         ids: Vec<String>,
         delivered_at: chrono::DateTime<chrono::Utc>,
     },
+    /// An agent called the `ask_user_question` MCP tool: one or more
+    /// multiple-choice questions the user must answer before the (blocked) tool
+    /// call returns. Broadcast so every client viewing this conversation renders
+    /// the interactive card above the input box, and captured into
+    /// `SessionState.pending_question` so a client attaching mid-turn (cold
+    /// attach, reconnect, another window) recovers it from the snapshot. The
+    /// backend parks a one-shot per `question_id` waiting for the answer.
+    QuestionRequest {
+        question_id: String,
+        questions: Vec<crate::acp::question::QuestionSpec>,
+    },
+    /// A previously-pending question was answered (from any client) or canceled
+    /// (the tool call was aborted / the connection drained). Carries only the
+    /// `question_id`; clients clear the matching card. Idempotent on apply.
+    QuestionResolved { question_id: String },
 }
 
 /// A block of the user's submitted prompt, broadcast via [`AcpEvent::UserMessage`]

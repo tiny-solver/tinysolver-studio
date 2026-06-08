@@ -12,6 +12,7 @@ pub mod lifecycle;
 pub mod manager;
 pub mod opencode_plugins;
 pub mod preflight;
+pub mod question;
 pub mod registry;
 pub mod session_state;
 pub mod terminal_runtime;

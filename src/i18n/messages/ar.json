@@ -2080,6 +2080,15 @@
         "fileCount": "{count, plural, one {# ملف} other {# ملفات}}",
         "remove": "إزالة",
         "noDiffDataAvailable": "لا توجد بيانات diff متاحة لـ {filePath}"
+      },
+      "askQuestion": {
+        "title": "يحتاج الوكيل إلى اختيارك",
+        "recommended": "موصى به",
+        "other": "أخرى",
+        "otherPlaceholder": "اكتب إجابتك…",
+        "skip": "تخطّي",
+        "submit": "إرسال",
+        "submitError": "تعذّر الإرسال. حاول مرة أخرى."
       }
     },
     "diffPreview": {
@@ -2784,5 +2793,16 @@
     "turnEndedResent": "انتهت الجولة — تم الإرسال كرسالة جديدة بدلاً من ذلك.",
     "turnEnded": "انتهت الجولة بالفعل.",
     "submitFailed": "تعذّر إرسال ملاحظتك"
+  },
+  "AskQuestionSettings": {
+    "title": "سؤال المستخدم",
+    "description": "يسمح للوكلاء بالتوقّف وطرح سؤال متعدّد الخيارات يظهر فوق مربّع إدخال المحادثة. ينتظر الوكيل حتى تجيب (أو تتخطّى). مُفعّل افتراضيًا.",
+    "enable": "تفعيل سؤال المستخدم",
+    "enableHint": "يضيف أداة ask_user_question للوكلاء الذين يبدؤون بعد التفعيل.",
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ…",
+    "saved": "تم حفظ إعدادات السؤال",
+    "saveFailed": "فشل حفظ إعدادات السؤال",
+    "loadFailed": "فشل التحميل: {detail}"
   }
 }

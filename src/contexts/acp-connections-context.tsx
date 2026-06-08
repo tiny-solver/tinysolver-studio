@@ -25,6 +25,7 @@ import {
   acpSetConfigOption,
   acpCancel,
   acpRespondPermission,
+  acpAnswerQuestion,
   acpDisconnect,
   acpTouchConnection,
   acpGetSessionSnapshot,
@@ -43,6 +44,8 @@ import type {
   EventEnvelope,
   PlanEntryInfo,
   PermissionOptionInfo,
+  PendingQuestionState,
+  QuestionAnswer,
   SessionConfigOptionInfo,
   SessionModeStateInfo,
   SessionUsageUpdateInfo,
@@ -166,6 +169,11 @@ export interface ConnectionState {
    *  the runtime as a synthesized user turn; `null` outside an active turn. */
   pendingUserMessage: PendingUserMessage | null
   pendingQuestion: PendingQuestion | null
+  /** Awaiting-answer multiple-choice `ask_user_question` (the codeg-mcp blocking
+   *  tool). Set from a `question_request` event or a snapshot's
+   *  `pending_question`; cleared on `question_resolved` or turn end. Distinct
+   *  from the free-text `pendingQuestion` above. */
+  pendingAskQuestion: PendingQuestionState | null
   claudeApiRetry: ClaudeApiRetryState | null
   error: string | null
   /**
@@ -356,6 +364,18 @@ type Action =
       pendingQuestion: PendingQuestion
     }
   | { type: "CLEAR_PENDING_QUESTION"; contextKey: string }
+  | {
+      type: "SET_ASK_QUESTION"
+      contextKey: string
+      pendingAskQuestion: PendingQuestionState
+    }
+  | {
+      type: "CLEAR_ASK_QUESTION"
+      contextKey: string
+      /** When present, only clear if the current question_id matches (guards a
+       *  late `question_resolved` from wiping a freshly-raised question). */
+      questionId?: string
+    }
   | { type: "SESSION_STARTED"; contextKey: string; sessionId: string }
   | {
       type: "SESSION_MODES"
@@ -582,7 +602,14 @@ function extractPermissionToolKind(toolCall: unknown): string | null {
   return null
 }
 
-function extractQuestionText(rawInput: string | null): string | null {
+/**
+ * Extract the free-text question for the LEGACY `QuestionDialog` from a tool
+ * call's raw input — gated on a singular `question` STRING field. Exported so a
+ * regression test can prove the new multiple-choice `ask_user_question` tool
+ * (whose input is `{ questions: [...] }`, plural array) never trips this legacy
+ * path even though tool-name normalization classifies it as "question".
+ */
+export function extractQuestionText(rawInput: string | null): string | null {
   if (!rawInput) return null
   try {
     const parsed = JSON.parse(rawInput)
@@ -848,6 +875,7 @@ function connectionsReducer(
         pendingPermission: null,
         pendingUserMessage: null,
         pendingQuestion: null,
+        pendingAskQuestion: null,
         claudeApiRetry: null,
         error: null,
         loadError: null,
@@ -897,6 +925,7 @@ function connectionsReducer(
         pendingPermission: null,
         pendingUserMessage: null,
         pendingQuestion: null,
+        pendingAskQuestion: null,
         claudeApiRetry: null,
         error: null,
         loadError: null,
@@ -991,6 +1020,7 @@ function connectionsReducer(
         usage: action.patch.usage,
         liveMessage: action.patch.liveMessage,
         pendingPermission: action.patch.pendingPermission,
+        pendingAskQuestion: action.patch.pendingAskQuestion,
         pendingUserMessage: action.patch.pendingUserMessage,
         promptCapabilities: mergedPromptCapabilities,
         selectorsReady: mergedSelectorsReady,
@@ -1051,6 +1081,10 @@ function connectionsReducer(
       } else if (conn.status === "prompting") {
         // Prompt cycle ended: clear in-flight Claude API retry banner.
         updated.claudeApiRetry = null
+        // A blocked ask_user_question can't outlive its turn. The normal path
+        // clears it via `question_resolved`; this is the safety net for a turn
+        // that ended without one (agent error / abandoned block).
+        updated.pendingAskQuestion = null
       }
       next.set(action.contextKey, updated)
       return next
@@ -1412,6 +1446,34 @@ function connectionsReducer(
       return next
     }
 
+    case "SET_ASK_QUESTION": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        pendingAskQuestion: action.pendingAskQuestion,
+      })
+      return next
+    }
+
+    case "CLEAR_ASK_QUESTION": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      if (
+        action.questionId !== undefined &&
+        conn.pendingAskQuestion?.question_id !== action.questionId
+      ) {
+        return state
+      }
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        pendingAskQuestion: null,
+      })
+      return next
+    }
+
     case "SESSION_STARTED": {
       const conn = state.get(action.contextKey)
       if (!conn) return state
@@ -1727,6 +1789,11 @@ export interface AcpActionsValue {
     contextKey: string,
     requestId: string,
     optionId: string
+  ): Promise<void>
+  answerQuestion(
+    contextKey: string,
+    questionId: string,
+    answer: QuestionAnswer
   ): Promise<void>
   setActiveKey(key: string | null): void
   touchActivity(contextKey: string): void
@@ -2294,6 +2361,30 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             type: "PERMISSION_CLEARED",
             contextKey,
             requestId: e.request_id,
+          })
+          break
+        case "question_request":
+          // Agent called the blocking `ask_user_question` MCP tool. Flush any
+          // queued streaming so the card renders against current content, then
+          // raise the interactive multiple-choice card above the input box.
+          flushStreamingQueue()
+          dispatch({
+            type: "SET_ASK_QUESTION",
+            contextKey,
+            pendingAskQuestion: {
+              question_id: e.question_id,
+              questions: e.questions,
+              created_at: new Date().toISOString(),
+            },
+          })
+          break
+        case "question_resolved":
+          // The question was answered (this or another window) or canceled.
+          // Matched by question_id so a stale event can't wipe a fresh one.
+          dispatch({
+            type: "CLEAR_ASK_QUESTION",
+            contextKey,
+            questionId: e.question_id,
           })
           break
         case "permission_request":
@@ -3633,6 +3724,32 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     [dispatch]
   )
 
+  const answerQuestion = useCallback(
+    async (contextKey: string, questionId: string, answer: QuestionAnswer) => {
+      const conn = storeRef.current.connections.get(contextKey)
+      if (!conn) {
+        // Throw, don't silently return: AskQuestionCard awaits this and holds a
+        // disabled in-flight state (spinner) until it resolves, only re-enabling
+        // on rejection. A silent resolve here would leave the card stuck. The
+        // throw routes to the card's retryable inline error instead.
+        throw new Error(
+          `[AcpConnections] answerQuestion: no connection for ${contextKey}`
+        )
+      }
+      try {
+        lastActivityRef.current.set(contextKey, Date.now())
+        await acpAnswerQuestion(conn.connectionId, questionId, answer)
+        // Optimistically clear; the backend also broadcasts question_resolved
+        // (idempotent on the matched id).
+        dispatch({ type: "CLEAR_ASK_QUESTION", contextKey, questionId })
+      } catch (e) {
+        console.error("[AcpConnections] answerQuestion failed:", e)
+        throw e
+      }
+    },
+    [dispatch]
+  )
+
   const attachDelegationChild = useCallback(
     (args: {
       connectionId: string
@@ -3713,6 +3830,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       setConfigOption,
       cancel,
       respondPermission,
+      answerQuestion,
       setActiveKey,
       touchActivity,
       registerOpenTabKeys,
@@ -3729,6 +3847,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       setConfigOption,
       cancel,
       respondPermission,
+      answerQuestion,
       setActiveKey,
       touchActivity,
       registerOpenTabKeys,

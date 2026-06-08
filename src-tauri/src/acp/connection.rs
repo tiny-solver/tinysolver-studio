@@ -864,6 +864,11 @@ pub struct DelegationInjection {
     /// EITHER feature is on, and the companion is told which tool groups to
     /// expose. Shares the same `tokens` registry and UDS socket as delegation.
     pub feedback: crate::acp::feedback::FeedbackRuntimeConfig,
+    /// Hot-swappable "is ask-user-question enabled?" flag. Read at injection
+    /// time alongside delegation + feedback so `codeg-mcp` is injected when ANY
+    /// of the three is on, and the companion's `--features` lists `ask` to expose
+    /// the `ask_user_question` tool.
+    pub ask: crate::acp::question::QuestionRuntimeConfig,
 }
 
 /// Locate the `codeg-mcp` companion binary across the supported deployment
@@ -946,12 +951,16 @@ fn is_executable_file(path: &Path) -> bool {
 /// delegate tool silently. Skipping leaves the agent fully functional minus
 /// `delegate_to_agent`, which is the right degradation when codeg-mcp didn't
 /// make it into the install.
-/// The `--features` value for a companion launch given the two feature flags,
-/// or `None` when neither is enabled (the companion isn't injected at all).
+/// The `--features` value for a companion launch given the three feature flags,
+/// or `None` when none is enabled (the companion isn't injected at all).
 /// Pulled out as a pure function so the inject/skip decision is unit-testable
 /// without a real binary on disk or a live broker.
-fn companion_features_arg(delegation_enabled: bool, feedback_enabled: bool) -> Option<String> {
-    if !delegation_enabled && !feedback_enabled {
+fn companion_features_arg(
+    delegation_enabled: bool,
+    feedback_enabled: bool,
+    ask_enabled: bool,
+) -> Option<String> {
+    if !delegation_enabled && !feedback_enabled && !ask_enabled {
         return None;
     }
     let mut features: Vec<&str> = Vec::new();
@@ -960,6 +969,9 @@ fn companion_features_arg(delegation_enabled: bool, feedback_enabled: bool) -> O
     }
     if feedback_enabled {
         features.push("feedback");
+    }
+    if ask_enabled {
+        features.push("ask");
     }
     Some(features.join(","))
 }
@@ -984,14 +996,16 @@ async fn inject_codeg_mcp(
     // surface to the LLM. (Historically this was gated on delegation alone.)
     let delegation_enabled = injection.broker.config_snapshot().await.enabled;
     let feedback_enabled = injection.feedback.is_enabled().await;
-    // `None` (neither feature enabled) short-circuits the whole injection.
-    let features_arg = companion_features_arg(delegation_enabled, feedback_enabled)?;
+    let ask_enabled = injection.ask.is_enabled().await;
+    // `None` (no feature enabled) short-circuits the whole injection.
+    let features_arg =
+        companion_features_arg(delegation_enabled, feedback_enabled, ask_enabled)?;
     let Some(binary_path) = locate_codeg_mcp_binary() else {
         eprintln!(
             "[delegation][WARN] codeg-mcp companion binary not found (checked CODEG_MCP_BIN, \
-             exe sibling, and PATH); skipping delegate_to_agent / check_user_feedback tool \
-             injection for connection {parent_connection_id}. Reinstall codeg or set \
-             CODEG_MCP_BIN to fix."
+             exe sibling, and PATH); skipping delegate_to_agent / check_user_feedback / \
+             ask_user_question tool injection for connection {parent_connection_id}. Reinstall \
+             codeg or set CODEG_MCP_BIN to fix."
         );
         return None;
     };
@@ -4440,6 +4454,7 @@ mod tests {
             tokens: Arc::new(TokenRegistry::default()),
             socket_path: std::path::PathBuf::from("/tmp/codeg-mcp.sock"),
             feedback: crate::acp::feedback::FeedbackRuntimeConfig::new(),
+            ask: crate::acp::question::QuestionRuntimeConfig::new(),
         };
 
         let mut servers: Vec<McpServer> = Vec::new();
@@ -4473,23 +4488,28 @@ mod tests {
     // have skipped it).
     #[test]
     fn companion_features_arg_inject_skip_decision() {
-        // Both off → no companion at all.
-        assert_eq!(companion_features_arg(false, false), None);
+        // All off → no companion at all.
+        assert_eq!(companion_features_arg(false, false, false), None);
         // Delegation only.
         assert_eq!(
-            companion_features_arg(true, false),
+            companion_features_arg(true, false, false),
             Some("delegation".to_string())
         );
         // Feedback only — the decoupling: companion injected for feedback even
         // when delegation is off.
         assert_eq!(
-            companion_features_arg(false, true),
+            companion_features_arg(false, true, false),
             Some("feedback".to_string())
         );
-        // Both on → comma-joined, delegation first.
+        // Ask only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(true, true),
-            Some("delegation,feedback".to_string())
+            companion_features_arg(false, false, true),
+            Some("ask".to_string())
+        );
+        // All on → comma-joined, in declaration order.
+        assert_eq!(
+            companion_features_arg(true, true, true),
+            Some("delegation,feedback,ask".to_string())
         );
     }
 }

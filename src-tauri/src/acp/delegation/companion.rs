@@ -40,11 +40,12 @@ use serde_json::{json, Value};
 use tokio::sync::{oneshot, Mutex};
 
 use crate::acp::delegation::transport::{
-    client_cancel, client_cancel_task_round_trip, client_commit_feedback,
-    client_feedback_round_trip, client_round_trip, client_status_round_trip, BrokerCancelRequest,
-    BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerRequest,
-    BrokerResponse, BrokerStatusRequest,
+    client_ask_round_trip, client_cancel, client_cancel_task_round_trip, client_commit_feedback,
+    client_feedback_round_trip, client_round_trip, client_status_round_trip, BrokerAskRequest,
+    BrokerCancelRequest, BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerFeedbackRequest,
+    BrokerRequest, BrokerResponse, BrokerStatusRequest,
 };
+use crate::acp::question::parse_questions;
 
 /// Upper bound on one broker-side cancel round-trip. Bounds both
 /// `handle_cancel_notification` (so stdin dispatch can't stall behind a
@@ -131,10 +132,11 @@ pub fn err(id: Value, code: i64, message: impl Into<String>) -> JsonRpcResponse 
 pub struct CompanionFeatures {
     pub delegation: bool,
     pub feedback: bool,
+    pub ask: bool,
 }
 
 impl CompanionFeatures {
-    /// Parse the comma-joined `--features` value (e.g. `delegation,feedback`).
+    /// Parse the comma-joined `--features` value (e.g. `delegation,feedback,ask`).
     /// Unknown tokens are ignored. An absent value (`None`) defaults to
     /// delegation-only — backward compatible with a parent that predates
     /// feature gating (companion + listener ship together, so post-upgrade the
@@ -144,16 +146,19 @@ impl CompanionFeatures {
             return Self {
                 delegation: true,
                 feedback: false,
+                ask: false,
             };
         };
         let mut f = Self {
             delegation: false,
             feedback: false,
+            ask: false,
         };
         for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match tok {
                 "delegation" => f.delegation = true,
                 "feedback" => f.feedback = true,
+                "ask" => f.ask = true,
                 _ => {}
             }
         }
@@ -164,6 +169,7 @@ impl CompanionFeatures {
     pub fn allows_tool(&self, name: &str) -> bool {
         match name {
             "check_user_feedback" => self.feedback,
+            "ask_user_question" => self.ask,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation" => self.delegation,
             _ => false,
         }
@@ -473,6 +479,26 @@ async fn build_tools_call_spawn(
             // to the agent). A cancel that suppresses the response sends no
             // commit, leaving the notes pending for the next check.
             register_and_spawn_feedback(inflight, id, socket, ctx.token.clone(), req).await
+        }
+        "ask_user_question" => {
+            // Validate + parse the schema HERE so a malformed call gets a
+            // synchronous -32602 the LLM can fix, rather than round-tripping bad
+            // data. Stable per-question ids are minted now and flow through to
+            // the answer correlation.
+            let questions = match parse_questions(&arguments) {
+                Ok(qs) => qs,
+                Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
+            };
+            let req = BrokerAskRequest {
+                token: ctx.token.clone(),
+                questions,
+            };
+            // No external_handle: canceling a blocking ask only suppresses its
+            // response. The companion dropping the round-trip future closes the
+            // socket, which the listener observes (peer-close) to tear the
+            // pending question down — no broker-side cancel to dispatch.
+            let round_trip = Box::pin(async move { client_ask_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_ask_result).await
         }
         other => LineAction::Respond(err(id, -32602, format!("unknown tool: {other}"))),
     }
@@ -855,6 +881,54 @@ pub fn render_feedback_result(outcome: &Value) -> Value {
     })
 }
 
+/// Map the `ask_user_question` round-trip outcome (a `{ answers, declined }`
+/// envelope from the listener) into an MCP `tools/call` result.
+///
+/// The human-readable `content` text reports the user's selections per question
+/// so the agent can act on them; a declined / empty answer tells the agent to
+/// proceed with its own judgment. The raw envelope rides along in
+/// `structuredContent`. `isError` is always `false` — a declined question is a
+/// valid result, not an error.
+pub fn render_ask_result(outcome: &Value) -> Value {
+    let declined = outcome
+        .get("declined")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let answers = outcome
+        .get("answers")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let text = if declined || answers.is_empty() {
+        "The user dismissed the question(s) without choosing an answer. Proceed \
+         using your best judgment and reasonable defaults."
+            .to_string()
+    } else {
+        let mut s = String::from("The user answered your question(s):\n");
+        for (i, a) in answers.iter().enumerate() {
+            let header = a.get("header").and_then(|v| v.as_str()).unwrap_or("");
+            let question = a.get("question").and_then(|v| v.as_str()).unwrap_or("");
+            let selected: Vec<&str> = a
+                .get("selected")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+                .unwrap_or_default();
+            let joined = if selected.is_empty() {
+                "(no selection)".to_string()
+            } else {
+                selected.join(", ")
+            };
+            s.push_str(&format!("{}. [{header}] {question}\n   → {joined}\n", i + 1));
+        }
+        s
+    };
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": false,
+        "structuredContent": { "answers": answers, "declined": declined },
+    })
+}
+
 pub fn render_task_report(report: &Value) -> Value {
     let status = report.get("status").and_then(|v| v.as_str()).unwrap_or("");
     let is_error = status == "failed";
@@ -895,6 +969,7 @@ mod tests {
         ctx_with(CompanionFeatures {
             delegation: true,
             feedback: false,
+            ask: false,
         })
     }
 
@@ -1359,10 +1434,17 @@ mod tests {
     const FEEDBACK_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
         feedback: true,
+        ask: false,
     };
     const BOTH: CompanionFeatures = CompanionFeatures {
         delegation: true,
         feedback: true,
+        ask: false,
+    };
+    const ASK_ONLY: CompanionFeatures = CompanionFeatures {
+        delegation: false,
+        feedback: false,
+        ask: true,
     };
 
     fn list_tool_names(action: LineAction) -> Vec<String> {
@@ -1380,14 +1462,17 @@ mod tests {
         // Absent → delegation-only (backward compatible).
         let def = CompanionFeatures::parse(None);
         assert!(def.delegation && !def.feedback);
+        assert!(!def.ask);
         // Explicit list, whitespace + unknown tokens tolerated.
-        let both = CompanionFeatures::parse(Some(" delegation , feedback ,bogus"));
-        assert!(both.delegation && both.feedback);
+        let all = CompanionFeatures::parse(Some(" delegation , feedback , ask ,bogus"));
+        assert!(all.delegation && all.feedback && all.ask);
         let fb = CompanionFeatures::parse(Some("feedback"));
-        assert!(!fb.delegation && fb.feedback);
+        assert!(!fb.delegation && fb.feedback && !fb.ask);
+        let ask = CompanionFeatures::parse(Some("ask"));
+        assert!(!ask.delegation && !ask.feedback && ask.ask);
         // Empty string → nothing enabled.
         let none = CompanionFeatures::parse(Some(""));
-        assert!(!none.delegation && !none.feedback);
+        assert!(!none.delegation && !none.feedback && !none.ask);
     }
 
     #[tokio::test]
@@ -1459,6 +1544,98 @@ mod tests {
         .to_string();
         let resp = unwrap_respond(dispatch_with_features(FEEDBACK_ONLY, &line).await);
         assert_eq!(resp.error.unwrap().code, -32602);
+    }
+
+    // -- ask_user_question feature gating + validation + rendering ----------
+
+    #[tokio::test]
+    async fn tools_list_includes_ask_only_when_enabled() {
+        let off = list_tool_names(
+            dispatch_for_test(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await,
+        );
+        assert!(!off.contains(&"ask_user_question".to_string()));
+        let on = list_tool_names(
+            dispatch_with_features(ASK_ONLY, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+                .await,
+        );
+        assert_eq!(on, vec!["ask_user_question".to_string()]);
+    }
+
+    fn ask_args() -> Value {
+        json!({
+            "questions": [{
+                "question": "Which approach?",
+                "header": "Approach",
+                "multiSelect": false,
+                "options": [
+                    { "label": "Incremental", "description": "smaller diffs" },
+                    { "label": "Rewrite", "description": "clean slate" }
+                ]
+            }]
+        })
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_spawns_when_valid_and_enabled() {
+        let line = json!({
+            "jsonrpc": "2.0", "id": 40, "method": "tools/call",
+            "params": { "name": "ask_user_question", "arguments": ask_args() }
+        })
+        .to_string();
+        assert!(matches!(
+            dispatch_with_features(ASK_ONLY, &line).await,
+            LineAction::Spawn(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_invalid_args_rejected_synchronously() {
+        // Empty questions array → -32602, fixable by the LLM without a round-trip.
+        let line = json!({
+            "jsonrpc": "2.0", "id": 41, "method": "tools/call",
+            "params": { "name": "ask_user_question", "arguments": { "questions": [] } }
+        })
+        .to_string();
+        let resp = unwrap_respond(dispatch_with_features(ASK_ONLY, &line).await);
+        assert_eq!(resp.error.unwrap().code, -32602);
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_rejected_as_unknown_when_feature_off() {
+        let line = json!({
+            "jsonrpc": "2.0", "id": 42, "method": "tools/call",
+            "params": { "name": "ask_user_question", "arguments": ask_args() }
+        })
+        .to_string();
+        let resp = unwrap_respond(dispatch_for_test(&line).await);
+        let e = resp.error.unwrap();
+        assert_eq!(e.code, -32602);
+        assert!(e.message.contains("unknown tool"));
+    }
+
+    #[test]
+    fn render_ask_result_lists_selections() {
+        let outcome = json!({
+            "declined": false,
+            "answers": [
+                { "question": "Which approach?", "header": "Approach", "multiSelect": false,
+                  "selected": ["Incremental"] }
+            ]
+        });
+        let rendered = render_ask_result(&outcome);
+        assert_eq!(rendered["isError"], false);
+        let text = rendered["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Approach"));
+        assert!(text.contains("Incremental"));
+        assert_eq!(rendered["structuredContent"]["declined"], false);
+    }
+
+    #[test]
+    fn render_ask_result_declined_tells_agent_to_proceed() {
+        let rendered = render_ask_result(&json!({ "declined": true, "answers": [] }));
+        assert_eq!(rendered["isError"], false);
+        let text = rendered["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("dismissed"));
     }
 
     #[test]

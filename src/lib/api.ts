@@ -25,6 +25,7 @@ import type {
   ConversationConnectionInfo,
   LiveSessionSnapshot,
   FeedbackItem,
+  QuestionAnswer,
   AcpAgentInfo,
   AcpAgentStatus,
   AgentSkillScope,
@@ -215,6 +216,24 @@ export async function acpRespondPermission(
     connectionId,
     requestId,
     optionId,
+  })
+}
+
+/**
+ * Submit the user's answer to a blocking `ask_user_question`. Resolves the
+ * parked tool call on the backend (and clears the card on every client via the
+ * `question_resolved` event). Idempotent: answering an already-resolved /
+ * unknown `questionId` is a no-op success.
+ */
+export async function acpAnswerQuestion(
+  connectionId: string,
+  questionId: string,
+  answer: QuestionAnswer
+): Promise<void> {
+  return getTransport().call("acp_answer_question", {
+    connectionId,
+    questionId,
+    answer,
   })
 }
 
@@ -2644,6 +2663,23 @@ export async function submitSessionFeedback(
     connectionId,
     text,
   })
+}
+
+// ─── Ask-user-question settings ────────────────────────────────────────────
+
+/** Mirror of Rust `QuestionSettings` (default ON). */
+export interface QuestionSettings {
+  enabled: boolean
+}
+
+export async function getQuestionSettings(): Promise<QuestionSettings> {
+  return getTransport().call("get_question_settings")
+}
+
+export async function setQuestionSettings(
+  settings: QuestionSettings
+): Promise<QuestionSettings> {
+  return getTransport().call("set_question_settings", { settings })
 }
 
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what
