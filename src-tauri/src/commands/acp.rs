@@ -1642,53 +1642,251 @@ fn hermes_config_yaml_path() -> PathBuf {
 }
 
 /// A managed Hermes provider: the config.yaml `model.provider` value (its `id`)
-/// and the `.env` variable that carries its API key (empty for OAuth providers,
-/// whose credentials are set via the terminal `--setup` flow), plus whether it
-/// needs a base URL. The frontend mirror owns the OAuth UI flag.
+/// and the `.env` variable that carries its API key. `key_env_var` is the
+/// variable Hermes' own setup writes first (mirrors `auth.py` PROVIDER_REGISTRY
+/// priority order); it is empty for OAuth providers (credentials set via the
+/// terminal `--setup` flow) and AWS Bedrock (resolved from the AWS SDK chain).
+/// `needs_base_url` marks providers whose endpoint is user-supplied (the
+/// OpenAI-compatible `openai-api` path). The frontend mirror owns the auth-kind
+/// UI flag.
 struct HermesProvider {
     id: &'static str,
     key_env_var: &'static str,
     needs_base_url: bool,
+    /// The `.env` variable Hermes reads for a user-supplied endpoint URL. When
+    /// set (only `openai-api` today), codeg mirrors the structured base URL into
+    /// both this var and config.yaml `model.base_url`, because Hermes' own
+    /// resolution paths disagree on which one wins — keeping them in sync makes
+    /// the saved endpoint authoritative under either path.
+    base_url_env_var: &'static str,
 }
 
-/// Curated subset of Hermes providers codeg edits via structured fields. The
-/// long tail (and OAuth providers' credentials) go through the raw config.yaml
-/// escape hatch and the terminal `--setup` flow.
+/// Curated subset of Hermes providers codeg edits via structured fields, keyed
+/// by the canonical `model.provider` id and `.env` key var from Hermes'
+/// `hermes_cli/auth.py` PROVIDER_REGISTRY (the single source of truth its own
+/// setup uses). The long tail and any exotic credential layout go through the
+/// raw config.yaml escape hatch and the terminal `--setup` flow.
 const HERMES_PROVIDERS: &[HermesProvider] = &[
+    // API-key providers — `key_env_var` is the first env var Hermes' own
+    // setup writes (auth.py PROVIDER_REGISTRY priority order).
     HermesProvider {
         id: "openrouter",
         key_env_var: "OPENROUTER_API_KEY",
         needs_base_url: false,
+        base_url_env_var: "OPENROUTER_BASE_URL",
     },
     HermesProvider {
-        id: "openai",
+        id: "openai-api",
         key_env_var: "OPENAI_API_KEY",
-        needs_base_url: false,
+        needs_base_url: true,
+        base_url_env_var: "OPENAI_BASE_URL",
     },
     HermesProvider {
         id: "anthropic",
         key_env_var: "ANTHROPIC_API_KEY",
         needs_base_url: false,
+        base_url_env_var: "ANTHROPIC_BASE_URL",
     },
     HermesProvider {
         id: "gemini",
         key_env_var: "GOOGLE_API_KEY",
         needs_base_url: false,
+        base_url_env_var: "GEMINI_BASE_URL",
     },
     HermesProvider {
-        id: "custom",
-        key_env_var: "OPENAI_API_KEY",
-        needs_base_url: true,
+        id: "deepseek",
+        key_env_var: "DEEPSEEK_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "DEEPSEEK_BASE_URL",
     },
+    HermesProvider {
+        id: "xai",
+        key_env_var: "XAI_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "XAI_BASE_URL",
+    },
+    HermesProvider {
+        id: "zai",
+        key_env_var: "GLM_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "GLM_BASE_URL",
+    },
+    HermesProvider {
+        id: "minimax",
+        key_env_var: "MINIMAX_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "MINIMAX_BASE_URL",
+    },
+    HermesProvider {
+        id: "minimax-cn",
+        key_env_var: "MINIMAX_CN_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "MINIMAX_CN_BASE_URL",
+    },
+    HermesProvider {
+        id: "kimi-coding",
+        key_env_var: "KIMI_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "KIMI_BASE_URL",
+    },
+    HermesProvider {
+        id: "kimi-coding-cn",
+        key_env_var: "KIMI_CN_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "",
+    },
+    HermesProvider {
+        id: "nvidia",
+        key_env_var: "NVIDIA_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "NVIDIA_BASE_URL",
+    },
+    HermesProvider {
+        id: "alibaba",
+        key_env_var: "DASHSCOPE_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "DASHSCOPE_BASE_URL",
+    },
+    HermesProvider {
+        id: "alibaba-coding-plan",
+        key_env_var: "ALIBABA_CODING_PLAN_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "ALIBABA_CODING_PLAN_BASE_URL",
+    },
+    HermesProvider {
+        id: "copilot",
+        key_env_var: "COPILOT_GITHUB_TOKEN",
+        needs_base_url: false,
+        base_url_env_var: "COPILOT_API_BASE_URL",
+    },
+    HermesProvider {
+        id: "lmstudio",
+        key_env_var: "LM_API_KEY",
+        needs_base_url: true,
+        base_url_env_var: "LM_BASE_URL",
+    },
+    HermesProvider {
+        id: "azure-foundry",
+        key_env_var: "AZURE_FOUNDRY_API_KEY",
+        needs_base_url: true,
+        base_url_env_var: "AZURE_FOUNDRY_BASE_URL",
+    },
+    HermesProvider {
+        id: "stepfun",
+        key_env_var: "STEPFUN_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "STEPFUN_BASE_URL",
+    },
+    HermesProvider {
+        id: "arcee",
+        key_env_var: "ARCEEAI_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "ARCEE_BASE_URL",
+    },
+    HermesProvider {
+        id: "gmi",
+        key_env_var: "GMI_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "GMI_BASE_URL",
+    },
+    HermesProvider {
+        id: "huggingface",
+        key_env_var: "HF_TOKEN",
+        needs_base_url: false,
+        base_url_env_var: "HF_BASE_URL",
+    },
+    HermesProvider {
+        id: "kilocode",
+        key_env_var: "KILOCODE_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "KILOCODE_BASE_URL",
+    },
+    HermesProvider {
+        id: "opencode-zen",
+        key_env_var: "OPENCODE_ZEN_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "OPENCODE_ZEN_BASE_URL",
+    },
+    HermesProvider {
+        id: "opencode-go",
+        key_env_var: "OPENCODE_GO_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "OPENCODE_GO_BASE_URL",
+    },
+    HermesProvider {
+        id: "xiaomi",
+        key_env_var: "XIAOMI_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "XIAOMI_BASE_URL",
+    },
+    HermesProvider {
+        id: "tencent-tokenhub",
+        key_env_var: "TOKENHUB_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "TOKENHUB_BASE_URL",
+    },
+    HermesProvider {
+        id: "ollama-cloud",
+        key_env_var: "OLLAMA_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "OLLAMA_BASE_URL",
+    },
+    HermesProvider {
+        id: "novita",
+        key_env_var: "NOVITA_API_KEY",
+        needs_base_url: false,
+        base_url_env_var: "NOVITA_BASE_URL",
+    },
+    // OAuth / external-process providers — credentials set via the terminal
+    // `--setup` flow; no `.env` key var.
     HermesProvider {
         id: "nous",
         key_env_var: "",
         needs_base_url: false,
+        base_url_env_var: "",
+    },
+    HermesProvider {
+        id: "openai-codex",
+        key_env_var: "",
+        needs_base_url: false,
+        base_url_env_var: "",
     },
     HermesProvider {
         id: "minimax-oauth",
         key_env_var: "",
         needs_base_url: false,
+        base_url_env_var: "",
+    },
+    HermesProvider {
+        id: "xai-oauth",
+        key_env_var: "",
+        needs_base_url: false,
+        base_url_env_var: "",
+    },
+    HermesProvider {
+        id: "qwen-oauth",
+        key_env_var: "",
+        needs_base_url: false,
+        base_url_env_var: "",
+    },
+    HermesProvider {
+        id: "google-gemini-cli",
+        key_env_var: "",
+        needs_base_url: false,
+        base_url_env_var: "",
+    },
+    HermesProvider {
+        id: "copilot-acp",
+        key_env_var: "",
+        needs_base_url: false,
+        base_url_env_var: "",
+    },
+    // AWS Bedrock — credentials from the AWS SDK chain.
+    HermesProvider {
+        id: "bedrock",
+        key_env_var: "",
+        needs_base_url: false,
+        base_url_env_var: "",
     },
 ];
 
@@ -1729,8 +1927,10 @@ fn parse_env_file(raw: &str) -> BTreeMap<String, String> {
 /// lines, ordering, and unrelated keys. The first occurrence of an updated key
 /// is replaced in place; any later duplicates of that key are dropped (so a
 /// last-occurrence-wins reader can't surface a stale shadowing line). Missing
-/// keys are appended. An empty value still writes `KEY=` so a user can clear a
-/// credential.
+/// keys are appended — including with an empty value (`KEY=`): Hermes loads
+/// `~/.hermes/.env` with override semantics, so an explicit empty line both
+/// clears a stored credential AND masks an inherited process-env value of the
+/// same name (e.g. a stale `OPENAI_API_KEY` exported in the shell).
 fn patch_env_text(existing: &str, updates: &[(&str, &str)]) -> String {
     let mut applied = vec![false; updates.len()];
     let mut out_lines: Vec<String> = Vec::new();
@@ -1758,6 +1958,9 @@ fn patch_env_text(existing: &str, updates: &[(&str, &str)]) -> String {
     }
 
     for (i, (key, value)) in updates.iter().enumerate() {
+        // Append a missing key, including an empty `KEY=` — an explicit empty
+        // line is what masks an inherited process-env value under Hermes' dotenv
+        // override loading, not just a no-op cleanup.
         if !applied[i] {
             out_lines.push(format!("{key}={value}"));
         }
@@ -1779,14 +1982,34 @@ fn yaml_str(value: &serde_yaml::Value, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Read `model.provider` from an existing config.yaml document, if present. Used
+/// to tell an out-of-band base URL for the *current* provider (keep) apart from a
+/// stale one left by a provider the user just switched away from (clear).
+fn existing_hermes_model_provider(existing: Option<&str>) -> Option<String> {
+    let raw = existing?;
+    let value: serde_yaml::Value = serde_yaml::from_str(raw).ok()?;
+    value.get("model").and_then(|m| yaml_str(m, "provider"))
+}
+
+/// How `merge_hermes_model_config` should treat the `model.base_url` field.
+enum BaseUrlWrite<'a> {
+    /// Write this endpoint, or remove the field when the value is empty/blank.
+    /// Used for providers whose base URL is user-editable in the panel.
+    Set(&'a str),
+    /// Leave any existing `model.base_url` untouched. Used for providers whose
+    /// endpoint is not exposed in the structured fields, so a base URL set
+    /// out-of-band (a proxy/Azure endpoint, etc.) survives a structured save.
+    Preserve,
+}
+
 /// Set `model.{provider,default,base_url}` in a Hermes config.yaml document,
 /// preserving every other top-level key. `default` is only written when a
-/// non-empty model is given; `base_url` of None removes that field.
+/// non-empty model is given; `base_url` follows the `BaseUrlWrite` action.
 fn merge_hermes_model_config(
     existing: Option<&str>,
     provider: &str,
     model: &str,
-    base_url: Option<&str>,
+    base_url: BaseUrlWrite<'_>,
 ) -> Result<String, AcpError> {
     use serde_yaml::{Mapping, Value};
     let mut root: Value = match existing {
@@ -1823,15 +2046,17 @@ fn merge_hermes_model_config(
         );
     }
     match base_url {
-        Some(url) if !url.trim().is_empty() => {
+        BaseUrlWrite::Set(url) if !url.trim().is_empty() => {
             model_map.insert(
                 Value::String("base_url".to_string()),
                 Value::String(url.trim().to_string()),
             );
         }
-        _ => {
+        BaseUrlWrite::Set(_) => {
             model_map.remove(Value::String("base_url".to_string()));
         }
+        // Preserve: leave whatever `model.base_url` is already there.
+        BaseUrlWrite::Preserve => {}
     }
 
     serde_yaml::to_string(&root)
@@ -1934,6 +2159,33 @@ fn hermes_setup_commands() -> (String, String) {
 /// JSON the settings UI binds to: `{provider, model, baseUrl, apiKey,
 /// hermesHome, setupCommand, modelCommand}`. Only the active provider's single
 /// key var is surfaced — never the rest of `.env`.
+/// Project the active provider's API key and endpoint URL for the settings UI.
+/// The key is read from the provider's `.env` key var. The base URL prefers
+/// config.yaml's `model.base_url` and falls back to the provider's base-URL env
+/// var — so an endpoint that lives only in `.env` (e.g. a bare `OPENAI_BASE_URL`
+/// with no YAML `base_url`) still shows in the panel and isn't cleared on the
+/// next save. Empty stored values are treated as absent. Unknown providers map
+/// to nothing here (their key var is undiscoverable; the raw editor governs).
+fn project_hermes_key_and_base(
+    provider: &str,
+    env_map: &BTreeMap<String, String>,
+    yaml_base_url: Option<&str>,
+) -> (Option<String>, Option<String>) {
+    let meta = hermes_provider(provider);
+    let api_key = meta
+        .filter(|p| !p.key_env_var.is_empty())
+        .and_then(|p| env_map.get(p.key_env_var))
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string());
+    let base_url = yaml_base_url.map(str::to_string).or_else(|| {
+        meta.filter(|p| !p.base_url_env_var.is_empty())
+            .and_then(|p| env_map.get(p.base_url_env_var))
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string())
+    });
+    (api_key, base_url)
+}
+
 fn load_hermes_local_config_json() -> Option<String> {
     let env_map = fs::read_to_string(hermes_env_path())
         .ok()
@@ -1942,23 +2194,21 @@ fn load_hermes_local_config_json() -> Option<String> {
 
     let mut provider: Option<String> = None;
     let mut model: Option<String> = None;
-    let mut base_url: Option<String> = None;
+    let mut yaml_base_url: Option<String> = None;
     if let Ok(raw_yaml) = fs::read_to_string(hermes_config_yaml_path()) {
         if let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(&raw_yaml) {
             if let Some(model_section) = value.get("model") {
                 provider = yaml_str(model_section, "provider");
                 model = yaml_str(model_section, "default");
-                base_url = yaml_str(model_section, "base_url");
+                yaml_base_url = yaml_str(model_section, "base_url");
             }
         }
     }
 
-    let api_key = provider
-        .as_deref()
-        .and_then(hermes_provider)
-        .filter(|p| !p.key_env_var.is_empty())
-        .and_then(|p| env_map.get(p.key_env_var))
-        .map(|v| v.to_string());
+    let (api_key, base_url) = match provider.as_deref() {
+        Some(p) => project_hermes_key_and_base(p, &env_map, yaml_base_url.as_deref()),
+        None => (None, yaml_base_url),
+    };
 
     let (setup_command, model_command) = hermes_setup_commands();
 
@@ -2003,6 +2253,130 @@ pub(crate) struct HermesConfigUpdate {
     pub raw_config_yaml: Option<String>,
 }
 
+/// Whether to skip tightening Hermes file/dir permissions, mirroring the opt-outs
+/// Hermes itself honors: containerized / managed deployments (Docker/Podman/LXC/
+/// Kubernetes volume mounts with mapped UIDs, etc.) where forcing `0700`/`0600`
+/// breaks the multi-process access model. Mirrors Hermes 0.16.0 `_is_container`:
+/// the `HERMES_CONTAINER` / `HERMES_SKIP_CHMOD` env opt-outs, the Docker
+/// (`/.dockerenv`) and Podman (`/run/.containerenv`) markers, and a
+/// docker/lxc/kubepods marker in `/proc/1/cgroup`.
+#[cfg(unix)]
+fn hermes_skip_chmod() -> bool {
+    // Match Hermes' Python truthiness (`os.environ.get(...)` — an empty value is
+    // falsy): only a NON-EMPTY opt-out enables skip, so a blank `HERMES_SKIP_CHMOD=`
+    // does not (and codeg still performs the 0644→0600 repair Hermes would).
+    let truthy = |key: &str| std::env::var(key).map(|v| !v.is_empty()).unwrap_or(false);
+    if truthy("HERMES_CONTAINER")
+        || truthy("HERMES_SKIP_CHMOD")
+        || Path::new("/.dockerenv").exists()
+        || Path::new("/run/.containerenv").exists()
+    {
+        return true;
+    }
+    fs::read_to_string("/proc/1/cgroup")
+        .map(|cgroup| {
+            cgroup.contains("docker") || cgroup.contains("lxc") || cgroup.contains("kubepods")
+        })
+        .unwrap_or(false)
+}
+
+/// Parse a `HERMES_HOME_MODE` value (octal, e.g. `0701` for web-server traversal
+/// layouts), falling back to owner-only `0700`. Accepts an optional `0o` prefix.
+#[cfg(unix)]
+fn parse_hermes_home_mode(raw: Option<&str>) -> u32 {
+    raw.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.strip_prefix("0o").unwrap_or(s))
+        .and_then(|s| u32::from_str_radix(s, 8).ok())
+        .filter(|m| *m != 0)
+        .unwrap_or(0o700)
+}
+
+/// Create the Hermes home directory if needed. On Unix, tighten it to
+/// `HERMES_HOME_MODE` (or `0700`) **only when codeg just created it** and Hermes
+/// itself would chmod (not a container/managed deployment). An existing
+/// `HERMES_HOME` is left untouched — it may be a NixOS-managed `0750`, a
+/// UID-mapped Docker volume, or otherwise deliberately group-accessible, and
+/// revoking that would break other Hermes users/processes.
+fn ensure_hermes_home_secure(home: &Path) -> Result<(), AcpError> {
+    let preexisting = home.exists();
+    fs::create_dir_all(home)
+        .map_err(|e| AcpError::protocol(format!("create hermes directory failed: {e}")))?;
+    #[cfg(unix)]
+    if !preexisting && !hermes_skip_chmod() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = parse_hermes_home_mode(std::env::var("HERMES_HOME_MODE").ok().as_deref());
+        // Best-effort: a chmod hiccup must not block saving the config.
+        let _ = fs::set_permissions(home, fs::Permissions::from_mode(mode));
+    }
+    Ok(())
+}
+
+/// Write a Hermes secret file (`.env` / `config.yaml`).
+///
+/// A brand-new secret — a path whose resolved target does not exist yet, whether
+/// `path` itself is absent or a symlink to a missing target — is created
+/// owner-only (`0600` on Unix) so it is never world-readable under the process
+/// umask, the one real exposure for a first-time codeg-driven setup. An EXISTING
+/// target is written through in place, which preserves everything that identifies
+/// it: its inode, mode, owner/group, POSIX ACL and xattrs, and any symlink (a
+/// dotfile-manager or secret-manager `~/.hermes/.env` keeps pointing at its real
+/// target). This deliberately favors preserving a managed/linked layout over an
+/// atomic temp+rename replace — a rename would drop the symlink and the inode's
+/// owner/ACL/xattrs, and on Windows would swap the file's security descriptor for
+/// the parent directory's. It matches Hermes' own model (config.py `_secure_dir`
+/// is a Windows no-op; file chmod is Unix-only) and the prior baseline. A crash
+/// during the brief write window is recoverable by re-saving. `label` names the
+/// file for error messages.
+fn write_hermes_secret_file(path: &Path, contents: &str, label: &str) -> Result<(), AcpError> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        // `metadata` FOLLOWS symlinks, so this is true when the resolved target
+        // does not exist yet — a genuinely fresh path OR a symlink whose target
+        // is missing (e.g. `~/.hermes/.env -> /vault/hermes.env`). Creating with
+        // `O_CREAT` likewise follows the symlink, so the new secret lands at the
+        // real target with owner-only `0600` instead of the umask default
+        // (`0644`). An existing resolved target is written through in place below.
+        if fs::metadata(path).is_err() {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)
+                .map_err(|e| AcpError::protocol(format!("create hermes {label} failed: {e}")))?;
+            return file
+                .write_all(contents.as_bytes())
+                .map_err(|e| AcpError::protocol(format!("write hermes {label} failed: {e}")));
+        }
+    }
+    // Existing target (or non-Unix): write through in place, preserving the
+    // target's identity (inode, owner/group, ACL, xattrs, and any symlink).
+    fs::write(path, contents)
+        .map_err(|e| AcpError::protocol(format!("write hermes {label} failed: {e}")))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Repair an accidentally WORLD-accessible secret (e.g. a `0644` left by an
+        // older codeg build or by the pre-fix dangling-symlink path) back to
+        // owner-only `0600`: a world-readable API key is a leak, and tightening it
+        // to `0640` would still expose it to a broad group like `staff`. A file
+        // with no "other" bits — including a deliberately group-shared managed
+        // `0640` — is left untouched, and the container/managed chmod opt-out is
+        // honored. Best-effort: never fail the save on a chmod hiccup.
+        if !hermes_skip_chmod() {
+            if let Ok(meta) = fs::metadata(path) {
+                if meta.permissions().mode() & 0o007 != 0 {
+                    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Write a Hermes config update to `~/.hermes/.env` (the active provider's API
 /// key) and `~/.hermes/config.yaml` (the `model:` section, or a verbatim raw
 /// document in advanced mode).
@@ -2019,8 +2393,7 @@ pub(crate) fn acp_update_hermes_config_core(
     } = update;
 
     let home = hermes_home_dir();
-    fs::create_dir_all(&home)
-        .map_err(|e| AcpError::protocol(format!("create hermes directory failed: {e}")))?;
+    ensure_hermes_home_secure(&home)?;
 
     // Build + validate everything BEFORE any write, so an invalid document or a
     // crafted key never half-applies (the secret in particular).
@@ -2031,7 +2404,7 @@ pub(crate) fn acp_update_hermes_config_core(
         None
     };
     let model_trimmed = model.as_deref().map(str::trim).unwrap_or_default();
-    let (config_yaml, env_update) = plan_hermes_write(
+    let (config_yaml, env_updates) = plan_hermes_write(
         &provider,
         api_key.as_deref(),
         model_trimmed,
@@ -2040,33 +2413,38 @@ pub(crate) fn acp_update_hermes_config_core(
         existing.as_deref(),
     )?;
 
-    // Write config.yaml first, then the secret — a config-write failure must
-    // never leave the stored credential changed.
-    fs::write(&config_path, config_yaml)
-        .map_err(|e| AcpError::protocol(format!("write hermes config.yaml failed: {e}")))?;
-    if let Some((key_var, key)) = env_update {
+    // Write config.yaml first, then `.env` — a config-write failure must never
+    // leave the stored credential changed. Both are owner-only (they can carry
+    // secrets: the `.env` key, and a raw config.yaml in advanced mode).
+    write_hermes_secret_file(&config_path, &config_yaml, "config.yaml")?;
+    if !env_updates.is_empty() {
         let env_path = hermes_env_path();
         let existing_env = fs::read_to_string(&env_path).unwrap_or_default();
-        let patched = patch_env_text(&existing_env, &[(key_var, key.as_str())]);
-        fs::write(&env_path, patched)
-            .map_err(|e| AcpError::protocol(format!("write hermes .env failed: {e}")))?;
+        let updates: Vec<(&str, &str)> =
+            env_updates.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let patched = patch_env_text(&existing_env, &updates);
+        write_hermes_secret_file(&env_path, &patched, ".env")?;
     }
 
     emit_acp_agents_updated(emitter, "config_updated", Some(AgentType::Hermes));
     Ok(())
 }
 
-/// The result of planning a Hermes save: the `config.yaml` content to write and,
-/// if any, the single `.env` `(var name, value)` update to apply.
-type HermesWritePlan = (String, Option<(&'static str, String)>);
+/// The result of planning a Hermes save: the `config.yaml` content to write and
+/// the ordered list of `.env` `(var name, value)` updates to apply (empty when
+/// nothing in `.env` changes).
+type HermesWritePlan = (String, Vec<(&'static str, String)>);
 
 /// Pure decision logic for a Hermes config save: compute the config.yaml content
-/// to write and, if any, the single `.env` `(key_var, value)` update. Validation
-/// happens here (no I/O) so a bad request fails before anything is written.
+/// to write and the `.env` `(key_var, value)` updates. Validation happens here
+/// (no I/O) so a bad request fails before anything is written.
 ///
 /// Raw mode is enforced server-side to never touch `.env` (the API contract is
-/// not left to the caller's payload). OAuth providers carry no key var, so they
-/// never produce an `.env` update. An embedded newline in the key is rejected.
+/// not left to the caller's payload). OAuth/AWS providers carry no key var, so
+/// they never produce a key update. Keyed providers update their API key (a
+/// blank key leaves the stored secret untouched); providers with a base-URL env
+/// var also mirror the structured endpoint URL there. Embedded newlines in the
+/// key or base URL are rejected.
 fn plan_hermes_write(
     provider: &str,
     api_key: Option<&str>,
@@ -2075,39 +2453,91 @@ fn plan_hermes_write(
     raw_config_yaml: Option<&str>,
     existing_config: Option<&str>,
 ) -> Result<HermesWritePlan, AcpError> {
+    // The provider the existing config.yaml was on (None for a first save / raw
+    // mode). Drives base-URL preservation and stale-`.env`-credential cleanup.
+    let previous_provider = existing_hermes_model_provider(existing_config);
+
     let config_yaml = if let Some(raw) = raw_config_yaml {
         serde_yaml::from_str::<serde_yaml::Value>(raw)
             .map_err(|e| AcpError::protocol(format!("invalid hermes config.yaml: {e}")))?;
         raw.to_string()
     } else {
-        let needs_base = hermes_provider(provider)
-            .map(|p| p.needs_base_url)
-            .unwrap_or(false);
-        let base = if needs_base { base_url } else { None };
+        // Structured mode only handles providers codeg can map to a key var /
+        // endpoint. Unknown ids (the legacy `openai`/`custom` pseudo-providers,
+        // user-defined `custom:` slugs, or anything outside the curated table)
+        // would otherwise be written with no credential — reject them and steer
+        // the user to the raw config.yaml editor, which stays the escape hatch.
+        let meta = hermes_provider(provider).ok_or_else(|| {
+            AcpError::protocol(format!(
+                "unknown hermes provider '{provider}'; edit ~/.hermes/config.yaml directly"
+            ))
+        })?;
+        // Decide what happens to `model.base_url`:
+        // - User-editable endpoint (openai-api/lmstudio/azure-foundry) → write the
+        //   field's value, or clear it when blank.
+        // - Endpoint not exposed in the panel, and the provider is UNCHANGED →
+        //   preserve an out-of-band base URL (proxy/Azure) the user set elsewhere.
+        // - Endpoint not exposed, but the provider just CHANGED → clear the stale
+        //   base URL left over from the previous provider (it must not carry over).
+        let base = if meta.needs_base_url {
+            BaseUrlWrite::Set(base_url.unwrap_or(""))
+        } else if previous_provider.as_deref() == Some(provider) {
+            BaseUrlWrite::Preserve
+        } else {
+            BaseUrlWrite::Set("")
+        };
         merge_hermes_model_config(existing_config, provider, model, base)?
     };
 
-    let env_update = if raw_config_yaml.is_some() {
-        // Raw mode edits config.yaml only; never the secret.
-        None
-    } else if let Some(meta) = hermes_provider(provider).filter(|p| !p.key_env_var.is_empty()) {
-        match api_key.map(str::trim).filter(|k| !k.is_empty()) {
-            Some(key) => {
+    // Raw mode edits config.yaml only; never `.env`.
+    let mut env_updates: Vec<(&'static str, String)> = Vec::new();
+    if raw_config_yaml.is_none() {
+        let meta = hermes_provider(provider);
+        // API key — keyed providers only. A blank key leaves the stored secret
+        // untouched (so switching providers can't wipe it).
+        if let Some(meta) = meta.filter(|p| !p.key_env_var.is_empty()) {
+            if let Some(key) = api_key.map(str::trim).filter(|k| !k.is_empty()) {
                 if key.contains(['\n', '\r']) {
                     return Err(AcpError::protocol(
                         "hermes api key must not contain newlines",
                     ));
                 }
-                Some((meta.key_env_var, key.to_string()))
+                env_updates.push((meta.key_env_var, key.to_string()));
             }
-            // Blank key → leave the stored ~/.hermes/.env value untouched.
-            None => None,
         }
-    } else {
-        None
-    };
+        // Endpoint URL — mirror the structured base URL into the provider's
+        // base-URL env var so `.env` and config.yaml `model.base_url` agree
+        // under either of Hermes' resolution paths. An empty value clears a
+        // stale override.
+        if let Some(meta) = meta.filter(|p| p.needs_base_url && !p.base_url_env_var.is_empty()) {
+            let base = base_url.map(str::trim).unwrap_or_default();
+            if base.contains(['\n', '\r']) {
+                return Err(AcpError::protocol(
+                    "hermes base url must not contain newlines",
+                ));
+            }
+            env_updates.push((meta.base_url_env_var, base.to_string()));
+        }
+        // Neutralize only vars that can actually BLEED INTO the selected
+        // provider's runtime path — never blanket-wipe the previous provider's
+        // own credential (a valid ANTHROPIC_API_KEY must survive an anthropic→zai
+        // switch; zai won't read it). The one documented cross-provider fallback
+        // in hermes 0.16.0: openrouter (being OpenAI-API compatible) falls back to
+        // OPENAI_API_KEY and treats OPENAI_BASE_URL as an endpoint override. So
+        // when saving openrouter, write an explicit empty `OPENAI_API_KEY=` /
+        // `OPENAI_BASE_URL=` — appended even if absent from `.env`, since under
+        // Hermes' dotenv override loading only that masks a stale value inherited
+        // from the process environment.
+        if provider == "openrouter" {
+            for var in ["OPENAI_API_KEY", "OPENAI_BASE_URL"] {
+                if !env_updates.iter().any(|(k, _)| *k == var) {
+                    env_updates.push((var, String::new()));
+                }
+            }
+        }
+    }
 
-    Ok((config_yaml, env_update))
+    Ok((config_yaml, env_updates))
 }
 
 fn agent_local_config_path(agent_type: AgentType) -> Option<PathBuf> {
@@ -4114,8 +4544,7 @@ pub async fn acp_open_hermes_setup_terminal(kind: String) -> Result<(), AcpError
         }
     };
     let home = hermes_home_dir();
-    fs::create_dir_all(&home)
-        .map_err(|e| AcpError::protocol(format!("create hermes directory failed: {e}")))?;
+    ensure_hermes_home_secure(&home)?;
     let home_str = home.to_string_lossy();
     open_external_terminal_impl(&command, Some(home_str.as_ref()))
 }
@@ -4208,8 +4637,7 @@ fn shell_single_quote(value: &str) -> String {
 pub async fn acp_reveal_hermes_home(app: tauri::AppHandle) -> Result<(), AcpError> {
     use tauri_plugin_opener::OpenerExt;
     let home = hermes_home_dir();
-    fs::create_dir_all(&home)
-        .map_err(|e| AcpError::protocol(format!("create hermes directory failed: {e}")))?;
+    ensure_hermes_home_secure(&home)?;
     app.opener()
         .open_path(home.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| AcpError::protocol(format!("open hermes folder failed: {e}")))?;
@@ -5605,11 +6033,30 @@ mod tests {
     }
 
     #[test]
+    fn patch_env_text_empty_value_clears_present_and_appends_to_mask() {
+        // Clearing a PRESENT key rewrites it to `KEY=` in place.
+        let cleared = patch_env_text("OPENAI_API_KEY=secret\nKEEP=1\n", &[("OPENAI_API_KEY", "")]);
+        assert!(cleared.contains("OPENAI_API_KEY="));
+        assert!(!cleared.contains("OPENAI_API_KEY=secret"));
+        assert!(cleared.contains("KEEP=1"));
+        // An ABSENT key is still appended as an explicit empty line — under
+        // Hermes' dotenv override loading that is what masks a value of the same
+        // name inherited from the process environment.
+        let absent = patch_env_text("KEEP=1\n", &[("OPENAI_API_KEY", "")]);
+        assert!(absent.contains("KEEP=1"));
+        assert!(absent.contains("OPENAI_API_KEY="));
+    }
+
+    #[test]
     fn merge_hermes_model_config_sets_model_and_keeps_other_keys() {
         let existing = "terminal:\n  backend: local\nmodel:\n  default: old-model\n  provider: openai\n";
-        let merged =
-            merge_hermes_model_config(Some(existing), "openrouter", "moonshotai/kimi-k2", None)
-                .expect("merge");
+        let merged = merge_hermes_model_config(
+            Some(existing),
+            "openrouter",
+            "moonshotai/kimi-k2",
+            BaseUrlWrite::Preserve,
+        )
+        .expect("merge");
         let value: serde_yaml::Value = serde_yaml::from_str(&merged).expect("parse merged");
         let model = value.get("model").expect("model section");
         assert_eq!(model.get("provider").and_then(|v| v.as_str()), Some("openrouter"));
@@ -5627,20 +6074,334 @@ mod tests {
     }
 
     #[test]
-    fn merge_hermes_model_config_writes_and_clears_base_url() {
-        let with_base =
-            merge_hermes_model_config(None, "custom", "my-model", Some("https://api.test/v1"))
-                .expect("merge with base");
+    fn merge_hermes_model_config_set_writes_clears_and_preserve_keeps_base_url() {
+        let with_base = merge_hermes_model_config(
+            None,
+            "openai-api",
+            "my-model",
+            BaseUrlWrite::Set("https://api.test/v1"),
+        )
+        .expect("merge with base");
         let value: serde_yaml::Value = serde_yaml::from_str(&with_base).expect("parse");
         assert_eq!(
             value.get("model").and_then(|m| m.get("base_url")).and_then(|v| v.as_str()),
             Some("https://api.test/v1")
         );
-        // Re-merging without a base URL removes the stale field.
-        let cleared = merge_hermes_model_config(Some(&with_base), "openai", "my-model", None)
-            .expect("merge clear");
+        // Set("") clears the field (user emptied the API URL input).
+        let cleared =
+            merge_hermes_model_config(Some(&with_base), "openai-api", "my-model", BaseUrlWrite::Set(""))
+                .expect("merge clear");
         let value: serde_yaml::Value = serde_yaml::from_str(&cleared).expect("parse");
         assert!(value.get("model").and_then(|m| m.get("base_url")).is_none());
+        // Preserve leaves an existing endpoint untouched (provider whose base URL
+        // is not user-editable in the panel must not lose an out-of-band value).
+        let kept = merge_hermes_model_config(
+            Some(&with_base),
+            "anthropic",
+            "my-model",
+            BaseUrlWrite::Preserve,
+        )
+        .expect("merge preserve");
+        let value: serde_yaml::Value = serde_yaml::from_str(&kept).expect("parse");
+        assert_eq!(
+            value.get("model").and_then(|m| m.get("base_url")).and_then(|v| v.as_str()),
+            Some("https://api.test/v1")
+        );
+    }
+
+    #[test]
+    fn plan_hermes_write_preserves_base_url_for_fixed_endpoint_provider() {
+        // Anthropic (needsBaseUrl: false) behind a proxy: a structured save that
+        // doesn't touch the hidden API URL field must keep the existing endpoint.
+        let existing = "model:\n  provider: anthropic\n  default: old\n  base_url: https://my-proxy/v1\n";
+        let (yaml, env) = plan_hermes_write(
+            "anthropic",
+            Some("sk-ant"),
+            "claude-x",
+            None,
+            None,
+            Some(existing),
+        )
+        .expect("plan");
+        let value: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("yaml");
+        assert_eq!(
+            value.get("model").and_then(|m| m.get("base_url")).and_then(|v| v.as_str()),
+            Some("https://my-proxy/v1"),
+            "out-of-band base_url must survive a structured save"
+        );
+        // Only the API key is touched in `.env`; no base-URL var for anthropic.
+        assert_eq!(env, vec![("ANTHROPIC_API_KEY", "sk-ant".to_string())]);
+    }
+
+    #[test]
+    fn plan_hermes_write_clears_stale_base_url_on_provider_switch() {
+        // Existing config is `openai-api` with a custom proxy endpoint; the user
+        // switches to `anthropic` (fixed endpoint, field hidden). The stale OpenAI
+        // base URL must NOT carry over to anthropic.
+        let existing =
+            "model:\n  provider: openai-api\n  default: gpt-x\n  base_url: https://openai-proxy/v1\n";
+        let (yaml, _env) = plan_hermes_write(
+            "anthropic",
+            Some("sk-ant"),
+            "claude-x",
+            None,
+            None,
+            Some(existing),
+        )
+        .expect("plan");
+        let value: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("yaml");
+        assert_eq!(
+            value.get("model").and_then(|m| m.get("provider")).and_then(|v| v.as_str()),
+            Some("anthropic")
+        );
+        assert!(
+            value.get("model").and_then(|m| m.get("base_url")).is_none(),
+            "stale base_url from the previous provider must be cleared on switch: {yaml}"
+        );
+    }
+
+    #[test]
+    fn plan_hermes_write_neutralizes_openrouter_openai_fallback() {
+        // Saving openrouter ALWAYS writes empty OPENAI_API_KEY/OPENAI_BASE_URL —
+        // hermes 0.16.0 openrouter resolution falls back to OPENAI_API_KEY (and
+        // treats OPENAI_BASE_URL as an override). It runs regardless of the
+        // previous provider, including legacy ids no longer in the table.
+        for prev in ["openai-api", "openai", "custom", "anthropic"] {
+            let existing = format!("model:\n  provider: {prev}\n  default: m\n");
+            let (_, env) = plan_hermes_write("openrouter", None, "m", None, None, Some(&existing))
+                .expect("→openrouter");
+            assert!(
+                env.contains(&("OPENAI_API_KEY", String::new())),
+                "OPENAI_API_KEY must be neutralized (prev={prev}): {env:?}"
+            );
+            assert!(env.contains(&("OPENAI_BASE_URL", String::new())));
+            // Blank openrouter key → its own var is left untouched.
+            assert!(!env.iter().any(|(k, _)| *k == "OPENROUTER_API_KEY"));
+        }
+        // A provided key is written alongside the neutralization.
+        let (_, env) = plan_hermes_write("openrouter", Some("sk-or"), "m", None, None, None)
+            .expect("keyed");
+        assert!(env.contains(&("OPENROUTER_API_KEY", "sk-or".to_string())));
+        assert!(env.contains(&("OPENAI_API_KEY", String::new())));
+    }
+
+    #[test]
+    fn plan_hermes_write_switch_preserves_unrelated_previous_credential() {
+        // Switching anthropic → zai must NOT wipe the still-valid ANTHROPIC_API_KEY
+        // (zai does not read it, so clearing it would only destroy a good
+        // credential). Only zai's own key var is written.
+        let existing = "model:\n  provider: anthropic\n  default: m\n";
+        let (_, env) = plan_hermes_write("zai", Some("sk-glm"), "m", None, None, Some(existing))
+            .expect("anthropic→zai");
+        assert_eq!(env, vec![("GLM_API_KEY", "sk-glm".to_string())]);
+        assert!(!env.iter().any(|(k, _)| *k == "ANTHROPIC_API_KEY"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_hermes_secret_file_secures_fresh_and_preserves_existing() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let mode_of = |p: &Path| fs::metadata(p).expect("metadata").permissions().mode() & 0o777;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let home = tmp.path().join(".hermes");
+        fs::create_dir_all(&home).expect("home");
+
+        // A brand-new secret is created owner-only (0600) and round-trips.
+        let env_path = home.join(".env");
+        write_hermes_secret_file(&env_path, "OPENROUTER_API_KEY=sk-1\n", ".env")
+            .expect("write env");
+        assert_eq!(mode_of(&env_path), 0o600, "fresh .env must be 0600");
+        assert_eq!(
+            fs::read_to_string(&env_path).unwrap(),
+            "OPENROUTER_API_KEY=sk-1\n"
+        );
+        let cfg_path = home.join("config.yaml");
+        write_hermes_secret_file(&cfg_path, "model:\n  provider: openai-api\n", "config.yaml")
+            .expect("write config.yaml");
+        assert_eq!(mode_of(&cfg_path), 0o600, "fresh config.yaml must be 0600");
+
+        // An existing file is written through IN PLACE: a managed group-readable
+        // mode (0640) and the inode itself are preserved (so owner/group, ACL and
+        // xattrs ride along), while the content updates.
+        fs::set_permissions(&env_path, fs::Permissions::from_mode(0o640)).expect("loosen");
+        let inode_before = fs::metadata(&env_path).unwrap().ino();
+        write_hermes_secret_file(&env_path, "OPENROUTER_API_KEY=sk-2\n", ".env")
+            .expect("rewrite env");
+        assert_eq!(mode_of(&env_path), 0o640, "existing managed mode must be preserved");
+        assert_eq!(
+            fs::metadata(&env_path).unwrap().ino(),
+            inode_before,
+            "existing file must be rewritten in place (same inode), not replaced"
+        );
+        assert_eq!(
+            fs::read_to_string(&env_path).unwrap(),
+            "OPENROUTER_API_KEY=sk-2\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_hermes_secret_file_writes_through_symlink() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        // A dotfile/secret-manager layout: config.yaml is a symlink to the real
+        // file. Saving must update the real target and keep the symlink intact.
+        let real = dir.join("real-config.yaml");
+        fs::write(&real, "model:\n  provider: openai-api\n").unwrap();
+        let link = dir.join("config.yaml");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        write_hermes_secret_file(&link, "model:\n  provider: anthropic\n", "config.yaml")
+            .expect("write through symlink");
+        assert!(
+            fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+            "the symlink must be preserved, not replaced by a regular file"
+        );
+        assert_eq!(
+            fs::read_to_string(&real).unwrap(),
+            "model:\n  provider: anthropic\n",
+            "the symlink's real target must be updated"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_hermes_secret_file_secures_dangling_symlink_target() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        // A managed layout: `.env` symlinks to a target that doesn't exist yet.
+        let real = dir.join("vault-hermes.env");
+        let link = dir.join(".env");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert!(fs::metadata(&link).is_err(), "precondition: dangling symlink");
+
+        write_hermes_secret_file(&link, "OPENROUTER_API_KEY=sk\n", ".env").expect("write");
+        // The target is created THROUGH the symlink and is owner-only (0600), not
+        // the umask default (0644) — a fresh secret must never be world-readable.
+        assert_eq!(
+            fs::metadata(&real).unwrap().permissions().mode() & 0o777,
+            0o600,
+            "a freshly created symlink target must be 0600"
+        );
+        assert_eq!(fs::read_to_string(&real).unwrap(), "OPENROUTER_API_KEY=sk\n");
+        assert!(
+            fs::symlink_metadata(&link).unwrap().file_type().is_symlink(),
+            "the symlink itself must be preserved"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_hermes_secret_file_tightens_world_readable_existing_secret() {
+        use std::os::unix::fs::PermissionsExt;
+        // The tightening is honored only where Hermes would chmod (not a
+        // container/managed opt-out, e.g. a Docker CI runner with /.dockerenv).
+        if hermes_skip_chmod() {
+            return;
+        }
+        let mode_of = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+
+        // A secret left world-readable (0644) by an older build is repaired to
+        // owner-only 0600 on the next save (0640 would still expose it to a broad
+        // group like staff); content updates.
+        let env_path = dir.join(".env");
+        fs::write(&env_path, "OPENROUTER_API_KEY=old\n").unwrap();
+        fs::set_permissions(&env_path, fs::Permissions::from_mode(0o644)).unwrap();
+        write_hermes_secret_file(&env_path, "OPENROUTER_API_KEY=new\n", ".env").unwrap();
+        assert_eq!(mode_of(&env_path), 0o600, "a world-readable 0644 secret → 0600");
+        assert_eq!(
+            fs::read_to_string(&env_path).unwrap(),
+            "OPENROUTER_API_KEY=new\n"
+        );
+
+        // A deliberately group-shared managed mode (0640, no world bits) survives.
+        let managed = dir.join("managed.env");
+        fs::write(&managed, "K=1\n").unwrap();
+        fs::set_permissions(&managed, fs::Permissions::from_mode(0o640)).unwrap();
+        write_hermes_secret_file(&managed, "K=2\n", ".env").unwrap();
+        assert_eq!(mode_of(&managed), 0o640, "managed group-shared mode preserved");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_hermes_home_secure_respects_existing_and_managed_dirs() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode_of = |p: &Path| fs::metadata(p).expect("metadata").permissions().mode() & 0o777;
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        // Fresh home → 0700 by default (HERMES_HOME_MODE cleared so the assertion
+        // is deterministic regardless of the ambient env; skipped when this env
+        // opts out of chmod, like a Docker CI runner).
+        temp_env::with_var("HERMES_HOME_MODE", None::<&str>, || {
+            let fresh = tmp.path().join("fresh-hermes");
+            ensure_hermes_home_secure(&fresh).expect("ensure fresh");
+            if !hermes_skip_chmod() {
+                assert_eq!(mode_of(&fresh), 0o700, "fresh hermes home must be 0700");
+            }
+        });
+
+        // HERMES_HOME_MODE overrides the default for a freshly-created home (e.g.
+        // 0750 for a web server that traverses HERMES_HOME).
+        temp_env::with_var("HERMES_HOME_MODE", Some("0750"), || {
+            let fresh = tmp.path().join("fresh-hermes-moded");
+            ensure_hermes_home_secure(&fresh).expect("ensure fresh moded");
+            if !hermes_skip_chmod() {
+                assert_eq!(mode_of(&fresh), 0o750, "HERMES_HOME_MODE must be honored");
+            }
+        });
+
+        // A pre-existing, group-accessible home (managed/NixOS layout) is left
+        // untouched — revoking shared access would break other Hermes processes.
+        let managed = tmp.path().join("managed-hermes");
+        fs::create_dir_all(&managed).unwrap();
+        fs::set_permissions(&managed, fs::Permissions::from_mode(0o755)).unwrap();
+        ensure_hermes_home_secure(&managed).expect("ensure managed");
+        assert_eq!(mode_of(&managed), 0o755, "existing hermes home mode preserved");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hermes_skip_chmod_requires_a_non_empty_opt_out() {
+        // A non-empty opt-out enables skip.
+        temp_env::with_vars(
+            [
+                ("HERMES_SKIP_CHMOD", Some("1")),
+                ("HERMES_CONTAINER", None),
+            ],
+            || assert!(hermes_skip_chmod(), "non-empty HERMES_SKIP_CHMOD skips"),
+        );
+        // An EMPTY opt-out must NOT skip (Hermes' Python truthiness treats `` as
+        // falsy) — but only assert that on a host that isn't itself a container.
+        let host_is_container = temp_env::with_vars(
+            [
+                ("HERMES_SKIP_CHMOD", None::<&str>),
+                ("HERMES_CONTAINER", None),
+            ],
+            hermes_skip_chmod,
+        );
+        if !host_is_container {
+            temp_env::with_vars(
+                [
+                    ("HERMES_SKIP_CHMOD", Some("")),
+                    ("HERMES_CONTAINER", Some("")),
+                ],
+                || assert!(!hermes_skip_chmod(), "an empty opt-out must not skip"),
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_hermes_home_mode_handles_octal_and_defaults() {
+        assert_eq!(parse_hermes_home_mode(None), 0o700);
+        assert_eq!(parse_hermes_home_mode(Some("")), 0o700);
+        assert_eq!(parse_hermes_home_mode(Some("0701")), 0o701);
+        assert_eq!(parse_hermes_home_mode(Some(" 750 ")), 0o750);
+        assert_eq!(parse_hermes_home_mode(Some("0o700")), 0o700);
+        assert_eq!(parse_hermes_home_mode(Some("nonsense")), 0o700);
     }
 
     #[test]
@@ -5648,24 +6409,114 @@ mod tests {
         let openrouter = hermes_provider("openrouter").expect("openrouter");
         assert_eq!(openrouter.key_env_var, "OPENROUTER_API_KEY");
         assert!(!openrouter.needs_base_url);
-        let custom = hermes_provider("custom").expect("custom");
-        assert_eq!(custom.key_env_var, "OPENAI_API_KEY");
-        assert!(custom.needs_base_url);
-        // OAuth providers carry no API-key env var (set via terminal --setup).
+        // `openai-api` is the OpenAI-compatible path: OPENAI_API_KEY + a
+        // user-supplied base URL.
+        let openai_api = hermes_provider("openai-api").expect("openai-api");
+        assert_eq!(openai_api.key_env_var, "OPENAI_API_KEY");
+        assert!(openai_api.needs_base_url);
+        // Hermes' first-priority key var per provider (auth.py PROVIDER_REGISTRY).
+        assert_eq!(hermes_provider("zai").expect("zai").key_env_var, "GLM_API_KEY");
+        assert_eq!(
+            hermes_provider("kimi-coding").expect("kimi-coding").key_env_var,
+            "KIMI_API_KEY"
+        );
+        // OAuth + AWS providers carry no API-key env var (set via terminal --setup
+        // or the AWS SDK chain).
         assert_eq!(hermes_provider("nous").expect("nous").key_env_var, "");
+        assert_eq!(hermes_provider("bedrock").expect("bedrock").key_env_var, "");
+        // The legacy bare `openai` alias (which Hermes routes to OpenRouter) and
+        // the old `custom` pseudo-provider are intentionally not in the table.
+        assert!(hermes_provider("openai").is_none());
+        assert!(hermes_provider("custom").is_none());
         assert!(hermes_provider("does-not-exist").is_none());
+    }
+
+    #[test]
+    fn hermes_provider_key_env_vars_match_authoritative_registry() {
+        // The full id → first api-key env var mapping from Hermes' own
+        // `hermes_cli/auth.py` PROVIDER_REGISTRY (empty for OAuth/AWS providers).
+        // Locks the table down so a wrong mapping (e.g. zai → ZAI_API_KEY instead
+        // of GLM_API_KEY) fails CI rather than silently sending the wrong key var.
+        let expected: &[(&str, &str)] = &[
+            ("openrouter", "OPENROUTER_API_KEY"),
+            ("openai-api", "OPENAI_API_KEY"),
+            ("anthropic", "ANTHROPIC_API_KEY"),
+            ("gemini", "GOOGLE_API_KEY"),
+            ("deepseek", "DEEPSEEK_API_KEY"),
+            ("xai", "XAI_API_KEY"),
+            ("zai", "GLM_API_KEY"),
+            ("minimax", "MINIMAX_API_KEY"),
+            ("minimax-cn", "MINIMAX_CN_API_KEY"),
+            ("kimi-coding", "KIMI_API_KEY"),
+            ("kimi-coding-cn", "KIMI_CN_API_KEY"),
+            ("nvidia", "NVIDIA_API_KEY"),
+            ("alibaba", "DASHSCOPE_API_KEY"),
+            ("alibaba-coding-plan", "ALIBABA_CODING_PLAN_API_KEY"),
+            ("copilot", "COPILOT_GITHUB_TOKEN"),
+            ("lmstudio", "LM_API_KEY"),
+            ("azure-foundry", "AZURE_FOUNDRY_API_KEY"),
+            ("stepfun", "STEPFUN_API_KEY"),
+            ("arcee", "ARCEEAI_API_KEY"),
+            ("gmi", "GMI_API_KEY"),
+            ("huggingface", "HF_TOKEN"),
+            ("kilocode", "KILOCODE_API_KEY"),
+            ("opencode-zen", "OPENCODE_ZEN_API_KEY"),
+            ("opencode-go", "OPENCODE_GO_API_KEY"),
+            ("xiaomi", "XIAOMI_API_KEY"),
+            ("tencent-tokenhub", "TOKENHUB_API_KEY"),
+            ("ollama-cloud", "OLLAMA_API_KEY"),
+            ("novita", "NOVITA_API_KEY"),
+            ("nous", ""),
+            ("openai-codex", ""),
+            ("minimax-oauth", ""),
+            ("xai-oauth", ""),
+            ("qwen-oauth", ""),
+            ("google-gemini-cli", ""),
+            ("copilot-acp", ""),
+            ("bedrock", ""),
+        ];
+        assert_eq!(
+            expected.len(),
+            HERMES_PROVIDERS.len(),
+            "expected list must cover every table entry"
+        );
+        for (id, key) in expected {
+            let p = hermes_provider(id).unwrap_or_else(|| panic!("missing provider {id}"));
+            assert_eq!(p.key_env_var, *key, "{id} key_env_var");
+        }
+        // No table entry is left unverified.
+        for p in HERMES_PROVIDERS {
+            assert!(
+                expected.iter().any(|(id, _)| *id == p.id),
+                "untested provider {}",
+                p.id
+            );
+        }
+        // The base-URL env var for the three user-supplied-endpoint providers.
+        assert_eq!(
+            hermes_provider("openai-api").unwrap().base_url_env_var,
+            "OPENAI_BASE_URL"
+        );
+        assert_eq!(
+            hermes_provider("lmstudio").unwrap().base_url_env_var,
+            "LM_BASE_URL"
+        );
+        assert_eq!(
+            hermes_provider("azure-foundry").unwrap().base_url_env_var,
+            "AZURE_FOUNDRY_BASE_URL"
+        );
     }
 
     #[test]
     fn plan_hermes_write_structured_maps_key_and_config() {
         let (yaml, env) =
-            plan_hermes_write("openrouter", Some("sk-or-1"), "kimi", None, None, None)
+            plan_hermes_write("anthropic", Some("sk-ant-1"), "kimi", None, None, None)
                 .expect("plan");
-        assert_eq!(env, Some(("OPENROUTER_API_KEY", "sk-or-1".to_string())));
+        assert_eq!(env, vec![("ANTHROPIC_API_KEY", "sk-ant-1".to_string())]);
         let value: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("yaml");
         assert_eq!(
             value.get("model").and_then(|m| m.get("provider")).and_then(|v| v.as_str()),
-            Some("openrouter")
+            Some("anthropic")
         );
     }
 
@@ -5682,7 +6533,7 @@ mod tests {
             None,
         )
         .expect("plan");
-        assert_eq!(env, None, "raw mode must not write .env");
+        assert!(env.is_empty(), "raw mode must not write .env");
         assert!(yaml.contains("anthropic"), "raw yaml written verbatim: {yaml}");
     }
 
@@ -5691,32 +6542,33 @@ mod tests {
         // OAuth provider (empty key var) → no .env update.
         let (_, env) = plan_hermes_write("nous", Some("ignored"), "m", None, None, None)
             .expect("oauth");
-        assert_eq!(env, None);
-        // Blank key on a keyed provider → leave the stored secret untouched.
-        let (_, env) = plan_hermes_write("openai", Some("   "), "m", None, None, None)
+        assert!(env.is_empty());
+        // Blank key on a keyed provider with no base-URL var → nothing touched.
+        let (_, env) = plan_hermes_write("anthropic", Some("   "), "m", None, None, None)
             .expect("blank");
-        assert_eq!(env, None);
-        let (_, env) = plan_hermes_write("openai", None, "m", None, None, None).expect("none");
-        assert_eq!(env, None);
+        assert!(env.is_empty());
+        let (_, env) =
+            plan_hermes_write("anthropic", None, "m", None, None, None).expect("none");
+        assert!(env.is_empty());
     }
 
     #[test]
     fn plan_hermes_write_rejects_newline_key_and_invalid_yaml() {
         assert!(
-            plan_hermes_write("openai", Some("a\nb"), "m", None, None, None).is_err(),
+            plan_hermes_write("openai-api", Some("a\nb"), "m", None, None, None).is_err(),
             "newline in key must be rejected"
         );
         assert!(
-            plan_hermes_write("openai", None, "m", None, Some("model: [unterminated"), None)
+            plan_hermes_write("openai-api", None, "m", None, Some("model: [unterminated"), None)
                 .is_err(),
             "invalid raw yaml must be rejected"
         );
     }
 
     #[test]
-    fn plan_hermes_write_custom_provider_writes_base_url() {
+    fn plan_hermes_write_openai_api_provider_writes_base_url() {
         let (yaml, env) = plan_hermes_write(
-            "custom",
+            "openai-api",
             Some("sk-x"),
             "m",
             Some("https://api.test/v1"),
@@ -5724,11 +6576,71 @@ mod tests {
             None,
         )
         .expect("plan");
-        assert_eq!(env, Some(("OPENAI_API_KEY", "sk-x".to_string())));
+        // The endpoint is written to BOTH the key var's sibling base-URL var and
+        // config.yaml model.base_url, so the two agree under either resolution path.
+        assert_eq!(
+            env,
+            vec![
+                ("OPENAI_API_KEY", "sk-x".to_string()),
+                ("OPENAI_BASE_URL", "https://api.test/v1".to_string()),
+            ]
+        );
         let value: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("yaml");
         assert_eq!(
             value.get("model").and_then(|m| m.get("base_url")).and_then(|v| v.as_str()),
             Some("https://api.test/v1")
         );
+        // Clearing the base URL writes an empty override so a stale `.env` value
+        // can't shadow the default endpoint.
+        let (_, env) = plan_hermes_write("openai-api", None, "m", None, None, None)
+            .expect("clear base");
+        assert_eq!(env, vec![("OPENAI_BASE_URL", String::new())]);
+    }
+
+    #[test]
+    fn plan_hermes_write_structured_rejects_unknown_provider() {
+        // Legacy/unknown ids can't be mapped to a key var → reject in structured
+        // mode so we never write a provider with no credential.
+        assert!(plan_hermes_write("openai", Some("k"), "m", None, None, None).is_err());
+        assert!(plan_hermes_write("custom", Some("k"), "m", None, None, None).is_err());
+        assert!(plan_hermes_write("totally-made-up", None, "m", None, None, None).is_err());
+        // Raw mode stays the escape hatch: any provider id is accepted verbatim.
+        let (yaml, env) = plan_hermes_write(
+            "custom:my-proxy",
+            None,
+            "m",
+            None,
+            Some("model:\n  provider: custom:my-proxy\n"),
+            None,
+        )
+        .expect("raw mode accepts any provider");
+        assert!(env.is_empty());
+        assert!(yaml.contains("custom:my-proxy"));
+    }
+
+    #[test]
+    fn project_hermes_key_and_base_falls_back_to_env_base_url() {
+        let mut env = BTreeMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "sk-1".to_string());
+        env.insert("OPENAI_BASE_URL".to_string(), "https://proxy/v1".to_string());
+        // No YAML base_url → the panel still sees the endpoint from `.env`, so a
+        // later save won't clear it (regression guard for the dual-write change).
+        let (key, base) = project_hermes_key_and_base("openai-api", &env, None);
+        assert_eq!(key, Some("sk-1".to_string()));
+        assert_eq!(base, Some("https://proxy/v1".to_string()));
+        // YAML base_url wins over the env fallback.
+        let (_, base) =
+            project_hermes_key_and_base("openai-api", &env, Some("https://yaml/v1"));
+        assert_eq!(base, Some("https://yaml/v1".to_string()));
+        // A keyed provider with no base-URL var and no YAML base → no base URL.
+        let mut env2 = BTreeMap::new();
+        env2.insert("ANTHROPIC_API_KEY".to_string(), "sk-a".to_string());
+        let (key, base) = project_hermes_key_and_base("anthropic", &env2, None);
+        assert_eq!(key, Some("sk-a".to_string()));
+        assert_eq!(base, None);
+        // Unknown provider → nothing projected from `.env`.
+        let (key, base) = project_hermes_key_and_base("custom:x", &env, None);
+        assert_eq!(key, None);
+        assert_eq!(base, None);
     }
 }

@@ -50,7 +50,9 @@ import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -4454,10 +4456,11 @@ export function AcpAgentSettings() {
               }
             : {
                 provider: draft.hermesProvider,
-                // Blank key → null → backend leaves the stored ~/.hermes/.env
-                // value untouched (so switching providers can't wipe it).
+                // Blank key, or a provider with no key field (OAuth / AWS) →
+                // null → backend leaves the stored ~/.hermes/.env value
+                // untouched (so switching providers can't wipe it).
                 apiKey:
-                  providerOption?.isOAuth || !draft.apiKey.trim()
+                  providerOption?.kind !== "apiKey" || !draft.apiKey.trim()
                     ? null
                     : draft.apiKey,
                 model: draft.model,
@@ -7688,11 +7691,42 @@ supports_websockets = true`}
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start">
-                          {HERMES_PROVIDERS.map((provider) => (
-                            <SelectItem key={provider.id} value={provider.id}>
-                              {provider.label}
-                            </SelectItem>
-                          ))}
+                          {/* Preserve an existing config's provider in the list
+                              even when it's outside the curated table, so the
+                              dropdown shows the real value instead of going blank. */}
+                          {selectedDraft.hermesProvider &&
+                            !HERMES_PROVIDERS.some(
+                              (p) => p.id === selectedDraft.hermesProvider
+                            ) && (
+                              <SelectItem value={selectedDraft.hermesProvider}>
+                                {selectedDraft.hermesProvider}
+                              </SelectItem>
+                            )}
+                          {(
+                            [
+                              ["apiKey", t("hermes.groupApiKey")],
+                              ["oauth", t("hermes.groupOauth")],
+                              ["aws", t("hermes.groupAws")],
+                            ] as const
+                          ).map(([kind, groupLabel]) => {
+                            const items = HERMES_PROVIDERS.filter(
+                              (p) => p.kind === kind
+                            )
+                            if (items.length === 0) return null
+                            return (
+                              <SelectGroup key={kind}>
+                                <SelectLabel>{groupLabel}</SelectLabel>
+                                {items.map((provider) => (
+                                  <SelectItem
+                                    key={provider.id}
+                                    value={provider.id}
+                                  >
+                                    {provider.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )
+                          })}
                         </SelectContent>
                       </Select>
                       <p className="text-[11px] text-muted-foreground">
@@ -7700,7 +7734,7 @@ supports_websockets = true`}
                       </p>
                     </div>
 
-                    {!selectedHermesProviderOption?.isOAuth && (
+                    {selectedHermesProviderOption?.kind === "apiKey" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           API Key
@@ -7785,9 +7819,21 @@ supports_websockets = true`}
                       />
                     </div>
 
-                    {selectedHermesProviderOption?.isOAuth && (
+                    {selectedHermesProviderOption?.kind === "oauth" && (
                       <p className="text-[11px] text-muted-foreground">
                         {t("hermes.oauthHint")}
+                      </p>
+                    )}
+
+                    {selectedHermesProviderOption?.kind === "aws" && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("hermes.awsHint")}
+                      </p>
+                    )}
+
+                    {!selectedHermesProviderOption && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                        {t("hermes.unsupportedProvider")}
                       </p>
                     )}
 
@@ -7795,7 +7841,10 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => handleSaveHermesConfig("structured")}
-                        disabled={selectedIsSavingConfig}
+                        disabled={
+                          selectedIsSavingConfig ||
+                          !selectedHermesProviderOption
+                        }
                       >
                         {selectedIsSavingConfig ? (
                           <>

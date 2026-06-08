@@ -398,48 +398,249 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
 ]
 
 /**
+ * How a Hermes provider's credentials are supplied:
+ * - `apiKey`: codeg writes the key to `~/.hermes/.env`.
+ * - `oauth`: set through the terminal `--setup` flow (no API-key field).
+ * - `aws`: resolved from the AWS SDK credential chain (no API-key field).
+ */
+export type HermesProviderKind = "apiKey" | "oauth" | "aws"
+
+/**
  * Curated Hermes providers the settings panel edits via structured fields.
- * Mirrors the backend `HERMES_PROVIDERS` table (commands/acp.rs). The provider
- * choice drives the linkage between the API key (~/.hermes/.env) and the
- * general config (~/.hermes/config.yaml `model.provider`/`base_url`). OAuth
- * providers carry no API key field — their credentials are set through the
- * terminal `--setup` flow.
+ * Mirrors the backend `HERMES_PROVIDERS` table (commands/acp.rs), whose ids and
+ * `.env` key vars come from Hermes' own `hermes_cli/auth.py` PROVIDER_REGISTRY.
+ * The provider choice drives the linkage between the API key (~/.hermes/.env)
+ * and the general config (~/.hermes/config.yaml `model.provider`/`base_url`).
  */
 export interface HermesProviderOption {
+  /** Canonical `model.provider` id written to config.yaml. */
   id: string
-  /** i18n key suffix under AcpAgentSettings.hermes.providers.* */
+  /** Brand display name shown in the provider dropdown (not localized). */
   label: string
+  /** Whether the provider takes a user-supplied base URL (OpenAI-compatible). */
   needsBaseUrl: boolean
-  isOAuth: boolean
+  kind: HermesProviderKind
 }
 
 export const HERMES_PROVIDERS: HermesProviderOption[] = [
+  // API-key providers — codeg writes the key var to ~/.hermes/.env.
   {
     id: "openrouter",
     label: "OpenRouter",
     needsBaseUrl: false,
-    isOAuth: false,
+    kind: "apiKey",
   },
-  { id: "openai", label: "OpenAI", needsBaseUrl: false, isOAuth: false },
-  { id: "anthropic", label: "Anthropic", needsBaseUrl: false, isOAuth: false },
-  { id: "gemini", label: "Google Gemini", needsBaseUrl: false, isOAuth: false },
   {
-    id: "custom",
-    label: "Custom (OpenAI-compatible)",
+    id: "openai-api",
+    label: "OpenAI / Compatible",
     needsBaseUrl: true,
-    isOAuth: false,
+    kind: "apiKey",
   },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "gemini",
+    label: "Google AI Studio",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "xai",
+    label: "xAI Grok",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "zai",
+    label: "Z.AI / GLM",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "minimax",
+    label: "MiniMax",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "minimax-cn",
+    label: "MiniMax (China)",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "kimi-coding",
+    label: "Kimi / Moonshot",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "kimi-coding-cn",
+    label: "Kimi / Moonshot (China)",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "nvidia",
+    label: "NVIDIA NIM",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "alibaba",
+    label: "Qwen (DashScope)",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "alibaba-coding-plan",
+    label: "Alibaba Coding Plan",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "copilot",
+    label: "GitHub Copilot",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "lmstudio",
+    label: "LM Studio",
+    needsBaseUrl: true,
+    kind: "apiKey",
+  },
+  {
+    id: "azure-foundry",
+    label: "Azure Foundry",
+    needsBaseUrl: true,
+    kind: "apiKey",
+  },
+  {
+    id: "stepfun",
+    label: "StepFun",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "arcee",
+    label: "Arcee AI",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "gmi",
+    label: "GMI Cloud",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "huggingface",
+    label: "Hugging Face",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "kilocode",
+    label: "Kilo Code",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "opencode-zen",
+    label: "OpenCode Zen",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "opencode-go",
+    label: "OpenCode Go",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "xiaomi",
+    label: "Xiaomi MiMo",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "tencent-tokenhub",
+    label: "Tencent TokenHub",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "ollama-cloud",
+    label: "Ollama Cloud",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  {
+    id: "novita",
+    label: "Novita AI",
+    needsBaseUrl: false,
+    kind: "apiKey",
+  },
+  // OAuth / external providers — credentials set via the terminal `--setup` flow.
   {
     id: "nous",
-    label: "Nous Portal (OAuth)",
+    label: "Nous Portal",
     needsBaseUrl: false,
-    isOAuth: true,
+    kind: "oauth",
+  },
+  {
+    id: "openai-codex",
+    label: "OpenAI Codex",
+    needsBaseUrl: false,
+    kind: "oauth",
   },
   {
     id: "minimax-oauth",
-    label: "MiniMax (OAuth)",
+    label: "MiniMax",
     needsBaseUrl: false,
-    isOAuth: true,
+    kind: "oauth",
+  },
+  {
+    id: "xai-oauth",
+    label: "xAI Grok",
+    needsBaseUrl: false,
+    kind: "oauth",
+  },
+  {
+    id: "qwen-oauth",
+    label: "Qwen",
+    needsBaseUrl: false,
+    kind: "oauth",
+  },
+  {
+    id: "google-gemini-cli",
+    label: "Gemini CLI",
+    needsBaseUrl: false,
+    kind: "oauth",
+  },
+  {
+    id: "copilot-acp",
+    label: "GitHub Copilot ACP",
+    needsBaseUrl: false,
+    kind: "oauth",
+  },
+  // AWS Bedrock — credentials from the AWS SDK chain.
+  {
+    id: "bedrock",
+    label: "AWS Bedrock",
+    needsBaseUrl: false,
+    kind: "aws",
   },
 ]
 
