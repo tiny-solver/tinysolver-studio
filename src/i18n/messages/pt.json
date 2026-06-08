@@ -91,6 +91,22 @@
       "placeholder": "Selecione o nível de zoom",
       "default": "Padrão",
       "current": "Zoom atual: {zoom}%"
+    },
+    "fonts": {
+      "sectionTitle": "Fontes",
+      "sectionDescription": "Escolha as fontes para a interface, o editor de código e o terminal. As fontes incluídas são carregadas sob demanda; selecione “Personalizada…” para usar qualquer fonte instalada no seu sistema.",
+      "interface": "Interface",
+      "editor": "Editor",
+      "terminal": "Terminal",
+      "groupSans": "Sem serifa",
+      "groupMono": "Monoespaçada",
+      "custom": "Personalizada…",
+      "customPlaceholder": "Nome da fonte, ex.: Fira Code",
+      "fontSize": "Tamanho da fonte",
+      "ligatures": "Ativar ligaduras",
+      "ligaturesUnavailable": "Esta fonte não tem ligaduras",
+      "terminalLigaturesHint": "As ligaduras do terminal aplicam-se apenas às fontes de programação incluídas.",
+      "preview": "Pré-visualização"
     }
   },
   "SystemSettings": {
@@ -734,7 +750,8 @@
       "saveConfigManagementFailed": "Falha ao salvar o gerenciamento de configuração",
       "clineSaved": "Configuração do Cline salva",
       "saveClineFailed": "Falha ao salvar a configuração do Cline",
-      "modelProviderRequired": "Selecione um provedor de modelo antes de salvar."
+      "modelProviderRequired": "Selecione um provedor de modelo antes de salvar.",
+      "affectedRunningSessions": "{count, plural, one {# sessão ativa precisa reconectar para aplicar a alteração} other {# sessões ativas precisam reconectar para aplicar a alteração}}"
     },
     "version": {
       "statusLabel": "Status da versão",
@@ -2093,6 +2110,17 @@
         "next": "Próxima",
         "submit": "Enviar",
         "submitError": "Falha ao enviar. Tente novamente."
+      },
+      "configStale": {
+        "agentConfigTitle": "Configurações do agente atualizadas",
+        "modelProviderTitle": "Provedor de modelo atualizado",
+        "description": "Esta sessão ainda está usando a configuração anterior. Reconecte para aplicar (o histórico da conversa é mantido).",
+        "reconnect": "Reconectar para aplicar",
+        "reconnecting": "Reconectando…",
+        "reconnectDisabledDuringTurn": "Disponível quando o turno atual terminar",
+        "dismiss": "Dispensar",
+        "reconnectFailed": "Falha ao reconectar a sessão",
+        "applied": "Nova configuração aplicada"
       }
     },
     "diffPreview": {
@@ -2433,7 +2461,8 @@
     "cancel": "Cancelar",
     "delete": "Excluir",
     "create": "Criar",
-    "save": "Salvar"
+    "save": "Salvar",
+    "affectedRunningSessions": "{count, plural, one {# sessão ativa precisa reconectar para aplicar a alteração} other {# sessões ativas precisam reconectar para aplicar a alteração}}"
   },
   "ExpertsSettings": {
     "title": "Habilidades de Especialista",

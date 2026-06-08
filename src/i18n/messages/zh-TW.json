@@ -91,6 +91,22 @@
       "placeholder": "請選擇縮放檔位",
       "default": "預設",
       "current": "目前縮放：{zoom}%"
+    },
+    "fonts": {
+      "sectionTitle": "字型",
+      "sectionDescription": "為介面、程式碼編輯器與終端機分別選擇字型。內建字型會按需載入；選擇「自訂…」可使用系統已安裝的任意字型。",
+      "interface": "介面",
+      "editor": "編輯器",
+      "terminal": "終端機",
+      "groupSans": "無襯線",
+      "groupMono": "等寬",
+      "custom": "自訂…",
+      "customPlaceholder": "字型名稱，如 Fira Code",
+      "fontSize": "字級",
+      "ligatures": "啟用連字",
+      "ligaturesUnavailable": "此字型不含連字",
+      "terminalLigaturesHint": "終端機連字僅對內建程式字型生效。",
+      "preview": "預覽"
     }
   },
   "SystemSettings": {
@@ -734,7 +750,8 @@
       "saveConfigManagementFailed": "儲存配置管理失敗",
       "clineSaved": "Cline 配置已儲存",
       "saveClineFailed": "儲存 Cline 配置失敗",
-      "modelProviderRequired": "請先選擇一個模型供應商再儲存。"
+      "modelProviderRequired": "請先選擇一個模型供應商再儲存。",
+      "affectedRunningSessions": "{count} 個進行中的工作階段需重新連線以套用變更"
     },
     "version": {
       "statusLabel": "版本狀態",
@@ -2093,6 +2110,17 @@
         "next": "下一題",
         "submit": "提交",
         "submitError": "提交失敗，請重試。"
+      },
+      "configStale": {
+        "agentConfigTitle": "智能體設定已更新",
+        "modelProviderTitle": "模型供應商已更新",
+        "description": "目前的工作階段仍在使用舊設定，重新連線後生效（對話紀錄不會遺失）。",
+        "reconnect": "重新連線以套用",
+        "reconnecting": "正在重新連線…",
+        "reconnectDisabledDuringTurn": "目前回合結束後可重新連線",
+        "dismiss": "忽略",
+        "reconnectFailed": "重新連線工作階段失敗",
+        "applied": "已套用新設定"
       }
     },
     "diffPreview": {
@@ -2433,7 +2461,8 @@
     "cancel": "取消",
     "delete": "刪除",
     "create": "建立",
-    "save": "儲存"
+    "save": "儲存",
+    "affectedRunningSessions": "{count} 個進行中的工作階段需重新連線以套用變更"
   },
   "ExpertsSettings": {
     "title": "專家技能",

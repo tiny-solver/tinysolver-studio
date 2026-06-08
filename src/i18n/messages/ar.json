@@ -91,6 +91,22 @@
       "placeholder": "اختر مستوى التكبير",
       "default": "افتراضي",
       "current": "التكبير الحالي: {zoom}%"
+    },
+    "fonts": {
+      "sectionTitle": "الخطوط",
+      "sectionDescription": "اختر خطوطًا للواجهة ومحرّر الأكواد والطرفية. تُحمّل الخطوط المضمّنة عند الحاجة؛ اختر «مخصّص…» لاستخدام أي خط مثبّت على نظامك.",
+      "interface": "الواجهة",
+      "editor": "المحرّر",
+      "terminal": "الطرفية",
+      "groupSans": "بلا زوائد",
+      "groupMono": "ثابت العرض",
+      "custom": "مخصّص…",
+      "customPlaceholder": "اسم الخط، مثل Fira Code",
+      "fontSize": "حجم الخط",
+      "ligatures": "تفعيل الحروف المتصلة",
+      "ligaturesUnavailable": "هذا الخط لا يحتوي على حروف متصلة",
+      "terminalLigaturesHint": "تنطبق الحروف المتصلة في الطرفية على خطوط البرمجة المضمّنة فقط.",
+      "preview": "معاينة"
     }
   },
   "SystemSettings": {
@@ -734,7 +750,8 @@
       "saveConfigManagementFailed": "فشل حفظ إدارة الإعدادات",
       "clineSaved": "تم حفظ تكوين Cline",
       "saveClineFailed": "فشل في حفظ تكوين Cline",
-      "modelProviderRequired": "يرجى اختيار مزود نموذج قبل الحفظ."
+      "modelProviderRequired": "يرجى اختيار مزود نموذج قبل الحفظ.",
+      "affectedRunningSessions": "{count} جلسة نشطة تحتاج إلى إعادة الاتصال لتطبيق التغيير"
     },
     "version": {
       "statusLabel": "حالة الإصدار",
@@ -2093,6 +2110,17 @@
         "next": "التالي",
         "submit": "إرسال",
         "submitError": "تعذّر الإرسال. حاول مرة أخرى."
+      },
+      "configStale": {
+        "agentConfigTitle": "تم تحديث إعدادات الوكيل",
+        "modelProviderTitle": "تم تحديث مزوّد النموذج",
+        "description": "لا تزال هذه الجلسة تستخدم الإعدادات السابقة. أعد الاتصال لتطبيقها (سيتم الاحتفاظ بسجل المحادثة).",
+        "reconnect": "أعد الاتصال للتطبيق",
+        "reconnecting": "جارٍ إعادة الاتصال…",
+        "reconnectDisabledDuringTurn": "متاح بعد انتهاء الدور الحالي",
+        "dismiss": "تجاهل",
+        "reconnectFailed": "فشل في إعادة الاتصال بالجلسة",
+        "applied": "تم تطبيق الإعدادات الجديدة"
       }
     },
     "diffPreview": {
@@ -2433,7 +2461,8 @@
     "cancel": "إلغاء",
     "delete": "حذف",
     "create": "إنشاء",
-    "save": "حفظ"
+    "save": "حفظ",
+    "affectedRunningSessions": "{count} جلسة نشطة تحتاج إلى إعادة الاتصال لتطبيق التغيير"
   },
   "ExpertsSettings": {
     "title": "مهارات الخبراء",

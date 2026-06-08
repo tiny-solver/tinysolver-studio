@@ -91,6 +91,22 @@
       "placeholder": "Zoomstufe wählen",
       "default": "Standard",
       "current": "Aktueller Zoom: {zoom}%"
+    },
+    "fonts": {
+      "sectionTitle": "Schriftarten",
+      "sectionDescription": "Wähle Schriftarten für Oberfläche, Code-Editor und Terminal. Mitgelieferte Schriftarten werden bei Bedarf geladen; wähle „Benutzerdefiniert…“, um eine beliebige auf deinem System installierte Schriftart zu verwenden.",
+      "interface": "Oberfläche",
+      "editor": "Editor",
+      "terminal": "Terminal",
+      "groupSans": "Serifenlos",
+      "groupMono": "Monospace",
+      "custom": "Benutzerdefiniert…",
+      "customPlaceholder": "Schriftartname, z. B. Fira Code",
+      "fontSize": "Schriftgröße",
+      "ligatures": "Ligaturen aktivieren",
+      "ligaturesUnavailable": "Diese Schriftart hat keine Ligaturen",
+      "terminalLigaturesHint": "Terminal-Ligaturen gelten nur für mitgelieferte Programmierschriftarten.",
+      "preview": "Vorschau"
     }
   },
   "SystemSettings": {
@@ -734,7 +750,8 @@
       "saveConfigManagementFailed": "Speichern der Konfigurationsverwaltung fehlgeschlagen",
       "clineSaved": "Cline-Konfiguration gespeichert",
       "saveClineFailed": "Cline-Konfiguration konnte nicht gespeichert werden",
-      "modelProviderRequired": "Bitte wählen Sie vor dem Speichern einen Modellanbieter aus."
+      "modelProviderRequired": "Bitte wählen Sie vor dem Speichern einen Modellanbieter aus.",
+      "affectedRunningSessions": "{count, plural, one {# laufende Sitzung muss zum Anwenden neu verbunden werden} other {# laufende Sitzungen müssen zum Anwenden neu verbunden werden}}"
     },
     "version": {
       "statusLabel": "Versionsstatus",
@@ -2093,6 +2110,17 @@
         "next": "Weiter",
         "submit": "Senden",
         "submitError": "Senden fehlgeschlagen. Bitte versuche es erneut."
+      },
+      "configStale": {
+        "agentConfigTitle": "Agent-Einstellungen aktualisiert",
+        "modelProviderTitle": "Modellanbieter aktualisiert",
+        "description": "Diese Sitzung verwendet weiterhin die bisherige Konfiguration. Zum Anwenden neu verbinden (der Gesprächsverlauf bleibt erhalten).",
+        "reconnect": "Zum Anwenden neu verbinden",
+        "reconnecting": "Wird neu verbunden…",
+        "reconnectDisabledDuringTurn": "Verfügbar, sobald die aktuelle Runde abgeschlossen ist",
+        "dismiss": "Schließen",
+        "reconnectFailed": "Sitzung konnte nicht neu verbunden werden",
+        "applied": "Neue Konfiguration angewendet"
       }
     },
     "diffPreview": {
@@ -2433,7 +2461,8 @@
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "create": "Erstellen",
-    "save": "Speichern"
+    "save": "Speichern",
+    "affectedRunningSessions": "{count, plural, one {# laufende Sitzung muss zum Anwenden neu verbunden werden} other {# laufende Sitzungen müssen zum Anwenden neu verbunden werden}}"
   },
   "ExpertsSettings": {
     "title": "Experten-Skills",

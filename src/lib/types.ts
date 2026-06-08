@@ -787,6 +787,23 @@ export type AcpEvent =
       type: "question_resolved"
       question_id: string
     }
+  /**
+   * The agent's effective settings (env vars / model provider / native config)
+   * changed AFTER this connection spawned, so the running process is still on
+   * its launch-time config. The frontend shows a "restart to apply" banner.
+   * `stale: false` means a prior drift was reverted (the setting was changed
+   * back) and the banner should clear. Mirrored into `LiveSessionSnapshot` so a
+   * snapshot attach (reconnect, refresh, new tile) recovers the state.
+   */
+  | {
+      type: "session_config_stale"
+      stale: boolean
+      kind: ConfigStaleKind
+    }
+
+/** Which settings surface drifted (mirror of Rust `ConfigStaleKind`), used to
+ *  word the "restart to apply" banner. */
+export type ConfigStaleKind = "agent_config" | "model_provider"
 
 /** A block of a broadcast user prompt (mirror of Rust `UserMessageBlock`).
  *  Narrower than the persisted `ContentBlock`: only what a viewer needs to
@@ -963,6 +980,11 @@ export interface LiveSessionSnapshot {
   fork_supported: boolean
   available_commands: AvailableCommandInfo[]
   selectors_ready: boolean
+  /** Whether the running session is on stale (launch-time) config after a later
+   *  settings save. Absent on older server payloads (then treated as `false`). */
+  config_stale?: boolean
+  /** Which settings surface drifted; present only while `config_stale`. */
+  config_stale_kind?: ConfigStaleKind | null
   event_seq: number
 }
 
@@ -1623,6 +1645,15 @@ export interface ModelProviderInfo {
   model: string | null
   created_at: string
   updated_at: string
+}
+
+/** Result of `updateModelProvider` (mirror of Rust `UpdateModelProviderResult`):
+ *  the updated provider plus how many running sessions the credential/model
+ *  cascade left on stale (launch-time) config — for the settings-side
+ *  "N sessions need restart" toast. */
+export interface UpdateModelProviderResult {
+  provider: ModelProviderInfo
+  affectedRunningSessions: number
 }
 
 export interface ClaudeProviderModel {
