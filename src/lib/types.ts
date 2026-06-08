@@ -397,6 +397,66 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "gemini",
 ]
 
+/**
+ * Curated Hermes providers the settings panel edits via structured fields.
+ * Mirrors the backend `HERMES_PROVIDERS` table (commands/acp.rs). The provider
+ * choice drives the linkage between the API key (~/.hermes/.env) and the
+ * general config (~/.hermes/config.yaml `model.provider`/`base_url`). OAuth
+ * providers carry no API key field — their credentials are set through the
+ * terminal `--setup` flow.
+ */
+export interface HermesProviderOption {
+  id: string
+  /** i18n key suffix under AcpAgentSettings.hermes.providers.* */
+  label: string
+  needsBaseUrl: boolean
+  isOAuth: boolean
+}
+
+export const HERMES_PROVIDERS: HermesProviderOption[] = [
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    needsBaseUrl: false,
+    isOAuth: false,
+  },
+  { id: "openai", label: "OpenAI", needsBaseUrl: false, isOAuth: false },
+  { id: "anthropic", label: "Anthropic", needsBaseUrl: false, isOAuth: false },
+  { id: "gemini", label: "Google Gemini", needsBaseUrl: false, isOAuth: false },
+  {
+    id: "custom",
+    label: "Custom (OpenAI-compatible)",
+    needsBaseUrl: true,
+    isOAuth: false,
+  },
+  {
+    id: "nous",
+    label: "Nous Portal (OAuth)",
+    needsBaseUrl: false,
+    isOAuth: true,
+  },
+  {
+    id: "minimax-oauth",
+    label: "MiniMax (OAuth)",
+    needsBaseUrl: false,
+    isOAuth: true,
+  },
+]
+
+/**
+ * Normalized Hermes config projection returned in `AcpAgentInfo.config_json`
+ * for `agent_type === "hermes"` (parsed from ~/.hermes/.env + config.yaml).
+ */
+export interface HermesLocalConfig {
+  provider?: string
+  model?: string
+  baseUrl?: string
+  apiKey?: string
+  hermesHome?: string
+  setupCommand?: string
+  modelCommand?: string
+}
+
 export const AGENT_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
@@ -947,6 +1007,8 @@ export interface AcpAgentInfo {
   codex_auth_json: string | null
   codex_config_toml: string | null
   cline_secrets_json: string | null
+  /** Raw ~/.hermes/config.yaml text, for the Hermes panel's advanced editor. */
+  hermes_config_yaml: string | null
   model_provider_id: number | null
 }
 

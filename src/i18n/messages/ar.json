@@ -557,6 +557,7 @@
       "confirmDelete": "تأكيد الحذف",
       "confirmUninstall": "تأكيد إزالة التثبيت",
       "saveClineConfig": "حفظ تكوين Cline",
+      "saveHermesConfig": "حفظ تكوين Hermes",
       "customInstall": "تثبيت مخصص"
     },
     "status": {
@@ -652,6 +653,25 @@
       "gatewayTokenHint": "يُفضّل استخدام token-file بدل الرمز النصي متى أمكن؛ قم بالإعداد عبر openclaw CLI.",
       "sessionKeyHint": "اختياري. حدّد مفتاح جلسة gateway؛ واتركه فارغًا للتعيين التلقائي لجلسة معزولة."
     },
+    "hermes": {
+      "configManagement": "تكوين Hermes",
+      "configDescription": "يدير Hermes بيانات اعتماده الخاصة في ~/.hermes/.env والإعدادات في ~/.hermes/config.yaml. اختر مزوّدًا، ثم عيّن مفتاح API والنموذج — وسيكتب codeg كلا الملفين نيابةً عنك.",
+      "providerLabel": "المزوّد",
+      "providerHint": "يحدّد المزوّد متغيّر مفتاح API و model.provider الذي يستخدمه Hermes. تُهيَّأ مزوّدات OAuth عبر إعداد الطرفية أدناه.",
+      "apiKeyHint": "يُحفظ في ~/.hermes/.env. ولا يُحقَن أبدًا في العملية — إذ يقرؤه Hermes من تكوينه الخاص.",
+      "modelName": "النموذج",
+      "oauthHint": "يستخدم هذا المزوّد OAuth. شغّل الإعداد أدناه للمصادقة في طرفيتك.",
+      "setupTitle": "إعداد ذاتي الإدارة",
+      "setupHint": "يحتاج إعداد Hermes التفاعلي إلى طرفية. شغّله أدناه، أو انسخ الأمر لتشغيله بنفسك.",
+      "runSetup": "تشغيل إعداد Hermes",
+      "configureModel": "تهيئة النموذج",
+      "openConfigFolder": "فتح ~/.hermes",
+      "copyCommand": "نسخ الأمر",
+      "commandCopied": "تم نسخ الأمر إلى الحافظة",
+      "advancedTitle": "متقدّم: تحرير config.yaml",
+      "rawConfigHint": "حرّر ~/.hermes/config.yaml مباشرةً. الحفظ هنا يستبدل الملف حرفيًا.",
+      "saveRawConfig": "حفظ config.yaml"
+    },
     "authModeOfficialSubscription": "الاشتراك الرسمي",
     "authModeCustomEndpoint": "نقطة نهاية مخصصة",
     "authModeCustomEndpointHint": "تكوين عنوان API ومفتاح API يدوياً لنقطة نهاية مخصصة.",
@@ -734,6 +754,8 @@
       "saveConfigManagementFailed": "فشل حفظ إدارة الإعدادات",
       "clineSaved": "تم حفظ تكوين Cline",
       "saveClineFailed": "فشل في حفظ تكوين Cline",
+      "hermesSaved": "تم حفظ تكوين Hermes",
+      "saveHermesFailed": "فشل في حفظ تكوين Hermes",
       "modelProviderRequired": "يرجى اختيار مزود نموذج قبل الحفظ."
     },
     "version": {
