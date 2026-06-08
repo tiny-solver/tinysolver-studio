@@ -29,6 +29,9 @@ pub struct DbConversationSummary {
     pub id: i32,
     pub folder_id: i32,
     pub title: Option<String>,
+    /// Mirror of `conversation.title_locked`: the user renamed this row by hand,
+    /// so the auto-title backfill must leave it alone.
+    pub title_locked: bool,
     pub agent_type: AgentType,
     pub status: String,
     pub model: Option<String>,

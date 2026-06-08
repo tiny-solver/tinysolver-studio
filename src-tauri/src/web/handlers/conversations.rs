@@ -135,6 +135,7 @@ pub async fn get_folder_conversation(
     let result = conv_commands::get_folder_conversation_with_live_core(
         &db.conn,
         &state.connection_manager,
+        &state.emitter,
         params.conversation_id,
     )
     .await?;

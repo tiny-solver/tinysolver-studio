@@ -83,6 +83,7 @@ pub async fn import_local_conversations(
             id: NotSet,
             folder_id: Set(folder_id),
             title: Set(summary.title.clone()),
+            title_locked: Set(false),
             agent_type: Set(at_str.clone()),
             status: Set(conversation::ConversationStatus::Completed),
             model: Set(summary.model.clone()),
