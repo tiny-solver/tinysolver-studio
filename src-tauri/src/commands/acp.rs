@@ -2299,6 +2299,7 @@ fn parse_hermes_home_mode(raw: Option<&str>) -> u32 {
 /// UID-mapped Docker volume, or otherwise deliberately group-accessible, and
 /// revoking that would break other Hermes users/processes.
 fn ensure_hermes_home_secure(home: &Path) -> Result<(), AcpError> {
+    #[cfg(unix)]
     let preexisting = home.exists();
     fs::create_dir_all(home)
         .map_err(|e| AcpError::protocol(format!("create hermes directory failed: {e}")))?;
