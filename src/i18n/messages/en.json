@@ -2139,6 +2139,12 @@
         "submit": "Submit",
         "submitError": "Couldn't submit. Please try again."
       },
+      "feedbackCheckResult": {
+        "count": "{count, plural, =1 {1 feedback note} other {# feedback notes}}",
+        "expand": "Show all feedback",
+        "collapse": "Collapse",
+        "errorTitle": "Feedback check failed"
+      },
       "askQuestionResult": {
         "title": "Question",
         "answeredLabel": "Q&A:",

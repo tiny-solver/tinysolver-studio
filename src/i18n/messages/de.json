@@ -2139,6 +2139,12 @@
         "submit": "Senden",
         "submitError": "Senden fehlgeschlagen. Bitte versuche es erneut."
       },
+      "feedbackCheckResult": {
+        "count": "{count, plural, =1 {1 Rückmeldung} other {# Rückmeldungen}}",
+        "expand": "Alle Rückmeldungen anzeigen",
+        "collapse": "Einklappen",
+        "errorTitle": "Feedback-Prüfung fehlgeschlagen"
+      },
       "askQuestionResult": {
         "title": "Frage",
         "answeredLabel": "Frage & Antwort:",

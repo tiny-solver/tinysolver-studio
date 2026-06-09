@@ -2139,6 +2139,12 @@
         "submit": "提交",
         "submitError": "提交失敗，請重試。"
       },
+      "feedbackCheckResult": {
+        "count": "{count} 則回饋",
+        "expand": "展開全部回饋",
+        "collapse": "收合",
+        "errorTitle": "回饋檢查失敗"
+      },
       "askQuestionResult": {
         "title": "提問",
         "answeredLabel": "提問回答：",

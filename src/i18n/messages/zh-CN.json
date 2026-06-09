@@ -2139,6 +2139,12 @@
         "submit": "提交",
         "submitError": "提交失败，请重试。"
       },
+      "feedbackCheckResult": {
+        "count": "{count} 条反馈",
+        "expand": "展开全部反馈",
+        "collapse": "收起",
+        "errorTitle": "反馈检查失败"
+      },
       "askQuestionResult": {
         "title": "提问",
         "answeredLabel": "提问回答：",

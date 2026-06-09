@@ -2139,6 +2139,12 @@
         "submit": "Envoyer",
         "submitError": "Échec de l'envoi. Veuillez réessayer."
       },
+      "feedbackCheckResult": {
+        "count": "{count, plural, =1 {1 retour} other {# retours}}",
+        "expand": "Afficher tous les retours",
+        "collapse": "Réduire",
+        "errorTitle": "Échec de la vérification des retours"
+      },
       "askQuestionResult": {
         "title": "Question",
         "answeredLabel": "Question et réponse :",

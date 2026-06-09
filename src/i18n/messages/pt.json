@@ -2139,6 +2139,12 @@
         "submit": "Enviar",
         "submitError": "Falha ao enviar. Tente novamente."
       },
+      "feedbackCheckResult": {
+        "count": "{count, plural, =1 {1 comentário} other {# comentários}}",
+        "expand": "Mostrar todos os comentários",
+        "collapse": "Recolher",
+        "errorTitle": "Falha ao verificar comentários"
+      },
       "askQuestionResult": {
         "title": "Pergunta",
         "answeredLabel": "Pergunta e resposta:",

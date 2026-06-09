@@ -2139,6 +2139,12 @@
         "submit": "제출",
         "submitError": "제출하지 못했습니다. 다시 시도해 주세요."
       },
+      "feedbackCheckResult": {
+        "count": "피드백 {count}개",
+        "expand": "모든 피드백 표시",
+        "collapse": "접기",
+        "errorTitle": "피드백 확인 실패"
+      },
       "askQuestionResult": {
         "title": "질문",
         "answeredLabel": "질문과 답변:",

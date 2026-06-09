@@ -2139,6 +2139,12 @@
         "submit": "إرسال",
         "submitError": "تعذّر الإرسال. حاول مرة أخرى."
       },
+      "feedbackCheckResult": {
+        "count": "{count} ملاحظة",
+        "expand": "عرض كل الملاحظات",
+        "collapse": "طي",
+        "errorTitle": "فشل التحقق من الملاحظات"
+      },
       "askQuestionResult": {
         "title": "سؤال",
         "answeredLabel": "سؤال وجواب:",

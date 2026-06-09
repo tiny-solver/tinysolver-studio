@@ -2139,6 +2139,12 @@
         "submit": "送信",
         "submitError": "送信できませんでした。もう一度お試しください。"
       },
+      "feedbackCheckResult": {
+        "count": "フィードバック {count} 件",
+        "expand": "すべてのフィードバックを表示",
+        "collapse": "折りたたむ",
+        "errorTitle": "フィードバックの確認に失敗しました"
+      },
       "askQuestionResult": {
         "title": "質問",
         "answeredLabel": "質問と回答：",
