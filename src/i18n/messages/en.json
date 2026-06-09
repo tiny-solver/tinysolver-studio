@@ -2139,6 +2139,13 @@
         "submit": "Submit",
         "submitError": "Couldn't submit. Please try again."
       },
+      "askQuestionResult": {
+        "title": "Question",
+        "answeredLabel": "Q&A:",
+        "awaiting": "Waiting for your answer…",
+        "declined": "You dismissed this — the agent used its own judgment.",
+        "noSelection": "No selection"
+      },
       "configStale": {
         "agentConfigTitle": "Agent settings updated",
         "modelProviderTitle": "Model provider updated",

@@ -2139,6 +2139,13 @@
         "submit": "제출",
         "submitError": "제출하지 못했습니다. 다시 시도해 주세요."
       },
+      "askQuestionResult": {
+        "title": "질문",
+        "answeredLabel": "질문과 답변:",
+        "awaiting": "답변을 기다리는 중…",
+        "declined": "이 질문을 건너뛰었습니다 — 에이전트가 자체 판단으로 진행했습니다.",
+        "noSelection": "선택 없음"
+      },
       "configStale": {
         "agentConfigTitle": "에이전트 설정이 업데이트되었습니다",
         "modelProviderTitle": "모델 공급자가 업데이트되었습니다",

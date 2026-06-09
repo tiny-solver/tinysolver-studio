@@ -2139,6 +2139,13 @@
         "submit": "送信",
         "submitError": "送信できませんでした。もう一度お試しください。"
       },
+      "askQuestionResult": {
+        "title": "質問",
+        "answeredLabel": "質問と回答：",
+        "awaiting": "回答をお待ちしています…",
+        "declined": "この質問をスキップしました — エージェントが独自に判断して進めました。",
+        "noSelection": "選択なし"
+      },
       "configStale": {
         "agentConfigTitle": "エージェント設定が更新されました",
         "modelProviderTitle": "モデルプロバイダーが更新されました",
