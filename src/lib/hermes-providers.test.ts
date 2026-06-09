@@ -40,7 +40,15 @@ describe("HERMES_PROVIDERS Rust↔TS parity", () => {
       const rs = rustRows.find((r) => r.id === ts.id)
       expect(rs, `Rust table is missing ${ts.id}`).toBeDefined()
       expect(rs!.needsBaseUrl, `${ts.id} needsBaseUrl`).toBe(ts.needsBaseUrl)
-      expect(rs!.hasKey, `${ts.id} key presence`).toBe(ts.kind === "apiKey")
+      if (ts.id === "custom") {
+        // `custom` is the exception: an apiKey-kind provider whose key AND
+        // endpoint live INLINE in config.yaml (model.api_key / model.base_url),
+        // so it carries no `.env` key var. Every other apiKey provider maps to
+        // a `.env` key.
+        expect(rs!.hasKey, "custom has no .env key var").toBe(false)
+      } else {
+        expect(rs!.hasKey, `${ts.id} key presence`).toBe(ts.kind === "apiKey")
+      }
     }
   })
 })

@@ -24,7 +24,7 @@ pub enum AgentDistribution {
     /// Used for ACP agents distributed as Python packages (e.g. Hermes).
     Uvx {
         version: &'static str,
-        /// The `uvx --from` package spec, e.g. "hermes-agent[acp]==0.16.0".
+        /// The `uvx --from` package spec, e.g. "hermes-agent[acp,mcp]==0.16.0".
         package: &'static str,
         /// The console-script entry point to run, e.g. "hermes-acp".
         cmd: &'static str,
@@ -265,7 +265,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             description: "Nous Research's self-improving agent (ACP via uvx)",
             distribution: AgentDistribution::Uvx {
                 version: "0.16.0",
-                package: "hermes-agent[acp]==0.16.0",
+                package: "hermes-agent[acp,mcp]==0.16.0",
                 cmd: "hermes-acp",
                 args: &[],
                 env: &[],
@@ -377,7 +377,7 @@ mod tests {
         assert_uvx_version(
             AgentType::Hermes,
             "0.16.0",
-            "hermes-agent[acp]==0.16.0",
+            "hermes-agent[acp,mcp]==0.16.0",
             Some("0.5.0"),
         );
     }

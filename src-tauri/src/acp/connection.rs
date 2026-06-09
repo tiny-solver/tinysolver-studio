@@ -917,6 +917,14 @@ fn build_load_session_request(
 /// ACP wire format. Errors and unsupported entries are logged and skipped so
 /// a single malformed entry never blocks a session from starting.
 fn load_mcp_servers_for_agent(agent_type: AgentType) -> Vec<McpServer> {
+    // Hermes reads its own `~/.hermes/config.yaml` `mcp_servers` natively at
+    // launch (registering each as an `mcp-<name>` toolset). codeg manages that
+    // section directly via the MCP settings UI, so forwarding the same servers
+    // over the ACP wire here would double-register them — skip it. (The built-in
+    // `codeg-mcp` companion is injected separately by `inject_codeg_mcp`.)
+    if agent_type == AgentType::Hermes {
+        return Vec::new();
+    }
     let entries = match crate::commands::mcp::read_servers_for_agent_type(agent_type) {
         Ok(map) => map,
         Err(err) => {

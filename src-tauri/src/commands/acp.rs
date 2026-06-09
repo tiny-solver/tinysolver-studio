@@ -1637,7 +1637,7 @@ fn hermes_env_path() -> PathBuf {
     hermes_home_dir().join(".env")
 }
 
-fn hermes_config_yaml_path() -> PathBuf {
+pub(crate) fn hermes_config_yaml_path() -> PathBuf {
     hermes_home_dir().join("config.yaml")
 }
 
@@ -1680,6 +1680,20 @@ const HERMES_PROVIDERS: &[HermesProvider] = &[
         key_env_var: "OPENAI_API_KEY",
         needs_base_url: true,
         base_url_env_var: "OPENAI_BASE_URL",
+    },
+    // User-supplied OpenAI-compatible endpoint. Unlike every other provider,
+    // `custom` carries BOTH its key and endpoint INLINE in config.yaml
+    // (`model.api_key` / `model.base_url`) and reads no `.env` var — verified
+    // against a working 0.16.0 config and `hermes_cli/auth.py`, where `custom`
+    // is a canonical provider. Empty key/base-url env vars keep the `.env`
+    // writer and the panel projection away; `plan_hermes_write` /
+    // `project_hermes_key_and_base` special-case the inline key via
+    // `hermes_inlines_api_key`.
+    HermesProvider {
+        id: "custom",
+        key_env_var: "",
+        needs_base_url: true,
+        base_url_env_var: "",
     },
     HermesProvider {
         id: "anthropic",
@@ -1894,6 +1908,16 @@ fn hermes_provider(id: &str) -> Option<&'static HermesProvider> {
     HERMES_PROVIDERS.iter().find(|p| p.id == id)
 }
 
+/// Whether a provider stores its API key INLINE in config.yaml `model.api_key`
+/// rather than in `~/.hermes/.env`. Only `custom` (the user-supplied
+/// OpenAI-compatible endpoint) works this way in Hermes 0.16.0: its registry
+/// entry has no `.env` key var, so the key rides in the `model:` section next to
+/// `base_url`. Drives both the structured write (`plan_hermes_write`) and the
+/// panel projection (`project_hermes_key_and_base`).
+fn hermes_inlines_api_key(provider: &str) -> bool {
+    provider == "custom"
+}
+
 /// Parse simple `KEY=value` lines from a dotenv file. Ignores blank lines and
 /// `#` comments, tolerates a leading `export `, and strips one layer of
 /// surrounding single/double quotes from the value. Last occurrence wins.
@@ -2002,14 +2026,33 @@ enum BaseUrlWrite<'a> {
     Preserve,
 }
 
+/// How `merge_hermes_model_config` should treat the inline `model.api_key`
+/// (and the companion `model.api_mode`), which only the `custom` provider uses.
+enum InlineApiKeyWrite<'a> {
+    /// Inline-key provider (`custom`): write `key` (or remove the field when
+    /// blank — a keyless local server). `scrub_mode` clears a stale
+    /// `model.api_mode`: `true` when switching TO custom from a different
+    /// provider (the prior mode must not bleed in), `false` on a custom→custom
+    /// re-save so a user's raw-editor `api_mode` (e.g. `anthropic_messages` for
+    /// an Anthropic-compatible proxy) survives a structured save.
+    Set { key: &'a str, scrub_mode: bool },
+    /// Non-inline provider (keyed/OAuth/AWS): scrub any stale inline
+    /// `model.api_key` / `model.api_mode` left over from a previous `custom`
+    /// endpoint so it can't bleed into the newly selected provider — mirroring
+    /// Hermes' own `auth.py` cleanup on a provider switch.
+    Clear,
+}
+
 /// Set `model.{provider,default,base_url}` in a Hermes config.yaml document,
 /// preserving every other top-level key. `default` is only written when a
-/// non-empty model is given; `base_url` follows the `BaseUrlWrite` action.
+/// non-empty model is given; `base_url` follows the `BaseUrlWrite` action and
+/// the inline `model.api_key` follows the `InlineApiKeyWrite` action.
 fn merge_hermes_model_config(
     existing: Option<&str>,
     provider: &str,
     model: &str,
     base_url: BaseUrlWrite<'_>,
+    inline_api_key: InlineApiKeyWrite<'_>,
 ) -> Result<String, AcpError> {
     use serde_yaml::{Mapping, Value};
     let mut root: Value = match existing {
@@ -2057,6 +2100,29 @@ fn merge_hermes_model_config(
         }
         // Preserve: leave whatever `model.base_url` is already there.
         BaseUrlWrite::Preserve => {}
+    }
+    match inline_api_key {
+        InlineApiKeyWrite::Set { key, scrub_mode } => {
+            if key.trim().is_empty() {
+                // Blank key on an inline provider → keyless local server.
+                model_map.remove(Value::String("api_key".to_string()));
+            } else {
+                model_map.insert(
+                    Value::String("api_key".to_string()),
+                    Value::String(key.trim().to_string()),
+                );
+            }
+            // Switching TO custom scrubs a stale mode; a custom→custom re-save
+            // leaves a user's raw-editor `api_mode` untouched.
+            if scrub_mode {
+                model_map.remove(Value::String("api_mode".to_string()));
+            }
+        }
+        // Non-inline provider: scrub a stale inline key/mode from a prior `custom`.
+        InlineApiKeyWrite::Clear => {
+            model_map.remove(Value::String("api_key".to_string()));
+            model_map.remove(Value::String("api_mode".to_string()));
+        }
     }
 
     serde_yaml::to_string(&root)
@@ -2134,14 +2200,14 @@ fn hermes_setup_argvs() -> (Vec<String>, Vec<String>) {
         vec![
             "uvx".to_string(),
             "--from".to_string(),
-            "hermes-agent[acp]==0.16.0".to_string(),
+            "hermes-agent[acp,mcp]==0.16.0".to_string(),
             "hermes-acp".to_string(),
             "--setup".to_string(),
         ],
         vec![
             "uvx".to_string(),
             "--from".to_string(),
-            "hermes-agent[acp]==0.16.0".to_string(),
+            "hermes-agent[acp,mcp]==0.16.0".to_string(),
             "hermes".to_string(),
             "model".to_string(),
         ],
@@ -2160,23 +2226,32 @@ fn hermes_setup_commands() -> (String, String) {
 /// hermesHome, setupCommand, modelCommand}`. Only the active provider's single
 /// key var is surfaced — never the rest of `.env`.
 /// Project the active provider's API key and endpoint URL for the settings UI.
-/// The key is read from the provider's `.env` key var. The base URL prefers
-/// config.yaml's `model.base_url` and falls back to the provider's base-URL env
-/// var — so an endpoint that lives only in `.env` (e.g. a bare `OPENAI_BASE_URL`
-/// with no YAML `base_url`) still shows in the panel and isn't cleared on the
-/// next save. Empty stored values are treated as absent. Unknown providers map
-/// to nothing here (their key var is undiscoverable; the raw editor governs).
+/// For inline-key providers (`custom`) the key comes from config.yaml's
+/// `model.api_key`; for every other keyed provider it is read from the
+/// provider's `.env` key var. The base URL prefers config.yaml's
+/// `model.base_url` and falls back to the provider's base-URL env var — so an
+/// endpoint that lives only in `.env` (e.g. a bare `OPENAI_BASE_URL` with no
+/// YAML `base_url`) still shows in the panel and isn't cleared on the next save.
+/// Empty stored values are treated as absent. Unknown providers map to nothing
+/// here (their key var is undiscoverable; the raw editor governs).
 fn project_hermes_key_and_base(
     provider: &str,
     env_map: &BTreeMap<String, String>,
     yaml_base_url: Option<&str>,
+    yaml_api_key: Option<&str>,
 ) -> (Option<String>, Option<String>) {
     let meta = hermes_provider(provider);
-    let api_key = meta
-        .filter(|p| !p.key_env_var.is_empty())
-        .and_then(|p| env_map.get(p.key_env_var))
-        .filter(|v| !v.is_empty())
-        .map(|v| v.to_string());
+    let api_key = if hermes_inlines_api_key(provider) {
+        yaml_api_key
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+    } else {
+        meta.filter(|p| !p.key_env_var.is_empty())
+            .and_then(|p| env_map.get(p.key_env_var))
+            .filter(|v| !v.is_empty())
+            .map(|v| v.to_string())
+    };
     let base_url = yaml_base_url.map(str::to_string).or_else(|| {
         meta.filter(|p| !p.base_url_env_var.is_empty())
             .and_then(|p| env_map.get(p.base_url_env_var))
@@ -2195,18 +2270,25 @@ fn load_hermes_local_config_json() -> Option<String> {
     let mut provider: Option<String> = None;
     let mut model: Option<String> = None;
     let mut yaml_base_url: Option<String> = None;
+    let mut yaml_api_key: Option<String> = None;
     if let Ok(raw_yaml) = fs::read_to_string(hermes_config_yaml_path()) {
         if let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(&raw_yaml) {
             if let Some(model_section) = value.get("model") {
                 provider = yaml_str(model_section, "provider");
                 model = yaml_str(model_section, "default");
                 yaml_base_url = yaml_str(model_section, "base_url");
+                yaml_api_key = yaml_str(model_section, "api_key");
             }
         }
     }
 
     let (api_key, base_url) = match provider.as_deref() {
-        Some(p) => project_hermes_key_and_base(p, &env_map, yaml_base_url.as_deref()),
+        Some(p) => project_hermes_key_and_base(
+            p,
+            &env_map,
+            yaml_base_url.as_deref(),
+            yaml_api_key.as_deref(),
+        ),
         None => (None, yaml_base_url),
     };
 
@@ -2298,7 +2380,7 @@ fn parse_hermes_home_mode(raw: Option<&str>) -> u32 {
 /// `HERMES_HOME` is left untouched — it may be a NixOS-managed `0750`, a
 /// UID-mapped Docker volume, or otherwise deliberately group-accessible, and
 /// revoking that would break other Hermes users/processes.
-fn ensure_hermes_home_secure(home: &Path) -> Result<(), AcpError> {
+pub(crate) fn ensure_hermes_home_secure(home: &Path) -> Result<(), AcpError> {
     #[cfg(unix)]
     let preexisting = home.exists();
     fs::create_dir_all(home)
@@ -2329,7 +2411,11 @@ fn ensure_hermes_home_secure(home: &Path) -> Result<(), AcpError> {
 /// is a Windows no-op; file chmod is Unix-only) and the prior baseline. A crash
 /// during the brief write window is recoverable by re-saving. `label` names the
 /// file for error messages.
-fn write_hermes_secret_file(path: &Path, contents: &str, label: &str) -> Result<(), AcpError> {
+pub(crate) fn write_hermes_secret_file(
+    path: &Path,
+    contents: &str,
+    label: &str,
+) -> Result<(), AcpError> {
     #[cfg(unix)]
     {
         use std::io::Write;
@@ -2463,11 +2549,13 @@ fn plan_hermes_write(
             .map_err(|e| AcpError::protocol(format!("invalid hermes config.yaml: {e}")))?;
         raw.to_string()
     } else {
-        // Structured mode only handles providers codeg can map to a key var /
-        // endpoint. Unknown ids (the legacy `openai`/`custom` pseudo-providers,
-        // user-defined `custom:` slugs, or anything outside the curated table)
-        // would otherwise be written with no credential — reject them and steer
-        // the user to the raw config.yaml editor, which stays the escape hatch.
+        // Structured mode only handles providers in the curated table. The
+        // `custom` provider IS handled (its key/endpoint live inline in
+        // config.yaml — see `hermes_inlines_api_key`), but unknown ids (the
+        // legacy `openai` pseudo-provider, user-defined `custom:` slugs, or
+        // anything outside the table) have no credential layout codeg can map —
+        // reject them and steer the user to the raw config.yaml editor, which
+        // stays the escape hatch.
         let meta = hermes_provider(provider).ok_or_else(|| {
             AcpError::protocol(format!(
                 "unknown hermes provider '{provider}'; edit ~/.hermes/config.yaml directly"
@@ -2487,7 +2575,25 @@ fn plan_hermes_write(
         } else {
             BaseUrlWrite::Set("")
         };
-        merge_hermes_model_config(existing_config, provider, model, base)?
+        // Inline key — `custom` only. The key rides in `model.api_key`; every
+        // other provider gets `Clear` so a stale inline key from a previous
+        // `custom` endpoint never bleeds into the new provider. A blank inline
+        // key drops the field (keyless local server).
+        let inline_api_key = if hermes_inlines_api_key(provider) {
+            let key = api_key.map(str::trim).unwrap_or_default();
+            if key.contains(['\n', '\r']) {
+                return Err(AcpError::protocol(
+                    "hermes api key must not contain newlines",
+                ));
+            }
+            // Scrub a stale `api_mode` only when switching TO custom from a
+            // different provider; a custom→custom re-save preserves it.
+            let scrub_mode = previous_provider.as_deref() != Some(provider);
+            InlineApiKeyWrite::Set { key, scrub_mode }
+        } else {
+            InlineApiKeyWrite::Clear
+        };
+        merge_hermes_model_config(existing_config, provider, model, base, inline_api_key)?
     };
 
     // Raw mode edits config.yaml only; never `.env`.
@@ -6434,6 +6540,7 @@ mod tests {
             "openrouter",
             "moonshotai/kimi-k2",
             BaseUrlWrite::Preserve,
+            InlineApiKeyWrite::Clear,
         )
         .expect("merge");
         let value: serde_yaml::Value = serde_yaml::from_str(&merged).expect("parse merged");
@@ -6459,6 +6566,7 @@ mod tests {
             "openai-api",
             "my-model",
             BaseUrlWrite::Set("https://api.test/v1"),
+            InlineApiKeyWrite::Clear,
         )
         .expect("merge with base");
         let value: serde_yaml::Value = serde_yaml::from_str(&with_base).expect("parse");
@@ -6467,9 +6575,14 @@ mod tests {
             Some("https://api.test/v1")
         );
         // Set("") clears the field (user emptied the API URL input).
-        let cleared =
-            merge_hermes_model_config(Some(&with_base), "openai-api", "my-model", BaseUrlWrite::Set(""))
-                .expect("merge clear");
+        let cleared = merge_hermes_model_config(
+            Some(&with_base),
+            "openai-api",
+            "my-model",
+            BaseUrlWrite::Set(""),
+            InlineApiKeyWrite::Clear,
+        )
+        .expect("merge clear");
         let value: serde_yaml::Value = serde_yaml::from_str(&cleared).expect("parse");
         assert!(value.get("model").and_then(|m| m.get("base_url")).is_none());
         // Preserve leaves an existing endpoint untouched (provider whose base URL
@@ -6479,6 +6592,7 @@ mod tests {
             "anthropic",
             "my-model",
             BaseUrlWrite::Preserve,
+            InlineApiKeyWrite::Clear,
         )
         .expect("merge preserve");
         let value: serde_yaml::Value = serde_yaml::from_str(&kept).expect("parse");
@@ -6486,6 +6600,100 @@ mod tests {
             value.get("model").and_then(|m| m.get("base_url")).and_then(|v| v.as_str()),
             Some("https://api.test/v1")
         );
+    }
+
+    #[test]
+    fn merge_hermes_model_config_custom_writes_and_clears_inline_key() {
+        // custom writes the key inline in `model.api_key` (+ keeps base_url).
+        let with_key = merge_hermes_model_config(
+            None,
+            "custom",
+            "gpt-5.5",
+            BaseUrlWrite::Set("https://endpoint.test/v1"),
+            InlineApiKeyWrite::Set {
+                key: "sk-abc",
+                scrub_mode: true,
+            },
+        )
+        .expect("merge custom");
+        let value: serde_yaml::Value = serde_yaml::from_str(&with_key).expect("parse");
+        let model = value.get("model").expect("model section");
+        assert_eq!(model.get("provider").and_then(|v| v.as_str()), Some("custom"));
+        assert_eq!(model.get("api_key").and_then(|v| v.as_str()), Some("sk-abc"));
+        assert_eq!(
+            model.get("base_url").and_then(|v| v.as_str()),
+            Some("https://endpoint.test/v1")
+        );
+
+        // A blank inline key drops the field (keyless local server).
+        let keyless = merge_hermes_model_config(
+            Some(&with_key),
+            "custom",
+            "gpt-5.5",
+            BaseUrlWrite::Set("https://endpoint.test/v1"),
+            InlineApiKeyWrite::Set {
+                key: "",
+                scrub_mode: false,
+            },
+        )
+        .expect("merge keyless");
+        let value: serde_yaml::Value = serde_yaml::from_str(&keyless).expect("parse");
+        assert!(value.get("model").and_then(|m| m.get("api_key")).is_none());
+
+        // custom→custom re-save with scrub_mode=false preserves a raw-editor
+        // `api_mode`; switching in with scrub_mode=true drops it.
+        let with_mode = "model:\n  provider: custom\n  default: m\n  api_mode: anthropic_messages\n";
+        let resaved = merge_hermes_model_config(
+            Some(with_mode),
+            "custom",
+            "m",
+            BaseUrlWrite::Set("https://e/v1"),
+            InlineApiKeyWrite::Set {
+                key: "sk-1",
+                scrub_mode: false,
+            },
+        )
+        .expect("merge resave");
+        let value: serde_yaml::Value = serde_yaml::from_str(&resaved).expect("parse");
+        assert_eq!(
+            value
+                .get("model")
+                .and_then(|m| m.get("api_mode"))
+                .and_then(|v| v.as_str()),
+            Some("anthropic_messages"),
+            "custom→custom re-save preserves api_mode"
+        );
+        let switched_in = merge_hermes_model_config(
+            Some(with_mode),
+            "custom",
+            "m",
+            BaseUrlWrite::Set("https://e/v1"),
+            InlineApiKeyWrite::Set {
+                key: "sk-1",
+                scrub_mode: true,
+            },
+        )
+        .expect("merge switch-in");
+        let value: serde_yaml::Value = serde_yaml::from_str(&switched_in).expect("parse");
+        assert!(
+            value.get("model").and_then(|m| m.get("api_mode")).is_none(),
+            "switching TO custom scrubs a stale api_mode"
+        );
+
+        // Switching to a keyed provider scrubs the stale inline key + api_mode.
+        let stale = "model:\n  provider: custom\n  default: gpt-5.5\n  api_key: sk-old\n  api_mode: chat_completions\n";
+        let switched = merge_hermes_model_config(
+            Some(stale),
+            "anthropic",
+            "claude",
+            BaseUrlWrite::Set(""),
+            InlineApiKeyWrite::Clear,
+        )
+        .expect("merge switch");
+        let value: serde_yaml::Value = serde_yaml::from_str(&switched).expect("parse");
+        let model = value.get("model").expect("model section");
+        assert!(model.get("api_key").is_none(), "stale inline key must be scrubbed");
+        assert!(model.get("api_mode").is_none(), "stale api_mode must be scrubbed");
     }
 
     #[test]
@@ -7138,10 +7346,18 @@ mod tests {
         // or the AWS SDK chain).
         assert_eq!(hermes_provider("nous").expect("nous").key_env_var, "");
         assert_eq!(hermes_provider("bedrock").expect("bedrock").key_env_var, "");
-        // The legacy bare `openai` alias (which Hermes routes to OpenRouter) and
-        // the old `custom` pseudo-provider are intentionally not in the table.
+        // `custom` IS in the table — the OpenAI-compatible BYO endpoint. It has
+        // no `.env` key/base-url var (both ride inline in config.yaml), but is
+        // flagged user-editable so the API URL field renders.
+        let custom = hermes_provider("custom").expect("custom");
+        assert_eq!(custom.key_env_var, "");
+        assert_eq!(custom.base_url_env_var, "");
+        assert!(custom.needs_base_url);
+        assert!(hermes_inlines_api_key("custom"));
+        assert!(!hermes_inlines_api_key("openai-api"));
+        // The legacy bare `openai` alias (which Hermes routes to OpenRouter) is
+        // intentionally not in the table.
         assert!(hermes_provider("openai").is_none());
-        assert!(hermes_provider("custom").is_none());
         assert!(hermes_provider("does-not-exist").is_none());
     }
 
@@ -7180,6 +7396,9 @@ mod tests {
             ("tencent-tokenhub", "TOKENHUB_API_KEY"),
             ("ollama-cloud", "OLLAMA_API_KEY"),
             ("novita", "NOVITA_API_KEY"),
+            // BYO OpenAI-compatible endpoint — key rides inline in config.yaml,
+            // so it has no `.env` key var.
+            ("custom", ""),
             ("nous", ""),
             ("openai-codex", ""),
             ("minimax-oauth", ""),
@@ -7231,6 +7450,58 @@ mod tests {
         assert_eq!(
             value.get("model").and_then(|m| m.get("provider")).and_then(|v| v.as_str()),
             Some("anthropic")
+        );
+    }
+
+    #[test]
+    fn plan_hermes_write_custom_inlines_key_and_base_url_never_touching_env() {
+        let (yaml, env) = plan_hermes_write(
+            "custom",
+            Some("sk-custom-1"),
+            "gpt-5.5",
+            Some("https://endpoint.test/v1"),
+            None,
+            None,
+        )
+        .expect("plan custom");
+        // custom NEVER writes `.env` — key + endpoint live inline in config.yaml.
+        assert!(env.is_empty(), "custom must not write any .env var");
+        let value: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("yaml");
+        let model = value.get("model").expect("model section");
+        assert_eq!(model.get("provider").and_then(|v| v.as_str()), Some("custom"));
+        assert_eq!(model.get("default").and_then(|v| v.as_str()), Some("gpt-5.5"));
+        assert_eq!(model.get("api_key").and_then(|v| v.as_str()), Some("sk-custom-1"));
+        assert_eq!(
+            model.get("base_url").and_then(|v| v.as_str()),
+            Some("https://endpoint.test/v1")
+        );
+        // A newline in the inline key is rejected (same guard as the `.env` path).
+        assert!(plan_hermes_write(
+            "custom",
+            Some("sk\nbad"),
+            "m",
+            Some("https://x/v1"),
+            None,
+            None
+        )
+        .is_err());
+
+        // Switching TO custom from another provider that carried an `api_mode`
+        // scrubs the stale mode (it must not bleed into the custom endpoint).
+        let prior = "model:\n  provider: openai-api\n  default: gpt\n  api_mode: chat_completions\n";
+        let (yaml, _env) = plan_hermes_write(
+            "custom",
+            Some("sk-2"),
+            "gpt-5.5",
+            Some("https://e/v1"),
+            None,
+            Some(prior),
+        )
+        .expect("plan switch-in");
+        let value: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("yaml");
+        assert!(
+            value.get("model").and_then(|m| m.get("api_mode")).is_none(),
+            "stale api_mode must be scrubbed when switching to custom"
         );
     }
 
@@ -7313,10 +7584,10 @@ mod tests {
 
     #[test]
     fn plan_hermes_write_structured_rejects_unknown_provider() {
-        // Legacy/unknown ids can't be mapped to a key var → reject in structured
-        // mode so we never write a provider with no credential.
+        // Legacy/unknown ids can't be mapped to a credential layout → reject in
+        // structured mode so we never write a provider with no credential.
+        // (`custom` IS handled now — see `plan_hermes_write_custom_*`.)
         assert!(plan_hermes_write("openai", Some("k"), "m", None, None, None).is_err());
-        assert!(plan_hermes_write("custom", Some("k"), "m", None, None, None).is_err());
         assert!(plan_hermes_write("totally-made-up", None, "m", None, None, None).is_err());
         // Raw mode stays the escape hatch: any provider id is accepted verbatim.
         let (yaml, env) = plan_hermes_write(
@@ -7339,21 +7610,30 @@ mod tests {
         env.insert("OPENAI_BASE_URL".to_string(), "https://proxy/v1".to_string());
         // No YAML base_url → the panel still sees the endpoint from `.env`, so a
         // later save won't clear it (regression guard for the dual-write change).
-        let (key, base) = project_hermes_key_and_base("openai-api", &env, None);
+        let (key, base) = project_hermes_key_and_base("openai-api", &env, None, None);
         assert_eq!(key, Some("sk-1".to_string()));
         assert_eq!(base, Some("https://proxy/v1".to_string()));
         // YAML base_url wins over the env fallback.
         let (_, base) =
-            project_hermes_key_and_base("openai-api", &env, Some("https://yaml/v1"));
+            project_hermes_key_and_base("openai-api", &env, Some("https://yaml/v1"), None);
         assert_eq!(base, Some("https://yaml/v1".to_string()));
         // A keyed provider with no base-URL var and no YAML base → no base URL.
         let mut env2 = BTreeMap::new();
         env2.insert("ANTHROPIC_API_KEY".to_string(), "sk-a".to_string());
-        let (key, base) = project_hermes_key_and_base("anthropic", &env2, None);
+        let (key, base) = project_hermes_key_and_base("anthropic", &env2, None, None);
         assert_eq!(key, Some("sk-a".to_string()));
         assert_eq!(base, None);
+        // `custom` reads its key from config.yaml `model.api_key`, NOT `.env`.
+        let (key, base) = project_hermes_key_and_base(
+            "custom",
+            &env,
+            Some("https://endpoint/v1"),
+            Some("sk-inline"),
+        );
+        assert_eq!(key, Some("sk-inline".to_string()));
+        assert_eq!(base, Some("https://endpoint/v1".to_string()));
         // Unknown provider → nothing projected from `.env`.
-        let (key, base) = project_hermes_key_and_base("custom:x", &env, None);
+        let (key, base) = project_hermes_key_and_base("custom:x", &env, None, None);
         assert_eq!(key, None);
         assert_eq!(base, None);
     }

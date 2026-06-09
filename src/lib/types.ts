@@ -451,6 +451,16 @@ export const HERMES_PROVIDERS: HermesProviderOption[] = [
     needsBaseUrl: true,
     kind: "apiKey",
   },
+  // Hermes' built-in `custom` provider: a user-supplied OpenAI-compatible
+  // endpoint. Unlike `openai-api` (key in ~/.hermes/.env), `custom` stores its
+  // key + endpoint INLINE in config.yaml (`model.api_key`/`model.base_url`);
+  // the backend routes them there. Shows both API Key + API URL fields.
+  {
+    id: "custom",
+    label: "Custom (OpenAI-compatible)",
+    needsBaseUrl: true,
+    kind: "apiKey",
+  },
   {
     id: "anthropic",
     label: "Anthropic",
@@ -1490,6 +1500,7 @@ export type McpAppType =
   | "open_claw"
   | "open_code"
   | "cline"
+  | "hermes"
 
 export interface LocalMcpServer {
   id: string
