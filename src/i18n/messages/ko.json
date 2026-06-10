@@ -2416,6 +2416,8 @@
       "errorDesc": "에이전트에 오류가 발생했을 때",
       "permissionRequest": "권한 요청",
       "permissionRequestDesc": "에이전트가 작업 권한을 요청할 때",
+      "questionRequest": "에이전트 질문",
+      "questionRequestDesc": "에이전트가 질문할 때",
       "userPromptSent": "사용자 메시지",
       "userPromptSentDesc": "메시지를 보낼 때 — 알림에 메시지 내용이 포함됩니다",
       "saved": "이벤트 필터가 업데이트되었습니다.",

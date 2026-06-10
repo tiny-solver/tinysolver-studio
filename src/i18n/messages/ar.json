@@ -2416,6 +2416,8 @@
       "errorDesc": "عندما يواجه الوكيل خطأ",
       "permissionRequest": "طلب إذن",
       "permissionRequestDesc": "عندما يطلب الوكيل إذنًا لتنفيذ إجراء",
+      "questionRequest": "سؤال من الوكيل",
+      "questionRequestDesc": "عندما يطرح أحد الوكلاء سؤالاً عليك",
       "userPromptSent": "رسالة المستخدم",
       "userPromptSentDesc": "عند إرسالك رسالة — يُضمَّن نص الرسالة في الإشعار",
       "saved": "تم تحديث فلتر الأحداث.",

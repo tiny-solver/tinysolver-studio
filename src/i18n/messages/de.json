@@ -2416,6 +2416,8 @@
       "errorDesc": "Wenn ein Agent einen Fehler feststellt",
       "permissionRequest": "Berechtigungsanfrage",
       "permissionRequestDesc": "Wenn ein Agent eine Berechtigung anfordert",
+      "questionRequest": "Frage des Agenten",
+      "questionRequestDesc": "Wenn ein Agent dir eine Frage stellt",
       "userPromptSent": "Benutzernachricht",
       "userPromptSentDesc": "Wenn du eine Nachricht sendest – der Nachrichtentext ist in der Benachrichtigung enthalten",
       "saved": "Ereignisfilter aktualisiert.",

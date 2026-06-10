@@ -2428,6 +2428,8 @@
       "errorDesc": "代理遇到错误时",
       "permissionRequest": "权限请求",
       "permissionRequestDesc": "智能体请求操作权限时",
+      "questionRequest": "智能体提问",
+      "questionRequestDesc": "当智能体向你提问时",
       "userPromptSent": "用户消息",
       "userPromptSentDesc": "当你发送消息时——通知中会包含消息内容",
       "saved": "事件过滤已更新。",
