@@ -3,10 +3,12 @@ import { Markdown } from "@tiptap/markdown"
 import { Placeholder } from "@tiptap/extension-placeholder"
 import StarterKit from "@tiptap/starter-kit"
 
+import { Reference } from "./nodes/reference-node"
+
 /**
- * Options for the shared composer extension set. Kept intentionally small for
- * Phase 0; trigger/suggestion + reference-node extensions are layered on in
- * later phases via additional entries to {@link buildComposerExtensions}.
+ * Options for the shared composer extension set. The `@`/`/` suggestion
+ * extensions are layered on in Phase 2 via additional entries to
+ * {@link buildComposerExtensions}.
  */
 export interface ComposerExtensionOptions {
   /** Placeholder shown when the document is empty. */
@@ -37,5 +39,6 @@ export function buildComposerExtensions(
       showOnlyWhenEditable: true,
     }),
     Markdown,
+    Reference,
   ]
 }

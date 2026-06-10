@@ -3,6 +3,7 @@ import type { JSONContent } from "@tiptap/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { buildComposerExtensions } from "./editor-config"
+import { referenceToMarkdown } from "./reference-text"
 
 /**
  * Headless editor sharing the exact extension set the live composer uses, so
@@ -142,6 +143,79 @@ describe("composer markdown engine", () => {
         contentType: "markdown",
       })
       expect(editor.getMarkdown()).toContain("发送给智能体的消息")
+    })
+  })
+
+  describe("reference serialization is injection-safe", () => {
+    function countLinks(node: JSONContent): number {
+      let count = 0
+      const walk = (n: JSONContent) => {
+        if (n.marks?.some((m) => m.type === "link")) count += 1
+        n.content?.forEach(walk)
+      }
+      walk(node)
+      return count
+    }
+
+    it("a crafted reference uri yields exactly one link when re-parsed", () => {
+      // If the destination weren't fully escaped, the parser would split this
+      // into a second `[pwn](http://evil)` link.
+      const md = referenceToMarkdown({
+        refType: "file",
+        id: "",
+        label: "f",
+        uri: "file:///a/\\> [pwn](http://evil)",
+        meta: null,
+      })
+      expect(countLinks(parse(editor, md))).toBe(1)
+    })
+
+    it.each([
+      ["bracket breakout", "a](http://evil) x"],
+      ["inline-link injection", "a[foo](http://evil)"],
+      ["autolink injection", "see <http://evil> now"],
+    ])(
+      "a crafted reference label (%s) yields exactly one link when re-parsed",
+      (_name, label) => {
+        const md = referenceToMarkdown({
+          refType: "session",
+          id: "1",
+          label,
+          uri: "codeg://session/1",
+          meta: null,
+        })
+        expect(countLinks(parse(editor, md))).toBe(1)
+      }
+    )
+
+    it.each([
+      ["bare url", "http://evil.com"],
+      ["www", "www.evil.com"],
+      ["email", "user@evil.com"],
+      ["image-shaped", "![x](http://evil)"],
+    ])(
+      "a no-uri reference label (%s) produces no link when re-parsed",
+      (_name, label) => {
+        const md = referenceToMarkdown({
+          refType: "file",
+          id: "",
+          label,
+          uri: null,
+          meta: null,
+        })
+        expect(countLinks(parse(editor, md))).toBe(0)
+      }
+    )
+
+    it("a URL-like agent label produces no link when re-parsed", () => {
+      const md = referenceToMarkdown({
+        refType: "agent",
+        id: "x",
+        label: "http://evil.com",
+        uri: null,
+        meta: null,
+      })
+      expect(countLinks(parse(editor, md))).toBe(0)
     })
   })
 })

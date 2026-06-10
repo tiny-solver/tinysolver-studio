@@ -8,7 +8,11 @@ import { RichComposer, type RichComposerHandle } from "./rich-composer"
 async function mount(props: React.ComponentProps<typeof RichComposer> = {}) {
   const ref = createRef<RichComposerHandle>()
   const result = render(<RichComposer ref={ref} {...props} />)
-  await waitFor(() => expect(ref.current?.getEditor()).not.toBeNull())
+  // Generous timeout: editor construction (ProseMirror + React node view) can
+  // be slow under parallel worker CPU contention.
+  await waitFor(() => expect(ref.current?.getEditor()).not.toBeNull(), {
+    timeout: 5000,
+  })
   return { ref, ...result }
 }
 
