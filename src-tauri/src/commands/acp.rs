@@ -233,6 +233,17 @@ fn uvx_agent_launchable(system_cmd: Option<(&'static str, &'static [&'static str
             .unwrap_or(false)
 }
 
+/// The `uvx` flags that pin the interpreter for a `Uvx` agent, inserted before
+/// `--from`. Returns `["--python", <ver>]` when the distribution sets a
+/// `python` pin, else an empty vec. Centralizes the pin so every uvx invocation
+/// (launch, prewarm, setup/model guidance) stays consistent.
+pub(crate) fn uvx_python_args(python: Option<&str>) -> Vec<String> {
+    match python {
+        Some(ver) => vec!["--python".to_string(), ver.to_string()],
+        None => Vec::new(),
+    }
+}
+
 /// Pre-fetch a `Uvx` agent's pinned package into uvx's cache by running
 /// `uvx --from <package> <cmd> --version`, so the first real connect doesn't
 /// pay the download cost. Streams progress to the install event stream.
@@ -240,6 +251,7 @@ async fn prewarm_uvx_agent(
     agent_name: &str,
     package: &str,
     cmd: &str,
+    python: Option<&str>,
     task_id: &str,
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
@@ -272,13 +284,20 @@ async fn prewarm_uvx_agent(
             })?
         }
     };
+    let python_args = uvx_python_args(python);
+    let python_display = if python_args.is_empty() {
+        String::new()
+    } else {
+        format!("{} ", python_args.join(" "))
+    };
     emit_agent_install_event(
         emitter,
         task_id,
         AgentInstallEventKind::Log,
-        format!("$ uvx --from {package} {cmd} --version"),
+        format!("$ uvx {python_display}--from {package} {cmd} --version"),
     );
     let output = crate::process::tokio_command(&uvx)
+        .args(&python_args)
         .arg("--from")
         .arg(package)
         .arg(cmd)
@@ -2163,6 +2182,7 @@ fn hermes_setup_argvs() -> (Vec<String>, Vec<String>) {
     if let registry::AgentDistribution::Uvx {
         package,
         cmd,
+        python,
         system_cmd,
         ..
     } = meta.distribution
@@ -2178,27 +2198,25 @@ fn hermes_setup_argvs() -> (Vec<String>, Vec<String>) {
         let uvx = resolve_uvx_command()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "uvx".to_string());
-        return (
-            vec![
-                uvx.clone(),
-                "--from".to_string(),
-                package.to_string(),
-                cmd.to_string(),
-                "--setup".to_string(),
-            ],
-            vec![
-                uvx,
-                "--from".to_string(),
-                package.to_string(),
-                "hermes".to_string(),
-                "model".to_string(),
-            ],
-        );
+        let python_args = uvx_python_args(python);
+        // `uvx [--python <ver>] --from <package> <tail...>` — the pin must
+        // precede `--from`, matching the launch/prewarm invocations.
+        let build = |tail: &[&str]| -> Vec<String> {
+            let mut argv = vec![uvx.clone()];
+            argv.extend(python_args.iter().cloned());
+            argv.push("--from".to_string());
+            argv.push(package.to_string());
+            argv.extend(tail.iter().map(|s| s.to_string()));
+            argv
+        };
+        return (build(&[cmd, "--setup"]), build(&["hermes", "model"]));
     }
     // Unreachable: Hermes is always a Uvx distribution.
     (
         vec![
             "uvx".to_string(),
+            "--python".to_string(),
+            "3.13".to_string(),
             "--from".to_string(),
             "hermes-agent[acp,mcp]==0.16.0".to_string(),
             "hermes-acp".to_string(),
@@ -2206,6 +2224,8 @@ fn hermes_setup_argvs() -> (Vec<String>, Vec<String>) {
         ],
         vec![
             "uvx".to_string(),
+            "--python".to_string(),
+            "3.13".to_string(),
             "--from".to_string(),
             "hermes-agent[acp,mcp]==0.16.0".to_string(),
             "hermes".to_string(),
@@ -5367,6 +5387,7 @@ pub(crate) async fn acp_prepare_npx_agent_core(
             package,
             cmd,
             version,
+            python,
             ..
         } => {
             let default = agent_setting_service::AgentDefaultInput {
@@ -5381,7 +5402,7 @@ pub(crate) async fn acp_prepare_npx_agent_core(
             // Pre-fetch the pinned package into uvx's cache so the first
             // connect doesn't pay the download cost. The version is pinned in
             // the package spec, so `version_override` does not apply here.
-            prewarm_uvx_agent(meta.name, package, cmd, &task_id, emitter).await?;
+            prewarm_uvx_agent(meta.name, package, cmd, python, &task_id, emitter).await?;
 
             let resolved = version.to_string();
             binary_cache::mark_uvx_agent_prepared(agent_type, &resolved)?;
@@ -7636,5 +7657,34 @@ mod tests {
         let (key, base) = project_hermes_key_and_base("custom:x", &env, None, None);
         assert_eq!(key, None);
         assert_eq!(base, None);
+    }
+
+    #[test]
+    fn uvx_python_args_pins_interpreter_or_is_empty() {
+        assert_eq!(
+            uvx_python_args(Some("3.13")),
+            vec!["--python".to_string(), "3.13".to_string()]
+        );
+        assert!(uvx_python_args(None).is_empty());
+    }
+
+    #[test]
+    fn hermes_setup_argvs_pin_python_before_from() {
+        // hermes-agent's requires-python `<3.14` (and its win32 `pywinpty` dep)
+        // means every uvx invocation must pin the interpreter, so a default
+        // Python 3.14 never gets selected. Guard the assertion on the `--from`
+        // branch: when a real `hermes` CLI is on PATH the recipe is the system
+        // form (`hermes acp --setup` / `hermes model`) with no `--from`.
+        let (setup, model) = hermes_setup_argvs();
+        for argv in [&setup, &model] {
+            if let Some(from_idx) = argv.iter().position(|a| a == "--from") {
+                let py_idx = argv
+                    .iter()
+                    .position(|a| a == "--python")
+                    .expect("uvx recipe must pin --python before --from");
+                assert!(py_idx < from_idx, "--python must precede --from: {argv:?}");
+                assert_eq!(argv.get(py_idx + 1).map(String::as_str), Some("3.13"));
+            }
+        }
     }
 }
