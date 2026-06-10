@@ -785,6 +785,7 @@
       "notInstalled": "غير مثبت",
       "remoteLocal": "البعيد: {remoteVersion} · المحلي: {localVersion}",
       "platformUnsupported": "{versionText}. المنصة الحالية لا تدعم هذا الوكيل.",
+      "uvxNotReady": "{versionText}. وقت تشغيل uv غير مثبّت — ثبّته من فحص uv بالأسفل لاستخدام هذا الوكيل.",
       "clickInstall": "{versionText}. انقر تثبيت في الجهة اليمنى.",
       "localUnrecognized": "{versionText}. الإصدار المحلي غير قابل للمقارنة؛ جرّب الترقية للكتابة فوق التثبيت.",
       "upgradeAvailable": "{versionText}. تتوفر ترقية.",

@@ -785,6 +785,7 @@
       "notInstalled": "未安裝",
       "remoteLocal": "遠端：{remoteVersion} · 本地：{localVersion}",
       "platformUnsupported": "{versionText}。目前平台不支援該 Agent。",
+      "uvxNotReady": "{versionText}。uv 執行階段未安裝——請在下方 uv 預檢項中安裝後再使用該 Agent。",
       "clickInstall": "{versionText}。請點擊右側安裝。",
       "localUnrecognized": "{versionText}。本地版本無法識別，可嘗試升級覆蓋安裝。",
       "upgradeAvailable": "{versionText}。發現可升級版本。",

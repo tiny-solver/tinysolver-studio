@@ -785,6 +785,7 @@
       "notInstalled": "Not installed",
       "remoteLocal": "Remote: {remoteVersion} · Local: {localVersion}",
       "platformUnsupported": "{versionText}. Current platform does not support this agent.",
+      "uvxNotReady": "{versionText}. The uv runtime isn't installed — install it from the uv check below to use this agent.",
       "clickInstall": "{versionText}. Click Install on the right.",
       "localUnrecognized": "{versionText}. Local version is not comparable; try upgrade to overwrite install.",
       "upgradeAvailable": "{versionText}. Upgrade available.",

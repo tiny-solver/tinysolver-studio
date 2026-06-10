@@ -1819,6 +1819,7 @@ export type FixActionKind =
   | "retry_connection"
   | "open_agents_settings"
   | "install_opencode_plugins"
+  | "install_uv"
 
 export interface FixAction {
   label: string

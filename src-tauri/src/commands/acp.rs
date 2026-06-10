@@ -243,35 +243,13 @@ async fn prewarm_uvx_agent(
     task_id: &str,
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
-    let uvx = match resolve_uvx_command() {
-        Some(path) => path,
-        None => {
-            // Zero-prerequisite UX: provision the uv toolchain on demand, then
-            // re-resolve. Failure propagates as a normal install error.
-            emit_agent_install_event(
-                emitter,
-                task_id,
-                AgentInstallEventKind::Log,
-                "uv not found — installing uv toolchain...".to_string(),
-            );
-            let emitter_clone = emitter.clone();
-            let task_id_clone = task_id.to_string();
-            crate::acp::binary_cache::ensure_uv_tool(move |msg| {
-                emit_agent_install_event(
-                    &emitter_clone,
-                    &task_id_clone,
-                    AgentInstallEventKind::Log,
-                    msg.to_string(),
-                );
-            })
-            .await?;
-            resolve_uvx_command().ok_or_else(|| {
-                AcpError::SdkNotInstalled(
-                    "uv installation did not produce a usable uvx".to_string(),
-                )
-            })?
-        }
-    };
+    // uv must already be installed; provision it separately via the "Install
+    // uv" preflight action. We deliberately do NOT auto-install it here so the
+    // two steps stay separate — the Settings UI disables this agent-install
+    // action until uv is ready, so a normal user never reaches this error.
+    let uvx = resolve_uvx_command().ok_or_else(|| {
+        AcpError::SdkNotInstalled("uv is not installed; install the uv runtime first".to_string())
+    })?;
     emit_agent_install_event(
         emitter,
         task_id,
@@ -5217,6 +5195,65 @@ pub async fn acp_download_agent_binary(
 ) -> Result<(), AcpError> {
     let emitter = EventEmitter::Tauri(app);
     acp_download_agent_binary_core(agent_type, version, task_id, &emitter).await
+}
+
+/// Provision ONLY the uv toolchain (uvx) into codeg's cache — independent of
+/// installing any `Uvx` agent's package. Streams progress over the shared
+/// agent-install event stream so the Settings page shows a live log. Backs the
+/// uv preflight check's "Install uv" fix. After this succeeds,
+/// `resolve_uvx_command()` resolves the cached uvx, so a subsequent preflight /
+/// agent-status reports uv as available.
+pub(crate) async fn acp_install_uv_tool_core(
+    task_id: String,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
+    emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
+
+    let emitter_clone = emitter.clone();
+    let task_id_clone = task_id.clone();
+    let result = crate::acp::binary_cache::ensure_uv_tool(move |msg| {
+        emit_agent_install_event(
+            &emitter_clone,
+            &task_id_clone,
+            AgentInstallEventKind::Log,
+            msg.to_string(),
+        );
+    })
+    .await
+    .map(|_| ());
+
+    match &result {
+        Ok(()) => {
+            emit_agent_install_event(
+                emitter,
+                &task_id,
+                AgentInstallEventKind::Completed,
+                "uv runtime installed successfully".to_string(),
+            );
+            // uv is shared across all uvx agents, so its arrival flips their
+            // availability — notify every client to refetch the agent list.
+            emit_acp_agents_updated(emitter, "uv_installed", None);
+        }
+        Err(e) => {
+            emit_agent_install_event(
+                emitter,
+                &task_id,
+                AgentInstallEventKind::Failed,
+                e.to_string(),
+            );
+        }
+    }
+    result
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_install_uv_tool(
+    task_id: String,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    let emitter = EventEmitter::Tauri(app);
+    acp_install_uv_tool_core(task_id, &emitter).await
 }
 
 pub(crate) async fn acp_detect_agent_local_version_core(
