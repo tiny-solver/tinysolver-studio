@@ -1237,6 +1237,31 @@ pub async fn cleanup_chat_folder_for_deleted_conversation(
     }
 }
 
+/// Full conversation-delete orchestration shared by the Tauri command and the web
+/// handler: capture the backing folder BEFORE the soft-delete (so a hidden chat
+/// folder can be retired afterward), soft-delete, broadcast the deletion, then run
+/// the tab + chat-folder cleanups. The thin `delete_conversation_core` primitive
+/// stays event-free for internal/test callers, so the orchestration lives here.
+pub async fn delete_conversation_with_cleanup_core(
+    emitter: &EventEmitter,
+    conn: &sea_orm::DatabaseConnection,
+    conversation_id: i32,
+) -> Result<(), AppCommandError> {
+    // Capture the backing folder before the soft-delete so a hidden chat folder
+    // can be cleaned up afterward.
+    let folder_id = conversation_service::get_by_id(conn, conversation_id)
+        .await
+        .ok()
+        .map(|c| c.folder_id);
+    delete_conversation_core(conn, conversation_id).await?;
+    emit_conversation_deleted(emitter, conversation_id);
+    cleanup_tabs_for_deleted_conversation(emitter, conn, conversation_id).await;
+    if let Some(folder_id) = folder_id {
+        cleanup_chat_folder_for_deleted_conversation(conn, folder_id).await;
+    }
+    Ok(())
+}
+
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn delete_conversation(
@@ -1244,20 +1269,8 @@ pub async fn delete_conversation(
     db: tauri::State<'_, AppDatabase>,
     conversation_id: i32,
 ) -> Result<(), AppCommandError> {
-    // Capture the backing folder before the soft-delete so a hidden chat folder
-    // can be cleaned up afterward.
-    let folder_id = conversation_service::get_by_id(&db.conn, conversation_id)
-        .await
-        .ok()
-        .map(|c| c.folder_id);
-    delete_conversation_core(&db.conn, conversation_id).await?;
     let emitter = EventEmitter::Tauri(app);
-    emit_conversation_deleted(&emitter, conversation_id);
-    cleanup_tabs_for_deleted_conversation(&emitter, &db.conn, conversation_id).await;
-    if let Some(folder_id) = folder_id {
-        cleanup_chat_folder_for_deleted_conversation(&db.conn, folder_id).await;
-    }
-    Ok(())
+    delete_conversation_with_cleanup_core(&emitter, &db.conn, conversation_id).await
 }
 
 fn compute_stats(all_conversations: &[ConversationSummary]) -> AgentStats {

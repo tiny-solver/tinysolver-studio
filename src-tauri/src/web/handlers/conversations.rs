@@ -314,24 +314,11 @@ pub async fn delete_conversation(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<DeleteConversationParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    // Capture the backing folder before the soft-delete so a hidden chat folder
-    // can be cleaned up afterward.
-    let folder_id =
-        crate::db::service::conversation_service::get_by_id(&state.db.conn, params.conversation_id)
-            .await
-            .ok()
-            .map(|c| c.folder_id);
-    conv_commands::delete_conversation_core(&state.db.conn, params.conversation_id).await?;
-    conv_commands::emit_conversation_deleted(&state.emitter, params.conversation_id);
-    conv_commands::cleanup_tabs_for_deleted_conversation(
+    conv_commands::delete_conversation_with_cleanup_core(
         &state.emitter,
         &state.db.conn,
         params.conversation_id,
     )
-    .await;
-    if let Some(folder_id) = folder_id {
-        conv_commands::cleanup_chat_folder_for_deleted_conversation(&state.db.conn, folder_id)
-            .await;
-    }
+    .await?;
     Ok(Json(()))
 }
