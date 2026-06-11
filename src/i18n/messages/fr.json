@@ -2424,6 +2424,8 @@
       "errorDesc": "Lorsqu'un agent rencontre une erreur",
       "permissionRequest": "Demande d'autorisation",
       "permissionRequestDesc": "Lorsqu'un agent demande une autorisation",
+      "questionRequest": "Question de l'agent",
+      "questionRequestDesc": "Quand un agent vous pose une question",
       "userPromptSent": "Message de l'utilisateur",
       "userPromptSentDesc": "Lorsque vous envoyez un message (le texte du message est inclus dans la notification)",
       "saved": "Filtre d'événements mis à jour.",

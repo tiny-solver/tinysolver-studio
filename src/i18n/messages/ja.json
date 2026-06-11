@@ -2424,6 +2424,8 @@
       "errorDesc": "エージェントがエラーに遭遇した時",
       "permissionRequest": "権限リクエスト",
       "permissionRequestDesc": "エージェントが操作の権限を要求した時",
+      "questionRequest": "エージェントからの質問",
+      "questionRequestDesc": "エージェントが質問したとき",
       "userPromptSent": "ユーザーメッセージ",
       "userPromptSentDesc": "メッセージを送信したとき（通知に本文が含まれます）",
       "saved": "イベントフィルターを更新しました。",
