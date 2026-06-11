@@ -1,4 +1,4 @@
-import { ALL_AGENT_TYPES } from "@/lib/types"
+import { ALL_AGENT_TYPES, type AgentType } from "@/lib/types"
 
 import type { ReferenceAttrs } from "./types"
 
@@ -6,6 +6,7 @@ import type { ReferenceAttrs } from "./types"
 // (from-prompt-blocks.ts) and transcript badge rendering
 // (ai-elements/markdown-link.tsx). Mirrors the schemes the adapters emit
 // (suggestion/adapters.ts) and the node's allow-list (nodes/reference-node.ts).
+const AGENT_URI = /^codeg:\/\/agent\/(.+)$/i
 const SESSION_URI = /^codeg:\/\/session\/(.+)$/i
 const COMMIT_URI = /^codeg:\/\/commit\/.*@(.+)$/i
 
@@ -31,6 +32,20 @@ export function parseCodegReferenceUri(
       label: label || base || uri,
       uri,
       meta: { fileKind: "file" },
+    }
+  }
+
+  const agent = uri.match(AGENT_URI)
+  if (agent) {
+    const type = agent[1]
+    return {
+      refType: "agent",
+      // The transcript link text is `@name`; strip a single leading `@` so the
+      // restored badge reads `name`, matching a live-inserted agent badge.
+      id: type,
+      label: (label || type).replace(/^@/, "") || type,
+      uri,
+      meta: { agentType: type as AgentType },
     }
   }
 

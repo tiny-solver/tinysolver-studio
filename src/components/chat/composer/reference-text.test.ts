@@ -51,6 +51,19 @@ describe("referenceToMarkdown", () => {
     ).toBe("@Claude Code")
   })
 
+  it("renders an agent with a uri as a [@label](codeg://agent/…) link", () => {
+    expect(
+      referenceToMarkdown(
+        ref({
+          refType: "agent",
+          id: "codex",
+          label: "Codex",
+          uri: "codeg://agent/codex",
+        })
+      )
+    ).toBe("[@Codex](codeg://agent/codex)")
+  })
+
   it("renders a skill as a /invocation token from its id", () => {
     expect(
       referenceToMarkdown(ref({ refType: "skill", id: "code-review" }))
@@ -123,6 +136,18 @@ describe("referenceToMarkdown", () => {
       expect(referenceToMarkdown(ref({ refType: "agent", label: "a]b" }))).toBe(
         "@a\\]b"
       )
+    })
+
+    it("escapes link-breaking chars in a uri-bearing agent label", () => {
+      expect(
+        referenceToMarkdown(
+          ref({
+            refType: "agent",
+            label: "a](http://evil) x",
+            uri: "codeg://agent/codex",
+          })
+        )
+      ).toBe("[@a\\]\\(http://evil\\) x](codeg://agent/codex)")
     })
 
     it("code-spans a URL-like agent label so it cannot autolink", () => {

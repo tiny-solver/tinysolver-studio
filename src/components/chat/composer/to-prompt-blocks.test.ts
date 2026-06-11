@@ -62,6 +62,24 @@ describe("docToPromptBlocks", () => {
     expect(textBlock(blocks)).toContain("@Codex")
   })
 
+  it("keeps an agent reference with a codeg uri inline as a markdown link", () => {
+    editor
+      .chain()
+      .insertContent("ask ")
+      .insertReference(
+        ref({
+          refType: "agent",
+          id: "codex",
+          label: "Codex",
+          uri: "codeg://agent/codex",
+        })
+      )
+      .run()
+    const blocks = docToPromptBlocks(editor)
+    expect(links(blocks)).toHaveLength(0)
+    expect(textBlock(blocks)).toContain("[@Codex](codeg://agent/codex)")
+  })
+
   it("keeps a skill reference inline as the /id token", () => {
     editor.commands.insertReference(
       ref({ refType: "skill", id: "code-review", label: "Code Review" })

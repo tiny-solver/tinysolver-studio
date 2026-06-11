@@ -45,14 +45,20 @@ export function fileToSuggestion(
   }
 }
 
-/** ACP agent → agent reference (no uri; serializes to `@label`). */
+/**
+ * ACP agent → agent reference. Carries a `codeg://agent/<agent_type>` uri as a
+ * routing anchor: it serializes inline as `[@label](codeg://agent/…)` and
+ * renders as a badge in the transcript. The uri is opaque to the agent (the
+ * readable `@label` carries the meaning); resolving it to real routing is a
+ * future, separate concern.
+ */
 export function agentToSuggestion(agent: AcpAgentInfo): SuggestionItem {
   return {
     reference: {
       refType: "agent",
       id: agent.agent_type,
       label: agent.name || AGENT_LABELS[agent.agent_type],
-      uri: null,
+      uri: `codeg://agent/${agent.agent_type}`,
       meta: { agentType: agent.agent_type, available: agent.available },
     },
     detail: agent.description || null,

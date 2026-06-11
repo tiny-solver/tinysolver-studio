@@ -129,6 +129,13 @@ describe("MarkdownLink", () => {
       expect(badge).toHaveAttribute("data-ref-type", "commit")
     })
 
+    it("renders an agent link as an agent badge", () => {
+      render(<MarkdownLink href="codeg://agent/codex">@Codex</MarkdownLink>)
+      const badge = screen.getByRole("img", { name: "agent: Codex" })
+      expect(badge).toHaveAttribute("data-ref-type", "agent")
+      expect(badge.querySelector("svg")).not.toBeNull()
+    })
+
     it("leaves a non-reference codeg uri as a normal link", () => {
       render(<MarkdownLink href="codeg://unknown/x">x</MarkdownLink>)
       expect(screen.getByRole("button")).toBeInTheDocument()

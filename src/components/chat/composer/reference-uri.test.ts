@@ -21,6 +21,29 @@ describe("parseCodegReferenceUri", () => {
     })
   })
 
+  it("parses an agent uri, stripping a leading @ from the label", () => {
+    expect(
+      parseCodegReferenceUri("codeg://agent/codex", "@Codex")
+    ).toMatchObject({
+      refType: "agent",
+      id: "codex",
+      label: "Codex",
+      uri: "codeg://agent/codex",
+      meta: { agentType: "codex" },
+    })
+  })
+
+  it("falls back to the agent type when the agent label is empty", () => {
+    expect(
+      parseCodegReferenceUri("codeg://agent/claude_code", "")
+    ).toMatchObject({
+      refType: "agent",
+      id: "claude_code",
+      label: "claude_code",
+      meta: { agentType: "claude_code" },
+    })
+  })
+
   it("parses a new-format session uri, recovering the agent type", () => {
     expect(
       parseCodegReferenceUri("codeg://session/codex_abc123", "My chat")

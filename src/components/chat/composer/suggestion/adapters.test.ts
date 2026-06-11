@@ -58,7 +58,7 @@ describe("fileToSuggestion", () => {
 })
 
 describe("agentToSuggestion", () => {
-  it("maps to an agent reference with no uri", () => {
+  it("maps to an agent reference with a codeg://agent routing uri", () => {
     const agent = {
       agent_type: "claude_code",
       name: "Claude Code",
@@ -70,7 +70,7 @@ describe("agentToSuggestion", () => {
       refType: "agent",
       id: "claude_code",
       label: "Claude Code",
-      uri: null,
+      uri: "codeg://agent/claude_code",
       meta: { agentType: "claude_code", available: true },
     })
   })

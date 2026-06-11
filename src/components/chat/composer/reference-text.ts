@@ -68,7 +68,8 @@ function escapeLinkDestination(uri: string): string {
  *
  * References with a URI render as a Markdown link `[label](uri)` — matching how
  * the backend's `user_blocks_from_prompt` already folds ResourceLinks into
- * `[name](uri)`. Agents render as `@label`. Skills render as the `/id`
+ * `[name](uri)`. Agents render as `[@label](codeg://agent/…)` when they carry a
+ * routing uri, or as plain `@label` otherwise. Skills render as the `/id`
  * invocation token (the stable id, never the possibly-localized display label).
  * Every interpolated label/uri is escaped — and free-standing URL/email-like
  * text is code-spanned — so a crafted reference cannot inject Markdown
@@ -76,8 +77,16 @@ function escapeLinkDestination(uri: string): string {
  */
 export function referenceToMarkdown(attrs: ReferenceAttrs): string {
   switch (attrs.refType) {
-    case "agent":
-      return `@${inlineText(attrs.label || attrs.id)}`
+    case "agent": {
+      // With a routing uri → `[@label](uri)` (the `@` lives inside the link
+      // text, where GFM cannot autolink it). Without one → plain `@label`, with
+      // the `@` kept OUTSIDE inlineText so a URL-like label is still code-spanned
+      // rather than the whole `@…` string being treated as autolink-triggering.
+      const text = collapseNewlines(attrs.label || attrs.id)
+      return attrs.uri
+        ? `[@${escapeMarkdownText(text)}](${escapeLinkDestination(attrs.uri)})`
+        : `@${inlineText(attrs.label || attrs.id)}`
+    }
     case "skill": {
       // Invocation token: the stable id is what the agent executes. The label
       // (possibly localized / containing spaces) is never used; an empty id is
