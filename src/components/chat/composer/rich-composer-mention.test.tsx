@@ -65,6 +65,43 @@ describe("RichComposer @ mention integration", () => {
     })
     // The "@app" trigger text is gone, replaced by the badge.
     expect(editor.getText()).not.toContain("@app")
+    // Selecting closes the panel and clears the combobox ARIA on the editor.
+    const dom = editor.view.dom as HTMLElement
+    await waitFor(() => {
+      expect(dom.hasAttribute("aria-controls")).toBe(false)
+      expect(dom.hasAttribute("aria-activedescendant")).toBe(false)
+      expect(dom.hasAttribute("aria-autocomplete")).toBe(false)
+    })
+  })
+
+  it("wires the editor's combobox ARIA while the panel is open, clears it on Escape", async () => {
+    const { editor } = await mount()
+    const dom = editor.view.dom as HTMLElement
+    expect(dom.getAttribute("role")).toBe("textbox")
+    expect(dom.hasAttribute("aria-controls")).toBe(false)
+    act(() => {
+      editor.commands.insertContent("@app")
+    })
+    await screen.findByText("app.ts", {}, { timeout: 5000 })
+    await waitFor(() => {
+      expect(dom.getAttribute("aria-controls")).toBe("mention-listbox")
+      expect(dom.getAttribute("aria-autocomplete")).toBe("list")
+      expect(dom.getAttribute("aria-activedescendant")).toBe("mention-option-0")
+    })
+    act(() => {
+      dom.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    })
+    await waitFor(() => {
+      expect(dom.hasAttribute("aria-controls")).toBe(false)
+      expect(dom.hasAttribute("aria-autocomplete")).toBe(false)
+      expect(dom.hasAttribute("aria-activedescendant")).toBe(false)
+    })
   })
 
   it("does not submit on Enter while the panel is open", async () => {
@@ -125,6 +162,11 @@ describe("RichComposer @ mention integration", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("mention-popup")).toBeNull()
     )
+    // Disabling also clears the combobox ARIA on the editor.
+    const dom = editor.view.dom as HTMLElement
+    expect(dom.hasAttribute("aria-controls")).toBe(false)
+    expect(dom.hasAttribute("aria-activedescendant")).toBe(false)
+    expect(dom.hasAttribute("aria-autocomplete")).toBe(false)
 
     // Enter now submits normally — panel + plugin state were cleared.
     act(() => {

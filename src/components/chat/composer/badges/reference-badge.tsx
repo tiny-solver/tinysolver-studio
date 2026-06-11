@@ -1,4 +1,5 @@
 import { Bot, FileText, Folder, GitCommit, Hash, Sparkles } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { AgentIcon } from "@/components/agent-icon"
 import {
@@ -14,34 +15,50 @@ const ICON_CLASS = "size-3.5 shrink-0"
 
 export function ReferenceIcon({ data }: { data: ReferenceAttrs }) {
   const meta = data.meta
+  let icon: ReactNode = null
   switch (data.refType) {
     case "file":
-      return meta?.fileKind === "dir" ? (
-        <Folder className={ICON_CLASS} />
-      ) : (
-        <FileText className={ICON_CLASS} />
-      )
+      icon =
+        meta?.fileKind === "dir" ? (
+          <Folder className={ICON_CLASS} />
+        ) : (
+          <FileText className={ICON_CLASS} />
+        )
+      break
     case "agent": {
       const agentType = meta?.agentType ?? (data.id as AgentType)
-      return agentType ? (
+      icon = agentType ? (
         <AgentIcon agentType={agentType} className={ICON_CLASS} />
       ) : (
         <Bot className={ICON_CLASS} />
       )
+      break
     }
     case "session":
-      return meta?.agentType ? (
+      icon = meta?.agentType ? (
         <AgentIcon agentType={meta.agentType} className={ICON_CLASS} />
       ) : (
         <Hash className={ICON_CLASS} />
       )
+      break
     case "commit":
-      return <GitCommit className={ICON_CLASS} />
+      icon = <GitCommit className={ICON_CLASS} />
+      break
     case "skill":
-      return <Sparkles className={ICON_CLASS} />
+      icon = <Sparkles className={ICON_CLASS} />
+      break
     default:
       return null
   }
+  // Decorative wherever it appears (popup option, badge): the accessible name
+  // comes from the adjacent label (or the badge's own role="img" name), so hide
+  // it — otherwise AgentIcon's titled <svg> leaks into the option name (e.g.
+  // "Codex Codex Helper").
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0">
+      {icon}
+    </span>
+  )
 }
 
 export interface ReferenceBadgeProps {
@@ -64,6 +81,12 @@ export function ReferenceBadge({ data, className }: ReferenceBadgeProps) {
       data-reference-badge=""
       data-ref-type={data.refType}
       title={data.uri ?? data.label}
+      // The badge is an inline contentEditable=false atom. `role="img"` makes it
+      // a single named unit so `aria-label` is a reliable accessible name (a
+      // bare span's aria-label is not), and collapses the decorative icon —
+      // including AgentIcon's titled <svg> — into that one name.
+      role="img"
+      aria-label={`${data.refType}: ${data.label || data.id}`}
       className={cn(
         "inline-flex max-w-[18rem] items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-1.5 py-px align-baseline text-[0.85em] leading-snug text-foreground",
         className

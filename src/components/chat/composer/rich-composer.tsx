@@ -22,7 +22,10 @@ import type {
   MentionController,
   MentionRenderState,
 } from "./suggestion/mention-suggestion"
-import { SuggestionPopup } from "./suggestion/suggestion-popup"
+import {
+  MENTION_LISTBOX_ID,
+  SuggestionPopup,
+} from "./suggestion/suggestion-popup"
 import type { ReferenceSearch, SuggestionPopupHandle } from "./suggestion/types"
 import type { ReferenceAttrs } from "./types"
 
@@ -404,6 +407,38 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       [editor, closeMention]
     )
 
+    // Combobox ARIA on the editing surface: DOM focus stays in the editor while
+    // the `@` panel is open, so the controlled-listbox relationship lives on the
+    // contentEditable. `aria-activedescendant` is mirrored from the popup's
+    // active row (below); here we toggle `aria-controls` and clear both when the
+    // panel closes. (role stays "textbox" — a multiline editor that surfaces an
+    // autocomplete list, the recognized textbox-autocomplete pattern.)
+    const isMentionOpen = mentionState !== null
+    useEffect(() => {
+      const dom = editor?.view.dom
+      if (!dom) return
+      if (isMentionOpen) {
+        // `aria-autocomplete="list"` tells AT this textbox offers a list of
+        // completions; `aria-controls` names the listbox it drives.
+        dom.setAttribute("aria-autocomplete", "list")
+        dom.setAttribute("aria-controls", MENTION_LISTBOX_ID)
+      } else {
+        dom.removeAttribute("aria-autocomplete")
+        dom.removeAttribute("aria-controls")
+        dom.removeAttribute("aria-activedescendant")
+      }
+    }, [editor, isMentionOpen])
+
+    const handleActiveOptionChange = useCallback(
+      (optionId: string | null) => {
+        const dom = editor?.view.dom
+        if (!dom) return
+        if (optionId) dom.setAttribute("aria-activedescendant", optionId)
+        else dom.removeAttribute("aria-activedescendant")
+      },
+      [editor]
+    )
+
     return (
       <div
         className={cn("codeg-composer flex min-h-0 flex-col", className)}
@@ -421,6 +456,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
             search={referenceSearch}
             onSelect={handleReferenceSelect}
             onClose={closeMention}
+            onActiveOptionChange={handleActiveOptionChange}
           />
         )}
       </div>

@@ -123,6 +123,11 @@ describe("Reference node", () => {
     )
     expect(badge.textContent).toContain("Claude Code")
     expect(badge.querySelector("svg")).not.toBeNull()
+    // The inline atom exposes a *computed* accessible name via role="img" +
+    // aria-label (a bare span's aria-label would be unreliable); the decorative
+    // icon collapses into that single name.
+    expect(badge).toHaveAttribute("role", "img")
+    expect(badge).toHaveAccessibleName("agent: Claude Code")
   })
 
   it("round-trips through HTML (renderHTML → parseHTML)", async () => {

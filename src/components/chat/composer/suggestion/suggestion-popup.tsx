@@ -31,6 +31,16 @@ const FETCH_DEBOUNCE_MS = 150
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect
 
+/**
+ * `id` of the listbox element and of each option. The editor's contentEditable
+ * (which keeps DOM focus) points `aria-controls` at the listbox and
+ * `aria-activedescendant` at the active option, the standard combobox pattern
+ * for a popup that doesn't take focus. Only one panel is open at a time (the
+ * focused editor's), so fixed ids never collide.
+ */
+export const MENTION_LISTBOX_ID = "mention-listbox"
+export const mentionOptionId = (index: number) => `mention-option-${index}`
+
 export interface SuggestionPopupProps {
   /** Live trigger state (query/range/caret rect). */
   state: MentionRenderState
@@ -45,6 +55,16 @@ export interface SuggestionPopupProps {
   onClose: () => void
   emptyLabel?: string
   loadingLabel?: string
+  /** Accessible name for the listbox. */
+  listboxLabel?: string
+  /** Builds the live-region result count announcement. */
+  countLabel?: (count: number) => string
+  /**
+   * Reports the active option's element id (or null when nothing is
+   * selectable), so the host can mirror it onto the editor's
+   * `aria-activedescendant`. Must be referentially stable.
+   */
+  onActiveOptionChange?: (optionId: string | null) => void
 }
 
 interface FlatRow {
@@ -69,6 +89,9 @@ export const SuggestionPopup = forwardRef<
     onClose,
     emptyLabel = "No matches",
     loadingLabel = "Searching…",
+    listboxLabel = "Mentions",
+    countLabel = (count) => `${count} results`,
+    onActiveOptionChange,
   },
   ref
 ) {
@@ -133,6 +156,15 @@ export const SuggestionPopup = forwardRef<
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: "nearest" })
   }, [selectedIndex])
+
+  // Mirror the active option's id to the host (→ editor `aria-activedescendant`).
+  // Null while nothing is selectable (loading / no matches), so the editor never
+  // points at a stale or absent option.
+  useEffect(() => {
+    onActiveOptionChange?.(
+      stale || flat.length === 0 ? null : mentionOptionId(selectedIndex)
+    )
+  }, [selectedIndex, flat.length, stale, onActiveOptionChange])
 
   // Position the caret-anchored panel within the viewport. Measure the rendered
   // panel (a `visibility:hidden` box still has layout), read the *live* caret
@@ -204,6 +236,11 @@ export const SuggestionPopup = forwardRef<
     [flat, selectedIndex, onSelect, onClose, state.range]
   )
 
+  const liveStatus = stale
+    ? loadingLabel
+    : flat.length === 0
+      ? emptyLabel
+      : countLabel(flat.length)
   let rowIndex = -1
 
   return createPortal(
@@ -226,6 +263,8 @@ export const SuggestionPopup = forwardRef<
         // overflowing — the positioner clamps placement, this bounds the size.
         className="max-h-[min(18rem,calc(100dvh_-_1rem))] w-80 max-w-[calc(100vw_-_1rem)] overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
       >
+        {/* Status text lives *outside* the listbox: a listbox may only own
+            options/groups. (The sr-only live region below announces it to AT.) */}
         {stale ? (
           <div className="px-2 py-3 text-sm text-muted-foreground">
             {loadingLabel}
@@ -234,51 +273,71 @@ export const SuggestionPopup = forwardRef<
           <div className="px-2 py-3 text-sm text-muted-foreground">
             {emptyLabel}
           </div>
-        ) : (
-          result.groups.map((group) =>
-            group.items.length === 0 ? null : (
-              <div key={group.kind} className="py-0.5">
-                <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                  {group.label}
-                </div>
-                {group.items.map((item) => {
-                  rowIndex += 1
-                  const active = rowIndex === selectedIndex
-                  const index = rowIndex
-                  return (
-                    <button
-                      key={`${group.kind}:${item.reference.id}`}
-                      type="button"
-                      data-active={active}
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
-                        active
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-accent/50"
-                      )}
-                      onMouseDown={(event) => {
-                        // Keep editor focus; insert on click.
-                        event.preventDefault()
-                        onSelect(item.reference, state.range)
-                      }}
-                      onMouseEnter={() => setSelectedIndex(index)}
-                    >
-                      <ReferenceIcon data={item.reference} />
-                      <span className="flex-1 truncate">
-                        {item.reference.label || item.reference.id}
-                      </span>
-                      {item.detail && (
-                        <span className="max-w-[10rem] truncate text-xs text-muted-foreground">
-                          {item.detail}
+        ) : null}
+        {/* Always rendered (even empty) so the editor's `aria-controls` target
+            always resolves; holds only option/group children. */}
+        <div id={MENTION_LISTBOX_ID} role="listbox" aria-label={listboxLabel}>
+          {!stale &&
+            result.groups.map((group) =>
+              group.items.length === 0 ? null : (
+                <div
+                  key={group.kind}
+                  role="group"
+                  aria-label={group.label}
+                  className="py-0.5"
+                >
+                  <div
+                    aria-hidden
+                    className="px-2 py-1 text-xs font-medium text-muted-foreground"
+                  >
+                    {group.label}
+                  </div>
+                  {group.items.map((item) => {
+                    rowIndex += 1
+                    const active = rowIndex === selectedIndex
+                    const index = rowIndex
+                    return (
+                      <button
+                        key={`${group.kind}:${item.reference.id}`}
+                        type="button"
+                        id={mentionOptionId(index)}
+                        role="option"
+                        aria-selected={active}
+                        data-active={active}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+                          active
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/50"
+                        )}
+                        onMouseDown={(event) => {
+                          // Keep editor focus; insert on click.
+                          event.preventDefault()
+                          onSelect(item.reference, state.range)
+                        }}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                      >
+                        <ReferenceIcon data={item.reference} />
+                        <span className="flex-1 truncate">
+                          {item.reference.label || item.reference.id}
                         </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            )
-          )
-        )}
+                        {item.detail && (
+                          <span className="max-w-[10rem] truncate text-xs text-muted-foreground">
+                            {item.detail}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            )}
+        </div>
+      </div>
+      {/* Announce loading / result count / empty state to screen readers; the
+          listbox keeps no focus, so AT relies on this polite live region. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveStatus}
       </div>
     </div>,
     document.body

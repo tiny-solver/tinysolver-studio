@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react"
+import { act, render, screen, within } from "@testing-library/react"
 import { createRef } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -82,7 +82,9 @@ describe("SuggestionPopup", () => {
 
   it("shows an empty state when there are no matches", async () => {
     mountPopup({ search: emptySearch, emptyLabel: "Nothing" })
-    expect(await screen.findByText("Nothing")).toBeInTheDocument()
+    // Scope to the listbox: the sr-only live region carries the same text.
+    const panel = screen.getByTestId("mention-popup")
+    expect(await within(panel).findByText("Nothing")).toBeInTheDocument()
   })
 
   it("selects the highlighted row on Enter (default = first)", async () => {
@@ -146,7 +148,9 @@ describe("SuggestionPopup", () => {
     // Query advances; the shown results now answer the *previous* query.
     rerender(view("ab", 3))
     expect(screen.queryByText("alpha.md")).toBeNull()
-    expect(screen.getByText("Loading")).toBeInTheDocument()
+    expect(
+      within(screen.getByTestId("mention-popup")).getByText("Loading")
+    ).toBeInTheDocument()
 
     act(() => ref.current?.onKeyDown(key("Enter")))
     expect(onSelect).not.toHaveBeenCalled()
@@ -254,5 +258,66 @@ describe("SuggestionPopup", () => {
     })
     expect(getClientRect.mock.calls.length).toBeGreaterThan(before)
     expect(container.style.left).toBe("300px")
+  })
+
+  it("exposes listbox + option roles with the active option selected", async () => {
+    mountPopup({ listboxLabel: "Mentions" })
+    await screen.findByText("alpha.md")
+    // The listbox is a child of the (testid) panel and owns only options.
+    const listbox = screen.getByRole("listbox", { name: "Mentions" })
+    expect(listbox).toHaveAttribute("id", "mention-listbox")
+    const options = within(listbox).getAllByRole("option")
+    expect(options).toHaveLength(2)
+    expect(options[0]).toHaveAttribute("aria-selected", "true")
+    expect(options[0]).toHaveAttribute("id", "mention-option-0")
+    expect(options[1]).toHaveAttribute("aria-selected", "false")
+  })
+
+  it("keeps the decorative icon out of the option's accessible name", async () => {
+    mountPopup()
+    await screen.findByText("Codex Helper")
+    // The agent row's AgentIcon is a titled <svg>; if it weren't decorative the
+    // option would be named "Codex Codex Helper". The name must be just label.
+    expect(
+      screen.getByRole("option", { name: "Codex Helper" })
+    ).toBeInTheDocument()
+  })
+
+  it("moves aria-selected with the keyboard", async () => {
+    const { ref } = mountPopup()
+    await screen.findByText("alpha.md")
+    act(() => ref.current?.onKeyDown(key("ArrowDown")))
+    const options = screen
+      .getByTestId("mention-popup")
+      .querySelectorAll('[role="option"]')
+    expect(options[0]).toHaveAttribute("aria-selected", "false")
+    expect(options[1]).toHaveAttribute("aria-selected", "true")
+  })
+
+  it("announces the result count via a polite live region", async () => {
+    mountPopup()
+    await screen.findByText("alpha.md")
+    const status = screen.getByRole("status")
+    expect(status).toHaveAttribute("aria-live", "polite")
+    expect(status).toHaveTextContent("2 results")
+  })
+
+  it("reports the active option id to the host for aria-activedescendant", async () => {
+    const onActiveOptionChange = vi.fn()
+    mountPopup({ onActiveOptionChange })
+    await screen.findByText("alpha.md")
+    expect(onActiveOptionChange).toHaveBeenLastCalledWith("mention-option-0")
+  })
+
+  it("reports a null active option while loading or empty", async () => {
+    const onActiveOptionChange = vi.fn()
+    mountPopup({
+      search: emptySearch,
+      onActiveOptionChange,
+      emptyLabel: "None",
+    })
+    const panel = screen.getByTestId("mention-popup")
+    await within(panel).findByText("None")
+    expect(onActiveOptionChange).toHaveBeenLastCalledWith(null)
   })
 })
