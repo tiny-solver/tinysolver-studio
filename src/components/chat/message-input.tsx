@@ -111,6 +111,11 @@ import {
   loadMessageInputDraft,
   saveMessageInputDraft,
 } from "@/lib/message-input-draft"
+import type {
+  ImageInputAttachment,
+  InputAttachment,
+  ResourceInputAttachment,
+} from "./message-input-attachments"
 
 interface MessageInputProps {
   onSend: (draft: PromptDraft, modeId?: string | null) => void
@@ -151,28 +156,6 @@ interface MessageInputProps {
    *  (no active turn / agent lacks the tool). */
   feedbackAddDisabled?: boolean
 }
-
-interface ResourceInputAttachment {
-  id: string
-  type: "resource"
-  kind: "link" | "embedded"
-  uri: string
-  name: string
-  mimeType: string | null
-  text?: string | null
-  blob?: string | null
-}
-
-interface ImageInputAttachment {
-  id: string
-  type: "image"
-  data: string
-  uri: string | null
-  name: string
-  mimeType: string
-}
-
-type InputAttachment = ResourceInputAttachment | ImageInputAttachment
 
 const MIME_BY_EXT: Record<string, string> = {
   txt: "text/plain",

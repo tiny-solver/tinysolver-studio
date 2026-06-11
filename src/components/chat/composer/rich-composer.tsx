@@ -10,14 +10,14 @@ import {
   useState,
   type CSSProperties,
 } from "react"
-import { type Editor } from "@tiptap/core"
+import { type Editor, type JSONContent } from "@tiptap/core"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { exitSuggestion } from "@tiptap/suggestion"
 
 import { cn } from "@/lib/utils"
 
 import { buildComposerExtensions } from "./editor-config"
-import { shouldSubmitOnEnter } from "./submit-key"
+import { decideComposerKey } from "./submit-key"
 import type {
   MentionController,
   MentionRenderState,
@@ -42,6 +42,12 @@ export interface RichComposerHandle {
   focus: () => void
   /** Whether the document is empty (no text, no nodes). */
   isEmpty: () => boolean
+  /** Serialize the current document to Tiptap JSON (for draft persistence). */
+  getJSON: () => JSONContent
+  /** Insert Markdown at the current selection (quick messages, appended text). */
+  insertMarkdownAtCursor: (markdown: string) => void
+  /** Insert an inline reference badge at the current selection. */
+  insertReference: (attrs: ReferenceAttrs) => void
   /** Escape hatch to the underlying editor (null until initialized). */
   getEditor: () => Editor | null
 }
@@ -66,8 +72,9 @@ export interface RichComposerProps {
    */
   onChange?: (markdown: string) => void
   /**
-   * Submit intent: Enter without Shift, while not composing (IME-safe) and not
-   * inside a code block. The host decides what "submit" means.
+   * Submit intent: fired when the `submitShortcut` binding is pressed while not
+   * composing (IME-safe) and not on a structural bare Enter (code block / list).
+   * The host decides what "submit" means.
    */
   onSubmit?: () => void
   onFocus?: () => void
@@ -79,6 +86,25 @@ export interface RichComposerProps {
    * effect. Omit to disable mentions.
    */
   referenceSearch?: ReferenceSearch
+  /**
+   * Key binding (matchShortcutEvent form) that sends the message. Default
+   * `"enter"`. When set to a non-Enter binding, a plain Enter inserts a newline.
+   */
+  submitShortcut?: string
+  /** Key binding that inserts a line break instead of sending. Default `"shift+enter"`. */
+  newlineShortcut?: string
+  /**
+   * When true, an external (parent-driven) menu — e.g. the `/` runtime command
+   * list — owns navigation/confirm keys, so the composer never submits or breaks
+   * while it is open. The internal `@` panel does not need this flag.
+   */
+  isExternalMenuOpen?: boolean
+  /**
+   * Called on paste before the editor handles it. Return true when the paste was
+   * consumed out-of-band (e.g. an image/file became an attachment) so the editor
+   * does not also insert it as text.
+   */
+  onPasteFiles?: (event: ClipboardEvent) => boolean
 }
 
 /**
@@ -102,6 +128,10 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       onFocus,
       onBlur,
       referenceSearch,
+      submitShortcut,
+      newlineShortcut,
+      isExternalMenuOpen,
+      onPasteFiles,
     },
     ref
   ) {
@@ -115,12 +145,23 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
     // installed) is gated on whether mentions are currently enabled — robust to
     // the prop being added/removed after the editor is created once.
     const referenceSearchRef = useRef(referenceSearch)
+    const submitShortcutRef = useRef(submitShortcut)
+    const newlineShortcutRef = useRef(newlineShortcut)
+    const isExternalMenuOpenRef = useRef(isExternalMenuOpen)
+    const onPasteFilesRef = useRef(onPasteFiles)
+    // The live editor, captured for command access inside editorProps handlers
+    // (which are created before `editor` is assigned in this closure).
+    const editorInstanceRef = useRef<Editor | null>(null)
     useEffect(() => {
       onChangeRef.current = onChange
       onSubmitRef.current = onSubmit
       onFocusRef.current = onFocus
       onBlurRef.current = onBlur
       referenceSearchRef.current = referenceSearch
+      submitShortcutRef.current = submitShortcut
+      newlineShortcutRef.current = newlineShortcut
+      isExternalMenuOpenRef.current = isExternalMenuOpen
+      onPasteFilesRef.current = onPasteFiles
     })
 
     // ── Unified `@` mention panel state bridge ──
@@ -177,13 +218,43 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
           ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
         },
         handleKeyDown: (view, event) => {
-          // Only Enter is special; let everything else fall through cheaply.
-          if (event.key !== "Enter") return false
-          // While the `@` panel is open it owns Enter (select / close); never
-          // submit. Checked synchronously via a ref to beat the re-render.
-          if (mentionOpenRef.current) return false
-          // Resolve structural context: code blocks and list items keep Enter
-          // (newline / list split) instead of submitting.
+          // A panel/menu owns its navigation/confirm keys while open: the `@`
+          // panel (internal, ref-tracked) and any external parent-driven menu
+          // (e.g. `/` runtime commands). Never submit or break while one is open.
+          if (mentionOpenRef.current || isExternalMenuOpenRef.current) {
+            return false
+          }
+          // Bindings are free-form (Enter, Shift+Enter, Mod+Enter, Tab, …), so
+          // we can't pre-filter by key. Instead, run a cheap first pass with no
+          // structural context: if neither binding matches it's plain typing —
+          // bail before resolving the (slightly costlier) editor structure.
+          // (A bare Enter still matches the default submit binding here, so we
+          // never wrongly skip it; the code-block/list carve-out is applied in
+          // the second pass below, which only narrows the result.)
+          const keyEvent = {
+            key: event.key,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            isComposing: event.isComposing,
+            keyCode: (event as { keyCode?: number }).keyCode ?? 0,
+          }
+          const bindings = {
+            submit: submitShortcutRef.current ?? "enter",
+            newline: newlineShortcutRef.current ?? "shift+enter",
+          }
+          if (
+            decideComposerKey(
+              keyEvent,
+              { composing: view.composing, inCodeBlock: false, inList: false },
+              bindings
+            ) === null
+          ) {
+            return false
+          }
+          // A binding matched (or a bare Enter needing the structural carve-out):
+          // resolve code-block / list context and decide for real.
           const { $from } = view.state.selection
           let inCodeBlock = $from.parent.type.spec.code === true
           let inList = false
@@ -192,32 +263,42 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
             if (name === "codeBlock") inCodeBlock = true
             if (name === "listItem" || name === "taskItem") inList = true
           }
-          const submit = shouldSubmitOnEnter(
-            {
-              key: event.key,
-              shiftKey: event.shiftKey,
-              altKey: event.altKey,
-              ctrlKey: event.ctrlKey,
-              metaKey: event.metaKey,
-              isComposing: event.isComposing,
-              keyCode: (event as { keyCode?: number }).keyCode ?? 0,
-            },
-            { composing: view.composing, inCodeBlock, inList }
+          const action = decideComposerKey(
+            keyEvent,
+            { composing: view.composing, inCodeBlock, inList },
+            bindings
           )
-          if (submit && onSubmitRef.current) {
+          if (action === "submit") {
+            // Only consume the key once a handler actually runs; otherwise let
+            // the editor apply its default (e.g. Enter splits the paragraph).
+            if (!onSubmitRef.current) return false
             onSubmitRef.current()
+            return true
+          }
+          if (action === "newline") {
+            const ed = editorInstanceRef.current
+            if (!ed) return false
+            // Code blocks take a literal newline; everywhere else a hard break.
+            if (inCodeBlock) ed.commands.insertContent("\n")
+            else ed.commands.setHardBreak()
             return true
           }
           return false
         },
+        handlePaste: (_view, event) =>
+          onPasteFilesRef.current?.(event) === true,
       },
       onCreate: ({ editor }) => {
+        editorInstanceRef.current = editor
         if (defaultMarkdown) {
           editor.commands.setContent(defaultMarkdown, {
             contentType: "markdown",
             emitUpdate: false,
           })
         }
+      },
+      onDestroy: () => {
+        editorInstanceRef.current = null
       },
       onUpdate: ({ editor }) => {
         onChangeRef.current?.(editor.getMarkdown())
@@ -241,6 +322,17 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
         clear: () => editor?.commands.clearContent(true),
         focus: () => editor?.commands.focus("end"),
         isEmpty: () => editor?.isEmpty ?? true,
+        getJSON: () => editor?.getJSON() ?? { type: "doc", content: [] },
+        insertMarkdownAtCursor: (markdown) => {
+          editor
+            ?.chain()
+            .focus()
+            .insertContent(markdown, { contentType: "markdown" })
+            .run()
+        },
+        insertReference: (attrs) => {
+          editor?.chain().focus().insertReference(attrs).run()
+        },
         getEditor: () => editor ?? null,
       }),
       [editor]

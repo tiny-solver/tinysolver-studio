@@ -4,6 +4,8 @@
  * real ProseMirror view (jsdom can't emulate IME composition reliably).
  */
 
+import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
+
 /** The subset of a keydown event the submit decision depends on. */
 export interface SubmitKeyEvent {
   key: string
@@ -49,4 +51,52 @@ export function shouldSubmitOnEnter(
   // Structural Enter inside code blocks and lists (per the composer design).
   if (context.inCodeBlock || context.inList) return false
   return true
+}
+
+/** Configurable submit / newline key bindings (matchShortcutEvent strings). */
+export interface ComposerKeyBindings {
+  /** Binding that sends the message. Default `"enter"`. */
+  submit: string
+  /** Binding that inserts a line break instead of sending. Default `"shift+enter"`. */
+  newline: string
+}
+
+/** What a keydown should do in the composer, or `null` to keep the editor default. */
+export type ComposerKeyAction = "submit" | "newline" | null
+
+/**
+ * Generalizes {@link shouldSubmitOnEnter} to the user-configurable submit /
+ * newline bindings (`send_message` / `newline_in_message`). Pure, so the
+ * precedence is unit-testable without a live view.
+ *
+ * Precedence:
+ * 1. Never act mid-IME-composition (the CJK candidate-confirming Enter).
+ * 2. A *bare* Enter inside a code block or list keeps ProseMirror's structural
+ *    default (newline / list split) — it is never hijacked into submit or a
+ *    forced break, regardless of the bindings.
+ * 3. The submit binding wins over the newline binding when both match.
+ *
+ * The newline binding is resolved explicitly (rather than deferring to the
+ * editor keymap) because bindings are free-form and may not correspond to a key
+ * ProseMirror binds.
+ */
+export function decideComposerKey(
+  event: SubmitKeyEvent,
+  context: SubmitKeyContext,
+  bindings: ComposerKeyBindings
+): ComposerKeyAction {
+  if (event.isComposing || event.keyCode === 229 || context.composing) {
+    return null
+  }
+  const bareEnter =
+    event.key === "Enter" &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  if (bareEnter && (context.inCodeBlock || context.inList)) return null
+
+  if (matchShortcutEvent(event, bindings.submit)) return "submit"
+  if (matchShortcutEvent(event, bindings.newline)) return "newline"
+  return null
 }

@@ -78,3 +78,102 @@ describe("RichComposer", () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 })
+
+function dispatchKey(
+  ref: React.RefObject<RichComposerHandle | null>,
+  init: KeyboardEventInit
+) {
+  const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+  act(() => {
+    dom.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init })
+    )
+  })
+}
+
+describe("RichComposer imperative inserts (Phase 3)", () => {
+  it("inserts markdown at the cursor", async () => {
+    const { ref } = await mount()
+    act(() => ref.current?.insertMarkdownAtCursor("hello **world**"))
+    expect(ref.current?.getMarkdown()).toContain("**world**")
+  })
+
+  it("inserts a reference badge and exposes it via getJSON", async () => {
+    const { ref } = await mount()
+    act(() =>
+      ref.current?.insertReference({
+        refType: "file",
+        id: "a.ts",
+        label: "a.ts",
+        uri: "file:///a.ts",
+        meta: null,
+      })
+    )
+    expect(JSON.stringify(ref.current?.getJSON())).toContain(
+      '"type":"reference"'
+    )
+  })
+})
+
+describe("RichComposer configurable submit / newline (Phase 3)", () => {
+  it("submits on a plain Enter by default", async () => {
+    const onSubmit = vi.fn()
+    const { ref } = await mount({ onSubmit })
+    dispatchKey(ref, { key: "Enter" })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it("treats Enter as a newline when submitShortcut is mod+enter", async () => {
+    const onSubmit = vi.fn()
+    const { ref } = await mount({ onSubmit, submitShortcut: "mod+enter" })
+    dispatchKey(ref, { key: "Enter" })
+    expect(onSubmit).not.toHaveBeenCalled()
+    dispatchKey(ref, { key: "Enter", metaKey: true })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it("inserts a hard break on Shift+Enter without submitting", async () => {
+    const onSubmit = vi.fn()
+    const { ref } = await mount({ onSubmit })
+    act(() => ref.current?.focus())
+    dispatchKey(ref, { key: "Enter", shiftKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(JSON.stringify(ref.current?.getJSON())).toContain(
+      '"type":"hardBreak"'
+    )
+  })
+
+  it("does not submit while an external menu is open", async () => {
+    const onSubmit = vi.fn()
+    const { ref } = await mount({ onSubmit, isExternalMenuOpen: true })
+    dispatchKey(ref, { key: "Enter" })
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it("submits on a custom non-Enter binding (Tab)", async () => {
+    const onSubmit = vi.fn()
+    const { ref } = await mount({ onSubmit, submitShortcut: "tab" })
+    dispatchKey(ref, { key: "Tab" })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it("breaks on a custom newline binding (Shift+Tab) without submitting", async () => {
+    const onSubmit = vi.fn()
+    const { ref } = await mount({ onSubmit, newlineShortcut: "shift+tab" })
+    act(() => ref.current?.focus())
+    dispatchKey(ref, { key: "Tab", shiftKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(JSON.stringify(ref.current?.getJSON())).toContain(
+      '"type":"hardBreak"'
+    )
+  })
+
+  it("does not swallow Enter when no onSubmit handler is provided", async () => {
+    const { ref } = await mount()
+    act(() => ref.current?.setMarkdown("hello"))
+    act(() => ref.current?.focus())
+    dispatchKey(ref, { key: "Enter" })
+    // Enter fell through to the editor default (paragraph split), not swallowed.
+    expect(ref.current?.getJSON().content?.length).toBeGreaterThanOrEqual(2)
+  })
+})

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  decideComposerKey,
   shouldSubmitOnEnter,
+  type ComposerKeyBindings,
   type SubmitKeyContext,
   type SubmitKeyEvent,
 } from "./submit-key"
@@ -80,5 +82,95 @@ describe("shouldSubmitOnEnter", () => {
     // Post-composition Enter: isComposing false, keyCode normal, view not
     // composing — this is a genuine submit, not a candidate confirmation.
     expect(shouldSubmitOnEnter(plainEnter, topLevel)).toBe(true)
+  })
+})
+
+describe("decideComposerKey", () => {
+  const DEFAULT: ComposerKeyBindings = {
+    submit: "enter",
+    newline: "shift+enter",
+  }
+  const SWAPPED: ComposerKeyBindings = { submit: "mod+enter", newline: "enter" }
+
+  describe("default bindings (enter / shift+enter)", () => {
+    it("submits on a plain Enter at the top level", () => {
+      expect(decideComposerKey(plainEnter, topLevel, DEFAULT)).toBe("submit")
+    })
+
+    it("inserts a newline on Shift+Enter", () => {
+      expect(
+        decideComposerKey({ ...plainEnter, shiftKey: true }, topLevel, DEFAULT)
+      ).toBe("newline")
+    })
+
+    it("keeps the editor default for a bare Enter in a code block", () => {
+      expect(
+        decideComposerKey(
+          plainEnter,
+          { ...topLevel, inCodeBlock: true },
+          DEFAULT
+        )
+      ).toBeNull()
+    })
+
+    it("keeps the editor default for a bare Enter in a list", () => {
+      expect(
+        decideComposerKey(plainEnter, { ...topLevel, inList: true }, DEFAULT)
+      ).toBeNull()
+    })
+
+    it("does nothing for an unbound modified Enter (mod+enter)", () => {
+      expect(
+        decideComposerKey({ ...plainEnter, metaKey: true }, topLevel, DEFAULT)
+      ).toBeNull()
+    })
+
+    it.each([
+      ["isComposing", { ...plainEnter, isComposing: true }, topLevel],
+      ["keyCode 229", { ...plainEnter, keyCode: 229 }, topLevel],
+      ["view.composing", plainEnter, { ...topLevel, composing: true }],
+    ] as const)("never acts mid-composition (%s)", (_n, event, context) => {
+      expect(decideComposerKey(event, context, DEFAULT)).toBeNull()
+    })
+  })
+
+  describe("swapped bindings (mod+enter submits, enter = newline)", () => {
+    it.each([
+      ["meta", { metaKey: true }],
+      ["ctrl", { ctrlKey: true }],
+    ])("submits on %s+Enter", (_n, mod) => {
+      expect(
+        decideComposerKey({ ...plainEnter, ...mod }, topLevel, SWAPPED)
+      ).toBe("submit")
+    })
+
+    it("treats a plain Enter as a newline", () => {
+      expect(decideComposerKey(plainEnter, topLevel, SWAPPED)).toBe("newline")
+    })
+
+    it("still keeps the structural default for a bare Enter in a list", () => {
+      expect(
+        decideComposerKey(plainEnter, { ...topLevel, inList: true }, SWAPPED)
+      ).toBeNull()
+    })
+
+    it("submits on Mod+Enter even inside a code block (not a bare Enter)", () => {
+      expect(
+        decideComposerKey(
+          { ...plainEnter, metaKey: true },
+          { ...topLevel, inCodeBlock: true },
+          SWAPPED
+        )
+      ).toBe("submit")
+    })
+  })
+
+  it("prefers submit over newline when both bindings match", () => {
+    expect(
+      decideComposerKey(plainEnter, topLevel, {
+        submit: "enter",
+        newline: "enter",
+      })
+    ).toBe("submit")
   })
 })
