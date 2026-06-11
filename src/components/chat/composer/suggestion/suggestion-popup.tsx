@@ -4,6 +4,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { ReferenceIcon } from "../badges/reference-badge"
 import type { ReferenceAttrs } from "../types"
 import type { MentionRenderState } from "./mention-suggestion"
+import { placeMentionPopup } from "./popup-position"
 import type {
   ReferenceSearch,
   SuggestionGroup,
@@ -22,6 +24,12 @@ import type {
 } from "./types"
 
 const FETCH_DEBOUNCE_MS = 150
+
+// Commit-synchronous in the browser so the panel is positioned before paint (no
+// flash at a stale spot); a no-op-safe passive effect during the static-export
+// prerender where `useLayoutEffect` would warn.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect
 
 export interface SuggestionPopupProps {
   /** Live trigger state (query/range/caret rect). */
@@ -75,6 +83,11 @@ export const SuggestionPopup = forwardRef<
     groups: SuggestionGroup[]
   }>({ query: null, groups: [] })
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [pos, setPos] = useState<{
+    left: number
+    top: number
+    placement: "above" | "below"
+  } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const stale = result.query !== state.query
 
@@ -121,6 +134,40 @@ export const SuggestionPopup = forwardRef<
       ?.scrollIntoView({ block: "nearest" })
   }, [selectedIndex])
 
+  // Position the caret-anchored panel within the viewport. Measure the rendered
+  // panel (a `visibility:hidden` box still has layout), read the *live* caret
+  // rect, then clamp/flip via the pure helper. A layout effect runs before
+  // paint, so the panel never flashes at a wrong spot. `state` is a fresh object
+  // each keystroke and the height tracks `stale`/`flat.length`, so this
+  // re-anchors as the caret moves and results load; resize + capture-phase
+  // scroll listeners re-anchor on window resize, editor scroll, or page scroll
+  // while the panel is open (the caret getter returns fresh coords each call).
+  useIsomorphicLayoutEffect(() => {
+    if (typeof window === "undefined") return
+    const reposition = () => {
+      const panel = listRef.current
+      if (!panel) return
+      const rect = panel.getBoundingClientRect()
+      const caret = state.getClientRect?.() ?? null
+      setPos(
+        placeMentionPopup(
+          caret
+            ? { left: caret.left, top: caret.top, bottom: caret.bottom }
+            : null,
+          { width: rect.width, height: rect.height },
+          { width: window.innerWidth, height: window.innerHeight }
+        )
+      )
+    }
+    reposition()
+    window.addEventListener("resize", reposition)
+    window.addEventListener("scroll", reposition, true)
+    return () => {
+      window.removeEventListener("resize", reposition)
+      window.removeEventListener("scroll", reposition, true)
+    }
+  }, [state, stale, flat.length])
+
   useImperativeHandle(
     ref,
     (): SuggestionPopupHandle => ({
@@ -157,22 +204,27 @@ export const SuggestionPopup = forwardRef<
     [flat, selectedIndex, onSelect, onClose, state.range]
   )
 
-  const rect = state.clientRect
   let rowIndex = -1
 
   return createPortal(
     <div
       style={{
         position: "fixed",
-        left: rect?.left ?? 0,
-        top: rect?.top ?? 0,
+        left: pos?.left ?? 0,
+        top: pos?.top ?? 0,
+        // Hidden until the first measure positions it (avoids a flash at 0,0).
+        visibility: pos ? "visible" : "hidden",
         zIndex: 50,
       }}
+      data-placement={pos?.placement}
     >
       <div
         ref={listRef}
         data-testid="mention-popup"
-        className="absolute bottom-full left-0 mb-1 max-h-72 w-80 overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+        // Cap to the viewport (minus the 8px×2 edge margin = 1rem) so the panel
+        // can always fit on small windows and scroll internally rather than
+        // overflowing — the positioner clamps placement, this bounds the size.
+        className="max-h-[min(18rem,calc(100dvh_-_1rem))] w-80 max-w-[calc(100vw_-_1rem)] overflow-y-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
       >
         {stale ? (
           <div className="px-2 py-3 text-sm text-muted-foreground">

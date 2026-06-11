@@ -6,8 +6,13 @@ export interface MentionRenderState {
   query: string
   /** Document range covering `@` + query, replaced when a row is chosen. */
   range: { from: number; to: number }
-  /** Caret rect (viewport coords) for positioning the popup, if known. */
-  clientRect: DOMRect | null
+  /**
+   * Live caret-rect getter (viewport coords), or null if unknown. Call it at
+   * position time — not once at trigger time — so the popup re-anchors to the
+   * current caret after a window resize, editor scroll, or page scroll while it
+   * is open.
+   */
+  getClientRect: (() => DOMRect | null) | null
 }
 
 /**
@@ -38,7 +43,8 @@ function toRenderState(props: SuggestionProps): MentionRenderState {
   return {
     query: props.query,
     range: props.range,
-    clientRect: props.clientRect?.() ?? null,
+    // Keep the getter itself (not a snapshot) so reposition reads live coords.
+    getClientRect: props.clientRect ?? null,
   }
 }
 

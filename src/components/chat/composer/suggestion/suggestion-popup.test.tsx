@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react"
 import { createRef } from "react"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { SuggestionPopup } from "./suggestion-popup"
 import type {
@@ -38,7 +38,11 @@ const groups: SuggestionGroup[] = [
 const search: ReferenceSearch = () => groups
 const emptySearch: ReferenceSearch = () => []
 
-const state = { query: "a", range: { from: 1, to: 3 }, clientRect: null }
+const state = {
+  query: "a",
+  range: { from: 1, to: 3 },
+  getClientRect: () => null,
+}
 
 function mountPopup(
   overrides: Partial<Parameters<typeof SuggestionPopup>[0]> = {}
@@ -64,6 +68,10 @@ function key(name: string): KeyboardEvent {
 }
 
 describe("SuggestionPopup", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it("renders grouped results from the search provider", async () => {
     mountPopup()
     expect(await screen.findByText("alpha.md")).toBeInTheDocument()
@@ -125,7 +133,7 @@ describe("SuggestionPopup", () => {
     const view = (query: string, to: number) => (
       <SuggestionPopup
         ref={ref}
-        state={{ query, range: { from: 1, to }, clientRect: null }}
+        state={{ query, range: { from: 1, to }, getClientRect: () => null }}
         search={search}
         onSelect={onSelect}
         onClose={vi.fn()}
@@ -159,5 +167,92 @@ describe("SuggestionPopup", () => {
     expect(onSelect).toHaveBeenCalledWith(fileRef, state.range)
     // preventDefault keeps focus in the editor rather than the popup button.
     expect(event.defaultPrevented).toBe(true)
+  })
+
+  it("positions and reveals the caret-anchored panel once measured", async () => {
+    render(
+      <SuggestionPopup
+        ref={createRef<SuggestionPopupHandle>()}
+        state={{
+          query: "a",
+          range: { from: 1, to: 3 },
+          getClientRect: () =>
+            ({ left: 100, top: 600, bottom: 620 }) as DOMRect,
+        }}
+        search={search}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    await screen.findByText("alpha.md")
+    const container = screen.getByTestId("mention-popup")
+      .parentElement as HTMLElement
+    // The layout effect measured the panel and clamped/flipped it into view.
+    expect(container.style.visibility).toBe("visible")
+    expect(container.style.position).toBe("fixed")
+    expect(container.dataset.placement).toBeTruthy()
+  })
+
+  it("clamps the rendered panel coordinates into the viewport", async () => {
+    // A real (nonzero) panel size lets the viewport clamp actually bite.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 320,
+      height: 288,
+    } as DOMRect)
+    render(
+      <SuggestionPopup
+        ref={createRef<SuggestionPopupHandle>()}
+        state={{
+          query: "a",
+          range: { from: 1, to: 3 },
+          // Caret hard against the right edge of the jsdom 1024px viewport.
+          getClientRect: () =>
+            ({ left: 1000, top: 600, bottom: 620 }) as DOMRect,
+        }}
+        search={search}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    await screen.findByText("alpha.md")
+    const container = screen.getByTestId("mention-popup")
+      .parentElement as HTMLElement
+    // left clamps to 1024 - 320 - 8 = 696 (not the raw caret x of 1000).
+    expect(container.style.left).toBe("696px")
+    // Room above (600px) fits → placed above: 600 - 4 - 288 = 308.
+    expect(container.style.top).toBe("308px")
+    expect(container.dataset.placement).toBe("above")
+  })
+
+  it("re-anchors to the live caret rect on resize (not a stale snapshot)", async () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 320,
+      height: 288,
+    } as DOMRect)
+    let caretLeft = 100
+    const getClientRect = vi.fn(
+      () => ({ left: caretLeft, top: 600, bottom: 620 }) as DOMRect
+    )
+    render(
+      <SuggestionPopup
+        ref={createRef<SuggestionPopupHandle>()}
+        state={{ query: "a", range: { from: 1, to: 3 }, getClientRect }}
+        search={search}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    await screen.findByText("alpha.md")
+    const container = screen.getByTestId("mention-popup")
+      .parentElement as HTMLElement
+    expect(container.style.left).toBe("100px")
+    // The caret reflows; a resize must re-read the live getter, not a snapshot.
+    const before = getClientRect.mock.calls.length
+    caretLeft = 300
+    act(() => {
+      window.dispatchEvent(new Event("resize"))
+    })
+    expect(getClientRect.mock.calls.length).toBeGreaterThan(before)
+    expect(container.style.left).toBe("300px")
   })
 })
