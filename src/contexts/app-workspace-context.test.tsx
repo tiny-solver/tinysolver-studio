@@ -57,6 +57,7 @@ function makeSummary(
     title_locked: false,
     agent_type: "claude_code",
     status: "in_progress",
+    kind: "regular",
     model: null,
     git_branch: null,
     external_id: null,

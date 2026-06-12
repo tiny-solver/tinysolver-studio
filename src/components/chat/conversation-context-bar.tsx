@@ -155,10 +155,10 @@ export const ConversationFolderBranchPicker = memo(
 
     if (!ownTab) return null
     // Chat mode: either a draft flagged `isChat` (no folder yet) or a bound
-    // conversation whose folder is a hidden `is_chat` folder. Show the folder
+    // conversation whose folder is a hidden chat folder. Show the folder
     // chip (so the user can switch back to a real folder while drafting) but
     // suppress the branch picker — a folderless chat has no git branch.
-    const isChatMode = ownTab.isChat === true || ownFolder?.is_chat === true
+    const isChatMode = ownTab.isChat === true || ownFolder?.kind === "chat"
     if (!ownFolder && !isChatMode) return null
 
     const isNewConversation = ownTab.conversationId == null
