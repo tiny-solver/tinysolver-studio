@@ -23,6 +23,29 @@ function escapeMarkdownText(text: string): string {
 // which never autolinks and reproduces the text literally.
 const AUTOLINK_TRIGGER = /(?:https?|ftp|mailto):|www\.|@/i
 
+// Slug shape of a real command / skill / expert id: alphanumeric ends with
+// interior `._-/` separators only. See {@link isLiteralInvocationToken}.
+const SAFE_INVOCATION_TOKEN = /^[A-Za-z0-9](?:[A-Za-z0-9._/-]*[A-Za-z0-9])?$/
+
+/**
+ * Whether `token` can be emitted raw after a `/` / `$` prefix without any
+ * Markdown breaking out — i.e. it is a genuine invocation slug the agent runs
+ * verbatim (escaping it would defeat invocation). Beyond the slug shape it
+ * rejects: GFM autolink triggers (`www.` / `http:` / `@`), and any `_` that is
+ * not strictly intraword — a `_` touching a separator (e.g. `a/_b_/c`) flanks
+ * into CommonMark emphasis (`/a/<em>b</em>/c`). Such ids — and anything else,
+ * e.g. a maliciously-named skill folder `![x](http://evil)` (ids come from the
+ * filesystem) — fall through to the safe (escaped / code-spanned) inline-text
+ * path. Real ids (`code-review`, `claude_code`, `scope/my.skill_v2`) pass.
+ */
+function isLiteralInvocationToken(token: string): boolean {
+  return (
+    SAFE_INVOCATION_TOKEN.test(token) &&
+    !AUTOLINK_TRIGGER.test(token) &&
+    !/[^A-Za-z0-9]_|_[^A-Za-z0-9]/.test(token)
+  )
+}
+
 /** Wrap text in a Markdown code span with a fence long enough to be literal. */
 function toInlineCode(text: string): string {
   const runs = text.match(/`+/g)
@@ -88,11 +111,17 @@ export function referenceToMarkdown(attrs: ReferenceAttrs): string {
         : `@${inlineText(attrs.label || attrs.id)}`
     }
     case "skill": {
-      // Invocation token: the stable id is what the agent executes. The label
-      // (possibly localized / containing spaces) is never used; an empty id is
-      // neutralized to nothing rather than emitting a broken `/command`.
+      // Invocation token: the stable id is what the agent executes, prefixed by
+      // the trigger it was created from (`/` commands & most skills, `$` Codex
+      // skills/experts — read from meta, default `/`). The label (possibly
+      // localized / containing spaces) is never used; an empty id is neutralized
+      // to nothing rather than emitting a broken `/command`.
       const token = collapseNewlines(attrs.id).trim()
-      return token ? `/${token}` : ""
+      if (!token) return ""
+      const prefix = attrs.meta?.invocationPrefix === "$" ? "$" : "/"
+      return isLiteralInvocationToken(token)
+        ? `${prefix}${token}`
+        : inlineText(`${prefix}${token}`)
     }
     case "file":
     case "session":

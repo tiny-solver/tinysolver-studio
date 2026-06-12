@@ -86,6 +86,40 @@ describe("referenceToMarkdown", () => {
     ).toBe("")
   })
 
+  it("uses the `$` prefix for a Codex skill (meta.invocationPrefix)", () => {
+    expect(
+      referenceToMarkdown(
+        ref({
+          refType: "skill",
+          id: "deploy",
+          label: "Deploy",
+          meta: { invocationPrefix: "$" },
+        })
+      )
+    ).toBe("$deploy")
+  })
+
+  it("uses the `$` prefix for a Codex expert", () => {
+    expect(
+      referenceToMarkdown(
+        ref({
+          refType: "skill",
+          id: "reviewer",
+          label: "Reviewer",
+          meta: { scope: "expert", invocationPrefix: "$" },
+        })
+      )
+    ).toBe("$reviewer")
+  })
+
+  it("defaults to `/` when invocationPrefix is absent", () => {
+    expect(
+      referenceToMarkdown(
+        ref({ refType: "skill", id: "build", meta: { scope: "expert" } })
+      )
+    ).toBe("/build")
+  })
+
   describe("markdown injection is neutralized", () => {
     it("escapes brackets and parens in link text so a label cannot break out", () => {
       expect(
@@ -162,6 +196,39 @@ describe("referenceToMarkdown", () => {
           ref({ refType: "file", label: "www.evil.com", uri: null })
         )
       ).toBe("`www.evil.com`")
+    })
+
+    it("code-spans a skill id that would inject Markdown (autolink trigger)", () => {
+      // Skill ids come from filesystem names; a malicious one must not inject a
+      // second link / image into the prompt or the transcript bubble.
+      expect(
+        referenceToMarkdown(ref({ refType: "skill", id: "![x](http://evil)" }))
+      ).toBe("`/![x](http://evil)`")
+    })
+
+    it("escapes structural chars in a skill id with no autolink trigger", () => {
+      expect(
+        referenceToMarkdown(ref({ refType: "skill", id: "foo[bar]" }))
+      ).toBe("/foo\\[bar\\]")
+    })
+
+    it("keeps a normal underscore/dot/slash skill id literal (must invoke)", () => {
+      // Underscores are common in agent/skill ids (e.g. claude_code) and MUST
+      // NOT be escaped, or the agent receives a non-invocable `/claude\_code`.
+      expect(
+        referenceToMarkdown(ref({ refType: "skill", id: "claude_code" }))
+      ).toBe("/claude_code")
+      expect(
+        referenceToMarkdown(ref({ refType: "skill", id: "scope/my.skill_v2" }))
+      ).toBe("/scope/my.skill_v2")
+    })
+
+    it("escapes a `_` that flanks a separator (would emphasize otherwise)", () => {
+      // `/a/_b_/c` parses as `/a/<em>b</em>/c` in CommonMark — a non-intraword
+      // `_` must be escaped so no emphasis leaks into the prompt/transcript.
+      expect(
+        referenceToMarkdown(ref({ refType: "skill", id: "a/_b_/c" }))
+      ).toBe("/a/\\_b\\_/c")
     })
   })
 

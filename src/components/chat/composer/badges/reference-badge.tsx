@@ -1,4 +1,12 @@
-import { Bot, FileText, Folder, GitCommit, Hash, Sparkles } from "lucide-react"
+import {
+  Bot,
+  Command,
+  FileText,
+  Folder,
+  GitCommit,
+  Hash,
+  Sparkles,
+} from "lucide-react"
 import type { ReactNode } from "react"
 
 import { AgentIcon } from "@/components/agent-icon"
@@ -45,7 +53,14 @@ export function ReferenceIcon({ data }: { data: ReferenceAttrs }) {
       icon = <GitCommit className={ICON_CLASS} />
       break
     case "skill":
-      icon = <Sparkles className={ICON_CLASS} />
+      // Experts (whole-turn directives) get a star; commands / skills get the
+      // command glyph. See {@link badgeColorClass} for the matching color.
+      icon =
+        meta?.scope === "expert" ? (
+          <Sparkles className={ICON_CLASS} />
+        ) : (
+          <Command className={ICON_CLASS} />
+        )
       break
     default:
       return null
@@ -59,6 +74,28 @@ export function ReferenceIcon({ data }: { data: ReferenceAttrs }) {
       {icon}
     </span>
   )
+}
+
+/**
+ * Soft tinted color set per reference kind (light + dark). `text-*` colors the
+ * label and — since the icon strokes with `currentColor` — the icon too. Skills
+ * split by scope: experts (star) are fuchsia, commands/skills (cmd) are sky.
+ */
+function badgeColorClass(data: ReferenceAttrs): string {
+  switch (data.refType) {
+    case "file":
+      return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300"
+    case "agent":
+      return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-300"
+    case "session":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+    case "commit":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
+    case "skill":
+      return data.meta?.scope === "expert"
+        ? "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-500/30 dark:bg-fuchsia-500/15 dark:text-fuchsia-300"
+        : "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-300"
+  }
 }
 
 export interface ReferenceBadgeProps {
@@ -88,7 +125,8 @@ export function ReferenceBadge({ data, className }: ReferenceBadgeProps) {
       role="img"
       aria-label={`${data.refType}: ${data.label || data.id}`}
       className={cn(
-        "inline-flex max-w-[18rem] items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-1.5 py-px align-baseline text-[0.85em] leading-snug text-foreground",
+        "inline-flex max-w-[18rem] items-center gap-1 rounded-md border px-1.5 py-px align-middle text-[0.85em] leading-snug",
+        badgeColorClass(data),
         className
       )}
     >
