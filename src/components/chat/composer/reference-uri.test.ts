@@ -109,4 +109,22 @@ describe("parseCodegReferenceUri", () => {
       meta: { shortHash: "abc1234" },
     })
   })
+
+  it("parses a skill uri, keeping the literal `/`·`$` token as the label", () => {
+    expect(
+      parseCodegReferenceUri("codeg://skill/review", "/review")
+    ).toMatchObject({
+      refType: "skill",
+      id: "review",
+      label: "/review",
+      uri: "codeg://skill/review",
+      meta: null,
+    })
+  })
+
+  it("falls back to a /-prefixed id for an empty skill label", () => {
+    expect(parseCodegReferenceUri("codeg://skill/deploy", "")?.label).toBe(
+      "/deploy"
+    )
+  })
 })

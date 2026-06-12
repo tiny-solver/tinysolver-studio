@@ -34,6 +34,7 @@ import {
 } from "streamdown"
 import remarkBreaks from "remark-breaks"
 import { markdownLinkComponents } from "./markdown-link"
+import { rehypeCommandBadges } from "./rehype-command-badges"
 import { rehypePluginsAllowingCodeg } from "./rehype-allow-codeg"
 import { remarkRewriteFileUriLinks } from "./remark-file-uri-links"
 
@@ -394,6 +395,12 @@ const remarkPluginsWithBreaks = [...remarkPlugins, remarkBreaks]
 // MarkdownLink → ReferenceBadge. See rehype-allow-codeg for the full rationale.
 const rehypePlugins = rehypePluginsAllowingCodeg(defaultRehypePlugins)
 
+// User messages additionally badge bare `/slash` / `$skill` invocation tokens.
+// Appended AFTER harden so the injected `codeg://skill/…` links aren't stripped,
+// and it runs before Streamdown's math (katex) rehype plugin so `$x$` math (by
+// then a `.math` element) is skipped, not mistaken for a `$skill` token.
+const rehypePluginsForUser = [...rehypePlugins, rehypeCommandBadges]
+
 function MessageResponseImpl({
   className,
   children,
@@ -416,7 +423,7 @@ function MessageResponseImpl({
       )}
       plugins={streamdownPlugins}
       remarkPlugins={softBreaks ? remarkPluginsWithBreaks : remarkPlugins}
-      rehypePlugins={rehypePlugins}
+      rehypePlugins={softBreaks ? rehypePluginsForUser : rehypePlugins}
       {...props}
       // Merge after spreading props so a caller can still override other
       // elements, but the link icon + safety routing on `a` always wins.

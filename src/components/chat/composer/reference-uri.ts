@@ -9,6 +9,9 @@ import type { ReferenceAttrs } from "./types"
 const AGENT_URI = /^codeg:\/\/agent\/(.+)$/i
 const SESSION_URI = /^codeg:\/\/session\/(.+)$/i
 const COMMIT_URI = /^codeg:\/\/commit\/.*@(.+)$/i
+// command / skill / expert tokens, surfaced as badges in transcript user messages
+// (rehype-command-badges.ts). The label carries the literal `/`·`$` prefix.
+const SKILL_URI = /^codeg:\/\/skill\/(.+)$/i
 
 /**
  * Parse a composer reference uri (`file://` / `codeg://…`) back into
@@ -77,6 +80,25 @@ export function parseCodegReferenceUri(
       label: label || shortHash,
       uri,
       meta: { shortHash },
+    }
+  }
+
+  const skill = uri.match(SKILL_URI)
+  if (skill) {
+    let id = skill[1]
+    try {
+      id = decodeURIComponent(id)
+    } catch {
+      // keep the raw segment if it isn't valid percent-encoding
+    }
+    return {
+      refType: "skill",
+      // The link text keeps the literal token (`/build` / `$deploy`); fall back
+      // to a `/`-prefixed id only if it was somehow empty.
+      id,
+      label: label || `/${id}`,
+      uri,
+      meta: null,
     }
   }
 
