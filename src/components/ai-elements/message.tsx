@@ -27,9 +27,14 @@ import {
   useMemo,
   useState,
 } from "react"
-import { Streamdown, defaultRemarkPlugins } from "streamdown"
+import {
+  Streamdown,
+  defaultRehypePlugins,
+  defaultRemarkPlugins,
+} from "streamdown"
 import remarkBreaks from "remark-breaks"
 import { markdownLinkComponents } from "./markdown-link"
+import { rehypePluginsAllowingCodeg } from "./rehype-allow-codeg"
 import { remarkRewriteFileUriLinks } from "./remark-file-uri-links"
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -384,6 +389,11 @@ const remarkPlugins = [
 // User messages opt in to this set so single newlines render as <br>.
 const remarkPluginsWithBreaks = [...remarkPlugins, remarkBreaks]
 
+// Streamdown's default rehype pipeline strips `codeg://` reference hrefs in
+// sanitization (rendering them as "[blocked]"); re-derive it so they survive to
+// MarkdownLink → ReferenceBadge. See rehype-allow-codeg for the full rationale.
+const rehypePlugins = rehypePluginsAllowingCodeg(defaultRehypePlugins)
+
 function MessageResponseImpl({
   className,
   children,
@@ -406,6 +416,7 @@ function MessageResponseImpl({
       )}
       plugins={streamdownPlugins}
       remarkPlugins={softBreaks ? remarkPluginsWithBreaks : remarkPlugins}
+      rehypePlugins={rehypePlugins}
       {...props}
       // Merge after spreading props so a caller can still override other
       // elements, but the link icon + safety routing on `a` always wins.
