@@ -4,6 +4,7 @@ import type { PromptInputBlock } from "@/lib/types"
 
 import type { InputAttachment } from "../message-input-attachments"
 import { blocksToRestoredDraft } from "./from-prompt-blocks"
+import type { ReferenceAttrs } from "./types"
 
 /**
  * Whether the composer has nothing sendable. Stricter than `editor.isEmpty`,
@@ -27,59 +28,59 @@ export function isComposerEmpty(editor: Editor): boolean {
 }
 
 /**
- * Inject `prefix + expertId + " "` as the leading token of the message — experts
- * are whole-turn directives the agent inspects first, so they go at the very
- * front, never at the caret.
+ * Insert an expert as the leading inline badge of the message — experts are
+ * whole-turn directives the agent inspects first, so the badge goes at the very
+ * front (and serializes to `${prefix}${id}` as the first token), never at the
+ * caret. `attrs` is an expert reference (refType `skill`, `meta.scope === "expert"`).
  *
- * The prefix must be the FIRST token of the *serialized* Markdown. Inserting
- * inline at position 1 only achieves that when the first block is a paragraph;
- * for a heading/list/quote/code block the Markdown marker (`# `, `- `, `> `, …)
- * would serialize before the prefix, so a fresh paragraph is prepended instead.
- * When the first block is a paragraph already carrying an expert prefix (from a
- * prior click), it is replaced rather than stacked — the agent only honors the
- * first directive.
+ * The badge must be the FIRST inline node of the FIRST block. Inserting at
+ * position 1 only achieves that when the first block is a paragraph; for a
+ * heading/list/quote/code block the Markdown marker (`# `, `- `, `> `, …) would
+ * serialize before it, so a fresh paragraph is prepended instead. When the first
+ * block already opens with an expert badge (from a prior pick), it is replaced
+ * rather than stacked — the agent only honors the first directive.
  */
-export function applyExpertPrefix(
+export function applyExpertReference(
   editor: Editor,
-  prefix: string,
-  expertId: string,
-  knownExpertIds: ReadonlySet<string>
+  attrs: ReferenceAttrs
 ): void {
-  const insertion = `${prefix}${expertId} `
+  const badge = [
+    { type: "reference", attrs },
+    { type: "text", text: " " },
+  ]
   const first = editor.state.doc.firstChild
 
-  if (first && first.type.name !== "paragraph") {
+  // First block isn't a paragraph: prepend a fresh one so the badge is the very
+  // first inline content (cursor lands just after the badge + its space, pos 3).
+  if (!first || first.type.name !== "paragraph") {
     editor
       .chain()
       .focus()
-      .insertContentAt(0, {
-        type: "paragraph",
-        content: [{ type: "text", text: insertion }],
-      })
-      .setTextSelection(insertion.length + 1)
+      .insertContentAt(0, { type: "paragraph", content: badge })
+      .setTextSelection(3)
       .run()
     return
   }
 
-  const leading = first
-    ? first.textBetween(0, Math.min(first.content.size, 80), undefined, " ")
-    : ""
-  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const existing = leading.match(
-    new RegExp(`^${escapedPrefix}([A-Za-z0-9_-]+)\\s`)
-  )
-  const replaceLen =
-    existing && knownExpertIds.has(existing[1]) ? existing[0].length : 0
+  // Paragraph: replace an existing leading expert badge (atom at pos 1) if any,
+  // taking one following space with it so the replacement doesn't stack spaces.
+  // `meta.scope === "expert"` is the unambiguous marker — only expert references
+  // carry it (commands/skills don't), so no extra id allow-list is needed (and
+  // an allow-list would false-negative on agent-linked experts → stacking).
+  const firstChild = first.firstChild
+  const isExpertBadge =
+    firstChild?.type.name === "reference" &&
+    firstChild.attrs.refType === "skill" &&
+    firstChild.attrs.meta?.scope === "expert"
 
-  // Position 1 is just inside the first block (after its opening boundary).
   let chain = editor.chain().focus()
-  if (replaceLen > 0) {
-    chain = chain.deleteRange({ from: 1, to: 1 + replaceLen })
+  if (isExpertBadge) {
+    const afterBadge = first.maybeChild(1)
+    const trailingSpace =
+      afterBadge?.isText && afterBadge.text?.startsWith(" ") ? 1 : 0
+    chain = chain.deleteRange({ from: 1, to: 2 + trailingSpace })
   }
-  chain
-    .insertContentAt(1, insertion)
-    .setTextSelection(1 + insertion.length)
-    .run()
+  chain.insertContentAt(1, badge).setTextSelection(3).run()
 }
 
 /**

@@ -112,10 +112,16 @@ import {
 } from "@/components/chat/composer/rich-composer"
 import { docToPromptBlocks } from "@/components/chat/composer/to-prompt-blocks"
 import {
-  applyExpertPrefix,
+  applyExpertReference,
   isComposerEmpty,
   restoreBlocksIntoEditor,
 } from "@/components/chat/composer/composer-commands"
+import {
+  commandToReference,
+  expertToReference,
+  skillToReference,
+} from "@/components/chat/composer/invocation-reference"
+import type { ReferenceAttrs } from "@/components/chat/composer/types"
 import {
   useReferenceSearch,
   type ReferenceGroupLabels,
@@ -1443,10 +1449,12 @@ export function MessageInput({
   }, [])
 
   // Replace the live `/`-or-`$` token immediately before the caret with
-  // `insertion` (+ a trailing space unless one already follows), then close the
-  // menu. Used by both the command (`/`) and Codex-skill (`$`) selections.
-  const replaceTriggerToken = useCallback(
-    (insertion: string) => {
+  // an inline reference badge (+ a trailing space unless one already follows),
+  // then close the menu. Used by both the command (`/`) and Codex-skill (`$`)
+  // selections — the badge serializes back to its literal `/cmd` / `$skill`
+  // token on send (see invocation-reference / referenceToMarkdown).
+  const replaceTriggerWithReference = useCallback(
+    (ref: ReferenceAttrs) => {
       const editor = editorRef.current?.getEditor()
       if (!editor) return
       const { $from } = editor.state.selection
@@ -1467,20 +1475,15 @@ export function MessageInput({
             )
           : ""
       const suffix = charAfter && /\s/.test(charAfter) ? "" : " "
-      if (!match) {
-        // No live trigger token (shouldn't normally happen) — insert at caret.
-        editor.chain().focus().insertContent(`${insertion}${suffix}`).run()
-        closeSlashMenu()
-        return
+      let chain = editor.chain().focus()
+      if (match) {
+        // Remove the live `/…` / `$…` token before the caret.
+        const tokenLen = match[2].length + match[3].length
+        chain = chain.deleteRange({ from: $from.pos - tokenLen, to: $from.pos })
       }
-      const tokenLen = match[2].length + match[3].length
-      const from = $from.pos - tokenLen
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from, to: $from.pos })
-        .insertContent(`${insertion}${suffix}`)
-        .run()
+      chain = chain.insertReference(ref)
+      if (suffix) chain = chain.insertContent(suffix)
+      chain.run()
       closeSlashMenu()
     },
     [closeSlashMenu]
@@ -1488,21 +1491,22 @@ export function MessageInput({
 
   const handleSlashSelect = useCallback(
     (cmd: AvailableCommandInfo) => {
-      replaceTriggerToken(`/${cmd.name}`)
+      replaceTriggerWithReference(commandToReference(cmd))
     },
-    [replaceTriggerToken]
+    [replaceTriggerWithReference]
   )
 
   // Codex uses `$<id>`, other agents `/<id>` — matching the trigger prefix.
   const handleSkillAutocompleteSelect = useCallback(
     (skill: AgentSkillItem) => {
-      replaceTriggerToken(`${expertPrefix}${skill.id}`)
+      replaceTriggerWithReference(skillToReference(skill, expertPrefix))
     },
-    [replaceTriggerToken, expertPrefix]
+    [replaceTriggerWithReference, expertPrefix]
   )
 
-  // The "+" → Slash commands picker inserts at the current caret (no trigger
-  // token to replace), adding a leading space if the caret isn't at a boundary.
+  // The "+" → Slash commands picker inserts a command badge at the current caret
+  // (no trigger token to replace), adding a leading space if the caret isn't at
+  // a boundary, and a trailing space after.
   const handleSlashPopoverSelect = useCallback((cmd: AvailableCommandInfo) => {
     const editor = editorRef.current?.getEditor()
     if (!editor) return
@@ -1517,24 +1521,29 @@ export function MessageInput({
           )
         : ""
     const needsSpace = charBefore !== "" && !/\s/.test(charBefore)
-    editor
-      .chain()
-      .focus()
-      .insertContent(`${needsSpace ? " " : ""}/${cmd.name} `)
-      .run()
+    let chain = editor.chain().focus()
+    if (needsSpace) chain = chain.insertContent(" ")
+    chain.insertReference(commandToReference(cmd)).insertContent(" ").run()
   }, [])
 
-  // Experts always inject `prefix + expert-id ` at the very front of the input,
-  // never at the cursor — the expert skill is a whole-turn directive the agent
-  // inspects first. If an expert prefix is already at the front (from a prior
-  // click), replace it instead of stacking (the agent only honors the first).
+  // Experts always inject an expert badge at the very front of the input, never
+  // at the cursor — the expert skill is a whole-turn directive the agent inspects
+  // first. If an expert badge is already at the front (from a prior click), it is
+  // replaced instead of stacked (the agent only honors the first). The badge
+  // label matches the expert menu's localized name.
   const handleExpertPopoverSelect = useCallback(
     (expert: ExpertListItem) => {
       const editor = editorRef.current?.getEditor()
       if (!editor) return
-      applyExpertPrefix(editor, expertPrefix, expert.metadata.id, expertIdSet)
+      const label =
+        pickExpertLocalized(expert.metadata.display_name, locale) ||
+        expert.metadata.id
+      applyExpertReference(
+        editor,
+        expertToReference(expert, expertPrefix, label)
+      )
     },
-    [expertIdSet, expertPrefix]
+    [expertPrefix, locale]
   )
 
   const handlePickFiles = useCallback(async () => {

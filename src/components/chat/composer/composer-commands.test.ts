@@ -4,11 +4,23 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { PromptInputBlock } from "@/lib/types"
 
 import {
-  applyExpertPrefix,
+  applyExpertReference,
   isComposerEmpty,
   restoreBlocksIntoEditor,
 } from "./composer-commands"
 import { buildComposerExtensions } from "./editor-config"
+import type { ReferenceAttrs } from "./types"
+
+/** An expert reference (refType `skill`, `meta.scope === "expert"`). */
+function expertAttrs(id: string, prefix: "/" | "$" = "/"): ReferenceAttrs {
+  return {
+    refType: "skill",
+    id,
+    label: id,
+    uri: null,
+    meta: { scope: "expert", invocationPrefix: prefix },
+  }
+}
 
 describe("isComposerEmpty", () => {
   let editor: Editor
@@ -46,7 +58,7 @@ describe("isComposerEmpty", () => {
   })
 })
 
-describe("applyExpertPrefix", () => {
+describe("applyExpertReference", () => {
   let editor: Editor
 
   beforeEach(() => {
@@ -54,47 +66,54 @@ describe("applyExpertPrefix", () => {
   })
   afterEach(() => editor?.destroy())
 
-  it("prepends the prefix to an empty document", () => {
-    applyExpertPrefix(editor, "/", "reviewer", new Set())
+  it("prepends an expert badge to an empty document", () => {
+    applyExpertReference(editor, expertAttrs("reviewer"))
+    // The badge is a real reference node (not plain text)…
+    expect(JSON.stringify(editor.getJSON())).toContain('"refType":"skill"')
+    // …that serializes to its `/reviewer` invocation token at the front.
     expect(editor.getMarkdown().trimStart()).toMatch(/^\/reviewer\b/)
   })
 
-  it("prepends the prefix in front of existing prose", () => {
+  it("prepends the badge in front of existing prose", () => {
     editor.commands.setContent("look at this", { contentType: "markdown" })
-    applyExpertPrefix(editor, "/", "reviewer", new Set())
+    applyExpertReference(editor, expertAttrs("reviewer"))
     expect(editor.getMarkdown().trimStart()).toMatch(/^\/reviewer look at this/)
   })
 
-  it("replaces an existing known expert prefix instead of stacking", () => {
-    editor.commands.setContent("/old keep this", { contentType: "markdown" })
-    applyExpertPrefix(editor, "/", "reviewer", new Set(["old"]))
+  it("replaces an existing leading expert badge instead of stacking", () => {
+    applyExpertReference(editor, expertAttrs("old"))
+    applyExpertReference(editor, expertAttrs("reviewer"))
     const md = editor.getMarkdown()
-    expect(md.trimStart()).toMatch(/^\/reviewer keep this/)
-    expect(md).not.toContain("old")
+    expect(md.trimStart()).toMatch(/^\/reviewer\b/)
+    expect(md).not.toContain("/old")
+    // Exactly one expert badge remains.
+    expect(
+      JSON.stringify(editor.getJSON()).match(/"refType":"skill"/g)
+    ).toHaveLength(1)
   })
 
-  it("does NOT replace a leading token that isn't a known expert", () => {
+  it("does NOT replace a leading plain-text token (only a real expert badge)", () => {
     editor.commands.setContent("/unknown keep", { contentType: "markdown" })
-    applyExpertPrefix(editor, "/", "reviewer", new Set(["old"]))
+    applyExpertReference(editor, expertAttrs("reviewer"))
     const md = editor.getMarkdown()
     expect(md.trimStart()).toMatch(/^\/reviewer /)
     expect(md).toContain("/unknown")
   })
 
-  it("keeps the prefix ahead of a heading's Markdown marker (regression)", () => {
+  it("keeps the badge ahead of a heading's Markdown marker (regression)", () => {
     // First block is a heading: inserting inline at pos 1 would serialize as
-    // `# /reviewer Title` (marker first). The prefix must lead the message.
+    // `# /reviewer Title` (marker first). The badge must lead the message.
     editor.commands.setContent("# Title", { contentType: "markdown" })
-    applyExpertPrefix(editor, "/", "reviewer", new Set())
+    applyExpertReference(editor, expertAttrs("reviewer"))
     const md = editor.getMarkdown()
     expect(md.trimStart()).toMatch(/^\/reviewer/)
     expect(md).toContain("# Title")
     expect(md.indexOf("/reviewer")).toBeLessThan(md.indexOf("# Title"))
   })
 
-  it("keeps the prefix ahead of a list's Markdown marker", () => {
+  it("keeps the badge ahead of a list's Markdown marker", () => {
     editor.commands.setContent("- one\n- two", { contentType: "markdown" })
-    applyExpertPrefix(editor, "/", "reviewer", new Set())
+    applyExpertReference(editor, expertAttrs("reviewer"))
     const md = editor.getMarkdown()
     expect(md.trimStart()).toMatch(/^\/reviewer/)
     expect(md.indexOf("/reviewer")).toBeLessThan(md.indexOf("one"))
@@ -102,7 +121,7 @@ describe("applyExpertPrefix", () => {
 
   it("supports the Codex `$` prefix", () => {
     editor.commands.setContent("ship it", { contentType: "markdown" })
-    applyExpertPrefix(editor, "$", "deploy", new Set())
+    applyExpertReference(editor, expertAttrs("deploy", "$"))
     expect(editor.getMarkdown().trimStart()).toMatch(/^\$deploy ship it/)
   })
 })
