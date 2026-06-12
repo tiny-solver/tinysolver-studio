@@ -34,28 +34,31 @@ describe("ReferenceBadge", () => {
     expect(badge).not.toHaveClass("align-baseline")
   })
 
-  it("tints a file reference blue", () => {
+  it("colors a file reference blue with no background or border", () => {
     const { container } = render(
       <ReferenceBadge data={ref({ refType: "file", label: "app.ts" })} />
     )
     const badge = badgeOf(container)
     expect(badge).toHaveAttribute("data-ref-type", "file")
-    expect(badge).toHaveClass("bg-blue-50", "text-blue-700")
+    // Text-only: a color, but no background / border (req 3).
+    expect(badge).toHaveClass("text-blue-700")
+    expect(badge.className).not.toMatch(/\bbg-/)
+    expect(badge.className).not.toMatch(/\bborder\b/)
     expect(container.querySelector(".lucide-file-text")).not.toBeNull()
   })
 
-  it("tints a session reference emerald", () => {
+  it("colors a session reference emerald", () => {
     const { container } = render(
       <ReferenceBadge data={ref({ refType: "session", label: "#42" })} />
     )
     const badge = badgeOf(container)
     expect(badge).toHaveAttribute("data-ref-type", "session")
-    expect(badge).toHaveClass("bg-emerald-50", "text-emerald-700")
+    expect(badge).toHaveClass("text-emerald-700")
     // No agentType meta → falls back to the Hash icon.
     expect(container.querySelector(".lucide-hash")).not.toBeNull()
   })
 
-  it("renders a command/skill with the command glyph, tinted sky", () => {
+  it("renders a command/skill with the command glyph, colored rose", () => {
     const { container } = render(
       <ReferenceBadge
         data={ref({
@@ -68,13 +71,11 @@ describe("ReferenceBadge", () => {
     )
     const badge = badgeOf(container)
     expect(badge).toHaveAttribute("data-ref-type", "skill")
-    expect(badge).toHaveClass("bg-sky-50", "text-sky-700")
-    // Command glyph, not the star.
+    expect(badge).toHaveClass("text-rose-700")
     expect(container.querySelector(".lucide-command")).not.toBeNull()
-    expect(container.querySelector(".lucide-sparkles")).toBeNull()
   })
 
-  it("renders an expert with the star glyph, tinted fuchsia", () => {
+  it("renders an expert with the SAME command glyph + color (unified, no star)", () => {
     const { container } = render(
       <ReferenceBadge
         data={ref({
@@ -87,9 +88,9 @@ describe("ReferenceBadge", () => {
     )
     const badge = badgeOf(container)
     expect(badge).toHaveAttribute("data-ref-type", "skill")
-    expect(badge).toHaveClass("bg-fuchsia-50", "text-fuchsia-700")
-    // Star glyph, not the command.
-    expect(container.querySelector(".lucide-sparkles")).not.toBeNull()
-    expect(container.querySelector(".lucide-command")).toBeNull()
+    // Experts are no longer distinguished — same rose color, command glyph.
+    expect(badge).toHaveClass("text-rose-700")
+    expect(container.querySelector(".lucide-command")).not.toBeNull()
+    expect(container.querySelector(".lucide-sparkles")).toBeNull()
   })
 })

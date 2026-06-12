@@ -36,7 +36,10 @@ export interface ReferenceMeta {
   author?: string
   /** commit: whether the commit is pushed upstream. */
   pushed?: boolean | null
-  /** skill: "global" | "project" | "expert" scope ("expert" → star icon). */
+  /**
+   * skill: "global" | "project" | "expert" scope. "expert" is read by the
+   * editor's expert-replace logic (not the badge — all skills share one icon).
+   */
   scope?: string
   /** skill: category grouping. */
   category?: string
