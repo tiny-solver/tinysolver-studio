@@ -39,11 +39,41 @@ pub struct LogGuard {
     _guard: Option<WorkerGuard>,
 }
 
-/// Build the `EnvFilter` for a level, always excluding the logging module's own
-/// target as a cross-thread feedback-loop backstop (the layer's thread-local
-/// guard handles the same-thread case).
-pub fn build_env_filter(level: LogLevel) -> EnvFilter {
-    EnvFilter::builder().parse_lossy(format!("{},codeg_lib::logging=off", level.directive()))
+/// Build the `EnvFilter` for the full settings: the global level followed by
+/// each non-empty per-target override (`target=level`), then always excluding
+/// the logging module's own target as a cross-thread feedback-loop backstop
+/// (the layer's thread-local guard handles the same-thread case). The backstop
+/// is appended last so it wins. `parse_lossy` silently drops any malformed
+/// target directive — the UI constrains the input to avoid that.
+pub fn build_env_filter(settings: &LogSettings) -> EnvFilter {
+    let mut directives = settings.level.directive().to_string();
+    for t in &settings.targets {
+        // Validate server-side (don't trust the UI): only well-formed module
+        // targets are interpolated, and the logging module can never be
+        // overridden — it must stay `off` (the backstop appended below).
+        let target = t.target.trim();
+        if is_valid_target(target) {
+            directives.push_str(&format!(",{}={}", target, t.level.directive()));
+        }
+    }
+    directives.push_str(",codeg_lib::logging=off");
+    EnvFilter::builder().parse_lossy(directives)
+}
+
+/// A well-formed tracing target: `ident(::ident)*`, `ident = [A-Za-z0-9_]+`
+/// (mirrors the frontend grammar). Also rejects the logging module's own target
+/// (and submodules) so a persisted or client-supplied override can't defeat the
+/// recursion backstop.
+fn is_valid_target(target: &str) -> bool {
+    if target.is_empty()
+        || target == "codeg_lib::logging"
+        || target.starts_with("codeg_lib::logging::")
+    {
+        return false;
+    }
+    target.split("::").all(|seg| {
+        !seg.is_empty() && seg.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    })
 }
 
 /// Build a reload handle not attached to any installed subscriber, for tests
@@ -52,7 +82,7 @@ pub fn build_env_filter(level: LogLevel) -> EnvFilter {
 #[cfg(any(test, feature = "test-utils"))]
 pub fn detached_reload_handle() -> ReloadHandle {
     let (_layer, handle): (reload::Layer<EnvFilter, Registry>, ReloadHandle) =
-        reload::Layer::new(build_env_filter(LogLevel::Info));
+        reload::Layer::new(build_env_filter(&LogSettings::default()));
     handle
 }
 
@@ -130,7 +160,12 @@ fn build_subscriber(
     // applied here is exactly the one the UI reports as env-locked.
     let initial_filter = match env_level_override() {
         Some(s) => EnvFilter::builder().parse_lossy(format!("{s},codeg_lib::logging=off")),
-        None => build_env_filter(initial),
+        // Phase 1 has no DB yet, so no persisted per-target overrides; just the
+        // default level. Phase 2 (apply_persisted_level) rebuilds with targets.
+        None => build_env_filter(&LogSettings {
+            level: initial,
+            targets: Vec::new(),
+        }),
     };
     let (filter_layer, reload_handle) = reload::Layer::new(initial_filter);
 
@@ -220,7 +255,7 @@ pub async fn apply_persisted_level(conn: &sea_orm::DatabaseConnection) {
         crate::db::service::app_metadata_service::get_value(conn, LOGGING_LEVEL_KEY).await
     {
         if let Ok(settings) = serde_json::from_str::<LogSettings>(&raw) {
-            hub.set_level(settings.level);
+            hub.apply_settings(&settings);
         }
     }
 }
@@ -228,6 +263,88 @@ pub async fn apply_persisted_level(conn: &sea_orm::DatabaseConnection) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logging::TargetDirective;
+
+    #[test]
+    fn build_env_filter_includes_per_target_directives() {
+        let settings = LogSettings {
+            level: LogLevel::Info,
+            targets: vec![
+                TargetDirective {
+                    target: "codeg_lib::acp".into(),
+                    level: LogLevel::Debug,
+                },
+                // Whitespace-only target is skipped, not emitted as a bare "=trace".
+                TargetDirective {
+                    target: "  ".into(),
+                    level: LogLevel::Trace,
+                },
+                TargetDirective {
+                    target: "codeg_lib::web".into(),
+                    level: LogLevel::Warn,
+                },
+            ],
+        };
+        let rendered = build_env_filter(&settings).to_string();
+        assert!(
+            rendered.contains("codeg_lib::acp=debug"),
+            "missing acp override: {rendered}"
+        );
+        assert!(
+            rendered.contains("codeg_lib::web=warn"),
+            "missing web override: {rendered}"
+        );
+        assert!(
+            rendered.contains("codeg_lib::logging=off"),
+            "missing backstop: {rendered}"
+        );
+        assert!(
+            !rendered.contains("=trace"),
+            "empty-target row should be skipped: {rendered}"
+        );
+    }
+
+    #[test]
+    fn build_env_filter_rejects_invalid_and_logging_targets() {
+        let settings = LogSettings {
+            level: LogLevel::Info,
+            targets: vec![
+                TargetDirective {
+                    target: "bad-target!".into(), // invalid chars → dropped
+                    level: LogLevel::Trace,
+                },
+                TargetDirective {
+                    target: "codeg_lib::logging".into(), // backstop override attempt → dropped
+                    level: LogLevel::Trace,
+                },
+                TargetDirective {
+                    target: "codeg_lib::acp".into(),
+                    level: LogLevel::Debug,
+                },
+            ],
+        };
+        let rendered = build_env_filter(&settings).to_string();
+        assert!(rendered.contains("codeg_lib::acp=debug"), "{rendered}");
+        assert!(!rendered.contains("bad-target"), "{rendered}");
+        // The logging module stays off; the override attempt is dropped.
+        assert!(rendered.contains("codeg_lib::logging=off"), "{rendered}");
+        assert!(!rendered.contains("codeg_lib::logging=trace"), "{rendered}");
+    }
+
+    #[test]
+    fn is_valid_target_grammar() {
+        assert!(is_valid_target("codeg_lib::acp"));
+        assert!(is_valid_target("codeg_lib::acp::delegation"));
+        assert!(is_valid_target("a"));
+        assert!(!is_valid_target(""));
+        assert!(!is_valid_target("bad-target"));
+        assert!(!is_valid_target("::leading"));
+        assert!(!is_valid_target("trailing::"));
+        assert!(!is_valid_target("a:::b"));
+        assert!(!is_valid_target("has space"));
+        assert!(!is_valid_target("codeg_lib::logging"));
+        assert!(!is_valid_target("codeg_lib::logging::hub"));
+    }
 
     #[test]
     fn env_level_override_precedence() {

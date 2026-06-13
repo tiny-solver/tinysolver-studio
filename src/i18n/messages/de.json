@@ -2938,6 +2938,11 @@
     "filesEmpty": "Noch keine Protokolldateien.",
     "download": "Herunterladen",
     "downloadTruncated": "Die Datei ist groß; die neuesten {size} wurden heruntergeladen. Die vollständige Datei befindet sich im Log-Verzeichnis.",
-    "captureEnvLocked": "Die Protokollebene wird durch die Umgebungsvariable RUST_LOG / CODEG_LOG gesteuert; ändere sie dort, damit es wirksam wird."
+    "captureEnvLocked": "Die Protokollebene wird durch die Umgebungsvariable RUST_LOG / CODEG_LOG gesteuert; ändere sie dort, damit es wirksam wird.",
+    "targetsTitle": "Modulspezifische Überschreibungen",
+    "targetsDescription": "Lege für bestimmte Module (z. B. codeg_lib::acp) eine andere Stufe fest, ohne die globale Stufe zu ändern.",
+    "targetsAdd": "Hinzufügen",
+    "targetsRemove": "Überschreibung entfernen",
+    "toggleDetails": "Details umschalten"
   }
 }

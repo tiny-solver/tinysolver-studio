@@ -1256,6 +1256,16 @@ fn canonical_spec_to_mcp_server(name: &str, spec: &serde_json::Value) -> Result<
 
 /// The main ACP connection loop.
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    name = "connection",
+    skip_all,
+    fields(
+        connection_id = %connection_id,
+        agent_type = ?agent_type,
+        working_dir = ?working_dir,
+        session_id = ?session_id,
+    )
+)]
 async fn run_connection(
     agent: AcpAgent,
     connection_id: String,

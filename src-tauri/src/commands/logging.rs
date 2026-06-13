@@ -17,7 +17,9 @@ use crate::app_error::AppCommandError;
 use crate::db::AppDatabase;
 use crate::db::service::app_metadata_service;
 use crate::logging::hub::{level_rank, log_hub, LogRecord};
-use crate::logging::{LogLevel, LogSettings, LOGGING_LEVEL_KEY, LOG_SETTINGS_CHANGED_EVENT};
+use crate::logging::{
+    LogLevel, LogSettings, TargetDirective, LOGGING_LEVEL_KEY, LOG_SETTINGS_CHANGED_EVENT,
+};
 use crate::web::event_bridge::{emit_event, EventEmitter};
 
 /// Metadata for one on-disk rotated log file.
@@ -36,12 +38,14 @@ pub struct LogFileInfo {
 /// on desktop, the full file is reachable via "open folder").
 const READ_LOG_MAX_BYTES: usize = 16 * 1024 * 1024;
 
-/// What the Settings UI needs to render the capture-level control: the persisted
-/// level plus whether `CODEG_LOG`/`RUST_LOG` currently locks it (env owns the
-/// live level, so the UI shows it read-only to avoid silent divergence).
-#[derive(Debug, Clone, Copy, Serialize)]
+/// What the Settings UI needs to render the capture controls: the persisted
+/// global level and per-target overrides, plus whether `CODEG_LOG`/`RUST_LOG`
+/// currently locks them (env owns the live level, so the UI shows them
+/// read-only to avoid silent divergence).
+#[derive(Debug, Clone, Serialize)]
 pub struct LogSettingsView {
     pub level: LogLevel,
+    pub targets: Vec<TargetDirective>,
     pub env_locked: bool,
 }
 
@@ -54,22 +58,19 @@ pub struct LogSettingsView {
 pub async fn get_log_settings_core(
     conn: &DatabaseConnection,
 ) -> Result<LogSettingsView, AppCommandError> {
-    let level = match app_metadata_service::get_value(conn, LOGGING_LEVEL_KEY)
+    let settings = match app_metadata_service::get_value(conn, LOGGING_LEVEL_KEY)
         .await
         .map_err(AppCommandError::from)?
     {
-        Some(raw) => {
-            serde_json::from_str::<LogSettings>(&raw)
-                .map_err(|e| {
-                    AppCommandError::configuration_invalid("Failed to parse stored log settings")
-                        .with_detail(e.to_string())
-                })?
-                .level
-        }
-        None => LogLevel::default(),
+        Some(raw) => serde_json::from_str::<LogSettings>(&raw).map_err(|e| {
+            AppCommandError::configuration_invalid("Failed to parse stored log settings")
+                .with_detail(e.to_string())
+        })?,
+        None => LogSettings::default(),
     };
     Ok(LogSettingsView {
-        level,
+        level: settings.level,
+        targets: settings.targets,
         env_locked: crate::logging::init::env_level_is_set(),
     })
 }
@@ -94,10 +95,11 @@ pub async fn set_log_settings_core(
     // UI locks the control in that case, so this also guards a stale client.
     if !crate::logging::init::env_level_is_set() {
         if let Some(hub) = log_hub() {
-            hub.set_level(settings.level);
+            hub.apply_settings(&settings);
         }
     }
-    emit_event(emitter, LOG_SETTINGS_CHANGED_EVENT, settings);
+    // Emit by reference (LogSettings is no longer Copy now that it carries a Vec).
+    emit_event(emitter, LOG_SETTINGS_CHANGED_EVENT, &settings);
     Ok(settings)
 }
 
@@ -305,6 +307,8 @@ mod tests {
             level,
             target: target.to_string(),
             message: message.to_string(),
+            fields: std::collections::BTreeMap::new(),
+            spans: Vec::new(),
         }
     }
 
@@ -408,6 +412,7 @@ mod tests {
             &db.conn,
             LogSettings {
                 level: LogLevel::Debug,
+                targets: Vec::new(),
             },
             &EventEmitter::Noop,
         )

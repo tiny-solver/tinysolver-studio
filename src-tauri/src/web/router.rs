@@ -16,6 +16,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use super::shutdown::ShutdownSignal;
 use super::{auth, handlers, ws};
 use crate::app_state::AppState;
+use tracing::Instrument;
 
 pub fn build_router(
     state: Arc<AppState>,
@@ -975,7 +976,25 @@ pub fn build_router(
             get(handlers::backup::backup_download),
         );
 
-    let api = public_api.merge(api);
+    // Wrap every API request in an `http` span (method, path, request id) so a
+    // single request's logs — including auth rejections — are correlatable in
+    // the viewer. `.instrument()` the downstream future; never `.enter()` across
+    // an await, which corrupts the span stack.
+    //
+    // Layer order: the protected router's `auth::require_token` layer was added
+    // (above) BEFORE this `.layer()`, and this layer is applied to the MERGED
+    // router, so it is the OUTERMOST layer. The instrumented `next.run(req)`
+    // future therefore wraps routing + auth + handler — auth-reject logs land
+    // inside the `http` span.
+    let api = public_api.merge(api).layer(middleware::from_fn(
+        |req: axum::extract::Request, next: Next| async move {
+            let method = req.method().clone();
+            let path = req.uri().path().to_string();
+            let request_id = uuid::Uuid::new_v4();
+            let span = tracing::info_span!("http", %method, %path, %request_id);
+            next.run(req).instrument(span).await
+        },
+    ));
 
     // WebSocket route (auth via Sec-WebSocket-Protocol)
     let ws_route = Router::new()

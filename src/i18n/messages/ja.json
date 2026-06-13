@@ -2938,6 +2938,11 @@
     "filesEmpty": "ログファイルはまだありません。",
     "download": "ダウンロード",
     "downloadTruncated": "ファイルが大きいため、最新の {size} をダウンロードしました。完全なファイルはログディレクトリにあります。",
-    "captureEnvLocked": "ログレベルは RUST_LOG / CODEG_LOG 環境変数で制御されています。変更はそちらで行ってください。"
+    "captureEnvLocked": "ログレベルは RUST_LOG / CODEG_LOG 環境変数で制御されています。変更はそちらで行ってください。",
+    "targetsTitle": "モジュール別オーバーライド",
+    "targetsDescription": "グローバルレベルを変えずに、特定モジュール（例: codeg_lib::acp）のレベルを個別に設定します。",
+    "targetsAdd": "追加",
+    "targetsRemove": "オーバーライドを削除",
+    "toggleDetails": "詳細を切り替え"
   }
 }

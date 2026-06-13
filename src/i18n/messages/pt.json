@@ -2938,6 +2938,11 @@
     "filesEmpty": "Ainda não há arquivos de registro.",
     "download": "Baixar",
     "downloadTruncated": "O arquivo é grande; foram baixados os {size} mais recentes. O arquivo completo está no diretório de logs.",
-    "captureEnvLocked": "O nível de registro é controlado pela variável de ambiente RUST_LOG / CODEG_LOG; altere-a lá para ter efeito."
+    "captureEnvLocked": "O nível de registro é controlado pela variável de ambiente RUST_LOG / CODEG_LOG; altere-a lá para ter efeito.",
+    "targetsTitle": "Substituições por módulo",
+    "targetsDescription": "Defina um nível diferente para módulos específicos (ex.: codeg_lib::acp) sem alterar o nível global.",
+    "targetsAdd": "Adicionar",
+    "targetsRemove": "Remover substituição",
+    "toggleDetails": "Alternar detalhes"
   }
 }

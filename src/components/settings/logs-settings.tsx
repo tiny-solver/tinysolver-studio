@@ -1,6 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   Loader2,
   Pause,
@@ -8,9 +16,13 @@ import {
   RotateCw,
   Trash2,
   FolderOpen,
+  ChevronRight,
+  Plus,
+  X,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { Virtualizer, type VirtualizerHandle } from "virtua"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,7 +46,14 @@ import {
 } from "@/lib/api"
 import { isDesktop, openPath } from "@/lib/platform"
 import { toErrorMessage } from "@/lib/app-error"
-import type { LogFileInfo, LogLevel, LogRecord } from "@/lib/types"
+import type {
+  LogFileInfo,
+  LogLevel,
+  LogRecord,
+  SpanInfo,
+  TargetDirective,
+} from "@/lib/types"
+import { applyLogBatch } from "./log-buffer"
 
 // Capture levels offered in the level dropdown (controls what the backend
 // records). `off` disables capture entirely.
@@ -60,6 +79,26 @@ const DISPLAY_LIMIT = 5000
 // truncated, which the download flow surfaces explicitly rather than passing a
 // tail off as the complete log.
 const READ_LOG_MAX_BYTES = 16 * 1024 * 1024
+
+// Curated tracing targets offered as autocomplete suggestions for per-module
+// overrides (free text is still allowed). Module paths under `codeg_lib`.
+const CURATED_TARGETS = [
+  "codeg_lib::acp",
+  "codeg_lib::acp::delegation",
+  "codeg_lib::web",
+  "codeg_lib::chat_channel",
+  "codeg_lib::db",
+]
+
+// A valid tracing target: `ident(::ident)*`. Rows failing this are flagged and
+// excluded from the saved payload (EnvFilter would silently drop them anyway).
+const TARGET_RE = /^[A-Za-z0-9_]+(::[A-Za-z0-9_]+)*$/
+
+function validTargets(targets: TargetDirective[]): TargetDirective[] {
+  return targets
+    .map((t) => ({ ...t, target: t.target.trim() }))
+    .filter((t) => TARGET_RE.test(t.target))
+}
 
 const LEVEL_RANK: Record<string, number> = {
   ERROR: 5,
@@ -130,6 +169,99 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// Render the enclosing span chain as a root→leaf breadcrumb, e.g.
+// `http{method=GET path=/x} › connection{connection_id=…}`.
+function spanBreadcrumb(spans: SpanInfo[]): string {
+  return spans
+    .map((s) => {
+      const f = Object.entries(s.fields)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(" ")
+      return f ? `${s.name}{${f}}` : s.name
+    })
+    .join(" › ")
+}
+
+// One log line. Memoized because the virtualized list re-renders often during a
+// live tail; rows only re-render when their record/expanded state changes.
+const LogRow = memo(function LogRow({
+  record,
+  expanded,
+  onToggle,
+}: {
+  record: LogRecord
+  expanded: boolean
+  onToggle: (seq: number) => void
+}) {
+  const t = useTranslations("LogsSettings")
+  const fieldEntries = Object.entries(record.fields)
+  const hasDetail = record.spans.length > 0 || fieldEntries.length > 0
+
+  return (
+    <div className="border-b border-border/40 hover:bg-muted/40">
+      <div className="flex gap-2 px-2 py-1">
+        {hasDetail ? (
+          <button
+            type="button"
+            onClick={() => onToggle(record.seq)}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-expanded={expanded}
+            aria-label={t("toggleDetails")}
+          >
+            <ChevronRight
+              className={`h-3 w-3 transition-transform ${
+                expanded ? "rotate-90" : ""
+              }`}
+            />
+          </button>
+        ) : (
+          <span className="w-3 shrink-0" />
+        )}
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {formatTime(record.timestamp_ms)}
+        </span>
+        <span
+          className={`w-12 shrink-0 font-semibold uppercase ${levelBadgeClasses(
+            record.level
+          )}`}
+        >
+          {record.level}
+        </span>
+        <span
+          className="shrink-0 truncate text-muted-foreground/80"
+          style={{ maxWidth: "12rem" }}
+          title={record.target}
+        >
+          {record.target}
+        </span>
+        <span className="whitespace-pre-wrap break-all text-foreground/90">
+          {record.message}
+        </span>
+      </div>
+      {expanded && hasDetail && (
+        <div className="space-y-1 px-2 pb-2 pl-7 text-[10px] text-muted-foreground">
+          {record.spans.length > 0 && (
+            <div className="break-all">
+              <span className="text-muted-foreground/60">spans: </span>
+              {spanBreadcrumb(record.spans)}
+            </div>
+          )}
+          {fieldEntries.length > 0 && (
+            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+              {fieldEntries.map(([k, v]) => (
+                <Fragment key={k}>
+                  <span className="text-muted-foreground/60">{k}</span>
+                  <span className="break-all text-foreground/80">{v}</span>
+                </Fragment>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+})
+
 export function LogsSettings() {
   const t = useTranslations("LogsSettings")
   const desktop = isDesktop()
@@ -139,6 +271,7 @@ export function LogsSettings() {
   const [savingLevel, setSavingLevel] = useState(false)
 
   const [captureLevel, setCaptureLevel] = useState<LogLevel>("info")
+  const [targets, setTargets] = useState<TargetDirective[]>([])
   const [envLocked, setEnvLocked] = useState(false)
   const [records, setRecords] = useState<LogRecord[]>([])
   const [search, setSearch] = useState("")
@@ -146,8 +279,51 @@ export function LogsSettings() {
   const [liveTail, setLiveTail] = useState(true)
 
   const [logFiles, setLogFiles] = useState<LogFileInfo[]>([])
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
 
-  const listRef = useRef<HTMLDivElement | null>(null)
+  // Virtualized list wiring (mirrors sidebar-conversation-list): the real
+  // OverlayScrollbars viewport is surfaced via onViewportRef and fed to virtua.
+  const viewportRef = useRef<HTMLElement | null>(null)
+  const [viewportEl, setViewportEl] = useState<HTMLElement | null>(null)
+  const virtualizerRef = useRef<VirtualizerHandle>(null)
+  const wasNearBottomRef = useRef(true)
+  // Live-tail ingestion buffer, flushed once per animation frame.
+  const pendingRef = useRef<LogRecord[]>([])
+  const rafRef = useRef<number | null>(null)
+
+  // Authoritative {level, targets}, updated synchronously by every save handler
+  // so a queued write always reads the freshest combined state — a level save
+  // and a target save can't clobber each other's field (the API persists the
+  // whole object). Synced from loadInitial and the cross-window broadcast.
+  const settingsRef = useRef<{ level: LogLevel; targets: TargetDirective[] }>({
+    level: "info",
+    targets: [],
+  })
+  // Serialize writes so out-of-order async resolution can't lose an update; an
+  // in-flight counter drives the saving spinner until the queue drains.
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve())
+  const inFlightRef = useRef(0)
+
+  const handleViewportRef = useCallback((el: HTMLElement | null) => {
+    viewportRef.current = el
+    setViewportEl(el)
+  }, [])
+
+  const handleScroll = useCallback(() => {
+    const el = viewportRef.current
+    if (!el) return
+    wasNearBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }, [])
+
+  const toggleExpanded = useCallback((seq: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(seq)) next.delete(seq)
+      else next.add(seq)
+      return next
+    })
+  }, [])
 
   const refreshLogs = useCallback(async () => {
     const recent = await getRecentLogs({ limit: DISPLAY_LIMIT })
@@ -164,6 +340,11 @@ export function LogsSettings() {
         desktop ? Promise.resolve<LogFileInfo[]>([]) : listLogFiles(),
       ])
       setCaptureLevel(settings.level)
+      setTargets(settings.targets ?? [])
+      settingsRef.current = {
+        level: settings.level,
+        targets: settings.targets ?? [],
+      }
       setEnvLocked(settings.env_locked)
       setRecords(recent)
       setLogFiles(files)
@@ -187,6 +368,8 @@ export function LogsSettings() {
     void (async () => {
       const dispose = await subscribeLogSettingsChanged((s) => {
         setCaptureLevel(s.level)
+        setTargets(s.targets ?? [])
+        settingsRef.current = { level: s.level, targets: s.targets ?? [] }
       })
       if (disposed) dispose()
       else unlisten = dispose
@@ -197,63 +380,129 @@ export function LogsSettings() {
     }
   }, [])
 
-  // Live tail: append new records (capped) while enabled.
+  // Live tail: coalesce incoming records via requestAnimationFrame so a burst of
+  // events becomes one state update instead of one setState per record. The
+  // monotonic-seq de-dup and the display cap are applied once per flush in
+  // applyLogBatch.
   useEffect(() => {
     if (!liveTail) return
     let disposed = false
     let unlisten: (() => void) | undefined
+
+    const flush = () => {
+      rafRef.current = null
+      const batch = pendingRef.current
+      if (batch.length === 0) return
+      pendingRef.current = []
+      setRecords((prev) => applyLogBatch(prev, batch, DISPLAY_LIMIT))
+    }
+
     void (async () => {
       const dispose = await subscribeLogAppended((record) => {
-        setRecords((prev) => {
-          // Monotonic-seq guard: the backend assigns strictly increasing seqs
-          // and both the initial snapshot and live events arrive in seq order,
-          // so a record at or below the newest one we already hold is the
-          // snapshot/live overlap on mount — drop it instead of doubling a row.
-          if (prev.length > 0 && record.seq <= prev[prev.length - 1].seq) {
-            return prev
-          }
-          const next =
-            prev.length >= DISPLAY_LIMIT ? prev.slice(1) : prev.slice()
-          next.push(record)
-          return next
-        })
+        pendingRef.current.push(record)
+        if (rafRef.current == null) {
+          rafRef.current = requestAnimationFrame(flush)
+        }
       })
       if (disposed) dispose()
       else unlisten = dispose
     })()
+
     return () => {
       disposed = true
       unlisten?.()
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+      pendingRef.current = []
     }
   }, [liveTail])
 
-  const visible = records.filter((r) => matchesFilter(r, viewLevel, search))
+  const visible = useMemo(
+    () => records.filter((r) => matchesFilter(r, viewLevel, search)),
+    [records, viewLevel, search]
+  )
 
-  // Stick to bottom while live-tailing if the user is already near the bottom.
+  // Stick to bottom while live-tailing if the user was already near the bottom
+  // (tracked on scroll). Uses the virtua handle rather than raw scrollTop.
   useEffect(() => {
-    if (!liveTail) return
-    const el = listRef.current
-    if (!el) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-    if (nearBottom) el.scrollTop = el.scrollHeight
+    if (!liveTail || !wasNearBottomRef.current || visible.length === 0) return
+    virtualizerRef.current?.scrollToIndex(visible.length - 1, { align: "end" })
   }, [visible.length, liveTail])
 
-  const handleLevelChange = useCallback(
-    async (value: string) => {
-      const level = value as LogLevel
-      const previous = captureLevel
-      setCaptureLevel(level)
-      setSavingLevel(true)
+  const queueSave = useCallback(() => {
+    inFlightRef.current += 1
+    setSavingLevel(true)
+    saveChainRef.current = saveChainRef.current.then(async () => {
       try {
-        await setLogSettings({ level })
+        await setLogSettings({
+          level: settingsRef.current.level,
+          targets: validTargets(settingsRef.current.targets),
+        })
       } catch (err) {
-        setCaptureLevel(previous)
         toast.error(t("levelSaveFailed"), { description: toErrorMessage(err) })
       } finally {
-        setSavingLevel(false)
+        inFlightRef.current -= 1
+        if (inFlightRef.current === 0) setSavingLevel(false)
       }
+    })
+  }, [t])
+
+  const handleLevelChange = useCallback(
+    (value: string) => {
+      const level = value as LogLevel
+      settingsRef.current = { ...settingsRef.current, level }
+      setCaptureLevel(level)
+      queueSave()
     },
-    [captureLevel, t]
+    [queueSave]
+  )
+
+  // Update targets in the authoritative ref (synchronously) and React state.
+  // Whether to save is the caller's choice (not while a name is being typed).
+  const updateTargets = useCallback((next: TargetDirective[]) => {
+    settingsRef.current = { ...settingsRef.current, targets: next }
+    setTargets(next)
+  }, [])
+
+  const handleAddTarget = useCallback(() => {
+    // Local-only blank row; persisted once it holds a valid target (on blur).
+    updateTargets([
+      ...settingsRef.current.targets,
+      { target: "", level: "debug" },
+    ])
+  }, [updateTargets])
+
+  const handleTargetNameChange = useCallback(
+    (index: number, target: string) => {
+      updateTargets(
+        settingsRef.current.targets.map((row, i) =>
+          i === index ? { ...row, target } : row
+        )
+      )
+    },
+    [updateTargets]
+  )
+
+  const handleTargetLevelChange = useCallback(
+    (index: number, level: LogLevel) => {
+      updateTargets(
+        settingsRef.current.targets.map((row, i) =>
+          i === index ? { ...row, level } : row
+        )
+      )
+      queueSave()
+    },
+    [updateTargets, queueSave]
+  )
+
+  const handleRemoveTarget = useCallback(
+    (index: number) => {
+      updateTargets(settingsRef.current.targets.filter((_, i) => i !== index))
+      queueSave()
+    },
+    [updateTargets, queueSave]
   )
 
   const handleOpenFolder = useCallback(async () => {
@@ -362,6 +611,89 @@ export function LogsSettings() {
               {t("captureEnvLocked")}
             </p>
           )}
+
+          {/* Per-module overrides */}
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-semibold">{t("targetsTitle")}</h3>
+                <p className="text-[11px] leading-4 text-muted-foreground">
+                  {t("targetsDescription")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddTarget}
+                disabled={envLocked}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {t("targetsAdd")}
+              </Button>
+            </div>
+            {targets.length > 0 && (
+              <div className="space-y-1.5">
+                {targets.map((row, i) => {
+                  const trimmed = row.target.trim()
+                  const invalid = trimmed !== "" && !TARGET_RE.test(trimmed)
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        value={row.target}
+                        onChange={(e) =>
+                          handleTargetNameChange(i, e.target.value)
+                        }
+                        onBlur={queueSave}
+                        placeholder="codeg_lib::acp"
+                        list="codeg-log-targets"
+                        disabled={envLocked}
+                        className={`h-8 flex-1 text-xs ${
+                          invalid ? "border-red-500/60" : ""
+                        }`}
+                      />
+                      <Select
+                        value={row.level}
+                        onValueChange={(v) =>
+                          handleTargetLevelChange(i, v as LogLevel)
+                        }
+                        disabled={envLocked}
+                      >
+                        <SelectTrigger className="h-8 w-28 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CAPTURE_LEVELS.map((level) => (
+                            <SelectItem
+                              key={level}
+                              value={level}
+                              className="text-xs"
+                            >
+                              {t(`levels.${level}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => handleRemoveTarget(i)}
+                        disabled={envLocked}
+                        aria-label={t("targetsRemove")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )
+                })}
+                <datalist id="codeg-log-targets">
+                  {CURATED_TARGETS.map((tgt) => (
+                    <option key={tgt} value={tgt} />
+                  ))}
+                </datalist>
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Viewer */}
@@ -450,44 +782,34 @@ export function LogsSettings() {
             </span>
           </div>
 
-          <div
-            ref={listRef}
-            className="h-[480px] overflow-y-auto rounded-md border bg-background/50 font-mono text-[11px] leading-5"
-          >
+          <div className="h-[480px] rounded-md border bg-background/50 font-mono text-[11px] leading-5">
             {visible.length === 0 ? (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
                 {t("empty")}
               </div>
             ) : (
-              <div className="divide-y divide-border/40">
-                {visible.map((r) => (
-                  <div
-                    key={r.seq}
-                    className="flex gap-2 px-2 py-1 hover:bg-muted/40"
+              <ScrollArea
+                className="h-full"
+                onViewportRef={handleViewportRef}
+                onScroll={handleScroll}
+              >
+                {viewportEl && (
+                  <Virtualizer
+                    ref={virtualizerRef}
+                    scrollRef={viewportRef}
+                    itemSize={28}
                   >
-                    <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {formatTime(r.timestamp_ms)}
-                    </span>
-                    <span
-                      className={`w-12 shrink-0 font-semibold uppercase ${levelBadgeClasses(
-                        r.level
-                      )}`}
-                    >
-                      {r.level}
-                    </span>
-                    <span
-                      className="shrink-0 truncate text-muted-foreground/80"
-                      style={{ maxWidth: "12rem" }}
-                      title={r.target}
-                    >
-                      {r.target}
-                    </span>
-                    <span className="whitespace-pre-wrap break-all text-foreground/90">
-                      {r.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                    {visible.map((r) => (
+                      <LogRow
+                        key={r.seq}
+                        record={r}
+                        expanded={expanded.has(r.seq)}
+                        onToggle={toggleExpanded}
+                      />
+                    ))}
+                  </Virtualizer>
+                )}
+              </ScrollArea>
             )}
           </div>
         </section>

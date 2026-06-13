@@ -2938,6 +2938,11 @@
     "filesEmpty": "Aún no hay archivos de registro.",
     "download": "Descargar",
     "downloadTruncated": "El archivo es grande; se descargaron los {size} más recientes. El archivo completo está en el directorio de registros.",
-    "captureEnvLocked": "El nivel de registro está controlado por la variable de entorno RUST_LOG / CODEG_LOG; cámbialo ahí para que surta efecto."
+    "captureEnvLocked": "El nivel de registro está controlado por la variable de entorno RUST_LOG / CODEG_LOG; cámbialo ahí para que surta efecto.",
+    "targetsTitle": "Anulaciones por módulo",
+    "targetsDescription": "Establece un nivel distinto para módulos específicos (p. ej. codeg_lib::acp) sin cambiar el nivel global.",
+    "targetsAdd": "Añadir",
+    "targetsRemove": "Quitar anulación",
+    "toggleDetails": "Mostrar detalles"
   }
 }

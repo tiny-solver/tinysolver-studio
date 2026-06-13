@@ -2938,6 +2938,11 @@
     "filesEmpty": "No log files yet.",
     "download": "Download",
     "downloadTruncated": "File is large; downloaded the latest {size}. The full file is in the logs directory.",
-    "captureEnvLocked": "Log level is controlled by the RUST_LOG / CODEG_LOG environment variable; change it there to take effect."
+    "captureEnvLocked": "Log level is controlled by the RUST_LOG / CODEG_LOG environment variable; change it there to take effect.",
+    "targetsTitle": "Per-module overrides",
+    "targetsDescription": "Set a different level for specific modules (e.g. codeg_lib::acp) without changing the global level.",
+    "targetsAdd": "Add",
+    "targetsRemove": "Remove override",
+    "toggleDetails": "Toggle details"
   }
 }

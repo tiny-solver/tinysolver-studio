@@ -1840,6 +1840,18 @@ impl DelegationBroker {
     /// orthogonal to whether the caller then blocks. The only change vs. the old
     /// `handle_request` is that "park a `oneshot` and await it" becomes "insert a
     /// [`RunningTask`] and return the ack."
+    #[tracing::instrument(
+        name = "delegation_task",
+        skip_all,
+        fields(
+            parent_connection_id = %req.parent_connection_id,
+            parent_tool_use_id = %req.parent_tool_use_id,
+            agent_type = ?req.agent_type,
+            working_dir = ?req.working_dir,
+            child_connection_id = tracing::field::Empty,
+            task_id = tracing::field::Empty,
+        )
+    )]
     pub async fn start_delegation(&self, mut req: DelegationRequest) -> DelegationTaskReport {
         // Register this setup as the VERY FIRST thing — before the pre-cancel
         // check's `.await` and the (possibly multi-second) claim poll — so a
@@ -2039,6 +2051,11 @@ impl DelegationBroker {
 
         // --- Send linked prompt ------------------------------------------------
         let call_id = uuid::Uuid::new_v4().to_string();
+        // Now that the child connection and task id exist, fill the span's empty
+        // fields so every subsequent log line in this delegation carries the
+        // parent→child linkage (see the `delegation_task` span on this fn).
+        tracing::Span::current().record("child_connection_id", child_connection_id.as_str());
+        tracing::Span::current().record("task_id", call_id.as_str());
         let link = DelegationLink {
             parent_conversation_id: req.parent_conversation_id,
             parent_tool_use_id: req.parent_tool_use_id.clone(),

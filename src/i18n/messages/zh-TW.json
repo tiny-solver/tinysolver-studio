@@ -2938,6 +2938,11 @@
     "filesEmpty": "尚無日誌檔案。",
     "download": "下載",
     "downloadTruncated": "檔案較大，已下載最新的 {size}。完整檔案請在日誌目錄中查看。",
-    "captureEnvLocked": "日誌等級由 RUST_LOG / CODEG_LOG 環境變數控制；請在該處修改以生效。"
+    "captureEnvLocked": "日誌等級由 RUST_LOG / CODEG_LOG 環境變數控制；請在該處修改以生效。",
+    "targetsTitle": "依模組覆寫",
+    "targetsDescription": "為特定模組（如 codeg_lib::acp）單獨設定級別，不影響全域級別。",
+    "targetsAdd": "新增",
+    "targetsRemove": "移除覆寫",
+    "toggleDetails": "切換詳情"
   }
 }

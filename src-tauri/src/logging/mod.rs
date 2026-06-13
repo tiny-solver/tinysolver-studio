@@ -75,10 +75,26 @@ impl LogLevel {
     }
 }
 
+/// A per-target level override, e.g. `codeg_lib::acp` at `Debug` while the
+/// global level stays `Info`. `target` is a `tracing` target (a Rust module
+/// path); it maps directly to an `EnvFilter` directive `target=level`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TargetDirective {
+    pub target: String,
+    pub level: LogLevel,
+}
+
 /// Persisted logging configuration. Stored as a JSON object (not a bare
 /// string) under [`LOGGING_LEVEL_KEY`] so the shape can grow without a
 /// migration.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+///
+/// `targets` is omitted from the serialized form when empty (`skip_serializing_if`)
+/// and defaults on read (`serde(default)`), so a pre-existing `{"level":"info"}`
+/// value still deserializes and the common case still serializes to that exact
+/// shape — no migration needed.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LogSettings {
     pub level: LogLevel,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<TargetDirective>,
 }

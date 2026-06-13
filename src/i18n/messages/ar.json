@@ -2938,6 +2938,11 @@
     "filesEmpty": "لا توجد ملفات سجل بعد.",
     "download": "تنزيل",
     "downloadTruncated": "الملف كبير، تم تنزيل أحدث {size}. الملف الكامل موجود في دليل السجلات.",
-    "captureEnvLocked": "يتم التحكم في مستوى السجل عبر متغير البيئة RUST_LOG / CODEG_LOG؛ غيّره هناك ليصبح ساريًا."
+    "captureEnvLocked": "يتم التحكم في مستوى السجل عبر متغير البيئة RUST_LOG / CODEG_LOG؛ غيّره هناك ليصبح ساريًا.",
+    "targetsTitle": "تجاوزات حسب الوحدة",
+    "targetsDescription": "عيّن مستوى مختلفًا لوحدات محددة (مثل codeg_lib::acp) دون تغيير المستوى العام.",
+    "targetsAdd": "إضافة",
+    "targetsRemove": "إزالة التجاوز",
+    "toggleDetails": "تبديل التفاصيل"
   }
 }

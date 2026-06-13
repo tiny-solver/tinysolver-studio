@@ -2938,6 +2938,11 @@
     "filesEmpty": "아직 로그 파일이 없습니다.",
     "download": "다운로드",
     "downloadTruncated": "파일이 커서 최신 {size}만 다운로드했습니다. 전체 파일은 로그 디렉터리에 있습니다.",
-    "captureEnvLocked": "로그 수준은 RUST_LOG / CODEG_LOG 환경 변수로 제어됩니다. 변경하려면 해당 변수를 수정하세요."
+    "captureEnvLocked": "로그 수준은 RUST_LOG / CODEG_LOG 환경 변수로 제어됩니다. 변경하려면 해당 변수를 수정하세요.",
+    "targetsTitle": "모듈별 재정의",
+    "targetsDescription": "전역 레벨을 바꾸지 않고 특정 모듈(예: codeg_lib::acp)의 레벨을 따로 설정합니다.",
+    "targetsAdd": "추가",
+    "targetsRemove": "재정의 제거",
+    "toggleDetails": "세부 정보 전환"
   }
 }

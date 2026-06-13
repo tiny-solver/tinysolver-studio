@@ -6,14 +6,14 @@
 //! returned by [`crate::logging::init`] and kept alive in each binary's `main`
 //! scope so it flushes on a graceful exit (statics are never dropped).
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use serde::Serialize;
 
 use crate::logging::init::{build_env_filter, ReloadHandle};
-use crate::logging::{LogLevel, LOG_APPENDED_EVENT};
+use crate::logging::{LogSettings, LOG_APPENDED_EVENT};
 use crate::web::event_bridge::{emit_event, EventEmitter};
 
 /// Hard cap on retained records regardless of byte total — defense against a
@@ -25,11 +25,26 @@ pub const LOG_BUFFER_MAX_COUNT: usize = 5_000;
 /// messages cannot grow the buffer without bound.
 pub const LOG_BUFFER_MAX_BYTES: usize = 4 * 1024 * 1024;
 
+/// One enclosing span in an event's scope: its name plus the key-value fields
+/// recorded on it (at creation or via `Span::record`). Ordered root→leaf in
+/// [`LogRecord::spans`].
+#[derive(Debug, Clone, Serialize)]
+pub struct SpanInfo {
+    pub name: String,
+    pub fields: BTreeMap<String, String>,
+}
+
 /// One captured log event — the unit the viewer renders and live-tails.
 ///
 /// `level` is tracing's uppercase string (`"ERROR"`..`"TRACE"`); `target` is
 /// the emitting module path. For migrated `eprintln!` the human `[TAG]` stays
 /// inline in `message`, so the viewer text matches the old stderr output.
+///
+/// `fields` holds the event's own key-value fields (everything except the
+/// `message`); `spans` holds the enclosing span chain (root→leaf). Both are
+/// empty for the plain-message logs that make up the migrated call sites, so
+/// those render exactly as before. `BTreeMap` keeps field order deterministic
+/// for rendering and tests.
 #[derive(Debug, Clone, Serialize)]
 pub struct LogRecord {
     pub seq: u64,
@@ -37,6 +52,10 @@ pub struct LogRecord {
     pub level: &'static str,
     pub target: String,
     pub message: String,
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+    #[serde(default)]
+    pub spans: Vec<SpanInfo>,
 }
 
 /// Severity rank for a tracing level string, for `min_level` filtering. Higher
@@ -50,6 +69,24 @@ pub fn level_rank(level: &str) -> u8 {
         "TRACE" => 1,
         _ => 0,
     }
+}
+
+/// Cheap byte estimate for a record's footprint in the ring buffer — no serde
+/// round-trip on the hot logging path. Counts the variable-length strings plus
+/// a fixed per-entry/per-pair overhead, so the byte cap still bounds RAM as
+/// records grow with structured fields and span context.
+fn estimate_size(rec: &LogRecord) -> usize {
+    let mut size = rec.target.len() + rec.message.len() + 48;
+    for (k, v) in &rec.fields {
+        size += k.len() + v.len() + 16;
+    }
+    for span in &rec.spans {
+        size += span.name.len() + 16;
+        for (k, v) in &span.fields {
+            size += k.len() + v.len() + 16;
+        }
+    }
+    size
 }
 
 /// Bounded ring buffer of recent records, enforcing a count cap and a byte cap
@@ -68,9 +105,7 @@ impl RingBuffer {
     }
 
     fn push(&mut self, rec: LogRecord) {
-        // Cheap estimate — no serde round-trip on the hot logging path. The
-        // fixed addend covers seq/timestamp/level plus per-entry overhead.
-        let size = rec.target.len() + rec.message.len() + 48;
+        let size = estimate_size(&rec);
         self.records.push_back((size, rec));
         self.byte_total = self.byte_total.saturating_add(size);
         while self.records.len() > LOG_BUFFER_MAX_COUNT || self.byte_total > LOG_BUFFER_MAX_BYTES {
@@ -157,11 +192,13 @@ impl LogHub {
         *self.emitter.write().unwrap_or_else(|e| e.into_inner()) = Some(emitter);
     }
 
-    /// Change the live capture level with zero restart (swaps the `EnvFilter`
-    /// behind the reload layer).
-    pub fn set_level(&self, level: LogLevel) {
+    /// Apply the full logging settings (global level + per-target overrides)
+    /// live, with zero restart (swaps the `EnvFilter` behind the reload layer).
+    /// Takes the whole `LogSettings` rather than a bare level so the rebuilt
+    /// filter can't silently drop the per-target directives.
+    pub fn apply_settings(&self, settings: &LogSettings) {
         let _ = self.reload.modify(|filter| {
-            *filter = build_env_filter(level);
+            *filter = build_env_filter(settings);
         });
     }
 
@@ -189,6 +226,8 @@ mod tests {
             level,
             target: target.to_string(),
             message: message.to_string(),
+            fields: BTreeMap::new(),
+            spans: Vec::new(),
         }
     }
 
@@ -220,6 +259,21 @@ mod tests {
             LOG_BUFFER_MAX_BYTES
         );
         assert!(buf.snapshot().len() <= LOG_BUFFER_MAX_COUNT);
+    }
+
+    #[test]
+    fn estimate_size_counts_fields_and_spans() {
+        let mut r = rec(1, "INFO", "t", "m");
+        let base = estimate_size(&r);
+        r.fields.insert("key".into(), "value".into());
+        r.spans.push(SpanInfo {
+            name: "span".into(),
+            fields: BTreeMap::from([("a".to_string(), "b".to_string())]),
+        });
+        assert!(
+            estimate_size(&r) > base,
+            "fields/spans must increase the byte estimate so the cap still bounds RAM"
+        );
     }
 
     #[test]
