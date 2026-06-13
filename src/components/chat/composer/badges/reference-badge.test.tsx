@@ -47,15 +47,38 @@ describe("ReferenceBadge", () => {
     expect(container.querySelector(".lucide-file-text")).not.toBeNull()
   })
 
-  it("colors a session reference emerald", () => {
+  it("colors a session reference emerald with the conversation glyph", () => {
     const { container } = render(
       <ReferenceBadge data={ref({ refType: "session", label: "#42" })} />
     )
     const badge = badgeOf(container)
     expect(badge).toHaveAttribute("data-ref-type", "session")
     expect(badge).toHaveClass("text-emerald-700")
-    // No agentType meta → falls back to the Hash icon.
-    expect(container.querySelector(".lucide-hash")).not.toBeNull()
+    // A session badge always shows the neutral conversation glyph (not the
+    // owning agent's icon, not Hash) — see the `session` case in ReferenceIcon.
+    expect(container.querySelector(".lucide-message-square")).not.toBeNull()
+    expect(container.querySelector(".lucide-hash")).toBeNull()
+  })
+
+  it("shows the conversation glyph and no status dot even with agent/status meta", () => {
+    // The inline badge ignores the owning agent and the live status: it never
+    // shows an agent icon and never paints the trailing status dot (those belong
+    // to the `@`-panel option row and the sidebar, not the inline chip).
+    const { container } = render(
+      <ReferenceBadge
+        data={ref({
+          refType: "session",
+          label: "Login refactor",
+          meta: { agentType: "codex", status: "in_progress" },
+        })}
+      />
+    )
+    expect(container.querySelector(".lucide-message-square")).not.toBeNull()
+    // No agent icon: AgentIcon for codex renders an <svg> with <title>Codex</title>;
+    // the conversation glyph carries no <title>, so none should be present.
+    expect(container.querySelector("title")).toBeNull()
+    // No trailing status dot (the removed `rounded-full` indicator).
+    expect(container.querySelector(".rounded-full")).toBeNull()
   })
 
   it("renders a command/skill with the command glyph, colored rose", () => {

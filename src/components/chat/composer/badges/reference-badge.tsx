@@ -1,19 +1,34 @@
-import { Bot, Command, FileText, Folder, GitCommit, Hash } from "lucide-react"
+import {
+  Bot,
+  Command,
+  FileText,
+  Folder,
+  GitCommit,
+  Hash,
+  MessageSquare,
+} from "lucide-react"
 import type { ReactNode } from "react"
 
 import { AgentIcon } from "@/components/agent-icon"
-import {
-  STATUS_COLORS,
-  type AgentType,
-  type ConversationStatus,
-} from "@/lib/types"
+import { type AgentType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 import type { ReferenceAttrs } from "../types"
 
 const ICON_CLASS = "size-3.5 shrink-0"
 
-export function ReferenceIcon({ data }: { data: ReferenceAttrs }) {
+export function ReferenceIcon({
+  data,
+  variant = "badge",
+}: {
+  data: ReferenceAttrs
+  /**
+   * Where the icon is shown. `"badge"` (default) is the inline reference chip in
+   * the composer and the message transcript; `"option"` is a row in the `@`
+   * panel. They differ only for sessions (see the `session` case).
+   */
+  variant?: "badge" | "option"
+}) {
   const meta = data.meta
   let icon: ReactNode = null
   switch (data.refType) {
@@ -35,11 +50,22 @@ export function ReferenceIcon({ data }: { data: ReferenceAttrs }) {
       break
     }
     case "session":
-      icon = meta?.agentType ? (
-        <AgentIcon agentType={meta.agentType} className={ICON_CLASS} />
-      ) : (
-        <Hash className={ICON_CLASS} />
-      )
+      // The inline badge (composer + transcript) shows a neutral conversation
+      // glyph: a session reference reads as "a conversation", not as the agent
+      // that owns it, and it carries no live status. The `@`-panel option row
+      // (`variant="option"`) instead shows the owning agent's icon so sessions
+      // stay distinguishable while picking one (falling back to `Hash` for a
+      // legacy id with no recoverable agent type).
+      icon =
+        variant === "option" ? (
+          meta?.agentType ? (
+            <AgentIcon agentType={meta.agentType} className={ICON_CLASS} />
+          ) : (
+            <Hash className={ICON_CLASS} />
+          )
+        ) : (
+          <MessageSquare className={ICON_CLASS} />
+        )
       break
     case "commit":
       icon = <GitCommit className={ICON_CLASS} />
@@ -94,14 +120,10 @@ export interface ReferenceBadgeProps {
 
 /**
  * Presentational inline chip for a reference. Shared by the editor node view and
- * (later) message-transcript rendering. Purely visual — no editor coupling.
+ * the message-transcript rendering (markdown-link → here). Purely visual — no
+ * editor coupling.
  */
 export function ReferenceBadge({ data, className }: ReferenceBadgeProps) {
-  const statusColor =
-    data.refType === "session" && data.meta?.status
-      ? STATUS_COLORS[data.meta.status as ConversationStatus]
-      : undefined
-
   return (
     <span
       data-reference-badge=""
@@ -121,12 +143,6 @@ export function ReferenceBadge({ data, className }: ReferenceBadgeProps) {
     >
       <ReferenceIcon data={data} />
       <span className="truncate">{data.label || data.id}</span>
-      {statusColor && (
-        <span
-          aria-hidden
-          className={cn("size-1.5 shrink-0 rounded-full", statusColor)}
-        />
-      )}
     </span>
   )
 }

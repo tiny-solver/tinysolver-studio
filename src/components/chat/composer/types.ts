@@ -20,13 +20,17 @@ export const REFERENCE_KINDS: readonly ReferenceKind[] = [
 export interface ReferenceMeta {
   /** file: whether the entry is a directory. */
   fileKind?: "file" | "dir"
-  /** agent/session: agent type, drives the icon. */
+  /**
+   * agent: drives the badge icon. session: the owning agent — used only for the
+   * `@`-panel option-row icon; the inline session badge shows a neutral
+   * conversation glyph regardless.
+   */
   agentType?: AgentType
   /** agent: whether the agent is currently available. */
   available?: boolean
-  /** session: conversation status (drives the status dot). */
+  /** session: conversation status snapshot (not rendered — the inline badge has no status dot). */
   status?: string
-  /** session: git branch. */
+  /** session: git branch snapshot (carried with the reference; not rendered on the badge). */
   branch?: string | null
   /** commit: short hash for display. */
   shortHash?: string

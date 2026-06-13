@@ -103,6 +103,21 @@ describe("sessionToSuggestion", () => {
       "#123"
     )
   })
+  it("folds inline reference badges in the title to their label text", () => {
+    // A title carrying a serialized file badge shows like the sidebar — just the
+    // bracket text — in the panel row and on the inserted session badge.
+    const item = sessionToSuggestion({
+      ...base,
+      title: "[README.md](file:///repo/README.md) fix the bug",
+    })
+    expect(item.reference.label).toBe("README.md fix the bug")
+    expect(item.keywords).toBe("README.md fix the bug codex")
+  })
+  it("falls back to #id when the title is only whitespace", () => {
+    expect(sessionToSuggestion({ ...base, title: "   " }).reference.label).toBe(
+      "#123"
+    )
+  })
 })
 
 describe("commitToSuggestion", () => {

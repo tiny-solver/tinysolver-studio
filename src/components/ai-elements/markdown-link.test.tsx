@@ -100,7 +100,7 @@ describe("MarkdownLink", () => {
   })
 
   describe("codeg:// reference badges", () => {
-    it("renders a new-format session link as a session badge (agent icon)", () => {
+    it("renders a session link as a session badge (conversation glyph, no agent icon or status dot)", () => {
       render(
         <MarkdownLink href="codeg://session/codex_abc">My chat</MarkdownLink>
       )
@@ -109,8 +109,13 @@ describe("MarkdownLink", () => {
       const badge = screen.getByRole("img", { name: "session: My chat" })
       expect(badge).toHaveAttribute("data-reference-badge")
       expect(badge).toHaveAttribute("data-ref-type", "session")
-      // codex agent type recovered from the uri → an AgentIcon svg renders.
-      expect(badge.querySelector("svg")).not.toBeNull()
+      // Even though the codex agent type is recoverable from the uri, the inline
+      // transcript badge shows the neutral conversation glyph — not the owning
+      // agent's icon (an AgentIcon svg would carry <title>Codex</title>) — and no
+      // trailing status dot. (User messages mirror the composer badge.)
+      expect(badge.querySelector(".lucide-message-square")).not.toBeNull()
+      expect(badge.querySelector("title")).toBeNull()
+      expect(badge.querySelector(".rounded-full")).toBeNull()
     })
 
     it("renders a legacy numeric session link as a session badge", () => {

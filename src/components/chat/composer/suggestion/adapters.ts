@@ -1,4 +1,5 @@
 import type { FlatFileEntry } from "@/hooks/use-file-tree"
+import { formatConversationTitle } from "@/lib/conversation-title"
 import {
   AGENT_LABELS,
   type AcpAgentInfo,
@@ -66,15 +67,23 @@ export function agentToSuggestion(agent: AcpAgentInfo): SuggestionItem {
 
 /**
  * Conversation → session reference. The serialization uri encodes the agent's
- * own session id as `codeg://session/<agent_type>_<external_id>` (so a transcript
- * badge can show the right agent icon and a future codeg-mcp can resolve it by
- * `(agent_type, external_id)`); sessions without an `external_id` fall back to
- * the internal numeric id. The in-app `id` stays the numeric id either way.
+ * own session id as `codeg://session/<agent_type>_<external_id>` (so the `@`-panel
+ * option row can show the owning agent's icon and a future codeg-mcp can resolve
+ * it by `(agent_type, external_id)`); sessions without an `external_id` fall back
+ * to the internal numeric id. The in-app `id` stays the numeric id either way.
+ * The inline session badge itself shows a neutral conversation glyph, not the
+ * agent icon.
  */
 export function sessionToSuggestion(
   conversation: DbConversationSummary
 ): SuggestionItem {
-  const label = conversation.title?.trim() || `#${conversation.id}`
+  // Fold any inline reference badges in the title (`[name](file://…)`, …) down
+  // to their bracket text, so the panel row and the inserted session badge read
+  // like the sidebar's title (`README.md fix`, not raw `[README.md](…)`) rather
+  // than leaking serialized Markdown. The numeric `#id` fallback also covers a
+  // whitespace-only title (folding can't turn blank into non-blank).
+  const label =
+    formatConversationTitle(conversation.title).trim() || `#${conversation.id}`
   const uri = conversation.external_id
     ? `codeg://session/${conversation.agent_type}_${conversation.external_id}`
     : `codeg://session/${conversation.id}`
