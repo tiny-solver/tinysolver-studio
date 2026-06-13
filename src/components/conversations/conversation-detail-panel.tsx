@@ -61,7 +61,6 @@ import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
 import {
   extractUserImagesFromDraft,
-  extractUserResourcesFromDraft,
   getPromptDraftDisplayText,
 } from "@/lib/prompt-draft"
 import {
@@ -115,18 +114,12 @@ function buildOptimisticUserTurnFromDraft(
   draft: PromptDraft,
   attachedResourcesFallback: string
 ): MessageTurn {
-  const displayText = getPromptDraftDisplayText(
-    draft,
-    attachedResourcesFallback
-  )
-  const resources = extractUserResourcesFromDraft(draft)
-  const resourceLines = resources.map((resource) => {
-    const label = resource.uri.toLowerCase().startsWith("file://")
-      ? resource.name
-      : `@${resource.name}`
-    return `[${label}](${resource.uri})`
-  })
-  const text = [displayText, ...resourceLines].join("\n").trim()
+  // `draft.displayText` is the composer's full Markdown, which already renders
+  // every inline file/resource badge as a `[label](uri)` link (see
+  // `referenceToMarkdown`). Re-appending the resource blocks here would duplicate
+  // each attached file in the optimistic bubble, so the display text is used
+  // as-is — images are the only out-of-band content left to add as blocks.
+  const text = getPromptDraftDisplayText(draft, attachedResourcesFallback)
 
   const blocks: ContentBlock[] = []
   for (const image of extractUserImagesFromDraft(draft)) {

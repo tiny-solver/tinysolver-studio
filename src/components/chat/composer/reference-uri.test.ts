@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { parseCodegReferenceUri } from "./reference-uri"
+import {
+  buildEmbeddedReferenceUri,
+  isEmbeddedReferenceUri,
+  parseCodegReferenceUri,
+} from "./reference-uri"
 
 describe("parseCodegReferenceUri", () => {
   it("returns null for non-reference schemes", () => {
@@ -126,5 +130,29 @@ describe("parseCodegReferenceUri", () => {
     expect(parseCodegReferenceUri("codeg://skill/deploy", "")?.label).toBe(
       "/deploy"
     )
+  })
+
+  it("parses an embedded-attachment uri as an inert file badge", () => {
+    expect(
+      parseCodegReferenceUri("codeg://embedded/9f3c-uuid", "report.pdf")
+    ).toMatchObject({
+      refType: "file",
+      label: "report.pdf",
+      uri: "codeg://embedded/9f3c-uuid",
+      meta: { fileKind: "file" },
+    })
+  })
+
+  it("falls back to a generic label for an empty embedded-attachment label", () => {
+    expect(
+      parseCodegReferenceUri("codeg://embedded/9f3c-uuid", "")?.label
+    ).toBe("resource")
+  })
+
+  it("recognizes a freshly minted embedded reference uri", () => {
+    const uri = buildEmbeddedReferenceUri()
+    expect(isEmbeddedReferenceUri(uri)).toBe(true)
+    expect(isEmbeddedReferenceUri("file:///codeg-embedded/real.ts")).toBe(false)
+    expect(isEmbeddedReferenceUri("codeg://session/abc")).toBe(false)
   })
 })

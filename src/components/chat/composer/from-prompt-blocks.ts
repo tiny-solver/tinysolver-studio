@@ -6,18 +6,23 @@ import { parseCodegReferenceUri as parseReferenceUri } from "./reference-uri"
 import type { ReferenceAttrs } from "./types"
 
 /**
- * Restore serialization (inverse of {@link "./to-prompt-blocks".docToPromptBlocks}):
- * turn a sent `PromptInputBlock[]` back into editor content + attachments, so a
- * queued message can be re-opened for editing with its badges and attachments
+ * Restore serialization (loose inverse of
+ * {@link "./to-prompt-blocks".docToPromptBlocks}): turn a sent
+ * `PromptInputBlock[]` back into editor content + attachments, so a queued
+ * message can be re-opened for editing with its references and attachments
  * intact.
  *
  * The split mirrors the send rule:
- * - `text` blocks → markdown segments replayed into the editor (inline
- *   session/commit/agent/skill references that were serialized *as text* come
- *   back as their text form — only **file** references were structured blocks,
- *   so only they round-trip to badges).
+ * - `text` blocks → markdown segments replayed into the editor. Every inline
+ *   reference that was serialized *as text* comes back in that text form: file
+ *   links `[name](file://…)` (which `docToPromptBlocks` now keeps inline) and
+ *   session/commit/agent/skill references alike replay as inline links/text, not
+ *   re-hydrated badges — consistent across every reference kind on a queue-edit.
  * - `resource_link` blocks whose uri is a composer scheme (`file:` / `codeg:`)
- *   → reference badge segments.
+ *   → reference badge segments. `docToPromptBlocks` no longer emits file
+ *   resource_links (files stay inline above), but this branch still restores any
+ *   composer-scheme resource_link the host appended out of band (e.g. an embedded
+ *   payload).
  * - everything else (`image`, embedded `resource`, non-composer `resource_link`)
  *   → out-of-band attachments.
  *

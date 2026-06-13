@@ -72,6 +72,24 @@ describe("blocksToRestoredDraft", () => {
     ])
   })
 
+  it("restores an inline file link in a text block as markdown, not a badge", () => {
+    // docToPromptBlocks keeps files inline now, so a text block can carry a
+    // `[name](file://…)` link; it must replay as prose (a markdown segment), not
+    // a re-hydrated reference badge. The resource_link branch above stays for
+    // host-appended payloads (embedded bytes / data uris).
+    const { segments, attachments } = blocksToRestoredDraft(
+      [{ type: "text", text: "see [app.ts](file:///repo/src/app.ts) please" }],
+      counter()
+    )
+    expect(attachments).toEqual([])
+    expect(segments).toEqual([
+      {
+        kind: "markdown",
+        text: "see [app.ts](file:///repo/src/app.ts) please",
+      },
+    ])
+  })
+
   it("restores a codeg session link as a session reference", () => {
     const { segments } = blocksToRestoredDraft(
       [
@@ -252,7 +270,7 @@ describe("round-trip with docToPromptBlocks", () => {
     editor?.destroy()
   })
 
-  it("a file reference survives send → restore as a badge", () => {
+  it("keeps a file reference inline through send → restore (markdown link, not a badge)", () => {
     editor
       .chain()
       .insertContent("see ")
@@ -270,12 +288,13 @@ describe("round-trip with docToPromptBlocks", () => {
     const { segments, attachments } = blocksToRestoredDraft(blocks, counter())
 
     expect(attachments).toEqual([])
+    // The file is no longer a structured resource_link, so it round-trips as an
+    // inline markdown link inside the prose — never lifted out to a badge segment
+    // (consistent with how session/commit/agent/skill refs round-trip).
+    expect(refSegments(segments)).toEqual([])
     const md = segments.find((s) => s.kind === "markdown")
-    expect(md && md.kind === "markdown" && md.text).toContain("see")
-    expect(refSegments(segments)[0]).toMatchObject({
-      refType: "file",
-      uri: "file:///repo/src/app.ts",
-      label: "app.ts",
-    })
+    expect(md && md.kind === "markdown" && md.text).toContain(
+      "[app.ts](file:///repo/src/app.ts)"
+    )
   })
 })

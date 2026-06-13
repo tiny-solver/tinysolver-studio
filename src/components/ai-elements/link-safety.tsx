@@ -283,7 +283,13 @@ function DirectLinkOpen({
   return null
 }
 
-function useOpenLinkOrFile() {
+/**
+ * Hook returning an async opener for a link or local-file uri: `file://` (and
+ * bare local paths) open in the workspace file panel; http(s)/mailto/tel route
+ * to the browser / OS handler. Used by the Streamdown link-safety modal and by
+ * standalone clickable file affordances (e.g. user-message resource badges).
+ */
+export function useOpenLinkOrFile() {
   const t = useTranslations("Folder.chat.linkSafety")
   const { activeFolder: folder } = useActiveFolder()
   const folderPath = folder?.path

@@ -138,7 +138,33 @@ describe("docToPromptBlocks", () => {
     expect(textBlock(blocks)).toContain("codeg://session/9")
   })
 
-  it("lifts a file reference to a trailing resource_link and drops it from the prose", () => {
+  it("drops an embedded-attachment reference from the prose without lifting it", () => {
+    // A path-less pasted attachment badge carries an inert codeg://embedded uri;
+    // its bytes are appended separately by the host, so it must neither survive
+    // in the prose nor become a resource_link with the synthetic uri.
+    editor
+      .chain()
+      .insertContent("see ")
+      .insertReference(
+        ref({
+          refType: "file",
+          id: "report.pdf",
+          label: "report.pdf",
+          uri: "codeg://embedded/abc-123",
+        })
+      )
+      .insertContent(" please")
+      .run()
+    const blocks = docToPromptBlocks(editor)
+    const text = textBlock(blocks)
+    expect(text).toContain("see")
+    expect(text).toContain("please")
+    expect(text).not.toContain("codeg://embedded")
+    expect(text).not.toContain("report.pdf")
+    expect(links(blocks)).toHaveLength(0)
+  })
+
+  it("keeps a file reference inline as a markdown link (no resource_link)", () => {
     editor
       .chain()
       .insertContent("see ")
@@ -156,20 +182,14 @@ describe("docToPromptBlocks", () => {
     const text = textBlock(blocks)
     expect(text).toContain("see")
     expect(text).toContain("please")
-    expect(text).not.toContain("file://")
-    expect(text).not.toContain("app.ts")
-    expect(links(blocks)).toEqual([
-      {
-        type: "resource_link",
-        uri: "file:///repo/src/app.ts",
-        name: "app.ts",
-        mime_type: null,
-        description: null,
-      },
-    ])
+    // The file stays inline, at the typed position, as a markdown link — never
+    // lifted to a trailing resource_link (which would land at the end of the
+    // message on cold reload).
+    expect(text).toContain("[app.ts](file:///repo/src/app.ts)")
+    expect(links(blocks)).toHaveLength(0)
   })
 
-  it("emits a file-only document as just the resource_link (no empty text block)", () => {
+  it("emits a file-only document as a single inline-link text block", () => {
     editor.commands.insertReference(
       ref({
         refType: "file",
@@ -181,12 +201,13 @@ describe("docToPromptBlocks", () => {
     const blocks = docToPromptBlocks(editor)
     expect(blocks).toHaveLength(1)
     expect(blocks[0]).toMatchObject({
-      type: "resource_link",
-      uri: "file:///repo/a.ts",
+      type: "text",
+      text: "[a.ts](file:///repo/a.ts)",
     })
+    expect(links(blocks)).toHaveLength(0)
   })
 
-  it("preserves document order across multiple file references", () => {
+  it("keeps multiple file references inline in document order", () => {
     editor
       .chain()
       .insertContent("a ")
@@ -208,11 +229,18 @@ describe("docToPromptBlocks", () => {
         })
       )
       .run()
-    const uris = links(docToPromptBlocks(editor)).map((l) => l.uri)
-    expect(uris).toEqual(["file:///one.ts", "file:///two.ts"])
+    const blocks = docToPromptBlocks(editor)
+    const text = textBlock(blocks)
+    expect(links(blocks)).toHaveLength(0)
+    expect(text).toContain("[one.ts](file:///one.ts)")
+    expect(text).toContain("[two.ts](file:///two.ts)")
+    expect(text.indexOf("one.ts")).toBeLessThan(text.indexOf("two.ts"))
   })
 
-  it("falls back to the uri basename when a file reference has no label", () => {
+  it("inlines a no-label file reference as a link carrying its uri", () => {
+    // The composer always labels a file with its basename; even without a label
+    // the reference still serializes inline as a link (its uri is the
+    // destination), never as a resource_link.
     editor.commands.insertReference(
       ref({
         refType: "file",
@@ -221,10 +249,12 @@ describe("docToPromptBlocks", () => {
         uri: "file:///repo/deep/name.ts",
       })
     )
-    expect(links(docToPromptBlocks(editor))[0].name).toBe("name.ts")
+    const blocks = docToPromptBlocks(editor)
+    expect(links(blocks)).toHaveLength(0)
+    expect(textBlock(blocks)).toContain("(file:///repo/deep/name.ts)")
   })
 
-  it("preserves marks in prose alongside a lifted file reference", () => {
+  it("preserves marks in prose alongside an inline file reference", () => {
     editor
       .chain()
       .insertContent("look at ")
@@ -235,7 +265,9 @@ describe("docToPromptBlocks", () => {
       )
       .run()
     const blocks = docToPromptBlocks(editor)
-    expect(textBlock(blocks)).toContain("**this**")
-    expect(links(blocks)).toHaveLength(1)
+    const text = textBlock(blocks)
+    expect(text).toContain("**this**")
+    expect(text).toContain("[x.ts](file:///x.ts)")
+    expect(links(blocks)).toHaveLength(0)
   })
 })

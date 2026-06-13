@@ -1,4 +1,5 @@
 import { ALL_AGENT_TYPES, type AgentType } from "@/lib/types"
+import { randomUUID } from "@/lib/utils"
 
 import type { ReferenceAttrs } from "./types"
 
@@ -12,6 +13,26 @@ const COMMIT_URI = /^codeg:\/\/commit\/.*@(.+)$/i
 // command / skill / expert tokens, surfaced as badges in transcript user messages
 // (rehype-command-badges.ts). The label carries the literal `/`·`$` prefix.
 const SKILL_URI = /^codeg:\/\/skill\/(.+)$/i
+
+// A path-less attached file (local-desktop paste/drop of inline bytes — an
+// embedded `resource` or a `data:` link) can't live in the doc by its real uri,
+// so its inline badge carries this synthetic display uri while the real
+// bytes-bearing block is held in a send-time map keyed by it (see
+// message-input's `embeddedPayloadsRef`). `codeg://` (not `file://`) is used on
+// purpose: it is never a real filesystem path (so it can't collide with a
+// genuine attachment) and it survives Streamdown's sanitize/harden pipeline, so
+// the transcript renders it as an inert file badge rather than a blocked link.
+const EMBEDDED_URI_PREFIX = "codeg://embedded/"
+
+/** Mint a fresh inert display uri for a path-less embedded attachment badge. */
+export function buildEmbeddedReferenceUri(): string {
+  return `${EMBEDDED_URI_PREFIX}${randomUUID()}`
+}
+
+/** Whether `uri` is an embedded-attachment display uri (see {@link buildEmbeddedReferenceUri}). */
+export function isEmbeddedReferenceUri(uri: string): boolean {
+  return uri.toLowerCase().startsWith(EMBEDDED_URI_PREFIX)
+}
 
 /**
  * Parse a composer reference uri (`file://` / `codeg://…`) back into
@@ -99,6 +120,19 @@ export function parseCodegReferenceUri(
       label: label || `/${id}`,
       uri,
       meta: null,
+    }
+  }
+
+  // A path-less embedded attachment: render as an inert file badge (the bytes
+  // live out of band, so there is nothing to open — the badge name comes from
+  // the link text the composer serialized).
+  if (isEmbeddedReferenceUri(uri)) {
+    return {
+      refType: "file",
+      id: label || "resource",
+      label: label || "resource",
+      uri,
+      meta: { fileKind: "file" },
     }
   }
 

@@ -10,7 +10,6 @@ import {
   Check,
   ChevronUp,
   Cog,
-  FileSearch,
   FolderSearch,
   GitFork,
   MessageSquarePlus,
@@ -112,6 +111,10 @@ import {
 } from "@/components/chat/composer/rich-composer"
 import { docToPromptBlocks } from "@/components/chat/composer/to-prompt-blocks"
 import {
+  buildEmbeddedReferenceUri,
+  isEmbeddedReferenceUri,
+} from "@/components/chat/composer/reference-uri"
+import {
   applyExpertReference,
   isComposerChromeClick,
   isComposerEmpty,
@@ -123,6 +126,7 @@ import {
   skillToReference,
 } from "@/components/chat/composer/invocation-reference"
 import type { ReferenceAttrs } from "@/components/chat/composer/types"
+import type { Editor, JSONContent } from "@tiptap/core"
 import {
   useReferenceSearch,
   type ReferenceGroupLabels,
@@ -337,6 +341,62 @@ function buildClipboardResourceUri(name: string): string {
   return `clipboard://${encodeURIComponent(normalizedName)}-${randomUUID()}`
 }
 
+// Non-image files attach as inline file badges in the editor (like `@`-file
+// references), not as out-of-band chips. A file with a real `file://` path uses
+// that uri directly (it serializes to a ResourceLink and round-trips through the
+// draft doc untouched). A path-less file (a local-desktop paste/drop carrying
+// inline bytes — an embedded resource or a `data:` link) can't live in the doc,
+// so its badge carries an inert `codeg://embedded/<uuid>` display uri
+// (`buildEmbeddedReferenceUri`) while the real bytes-bearing block is held in the
+// `embeddedPayloadsRef` map keyed by that uri. `docToPromptBlocks` drops the
+// embedded badge from the prose; `buildDraft` appends the mapped block for every
+// embedded badge still in the document. The `codeg://` scheme is never a real
+// path (no collision with a genuine attachment) and survives the transcript's
+// sanitize/harden pipeline, so it renders as an inert file badge, not a blocked
+// link — see {@link buildEmbeddedReferenceUri} / {@link isEmbeddedReferenceUri}.
+
+/** Whether the document already holds a file reference badge for `uri` (used to
+ *  dedupe repeated drops/picks of the same path, mirroring the old seen-set). */
+function editorHasFileReference(editor: Editor, uri: string): boolean {
+  let found = false
+  editor.state.doc.descendants((node) => {
+    if (found) return false
+    if (
+      node.type.name === "reference" &&
+      node.attrs?.refType === "file" &&
+      node.attrs?.uri === uri
+    ) {
+      found = true
+      return false
+    }
+    return true
+  })
+  return found
+}
+
+/** Drop embedded-attachment reference badges from a draft document before it is
+ *  persisted: their bytes live only in the in-memory `embeddedPayloadsRef` map
+ *  (never serialized into the draft), so a restored badge would send nothing.
+ *  Identified purely by the unambiguous `codeg://embedded/…` display uri (no map
+ *  needed) — a real `file://` attachment is never matched. Stripping at save
+ *  keeps the live badge visible this session but matches the pre-existing
+ *  behavior where out-of-band pasted bytes don't survive a draft round-trip. */
+function stripEmbeddedReferences(doc: JSONContent): JSONContent {
+  if (!doc.content) return doc
+  const content: JSONContent[] = []
+  for (const child of doc.content) {
+    if (
+      child.type === "reference" &&
+      typeof child.attrs?.uri === "string" &&
+      isEmbeddedReferenceUri(child.attrs.uri)
+    ) {
+      continue
+    }
+    content.push(stripEmbeddedReferences(child))
+  }
+  return { ...doc, content }
+}
+
 function buildDataUri(base64Data: string, mimeType: string | null): string {
   const safeMime =
     mimeType && mimeType.trim() ? mimeType : "application/octet-stream"
@@ -496,7 +556,12 @@ export function MessageInput({
   // Flips true once the RichComposer's async (immediatelyRender:false) editor has
   // mounted, so the hydration effect can use the imperative handle.
   const [composerReady, setComposerReady] = useState(false)
+  // `attachments` now holds only images; non-image files live inline as editor
+  // reference badges. This map carries the real bytes-bearing block for each
+  // embedded/data-uri badge, keyed by its synthetic `file://` sentinel uri, and
+  // is reconciled into the outgoing blocks by `buildDraft`.
   const [attachments, setAttachments] = useState<InputAttachment[]>([])
+  const embeddedPayloadsRef = useRef<Map<string, PromptInputBlock>>(new Map())
   const [isDragActive, setIsDragActive] = useState(false)
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([])
   const [quickMessagesLoading, setQuickMessagesLoading] = useState(false)
@@ -581,7 +646,10 @@ export function MessageInput({
       if (ed.isEmpty()) {
         clearMessageInputDraftV2(effectiveDraftStorageKey)
       } else {
-        saveMessageInputDraftV2(effectiveDraftStorageKey, ed.getJSON())
+        saveMessageInputDraftV2(
+          effectiveDraftStorageKey,
+          stripEmbeddedReferences(ed.getJSON())
+        )
       }
     }, 300)
   }, [effectiveDraftStorageKey, isEditingQueueItem])
@@ -593,6 +661,56 @@ export function MessageInput({
       }
     }
   }, [])
+
+  // Replay a sent `PromptInputBlock[]` (a queued message being re-edited) into
+  // the editor: prose + file badges inline, images into `attachments`, and any
+  // embedded/data-uri resources re-inlined as sentinel badges with their
+  // bytes-bearing blocks re-registered in the payload map.
+  const hydrateFromBlocks = useCallback(
+    (editor: Editor, blocks: PromptInputBlock[]) => {
+      embeddedPayloadsRef.current.clear()
+      const restored = restoreBlocksIntoEditor(editor, blocks)
+      setAttachments(
+        restored.filter((a): a is ImageInputAttachment => a.type === "image")
+      )
+      const resources = restored.filter(
+        (a): a is ResourceInputAttachment => a.type === "resource"
+      )
+      if (resources.length === 0) return
+      let chain = editor.chain().focus("end")
+      for (const att of resources) {
+        const refUri = buildEmbeddedReferenceUri()
+        const block: PromptInputBlock =
+          att.kind === "embedded"
+            ? {
+                type: "resource",
+                uri: att.uri,
+                mime_type: att.mimeType,
+                text: att.text ?? null,
+                blob: att.blob ?? null,
+              }
+            : {
+                type: "resource_link",
+                uri: att.uri,
+                name: att.name,
+                mime_type: att.mimeType,
+                description: null,
+              }
+        embeddedPayloadsRef.current.set(refUri, block)
+        chain = chain
+          .insertReference({
+            refType: "file",
+            id: refUri,
+            label: att.name,
+            uri: refUri,
+            meta: { fileKind: "file" },
+          })
+          .insertContent(" ")
+      }
+      chain.run()
+    },
+    []
+  )
 
   // One-time hydration once the editor is ready: a queue-edit payload, else a v2
   // draft document (or a legacy v1 Markdown draft migrated forward). Guarded so
@@ -608,8 +726,8 @@ export function MessageInput({
     ) {
       const editor = ed.getEditor()
       if (editingDraftBlocks && editingDraftBlocks.length > 0 && editor) {
-        // Full fidelity: restore inline badges + attachments from the blocks.
-        setAttachments(restoreBlocksIntoEditor(editor, editingDraftBlocks))
+        // Full fidelity: restore inline badges + images from the blocks.
+        hydrateFromBlocks(editor, editingDraftBlocks)
       } else if (editingDraftText != null) {
         ed.setMarkdown(editingDraftText)
       }
@@ -631,6 +749,7 @@ export function MessageInput({
     editingDraftText,
     editingDraftBlocks,
     effectiveDraftStorageKey,
+    hydrateFromBlocks,
   ])
 
   // Re-hydrate when the user (re)edits a *different* queue item after the
@@ -645,7 +764,7 @@ export function MessageInput({
       prevEditingItemIdRef.current = editingItemId
       const editor = editorRef.current?.getEditor()
       if (editingDraftBlocks && editingDraftBlocks.length > 0 && editor) {
-        setAttachments(restoreBlocksIntoEditor(editor, editingDraftBlocks))
+        hydrateFromBlocks(editor, editingDraftBlocks)
       } else if (editingDraftText != null) {
         editorRef.current?.setMarkdown(editingDraftText)
       }
@@ -656,7 +775,13 @@ export function MessageInput({
     } else if (!isEditingQueueItem) {
       prevEditingItemIdRef.current = null
     }
-  }, [isEditingQueueItem, editingItemId, editingDraftText, editingDraftBlocks])
+  }, [
+    isEditingQueueItem,
+    editingItemId,
+    editingDraftText,
+    editingDraftBlocks,
+    hydrateFromBlocks,
+  ])
 
   const setDragActiveIfChanged = useCallback((next: boolean) => {
     if (dragActiveRef.current === next) return
@@ -721,14 +846,6 @@ export function MessageInput({
         ? (imageAttachments.find((a) => a.id === previewAttachmentId) ?? null)
         : null,
     [previewAttachmentId, imageAttachments]
-  )
-  const resourceAttachments = useMemo(
-    () =>
-      attachments.filter(
-        (attachment): attachment is ResourceInputAttachment =>
-          attachment.type === "resource"
-      ),
-    [attachments]
   )
   const hasAttachments = attachments.length > 0
   const hasSendableContent = !composerEmpty || hasAttachments
@@ -895,6 +1012,54 @@ export function MessageInput({
     detectSlashTriggerRef.current = detectSlashTrigger
   }, [detectSlashTrigger])
 
+  // Insert one inline file reference badge per item, matching `@`-file mentions.
+  // A genuine `file://` item uses its uri directly (deduped against the document);
+  // an item carrying a `realBlock` (embedded bytes / `data:` link) gets an inert
+  // `codeg://embedded/…` display uri and its block is stashed in
+  // `embeddedPayloadsRef` for send-time reconciliation. Files are "attach"
+  // actions, so badges append at the doc end.
+  const insertFileReferences = useCallback(
+    (
+      items: Array<{
+        name: string
+        uri?: string
+        realBlock?: PromptInputBlock
+      }>
+    ) => {
+      if (items.length === 0) return
+      const editor = editorRef.current?.getEditor()
+      if (!editor) return
+      const seen = new Set<string>()
+      let chain = editor.chain().focus("end")
+      let inserted = 0
+      for (const item of items) {
+        let refUri: string
+        if (item.realBlock) {
+          refUri = buildEmbeddedReferenceUri()
+          embeddedPayloadsRef.current.set(refUri, item.realBlock)
+        } else {
+          if (!item.uri) continue
+          refUri = item.uri
+          if (seen.has(refUri) || editorHasFileReference(editor, refUri))
+            continue
+          seen.add(refUri)
+        }
+        chain = chain
+          .insertReference({
+            refType: "file",
+            id: refUri,
+            label: item.name,
+            uri: refUri,
+            meta: { fileKind: "file" },
+          })
+          .insertContent(" ")
+        inserted++
+      }
+      if (inserted > 0) chain.run()
+    },
+    []
+  )
+
   const appendResourceLinks = useCallback(
     (
       links: Array<{
@@ -904,30 +1069,29 @@ export function MessageInput({
         dedupeKey: string
       }>
     ) => {
-      if (links.length === 0) return
-      setAttachments((prev) => {
-        const seen = new Set(
-          prev.flatMap((item) =>
-            item.type === "resource" && item.kind === "link" ? [item.uri] : []
+      // `file://` links the agent can read directly become inline file badges
+      // (uri used as-is); a non-fetchable `data:` link keeps its real block out
+      // of band behind a sentinel badge.
+      insertFileReferences(
+        links
+          .filter((link) => link.uri)
+          .map((link) =>
+            link.uri.toLowerCase().startsWith("file://")
+              ? { name: link.name, uri: link.uri }
+              : {
+                  name: link.name,
+                  realBlock: {
+                    type: "resource_link" as const,
+                    uri: link.uri,
+                    name: link.name,
+                    mime_type: link.mimeType,
+                    description: null,
+                  },
+                }
           )
-        )
-        const next = [...prev]
-        for (const link of links) {
-          if (!link.uri || seen.has(link.dedupeKey)) continue
-          seen.add(link.dedupeKey)
-          next.push({
-            id: `resource-link:${link.dedupeKey}`,
-            type: "resource",
-            kind: "link",
-            uri: link.uri,
-            name: link.name,
-            mimeType: link.mimeType,
-          })
-        }
-        return next
-      })
+      )
     },
-    []
+    [insertFileReferences]
   )
 
   const appendResourceAttachments = useCallback(
@@ -1048,22 +1212,22 @@ export function MessageInput({
         blob?: string | null
       }>
     ) => {
-      if (resources.length === 0) return
-      setAttachments((prev) => [
-        ...prev,
-        ...resources.map((resource) => ({
-          id: `resource-embedded:${randomUUID()}`,
-          type: "resource" as const,
-          kind: "embedded" as const,
-          uri: resource.uri,
+      // Inline bytes (no real path): each becomes a sentinel file badge whose
+      // embedded `resource` block is reconciled back in at send time.
+      insertFileReferences(
+        resources.map((resource) => ({
           name: resource.name,
-          mimeType: resource.mimeType,
-          text: resource.text ?? null,
-          blob: resource.blob ?? null,
-        })),
-      ])
+          realBlock: {
+            type: "resource" as const,
+            uri: resource.uri,
+            mime_type: resource.mimeType,
+            text: resource.text ?? null,
+            blob: resource.blob ?? null,
+          },
+        }))
+      )
     },
-    []
+    [insertFileReferences]
   )
 
   // Path-less files (browser `File` objects: drag-drop in web mode, paste,
@@ -1793,32 +1957,34 @@ export function MessageInput({
   const buildDraft = useCallback((): PromptDraft | null => {
     const editor = editorRef.current?.getEditor()
     // Inline badges + prose → text/resource_link blocks (file mentions become
-    // first-class ResourceLinks; agent/session/commit/skill stay inline text).
+    // first-class ResourceLinks; agent/session/commit/skill stay inline text;
+    // embedded badges are dropped here and re-added below from the payload map).
     const blocks: PromptInputBlock[] = editor ? docToPromptBlocks(editor) : []
+    // Append the real bytes-bearing block for every embedded-attachment badge
+    // still present in the document, looked up by its `codeg://embedded/…` uri.
+    // Walking the live doc (rather than a swap pass over a stored draft) means a
+    // deleted badge's stale map entry is simply never emitted, and an undo that
+    // resurrects a badge re-emits it — no pruning, and no orphan uri can leak.
+    if (editor) {
+      editor.state.doc.descendants((node) => {
+        if (
+          node.type.name === "reference" &&
+          typeof node.attrs?.uri === "string" &&
+          isEmbeddedReferenceUri(node.attrs.uri)
+        ) {
+          const real = embeddedPayloadsRef.current.get(node.attrs.uri)
+          if (real) blocks.push(real)
+        }
+        return true
+      })
+    }
     const displayMarkdown = editorRef.current?.getMarkdown().trim() ?? ""
 
     if (blocks.length === 0 && attachments.length === 0) return null
 
+    // `attachments` holds only images now — files live inline as badges above.
     for (const attachment of attachments) {
-      if (attachment.type === "resource") {
-        if (attachment.kind === "link") {
-          blocks.push({
-            type: "resource_link",
-            uri: attachment.uri,
-            name: attachment.name,
-            mime_type: attachment.mimeType,
-            description: null,
-          })
-        } else {
-          blocks.push({
-            type: "resource",
-            uri: attachment.uri,
-            mime_type: attachment.mimeType,
-            text: attachment.text ?? null,
-            blob: attachment.blob ?? null,
-          })
-        }
-      } else {
+      if (attachment.type === "image") {
         blocks.push({
           type: "image",
           data: attachment.data,
@@ -1839,6 +2005,7 @@ export function MessageInput({
     editorRef.current?.clear()
     setComposerEmpty(true)
     setAttachments([])
+    embeddedPayloadsRef.current.clear()
     closeSlashMenu()
   }, [closeSlashMenu])
 
@@ -2035,7 +2202,6 @@ export function MessageInput({
   )
 
   const hasImageAttachments = imageAttachments.length > 0
-  const hasResourceAttachments = resourceAttachments.length > 0
   const showDragActive = isDragActive && !disabled
 
   const selectorItems = (
@@ -2255,7 +2421,7 @@ export function MessageInput({
           )}
         >
           <ConversationContextBar
-            hasExtraContent={hasImageAttachments || hasResourceAttachments}
+            hasExtraContent={hasImageAttachments}
             scrollEndTrigger={attachments.length}
             extraContent={
               <>
@@ -2282,25 +2448,6 @@ export function MessageInput({
                       type="button"
                       onClick={() => removeAttachment(attachment.id)}
                       className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
-                      aria-label={t("removeAttachmentAria", {
-                        name: attachment.name,
-                      })}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-                {resourceAttachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] text-muted-foreground"
-                  >
-                    <FileSearch className="h-3 w-3" />
-                    <span className="max-w-40 truncate">{attachment.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="rounded-sm p-0.5 hover:bg-muted-foreground/15"
                       aria-label={t("removeAttachmentAria", {
                         name: attachment.name,
                       })}
