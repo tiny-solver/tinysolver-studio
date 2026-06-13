@@ -1,10 +1,12 @@
 "use client"
 
-import type { ComponentProps, MouseEvent } from "react"
+import type { ComponentProps, MouseEvent, ReactNode } from "react"
 import { useCallback, useState } from "react"
 import { FileText, Globe, Mail, Phone, type LucideIcon } from "lucide-react"
 import type { Components, LinkSafetyModalProps } from "streamdown"
 
+import { ReferenceBadge } from "@/components/chat/composer/badges/reference-badge"
+import { parseCodegReferenceUri } from "@/components/chat/composer/reference-uri"
 import { classifyResourceKind, type ResourceKind } from "@/lib/resource-kind"
 import { cn } from "@/lib/utils"
 import { useStreamdownLinkSafety } from "./link-safety"
@@ -23,6 +25,17 @@ const INCOMPLETE_LINK = "streamdown:incomplete-link"
 type MarkdownLinkProps = ComponentProps<"a"> & {
   // react-markdown passes the originating hast node; it must not reach the DOM.
   node?: unknown
+}
+
+/** Flatten a markdown link's children to plain text (used as the badge label). */
+function nodeText(children: ReactNode): string {
+  if (typeof children === "string") return children
+  if (Array.isArray(children)) {
+    return children
+      .map((child) => (typeof child === "string" ? child : ""))
+      .join("")
+  }
+  return ""
 }
 
 /**
@@ -77,6 +90,15 @@ export function MarkdownLink({
         {children}
       </a>
     )
+  }
+
+  // A codeg:// reference link (session / commit / agent) renders as an inline
+  // badge, mirroring the composer's reference chips. The same parser the editor
+  // uses on draft restore recovers refType/id/meta from the uri; the link text
+  // is the label.
+  if (!isIncomplete && href.toLowerCase().startsWith("codeg:")) {
+    const reference = parseCodegReferenceUri(href, nodeText(children))
+    if (reference) return <ReferenceBadge data={reference} />
   }
 
   const kind = isIncomplete ? null : classifyResourceKind(href)
