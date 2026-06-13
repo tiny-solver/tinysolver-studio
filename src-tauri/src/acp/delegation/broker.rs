@@ -1302,7 +1302,7 @@ impl DelegationBroker {
         // to hours) so a host re-emit at terminal status flip is
         // still rejected. See `ToolCallTrackerBucket` docs.
         if bucket.consumed.iter().any(|(id, _)| id == &tool_call_id) {
-            eprintln!(
+            tracing::info!(
                 "[delegation] dropping ACP tool_call_id={tool_call_id} on conn={parent_connection_id} (already consumed by an earlier delegation)"
             );
             return;
@@ -1327,7 +1327,7 @@ impl DelegationBroker {
                     existing.match_key = Some(key);
                 }
                 _ => {
-                    eprintln!(
+                    tracing::info!(
                         "[delegation] dropping duplicate ACP tool_call_id={tool_call_id} on conn={parent_connection_id}"
                     );
                 }
@@ -1388,7 +1388,7 @@ impl DelegationBroker {
             if now.duration_since(bucket.pending[idx].registered_at) > PENDING_TOOL_CALL_TTL {
                 if let Some(stale) = bucket.pending.remove(idx) {
                     let age_secs = now.duration_since(stale.registered_at).as_secs();
-                    eprintln!(
+                    tracing::info!(
                         "[delegation] evicting stale UNKEYED ACP tool_call_id={} (age={age_secs}s) on conn={parent_connection_id}",
                         stale.tool_call_id
                     );
@@ -1485,7 +1485,7 @@ impl DelegationBroker {
             let fresh = now.duration_since(p.registered_at) <= PENDING_TOOL_CALL_TTL;
             if !fresh {
                 let age_secs = now.duration_since(p.registered_at).as_secs();
-                eprintln!(
+                tracing::info!(
                     "[delegation] evicting stale UNKEYED ACP tool_call_id={} (age={age_secs}s) on conn={parent_connection_id}",
                     p.tool_call_id
                 );
@@ -1915,7 +1915,7 @@ impl DelegationBroker {
                 .claim_pending_tool_call_with_brief_wait(&req.parent_connection_id, &match_key)
                 .await
                 .unwrap_or_else(|| {
-                    eprintln!(
+                    tracing::warn!(
                         "[delegation] synthetic fallback for parent_tool_use_id on conn={} (no ACP tool_call_id arrived within claim budget)",
                         req.parent_connection_id
                     );

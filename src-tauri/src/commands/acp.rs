@@ -2739,7 +2739,7 @@ fn hermes_home_for_launch(runtime_env: &BTreeMap<String, String>) -> PathBuf {
 
 pub(crate) fn reconcile_hermes_runtime_env(runtime_env: &BTreeMap<String, String>) {
     if let Err(err) = reconcile_hermes_runtime_env_in(&hermes_home_for_launch(runtime_env)) {
-        eprintln!("[ACP][Hermes] base_url reconcile skipped: {err}");
+        tracing::warn!("[ACP][Hermes] base_url reconcile skipped: {err}");
     }
 }
 
@@ -3757,7 +3757,7 @@ pub(crate) async fn cascade_update_model_provider(
             &model_env,
             &codex_action,
         ) {
-            eprintln!(
+            tracing::warn!(
                 "[ModelProvider] cascade_update_agent_config({agent_type}) failed: {e}, skipping config update"
             );
         }
@@ -4750,7 +4750,7 @@ pub(crate) async fn acp_update_agent_env_core(
         .map_err(|e| AcpError::protocol(e.to_string()))?;
 
     if let Err(e) = apply_codex_root_model_action(&codex_action) {
-        eprintln!("[acp_update_agent_env] apply_codex_root_model_action failed: {e}");
+        tracing::error!("[acp_update_agent_env] apply_codex_root_model_action failed: {e}");
     }
 
     emit_acp_agents_updated(emitter, "env_updated", Some(agent_type));
@@ -5476,7 +5476,7 @@ pub(crate) async fn acp_prepare_npx_agent_core(
                     agent_setting_service::set_installed_version(&db.conn, agent_type, detected)
                         .await
                 {
-                    eprintln!(
+                    tracing::error!(
                         "[acp] failed to resync installed_version after clean upgrade failure: {sync_err}"
                     );
                 }

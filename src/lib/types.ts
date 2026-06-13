@@ -1485,6 +1485,37 @@ export interface SystemRenderingSettings {
   disable_hardware_acceleration: boolean
 }
 
+// --- Logging ---
+
+export type LogLevel = "off" | "error" | "warn" | "info" | "debug" | "trace"
+
+export interface LogSettings {
+  level: LogLevel
+}
+
+/** What the Logs settings UI reads: the persisted level plus whether an env var
+ * (CODEG_LOG/RUST_LOG) currently locks the control (env owns the live level). */
+export interface LogSettingsView {
+  level: LogLevel
+  env_locked: boolean
+}
+
+/** One captured log event. `level` is tracing's uppercase string
+ * ("ERROR".."TRACE"); `target` is the emitting module path. */
+export interface LogRecord {
+  seq: number
+  timestamp_ms: number
+  level: string
+  target: string
+  message: string
+}
+
+export interface LogFileInfo {
+  name: string
+  size_bytes: number
+  modified_ms: number
+}
+
 // --- Version Control ---
 
 export interface GitCredentials {

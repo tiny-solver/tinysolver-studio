@@ -539,6 +539,18 @@ pub fn build_router(
             "/update_system_terminal_settings",
             post(handlers::system_settings::update_system_terminal_settings),
         )
+        // ─── Logging ───
+        .route(
+            "/get_log_settings",
+            post(handlers::logging::get_log_settings),
+        )
+        .route(
+            "/set_log_settings",
+            post(handlers::logging::set_log_settings),
+        )
+        .route("/get_recent_logs", post(handlers::logging::get_recent_logs))
+        .route("/list_log_files", post(handlers::logging::list_log_files))
+        .route("/read_log_file", post(handlers::logging::read_log_file))
         // ─── ACP ───
         .route(
             "/acp_get_agent_status",
@@ -1033,7 +1045,7 @@ async fn health_check() -> impl IntoResponse {
 
 async fn api_not_found(uri: axum::http::Uri) -> impl IntoResponse {
     let command = uri.path().trim_start_matches('/');
-    eprintln!("[WEB] Unimplemented API endpoint: {}", command);
+    tracing::info!("[WEB] Unimplemented API endpoint: {}", command);
     (
         StatusCode::NOT_IMPLEMENTED,
         Json(serde_json::json!({
