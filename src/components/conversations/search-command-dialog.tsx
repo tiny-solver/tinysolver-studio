@@ -29,6 +29,7 @@ import {
   CommandItem,
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
+import { formatConversationTitle } from "@/lib/conversation-title"
 
 type SearchTab = "conversations" | "files"
 
@@ -280,14 +281,15 @@ export function SearchCommandDialog({
                 {results.map((conv) => (
                   <CommandItem
                     key={conv.id}
-                    value={`${conv.id}-${conv.title ?? ""}`}
+                    value={`${conv.id}-${formatConversationTitle(conv.title)}`}
                     onSelect={() => handleSelectConversation(conv)}
                   >
                     <ConversationStatusDot
                       status={conv.status as ConversationStatus}
                     />
                     <span className="flex-1 truncate">
-                      {conv.title || t("untitledConversation")}
+                      {formatConversationTitle(conv.title) ||
+                        t("untitledConversation")}
                     </span>
                     <span className="text-xs text-muted-foreground shrink-0">
                       {AGENT_LABELS[conv.agent_type]}
