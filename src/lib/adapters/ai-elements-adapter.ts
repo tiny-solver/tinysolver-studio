@@ -14,6 +14,10 @@ import {
 import { normalizeToolName } from "@/lib/tool-call-normalization"
 import { feedbackCheckHasContent } from "@/lib/feedback-check"
 import { isPlanLikeToolName, parseTodosFromJson } from "@/lib/plan-parse"
+import {
+  tokenizeReferenceLinks,
+  unescapeReferenceLabel,
+} from "@/lib/reference-link"
 
 /**
  * Adapted content part types for AI SDK Elements components
@@ -132,19 +136,6 @@ export interface UserImageDisplay {
 }
 
 const BLOCKED_RESOURCE_MENTION_RE = /@([^\s@]+)\s*\[blocked[^\]]*\]/gi
-// Matches a Markdown link, capturing label + destination.
-//
-// The label alternative `(?:\\.|[^\]\\])+` accepts backslash escapes inside the
-// label: `referenceToMarkdown` backslash-escapes inline punctuation, so a
-// filename containing `]` rides in the text as `[a\]b.ts](…)` — a bare `[^\]]+`
-// would stop at the escaped `]` and fail to match, dropping the file from the row.
-//
-// The destination alternative `<[^>]*>` handles CommonMark angle-bracket
-// destinations, which `referenceToMarkdown` emits for file URIs containing spaces
-// or parentheses (e.g. `[a b.ts](<file:///x/a b.ts>)`): without it the `[^)]*`
-// form would stop at the first `)` inside the path, truncating the uri (or, with
-// a leading `<`, failing the `file://` test) and dropping the file from the row.
-const MARKDOWN_LINK_RE = /\[((?:\\.|[^\]\\])+)\]\((<[^>]*>|[^)]*)\)/g
 
 /**
  * Adapted message format for AI SDK Elements
@@ -654,16 +645,6 @@ function sanitizeMentionName(raw: string): string {
   return raw.replace(/[),.;:!?]+$/g, "")
 }
 
-/**
- * Reverse {@link referenceToMarkdown}'s `escapeMarkdownText`: drop the backslash
- * from an escaped inline-punctuation char so a display name reads cleanly. A file
- * like `foo (1).ts` is serialized into the text block as `foo \(1\).ts`; the
- * resource chip must show `foo (1).ts`, not the backslashes.
- */
-function unescapeMarkdownLabel(text: string): string {
-  return text.replace(/\\([\\`*_~[\]()<>])/g, "$1")
-}
-
 // Tidy the prose AFTER resources were lifted/removed, WITHOUT mutating a
 // `file://` link kept inline (the COPY case). Collapsing internal `[ \t]{2,}`
 // runs would rewrite a path that legitimately contains consecutive spaces
@@ -787,7 +768,7 @@ function handleMarkdownLink(
     // badge). Other codeg refs are not attachments: inline only.
     if (normalizedUri.toLowerCase().startsWith("codeg://embedded/")) {
       addResource(resources, {
-        name: unescapeMarkdownLabel(normalizedLabel) || "attachment",
+        name: unescapeReferenceLabel(normalizedLabel) || "attachment",
         uri: normalizedUri,
         mime_type: null,
       })
@@ -807,8 +788,8 @@ function handleMarkdownLink(
   // through the mention trimming. Only a NON-file `@`-mention gets its `@`
   // stripped and trailing sentence punctuation trimmed.
   const name = isFileUri
-    ? unescapeMarkdownLabel(normalizedLabel) || fileNameFromUri(normalizedUri)
-    : sanitizeMentionName(unescapeMarkdownLabel(normalizedLabel.slice(1))) ||
+    ? unescapeReferenceLabel(normalizedLabel) || fileNameFromUri(normalizedUri)
+    : sanitizeMentionName(unescapeReferenceLabel(normalizedLabel.slice(1))) ||
       fileNameFromUri(normalizedUri)
   addResource(resources, { name, uri: normalizedUri, mime_type: null })
   // A real `file://` attachment is COPIED, not moved: it stays inline in the
@@ -831,14 +812,17 @@ export function extractUserResourcesFromText(text: string): {
   // contain an `@…[blocked…]` pattern and be mutated before extraction. The link
   // segments are handled verbatim by `handleMarkdownLink`.
   let out = ""
-  let cursor = 0
-  for (const match of text.matchAll(MARKDOWN_LINK_RE)) {
-    const start = match.index ?? cursor
-    out += stripBlockedMentions(text.slice(cursor, start), resources)
-    out += handleMarkdownLink(match[0], match[1], match[2], resources)
-    cursor = start + match[0].length
+  for (const token of tokenizeReferenceLinks(text)) {
+    out +=
+      token.type === "link"
+        ? handleMarkdownLink(
+            token.raw,
+            token.label,
+            token.destination,
+            resources
+          )
+        : stripBlockedMentions(token.value, resources)
   }
-  out += stripBlockedMentions(text.slice(cursor), resources)
 
   return {
     text: normalizeResourceText(out),

@@ -113,11 +113,11 @@ describe("formatConversationTitle", () => {
     expect(formatConversationTitle("[[b]](https://x)")).toBe("[b]")
   })
 
-  it("leaves an unbalanced nested-bracket fragment untouched", () => {
-    // `[a [b](https://x)` never balances the outer `[`, so it is not a link.
-    expect(formatConversationTitle("[a [b](https://x)")).toBe(
-      "[a [b](https://x)"
-    )
+  it("recovers the inner link after an unbalanced outer `[`", () => {
+    // `[a ` never balances, but the later `[b](https://x)` is still a valid link
+    // and folds to its label; the stray `[a ` is kept as prose. (The shared
+    // tokenizer recovers later links instead of giving up at the unmatched `[`.)
+    expect(formatConversationTitle("[a [b](https://x)")).toBe("[a b")
   })
 
   it("does not let a backslash escape whitespace in a destination", () => {

@@ -1,5 +1,6 @@
 import type { FlatFileEntry } from "@/hooks/use-file-tree"
 import { formatConversationTitle } from "@/lib/conversation-title"
+import { buildFileUri } from "@/lib/reference-link"
 import {
   AGENT_LABELS,
   type AcpAgentInfo,
@@ -8,17 +9,6 @@ import {
 } from "@/lib/types"
 
 import type { SuggestionItem } from "./types"
-
-/**
- * Build a `file://` URI from an absolute path (POSIX or Windows), percent-
- * encoding each path segment so spaces / `#` / `?` / `%` can't corrupt the URI.
- * Mirrors `toFileUri` in message-input.tsx.
- */
-export function pathToFileUri(absolutePath: string): string {
-  const normalized = absolutePath.replace(/\\/g, "/")
-  const encoded = normalized.split("/").map(encodeURIComponent).join("/")
-  return normalized.startsWith("/") ? `file://${encoded}` : `file:///${encoded}`
-}
 
 function joinPath(root: string, relative: string): string {
   const left = root.replace(/[/\\]+$/, "")
@@ -36,7 +26,7 @@ export function fileToSuggestion(
       refType: "file",
       id: entry.relativePath,
       label: entry.name,
-      uri: pathToFileUri(joinPath(workspaceRoot, entry.relativePath)),
+      uri: buildFileUri(joinPath(workspaceRoot, entry.relativePath)),
       meta: { fileKind: entry.kind },
     },
     detail: entry.relativePath,

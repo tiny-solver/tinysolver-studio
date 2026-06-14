@@ -910,6 +910,25 @@ describe("extractUserResourcesFromText — codeg references stay inline", () => 
     expect(text).toContain("[#42](codeg://session/codex_abc)")
     expect(text).toContain("[foo.ts](file:///x/foo.ts)")
   })
+
+  it("recovers a file chip after stray/unbalanced brackets in prose", () => {
+    // The unmatched `[oops` must not swallow the later real file reference.
+    const { text, resources } = extractUserResourcesFromText(
+      "text [oops [still open] [foo.ts](file:///x/foo.ts)"
+    )
+    expect(resources).toEqual([
+      { name: "foo.ts", uri: "file:///x/foo.ts", mime_type: null },
+    ])
+    expect(text).toContain("[foo.ts](file:///x/foo.ts)")
+  })
+
+  it("ignores an empty-label [](file://…) link, adding no chip", () => {
+    const { text, resources } = extractUserResourcesFromText(
+      "see [](file:///x/foo.ts) ok"
+    )
+    expect(resources).toEqual([])
+    expect(text).toBe("see [](file:///x/foo.ts) ok")
+  })
 })
 
 describe("adaptMessageTurn — user reference resources", () => {

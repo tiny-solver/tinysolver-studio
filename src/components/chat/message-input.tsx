@@ -38,6 +38,7 @@ import {
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
 import { AgentIcon } from "@/components/agent-icon"
 import { cn, randomUUID } from "@/lib/utils"
+import { buildFileUri } from "@/lib/reference-link"
 import {
   filesFromClipboard,
   clipboardHasText,
@@ -224,15 +225,6 @@ function fileNameFromPath(path: string): string {
 function mimeTypeFromPath(path: string): string | null {
   const ext = path.split(".").pop()?.toLowerCase() ?? ""
   return MIME_BY_EXT[ext] ?? null
-}
-
-function toFileUri(path: string): string {
-  const normalized = path.replace(/\\/g, "/")
-  const encoded = normalized.split("/").map(encodeURIComponent).join("/")
-  if (normalized.startsWith("/")) {
-    return `file://${encoded}`
-  }
-  return `file:///${encoded}`
 }
 
 function hasDragFiles(dataTransfer: DataTransfer | null): boolean {
@@ -1101,7 +1093,7 @@ export function MessageInput({
           (path): path is string => typeof path === "string" && path.length > 0
         )
         .map((path) => {
-          const uri = toFileUri(path)
+          const uri = buildFileUri(path)
           return {
             uri,
             name: fileNameFromPath(path),
@@ -1265,7 +1257,7 @@ export function MessageInput({
         const name = file.name || `resource-${randomUUID()}`
         const mimeType = file.type || mimeTypeFromPath(name)
         if (path) {
-          const uri = toFileUri(path)
+          const uri = buildFileUri(path)
           pathLinks.push({
             uri,
             name: fileNameFromPath(path),
@@ -1360,7 +1352,7 @@ export function MessageInput({
             id: `image:${Date.now()}:${index}:${randomUUID()}`,
             type: "image" as const,
             data,
-            uri: toFileUri(path),
+            uri: buildFileUri(path),
             name: fileNameFromPath(path),
             mimeType: mimeTypeFromPath(path) ?? "image/png",
           }

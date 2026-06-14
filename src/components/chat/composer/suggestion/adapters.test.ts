@@ -11,21 +11,8 @@ import {
   agentToSuggestion,
   commitToSuggestion,
   fileToSuggestion,
-  pathToFileUri,
   sessionToSuggestion,
 } from "./adapters"
-
-describe("pathToFileUri", () => {
-  it("builds a triple-slash uri for a posix path", () => {
-    expect(pathToFileUri("/repo/src/app.ts")).toBe("file:///repo/src/app.ts")
-  })
-  it("normalizes Windows backslashes and encodes the drive segment", () => {
-    expect(pathToFileUri("C:\\repo\\app.ts")).toBe("file:///C%3A/repo/app.ts")
-  })
-  it("percent-encodes spaces, # and ? within segments (not the separators)", () => {
-    expect(pathToFileUri("/a/b c#d?e.ts")).toBe("file:///a/b%20c%23d%3Fe.ts")
-  })
-})
 
 describe("fileToSuggestion", () => {
   const entry: FlatFileEntry = {
