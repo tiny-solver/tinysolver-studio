@@ -2895,6 +2895,17 @@
     "turnEnded": "Die Runde ist bereits beendet.",
     "submitFailed": "Deine Notiz konnte nicht gesendet werden"
   },
+  "SessionInfoSettings": {
+    "title": "Sitzungsinformationen abrufen",
+    "description": "Erlaubt Agenten, eine in deiner Nachricht referenzierte Sitzung (ein Sitzungs-Badge) nachzuschlagen, um Titel, Agent, Status, Arbeitsbereich, Token-Verbrauch und letzte Nachrichten zu lesen.",
+    "enable": "Sitzungsinformationen abrufen aktivieren",
+    "enableHint": "Fügt das get_session_info-Tool zu Agenten hinzu, die nach dem Aktivieren gestartet werden.",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Einstellungen für Sitzungsinformationen gespeichert",
+    "saveFailed": "Einstellungen für Sitzungsinformationen konnten nicht gespeichert werden",
+    "loadFailed": "Laden fehlgeschlagen: {detail}"
+  },
   "AskQuestionSettings": {
     "title": "Benutzer fragen",
     "description": "Erlaubt Agenten, anzuhalten und dir eine Multiple-Choice-Frage zu stellen, die über dem Eingabefeld der Unterhaltung erscheint. Der Agent wartet, bis du antwortest (oder überspringst).",

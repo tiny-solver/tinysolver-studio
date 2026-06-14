@@ -2895,6 +2895,17 @@
     "turnEnded": "Le tour est déjà terminé.",
     "submitFailed": "Impossible d'envoyer votre note"
   },
+  "SessionInfoSettings": {
+    "title": "Obtenir les infos de session",
+    "description": "Permet aux agents de consulter une session que vous mentionnez dans votre message (un badge de session) pour lire son titre, son agent, son statut, son espace de travail, sa consommation de jetons et ses messages récents.",
+    "enable": "Activer l'obtention des infos de session",
+    "enableHint": "Ajoute l'outil get_session_info aux agents démarrés après l'activation.",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Paramètres d'infos de session enregistrés",
+    "saveFailed": "Échec de l'enregistrement des paramètres d'infos de session",
+    "loadFailed": "Échec du chargement : {detail}"
+  },
   "AskQuestionSettings": {
     "title": "Poser une question à l'utilisateur",
     "description": "Permet aux agents de s'interrompre et de vous poser une question à choix multiples affichée au-dessus de la zone de saisie de la conversation. L'agent attend votre réponse (ou que vous ignoriez).",

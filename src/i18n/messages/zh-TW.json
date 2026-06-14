@@ -2895,6 +2895,17 @@
     "turnEnded": "本輪已結束。",
     "submitFailed": "留言送出失敗"
   },
+  "SessionInfoSettings": {
+    "title": "取得工作階段資訊",
+    "description": "允許智慧代理查詢你在訊息中提及的工作階段（工作階段徽章），讀取其標題、代理、狀態、工作區、Token 用量與最近訊息。",
+    "enable": "啟用取得工作階段資訊",
+    "enableHint": "在開啟後啟動的代理將取得 get_session_info 工具。",
+    "save": "儲存",
+    "saving": "儲存中…",
+    "saved": "工作階段資訊設定已儲存",
+    "saveFailed": "儲存工作階段資訊設定失敗",
+    "loadFailed": "載入失敗：{detail}"
+  },
   "AskQuestionSettings": {
     "title": "向使用者提問",
     "description": "允許智能體暫停並向你提出多選問題，問題會顯示在對話輸入框上方。智能體會一直等待，直到你作答（或略過）。",

@@ -2895,6 +2895,17 @@
     "turnEnded": "本轮已结束。",
     "submitFailed": "留言发送失败"
   },
+  "SessionInfoSettings": {
+    "title": "获取会话信息",
+    "description": "允许智能体查询你在消息中提及的会话（会话徽章），读取其标题、智能体、状态、工作区、Token 用量和最近消息。",
+    "enable": "启用获取会话信息",
+    "enableHint": "在开启后启动的智能体将获得 get_session_info 工具。",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "会话信息设置已保存",
+    "saveFailed": "保存会话信息设置失败",
+    "loadFailed": "加载失败：{detail}"
+  },
   "AskQuestionSettings": {
     "title": "向用户提问",
     "description": "允许智能体暂停并向你提出多选问题，问题会显示在会话输入框上方。智能体会一直等待，直到你作答（或跳过）。",

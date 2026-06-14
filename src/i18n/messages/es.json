@@ -2895,6 +2895,17 @@
     "turnEnded": "El turno ya terminó.",
     "submitFailed": "No se pudo enviar tu nota"
   },
+  "SessionInfoSettings": {
+    "title": "Obtener información de sesión",
+    "description": "Permite que los agentes consulten una sesión que mencionas en tu mensaje (una insignia de sesión) para leer su título, agente, estado, espacio de trabajo, uso de tokens y mensajes recientes.",
+    "enable": "Activar obtener información de sesión",
+    "enableHint": "Añade la herramienta get_session_info a los agentes iniciados después de activarla.",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "saved": "Ajustes de información de sesión guardados",
+    "saveFailed": "No se pudieron guardar los ajustes de información de sesión",
+    "loadFailed": "Error al cargar: {detail}"
+  },
   "AskQuestionSettings": {
     "title": "Preguntar al usuario",
     "description": "Permite que los agentes se detengan y te hagan una pregunta de opción múltiple que aparece encima del cuadro de entrada de la conversación. El agente espera hasta que respondas (u omitas).",

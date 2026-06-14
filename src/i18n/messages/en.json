@@ -2895,6 +2895,17 @@
     "turnEnded": "The turn already ended.",
     "submitFailed": "Couldn't send your note"
   },
+  "SessionInfoSettings": {
+    "title": "Get session info",
+    "description": "Let agents look up a session you reference in your message (a session badge) to read its title, agent, status, workspace, token usage, and recent messages.",
+    "enable": "Enable get session info",
+    "enableHint": "Adds the get_session_info tool to agents started after this is turned on.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Session info settings saved",
+    "saveFailed": "Failed to save session info settings",
+    "loadFailed": "Failed to load: {detail}"
+  },
   "AskQuestionSettings": {
     "title": "Ask user question",
     "description": "Let agents pause and ask you a multiple-choice question that appears above the conversation input box. The agent waits until you answer (or skip).",

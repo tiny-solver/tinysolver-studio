@@ -76,11 +76,15 @@ export function parseCodegReferenceUri(
   const session = uri.match(SESSION_URI)
   if (session) {
     const id = session[1]
-    // New format is `codeg://session/<agent_type>_<external_id>`. Agent types
-    // themselves contain underscores (claude_code, open_code, open_claw), so the
-    // type is recovered by prefix match against the known set — never by
-    // splitting on the first `_`. A legacy all-numeric id (or any opaque token)
-    // matches no prefix and degrades to a session badge without an agent icon.
+    // Current format is `codeg://session/<conversation_id>` (a bare numeric id),
+    // which matches no agent-type prefix and so degrades to a session badge
+    // without an agent icon — fine, since the live-inserted badge carries the
+    // agent via `meta` and get_session_info resolves the agent server-side.
+    // LEGACY links `codeg://session/<agent_type>_<external_id>` (still present in
+    // historical transcripts) keep their agent icon: the type is recovered by
+    // prefix match against the known set — never by splitting on the first `_`,
+    // since agent types themselves contain underscores (claude_code, open_code,
+    // open_claw).
     const agentType = ALL_AGENT_TYPES.find((type) => id.startsWith(`${type}_`))
     return {
       refType: "session",

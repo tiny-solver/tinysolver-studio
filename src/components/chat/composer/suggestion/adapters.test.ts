@@ -79,7 +79,7 @@ describe("sessionToSuggestion", () => {
     status: "in_progress",
     git_branch: "main",
   } as DbConversationSummary
-  it("encodes <agent_type>_<external_id> in the uri (id stays the numeric id)", () => {
+  it("encodes the numeric conversation id in the uri (regardless of external_id)", () => {
     const item = sessionToSuggestion({
       ...base,
       title: "Login refactor",
@@ -89,11 +89,14 @@ describe("sessionToSuggestion", () => {
       refType: "session",
       id: "123",
       label: "Login refactor",
-      uri: "codeg://session/codex_abc123",
+      // Always the internal numeric id now — get_session_info resolves it
+      // server-side via the row's bound external_id + agent_type.
+      uri: "codeg://session/123",
+      // meta.agentType still set, so the @-panel option row shows the agent icon.
       meta: { agentType: "codex", status: "in_progress", branch: "main" },
     })
   })
-  it("falls back to the numeric id when there is no external_id", () => {
+  it("uses the numeric id even when there is no external_id", () => {
     expect(sessionToSuggestion({ ...base, title: "x" }).reference.uri).toBe(
       "codeg://session/123"
     )
