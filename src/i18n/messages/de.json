@@ -1175,6 +1175,9 @@
       "recentOpen": "Zuletzt geöffnet"
     },
     "fileWorkspacePanel": {
+      "addSelectionToChat": "Auswahl zum Chat hinzufügen",
+      "addToChat": "Zum Chat hinzufügen",
+      "addSelectionToChatDone": "{label} zur Unterhaltung hinzugefügt",
       "viewDiff": "Diff anzeigen",
       "openFile": "Datei öffnen",
       "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",

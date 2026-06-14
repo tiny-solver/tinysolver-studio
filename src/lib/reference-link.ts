@@ -30,6 +30,57 @@ export function buildFileUri(absolutePath: string): string {
 }
 
 /**
+ * A 1-based, inclusive line span selected in the editor. `end === start` is a
+ * single line; `end > start` is a range. Callers normalize so `end >= start`.
+ */
+export interface FileLineRange {
+  start: number
+  end: number
+}
+
+/**
+ * The `#L…` uri fragment for a line span: `L10` for one line, `L10-25` for a
+ * range. Mirrors the GitHub/VS Code convention so the destination stays human-
+ * readable and the agent can recover the lines from the link.
+ */
+function lineRangeFragment(range: FileLineRange): string {
+  return range.end > range.start
+    ? `L${range.start}-${range.end}`
+    : `L${range.start}`
+}
+
+/**
+ * {@link buildFileUri} with an optional `#L<start>[-<end>]` line-range fragment
+ * appended. The fragment is concatenated AFTER per-segment encoding (and is
+ * never itself encoded) so the `#` stays a literal fragment delimiter rather
+ * than a percent-encoded path character. Encoding the range in the uri — not
+ * just the label — is what lets two different selections of the same file
+ * coexist as distinct badges (the composer dedupes file references by uri).
+ */
+export function buildFileUriWithRange(
+  absolutePath: string,
+  range?: FileLineRange | null
+): string {
+  const base = buildFileUri(absolutePath)
+  return range ? `${base}#${lineRangeFragment(range)}` : base
+}
+
+/**
+ * The badge label for a file selection: `foo.ts` with no range, `foo.ts:10` for
+ * a single line, `foo.ts:10-25` for a span — matching how mainstream editors
+ * present a "selection" chip.
+ */
+export function formatFileRangeLabel(
+  fileName: string,
+  range?: FileLineRange | null
+): string {
+  if (!range) return fileName
+  return range.end > range.start
+    ? `${fileName}:${range.start}-${range.end}`
+    : `${fileName}:${range.start}`
+}
+
+/**
  * Reverse `escapeMarkdownText` (reference-text.ts): drop the backslash from each
  * escaped inline-significant punctuation char so the recovered label reads
  * literally. The character class mirrors the serializer's exactly.

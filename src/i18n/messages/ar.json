@@ -1175,6 +1175,9 @@
       "recentOpen": "المفتوح مؤخرًا"
     },
     "fileWorkspacePanel": {
+      "addSelectionToChat": "إضافة التحديد إلى المحادثة",
+      "addToChat": "إضافة إلى المحادثة",
+      "addSelectionToChatDone": "تمت إضافة {label} إلى المحادثة",
       "viewDiff": "عرض Diff",
       "openFile": "فتح الملف",
       "fileCount": "{count, plural, one {# ملف} other {# ملفات}}",

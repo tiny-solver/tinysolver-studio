@@ -1175,6 +1175,9 @@
       "recentOpen": "최근 연 항목"
     },
     "fileWorkspacePanel": {
+      "addSelectionToChat": "선택 영역을 대화에 추가",
+      "addToChat": "대화에 추가",
+      "addSelectionToChatDone": "{label}을(를) 대화에 추가했습니다",
       "viewDiff": "Diff 보기",
       "openFile": "파일 열기",
       "fileCount": "{count, plural, one {#개 파일} other {#개 파일}}",

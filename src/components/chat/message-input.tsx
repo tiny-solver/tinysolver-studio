@@ -38,7 +38,11 @@ import {
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
 import { AgentIcon } from "@/components/agent-icon"
 import { cn, randomUUID } from "@/lib/utils"
-import { buildFileUri } from "@/lib/reference-link"
+import {
+  buildFileUri,
+  buildFileUriWithRange,
+  formatFileRangeLabel,
+} from "@/lib/reference-link"
 import {
   filesFromClipboard,
   clipboardHasText,
@@ -1106,6 +1110,25 @@ export function MessageInput({
     [appendResourceLinks]
   )
 
+  // Attach a single file as a ranged badge (`foo.ts:10-25`), used by the file
+  // editor's "add selection to chat". The line span is encoded into both the
+  // label and the uri fragment (`file://…#L10-25`), so distinct selections of
+  // the same file stay distinct (the uri is the dedupe key in
+  // `insertFileReferences`) and the range rides along to the agent in the
+  // serialized `[label](uri)` link.
+  const appendFileRangeAttachment = useCallback(
+    (path: string, range: { start: number; end: number }) => {
+      if (!path) return
+      insertFileReferences([
+        {
+          name: formatFileRangeLabel(fileNameFromPath(path), range),
+          uri: buildFileUriWithRange(path, range),
+        },
+      ])
+    },
+    [insertFileReferences]
+  )
+
   // Shared upload pool used by the menu's "Upload local file" button,
   // browser drag-drop in web mode, paste in web mode, and the fallback
   // path of `appendFilesAsResources` for remote-desktop. Splits oversize
@@ -1784,14 +1807,19 @@ export function MessageInput({
       const customEvent = event as CustomEvent<AttachFileToSessionDetail>
       if (!customEvent.detail) return
       if (customEvent.detail.tabId !== attachmentTabId) return
-      appendResourceAttachments([customEvent.detail.path])
+      const { path, range } = customEvent.detail
+      if (range) {
+        appendFileRangeAttachment(path, range)
+      } else {
+        appendResourceAttachments([path])
+      }
     }
 
     window.addEventListener(ATTACH_FILE_TO_SESSION_EVENT, handleAttachFile)
     return () => {
       window.removeEventListener(ATTACH_FILE_TO_SESSION_EVENT, handleAttachFile)
     }
-  }, [appendResourceAttachments, attachmentTabId])
+  }, [appendResourceAttachments, appendFileRangeAttachment, attachmentTabId])
 
   useEffect(() => {
     if (!attachmentTabId) return

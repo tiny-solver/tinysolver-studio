@@ -60,8 +60,10 @@ function parseLineValue(raw: string | undefined): number | null {
 function parseHashLine(hash: string): number | null {
   const normalized = hash.startsWith("#") ? hash.slice(1) : hash
   if (!normalized) return null
+  // `L<start>` / `L<start>-<end>` / `L<start>-L<end>` (GitHub-style) — a range
+  // (e.g. the editor's "add selection" badge `#L10-25`) jumps to its start line.
   return (
-    parseLineValue(normalized.match(/^L(\d+)$/i)?.[1]) ??
+    parseLineValue(normalized.match(/^L(\d+)(?:-L?\d+)?$/i)?.[1]) ??
     parseLineValue(normalized.match(/^line=(\d+)$/i)?.[1]) ??
     parseLineValue(normalized.match(/^(\d+)$/)?.[1])
   )

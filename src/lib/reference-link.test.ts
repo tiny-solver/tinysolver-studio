@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildFileUri,
+  buildFileUriWithRange,
   foldReferenceLinks,
+  formatFileRangeLabel,
   tokenizeReferenceLinks,
   unescapeReferenceLabel,
 } from "./reference-link"
@@ -187,6 +189,72 @@ describe("foldReferenceLinks", () => {
   it("leaves malformed fragments and non-link tokens verbatim", () => {
     expect(foldReferenceLinks("@Codex /review [oops](file:///x")).toBe(
       "@Codex /review [oops](file:///x"
+    )
+  })
+
+  it("folds a ranged file badge to its label", () => {
+    expect(
+      foldReferenceLinks("see [app.ts:10-25](file:///repo/src/app.ts#L10-25)")
+    ).toBe("see app.ts:10-25")
+  })
+})
+
+describe("buildFileUriWithRange", () => {
+  it("returns the plain file uri when no range is given", () => {
+    expect(buildFileUriWithRange("/repo/src/app.ts")).toBe(
+      "file:///repo/src/app.ts"
+    )
+    expect(buildFileUriWithRange("/repo/src/app.ts", null)).toBe(
+      "file:///repo/src/app.ts"
+    )
+  })
+  it("appends an #L<line> fragment for a single-line span", () => {
+    expect(
+      buildFileUriWithRange("/repo/src/app.ts", { start: 10, end: 10 })
+    ).toBe("file:///repo/src/app.ts#L10")
+  })
+  it("appends an #L<start>-<end> fragment for a multi-line span", () => {
+    expect(
+      buildFileUriWithRange("/repo/src/app.ts", { start: 10, end: 25 })
+    ).toBe("file:///repo/src/app.ts#L10-25")
+  })
+  it("keeps the # literal after percent-encoding the path segments", () => {
+    expect(buildFileUriWithRange("/a/b c.ts", { start: 3, end: 7 })).toBe(
+      "file:///a/b%20c.ts#L3-7"
+    )
+  })
+  it("round-trips through the tokenizer as a single ranged link", () => {
+    expect(
+      tokenizeReferenceLinks(
+        `[app.ts:10-25](${buildFileUriWithRange("/repo/app.ts", {
+          start: 10,
+          end: 25,
+        })})`
+      )
+    ).toEqual([
+      {
+        type: "link",
+        raw: "[app.ts:10-25](file:///repo/app.ts#L10-25)",
+        label: "app.ts:10-25",
+        destination: "file:///repo/app.ts#L10-25",
+      },
+    ])
+  })
+})
+
+describe("formatFileRangeLabel", () => {
+  it("returns the bare file name with no range", () => {
+    expect(formatFileRangeLabel("app.ts")).toBe("app.ts")
+    expect(formatFileRangeLabel("app.ts", null)).toBe("app.ts")
+  })
+  it("suffixes a single line as :<line>", () => {
+    expect(formatFileRangeLabel("app.ts", { start: 10, end: 10 })).toBe(
+      "app.ts:10"
+    )
+  })
+  it("suffixes a span as :<start>-<end>", () => {
+    expect(formatFileRangeLabel("app.ts", { start: 10, end: 25 })).toBe(
+      "app.ts:10-25"
     )
   })
 })

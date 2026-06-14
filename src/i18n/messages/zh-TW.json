@@ -1175,6 +1175,9 @@
       "recentOpen": "最近打開"
     },
     "fileWorkspacePanel": {
+      "addSelectionToChat": "新增選取範圍到對話",
+      "addToChat": "加入對話",
+      "addSelectionToChatDone": "已將 {label} 加入對話",
       "viewDiff": "查看差異",
       "openFile": "打開檔案",
       "fileCount": "{count} 個檔案",

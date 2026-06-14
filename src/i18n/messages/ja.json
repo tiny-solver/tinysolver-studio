@@ -1175,6 +1175,9 @@
       "recentOpen": "最近開いたフォルダ"
     },
     "fileWorkspacePanel": {
+      "addSelectionToChat": "選択範囲をチャットに追加",
+      "addToChat": "チャットに追加",
+      "addSelectionToChatDone": "{label} を会話に追加しました",
       "viewDiff": "差分を見る",
       "openFile": "ファイルを開く",
       "fileCount": "{count, plural, one {# 個のファイル} other {# 個のファイル}}",
