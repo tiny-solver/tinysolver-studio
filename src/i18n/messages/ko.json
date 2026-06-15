@@ -1793,6 +1793,7 @@
         "quickMessages": "빠른 메시지",
         "quickMessagesEmpty": "빠른 메시지가 없습니다",
         "quickMessagesLoading": "불러오는 중...",
+        "paste": "붙여넣기",
         "quickMessageUntitled": "제목 없음",
         "liveFeedback": "라이브 피드백",
         "liveFeedbackDisabledHint": "에이전트가 작업 중일 때 보낼 수 있습니다",

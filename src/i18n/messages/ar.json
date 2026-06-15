@@ -1793,6 +1793,7 @@
         "quickMessages": "الرسائل السريعة",
         "quickMessagesEmpty": "لا توجد رسائل سريعة بعد",
         "quickMessagesLoading": "جارٍ التحميل...",
+        "paste": "لصق",
         "quickMessageUntitled": "بدون عنوان",
         "liveFeedback": "ملاحظات مباشرة",
         "liveFeedbackDisabledHint": "متاح أثناء عمل الوكيل",

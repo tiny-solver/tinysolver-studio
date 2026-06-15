@@ -9,6 +9,7 @@ import {
   BookOpenText,
   Check,
   ChevronUp,
+  ClipboardPaste,
   Cog,
   FolderSearch,
   GitFork,
@@ -35,6 +36,15 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
 import { AgentIcon } from "@/components/agent-icon"
 import { cn, randomUUID } from "@/lib/utils"
@@ -561,6 +571,14 @@ export function MessageInput({
   const [isDragActive, setIsDragActive] = useState(false)
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([])
   const [quickMessagesLoading, setQuickMessagesLoading] = useState(false)
+  // Whether the async Clipboard read API is usable here. It's absent in
+  // non-secure web deployments served over HTTP/LAN (see installClipboardFallback
+  // in lib/utils, which only shims writeText), so the composer's custom
+  // right-click "Paste" can't work there. When false we keep the radix context
+  // menu disabled and let the browser's native menu through — its Paste still
+  // works over the editable text. Resolved on the client after mount so SSR and
+  // the first client render agree (no hydration mismatch on the trigger).
+  const [clipboardReadSupported, setClipboardReadSupported] = useState(false)
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(
     null
   )
@@ -594,6 +612,15 @@ export function MessageInput({
   useEffect(() => {
     isPromptingRef.current = isPrompting
   }, [isPrompting])
+
+  useEffect(() => {
+    // navigator.clipboard is undefined at runtime in non-secure contexts even
+    // though the DOM types claim it is always present, so guard with typeof.
+    setClipboardReadSupported(
+      typeof navigator !== "undefined" &&
+        typeof navigator.clipboard?.readText === "function"
+    )
+  }, [])
 
   // Localized group headings + panel chrome for the `@` mention panel.
   const referenceGroupLabels = useMemo<ReferenceGroupLabels>(
@@ -1577,6 +1604,13 @@ export function MessageInput({
   const handlePasteFiles = useCallback(
     (event: ClipboardEvent): boolean => {
       if (disabled) return false
+      // The context-menu "Paste" drives text through `view.pasteText`, which
+      // runs this handler with a synthetic `new ClipboardEvent("paste")` whose
+      // `clipboardData` is null. There's nothing to attach from it (and the
+      // image fallback below would otherwise fire a stray async clipboard read),
+      // so let the editor's own text paste proceed. Real pastes always carry a
+      // (non-null) DataTransfer, so this never short-circuits a genuine paste.
+      if (!event.clipboardData) return false
       const files = filesFromClipboard(event.clipboardData)
       if (files.length > 0) {
         void appendFilesFromInput(files).catch((error) => {
@@ -1799,6 +1833,41 @@ export function MessageInput({
     if (!message.content) return
     editorRef.current?.insertMarkdownAtCursor(message.content)
   }, [])
+
+  // The composer's custom right-click "Paste". The native context menu only
+  // appears over the contenteditable text, so the blank chrome had no paste
+  // affordance — this reproduces Ctrl+V everywhere in the box. Reading the
+  // clipboard happens inside the menu-click user gesture, so the async
+  // Clipboard API has the activation it needs.
+  const handleContextPaste = useCallback(async () => {
+    if (disabled) return
+    const editor = editorRef.current?.getEditor()
+    if (!editor) return
+    let text = ""
+    try {
+      text = (await navigator.clipboard.readText()) ?? ""
+    } catch {
+      // Permission denied / unsupported / no activation — fall through to the
+      // image path (a textless clipboard may still hold a screenshot).
+      text = ""
+    }
+    if (text) {
+      // Route through ProseMirror's own text paste so newlines, marks and the
+      // editor's paste pipeline behave exactly like a keyboard paste.
+      editor.view.focus()
+      editor.view.pasteText(text)
+      return
+    }
+    // No text — try a pasted image (screenshot), mirroring `handlePasteFiles`.
+    try {
+      const imageFiles = await imageFilesFromClipboardApi()
+      if (imageFiles.length > 0) {
+        await appendFilesFromInput(imageFiles)
+      }
+    } catch (error) {
+      console.error("[MessageInput] context menu paste failed:", error)
+    }
+  }, [disabled, appendFilesFromInput])
 
   useEffect(() => {
     if (!attachmentTabId) return
@@ -2430,395 +2499,463 @@ export function MessageInput({
             "ring-1 ring-primary/40"
         )}
       >
-        <div
-          onMouseDown={handleChromeMouseDown}
-          className={cn(
-            // `codeg-composer-chrome` paints the text I-beam across the box's
-            // blank areas (padding, the dead space below a short message, the
-            // action-bar gaps) so the whole input reads as clickable-to-type;
-            // interactive controls re-assert their own cursor (see globals.css).
-            "codeg-composer-chrome @container relative flex flex-col bg-transparent transition-colors",
-            folderBranchPickerAttached
-              ? "rounded-xl border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"
-              : "rounded-xl border border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
-            !folderBranchPickerAttached &&
-              showDragActive &&
-              "ring-1 ring-primary/40",
-            className
-          )}
-        >
-          <ConversationContextBar
-            hasExtraContent={hasImageAttachments}
-            scrollEndTrigger={attachments.length}
-            extraContent={
-              <>
-                {imageAttachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setPreviewAttachmentId(attachment.id)}
-                      className="cursor-pointer transition-opacity hover:opacity-80"
-                    >
-                      <Image
-                        src={`data:${attachment.mimeType};base64,${attachment.data}`}
-                        alt={attachment.name}
-                        width={56}
-                        height={56}
-                        unoptimized
-                        className="h-14 w-14 object-cover"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
-                      aria-label={t("removeAttachmentAria", {
-                        name: attachment.name,
-                      })}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </>
-            }
-          />
-          <RichComposer
-            ref={editorRef}
-            placeholder={resolvedPlaceholder}
-            ariaLabel={resolvedPlaceholder}
-            autoFocus={autoFocus}
-            referenceSearch={referenceSearch}
-            mentionUiLabels={mentionUiLabels}
-            tabLabels={referenceGroupLabels}
-            onChange={handleComposerChange}
-            onReady={handleComposerReady}
-            onSubmit={handleSend}
-            onFocus={onFocus}
-            onPasteFiles={handlePasteFiles}
-            submitShortcut={shortcuts.send_message}
-            newlineShortcut={shortcuts.newline_in_message}
-            isExternalMenuOpen={slashMenuOpen && slashAutocompleteCount > 0}
-            onExternalMenuKeyDown={handleExternalMenuKeyDown}
-            className="min-h-0 flex-1"
-          />
-          <div className="flex shrink-0 items-end justify-between gap-1 px-2 pb-2">
-            <div className="flex min-w-0 items-end gap-1">
-              <DropdownMenu onOpenChange={handleAddMenuOpenChange}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    disabled={disabled}
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0 text-muted-foreground"
-                    title={t("addActions")}
-                    aria-label={t("addActions")}
-                  >
-                    <Plus className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  side="top"
-                  align="start"
-                  className="min-w-48"
-                >
-                  {showNativePaperclip ? (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        handlePickFiles().catch((error) => {
-                          console.error(
-                            "[MessageInput] pick files from menu failed:",
-                            error
-                          )
-                        })
-                      }}
-                    >
-                      <Paperclip className="size-4" />
-                      {t("attachFiles")}
-                    </DropdownMenuItem>
-                  ) : (
-                    <>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          handleUploadLocalFiles().catch((error) => {
-                            console.error(
-                              "[MessageInput] upload local files failed:",
-                              error
-                            )
-                          })
-                        }}
-                      >
-                        <Upload className="size-4" />
-                        {t("attachLocalUpload")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setServerFilePickerOpen(true)}
-                      >
-                        <FolderSearch className="size-4" />
-                        {t("attachServerFile")}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      <MessageSquareText className="size-4" />
-                      {t("quickMessages")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent
-                      className="min-w-40 overflow-y-auto"
-                      style={{
-                        maxWidth: "min(20rem, calc(100vw - 1rem))",
-                        maxHeight:
-                          "min(32rem, var(--radix-dropdown-menu-content-available-height))",
-                      }}
-                    >
-                      {quickMessagesLoading && quickMessages.length === 0 ? (
-                        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                          {t("quickMessagesLoading")}
-                        </div>
-                      ) : quickMessages.length === 0 ? (
-                        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                          {t("quickMessagesEmpty")}
-                        </div>
-                      ) : (
-                        quickMessages.map((message) => (
-                          <DropdownMenuItem
-                            key={message.id}
-                            onClick={() => handleQuickMessageSelect(message)}
-                          >
-                            <span className="truncate">
-                              {message.title || (
-                                <span className="italic text-muted-foreground">
-                                  {t("quickMessageUntitled")}
-                                </span>
-                              )}
-                            </span>
-                          </DropdownMenuItem>
-                        ))
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  {onAddFeedback && (
-                    <DropdownMenuItem
-                      disabled={feedbackAddDisabled}
-                      onClick={onAddFeedback}
-                      title={
-                        feedbackAddDisabled
-                          ? t("liveFeedbackDisabledHint")
-                          : undefined
-                      }
-                    >
-                      <MessageSquarePlus className="size-4" />
-                      {t("liveFeedback")}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      <Sparkles className="size-4" />
-                      {t("expertSkills")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent
-                      className="min-w-72 overflow-y-auto"
-                      style={{
-                        maxWidth: "min(20rem, calc(100vw - 1rem))",
-                        maxHeight:
-                          "min(32rem, var(--radix-dropdown-menu-content-available-height))",
-                      }}
-                    >
-                      {availableExperts.length === 0 ? (
-                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                          {t("expertsEmptyForAgent")}
-                        </div>
-                      ) : (
-                        groupedExperts.map(([category, items], groupIndex) => (
-                          <div key={category}>
-                            {groupIndex > 0 && <DropdownMenuSeparator />}
-                            <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wide">
-                              {translateExpertCategory(category)}
-                            </DropdownMenuLabel>
-                            {items.map((expert) => {
-                              const Icon = getExpertIcon(expert.metadata.icon)
-                              const name =
-                                pickExpertLocalized(
-                                  expert.metadata.display_name,
-                                  locale
-                                ) || expert.metadata.id
-                              const description = pickExpertLocalized(
-                                expert.metadata.description,
-                                locale
-                              )
-                              return (
-                                <DropdownMenuItem
-                                  key={expert.metadata.id}
-                                  onClick={() =>
-                                    handleExpertPopoverSelect(expert)
-                                  }
-                                  className="items-start gap-2"
-                                >
-                                  <Icon className="mt-0.5 size-4 shrink-0" />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="truncate font-medium">
-                                      {name}
-                                    </div>
-                                    {description && (
-                                      <div className="line-clamp-2 text-xs text-muted-foreground">
-                                        {description}
-                                      </div>
-                                    )}
-                                  </div>
-                                </DropdownMenuItem>
-                              )
-                            })}
-                          </div>
-                        ))
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub
-                    open={slashDropdownOpen}
-                    onOpenChange={handleSlashDropdownOpenChange}
-                  >
-                    <DropdownMenuSubTrigger
-                      disabled={slashCommands.length === 0}
-                    >
-                      <Command className="size-4" />
-                      {t("slashCommands")}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent
-                      className="flex min-w-72 flex-col overflow-hidden p-0"
-                      style={{
-                        maxWidth: "min(20rem, calc(100vw - 1rem))",
-                        maxHeight:
-                          "min(32rem, var(--radix-dropdown-menu-content-available-height))",
-                      }}
-                    >
-                      <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-                        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <input
-                          ref={slashDropdownInputRef}
-                          type="text"
-                          role="searchbox"
-                          aria-label={t("slashSearchPlaceholder")}
-                          value={slashDropdownSearch}
-                          onChange={(e) =>
-                            setSlashDropdownSearch(e.target.value)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "ArrowDown") {
-                              e.preventDefault()
-                              const container = e.currentTarget.closest(
-                                '[data-slot="dropdown-menu-sub-content"]'
-                              )
-                              const firstItem =
-                                container?.querySelector<HTMLElement>(
-                                  '[role="menuitem"]'
-                                )
-                              firstItem?.focus()
-                              return
-                            }
-                            if (e.key === "Enter") {
-                              e.preventDefault()
-                              const first = filteredSlashDropdownCommands[0]
-                              if (first) {
-                                handleSlashPopoverSelect(first)
-                                setSlashDropdownOpen(false)
-                              }
-                              return
-                            }
-                            if (e.key === "Escape" || e.key === "Tab") return
-                            // Prevent radix DropdownMenu's built-in typeahead
-                            // from hijacking letter keys while the user is
-                            // typing.
-                            e.stopPropagation()
-                          }}
-                          placeholder={t("slashSearchPlaceholder")}
-                          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-1">
-                        {filteredSlashDropdownCommands.length === 0 ? (
-                          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                            {t("slashSearchEmpty")}
-                          </div>
-                        ) : (
-                          filteredSlashDropdownCommands.map((cmd) => (
-                            <DropdownMenuItem
-                              key={cmd.name}
-                              onClick={() => handleSlashPopoverSelect(cmd)}
-                              // Radix focuses the item on pointermove, which
-                              // fires while scrolling (items slide under the
-                              // cursor) and steals focus from the search input.
-                              // Short-circuit that default with preventDefault
-                              // so the search keeps focus until the user
-                              // explicitly clicks.
-                              onPointerMove={(e) => e.preventDefault()}
-                              onPointerLeave={(e) => e.preventDefault()}
-                              className="hover:bg-accent hover:text-accent-foreground"
-                            >
-                              <DropdownRadioItemContent
-                                label={`/${cmd.name}`}
-                                description={cmd.description}
-                              />
-                            </DropdownMenuItem>
-                          ))
-                        )}
-                      </div>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {hasInlineSelectors && (
-                <div className="hidden min-w-0 items-end gap-1 @[30rem]:flex">
-                  {inlineSelectorItems}
-                </div>
+        <ContextMenu onOpenChange={handleAddMenuOpenChange}>
+          {/* Disabled in non-secure web (no async clipboard read) so the native
+              context menu — whose Paste still works over the editor text — is
+              not suppressed. Desktop/secure-web get the full custom menu. */}
+          <ContextMenuTrigger asChild disabled={!clipboardReadSupported}>
+            <div
+              onMouseDown={handleChromeMouseDown}
+              className={cn(
+                // `codeg-composer-chrome` paints the text I-beam across the box's
+                // blank areas (padding, the dead space below a short message, the
+                // action-bar gaps) so the whole input reads as clickable-to-type;
+                // interactive controls re-assert their own cursor (see globals.css).
+                "codeg-composer-chrome @container relative flex flex-col bg-transparent transition-colors",
+                folderBranchPickerAttached
+                  ? "rounded-xl border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"
+                  : "rounded-xl border border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+                !folderBranchPickerAttached &&
+                  showDragActive &&
+                  "ring-1 ring-primary/40",
+                className
               )}
-              {hasAnySelector && (
-                <div
-                  className={cn(
-                    "flex",
-                    hasInlineSelectors && "@[30rem]:hidden"
-                  )}
-                >
-                  <DropdownMenu>
+            >
+              <ConversationContextBar
+                hasExtraContent={hasImageAttachments}
+                scrollEndTrigger={attachments.length}
+                extraContent={
+                  <>
+                    {imageAttachments.map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachmentId(attachment.id)}
+                          className="cursor-pointer transition-opacity hover:opacity-80"
+                        >
+                          <Image
+                            src={`data:${attachment.mimeType};base64,${attachment.data}`}
+                            alt={attachment.name}
+                            width={56}
+                            height={56}
+                            unoptimized
+                            className="h-14 w-14 object-cover"
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(attachment.id)}
+                          className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
+                          aria-label={t("removeAttachmentAria", {
+                            name: attachment.name,
+                          })}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                }
+              />
+              <RichComposer
+                ref={editorRef}
+                placeholder={resolvedPlaceholder}
+                ariaLabel={resolvedPlaceholder}
+                autoFocus={autoFocus}
+                referenceSearch={referenceSearch}
+                mentionUiLabels={mentionUiLabels}
+                tabLabels={referenceGroupLabels}
+                onChange={handleComposerChange}
+                onReady={handleComposerReady}
+                onSubmit={handleSend}
+                onFocus={onFocus}
+                onPasteFiles={handlePasteFiles}
+                submitShortcut={shortcuts.send_message}
+                newlineShortcut={shortcuts.newline_in_message}
+                isExternalMenuOpen={slashMenuOpen && slashAutocompleteCount > 0}
+                onExternalMenuKeyDown={handleExternalMenuKeyDown}
+                className="min-h-0 flex-1"
+              />
+              <div className="flex shrink-0 items-end justify-between gap-1 px-2 pb-2">
+                <div className="flex min-w-0 items-end gap-1">
+                  <DropdownMenu onOpenChange={handleAddMenuOpenChange}>
                     <DropdownMenuTrigger asChild>
                       <Button
+                        disabled={disabled}
                         variant="ghost"
                         size="icon-xs"
-                        className="shrink-0"
-                        title={t("agentSettings")}
-                        aria-label={t("agentSettings")}
+                        className="shrink-0 text-muted-foreground"
+                        title={t("addActions")}
+                        aria-label={t("addActions")}
                       >
-                        {agentType ? (
-                          <AgentIcon agentType={agentType} className="size-3" />
-                        ) : (
-                          <Cog className="size-3" />
-                        )}
+                        <Plus className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       side="top"
                       align="start"
-                      className="min-w-56"
+                      className="min-w-48"
                     >
-                      {selectorItems}
+                      {showNativePaperclip ? (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            handlePickFiles().catch((error) => {
+                              console.error(
+                                "[MessageInput] pick files from menu failed:",
+                                error
+                              )
+                            })
+                          }}
+                        >
+                          <Paperclip className="size-4" />
+                          {t("attachFiles")}
+                        </DropdownMenuItem>
+                      ) : (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              handleUploadLocalFiles().catch((error) => {
+                                console.error(
+                                  "[MessageInput] upload local files failed:",
+                                  error
+                                )
+                              })
+                            }}
+                          >
+                            <Upload className="size-4" />
+                            {t("attachLocalUpload")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setServerFilePickerOpen(true)}
+                          >
+                            <FolderSearch className="size-4" />
+                            {t("attachServerFile")}
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <MessageSquareText className="size-4" />
+                          {t("quickMessages")}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent
+                          className="min-w-40 overflow-y-auto"
+                          style={{
+                            maxWidth: "min(20rem, calc(100vw - 1rem))",
+                            maxHeight:
+                              "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                          }}
+                        >
+                          {quickMessagesLoading &&
+                          quickMessages.length === 0 ? (
+                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                              {t("quickMessagesLoading")}
+                            </div>
+                          ) : quickMessages.length === 0 ? (
+                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                              {t("quickMessagesEmpty")}
+                            </div>
+                          ) : (
+                            quickMessages.map((message) => (
+                              <DropdownMenuItem
+                                key={message.id}
+                                onClick={() =>
+                                  handleQuickMessageSelect(message)
+                                }
+                              >
+                                <span className="truncate">
+                                  {message.title || (
+                                    <span className="italic text-muted-foreground">
+                                      {t("quickMessageUntitled")}
+                                    </span>
+                                  )}
+                                </span>
+                              </DropdownMenuItem>
+                            ))
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                      {onAddFeedback && (
+                        <DropdownMenuItem
+                          disabled={feedbackAddDisabled}
+                          onClick={onAddFeedback}
+                          title={
+                            feedbackAddDisabled
+                              ? t("liveFeedbackDisabledHint")
+                              : undefined
+                          }
+                        >
+                          <MessageSquarePlus className="size-4" />
+                          {t("liveFeedback")}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <Sparkles className="size-4" />
+                          {t("expertSkills")}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent
+                          className="min-w-72 overflow-y-auto"
+                          style={{
+                            maxWidth: "min(20rem, calc(100vw - 1rem))",
+                            maxHeight:
+                              "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                          }}
+                        >
+                          {availableExperts.length === 0 ? (
+                            <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                              {t("expertsEmptyForAgent")}
+                            </div>
+                          ) : (
+                            groupedExperts.map(
+                              ([category, items], groupIndex) => (
+                                <div key={category}>
+                                  {groupIndex > 0 && <DropdownMenuSeparator />}
+                                  <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wide">
+                                    {translateExpertCategory(category)}
+                                  </DropdownMenuLabel>
+                                  {items.map((expert) => {
+                                    const Icon = getExpertIcon(
+                                      expert.metadata.icon
+                                    )
+                                    const name =
+                                      pickExpertLocalized(
+                                        expert.metadata.display_name,
+                                        locale
+                                      ) || expert.metadata.id
+                                    const description = pickExpertLocalized(
+                                      expert.metadata.description,
+                                      locale
+                                    )
+                                    return (
+                                      <DropdownMenuItem
+                                        key={expert.metadata.id}
+                                        onClick={() =>
+                                          handleExpertPopoverSelect(expert)
+                                        }
+                                        className="items-start gap-2"
+                                      >
+                                        <Icon className="mt-0.5 size-4 shrink-0" />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="truncate font-medium">
+                                            {name}
+                                          </div>
+                                          {description && (
+                                            <div className="line-clamp-2 text-xs text-muted-foreground">
+                                              {description}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </DropdownMenuItem>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            )
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                      <DropdownMenuSub
+                        open={slashDropdownOpen}
+                        onOpenChange={handleSlashDropdownOpenChange}
+                      >
+                        <DropdownMenuSubTrigger
+                          disabled={slashCommands.length === 0}
+                        >
+                          <Command className="size-4" />
+                          {t("slashCommands")}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent
+                          className="flex min-w-72 flex-col overflow-hidden p-0"
+                          style={{
+                            maxWidth: "min(20rem, calc(100vw - 1rem))",
+                            maxHeight:
+                              "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                          }}
+                        >
+                          <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
+                            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <input
+                              ref={slashDropdownInputRef}
+                              type="text"
+                              role="searchbox"
+                              aria-label={t("slashSearchPlaceholder")}
+                              value={slashDropdownSearch}
+                              onChange={(e) =>
+                                setSlashDropdownSearch(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "ArrowDown") {
+                                  e.preventDefault()
+                                  const container = e.currentTarget.closest(
+                                    '[data-slot="dropdown-menu-sub-content"]'
+                                  )
+                                  const firstItem =
+                                    container?.querySelector<HTMLElement>(
+                                      '[role="menuitem"]'
+                                    )
+                                  firstItem?.focus()
+                                  return
+                                }
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  const first = filteredSlashDropdownCommands[0]
+                                  if (first) {
+                                    handleSlashPopoverSelect(first)
+                                    setSlashDropdownOpen(false)
+                                  }
+                                  return
+                                }
+                                if (e.key === "Escape" || e.key === "Tab")
+                                  return
+                                // Prevent radix DropdownMenu's built-in typeahead
+                                // from hijacking letter keys while the user is
+                                // typing.
+                                e.stopPropagation()
+                              }}
+                              placeholder={t("slashSearchPlaceholder")}
+                              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                          </div>
+                          <div className="flex-1 overflow-y-auto p-1">
+                            {filteredSlashDropdownCommands.length === 0 ? (
+                              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                                {t("slashSearchEmpty")}
+                              </div>
+                            ) : (
+                              filteredSlashDropdownCommands.map((cmd) => (
+                                <DropdownMenuItem
+                                  key={cmd.name}
+                                  onClick={() => handleSlashPopoverSelect(cmd)}
+                                  // Radix focuses the item on pointermove, which
+                                  // fires while scrolling (items slide under the
+                                  // cursor) and steals focus from the search input.
+                                  // Short-circuit that default with preventDefault
+                                  // so the search keeps focus until the user
+                                  // explicitly clicks.
+                                  onPointerMove={(e) => e.preventDefault()}
+                                  onPointerLeave={(e) => e.preventDefault()}
+                                  className="hover:bg-accent hover:text-accent-foreground"
+                                >
+                                  <DropdownRadioItemContent
+                                    label={`/${cmd.name}`}
+                                    description={cmd.description}
+                                  />
+                                </DropdownMenuItem>
+                              ))
+                            )}
+                          </div>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {hasInlineSelectors && (
+                    <div className="hidden min-w-0 items-end gap-1 @[30rem]:flex">
+                      {inlineSelectorItems}
+                    </div>
+                  )}
+                  {hasAnySelector && (
+                    <div
+                      className={cn(
+                        "flex",
+                        hasInlineSelectors && "@[30rem]:hidden"
+                      )}
+                    >
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="shrink-0"
+                            title={t("agentSettings")}
+                            aria-label={t("agentSettings")}
+                          >
+                            {agentType ? (
+                              <AgentIcon
+                                agentType={agentType}
+                                className="size-3"
+                              />
+                            ) : (
+                              <Cog className="size-3" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="top"
+                          align="start"
+                          className="min-w-56"
+                        >
+                          {selectorItems}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </div>
+                <div className="shrink-0">{actionButtons}</div>
+              </div>
+              {showDragActive && (
+                <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-md border border-dashed border-primary/50 bg-background/80 text-xs text-muted-foreground">
+                  {t("dropFilesToAttach")}
                 </div>
               )}
             </div>
-            <div className="shrink-0">{actionButtons}</div>
-          </div>
-          {showDragActive && (
-            <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-md border border-dashed border-primary/50 bg-background/80 text-xs text-muted-foreground">
-              {t("dropFilesToAttach")}
-            </div>
-          )}
-        </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem
+              disabled={disabled}
+              onSelect={() => {
+                void handleContextPaste()
+              }}
+            >
+              <ClipboardPaste className="size-4" />
+              {t("paste")}
+            </ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger disabled={disabled}>
+                <MessageSquareText className="size-4" />
+                {t("quickMessages")}
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent
+                className="min-w-40 overflow-y-auto"
+                style={{
+                  maxWidth: "min(20rem, calc(100vw - 1rem))",
+                  maxHeight:
+                    "min(32rem, var(--radix-context-menu-content-available-height))",
+                }}
+              >
+                {quickMessagesLoading && quickMessages.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {t("quickMessagesLoading")}
+                  </div>
+                ) : quickMessages.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {t("quickMessagesEmpty")}
+                  </div>
+                ) : (
+                  quickMessages.map((message) => (
+                    <ContextMenuItem
+                      key={message.id}
+                      onSelect={() => handleQuickMessageSelect(message)}
+                    >
+                      <span className="truncate">
+                        {message.title || (
+                          <span className="italic text-muted-foreground">
+                            {t("quickMessageUntitled")}
+                          </span>
+                        )}
+                      </span>
+                    </ContextMenuItem>
+                  ))
+                )}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          </ContextMenuContent>
+        </ContextMenu>
         {hasFolderBranchPicker && (
           // `pl-2` mirrors the action bar's `px-2` so this row lines up with the
           // composer above. Kept on the rem scale (no px literals) so it tracks

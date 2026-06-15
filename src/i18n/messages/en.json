@@ -1795,6 +1795,7 @@
         "quickMessages": "Quick messages",
         "quickMessagesEmpty": "No quick messages yet",
         "quickMessagesLoading": "Loading...",
+        "paste": "Paste",
         "quickMessageUntitled": "Untitled",
         "liveFeedback": "Live feedback",
         "liveFeedbackDisabledHint": "Available while the agent is working",

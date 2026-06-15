@@ -1795,6 +1795,7 @@
         "quickMessages": "快捷消息",
         "quickMessagesEmpty": "暂无快捷消息",
         "quickMessagesLoading": "加载中...",
+        "paste": "粘贴",
         "quickMessageUntitled": "未命名",
         "liveFeedback": "实时反馈",
         "liveFeedbackDisabledHint": "智能体工作时可发送",

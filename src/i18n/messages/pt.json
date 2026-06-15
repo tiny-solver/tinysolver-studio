@@ -1793,6 +1793,7 @@
         "quickMessages": "Mensagens rápidas",
         "quickMessagesEmpty": "Ainda não há mensagens rápidas",
         "quickMessagesLoading": "Carregando...",
+        "paste": "Colar",
         "quickMessageUntitled": "Sem título",
         "liveFeedback": "Feedback ao vivo",
         "liveFeedbackDisabledHint": "Disponível enquanto o agente trabalha",

@@ -1793,6 +1793,7 @@
         "quickMessages": "Messages rapides",
         "quickMessagesEmpty": "Aucun message rapide pour l'instant",
         "quickMessagesLoading": "Chargement...",
+        "paste": "Coller",
         "quickMessageUntitled": "Sans titre",
         "liveFeedback": "Retour en direct",
         "liveFeedbackDisabledHint": "Disponible pendant que l'agent travaille",
