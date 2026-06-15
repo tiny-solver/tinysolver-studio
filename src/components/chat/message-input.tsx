@@ -1050,21 +1050,27 @@ export function MessageInput({
   // A genuine `file://` item uses its uri directly (deduped against the document);
   // an item carrying a `realBlock` (embedded bytes / `data:` link) gets an inert
   // `codeg://embedded/…` display uri and its block is stashed in
-  // `embeddedPayloadsRef` for send-time reconciliation. Files are "attach"
-  // actions, so badges append at the doc end.
+  // `embeddedPayloadsRef` for send-time reconciliation. Badges append at the doc
+  // end by default; pass `atCaret` to drop them at the composer's current caret
+  // (`focus()` keeps the retained selection even while the input is blurred —
+  // e.g. focus sits in the file editor), so "add to chat" lands a reference
+  // where the user left off instead of always at the end.
   const insertFileReferences = useCallback(
     (
       items: Array<{
         name: string
         uri?: string
         realBlock?: PromptInputBlock
-      }>
+      }>,
+      opts: { atCaret?: boolean } = {}
     ) => {
       if (items.length === 0) return
       const editor = editorRef.current?.getEditor()
       if (!editor) return
       const seen = new Set<string>()
-      let chain = editor.chain().focus("end")
+      let chain = opts.atCaret
+        ? editor.chain().focus()
+        : editor.chain().focus("end")
       let inserted = 0
       for (const item of items) {
         let refUri: string
@@ -1101,7 +1107,8 @@ export function MessageInput({
         name: string
         mimeType: string | null
         dedupeKey: string
-      }>
+      }>,
+      opts: { atCaret?: boolean } = {}
     ) => {
       // `file://` links the agent can read directly become inline file badges
       // (uri used as-is); a non-fetchable `data:` link keeps its real block out
@@ -1122,14 +1129,15 @@ export function MessageInput({
                     description: null,
                   },
                 }
-          )
+          ),
+        opts
       )
     },
     [insertFileReferences]
   )
 
   const appendResourceAttachments = useCallback(
-    (paths: string[]) => {
+    (paths: string[], opts: { atCaret?: boolean } = {}) => {
       const normalized = paths
         .filter(
           (path): path is string => typeof path === "string" && path.length > 0
@@ -1143,7 +1151,7 @@ export function MessageInput({
             dedupeKey: uri,
           }
         })
-      appendResourceLinks(normalized)
+      appendResourceLinks(normalized, opts)
     },
     [appendResourceLinks]
   )
@@ -1155,14 +1163,21 @@ export function MessageInput({
   // `insertFileReferences`) and the range rides along to the agent in the
   // serialized `[label](uri)` link.
   const appendFileRangeAttachment = useCallback(
-    (path: string, range: { start: number; end: number }) => {
+    (
+      path: string,
+      range: { start: number; end: number },
+      opts: { atCaret?: boolean } = {}
+    ) => {
       if (!path) return
-      insertFileReferences([
-        {
-          name: formatFileRangeLabel(fileNameFromPath(path), range),
-          uri: buildFileUriWithRange(path, range),
-        },
-      ])
+      insertFileReferences(
+        [
+          {
+            name: formatFileRangeLabel(fileNameFromPath(path), range),
+            uri: buildFileUriWithRange(path, range),
+          },
+        ],
+        opts
+      )
     },
     [insertFileReferences]
   )
@@ -1973,10 +1988,12 @@ export function MessageInput({
       if (!customEvent.detail) return
       if (customEvent.detail.tabId !== attachmentTabId) return
       const { path, range } = customEvent.detail
+      // Drop the badge at the composer's current caret rather than the end, so
+      // "add to chat" / "add file to chat" land where the user left off.
       if (range) {
-        appendFileRangeAttachment(path, range)
+        appendFileRangeAttachment(path, range, { atCaret: true })
       } else {
-        appendResourceAttachments([path])
+        appendResourceAttachments([path], { atCaret: true })
       }
     }
 
