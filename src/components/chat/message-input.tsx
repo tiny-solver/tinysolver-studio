@@ -11,17 +11,20 @@ import {
   ChevronUp,
   ClipboardPaste,
   Cog,
+  Copy,
   FolderSearch,
   GitFork,
   MessageSquarePlus,
   MessageSquareText,
   Paperclip,
   Plus,
+  Scissors,
   Search,
   Send,
   Command,
   Sparkles,
   Square,
+  TextSelect,
   Upload,
   X,
 } from "lucide-react"
@@ -40,6 +43,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
@@ -47,7 +51,7 @@ import {
 } from "@/components/ui/context-menu"
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
 import { AgentIcon } from "@/components/agent-icon"
-import { cn, randomUUID } from "@/lib/utils"
+import { cn, copyTextFromMenu, randomUUID } from "@/lib/utils"
 import {
   buildFileUri,
   buildFileUriWithRange,
@@ -140,6 +144,8 @@ import {
   expertToReference,
   skillToReference,
 } from "@/components/chat/composer/invocation-reference"
+import { cutSelectionToClipboard } from "@/components/chat/composer/clipboard-actions"
+import { referenceToMarkdown } from "@/components/chat/composer/reference-text"
 import type { ReferenceAttrs } from "@/components/chat/composer/types"
 import type { Editor, JSONContent } from "@tiptap/core"
 import {
@@ -579,6 +585,11 @@ export function MessageInput({
   // works over the editable text. Resolved on the client after mount so SSR and
   // the first client render agree (no hydration mismatch on the trigger).
   const [clipboardReadSupported, setClipboardReadSupported] = useState(false)
+  // Snapshotted when the custom right-click menu opens: whether the editor holds
+  // a non-empty selection, which gates the Cut/Copy items. Read from the editor's
+  // ProseMirror state (not the DOM Selection) so it stays correct after the radix
+  // menu takes focus.
+  const [contextSelectionActive, setContextSelectionActive] = useState(false)
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(
     null
   )
@@ -1834,6 +1845,77 @@ export function MessageInput({
     editorRef.current?.insertMarkdownAtCursor(message.content)
   }, [])
 
+  // Plain-text rendering of the editor's current selection, for the right-click
+  // Cut/Copy. Read straight from ProseMirror state (stable while the radix menu
+  // holds DOM focus); inline reference badges serialize to their Markdown form
+  // and hard breaks to newlines so a copied selection reads back as text.
+  const selectionPlainText = useCallback((editor: Editor): string => {
+    const { from, to } = editor.state.selection
+    if (from >= to) return ""
+    return editor.state.doc.textBetween(from, to, "\n", (leaf) => {
+      if (leaf.type.name === "reference") {
+        return referenceToMarkdown(leaf.attrs as ReferenceAttrs)
+      }
+      if (leaf.type.name === "hardBreak") return "\n"
+      return ""
+    })
+  }, [])
+
+  // The radix menu traps focus until it closes, so the clipboard write is
+  // deferred (see copyTextFromMenu) — otherwise the non-secure execCommand
+  // fallback can't focus its scratch textarea. Copy never mutates the document,
+  // so a failed write loses nothing; we still surface it (the native menu was
+  // suppressed) so the user can fall back to the keyboard.
+  const handleContextCopy = useCallback(async () => {
+    const editor = editorRef.current?.getEditor()
+    if (!editor) return
+    const text = selectionPlainText(editor)
+    if (!text) return
+    if (!(await copyTextFromMenu(text))) {
+      toast.error(t("clipboardWriteFailed"))
+    }
+  }, [selectionPlainText, t])
+
+  const handleContextCut = useCallback(async () => {
+    if (disabled) return
+    const editor = editorRef.current?.getEditor()
+    if (!editor) return
+    // Capture the range up front so the post-write delete targets exactly what
+    // was copied. Cut is atomic: the deferred clipboard write can fail in a
+    // non-secure context, so the range is removed only once the write succeeds —
+    // otherwise the selection is kept and the failure is surfaced (no data loss).
+    const { from, to } = editor.state.selection
+    await cutSelectionToClipboard({
+      text: selectionPlainText(editor),
+      copy: copyTextFromMenu,
+      remove: () => editor.chain().focus().deleteRange({ from, to }).run(),
+      onWriteFailed: () => toast.error(t("clipboardWriteFailed")),
+    })
+  }, [disabled, selectionPlainText, t])
+
+  const handleContextSelectAll = useCallback(() => {
+    if (disabled) return
+    const editor = editorRef.current?.getEditor()
+    if (!editor) return
+    editor.chain().focus().selectAll().run()
+  }, [disabled])
+
+  // Opening the custom right-click menu: snapshot whether there's a selection
+  // (gates Cut/Copy) and refresh the quick-messages list. The editor keeps its
+  // selection while the menu is open, so Paste / a quick message lands back at
+  // the same caret.
+  const handleContextMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) return
+      const editor = editorRef.current?.getEditor()
+      setContextSelectionActive(editor ? !editor.state.selection.empty : false)
+      loadQuickMessages().catch((error) => {
+        console.error("[MessageInput] quick messages refresh failed:", error)
+      })
+    },
+    [loadQuickMessages]
+  )
+
   // The composer's custom right-click "Paste". The native context menu only
   // appears over the contenteditable text, so the blank chrome had no paste
   // affordance — this reproduces Ctrl+V everywhere in the box. Reading the
@@ -1844,11 +1926,17 @@ export function MessageInput({
     const editor = editorRef.current?.getEditor()
     if (!editor) return
     let text = ""
+    // The async clipboard read can be blocked at call time even though the API
+    // exists (denied permission, browser policy), so track that: with the native
+    // menu (and its Paste) suppressed to show this one, a silent failure would
+    // leave the user with no feedback and no fallback.
+    let readBlocked = false
     try {
       text = (await navigator.clipboard.readText()) ?? ""
     } catch {
       // Permission denied / unsupported / no activation — fall through to the
       // image path (a textless clipboard may still hold a screenshot).
+      readBlocked = true
       text = ""
     }
     if (text) {
@@ -1863,11 +1951,19 @@ export function MessageInput({
       const imageFiles = await imageFilesFromClipboardApi()
       if (imageFiles.length > 0) {
         await appendFilesFromInput(imageFiles)
+        return
       }
     } catch (error) {
       console.error("[MessageInput] context menu paste failed:", error)
+      readBlocked = true
     }
-  }, [disabled, appendFilesFromInput])
+    // Nothing landed. A blocked read leaves no visible result and no native menu
+    // to retry from, so point the user at the keyboard shortcut. A merely empty
+    // clipboard (read succeeded, returned "") stays a silent no-op as before.
+    if (readBlocked) {
+      toast.error(t("pasteUnavailable"))
+    }
+  }, [disabled, appendFilesFromInput, t])
 
   useEffect(() => {
     if (!attachmentTabId) return
@@ -2499,7 +2595,7 @@ export function MessageInput({
             "ring-1 ring-primary/40"
         )}
       >
-        <ContextMenu onOpenChange={handleAddMenuOpenChange}>
+        <ContextMenu onOpenChange={handleContextMenuOpenChange}>
           {/* Disabled in non-secure web (no async clipboard read) so the native
               context menu — whose Paste still works over the editor text — is
               not suppressed. Desktop/secure-web get the full custom menu. */}
@@ -2907,6 +3003,20 @@ export function MessageInput({
           </ContextMenuTrigger>
           <ContextMenuContent>
             <ContextMenuItem
+              disabled={disabled || !contextSelectionActive}
+              onSelect={() => void handleContextCut()}
+            >
+              <Scissors className="size-4" />
+              {t("cut")}
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={!contextSelectionActive}
+              onSelect={() => void handleContextCopy()}
+            >
+              <Copy className="size-4" />
+              {t("copy")}
+            </ContextMenuItem>
+            <ContextMenuItem
               disabled={disabled}
               onSelect={() => {
                 void handleContextPaste()
@@ -2915,6 +3025,14 @@ export function MessageInput({
               <ClipboardPaste className="size-4" />
               {t("paste")}
             </ContextMenuItem>
+            <ContextMenuItem
+              disabled={disabled}
+              onSelect={() => handleContextSelectAll()}
+            >
+              <TextSelect className="size-4" />
+              {t("selectAll")}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuSub>
               <ContextMenuSubTrigger disabled={disabled}>
                 <MessageSquareText className="size-4" />
