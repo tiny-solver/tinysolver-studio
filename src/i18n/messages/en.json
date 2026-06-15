@@ -1209,6 +1209,8 @@
       "addSelectionToChat": "Add Selection to Chat",
       "addToChat": "Add to Chat",
       "addSelectionToChatDone": "Added {label} to the conversation",
+      "addFileToChat": "Add File to Chat",
+      "addFileToChatDone": "Added {label} to the conversation",
       "viewDiff": "View Diff",
       "openFile": "Open File",
       "fileCount": "{count, plural, one {# file} other {# files}}",

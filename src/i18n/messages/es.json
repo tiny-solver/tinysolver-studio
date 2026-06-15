@@ -1209,6 +1209,8 @@
       "addSelectionToChat": "Añadir selección al chat",
       "addToChat": "Añadir al chat",
       "addSelectionToChatDone": "Se añadió {label} a la conversación",
+      "addFileToChat": "Añadir archivo al chat",
+      "addFileToChatDone": "Se añadió {label} a la conversación",
       "viewDiff": "Ver Diff",
       "openFile": "Abrir archivo",
       "fileCount": "{count, plural, one {# archivo} other {# archivos}}",
