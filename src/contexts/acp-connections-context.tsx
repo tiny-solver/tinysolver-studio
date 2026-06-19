@@ -1246,6 +1246,7 @@ function connectionsReducer(
         current.availableCommands ?? action.patch.availableCommands
       const mergedPromptCapabilities =
         action.patch.promptCapabilities ?? current.promptCapabilities
+      const recoveredError = current.error ?? action.patch.lastError
 
       // Race guard: the snapshot may have been generated BEFORE events
       // that have since arrived and been applied to in-memory state.
@@ -1260,7 +1261,8 @@ function connectionsReducer(
           mergedModes === current.modes &&
           mergedConfigOptions === current.configOptions &&
           mergedAvailableCommands === current.availableCommands &&
-          mergedPromptCapabilities === current.promptCapabilities
+          mergedPromptCapabilities === current.promptCapabilities &&
+          recoveredError === current.error
         ) {
           return state
         }
@@ -1273,6 +1275,7 @@ function connectionsReducer(
           promptCapabilities: mergedPromptCapabilities,
           selectorsReady: mergedSelectorsReady,
           supportsFork: mergedSupportsFork,
+          error: recoveredError,
         })
         return next
       }
@@ -1307,6 +1310,7 @@ function connectionsReducer(
         // recovers the pending-background count the one-shot events won't
         // replay for it (sweep exemption + chip).
         backgroundOutstanding: action.patch.backgroundOutstanding,
+        error: action.patch.lastError,
         lastAppliedSeq: action.patch.eventSeq,
       })
       return next
