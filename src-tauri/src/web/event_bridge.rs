@@ -225,6 +225,33 @@ pub struct TabsChanged {
     pub tabs: Vec<crate::models::OpenedTab>,
 }
 
+/// Global side-channel for cross-client automation list + run sync. Mirrors
+/// [`CONVERSATION_CHANGED_EVENT`]: a single [`emit_event`] reaches the Tauri
+/// webview and every WebSocket client. The scheduler runs headless (no window),
+/// so this broadcast is the only way an open automations view learns a run
+/// started or settled.
+pub const AUTOMATION_CHANGED_EVENT: &str = "automation://changed";
+
+/// Payload for [`AUTOMATION_CHANGED_EVENT`]. Carries only ids — clients refetch
+/// the affected automation / its runs. All variants are small, so no boxing is
+/// needed (unlike [`ConversationChange`]).
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AutomationChange {
+    /// Insert-or-replace by id (create, edit, enable/disable, last-run update).
+    Upsert { id: i32 },
+    /// Soft-deleted by id.
+    Deleted { id: i32 },
+    /// A run was claimed and launched.
+    RunStarted { automation_id: i32, run_id: i32 },
+    /// A run reached a terminal state (succeeded / failed / cancelled / skipped).
+    RunSettled {
+        automation_id: i32,
+        run_id: i32,
+        status: String,
+    },
+}
+
 /// Unified event emission: serializes the payload exactly once and dispatches
 /// the shared `Arc<Value>` to both the Tauri webview and the web broadcaster.
 pub fn emit_event(emitter: &EventEmitter, event: &str, payload: impl Serialize) {

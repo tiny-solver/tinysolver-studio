@@ -907,6 +907,48 @@ pub fn build_router(
             "/quick_messages_reorder",
             post(handlers::quick_messages::quick_messages_reorder),
         )
+        // ─── Automations ───
+        .route(
+            "/automation_list",
+            post(handlers::automation::automation_list),
+        )
+        .route("/automation_get", post(handlers::automation::automation_get))
+        .route(
+            "/automation_runs",
+            post(handlers::automation::automation_runs),
+        )
+        .route(
+            "/automation_create",
+            post(handlers::automation::automation_create),
+        )
+        .route(
+            "/automation_update",
+            post(handlers::automation::automation_update),
+        )
+        .route(
+            "/automation_set_enabled",
+            post(handlers::automation::automation_set_enabled),
+        )
+        .route(
+            "/automation_delete",
+            post(handlers::automation::automation_delete),
+        )
+        .route(
+            "/automation_mark_seen",
+            post(handlers::automation::automation_mark_seen),
+        )
+        .route(
+            "/automation_compute_next_run",
+            post(handlers::automation::automation_compute_next_run),
+        )
+        .route(
+            "/automation_run_now",
+            post(handlers::automation::automation_run_now),
+        )
+        .route(
+            "/automation_cancel_run",
+            post(handlers::automation::automation_cancel_run),
+        )
         // ─── Pet ───
         .route("/pet_list", post(handlers::pet::pet_list))
         .route("/pet_get", post(handlers::pet::pet_get))

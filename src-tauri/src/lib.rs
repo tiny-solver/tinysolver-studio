@@ -5,6 +5,7 @@ pub use acp::{
 pub use network::proxy::init_proxy_from_db;
 mod app_error;
 pub mod app_state;
+pub mod automation;
 pub mod chat_channel;
 pub mod commands;
 pub mod db;
@@ -44,7 +45,8 @@ mod tauri_app {
     use crate::acp::manager::ConnectionManager;
     use crate::chat_channel::manager::ChatChannelManager;
     use crate::commands::{
-        acp as acp_commands, app_update as app_update_commands, backup,
+        acp as acp_commands, app_update as app_update_commands,
+        automation as automation_commands, backup,
         chat_channel as chat_channel_commands, conversations, delegation as delegation_commands,
         experts as experts_commands, feedback as feedback_commands, file_io, folder_commands,
         folders, logging as logging_commands, mcp as mcp_commands,
@@ -599,6 +601,24 @@ mod tauri_app {
                     ));
                 }
 
+                // Automation engine: drives manual + scheduled fires, settles
+                // runs off the event bus, reconciles, and recovers on boot. One
+                // per process; mirrored in `bin/codeg_server.rs`.
+                {
+                    let engine = crate::automation::build_engine(
+                        crate::db::AppDatabase {
+                            conn: app.state::<crate::db::AppDatabase>().conn.clone(),
+                        },
+                        app.state::<ConnectionManager>().clone_ref(),
+                        crate::web::event_bridge::EventEmitter::Tauri(app.handle().clone()),
+                        app.state::<std::sync::Arc<crate::acp::InternalEventBus>>()
+                            .inner()
+                            .clone(),
+                        effective_data_dir.clone(),
+                    );
+                    tauri::async_runtime::spawn(crate::automation::run_automation_engine(engine));
+                }
+
                 // Single-window workspace: ensure the main window exists.
                 // Workspace state (open folders, opened tabs, active tab) is
                 // restored by the frontend via `list_open_folder_details` /
@@ -1046,6 +1066,17 @@ mod tauri_app {
                 quick_messages_commands::quick_messages_update,
                 quick_messages_commands::quick_messages_delete,
                 quick_messages_commands::quick_messages_reorder,
+                automation_commands::automation_list,
+                automation_commands::automation_get,
+                automation_commands::automation_runs,
+                automation_commands::automation_create,
+                automation_commands::automation_update,
+                automation_commands::automation_set_enabled,
+                automation_commands::automation_delete,
+                automation_commands::automation_mark_seen,
+                automation_commands::automation_compute_next_run,
+                automation_commands::automation_run_now,
+                automation_commands::automation_cancel_run,
                 terminal_commands::terminal_spawn,
                 terminal_commands::terminal_write,
                 terminal_commands::terminal_resize,
