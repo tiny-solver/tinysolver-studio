@@ -128,6 +128,93 @@ export function AgentConfigSection({
   )
 }
 
+/**
+ * Mirror of `FieldRow.selectValue` (`value ?? currentValue`) applied across a
+ * whole snapshot: the concrete selections the inline (no-inherit) config bar is
+ * *displaying*. The editor saves these so a saved automation pins exactly what
+ * the user saw — an untouched option persists the agent's current value rather
+ * than an empty override that would silently inherit a future default.
+ *
+ * Kept right beside `FieldRow` so the display rule and the save rule can't drift.
+ */
+export function effectiveSelections(
+  snapshot: AgentOptionsSnapshot | null,
+  modeId: string | null,
+  configValues: Record<string, string>
+): { mode_id: string | null; config_values: Record<string, string> } {
+  // No probe landed → nothing concrete was ever shown; persist the raw overrides.
+  if (!snapshot) return { mode_id: modeId, config_values: configValues }
+
+  const config: Record<string, string> = {}
+  for (const option of snapshot.config_options) {
+    if (option.kind.type !== "select") continue
+    const effective = configValues[option.id] ?? option.kind.current_value
+    if (effective != null && effective !== "") config[option.id] = effective
+  }
+  // Defensive: never drop a user override for an option this snapshot doesn't
+  // advertise (e.g. a stale id from an earlier probe of another agent).
+  for (const [id, value] of Object.entries(configValues)) {
+    if (!(id in config)) config[id] = value
+  }
+
+  // Mirror `showMode = hasModes && !hasOptions`: the standalone mode row is only
+  // shown — and thus only pinnable — when the agent has modes but no config
+  // options; otherwise leave the user's mode choice (incl. null) untouched.
+  const hasModes = !!snapshot.modes && snapshot.modes.available_modes.length > 0
+  const hasOptions = snapshot.config_options.length > 0
+  const mode_id =
+    modeId ?? (hasModes && !hasOptions ? snapshot.modes!.current_mode_id : null)
+
+  return { mode_id, config_values: config }
+}
+
+// Friendly name for a selected value within a select option — checks groups
+// first, then the flat list, mirroring how ConfigOptionRow renders them.
+function selectValueLabel(
+  kind: SessionConfigOptionInfo["kind"],
+  value: string
+): string | undefined {
+  for (const group of kind.groups) {
+    const hit = group.options.find((o) => o.value === value)
+    if (hit) return hit.name
+  }
+  return kind.options.find((o) => o.value === value)?.name
+}
+
+/**
+ * Human-readable labels for the effective selections, captured at save time so
+ * the detail page shows friendly names (model/mode/option) instead of raw value
+ * ids — and keeps showing them even if the agent is later uninstalled or its
+ * option set changes. Pass the same effective `{ mode_id, config_values }` that
+ * `effectiveSelections` produced. Returns only the fields it can resolve.
+ */
+export function snapshotLabels(
+  snapshot: AgentOptionsSnapshot | null,
+  modeId: string | null,
+  configValues: Record<string, string>
+): { mode_label?: string; config_labels?: Record<string, string> } {
+  if (!snapshot) return {}
+  const out: { mode_label?: string; config_labels?: Record<string, string> } =
+    {}
+
+  if (modeId && snapshot.modes) {
+    const mode = snapshot.modes.available_modes.find((m) => m.id === modeId)
+    if (mode) out.mode_label = mode.name
+  }
+
+  const config_labels: Record<string, string> = {}
+  for (const option of snapshot.config_options) {
+    if (option.kind.type !== "select") continue
+    const value = configValues[option.id]
+    if (value == null) continue
+    const name = selectValueLabel(option.kind, value)
+    if (name) config_labels[option.id] = name
+  }
+  if (Object.keys(config_labels).length > 0) out.config_labels = config_labels
+
+  return out
+}
+
 // The shared row shell (label + Select trigger) for both the standalone mode
 // row and the per-option rows. Keeping the inline-vs-stacked styling here means
 // the mode chip and the config chips can never drift apart in the composer's

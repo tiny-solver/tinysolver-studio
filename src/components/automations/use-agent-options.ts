@@ -52,6 +52,10 @@ export interface AgentOptionsState {
   loading: boolean
   error: string | null
   reload: () => void
+  /** Resolve the snapshot for a save-time read: the loaded one if present, else
+   *  the in-flight/fresh probe, bounded so a wedged probe never blocks saving
+   *  (returns null on timeout/failure → caller falls back to raw overrides). */
+  ensure: () => Promise<AgentOptionsSnapshot | null>
 }
 
 /**
@@ -110,5 +114,23 @@ export function useAgentOptions(agentType: AgentType): AgentOptionsState {
 
   const reload = useCallback(() => load(agentType, true), [agentType, load])
 
-  return { snapshot, loading, error, reload }
+  const ensure = useCallback(async (): Promise<AgentOptionsSnapshot | null> => {
+    if (snapshot) return snapshot
+    // Share the module-level inflight/cache; bound the wait so a wedged probe
+    // degrades to "save with raw overrides" rather than hanging the save.
+    let timer: number | undefined
+    const timeout = new Promise<null>((resolve) => {
+      timer = window.setTimeout(() => resolve(null), 5000)
+    })
+    try {
+      return await Promise.race([
+        fetchOptions(agentType).catch(() => null),
+        timeout,
+      ])
+    } finally {
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [snapshot, agentType])
+
+  return { snapshot, loading, error, reload, ensure }
 }

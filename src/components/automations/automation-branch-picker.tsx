@@ -26,7 +26,10 @@ interface AutomationBranchPickerProps {
   folderPath: string | null
   /** Currently selected branch name ("" = the folder's default branch). */
   value: string
-  onChange: (branch: string) => void
+  /** `isRemote` is true only when the pick came from the remote group, so the
+   *  caller can record it as a remote branch (the name itself is the stripped
+   *  leaf either way). */
+  onChange: (branch: string, isRemote: boolean) => void
   placeholder: string
   disabled?: boolean
 }
@@ -102,8 +105,8 @@ export function AutomationBranchPicker({
     if (!open) setQuery("")
   }
 
-  const select = (branch: string) => {
-    onChange(branch)
+  const select = (branch: string, isRemote: boolean) => {
+    onChange(branch, isRemote)
     setOpen(false)
   }
 
@@ -174,7 +177,10 @@ export function AutomationBranchPicker({
               <>
                 <CommandEmpty>{t("branchNone")}</CommandEmpty>
                 <CommandGroup>
-                  <CommandItem value="__default__" onSelect={() => select("")}>
+                  <CommandItem
+                    value="__default__"
+                    onSelect={() => select("", false)}
+                  >
                     <GitBranch
                       className="size-4 shrink-0 opacity-60"
                       aria-hidden="true"
@@ -189,7 +195,10 @@ export function AutomationBranchPicker({
                 </CommandGroup>
                 {showUseCustom ? (
                   <CommandGroup>
-                    <CommandItem value={`use ${q}`} onSelect={() => select(q)}>
+                    <CommandItem
+                      value={`use ${q}`}
+                      onSelect={() => select(q, false)}
+                    >
                       <GitBranch
                         className="size-4 shrink-0"
                         aria-hidden="true"
@@ -206,7 +215,7 @@ export function AutomationBranchPicker({
                       <CommandItem
                         key={`local-${b}`}
                         value={`local ${b}`}
-                        onSelect={() => select(b)}
+                        onSelect={() => select(b, false)}
                       >
                         <GitBranch
                           className="size-4 shrink-0"
@@ -231,7 +240,7 @@ export function AutomationBranchPicker({
                         <CommandItem
                           key={`remote-${b}`}
                           value={`remote ${b}`}
-                          onSelect={() => select(name)}
+                          onSelect={() => select(name, true)}
                         >
                           <GitBranch
                             className="size-4 shrink-0 opacity-60"

@@ -16,7 +16,11 @@ import {
 import { docToPromptBlocks } from "@/components/chat/composer/to-prompt-blocks"
 import { isComposerChromeClick } from "@/components/chat/composer/composer-commands"
 import type { MentionUiLabels } from "@/components/chat/composer/suggestion/types"
-import { AgentConfigSection } from "./agent-config-section"
+import {
+  AgentConfigSection,
+  effectiveSelections,
+  snapshotLabels,
+} from "./agent-config-section"
 import { AutomationBranchPicker } from "./automation-branch-picker"
 import {
   ComposerInvocationsPopup,
@@ -37,6 +41,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { automationComputeNextRun } from "@/lib/api"
+import { AGENT_LABELS } from "@/lib/types"
 import type {
   AgentType,
   Automation,
@@ -111,6 +116,11 @@ export function AutomationEditor({
     automation?.config?.config_values ?? {}
   )
   const [branch, setBranch] = useState(automation?.branch ?? "")
+  // Whether `branch` was picked from the remote group — persisted so the engine
+  // can resolve a remote-only branch unambiguously (see is_remote_branch).
+  const [isRemoteBranch, setIsRemoteBranch] = useState(
+    automation?.is_remote_branch ?? false
+  )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [nextRun, setNextRun] = useState<string | null>(null)
@@ -215,29 +225,56 @@ export function AutomationEditor({
       ? docToPromptBlocks(editor)
       : [{ type: "text", text: displayText }]
 
-    const draft: AutomationDraft = {
-      name: name.trim(),
-      // Enable/disable lives on the detail header + row menu now; preserve an
-      // existing automation's state and default new ones to enabled.
-      enabled: automation?.enabled ?? true,
-      trigger_kind: trigger,
-      cron: trigger === "schedule" ? cron.trim() : null,
-      timezone,
-      agent_type: agentType,
-      root_folder_id: folderId,
-      isolation,
-      branch:
-        isolation === "shared_in_root" && branch.trim() ? branch.trim() : null,
-      is_remote_branch: false,
-      config: {
-        prompt_blocks: blocks,
-        display_text: displayText,
-        mode_id: modeId,
-        config_values: configValues,
-      },
-    }
     setSaving(true)
     try {
+      // Resolve the probe (awaiting it if a fast save raced ahead, bounded so a
+      // wedged probe can't block saving) and pin exactly what the inline config
+      // bar shows: an untouched selector displays the agent's current value (no
+      // "inherit" here), so persist that, not an empty override that would
+      // inherit a future default.
+      const snapshot = await agentOptions.ensure()
+      const { mode_id, config_values } = effectiveSelections(
+        snapshot,
+        modeId,
+        configValues
+      )
+      // Capture friendly labels for the chosen agent/folder/mode/options so the
+      // detail page renders names, not raw value ids — and keeps doing so if the
+      // agent is later uninstalled or the folder removed.
+      const folderName = folders.find((f) => f.id === folderId)?.name
+      const label_snapshot = {
+        agent_label: AGENT_LABELS[agentType] ?? agentType,
+        ...(folderName ? { folder_label: folderName } : {}),
+        ...snapshotLabels(snapshot, mode_id, config_values),
+      }
+
+      const draft: AutomationDraft = {
+        name: name.trim(),
+        // Enable/disable lives on the detail header + row menu now; preserve an
+        // existing automation's state and default new ones to enabled.
+        enabled: automation?.enabled ?? true,
+        trigger_kind: trigger,
+        cron: trigger === "schedule" ? cron.trim() : null,
+        timezone,
+        agent_type: agentType,
+        root_folder_id: folderId,
+        isolation,
+        branch:
+          isolation === "shared_in_root" && branch.trim()
+            ? branch.trim()
+            : null,
+        is_remote_branch:
+          isolation === "shared_in_root" && branch.trim()
+            ? isRemoteBranch
+            : false,
+        config: {
+          prompt_blocks: blocks,
+          display_text: displayText,
+          mode_id,
+          config_values,
+          label_snapshot,
+        },
+      }
       await onSubmit(draft)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -346,7 +383,15 @@ export function AutomationEditor({
         <div className="flex flex-wrap items-center gap-2">
           <Select
             value={folderId != null ? String(folderId) : undefined}
-            onValueChange={(v) => setFolderId(Number(v))}
+            // A branch belongs to a specific repo, so switching folders must drop
+            // the previous folder's branch (else it'd be saved against the new
+            // one). Done in this user-action handler, not a folderId effect, so
+            // the initial hydrate/backfill never wipes a seeded branch on edit.
+            onValueChange={(v) => {
+              setFolderId(Number(v))
+              setBranch("")
+              setIsRemoteBranch(false)
+            }}
           >
             <SelectTrigger size="sm" className="h-7 gap-1.5 text-xs">
               <Folder
@@ -372,7 +417,10 @@ export function AutomationEditor({
             <AutomationBranchPicker
               folderPath={folderPath}
               value={branch}
-              onChange={setBranch}
+              onChange={(b, isRemote) => {
+                setBranch(b)
+                setIsRemoteBranch(isRemote)
+              }}
               placeholder={t("branchPlaceholder")}
               disabled={folderId == null}
             />
