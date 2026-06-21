@@ -291,6 +291,20 @@ impl AutomationEngine {
         // stop here — it already emitted RunSettled — rather than spawn an agent
         // for an already-cancelled run.
         if run_no_longer_running(&self.db.conn, run_id).await {
+            // A per-run worktree may already exist (resolve_cwd ran, and its
+            // folder was broadcast to the sidebar). Record it on the run so the
+            // cancelled run still links its worktree for tracking/cleanup rather
+            // than orphaning it, then stop before spawning the agent.
+            if cwd.worktree_folder_id.is_some() {
+                let _ = automation_service::attach_run_runtime(
+                    &self.db.conn,
+                    run_id,
+                    None,
+                    None,
+                    cwd.worktree_folder_id,
+                )
+                .await;
+            }
             return Ok(());
         }
 
@@ -703,7 +717,44 @@ impl AutomationEngine {
         .await
         .map_err(|e| e.to_string())?;
 
-        // Best-effort: stop the live turn and drop the index entry / connection.
+        // Resolve the automation id to take its fire_lock; bail cleanly if the
+        // run vanished (shouldn't happen right after a successful settle).
+        let Some(run) = run_by_id(&self.db.conn, run_id).await.ok().flatten() else {
+            return Ok(());
+        };
+        let automation_id = run.automation_id;
+
+        // Announce the cancel immediately so the UI leaves "running" without
+        // waiting on the teardown below, which may block on an in-progress launch
+        // holding the fire_lock.
+        if settled {
+            self.emit(AutomationChange::RunSettled {
+                automation_id,
+                run_id,
+                status: "cancelled".to_string(),
+            });
+        }
+
+        // Serialize the teardown with launch. `run_automation` holds this
+        // automation's fire_lock across its entire inline `launch()` (including
+        // `send_prompt`), so taking it here forces the connection teardown to run
+        // either BEFORE launch prompts (its gate then aborts on the cancelled
+        // status set above) or AFTER the turn is truly in flight (so
+        // `manager.cancel` aborts a real turn) — never interleaved with the prompt
+        // enqueue, which would otherwise let the prompt reach the agent after the
+        // cancel. Lock order matches launch (fire_lock then index), so no deadlock.
+        let fire_lock = self.fire_lock(automation_id).await;
+        let _guard = fire_lock.lock().await;
+
+        // Re-read under the lock: a launch that has since finished may have
+        // attached the conversation after the snapshot above.
+        let conversation_id = run_by_id(&self.db.conn, run_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|r| r.conversation_id);
+
+        // Stop the live turn and drop the index entry / connection.
         let conn_id = {
             self.index
                 .lock()
@@ -718,24 +769,12 @@ impl AutomationEngine {
             let _ = self.manager.disconnect(&conn_id).await;
         }
 
-        if let Ok(Some(run)) = run_by_id(&self.db.conn, run_id).await {
-            // Converge the produced conversation. The `manager.cancel` path above
-            // flips it when we owned a live connection; a run with no live worker
-            // (lost index / another process / the pre-reconcile window) would
-            // otherwise strand its conversation at InProgress in the sidebar.
-            if let Some(conv_id) = run.conversation_id {
-                if self.conversation_status(conv_id).await
-                    == Some(ConversationStatus::InProgress)
-                {
-                    self.cancel_conversation(conv_id).await;
-                }
-            }
-            if settled {
-                self.emit(AutomationChange::RunSettled {
-                    automation_id: run.automation_id,
-                    run_id,
-                    status: "cancelled".to_string(),
-                });
+        // Converge the produced conversation. A run with no live worker (lost
+        // index / another process / cancelled mid-launch) would otherwise strand
+        // its conversation at InProgress in the sidebar.
+        if let Some(conv_id) = conversation_id {
+            if self.conversation_status(conv_id).await == Some(ConversationStatus::InProgress) {
+                self.cancel_conversation(conv_id).await;
             }
         }
         Ok(())
