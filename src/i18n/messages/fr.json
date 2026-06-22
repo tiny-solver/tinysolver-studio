@@ -3048,6 +3048,7 @@
     "isolation": "Isolation",
     "isolationWorktree": "Nouveau worktree par exécution",
     "isolationShared": "Exécuter dans le dossier",
+    "isolationSharedCaveat": "Les exécutions utilisent directement l'arbre de travail de ce dossier et peuvent entrer en conflit avec vos modifications non validées. Activez l'option worktree pour isoler chaque exécution.",
     "trigger": "Déclencheur",
     "triggerSchedule": "Planifié",
     "triggerManual": "Manuel uniquement",

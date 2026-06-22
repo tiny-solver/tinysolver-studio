@@ -3048,6 +3048,7 @@
     "isolation": "العزل",
     "isolationWorktree": "worktree جديد لكل تشغيل",
     "isolationShared": "التشغيل داخل المجلد",
+    "isolationSharedCaveat": "تستخدم عمليات التشغيل شجرة عمل هذا المجلد مباشرةً، وقد تتعارض مع تغييراتك غير المُلتزَم بها. فعِّل خيار شجرة العمل لعزل كل عملية تشغيل.",
     "trigger": "المُشغِّل",
     "triggerSchedule": "وفق جدول",
     "triggerManual": "يدوي فقط",

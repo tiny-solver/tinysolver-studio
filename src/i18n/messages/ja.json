@@ -3048,6 +3048,7 @@
     "isolation": "分離",
     "isolationWorktree": "実行ごとに新しい worktree",
     "isolationShared": "フォルダ内で実行",
+    "isolationSharedCaveat": "実行はこのフォルダーの作業ツリーを直接使用するため、コミットしていない変更と競合する可能性があります。実行ごとに分離するにはワークツリーのオプションを有効にしてください。",
     "trigger": "トリガー",
     "triggerSchedule": "スケジュール",
     "triggerManual": "手動のみ",

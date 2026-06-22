@@ -3048,6 +3048,7 @@
     "isolation": "Isolamento",
     "isolationWorktree": "Novo worktree por execução",
     "isolationShared": "Executar na pasta",
+    "isolationSharedCaveat": "As execuções usam diretamente a árvore de trabalho desta pasta e podem entrar em conflito com suas alterações não confirmadas. Ative a opção de worktree para isolar cada execução.",
     "trigger": "Gatilho",
     "triggerSchedule": "Agendado",
     "triggerManual": "Somente manual",

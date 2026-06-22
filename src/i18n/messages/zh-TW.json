@@ -3048,6 +3048,7 @@
     "isolation": "隔離方式",
     "isolationWorktree": "每次執行新增 worktree",
     "isolationShared": "在資料夾內執行",
+    "isolationSharedCaveat": "執行會直接使用該資料夾的工作樹，可能與你未提交的變更衝突。勾選每次執行新建工作樹以隔離每次執行。",
     "trigger": "觸發方式",
     "triggerSchedule": "按排程",
     "triggerManual": "僅手動",

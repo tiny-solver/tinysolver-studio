@@ -482,6 +482,13 @@ export function AutomationEditor({
             {t("isolationWorktree")}
           </Label>
         </div>
+        {/* Running in the folder shares the user's working tree (and any
+            concurrent shared run); surface that trade-off where it's chosen. */}
+        {isolation === "shared_in_root" ? (
+          <p className="text-xs text-muted-foreground">
+            {t("isolationSharedCaveat")}
+          </p>
+        ) : null}
       </div>
 
       {/* Trigger — manual vs scheduled, with the schedule details folded in. */}

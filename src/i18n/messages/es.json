@@ -3048,6 +3048,7 @@
     "isolation": "Aislamiento",
     "isolationWorktree": "Nuevo worktree por ejecución",
     "isolationShared": "Ejecutar en la carpeta",
+    "isolationSharedCaveat": "Las ejecuciones usan directamente el árbol de trabajo de esta carpeta y pueden entrar en conflicto con tus cambios sin confirmar. Activa la opción de árbol de trabajo para aislar cada ejecución.",
     "trigger": "Activador",
     "triggerSchedule": "Programado",
     "triggerManual": "Solo manual",

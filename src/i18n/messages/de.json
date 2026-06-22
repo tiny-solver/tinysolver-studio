@@ -3048,6 +3048,7 @@
     "isolation": "Isolierung",
     "isolationWorktree": "Neues Worktree pro Lauf",
     "isolationShared": "Im Ordner ausführen",
+    "isolationSharedCaveat": "Ausführungen verwenden den Arbeitsbaum dieses Ordners direkt und können mit deinen nicht committeten Änderungen kollidieren. Aktiviere die Worktree-Option, um jede Ausführung zu isolieren.",
     "trigger": "Auslöser",
     "triggerSchedule": "Nach Zeitplan",
     "triggerManual": "Nur manuell",

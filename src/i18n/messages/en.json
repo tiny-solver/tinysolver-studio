@@ -3048,6 +3048,7 @@
     "isolation": "Isolation",
     "isolationWorktree": "New worktree per run",
     "isolationShared": "Run in the folder",
+    "isolationSharedCaveat": "Runs use this folder's working tree directly — they can collide with your uncommitted changes. Enable the worktree option to isolate each run.",
     "trigger": "Trigger",
     "triggerSchedule": "On a schedule",
     "triggerManual": "Manual only",
