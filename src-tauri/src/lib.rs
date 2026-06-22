@@ -604,18 +604,17 @@ mod tauri_app {
                 // Automation engine: drives manual + scheduled fires, settles
                 // runs off the event bus, reconciles, and recovers on boot. One
                 // per process; mirrored in `bin/codeg_server.rs`.
-                {
-                    let engine = crate::automation::build_engine(
-                        crate::db::AppDatabase {
-                            conn: app.state::<crate::db::AppDatabase>().conn.clone(),
-                        },
-                        app.state::<ConnectionManager>().clone_ref(),
-                        crate::web::event_bridge::EventEmitter::Tauri(app.handle().clone()),
-                        app.state::<std::sync::Arc<crate::acp::InternalEventBus>>()
-                            .inner()
-                            .clone(),
-                        effective_data_dir.clone(),
-                    );
+                if let Some(engine) = crate::automation::build_engine(
+                    crate::db::AppDatabase {
+                        conn: app.state::<crate::db::AppDatabase>().conn.clone(),
+                    },
+                    app.state::<ConnectionManager>().clone_ref(),
+                    crate::web::event_bridge::EventEmitter::Tauri(app.handle().clone()),
+                    app.state::<std::sync::Arc<crate::acp::InternalEventBus>>()
+                        .inner()
+                        .clone(),
+                    effective_data_dir.clone(),
+                ) {
                     tauri::async_runtime::spawn(crate::automation::run_automation_engine(engine));
                 }
 
