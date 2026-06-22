@@ -173,7 +173,7 @@ pub fn list_log_files_core() -> Vec<LogFileInfo> {
             })
         })
         .collect();
-    files.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms));
+    files.sort_by_key(|f| std::cmp::Reverse(f.modified_ms));
     files
 }
 
