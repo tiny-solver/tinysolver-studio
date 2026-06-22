@@ -171,8 +171,16 @@ mod tests {
     #[tokio::test]
     async fn backfills_folder_and_conversation_kind() {
         let conn = Database::connect("sqlite::memory:").await.expect("db");
-        let total = <Migrator as MigratorTrait>::migrations().len() as u32;
-        Migrator::up(&conn, Some(total - 1))
+        // Run every migration up to (but not including) THIS one, located by name
+        // rather than `total - 1`: migrations added *after* this file (e.g. the
+        // automations tables) would otherwise let `total - 1` run the kind
+        // migration here and drop `is_chat` before the legacy rows are inserted.
+        let migrations = <Migrator as MigratorTrait>::migrations();
+        let kind_idx = migrations
+            .iter()
+            .position(|m| m.name().contains("conversation_folder_kind"))
+            .expect("kind migration is registered");
+        Migrator::up(&conn, Some(kind_idx as u32))
             .await
             .expect("legacy migrations");
 
