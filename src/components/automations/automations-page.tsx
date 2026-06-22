@@ -94,7 +94,7 @@ import {
   automationSetEnabled,
   automationUpdate,
 } from "@/lib/api"
-import { subscribe } from "@/lib/platform"
+import { onTransportReconnect, subscribe } from "@/lib/platform"
 import { cn } from "@/lib/utils"
 import type { Automation, AutomationDraft, AutomationRun } from "@/lib/types"
 
@@ -870,8 +870,13 @@ function AutomationDetail({
 
   const folderName =
     folders.find((f) => f.id === automation.root_folder_id)?.name ?? "—"
-  const labels = automation.config.label_snapshot
-  const configEntries = Object.entries(automation.config.config_values || {})
+  // `config` is serialized from an opaque JSON column and falls back to `null`
+  // on the backend if the stored blob fails to parse — guard every read so a
+  // malformed automation degrades gracefully instead of throwing during render
+  // (which, with no error boundary on this route, white-screens the whole app).
+  const config = automation.config ?? null
+  const labels = config?.label_snapshot
+  const configEntries = Object.entries(config?.config_values ?? {})
   const isSchedule = automation.trigger_kind === "schedule" && !!automation.cron
 
   return (
@@ -957,12 +962,12 @@ function AutomationDetail({
                   : "—"}
               </StatCard>
             ) : null}
-            {automation.config.mode_id || configEntries.length > 0 ? (
+            {config?.mode_id || configEntries.length > 0 ? (
               <StatCard icon={<SlidersHorizontal />} label={t("config")}>
                 <div className="flex flex-wrap gap-1">
-                  {automation.config.mode_id ? (
+                  {config?.mode_id ? (
                     <Badge variant="outline" className="text-[0.625rem]">
-                      {labels?.mode_label ?? automation.config.mode_id}
+                      {labels?.mode_label ?? config.mode_id}
                     </Badge>
                   ) : null}
                   {configEntries.map(([k, v]) => (
@@ -982,7 +987,7 @@ function AutomationDetail({
 
         <SectionCard title={t("sectionPrompt")}>
           <p className="whitespace-pre-wrap text-sm text-foreground/90">
-            {automation.config.display_text || "—"}
+            {config?.display_text || "—"}
           </p>
         </SectionCard>
 
@@ -1049,9 +1054,16 @@ function RunHistory({
       if (cancelled) u()
       else unsub = u
     })
+    // A run that settled while the WS was disconnected drops its event (the
+    // broadcaster skips when receiver_count == 0), so re-load on reconnect to
+    // clear a stale "running" row. No-op on desktop IPC.
+    const offReconnect = onTransportReconnect(() => {
+      void load()
+    })
     return () => {
       cancelled = true
       unsub?.()
+      offReconnect?.()
     }
   }, [load])
 

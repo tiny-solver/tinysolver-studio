@@ -127,6 +127,11 @@ export function AutomationEditor({
   const [cronBuilderOpen, setCronBuilderOpen] = useState(false)
 
   const editorRef = useRef<RichComposerHandle>(null)
+  // True once the user explicitly picks an agent. A system fallback (saved agent
+  // unavailable on this device) updates the displayed type via onFallback but
+  // leaves this false, so submit can persist the original agent instead of
+  // silently swapping it (see the submit handler).
+  const userChoseAgentRef = useRef(false)
 
   const folderPath = useMemo(
     () => folders.find((f) => f.id === folderId)?.path ?? null,
@@ -254,6 +259,19 @@ export function AutomationEditor({
       // detail page renders names, not raw value ids — and keeps doing so if the
       // agent is later uninstalled or the folder removed.
       const folderName = folders.find((f) => f.id === folderId)?.name
+      // If the saved agent is unavailable on this device, AgentSelector shows a
+      // substitute via onFallback. That swap is display-only: persisting it would
+      // silently change the automation's agent (and invalidate its per-agent
+      // config) when the user only meant to edit, say, the name or schedule. So
+      // unless the user explicitly chose another agent, keep the original agent
+      // and its saved config — while still applying prompt/name/schedule edits.
+      const fellBackToSubstitute =
+        !userChoseAgentRef.current &&
+        !!automation &&
+        automation.agent_type !== agentType
+      const persistedAgentType = fellBackToSubstitute
+        ? automation.agent_type
+        : agentType
       const label_snapshot = {
         agent_label: AGENT_LABELS[agentType] ?? agentType,
         ...(folderName ? { folder_label: folderName } : {}),
@@ -268,7 +286,7 @@ export function AutomationEditor({
         trigger_kind: trigger,
         cron: trigger === "schedule" ? cron.trim() : null,
         timezone,
-        agent_type: agentType,
+        agent_type: persistedAgentType,
         root_folder_id: folderId,
         isolation,
         branch:
@@ -279,13 +297,24 @@ export function AutomationEditor({
           isolation === "shared_in_root" && branch.trim()
             ? isRemoteBranch
             : false,
-        config: {
-          prompt_blocks: blocks,
-          display_text: displayText,
-          mode_id,
-          config_values,
-          label_snapshot,
-        },
+        config: fellBackToSubstitute
+          ? {
+              // Preserve the original agent's saved config verbatim; only the
+              // user-editable prompt is refreshed.
+              prompt_blocks: blocks,
+              display_text: displayText,
+              mode_id: automation.config?.mode_id ?? null,
+              config_values: automation.config?.config_values ?? {},
+              label_snapshot:
+                automation.config?.label_snapshot ?? label_snapshot,
+            }
+          : {
+              prompt_blocks: blocks,
+              display_text: displayText,
+              mode_id,
+              config_values,
+              label_snapshot,
+            },
       }
       await onSubmit(draft)
     } catch (e) {
@@ -323,6 +352,7 @@ export function AutomationEditor({
           defaultAgentType={agentType}
           onSelect={(a) => {
             // Switching agents changes the option universe — reset overrides.
+            userChoseAgentRef.current = true
             setAgentType(a)
             setModeId(null)
             setConfigValues({})
@@ -435,6 +465,10 @@ export function AutomationEditor({
               }}
               placeholder={t("branchPlaceholder")}
               disabled={folderId == null}
+              // shared_in_root checks the branch out in the root tree, which
+              // can't track a remote-only branch — the backend rejects that
+              // combination, so don't offer it here.
+              allowRemote={false}
             />
           ) : null}
 

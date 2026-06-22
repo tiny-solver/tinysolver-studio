@@ -943,7 +943,9 @@ export interface Automation {
   isolation: AutomationIsolation
   branch: string | null
   is_remote_branch: boolean
-  config: AutomationConfig
+  // Serialized from an opaque JSON column; the backend falls back to `null`
+  // when a stored blob fails to parse, so readers must guard against it.
+  config: AutomationConfig | null
   last_run_at: string | null
   last_run_status: string | null
   last_run_conversation_id: number | null

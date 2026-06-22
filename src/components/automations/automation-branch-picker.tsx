@@ -32,6 +32,11 @@ interface AutomationBranchPickerProps {
   onChange: (branch: string, isRemote: boolean) => void
   placeholder: string
   disabled?: boolean
+  /** When false the remote-branch group is hidden. Used for shared_in_root
+   *  isolation, where a remote branch can't be checked out in the root tree
+   *  (the backend rejects the combination), so offering it would only let the
+   *  user build a config that fails at save/run. */
+  allowRemote?: boolean
 }
 
 const EMPTY_LIST: GitBranchList = {
@@ -61,6 +66,7 @@ export function AutomationBranchPicker({
   onChange,
   placeholder,
   disabled,
+  allowRemote = true,
 }: AutomationBranchPickerProps) {
   const t = useTranslations("Automations")
   const [open, setOpen] = useState(false)
@@ -111,7 +117,7 @@ export function AutomationBranchPicker({
   }
 
   const local = branchList?.local ?? []
-  const remote = branchList?.remote ?? []
+  const remote = allowRemote ? (branchList?.remote ?? []) : []
   const q = query.trim()
   // Derive from branchList (stable) rather than the per-render `local`/`remote`
   // arrays so the memo doesn't recompute every render.

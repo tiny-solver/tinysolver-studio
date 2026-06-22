@@ -34,6 +34,7 @@ vi.mock("@/contexts/app-workspace-context", () => ({
 }))
 vi.mock("@/lib/platform", () => ({
   subscribe: vi.fn().mockResolvedValue(() => {}),
+  onTransportReconnect: vi.fn(() => () => {}),
 }))
 vi.mock("@/lib/api", () => ({
   automationMarkSeen: vi.fn().mockResolvedValue(undefined),

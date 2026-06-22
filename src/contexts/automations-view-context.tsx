@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import { automationList } from "@/lib/api"
-import { subscribe } from "@/lib/platform"
+import { onTransportReconnect, subscribe } from "@/lib/platform"
 import type { Automation } from "@/lib/types"
 
 const AUTOMATION_CHANGED_EVENT = "automation://changed"
@@ -77,9 +77,16 @@ export function AutomationsViewProvider({ children }: { children: ReactNode }) {
       if (cancelled) u()
       else unsub = u
     })
+    // Events fired while the WS was disconnected are dropped by the broadcaster
+    // (receiver_count == 0); re-fetch on reconnect so a run that settled during
+    // the gap doesn't leave the list stale. No-op on desktop IPC.
+    const offReconnect = onTransportReconnect(() => {
+      void refetch()
+    })
     return () => {
       cancelled = true
       unsub?.()
+      offReconnect?.()
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [refetch])
