@@ -53,6 +53,12 @@ pub struct PlatformBinary {
 #[derive(Debug, Clone)]
 pub struct AcpAgentMeta {
     pub agent_type: AgentType,
+    /// 是否经 ACP 线缆（session/new 的 `mcpServers` 字段）向该 agent 转发 MCP
+    /// 服务器——既包括用户配置的服务器，也包括内置 codeg-mcp 伴生进程。
+    /// OpenClaw 拒绝 `mcpServers` 中的任何服务器条目（会使 session/new 失败），
+    /// 故置 false。注意空列表 `[]` 仍会按 ACP schema 序列化、OpenClaw 可接受——
+    /// 闸门只是保证该列表对 OpenClaw 恒为空（不含任何条目）。
+    pub supports_mcp: bool,
     pub name: &'static str,
     pub description: &'static str,
     pub distribution: AgentDistribution,
@@ -146,6 +152,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
     match agent_type {
         AgentType::ClaudeCode => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "Claude Code",
             description: "ACP wrapper for Anthropic's Claude",
             distribution: AgentDistribution::Npx {
@@ -159,6 +166,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::Codex => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "Codex CLI",
             description: "ACP adapter for OpenAI's coding assistant",
             // codex-acp moved from zed-industries (Rust binary) to the
@@ -175,6 +183,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::Gemini => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
             distribution: AgentDistribution::Npx {
@@ -188,6 +197,9 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::OpenClaw => AcpAgentMeta {
             agent_type,
+            // OpenClaw 拒绝 `mcpServers` 中的任何服务器条目（会使 session/new 失败），
+            // 故不向其转发任何 MCP 条目（含 codeg-mcp 伴生进程）。详见 supports_mcp 字段注释。
+            supports_mcp: false,
             name: "OpenClaw",
             description: "OpenClaw is a personal AI assistant you run on your own devices.",
             distribution: AgentDistribution::Npx {
@@ -201,6 +213,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::Cline => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "Cline",
             description: "Autonomous coding agent CLI",
             distribution: AgentDistribution::Npx {
@@ -214,6 +227,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::OpenCode => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "OpenCode",
             description: "The open source coding agent",
             distribution: AgentDistribution::Binary {
@@ -251,6 +265,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::Hermes => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "Hermes Agent",
             description: "Nous Research's self-improving agent (ACP via uvx)",
             distribution: AgentDistribution::Uvx {
@@ -272,6 +287,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::CodeBuddy => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "CodeBuddy",
             description: "Tencent Cloud's official AI coding assistant (ACP)",
             distribution: AgentDistribution::Npx {
@@ -285,6 +301,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::KimiCode => AcpAgentMeta {
             agent_type,
+            supports_mcp: true,
             name: "Kimi Code",
             description: "Moonshot AI's official CLI coding assistant (ACP)",
             distribution: AgentDistribution::Npx {
@@ -432,5 +449,23 @@ mod tests {
             // interpreter it (and its win32 `pywinpty` dep) supports.
             Some("3.13"),
         );
+    }
+
+    // OpenClaw rejects MCP server entries inside `mcpServers` (the empty `[]`
+    // field is still serialized and tolerated) and fails session/new on any
+    // entry, so it must be the only agent with `supports_mcp == false`. Every
+    // other agent (current and future) keeps it `true`. Iterating the full
+    // registry means a newly-added agent that wrongly opts out — or a
+    // regression flipping OpenClaw back on — trips this assert.
+    #[test]
+    fn only_openclaw_opts_out_of_mcp() {
+        for agent_type in all_acp_agents() {
+            let meta = get_agent_meta(agent_type);
+            assert_eq!(
+                meta.supports_mcp,
+                agent_type != AgentType::OpenClaw,
+                "unexpected supports_mcp for {agent_type:?}"
+            );
+        }
     }
 }

@@ -1568,46 +1568,71 @@ async fn run_connection(
                 init_resp.agent_capabilities.load_session, supports_fork
             );
 
+            // Whether this agent accepts MCP server entries over the ACP wire
+            // (`session/new`'s `mcpServers`). Almost all do; OpenClaw rejects
+            // any server entry and fails session creation, so it must receive
+            // NONE — neither user-configured servers nor the built-in codeg-mcp
+            // companion. (The `mcpServers` key itself is always serialized as
+            // `[]` by the ACP schema and OpenClaw tolerates the empty list; the
+            // gate only guarantees the list stays empty for it.) This is the
+            // single chokepoint feeding session/new, session/load, and the
+            // load→new fallback, so gating here keeps server entries off the
+            // wire on every path. See `AcpAgentMeta::supports_mcp`.
+            let agent_supports_mcp = registry::get_agent_meta(agent_type).supports_mcp;
+
             // Load MCP servers configured for this agent and filter by the
             // capabilities the agent just declared. Stdio is mandatory per
             // ACP spec; HTTP/SSE are gated on `mcp_capabilities.{http,sse}`.
-            let mcp_caps = &init_resp.agent_capabilities.mcp_capabilities;
-            let mut mcp_servers: Vec<McpServer> = load_mcp_servers_for_agent(agent_type)
-                .into_iter()
-                .filter(|s| match s {
-                    McpServer::Stdio(_) => true,
-                    McpServer::Http(server) => {
-                        if mcp_caps.http {
-                            true
-                        } else {
-                            tracing::warn!(
-                                "[ACP][{}] skip HTTP MCP server '{}': agent does not advertise mcpCapabilities.http",
-                                agent_type, server.name
-                            );
-                            false
+            let mut mcp_servers: Vec<McpServer> = if agent_supports_mcp {
+                let mcp_caps = &init_resp.agent_capabilities.mcp_capabilities;
+                load_mcp_servers_for_agent(agent_type)
+                    .into_iter()
+                    .filter(|s| match s {
+                        McpServer::Stdio(_) => true,
+                        McpServer::Http(server) => {
+                            if mcp_caps.http {
+                                true
+                            } else {
+                                tracing::warn!(
+                                    "[ACP][{}] skip HTTP MCP server '{}': agent does not advertise mcpCapabilities.http",
+                                    agent_type, server.name
+                                );
+                                false
+                            }
                         }
-                    }
-                    McpServer::Sse(server) => {
-                        if mcp_caps.sse {
-                            true
-                        } else {
-                            tracing::warn!(
-                                "[ACP][{}] skip SSE MCP server '{}': agent does not advertise mcpCapabilities.sse",
-                                agent_type, server.name
-                            );
-                            false
+                        McpServer::Sse(server) => {
+                            if mcp_caps.sse {
+                                true
+                            } else {
+                                tracing::warn!(
+                                    "[ACP][{}] skip SSE MCP server '{}': agent does not advertise mcpCapabilities.sse",
+                                    agent_type, server.name
+                                );
+                                false
+                            }
                         }
-                    }
-                    _ => false,
-                })
-                .collect();
+                        _ => false,
+                    })
+                    .collect()
+            } else {
+                tracing::info!(
+                    "[ACP][{}] supports_mcp=false: skipping all MCP wire forwarding (user servers + codeg-mcp companion)",
+                    agent_type
+                );
+                Vec::new()
+            };
 
             // Inject the built-in `codeg-mcp` MCP server. Stdio is
             // unconditionally supported by the ACP wire — no `mcp_caps`
             // filter needed. The returned token is stashed on the session
-            // state so connection teardown can revoke it.
-            let delegate_injection = if let Some(inj) = delegation_injection.as_ref() {
-                inject_codeg_mcp(&mut mcp_servers, inj, &conn_id, &cwd).await
+            // state so connection teardown can revoke it. Skipped entirely
+            // for agents that don't accept MCP over the wire (above).
+            let delegate_injection = if agent_supports_mcp {
+                if let Some(inj) = delegation_injection.as_ref() {
+                    inject_codeg_mcp(&mut mcp_servers, inj, &conn_id, &cwd).await
+                } else {
+                    None
+                }
             } else {
                 None
             };
@@ -4598,6 +4623,49 @@ mod tests {
         );
 
         assert!(req.meta.is_none());
+    }
+
+    // OpenClaw rejects MCP server *entries* over the ACP wire, not the
+    // `mcpServers` field itself. The ACP schema does not `skip_serializing_if`
+    // that field on NewSessionRequest/LoadSessionRequest, so it always
+    // serializes as `[]`; every agent (OpenClaw included) already receives
+    // `mcpServers: []` on a fresh install with no servers configured and
+    // codeg-mcp off — the known-good payload. The connection-layer gate
+    // (`supports_mcp == false`) forces OpenClaw onto that empty payload
+    // unconditionally. This pins the wire contract: both builders emit an
+    // empty list, so no server entry can ever reach OpenClaw.
+    #[test]
+    fn openclaw_session_requests_carry_no_mcp_servers() {
+        let cwd = std::path::PathBuf::from("/tmp/codeg");
+
+        let new_req = build_new_session_request(AgentType::OpenClaw, &cwd, Vec::new());
+        assert!(
+            new_req.mcp_servers.is_empty(),
+            "OpenClaw session/new must carry no MCP servers"
+        );
+        let new_json = serde_json::to_value(&new_req).unwrap();
+        assert_eq!(
+            new_json.get("mcpServers"),
+            Some(&serde_json::json!([])),
+            "OpenClaw session/new mcpServers must serialize as an empty list"
+        );
+
+        let load_req = build_load_session_request(
+            AgentType::OpenClaw,
+            SessionId::new("openclaw-session".to_string()),
+            &cwd,
+            Vec::new(),
+        );
+        assert!(
+            load_req.mcp_servers.is_empty(),
+            "OpenClaw session/load must carry no MCP servers"
+        );
+        let load_json = serde_json::to_value(&load_req).unwrap();
+        assert_eq!(
+            load_json.get("mcpServers"),
+            Some(&serde_json::json!([])),
+            "OpenClaw session/load mcpServers must serialize as an empty list"
+        );
     }
 
     #[test]
