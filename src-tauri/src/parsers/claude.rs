@@ -8,7 +8,8 @@ use regex::Regex;
 
 use crate::models::*;
 use crate::parsers::{
-    folder_name_from_path, title_from_user_text, truncate_str, AgentParser, ParseError,
+    folder_name_from_path, is_safe_subagent_id, title_from_user_text, truncate_str, AgentParser,
+    ParseError,
 };
 
 /// Regex that matches Claude Code system-injected XML tags and their content.
@@ -761,12 +762,11 @@ impl ClaudeParser {
                             let mut stats = extract_agent_execution_stats(tur);
                             // Load tool calls from subagent's own JSONL transcript
                             if let Some(agent_id) = tur.get("agentId").and_then(|v| v.as_str()) {
-                                // Reject path traversal: agentId must be alphanumeric
-                                if !agent_id.is_empty()
-                                    && !agent_id.contains('/')
-                                    && !agent_id.contains('\\')
-                                    && !agent_id.contains("..")
-                                {
+                                // Reject path traversal: `agent_id` becomes a filename
+                                // component under the session dir (see
+                                // `is_safe_subagent_id` — rejects separators, `..`, a
+                                // Windows drive colon, and NUL).
+                                if is_safe_subagent_id(agent_id) {
                                     let subagent_dir = path.with_extension("").join("subagents");
                                     let subagent_path =
                                         subagent_dir.join(format!("agent-{}.jsonl", agent_id));

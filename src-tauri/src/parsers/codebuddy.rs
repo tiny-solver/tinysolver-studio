@@ -13,9 +13,9 @@ use crate::models::{
 };
 use crate::parsers::{
     compute_session_stats, folder_name_from_path, infer_context_window_max_tokens,
-    latest_turn_total_usage_tokens, merge_context_window_stats, relocate_orphaned_tool_results,
-    resolve_patch_line_numbers, structurize_read_tool_output, title_from_user_text, truncate_str,
-    AgentParser, ParseError,
+    is_safe_subagent_id, latest_turn_total_usage_tokens, merge_context_window_stats,
+    relocate_orphaned_tool_results, resolve_patch_line_numbers, structurize_read_tool_output,
+    title_from_user_text, truncate_str, AgentParser, ParseError,
 };
 
 /// Resolve CodeBuddy's config dir, honoring `CODEBUDDY_CONFIG_DIR`, else
@@ -363,6 +363,29 @@ impl Default for CodeBuddyParser {
     }
 }
 
+/// True when `path` is a CodeBuddy sub-agent transcript rather than a top-level
+/// session, so the conversation scan can skip it — otherwise a sub-agent's
+/// internal execution transcript would surface as a bogus top-level conversation
+/// (and `get_conversation` would open it). It only feeds an Agent result's
+/// `agent_stats` (loaded by constructed path in `agent_stats_from_subagent`, not
+/// via this scan), so hiding it from the list is safe.
+///
+/// CodeBuddy's documented layout is `<projects>/<encoded-cwd>/<sessionId>.jsonl`
+/// for a top-level session and `<encoded-cwd>/<sessionId>/subagents/<agent>.jsonl`
+/// for a sub-agent transcript. So a transcript is a `.jsonl` whose immediate
+/// parent directory is `subagents`, nested at least that deep
+/// (encoded-cwd + session + `subagents` + file ⇒ ≥ 4 components below
+/// `base_dir`). The depth floor is what keeps a *legitimate* session whose own
+/// encoded-cwd dir is literally named `subagents`
+/// (`<projects>/subagents/<sessionId>.jsonl`, only 2 components) from being
+/// mistaken for one. Computed on the components below `base_dir` so a `subagents`
+/// segment in the base path's own prefix can't over-match either.
+fn is_subagent_transcript(base_dir: &Path, path: &Path) -> bool {
+    let relative = path.strip_prefix(base_dir).unwrap_or(path);
+    let components: Vec<_> = relative.components().collect();
+    components.len() >= 4 && components[components.len() - 2].as_os_str() == "subagents"
+}
+
 impl AgentParser for CodeBuddyParser {
     fn list_conversations(&self) -> Result<Vec<ConversationSummary>, ParseError> {
         let mut conversations = Vec::new();
@@ -376,6 +399,12 @@ impl AgentParser for CodeBuddyParser {
         {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            // A sub-agent transcript (`<session>/subagents/<agent>.jsonl`) is not
+            // a top-level conversation; it only feeds an Agent result's
+            // `agent_stats`. Skip it so the history list isn't polluted.
+            if is_subagent_transcript(&self.base_dir, path) {
                 continue;
             }
             if let Some(summary) = self.parse_summary(path) {
@@ -395,6 +424,11 @@ impl AgentParser for CodeBuddyParser {
             {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                // Never open a sub-agent transcript as a top-level conversation,
+                // even if its file stem happens to match the requested id.
+                if is_subagent_transcript(&self.base_dir, path) {
                     continue;
                 }
                 if path.file_stem().map(|s| s.to_string_lossy()).as_deref() == Some(conversation_id)
@@ -783,8 +817,10 @@ fn agent_stats_from_subagent(
     main_session_path: &Path,
 ) -> Option<AgentExecutionStats> {
     let id = subagent_transcript_id(result)?;
-    // Path-traversal guard: `id` becomes a filename under the session dir.
-    if id.contains('/') || id.contains('\\') || id.contains("..") {
+    // Path-traversal guard: `id` becomes a filename under the session dir, so it
+    // must be a single plain component (rejects separators, `..`, a Windows
+    // drive colon, and NUL). See `is_safe_subagent_id`.
+    if !is_safe_subagent_id(id) {
         return None;
     }
     let transcript = main_session_path
@@ -1615,6 +1651,126 @@ mod tests {
             .and_then(|(_, o)| o.clone())
             .expect("b1 result");
         assert_eq!(b1_output, "a.ts");
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn subagent_transcript_is_excluded_from_conversation_list() {
+        // Regression: a sub-agent transcript lives at `<session>/subagents/<agent>.jsonl`
+        // inside the recursively-scanned projects tree. It must feed ONLY the
+        // Agent result's agent_stats — never surface as a top-level conversation,
+        // nor be openable by its own id via get_conversation.
+        let root = std::env::temp_dir().join(format!("codeg-cb-sublist-{}", uuid::Uuid::new_v4()));
+        let sid = "sess-list";
+        write_session(
+            &root,
+            "Users-demo-app",
+            sid,
+            &[
+                json!({"type":"message","role":"user","timestamp":1782193811000i64,"cwd":"/Users/demo/app","sessionId":sid,
+                       "content":[{"type":"input_text","text":"build it"}]}),
+                json!({"type":"function_call","timestamp":1782193811200i64,"cwd":"/Users/demo/app","sessionId":sid,
+                       "name":"Agent","callId":"a1",
+                       "arguments":"{\"description\": \"build\", \"prompt\": \"run the build\", \"subagent_type\": \"general-purpose\"}"}),
+                json!({"type":"function_call_result","timestamp":1782193811400i64,"cwd":"/Users/demo/app","sessionId":sid,
+                       "name":"Agent","callId":"a1","status":"completed",
+                       "output":{"type":"text","text":"Build succeeded"},
+                       "providerData":{"toolResult":{"content":"Build succeeded","subAgent":{"sessionId":"agent-list01"}}}}),
+            ],
+        );
+        // The sub-agent transcript carries its own sessionId + content records, so
+        // WITHOUT the skip it would parse into a (bogus) top-level summary.
+        write_subagent(
+            &root,
+            "Users-demo-app",
+            sid,
+            "agent-list01",
+            &[
+                json!({"type":"message","role":"user","timestamp":1782193811250i64,"sessionId":"agent-list01",
+                       "content":[{"type":"input_text","text":"internal subagent prompt"}]}),
+                json!({"type":"function_call","timestamp":1782193811260i64,"sessionId":"agent-list01",
+                       "name":"Bash","callId":"s1","arguments":"{\"command\": \"pnpm build\"}"}),
+                json!({"type":"function_call_result","timestamp":1782193811300i64,"sessionId":"agent-list01",
+                       "name":"Bash","callId":"s1","status":"completed","output":{"type":"text","text":"ok"}}),
+            ],
+        );
+
+        let parser = CodeBuddyParser::with_base_dir(root.clone());
+
+        // (1) Only the real session is listed; the sub-agent transcript is not.
+        let list = parser.list_conversations().expect("list");
+        assert_eq!(list.len(), 1, "only the top-level session is listed");
+        assert_eq!(list[0].id, sid);
+        assert!(
+            !list.iter().any(|c| c.id == "agent-list01"),
+            "a sub-agent transcript must not appear as a conversation"
+        );
+
+        // (2) It can't be opened as a conversation by its own id either.
+        assert!(
+            matches!(
+                parser.get_conversation("agent-list01"),
+                Err(ParseError::ConversationNotFound(_))
+            ),
+            "a sub-agent transcript id must not resolve to a conversation"
+        );
+
+        // (3) But it STILL feeds the Agent result's agent_stats in the real session.
+        let detail = parser.get_conversation(sid).expect("detail");
+        let agent_stats = detail
+            .turns
+            .iter()
+            .flat_map(|t| &t.blocks)
+            .find_map(|b| match b {
+                ContentBlock::ToolResult {
+                    tool_use_id,
+                    agent_stats,
+                    ..
+                } if tool_use_id.as_deref() == Some("a1") => agent_stats.clone(),
+                _ => None,
+            })
+            .expect("Agent result still carries agent_stats from the subagent transcript");
+        assert_eq!(agent_stats.total_tool_use_count, Some(1));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn top_level_session_under_subagents_named_project_dir_is_listed() {
+        // False-positive guard: a legitimate top-level session whose encoded-cwd
+        // project dir is literally named `subagents`
+        // (`<projects>/subagents/<sessionId>.jsonl`, 2 components) must still be
+        // listed/opened — the nested sub-agent transcript shape is one level
+        // deeper (`<project>/<session>/subagents/<agent>.jsonl`, 4 components).
+        let root = std::env::temp_dir().join(format!("codeg-cb-subdir-{}", uuid::Uuid::new_v4()));
+        let sid = "sess-in-subagents-dir";
+        write_session(
+            &root,
+            "subagents",
+            sid,
+            &[
+                json!({"type":"message","role":"user","timestamp":1782193811000i64,"cwd":"/Users/demo/subagents","sessionId":sid,
+                       "content":[{"type":"input_text","text":"hi"}]}),
+                json!({"type":"message","role":"assistant","timestamp":1782193811100i64,"cwd":"/Users/demo/subagents","sessionId":sid,
+                       "content":[{"type":"output_text","text":"hello"}]}),
+            ],
+        );
+
+        let parser = CodeBuddyParser::with_base_dir(root.clone());
+
+        let list = parser.list_conversations().expect("list");
+        assert_eq!(
+            list.len(),
+            1,
+            "a session whose project dir is named `subagents` is still a conversation"
+        );
+        assert_eq!(list[0].id, sid);
+        // And it opens normally rather than 404-ing.
+        assert!(
+            parser.get_conversation(sid).is_ok(),
+            "the session must be openable, not skipped as a transcript"
+        );
 
         std::fs::remove_dir_all(&root).ok();
     }
