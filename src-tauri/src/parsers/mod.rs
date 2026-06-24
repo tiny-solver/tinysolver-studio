@@ -4,6 +4,7 @@ pub mod codebuddy;
 pub mod codex;
 pub mod gemini;
 pub mod hermes;
+pub mod kimi_code;
 pub mod openclaw;
 pub mod opencode;
 

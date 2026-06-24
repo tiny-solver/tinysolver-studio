@@ -254,6 +254,11 @@ function appsToDraft(apps: McpAppType[]): Record<McpAppType, boolean> {
     cline: appSet.has("cline"),
     hermes: appSet.has("hermes"),
     code_buddy: appSet.has("code_buddy"),
+    // Kimi Code is intentionally absent from APP_OPTIONS (the picker): its
+    // native config.toml management is a Phase 3 stub, and codeg-mcp already
+    // reaches Kimi over the ACP forward path. The key stays here only to keep
+    // this Record<McpAppType, boolean> exhaustive.
+    kimi_code: appSet.has("kimi_code"),
   }
 }
 

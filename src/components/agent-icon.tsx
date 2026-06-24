@@ -285,6 +285,34 @@ const CodeBuddyMonoIcon = memo(function CodeBuddyMonoIcon({
   )
 })
 
+const KimiCodeColorIcon = memo(function KimiCodeColorIcon({
+  size = "1em",
+}: IconProps) {
+  // Official Kimi mark: a bold white "K" on a black squircle with the Kimi-blue
+  // tittle dot at the top-right (sampled #1783FF from the brand asset).
+  return (
+    <svg
+      height={size}
+      style={baseSvgStyle}
+      viewBox="0 0 24 24"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <title>Kimi Code</title>
+      <rect width="24" height="24" rx="5.3" fill="#000000" />
+      <path
+        d="M7.2 6.5V17.5M7.2 12l7-5.3M7.2 12l7.6 5.5"
+        stroke="#FFFFFF"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <circle cx="17.95" cy="6.7" r="1.9" fill="#1783FF" />
+    </svg>
+  )
+})
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyIcon = React.ComponentType<any>
 
@@ -293,6 +321,7 @@ const COLOR_ICONS: Partial<Record<AgentType, AnyIcon>> = {
   codex: CodexColorIcon,
   gemini: GeminiCliColorIcon,
   open_claw: OpenClawColorIcon,
+  kimi_code: KimiCodeColorIcon,
 }
 
 const MONO_ICONS: Partial<Record<AgentType, AnyIcon>> = {

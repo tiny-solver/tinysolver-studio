@@ -56,6 +56,7 @@ pub enum McpAppType {
     Cline,
     Hermes,
     CodeBuddy,
+    KimiCode,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -371,6 +372,7 @@ pub async fn mcp_upsert_local_server(
         McpAppType::Cline,
         McpAppType::Hermes,
         McpAppType::CodeBuddy,
+        McpAppType::KimiCode,
     ];
 
     for app in all_apps {
@@ -427,6 +429,7 @@ pub async fn mcp_remove_server(
             McpAppType::Cline,
             McpAppType::Hermes,
             McpAppType::CodeBuddy,
+            McpAppType::KimiCode,
         ],
     };
 
@@ -2239,6 +2242,13 @@ fn scan_local_servers() -> Result<Vec<LocalMcpServer>, AppCommandError> {
         entry.1.insert(McpAppType::CodeBuddy);
     }
 
+    for (id, spec) in read_kimi_code_servers()? {
+        let entry = merged
+            .entry(id)
+            .or_insert_with(|| (spec.clone(), BTreeSet::new()));
+        entry.1.insert(McpAppType::KimiCode);
+    }
+
     Ok(merged
         .into_iter()
         .map(|(id, (spec, apps))| LocalMcpServer {
@@ -2264,6 +2274,7 @@ fn upsert_server_for_app(app: McpAppType, id: &str, spec: &Value) -> Result<(), 
         McpAppType::Cline => upsert_cline_server(id, spec),
         McpAppType::Hermes => upsert_hermes_server(id, spec),
         McpAppType::CodeBuddy => upsert_codebuddy_server(id, spec),
+        McpAppType::KimiCode => upsert_kimi_code_server(id, spec),
     }
 }
 
@@ -2280,7 +2291,34 @@ pub fn read_servers_for_agent_type(
         AgentType::Cline => read_cline_servers(),
         AgentType::Hermes => read_hermes_servers(),
         AgentType::CodeBuddy => read_codebuddy_servers(),
+        AgentType::KimiCode => read_kimi_code_servers(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Kimi Code  (~/.kimi-code/config.toml  →  [mcp_servers])
+//
+// v1 STUB. Kimi Code advertises ACP `mcpCapabilities` (http/sse + stdio
+// forwarding via `session/new`), so codeg-mcp and user MCP servers reach Kimi
+// over the ACP forward path (`load_mcp_servers_for_agent`) without writing
+// config.toml. Managing Kimi's native `[mcp_servers]` TOML section is deferred
+// to Phase 3 (its on-disk schema is not yet confirmed). These stubs keep the
+// MCP dispatch exhaustive and make "Kimi Code" a no-op config target for now.
+//
+// IMPORTANT: unlike Hermes, Kimi must NOT be added to the ACP forward skip
+// list — codeg-mcp keeps reaching it while this native path is stubbed.
+// ---------------------------------------------------------------------------
+
+fn read_kimi_code_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+    Ok(BTreeMap::new())
+}
+
+fn upsert_kimi_code_server(_id: &str, _spec: &Value) -> Result<(), AppCommandError> {
+    Ok(())
+}
+
+fn remove_kimi_code_server(_id: &str) -> Result<bool, AppCommandError> {
+    Ok(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -2536,6 +2574,7 @@ fn remove_server_for_app(app: McpAppType, id: &str) -> Result<bool, AppCommandEr
         McpAppType::Cline => remove_cline_server(id),
         McpAppType::Hermes => remove_hermes_server(id),
         McpAppType::CodeBuddy => remove_codebuddy_server(id),
+        McpAppType::KimiCode => remove_kimi_code_server(id),
     }
 }
 

@@ -105,6 +105,7 @@ pub fn all_acp_agents() -> Vec<AgentType> {
         AgentType::Cline,
         AgentType::Hermes,
         AgentType::CodeBuddy,
+        AgentType::KimiCode,
     ]
 }
 
@@ -118,6 +119,7 @@ pub fn registry_id_for(agent_type: AgentType) -> &'static str {
         AgentType::Cline => "cline",
         AgentType::Hermes => "hermes",
         AgentType::CodeBuddy => "codebuddy-code",
+        AgentType::KimiCode => "kimi-code",
     }
 }
 
@@ -131,6 +133,7 @@ pub fn from_registry_id(id: &str) -> Option<AgentType> {
         "cline" => Some(AgentType::Cline),
         "hermes" => Some(AgentType::Hermes),
         "codebuddy-code" => Some(AgentType::CodeBuddy),
+        "kimi-code" => Some(AgentType::KimiCode),
         _ => None,
     }
 }
@@ -301,6 +304,19 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 node_required: Some("22.0.0"),
             },
         },
+        AgentType::KimiCode => AcpAgentMeta {
+            agent_type,
+            name: "Kimi Code",
+            description: "Moonshot AI's official CLI coding assistant (ACP)",
+            distribution: AgentDistribution::Npx {
+                version: "0.19.1",
+                package: "@moonshot-ai/kimi-code@0.19.1",
+                cmd: "kimi",
+                args: &["acp"],
+                env: &[],
+                node_required: Some("22.19.0"),
+            },
+        },
     }
 }
 
@@ -414,6 +430,12 @@ mod tests {
             "2.109.2",
             "@tencent-ai/codebuddy-code@2.109.2",
             Some("22.0.0"),
+        );
+        assert_npx_version(
+            AgentType::KimiCode,
+            "0.19.1",
+            "@moonshot-ai/kimi-code@0.19.1",
+            Some("22.19.0"),
         );
         assert_binary_version(AgentType::Codex, "0.16.0", "/releases/download/v0.16.0/");
         assert_binary_version(AgentType::OpenCode, "1.17.9", "/releases/download/v1.17.9/");
