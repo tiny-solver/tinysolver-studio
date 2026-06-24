@@ -424,12 +424,34 @@ function extractRevisedPrompt(content: string | null): string | null {
   return trimmed
 }
 
-function resolveGoalToolInputFromLiveTitle(
+/** First filesystem path from an ACP tool call's `locations` (`[{ path }]`), or null. */
+function firstLocationPath(locations: unknown): string | null {
+  if (!Array.isArray(locations)) return null
+  for (const loc of locations) {
+    if (loc && typeof loc === "object") {
+      const p = (loc as { path?: unknown }).path
+      if (typeof p === "string" && p.length > 0) return p
+    }
+  }
+  return null
+}
+
+function resolveLiveToolInput(
   toolName: string,
   info: ToolCallInfo
 ): string | null {
   if (info.raw_input && info.raw_input.trim().length > 0) {
     return info.raw_input
+  }
+
+  // codex classifies file-reading shell commands (sed/cat/head) as ACP `read`
+  // commandActions: kind="read", the path only in `locations`/`title`, and NO
+  // raw_input (codex-acp createCommandActionEvent). Synthesize a `file_path` from
+  // the location so the read card derives a "Read <path>" title + file view,
+  // matching a normal read instead of falling back to "read: <output>".
+  if (toolName === "read") {
+    const path = firstLocationPath(info.locations)
+    if (path) return JSON.stringify({ file_path: path })
   }
 
   const goal = parseGoalUpdateTitle(info.title)
@@ -653,10 +675,7 @@ function buildStreamingTurnsFromLiveMessage(
           type: "tool_use",
           tool_use_id: block.info.tool_call_id,
           tool_name: toolName,
-          input_preview: resolveGoalToolInputFromLiveTitle(
-            toolName,
-            block.info
-          ),
+          input_preview: resolveLiveToolInput(toolName, block.info),
           // Forward the ACP `meta` field downstream so the renderer can
           // read delegation state (`meta["codeg.delegation"]`) for
           // pre-binding / post-refresh fallback rendering of
