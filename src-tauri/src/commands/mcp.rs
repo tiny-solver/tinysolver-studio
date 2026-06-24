@@ -2296,29 +2296,106 @@ pub fn read_servers_for_agent_type(
 }
 
 // ---------------------------------------------------------------------------
-// Kimi Code  (~/.kimi-code/config.toml  →  [mcp_servers])
+// Kimi Code  (~/.kimi-code/mcp.json  →  top-level `mcpServers`)
 //
-// v1 STUB. Kimi Code advertises ACP `mcpCapabilities` (http/sse + stdio
-// forwarding via `session/new`), so codeg-mcp and user MCP servers reach Kimi
-// over the ACP forward path (`load_mcp_servers_for_agent`) without writing
-// config.toml. Managing Kimi's native `[mcp_servers]` TOML section is deferred
-// to Phase 3 (its on-disk schema is not yet confirmed). These stubs keep the
-// MCP dispatch exhaustive and make "Kimi Code" a no-op config target for now.
+// Kimi reads its user-global MCP config from `<KIMI_CODE_HOME>/mcp.json`
+// (default `~/.kimi-code/mcp.json`) — a JSON file with a top-level `mcpServers`
+// object of Claude-shaped entries (`command`/`args`/`env`/`cwd`, or `url` for
+// http/sse). This mirrors CodeBuddy/Cline's JSON layout (NOT Codex's TOML).
 //
-// IMPORTANT: unlike Hermes, Kimi must NOT be added to the ACP forward skip
-// list — codeg-mcp keeps reaching it while this native path is stubbed.
+// Because Kimi loads this file natively at session start, `KimiCode` is on the
+// ACP forward skip list in `connection.rs` (like Hermes) so the same user
+// servers aren't double-registered over `session/new`. The built-in `codeg-mcp`
+// companion is injected separately by `inject_codeg_mcp`, so it still reaches
+// Kimi regardless.
 // ---------------------------------------------------------------------------
 
+fn kimi_code_mcp_json_path() -> PathBuf {
+    crate::parsers::kimi_code::resolve_kimi_code_home_dir().join("mcp.json")
+}
+
 fn read_kimi_code_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
-    Ok(BTreeMap::new())
+    read_kimi_code_servers_at(&kimi_code_mcp_json_path())
 }
 
-fn upsert_kimi_code_server(_id: &str, _spec: &Value) -> Result<(), AppCommandError> {
-    Ok(())
+fn read_kimi_code_servers_at(path: &Path) -> Result<BTreeMap<String, Value>, AppCommandError> {
+    let root = read_json_file(path)?;
+    let mut out = BTreeMap::new();
+
+    let Some(servers) = root.get("mcpServers").and_then(Value::as_object) else {
+        return Ok(out);
+    };
+
+    for (id, spec) in servers {
+        match canonicalize_spec(spec, "Kimi Code config") {
+            Ok(normalized) => {
+                out.insert(id.to_string(), normalized);
+            }
+            Err(err) => {
+                eprintln!("[MCP] skip invalid Kimi Code MCP entry id={id}: {err}");
+            }
+        }
+    }
+
+    Ok(out)
 }
 
-fn remove_kimi_code_server(_id: &str) -> Result<bool, AppCommandError> {
-    Ok(false)
+fn upsert_kimi_code_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+    upsert_kimi_code_server_at(&kimi_code_mcp_json_path(), id, spec)
+}
+
+fn upsert_kimi_code_server_at(
+    path: &Path,
+    id: &str,
+    spec: &Value,
+) -> Result<(), AppCommandError> {
+    let mut root = read_json_file(path)?;
+    if !root.is_object() {
+        root = json!({});
+    }
+
+    let canonical = canonicalize_spec(spec, "Kimi Code write")?;
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        mcp_configuration_invalid(format!("invalid JSON root in {}", path.display()))
+    })?;
+    if !obj.get("mcpServers").map(Value::is_object).unwrap_or(false) {
+        obj.insert("mcpServers".to_string(), Value::Object(Map::new()));
+    }
+
+    let map = obj
+        .get_mut("mcpServers")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| {
+            mcp_configuration_invalid(format!("invalid mcpServers in {}", path.display()))
+        })?;
+    map.insert(id.to_string(), canonical);
+
+    write_json_file(path, &root)
+}
+
+fn remove_kimi_code_server(id: &str) -> Result<bool, AppCommandError> {
+    remove_kimi_code_server_at(&kimi_code_mcp_json_path(), id)
+}
+
+fn remove_kimi_code_server_at(path: &Path, id: &str) -> Result<bool, AppCommandError> {
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let mut root = read_json_file(path)?;
+    let Some(obj) = root.as_object_mut() else {
+        return Ok(false);
+    };
+    let Some(servers) = obj.get_mut("mcpServers").and_then(Value::as_object_mut) else {
+        return Ok(false);
+    };
+
+    let removed = servers.remove(id).is_some();
+    if removed {
+        write_json_file(path, &root)?;
+    }
+    Ok(removed)
 }
 
 // ---------------------------------------------------------------------------
@@ -4361,6 +4438,51 @@ mod tests {
         assert!(normalize_mcp_type("   ").is_none());
         assert!(normalize_mcp_type("Foo").is_none());
         assert!(normalize_mcp_type("ws").is_none());
+    }
+
+    #[test]
+    fn kimi_code_mcp_json_round_trips() {
+        // Kimi reads `<KIMI_CODE_HOME>/mcp.json` (`mcpServers`) natively; verify
+        // the read/upsert/remove cycle against an isolated path.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("mcp.json");
+
+        // Missing file → no servers, and removing is a no-op.
+        assert!(read_kimi_code_servers_at(&path)
+            .expect("read missing")
+            .is_empty());
+        assert!(!remove_kimi_code_server_at(&path, "ctx7").expect("remove missing"));
+
+        // Upsert a stdio server.
+        let spec = json!({
+            "type": "stdio",
+            "command": "npx",
+            "args": ["-y", "ctx7-mcp"],
+        });
+        upsert_kimi_code_server_at(&path, "ctx7", &spec).expect("upsert");
+
+        // It round-trips, canonicalized, under `mcpServers`.
+        let servers = read_kimi_code_servers_at(&path).expect("read back");
+        assert_eq!(servers.len(), 1);
+        let stored = servers.get("ctx7").expect("ctx7 present");
+        assert_eq!(stored.get("type").and_then(Value::as_str), Some("stdio"));
+        assert_eq!(stored.get("command").and_then(Value::as_str), Some("npx"));
+
+        // On-disk shape is `{ "mcpServers": { "ctx7": { .. } } }`.
+        let raw = std::fs::read_to_string(&path).expect("read file");
+        let root: Value = serde_json::from_str(&raw).expect("parse json");
+        assert!(root
+            .get("mcpServers")
+            .and_then(Value::as_object)
+            .map(|m| m.contains_key("ctx7"))
+            .unwrap_or(false));
+
+        // Remove it; the file no longer lists it and a second remove is a no-op.
+        assert!(remove_kimi_code_server_at(&path, "ctx7").expect("remove"));
+        assert!(read_kimi_code_servers_at(&path)
+            .expect("read after remove")
+            .is_empty());
+        assert!(!remove_kimi_code_server_at(&path, "ctx7").expect("remove again"));
     }
 
     fn codex_entry(toml_src: &str) -> toml::Value {

@@ -3767,10 +3767,15 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
             global_dirs: vec![home_dir_or_default().join(".codebuddy").join("skills")],
             project_rel_dirs: vec![".codebuddy/skills"],
         }),
-        // Kimi Code's skill storage layout is not yet confirmed; surfacing
-        // skills is deferred (Phase 3). `None` makes `scoped_skill_dirs`
-        // report "not supported" and excludes it from experts/Settings → Skills.
-        AgentType::KimiCode => None,
+        // Kimi Code reads skills from `<KIMI_CODE_HOME>/skills/` (default
+        // `~/.kimi-code/skills/`) and project-local `<root>/.kimi-code/skills/`.
+        AgentType::KimiCode => Some(SkillStorageSpec {
+            kind: SkillStorageKind::SkillDirectoryOnly,
+            global_dirs: vec![
+                crate::parsers::kimi_code::resolve_kimi_code_home_dir().join("skills"),
+            ],
+            project_rel_dirs: vec![".kimi-code/skills"],
+        }),
     }
 }
 
@@ -6997,6 +7002,16 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("codeg-acp-{name}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("create test directory");
         dir
+    }
+
+    #[test]
+    fn kimi_code_skill_storage_spec_targets_kimi_home() {
+        let spec =
+            skill_storage_spec(AgentType::KimiCode).expect("Kimi Code supports skills");
+        assert_eq!(spec.kind, SkillStorageKind::SkillDirectoryOnly);
+        assert_eq!(spec.project_rel_dirs, vec![".kimi-code/skills"]);
+        let expected = crate::parsers::kimi_code::resolve_kimi_code_home_dir().join("skills");
+        assert_eq!(spec.global_dirs, vec![expected]);
     }
 
     #[test]
