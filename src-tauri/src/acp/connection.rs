@@ -185,6 +185,22 @@ impl AgentConnection {
 }
 
 /// Build an AcpAgent from registry metadata.
+/// Directory handed to codex-acp via `APP_SERVER_LOGS` so its adapter-side
+/// (ACP ↔ Codex app-server translation) logs land on disk for support.
+///
+/// Roots under the same `<cache>/app.codeg` tree as
+/// [`binary_cache::cache_dir`] for consistency. Returns `None` — and the
+/// caller injects nothing — when the system cache dir is unknown or the
+/// directory can't be created: diagnostics must never block a connection.
+fn codex_app_server_log_dir() -> Option<String> {
+    let dir = dirs::cache_dir()?
+        .join("app.codeg")
+        .join("acp-logs")
+        .join("codex-acp");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir.to_string_lossy().into_owned())
+}
+
 async fn build_agent(
     agent_type: AgentType,
     runtime_env: &BTreeMap<String, String>,
@@ -195,7 +211,20 @@ async fn build_agent(
 
     let agent = match meta.distribution {
         AgentDistribution::Npx { cmd, args, env, .. } => {
-            let merged_env = merge_agent_env(env, runtime_env);
+            let mut merged_env = merge_agent_env(env, runtime_env);
+            // codex-acp 1.0.0 honors APP_SERVER_LOGS as a directory for its
+            // adapter-side logs. Surface it only under CODEG_ACP_DEBUG so
+            // default runs are unchanged; a directory-creation failure silently
+            // skips injection (diagnostics must never block a connect).
+            let want_codex_logs = agent_type == AgentType::Codex
+                && std::env::var("CODEG_ACP_DEBUG")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+            if want_codex_logs {
+                if let Some(dir) = codex_app_server_log_dir() {
+                    merged_env.push(("APP_SERVER_LOGS".to_string(), dir));
+                }
+            }
             let mut parts: Vec<String> = Vec::new();
             for (k, v) in &merged_env {
                 parts.push(format!("{k}={v}"));
@@ -785,12 +814,23 @@ fn map_session_config_options(
         .collect()
 }
 
-/// Codex-acp sometimes omits the "mode" (approval preset) config option when
-/// the loaded sandbox policy does not exactly match one of the three built-in
-/// presets (commonly because `writable_roots` was injected during config
-/// loading).  When that happens, synthesize the option so the user can still
-/// pick a preset.  codex-acp's `set_config_option` handler always accepts
-/// `config_id = "mode"` regardless of whether it was advertised.
+/// Defensive fallback for Codex's approval-preset selector.
+///
+/// codex-acp 1.0.0 advertises its modes through *both* standard ACP
+/// `SessionModes` and an `id = "mode"` config option (see `AgentMode.ts`'s
+/// `toSessionModeState()` + `toConfigOption()`), so this synthesizer is
+/// normally a no-op — the early return fires because the agent already
+/// surfaced "mode". We keep it only as a safety net: if a future build ever
+/// omits the "mode" config option (older 0.16.0 did this when the sandbox
+/// policy didn't match a preset, e.g. after `writable_roots` injection), the
+/// user would otherwise lose the preset picker entirely, because the composer
+/// hides the standard mode selector whenever any config option exists. Codex's
+/// `set_config_option` handler accepts `config_id = "mode"` regardless of
+/// whether it was advertised.
+///
+/// The preset ids/names/descriptions below MUST match the live adapter
+/// vocabulary (`read-only` / `agent` / `agent-full-access`, default `agent`);
+/// the legacy 0.16.0 ids (`auto` / `full-access`) are no longer accepted.
 fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
     if options.iter().any(|o| o.id == "mode") {
         return;
@@ -805,24 +845,28 @@ fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
             ),
             category: Some("mode".to_string()),
             kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
-                current_value: "auto".to_string(),
+                current_value: "agent".to_string(),
                 options: vec![
                     SessionConfigSelectOptionInfo {
                         value: "read-only".to_string(),
-                        name: "Read Only".to_string(),
-                        description: Some("Codex can only read files".to_string()),
-                    },
-                    SessionConfigSelectOptionInfo {
-                        value: "auto".to_string(),
-                        name: "Default".to_string(),
+                        name: "Read-only".to_string(),
                         description: Some(
-                            "Codex can edit files, but asks before running commands".to_string(),
+                            "Requires approval to edit files and run commands.".to_string(),
                         ),
                     },
                     SessionConfigSelectOptionInfo {
-                        value: "full-access".to_string(),
-                        name: "Full Access".to_string(),
-                        description: Some("Codex runs without asking for approval".to_string()),
+                        value: "agent".to_string(),
+                        name: "Agent".to_string(),
+                        description: Some("Read and edit files, and run commands.".to_string()),
+                    },
+                    SessionConfigSelectOptionInfo {
+                        value: "agent-full-access".to_string(),
+                        name: "Agent (full access)".to_string(),
+                        description: Some(
+                            "Codex can edit files outside this workspace and run commands with \
+                             network access."
+                                .to_string(),
+                        ),
                     },
                 ],
                 groups: vec![],
@@ -2159,9 +2203,11 @@ async fn apply_preferred_session_options(
     let mut options = initial_config_options;
     for (config_id, value_id) in preferred_config_values {
         // Skip the round-trip when the agent's current value already matches.
-        // Note: Codex omits "mode" from its advertised options but accepts
-        // `set_config_option` for it (see `ensure_codex_mode_option`), so we
-        // do NOT skip on "config_id not in options" — let the agent decide.
+        // Note: codex-acp 1.0.0 advertises "mode" as a config option (so the
+        // match check below normally fires), but we still do NOT skip when a
+        // requested config_id is absent from the advertised options — older or
+        // edge-case builds accept `set_config_option` for an unadvertised "mode"
+        // (see `ensure_codex_mode_option`), so let the agent decide.
         let already_matches = options.iter().any(|o| {
             o.id.to_string() == *config_id
                 && matches!(

@@ -161,37 +161,16 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             agent_type,
             name: "Codex CLI",
             description: "ACP adapter for OpenAI's coding assistant",
-            distribution: AgentDistribution::Binary {
-                version: "0.16.0",
+            // codex-acp moved from zed-industries (Rust binary) to the
+            // agentclientprotocol org (TypeScript rewrite, npx-distributed).
+            // 1.0.0 bundles `@openai/codex` and drives `codex app-server`.
+            distribution: AgentDistribution::Npx {
+                version: "1.0.0",
+                package: "@agentclientprotocol/codex-acp@1.0.0",
                 cmd: "codex-acp",
                 args: &[],
                 env: &[],
-                platforms: &[
-                    PlatformBinary {
-                        platform: "darwin-aarch64",
-                        url: "https://github.com/zed-industries/codex-acp/releases/download/v0.16.0/codex-acp-0.16.0-aarch64-apple-darwin.tar.gz",
-                    },
-                    PlatformBinary {
-                        platform: "darwin-x86_64",
-                        url: "https://github.com/zed-industries/codex-acp/releases/download/v0.16.0/codex-acp-0.16.0-x86_64-apple-darwin.tar.gz",
-                    },
-                    PlatformBinary {
-                        platform: "linux-aarch64",
-                        url: "https://github.com/zed-industries/codex-acp/releases/download/v0.16.0/codex-acp-0.16.0-aarch64-unknown-linux-gnu.tar.gz",
-                    },
-                    PlatformBinary {
-                        platform: "linux-x86_64",
-                        url: "https://github.com/zed-industries/codex-acp/releases/download/v0.16.0/codex-acp-0.16.0-x86_64-unknown-linux-gnu.tar.gz",
-                    },
-                    PlatformBinary {
-                        platform: "windows-aarch64",
-                        url: "https://github.com/zed-industries/codex-acp/releases/download/v0.16.0/codex-acp-0.16.0-aarch64-pc-windows-msvc.zip",
-                    },
-                    PlatformBinary {
-                        platform: "windows-x86_64",
-                        url: "https://github.com/zed-industries/codex-acp/releases/download/v0.16.0/codex-acp-0.16.0-x86_64-pc-windows-msvc.zip",
-                    },
-                ],
+                node_required: None,
             },
         },
         AgentType::Gemini => AcpAgentMeta {
@@ -437,7 +416,12 @@ mod tests {
             "@moonshot-ai/kimi-code@0.19.1",
             Some("22.19.0"),
         );
-        assert_binary_version(AgentType::Codex, "0.16.0", "/releases/download/v0.16.0/");
+        assert_npx_version(
+            AgentType::Codex,
+            "1.0.0",
+            "@agentclientprotocol/codex-acp@1.0.0",
+            None,
+        );
         assert_binary_version(AgentType::OpenCode, "1.17.9", "/releases/download/v1.17.9/");
         assert_uvx_version(
             AgentType::Hermes,
