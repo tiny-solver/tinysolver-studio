@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "Explora intención y requisitos antes de construir",
             "debuggingDesc": "Encuentra la causa raíz antes de proponer arreglos",
             "writingSkillsDesc": "Crea, edita y verifica habilidades reutilizables"
+          },
+          "notEnabled": {
+            "title": "La habilidad «{skill}» aún no está activada para {agent}",
+            "description": "Actívala en Ajustes para usarla aquí.",
+            "action": "Activar",
+            "hint": "Habilidad no activada"
           }
         }
       },

@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "Explorer intention et besoins avant de coder",
             "debuggingDesc": "Trouver la cause racine avant de corriger",
             "writingSkillsDesc": "Créer, modifier et vérifier des skills réutilisables"
+          },
+          "notEnabled": {
+            "title": "La compétence « {skill} » n’est pas encore activée pour {agent}",
+            "description": "Activez-la dans les Paramètres pour l’utiliser ici.",
+            "action": "Activer",
+            "hint": "Compétence non activée"
           }
         }
       },

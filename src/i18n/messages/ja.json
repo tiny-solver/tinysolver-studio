@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "着手前に意図と要件を整理",
             "debuggingDesc": "修正の前に根本原因を特定",
             "writingSkillsDesc": "再利用可能なスキルを作成・編集・検証"
+          },
+          "notEnabled": {
+            "title": "「{skill}」スキルは {agent} でまだ有効になっていません",
+            "description": "設定で有効にすると、ここで使用できます。",
+            "action": "有効にする",
+            "hint": "スキルが無効です"
           }
         }
       },

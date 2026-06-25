@@ -1583,6 +1583,8 @@ export type SettingsSection =
   | "agents"
   | "mcp"
   | "skills"
+  | "experts"
+  | "office-tools"
   | "shortcuts"
   | "system"
 

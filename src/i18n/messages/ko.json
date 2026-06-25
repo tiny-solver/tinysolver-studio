@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "구현 전 의도와 요구사항 탐색",
             "debuggingDesc": "수정 제안 전에 근본 원인 파악",
             "writingSkillsDesc": "재사용 가능한 스킬 생성·편집·검증"
+          },
+          "notEnabled": {
+            "title": "‘{skill}’ 스킬이 아직 {agent}에서 활성화되지 않았습니다",
+            "description": "설정에서 활성화하면 여기서 사용할 수 있습니다.",
+            "action": "활성화하기",
+            "hint": "스킬이 비활성화됨"
           }
         }
       },

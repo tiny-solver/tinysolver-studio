@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "Absicht & Anforderungen vor dem Bauen klären",
             "debuggingDesc": "Erst die Ursache finden, dann Fixes vorschlagen",
             "writingSkillsDesc": "Wiederverwendbare Skills erstellen, bearbeiten & prüfen"
+          },
+          "notEnabled": {
+            "title": "Skill „{skill}“ ist für {agent} noch nicht aktiviert",
+            "description": "Aktiviere ihn in den Einstellungen, um ihn hier zu nutzen.",
+            "action": "Aktivieren",
+            "hint": "Skill nicht aktiviert"
           }
         }
       },

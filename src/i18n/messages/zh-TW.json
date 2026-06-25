@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "動手前先梳理意圖與需求",
             "debuggingDesc": "先定位根因再提出修復",
             "writingSkillsDesc": "建立、編輯並驗證可重用技能"
+          },
+          "notEnabled": {
+            "title": "「{skill}」技能尚未對 {agent} 啟用",
+            "description": "前往設定啟用後即可在此使用。",
+            "action": "前往啟用",
+            "hint": "技能未啟用"
           }
         }
       },

@@ -2036,6 +2036,12 @@
             "brainstormingDesc": "Explore intent & requirements before building",
             "debuggingDesc": "Find the root cause before proposing fixes",
             "writingSkillsDesc": "Create, edit & verify reusable skills"
+          },
+          "notEnabled": {
+            "title": "“{skill}” isn’t enabled for {agent} yet",
+            "description": "Enable it in Settings to use it here.",
+            "action": "Enable",
+            "hint": "Skill not enabled"
           }
         }
       },
