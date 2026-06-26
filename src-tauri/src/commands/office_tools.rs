@@ -10,7 +10,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use serde::Serialize;
 use tokio::sync::Mutex;
@@ -372,15 +374,38 @@ pub async fn officecli_install() -> Result<OfficecliInfo, OfficeToolsError> {
     // fallback). It owns the download, checksum, install location, and — on
     // Windows — the persistent User-PATH registration. See `officecli_install_command`.
     let cmd = officecli_install_command(current_install_os());
-    let output = tokio_command(&cmd.program)
+    let child = tokio_command(&cmd.program)
         .args(&cmd.args)
-        .output()
-        .await
+        // Pipe output for diagnostics; null stdin so the installer can't block
+        // waiting on input it will never get.
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| {
             OfficeToolsError::CommandFailed(format!(
                 "failed to run the OfficeCLI installer: {e} — install manually from {OFFICECLI_MANUAL_URL}"
             ))
         })?;
+
+    // Bound the whole install (script fetch + binary download). On timeout the
+    // entire process tree is killed — not just the direct shell — so the vendor
+    // script's download descendant can't keep installing in the background and
+    // race a later retry/uninstall once `mutation_lock` is released.
+    let output = match wait_with_output_or_kill_tree(child, OFFICECLI_INSTALL_TIMEOUT).await {
+        Ok(Some(output)) => output,
+        Ok(None) => {
+            return Err(OfficeToolsError::CommandFailed(format!(
+                "OfficeCLI install timed out after {}s — check your network and install manually from {OFFICECLI_MANUAL_URL}",
+                OFFICECLI_INSTALL_TIMEOUT.as_secs()
+            )));
+        }
+        Err(e) => {
+            return Err(OfficeToolsError::CommandFailed(format!(
+                "failed to run the OfficeCLI installer: {e} — install manually from {OFFICECLI_MANUAL_URL}"
+            )));
+        }
+    };
 
     if !output.status.success() {
         // The official scripts report failures on stdout (PowerShell `Write-Host`,
@@ -433,6 +458,38 @@ fn bounded_tail(s: &str, max: usize) -> String {
     format!("…{}", &s[start..])
 }
 
+/// Await `child` to completion capturing its output, or — if it runs past
+/// `timeout` — kill the entire process tree and return `Ok(None)`.
+///
+/// Killing the *tree* (via `kill_tree`) rather than just the direct child
+/// matters: the vendor installer script downloads the multi-MB binary in a
+/// descendant process (`curl` under `install.sh`, `Invoke-WebRequest` under
+/// `install.ps1`). On timeout, dropping the wait future detaches the direct
+/// shell but would leave that descendant running — it could finish installing
+/// in the background and race a later retry/uninstall once `mutation_lock` is
+/// released. We deliberately do NOT use `Command::kill_on_drop`: it SIGKILLs the
+/// shell first, reparenting the descendant away so `kill_tree` could no longer
+/// reach it. Capturing the pid before the move and killing the tree on timeout
+/// keeps the descendant reachable. `kill_tree` is best-effort (a pid that has
+/// already exited is a no-op); Tokio's orphan reaper reaps the killed children.
+async fn wait_with_output_or_kill_tree(
+    child: tokio::process::Child,
+    timeout: Duration,
+) -> io::Result<Option<std::process::Output>> {
+    let pid = child.id();
+    match tokio::time::timeout(timeout, child.wait_with_output()).await {
+        Ok(result) => result.map(Some),
+        Err(_) => {
+            if let Some(pid) = pid {
+                if let Err(err) = kill_tree::tokio::kill_tree(pid).await {
+                    tracing::error!("[office] kill_tree failed for install pid {pid}: {err}");
+                }
+            }
+            Ok(None)
+        }
+    }
+}
+
 /// Where users can install OfficeCLI by hand when the network path fails.
 const OFFICECLI_MANUAL_URL: &str = "https://github.com/iOfficeAI/OfficeCLI";
 const OFFICECLI_INSTALL_SH_MIRROR_URL: &str = "https://d.officecli.ai/install.sh";
@@ -441,6 +498,15 @@ const OFFICECLI_INSTALL_SH_GITHUB_URL: &str =
 const OFFICECLI_INSTALL_PS1_MIRROR_URL: &str = "https://d.officecli.ai/install.ps1";
 const OFFICECLI_INSTALL_PS1_GITHUB_URL: &str =
     "https://raw.githubusercontent.com/iOfficeAI/OfficeCLI/main/install.ps1";
+
+/// Hard ceiling on the whole installer subprocess — the small script download
+/// *and* the multi-MB binary the script then fetches. Generous (slow networks
+/// pulling tens of MB are fine) but bounded: a stalled mirror or hung download
+/// must never pin the mutation lock and the UI's "installing" state forever. On
+/// timeout the whole process tree is killed (see `wait_with_output_or_kill_tree`).
+/// The per-request `curl`/`irm` timeouts below only bound the script fetch; this
+/// bounds everything.
+const OFFICECLI_INSTALL_TIMEOUT: Duration = Duration::from_secs(480);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InstallOs {
@@ -475,8 +541,11 @@ fn officecli_install_command(os: InstallOs) -> OfficecliInstallCommand {
                 "-ExecutionPolicy".to_string(),
                 "Bypass".to_string(),
                 "-Command".to_string(),
+                // `-TimeoutSec` bounds each script fetch so a stalled mirror
+                // fails over to GitHub instead of hanging; the binary download
+                // the script then does is bounded by OFFICECLI_INSTALL_TIMEOUT.
                 format!(
-                    "$ErrorActionPreference='Stop'; try {{ $s = irm {OFFICECLI_INSTALL_PS1_MIRROR_URL} }} catch {{ $s = irm {OFFICECLI_INSTALL_PS1_GITHUB_URL} }}; iex $s"
+                    "$ErrorActionPreference='Stop'; try {{ $s = irm -TimeoutSec 60 {OFFICECLI_INSTALL_PS1_MIRROR_URL} }} catch {{ $s = irm -TimeoutSec 60 {OFFICECLI_INSTALL_PS1_GITHUB_URL} }}; iex $s"
                 ),
             ],
         },
@@ -486,9 +555,13 @@ fn officecli_install_command(os: InstallOs) -> OfficecliInstallCommand {
                 "-lc".to_string(),
                 // Download to a temp file rather than `curl | bash`: a
                 // connection dropped mid-stream would otherwise concatenate the
-                // fallback output after a partial script.
+                // fallback output after a partial script. The `--connect-timeout`
+                // / `--max-time` flags bound each script fetch so a stalled
+                // mirror fails over to GitHub instead of hanging; the binary
+                // download the script then does is bounded by
+                // OFFICECLI_INSTALL_TIMEOUT.
                 format!(
-                    "f=$(mktemp) || exit 1; (curl -fsSL {OFFICECLI_INSTALL_SH_MIRROR_URL} -o \"$f\" || curl -fsSL {OFFICECLI_INSTALL_SH_GITHUB_URL} -o \"$f\") && bash \"$f\"; s=$?; rm -f \"$f\"; exit $s"
+                    "f=$(mktemp) || exit 1; (curl -fsSL --connect-timeout 20 --max-time 60 {OFFICECLI_INSTALL_SH_MIRROR_URL} -o \"$f\" || curl -fsSL --connect-timeout 20 --max-time 60 {OFFICECLI_INSTALL_SH_GITHUB_URL} -o \"$f\") && bash \"$f\"; s=$?; rm -f \"$f\"; exit $s"
                 ),
             ],
         },
@@ -1131,6 +1204,76 @@ mod tests {
                 .expect("github URL present");
             assert!(mirror < github, "mirror must precede github for {os:?}: {script}");
         }
+    }
+
+    #[test]
+    fn install_command_bounds_script_download_time() {
+        // Fetching the installer *script* must fail over quickly rather than
+        // hang on a stalled mirror. (The binary download the script then does is
+        // bounded separately by OFFICECLI_INSTALL_TIMEOUT.)
+        let unix = officecli_install_command(InstallOs::Unix).args.join(" ");
+        assert!(unix.contains("--connect-timeout"), "{unix}");
+        assert!(unix.contains("--max-time"), "{unix}");
+
+        let win = officecli_install_command(InstallOs::Windows).args.join(" ");
+        assert!(win.contains("-TimeoutSec"), "{win}");
+    }
+
+    /// On timeout the *whole tree* must die, not just the direct shell — the
+    /// vendor script downloads the binary in a descendant. Models that with
+    /// `sh` spawning a long-lived `sleep` grandchild and asserts the grandchild
+    /// is killed. Unix-only (relies on `sh`/`kill(2)`).
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn install_timeout_kills_whole_process_tree() {
+        use std::time::Duration;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pidfile = dir.path().join("grandchild.pid");
+        // `sh` (direct child) backgrounds `sleep` (grandchild), records its pid,
+        // and `wait`s — so the tree outlives our short timeout.
+        let child = tokio_command("sh")
+            .arg("-c")
+            .arg(format!("sleep 30 & echo $! > '{}'; wait", pidfile.display()))
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn sh");
+
+        let result = wait_with_output_or_kill_tree(child, Duration::from_millis(300))
+            .await
+            .expect("no io error");
+        assert!(result.is_none(), "expected a timeout (Ok(None))");
+
+        // Grandchild pid is written almost immediately; poll briefly for it.
+        let mut gpid = None;
+        for _ in 0..100 {
+            if let Ok(s) = std::fs::read_to_string(&pidfile) {
+                if let Ok(p) = s.trim().parse::<i32>() {
+                    gpid = Some(p);
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let gpid = gpid.expect("grandchild recorded its pid");
+
+        // Poll until the grandchild is gone: `kill(pid, 0)` returns -1/ESRCH
+        // once it no longer exists (reparented + reaped after the tree kill).
+        let mut alive = true;
+        for _ in 0..150 {
+            // SAFETY: signal 0 only probes for existence; it sends no signal.
+            if unsafe { libc::kill(gpid, 0) } != 0 {
+                alive = false;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(
+            !alive,
+            "grandchild {gpid} survived — the process tree was not killed"
+        );
     }
 
     #[test]
