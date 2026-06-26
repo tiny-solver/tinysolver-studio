@@ -7183,21 +7183,19 @@ mod tests {
 
     #[test]
     fn opencode_config_path_falls_back_when_xdg_config_home_empty() {
-        // An empty XDG_CONFIG_HOME must fall back to ~/.config, not resolve to a
-        // relative "opencode/opencode.json".
-        let tmp = tempfile::tempdir().expect("tempdir");
-        temp_env::with_vars(
-            [
-                ("HOME", Some(tmp.path())),
-                ("XDG_CONFIG_HOME", Some(std::path::Path::new(""))),
-            ],
-            || {
-                assert_eq!(
-                    opencode_primary_config_path(),
-                    tmp.path().join(".config").join("opencode").join("opencode.json")
-                );
-            },
-        );
+        // An empty XDG_CONFIG_HOME must fall back to <home>/.config, not resolve
+        // to a relative "opencode/opencode.json". `dirs::home_dir()` ignores the
+        // HOME env var on Windows, so derive the expected base from the same
+        // resolution production uses instead of pinning HOME.
+        temp_env::with_var("XDG_CONFIG_HOME", Some(""), || {
+            assert_eq!(
+                opencode_primary_config_path(),
+                home_dir_or_default()
+                    .join(".config")
+                    .join("opencode")
+                    .join("opencode.json")
+            );
+        });
     }
 
     #[test]
