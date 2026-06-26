@@ -2152,6 +2152,18 @@ export interface AgentInstallEvent {
   payload: string
 }
 
+export type OfficecliInstallEventKind =
+  | "started"
+  | "log"
+  | "completed"
+  | "failed"
+
+export interface OfficecliInstallEvent {
+  task_id: string
+  kind: OfficecliInstallEventKind
+  payload: string
+}
+
 // ─── Chat Channels ───
 
 export type ChannelType = "lark" | "telegram" | "weixin"

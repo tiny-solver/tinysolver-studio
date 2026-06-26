@@ -683,8 +683,18 @@ export async function officecliDetect(): Promise<OfficecliInfo> {
   return getTransport().call("officecli_detect")
 }
 
-export async function officecliInstall(): Promise<OfficecliInfo> {
-  return getTransport().call("officecli_install")
+export async function officecliInstall(taskId: string): Promise<OfficecliInfo> {
+  // The vendor installer downloads + extracts a multi-MB binary; allow well
+  // beyond the default 60s web-call timeout so slow networks don't surface a
+  // spurious timeout while progress is still streaming. Sits 30s ABOVE the
+  // backend's own 600s deadline so the backend's structured timeout error wins
+  // the race instead of a generic transport abort. `taskId` correlates the
+  // `app://officecli-install` stream the settings page subscribes to.
+  return getTransport().call(
+    "officecli_install",
+    { taskId },
+    { timeoutMs: 630_000 }
+  )
 }
 
 export async function officecliUninstall(): Promise<OfficecliInfo> {
