@@ -171,10 +171,13 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             description: "ACP adapter for OpenAI's coding assistant",
             // codex-acp moved from zed-industries (Rust binary) to the
             // agentclientprotocol org (TypeScript rewrite, npx-distributed).
-            // 1.0.0 bundles `@openai/codex` and drives `codex app-server`.
+            // 1.0.1 bundles `@openai/codex` 0.142.2 and drives `codex
+            // app-server`; it also resolves the resumed `model_provider` from
+            // `~/.codex/config.toml` (#224), so codeg no longer injects
+            // `MODEL_PROVIDER` to keep resumed sessions on the custom provider.
             distribution: AgentDistribution::Npx {
-                version: "1.0.0",
-                package: "@agentclientprotocol/codex-acp@1.0.0",
+                version: "1.0.1",
+                package: "@agentclientprotocol/codex-acp@1.0.1",
                 cmd: "codex-acp",
                 args: &[],
                 env: &[],
@@ -435,8 +438,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Codex,
-            "1.0.0",
-            "@agentclientprotocol/codex-acp@1.0.0",
+            "1.0.1",
+            "@agentclientprotocol/codex-acp@1.0.1",
             None,
         );
         assert_binary_version(AgentType::OpenCode, "1.17.11", "/releases/download/v1.17.11/");
