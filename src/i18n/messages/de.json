@@ -2885,6 +2885,7 @@
     "detection": {
       "installed": "Installiert",
       "notInstalled": "Nicht installiert",
+      "notRunnable": "Installiert, aber nicht lauffähig",
       "installHint": "Installieren Sie OfficeCLI, um Office-Dokumentenerstellungs-Skills für Ihre KI-Agenten zu aktivieren.",
       "install": "Installieren",
       "uninstall": "Deinstallieren",
