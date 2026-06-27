@@ -695,12 +695,14 @@ impl CodexParser {
         //
         // This disk-based reconstruction (the rollout `function_call`s below +
         // `parse_codex_subagent_stats` reading `agent-<id>.jsonl`) is the ONLY
-        // source for the sub-agent "Agent" capsule. codex-acp 1.0.0 deliberately
-        // drops sub-agent events from the live ACP stream — its
-        // `CodexEventHandler.createItemEvent` returns `null` for
-        // `collabAgentToolCall` and `subAgentActivity` — so the live path carries
-        // no sub-agent data and the capsule only appears on history reload (the
-        // same upstream constraint as kimi-code's `isFromMainAgent` gate).
+        // source for the sub-agent "Agent" capsule. codex-acp 1.0.1 (#223) now
+        // maps `collabAgentToolCall` onto live ACP `tool_call` updates (titled
+        // `collab.<tool>`), but still drops `subAgentActivity`, and neither path
+        // emits the spawn/wait/close lifecycle this capsule is built from — so
+        // the capsule still only appears on history reload. The live `collab.*`
+        // cards are a separate representation of the same activity and do not
+        // double-render against this capsule (different turn lifecycle: live
+        // during streaming, reconstructed capsule after reload).
         let mut spawn_agent_call_ids: HashSet<String> = HashSet::new();
         let mut agent_id_to_spawn_call_id: HashMap<String, String> = HashMap::new();
         let mut agent_final_results: HashMap<String, String> = HashMap::new();
