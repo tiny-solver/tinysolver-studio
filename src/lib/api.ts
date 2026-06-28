@@ -493,6 +493,63 @@ export async function acpFetchKimiModels(params: {
 }
 
 /**
+ * Apply a structured Pi config update. Merge-writes pi's native
+ * `~/.pi/agent/settings.json` (`defaultProvider` / `defaultModel` /
+ * `defaultThinkingLevel`) and, when an API key is supplied,
+ * `~/.pi/agent/auth.json` (`{ "<provider>": { "type": "api_key", "key": ... } }`),
+ * preserving every other key in both files.
+ */
+export async function acpUpdatePiConfig(params: {
+  provider: string
+  model: string
+  thinkingLevel?: string
+  apiKey?: string
+  /** Custom/self-hosted provider endpoint. When set, `provider` is written to
+   * `models.json` (with `customApi` as the wire protocol). Omit for built-ins. */
+  customBaseUrl?: string
+  customApi?: string
+}): Promise<void> {
+  return getTransport().call("acp_update_pi_config", {
+    provider: params.provider,
+    model: params.model,
+    thinkingLevel: params.thinkingLevel ?? null,
+    apiKey: params.apiKey ?? null,
+    customBaseUrl: params.customBaseUrl ?? null,
+    customApi: params.customApi ?? null,
+  })
+}
+
+/**
+ * Read pi's current native config for the settings panel: the three
+ * `settings.json` model keys plus the provider names present in `auth.json`
+ * (sorted). Missing files surface as `null` / an empty list.
+ */
+export async function loadPiConfig(): Promise<{
+  defaultProvider: string | null
+  defaultModel: string | null
+  defaultThinkingLevel: string | null
+  authProviders: string[]
+  /** Custom/self-hosted providers defined in `models.json`, sorted by id. Used
+   * to rehydrate the custom-provider form and detect a custom `defaultProvider`. */
+  customProviders: { id: string; baseUrl: string; api: string }[]
+}> {
+  return getTransport().call("acp_load_pi_config", {})
+}
+
+/**
+ * Validate a user-supplied custom pi binary (BYO-pi): resolve it (path or
+ * `PATH`) and best-effort read its `--version`. A not-found binary returns
+ * `{ found: false, resolvedPath: null, version: null }` (not an error).
+ */
+export async function acpValidatePiCommand(command: string): Promise<{
+  found: boolean
+  resolvedPath: string | null
+  version: string | null
+}> {
+  return getTransport().call("acp_validate_pi_command", { command })
+}
+
+/**
  * Launch Hermes's interactive setup in the OS terminal (desktop only). `kind`
  * picks the flow; the backend constructs the exact command from the registry
  * recipe (no arbitrary shell text crosses the boundary).

@@ -900,7 +900,11 @@
       "providerDisconnected": "{providerId} を切断しました",
       "disconnectFailed": "{providerId} の切断に失敗しました",
       "catalogRefreshed": "カタログを更新しました — {count} 個のプロバイダー",
-      "catalogRefreshFailed": "カタログの更新に失敗しました"
+      "catalogRefreshFailed": "カタログの更新に失敗しました",
+      "piSaved": "Pi 設定を保存しました",
+      "savePiFailed": "Pi 設定の保存に失敗しました",
+      "piRuntimeSaved": "Pi ランタイムを保存しました",
+      "savePiRuntimeFailed": "Pi ランタイムの保存に失敗しました"
     },
     "version": {
       "statusLabel": "バージョン状態",
@@ -932,6 +936,49 @@
       "refresh": "更新",
       "success": "すべてのプラグインが正常にインストールされました",
       "failed": "プラグイン操作に失敗しました"
+    },
+    "pi": {
+      "configManagement": "Pi 設定",
+      "configDescription": "Pi はモデルプロバイダーの API キーで認証します。キーは ~/.pi/agent/auth.json に、モデル選択は settings.json に書き込まれます。",
+      "providerLabel": "プロバイダー",
+      "modelLabel": "モデル",
+      "thinkingLabel": "思考",
+      "thinking": {
+        "off": "オフ",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "minimal": "最小",
+        "xhigh": "最高"
+      },
+      "apiKeyLabel": "API キー",
+      "apiKeyHint": "選択したプロバイダーの ~/.pi/agent/auth.json に保存されます。",
+      "apiKeySetPlaceholder": "••••••（保存済み・空欄で維持）",
+      "saveConfig": "Pi 設定を保存",
+      "providerModelRequired": "プロバイダーとモデルは必須です",
+      "runtimeTitle": "ランタイム",
+      "runtimeDescription": "どの pi を実行するか選択します。デフォルト、または自分の pi ビルドを指定します。",
+      "modeDefault": "デフォルト pi",
+      "modeDefaultHint": "内蔵の pi-acp アダプターで PATH 上の pi を起動します。",
+      "modeCustom": "カスタム pi",
+      "modeCustomHint": "自分の pi ビルド・インストール・ラッパーを実行します。",
+      "commandLabel": "pi コマンドまたはパス",
+      "commandHint": "絶対パス、PATH 上のコマンド名、またはラッパースクリプト（例: monorepo の ./pi-test.sh）。",
+      "commandNotFound": "コマンドが見つかりません",
+      "validate": "検証",
+      "advanced": "詳細設定",
+      "configDirLabel": "設定ディレクトリ (PI_CODING_AGENT_DIR)",
+      "sessionDirLabel": "セッションディレクトリ (PI_CODING_AGENT_SESSION_DIR)",
+      "flagsHint": "pi-acp はカスタム pi フラグ（--approve、-e など）を転送しません。pi をスクリプトでラップしてコマンドに指定してください。",
+      "customIncomplete": "保存するには pi コマンドを入力してください",
+      "saveRuntime": "ランタイムを保存",
+      "providerPlaceholder": "プロバイダーを選択",
+      "customProvider": "カスタムプロバイダー…",
+      "providerIdLabel": "プロバイダー ID",
+      "apiProtocolLabel": "API プロトコル",
+      "baseUrlLabel": "API エンドポイント（Base URL）",
+      "customProviderHint": "~/.pi/agent/models.json にエンドポイント向けのプロバイダーを定義します。多くのセルフホスト／プロキシは openai-completions を使用します。",
+      "baseUrlRequired": "API エンドポイント（Base URL）は必須です"
     }
   },
   "SettingsPages": {

@@ -1105,6 +1105,19 @@ async fn send_resume_session(
     })
 }
 
+/// Whether MCP servers forwarded over the ACP wire (`session/new.mcpServers`)
+/// actually reach the agent's model. Almost all adapters deliver them; pi-acp
+/// (0.0.31) accepts the `mcpServers` field but DROPS it — it never forwards MCP
+/// to the inner `pi --mode rpc` process, and pi has no native MCP. So forwarding
+/// either user servers or the built-in codeg-mcp companion to pi is futile, and
+/// injecting codeg-mcp would falsely mark delegation/feedback/ask as available
+/// (`feedback_tool_available`, a registered delegation token pi can never use).
+/// `supports_mcp` stays `true` for pi (session/new tolerates the field), so this
+/// is a separate, narrower gate. Gate codeg-mcp injection on it.
+fn agent_delivers_wire_mcp(agent_type: AgentType) -> bool {
+    !matches!(agent_type, AgentType::Pi)
+}
+
 /// Load MCP servers configured for `agent_type` and convert them into the
 /// ACP wire format. Errors and unsupported entries are logged and skipped so
 /// a single malformed entry never blocks a session from starting.
@@ -1752,7 +1765,7 @@ async fn run_connection(
             // filter needed. The returned token is stashed on the session
             // state so connection teardown can revoke it. Skipped entirely
             // for agents that don't accept MCP over the wire (above).
-            let delegate_injection = if agent_supports_mcp {
+            let delegate_injection = if agent_supports_mcp && agent_delivers_wire_mcp(agent_type) {
                 if let Some(inj) = delegation_injection.as_ref() {
                     inject_codeg_mcp(&mut mcp_servers, inj, &conn_id, &cwd).await
                 } else {

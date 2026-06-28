@@ -2435,6 +2435,415 @@ pub(crate) async fn acp_fetch_kimi_models_core(
 }
 
 // ---------------------------------------------------------------------------
+// Pi config helpers
+//
+// pi (the self-extensible coding agent, reached over ACP via `pi-acp`) reads its
+// model selection from `~/.pi/agent/settings.json` (`defaultProvider`,
+// `defaultModel`, `defaultThinkingLevel` — plain strings) and its API keys from
+// `~/.pi/agent/auth.json` (`{ "<provider>": { "type": "api_key", "key": ... } }`).
+// codeg manages both NATIVE files directly (merge-writes that preserve every
+// other key), mirroring how it manages Codex's `auth.json`/`config.toml`. The
+// agent dir honors `PI_CODING_AGENT_DIR` so a custom pi install can be targeted.
+// ---------------------------------------------------------------------------
+
+/// Resolve pi's coding-agent dir: `PI_CODING_AGENT_DIR` if set (trimmed,
+/// non-empty), else `~/.pi/agent` (mirrors `codex_home_dir`/`resolve_kimi_*`).
+fn pi_agent_dir() -> PathBuf {
+    match std::env::var("PI_CODING_AGENT_DIR")
+        .ok()
+        .map(|raw| raw.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
+        Some(value) => PathBuf::from(value),
+        None => home_dir_or_default().join(".pi").join("agent"),
+    }
+}
+
+fn pi_settings_json_path() -> PathBuf {
+    pi_agent_dir().join("settings.json")
+}
+
+fn pi_auth_json_path() -> PathBuf {
+    pi_agent_dir().join("auth.json")
+}
+
+fn pi_models_json_path() -> PathBuf {
+    pi_agent_dir().join("models.json")
+}
+
+/// Structured Pi config update from the settings UI. Writes pi's native files:
+/// `settings.json` always (provider/model/thinking level), and `auth.json` only
+/// when an API key is supplied (merge-preserving other providers).
+#[derive(Debug, Clone)]
+pub(crate) struct PiConfigUpdate {
+    pub provider: String,
+    pub model: String,
+    pub thinking_level: Option<String>,
+    pub api_key: Option<String>,
+    /// When set (non-empty), `provider` is a custom / self-hosted provider: its
+    /// definition is merge-written to `models.json` (`baseUrl` + `api`, with the
+    /// chosen `model` folded into the provider's `models` array). `None` leaves
+    /// `models.json` untouched (built-in provider).
+    pub custom_base_url: Option<String>,
+    /// Wire protocol for the custom provider (defaults to `openai-completions`).
+    /// Ignored when `custom_base_url` is `None`.
+    pub custom_api: Option<String>,
+}
+
+/// Read a JSON file into an owned object map, returning an empty map when the
+/// file is absent, unreadable, or does not parse to a JSON object. Pi's native
+/// files are small and codeg-owned; corruption shouldn't abort a save (we
+/// re-author the managed keys and preserve whatever else parses).
+fn read_json_object_or_empty(path: &Path) -> serde_json::Map<String, serde_json::Value> {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|value| match value {
+            serde_json::Value::Object(map) => Some(map),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// Pretty-print a JSON object (with a trailing newline) to `path`, creating the
+/// parent directory if needed.
+fn write_json_object_pretty(
+    path: &Path,
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), AcpError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| AcpError::protocol(format!("create pi config directory failed: {e}")))?;
+    }
+    let mut text = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
+        .map_err(|e| AcpError::protocol(format!("serialize pi config failed: {e}")))?;
+    text.push('\n');
+    fs::write(path, text)
+        .map_err(|e| AcpError::protocol(format!("write pi config failed: {e}")))?;
+    Ok(())
+}
+
+/// Apply a structured Pi config update to pi's native files. Validates the whole
+/// request before any write: provider/model must be non-empty after trim and the
+/// API key must not contain newlines (it lands verbatim in a JSON string). Writes
+/// `settings.json` first (merge-preserving), then `auth.json` only when an API
+/// key is supplied. Ensures the settings row exists, then emits the agents-updated
+/// event so the settings panel refreshes.
+pub(crate) async fn acp_update_pi_config_core(
+    update: PiConfigUpdate,
+    db: &AppDatabase,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
+    // ---- Validate (no writes yet) ----
+    let provider = update.provider.trim();
+    if provider.is_empty() {
+        return Err(AcpError::protocol("pi provider is required"));
+    }
+    let model = update.model.trim();
+    if model.is_empty() {
+        return Err(AcpError::protocol("pi model is required"));
+    }
+    let thinking_level = update
+        .thinking_level
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let api_key = update
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(key) = api_key {
+        if key.contains('\n') || key.contains('\r') {
+            return Err(AcpError::protocol(
+                "pi API key must not contain line breaks",
+            ));
+        }
+    }
+
+    // Ensure the settings row exists (mirrors the kimi flow) so the agent shows
+    // up as configured/enabled in the DB-backed settings list.
+    let default = agent_setting_service::AgentDefaultInput {
+        agent_type: AgentType::Pi,
+        registry_id: registry::registry_id_for(AgentType::Pi).to_string(),
+        default_sort_order: i32::MAX / 2,
+    };
+    agent_setting_service::ensure_defaults(&db.conn, &[default])
+        .await
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+
+    // ---- settings.json: merge-write provider/model/thinking level ----
+    let settings_path = pi_settings_json_path();
+    let mut settings = read_json_object_or_empty(&settings_path);
+    settings.insert(
+        "defaultProvider".to_string(),
+        serde_json::Value::String(provider.to_string()),
+    );
+    settings.insert(
+        "defaultModel".to_string(),
+        serde_json::Value::String(model.to_string()),
+    );
+    if let Some(level) = thinking_level {
+        settings.insert(
+            "defaultThinkingLevel".to_string(),
+            serde_json::Value::String(level.to_string()),
+        );
+    }
+    write_json_object_pretty(&settings_path, &settings)?;
+
+    // ---- auth.json: merge-write the provider credential (only when given) ----
+    if let Some(key) = api_key {
+        let auth_path = pi_auth_json_path();
+        let mut auth = read_json_object_or_empty(&auth_path);
+        let mut entry = serde_json::Map::new();
+        entry.insert(
+            "type".to_string(),
+            serde_json::Value::String("api_key".to_string()),
+        );
+        entry.insert(
+            "key".to_string(),
+            serde_json::Value::String(key.to_string()),
+        );
+        auth.insert(provider.to_string(), serde_json::Value::Object(entry));
+        write_json_object_pretty(&auth_path, &auth)?;
+    }
+
+    // ---- models.json: define the custom provider (only when a base URL is
+    // given). Built-in providers leave this file untouched. Merge-preserving:
+    // `baseUrl`/`api` are overwritten from the form, but any other fields the
+    // user hand-tuned (headers/compat/modelOverrides) and previously-defined
+    // models are kept; the chosen model is folded into the `models` array. ----
+    let custom_base_url = update
+        .custom_base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(base_url) = custom_base_url {
+        let custom_api = update
+            .custom_api
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("openai-completions");
+        let models_path = pi_models_json_path();
+        let mut models_doc = read_json_object_or_empty(&models_path);
+        let mut providers = match models_doc.remove("providers") {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+        let mut entry = match providers.remove(provider) {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+        entry.insert(
+            "baseUrl".to_string(),
+            serde_json::Value::String(base_url.to_string()),
+        );
+        entry.insert(
+            "api".to_string(),
+            serde_json::Value::String(custom_api.to_string()),
+        );
+        let mut models_arr = match entry.remove("models") {
+            Some(serde_json::Value::Array(arr)) => arr,
+            _ => Vec::new(),
+        };
+        let already = models_arr
+            .iter()
+            .any(|m| m.get("id").and_then(serde_json::Value::as_str) == Some(model));
+        if !already {
+            let mut model_obj = serde_json::Map::new();
+            model_obj.insert(
+                "id".to_string(),
+                serde_json::Value::String(model.to_string()),
+            );
+            model_obj.insert(
+                "name".to_string(),
+                serde_json::Value::String(model.to_string()),
+            );
+            models_arr.push(serde_json::Value::Object(model_obj));
+        }
+        entry.insert("models".to_string(), serde_json::Value::Array(models_arr));
+        providers.insert(provider.to_string(), serde_json::Value::Object(entry));
+        models_doc.insert(
+            "providers".to_string(),
+            serde_json::Value::Object(providers),
+        );
+        write_json_object_pretty(&models_path, &models_doc)?;
+    }
+
+    emit_acp_agents_updated(emitter, "config_updated", Some(AgentType::Pi));
+    Ok(())
+}
+
+/// Projection of pi's current native config for the settings panel: the three
+/// `settings.json` model keys plus the provider names present in `auth.json`
+/// (sorted). Missing files surface as all-`None` / empty.
+/// A custom / self-hosted provider defined in `models.json`, projected for the
+/// settings panel so it can rehydrate the custom-provider form (and detect that
+/// the current `defaultProvider` is a custom one).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiCustomProvider {
+    pub id: String,
+    pub base_url: String,
+    pub api: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiConfigProjection {
+    pub default_provider: Option<String>,
+    pub default_model: Option<String>,
+    pub default_thinking_level: Option<String>,
+    pub auth_providers: Vec<String>,
+    pub custom_providers: Vec<PiCustomProvider>,
+}
+
+/// Read pi's native files into a `PiConfigProjection`. Never errors: absent or
+/// malformed files yield `None` / an empty provider list (the panel treats that
+/// as "not configured yet").
+pub(crate) fn load_pi_config_core() -> PiConfigProjection {
+    let settings = read_json_object_or_empty(&pi_settings_json_path());
+    let string_key = |key: &str| {
+        settings
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    let mut auth_providers: Vec<String> = read_json_object_or_empty(&pi_auth_json_path())
+        .keys()
+        .cloned()
+        .collect();
+    auth_providers.sort();
+    let mut custom_providers: Vec<PiCustomProvider> =
+        read_json_object_or_empty(&pi_models_json_path())
+            .get("providers")
+            .and_then(serde_json::Value::as_object)
+            .map(|providers| {
+                providers
+                    .iter()
+                    .map(|(id, entry)| PiCustomProvider {
+                        id: id.clone(),
+                        base_url: entry
+                            .get("baseUrl")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        api: entry
+                            .get("api")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("openai-completions")
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    custom_providers.sort_by(|a, b| a.id.cmp(&b.id));
+    PiConfigProjection {
+        default_provider: string_key("defaultProvider"),
+        default_model: string_key("defaultModel"),
+        default_thinking_level: string_key("defaultThinkingLevel"),
+        auth_providers,
+        custom_providers,
+    }
+}
+
+/// Result of validating a user-supplied custom pi binary (BYO-pi). `found=false`
+/// with `resolved_path=None` is a normal result (not an error) — the panel shows
+/// "not found" rather than surfacing an exception.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiCommandValidation {
+    pub found: bool,
+    pub resolved_path: Option<String>,
+    pub version: Option<String>,
+}
+
+/// Best-effort check that `resolved` looks executable on unix (any execute bit
+/// set). On non-unix we already know it exists; treat that as good enough.
+#[cfg(unix)]
+fn pi_path_is_executable(resolved: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(resolved)
+        .map(|meta| meta.is_file() && (meta.permissions().mode() & 0o111 != 0))
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn pi_path_is_executable(resolved: &Path) -> bool {
+    resolved.is_file()
+}
+
+/// Resolve a user-supplied pi command. A value containing a path separator (or an
+/// absolute path) is treated as a path and checked on disk; a bare name is looked
+/// up on `PATH` via the `which` crate. On success, best-effort `--version` is run
+/// (failures tolerated → `version=None`). Never errors on a not-found / probe
+/// failure: returns `found=false` (or `version=None`) instead.
+pub(crate) fn acp_validate_pi_command_core(command: String) -> PiCommandValidation {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return PiCommandValidation {
+            found: false,
+            resolved_path: None,
+            version: None,
+        };
+    }
+
+    let looks_like_path = trimmed.contains(std::path::MAIN_SEPARATOR)
+        || trimmed.contains('/')
+        || Path::new(trimmed).is_absolute();
+
+    let resolved: Option<PathBuf> = if looks_like_path {
+        let candidate = Path::new(trimmed);
+        if pi_path_is_executable(candidate) {
+            // Canonicalize to an absolute path; fall back to the raw path if the
+            // FS rejects canonicalization (e.g. permissions) but it is executable.
+            Some(fs::canonicalize(candidate).unwrap_or_else(|_| candidate.to_path_buf()))
+        } else {
+            None
+        }
+    } else {
+        which::which(trimmed).ok()
+    };
+
+    let Some(resolved_path) = resolved else {
+        return PiCommandValidation {
+            found: false,
+            resolved_path: None,
+            version: None,
+        };
+    };
+
+    let version = probe_pi_version(&resolved_path);
+    PiCommandValidation {
+        found: true,
+        resolved_path: Some(resolved_path.to_string_lossy().into_owned()),
+        version,
+    }
+}
+
+/// Best-effort `<resolved> --version`, returning the trimmed first stdout line.
+/// Any failure (spawn error, non-zero exit, empty output) → `None`; never panics
+/// and never blocks indefinitely (`Command::output` waits for the short-lived
+/// `--version` child to exit on its own).
+fn probe_pi_version(resolved: &Path) -> Option<String> {
+    let output = std::process::Command::new(resolved)
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .next()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+}
+
+// ---------------------------------------------------------------------------
 // Hermes config helpers
 //
 // Hermes self-manages credentials in `~/.hermes/.env` (secrets) and general
@@ -3843,6 +4252,10 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
             ],
             project_rel_dirs: vec![".kimi-code/skills"],
         }),
+        // pi skills load natively over rpc (`~/.pi/agent/...` + the settings
+        // `skills` key); codeg does not yet manage a skill store for pi — the
+        // exact global skill dir is unconfirmed (deferred).
+        AgentType::Pi => None,
     }
 }
 
@@ -4590,6 +5003,12 @@ fn cascade_update_agent_config(
             // (KIMI_MODEL_API_KEY / KIMI_MODEL_BASE_URL / KIMI_MODEL_NAME)
             // managed by its dedicated settings panel through `acpUpdateAgentEnv`;
             // it does not participate in the model-provider credential cascade.
+        }
+        AgentType::Pi => {
+            // Pi authenticates via its own `~/.pi/agent/auth.json` + model
+            // selection in `~/.pi/agent/settings.json`, managed by the dedicated
+            // Pi settings panel (`acp_update_pi_config`); it does not participate
+            // in the model-provider credential cascade.
         }
     }
     Ok(())
@@ -5988,6 +6407,56 @@ pub async fn acp_fetch_kimi_models(
     api_key: String,
 ) -> Result<Vec<String>, AcpError> {
     acp_fetch_kimi_models_core(&base_url, &api_key).await
+}
+
+/// Apply a structured Pi config update, writing pi's native `settings.json`
+/// (provider/model/thinking level) and `auth.json` (when an API key is given).
+/// Desktop command; the web handler calls `acp_update_pi_config_core` directly.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_update_pi_config(
+    provider: String,
+    model: String,
+    thinking_level: Option<String>,
+    api_key: Option<String>,
+    custom_base_url: Option<String>,
+    custom_api: Option<String>,
+    db: State<'_, AppDatabase>,
+    app: tauri::AppHandle,
+) -> Result<(), AcpError> {
+    let emitter = EventEmitter::Tauri(app);
+    acp_update_pi_config_core(
+        PiConfigUpdate {
+            provider,
+            model,
+            thinking_level,
+            api_key,
+            custom_base_url,
+            custom_api,
+        },
+        &db,
+        &emitter,
+    )
+    .await
+}
+
+/// Read pi's current native config (model selection + configured auth providers)
+/// for the settings panel. Desktop command; the web handler calls
+/// `load_pi_config_core` directly. Reads the filesystem only — no DB/state needed.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_load_pi_config() -> Result<PiConfigProjection, AcpError> {
+    Ok(load_pi_config_core())
+}
+
+/// Validate a user-supplied custom pi binary (BYO-pi): resolve it (path or
+/// `PATH`) and best-effort read its `--version`. A not-found binary returns
+/// `found=false` (not an error). Desktop command; the web handler calls
+/// `acp_validate_pi_command_core` directly.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_validate_pi_command(command: String) -> Result<PiCommandValidation, AcpError> {
+    Ok(acp_validate_pi_command_core(command))
 }
 
 /// Launch Hermes's interactive setup in the OS terminal. `kind` selects the

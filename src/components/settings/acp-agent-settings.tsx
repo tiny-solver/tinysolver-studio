@@ -123,6 +123,7 @@ import { toErrorMessage } from "@/lib/app-error"
 import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
 import { OpencodePluginsModal } from "./opencode-plugins-modal"
 import { CodeBuddyConfigPanel } from "./codebuddy-config-panel"
+import { PiConfigPanel } from "./pi-config-panel"
 
 interface AgentCheckState {
   result?: PreflightResult
@@ -9331,6 +9332,20 @@ supports_websockets = true`}
                 ) : selectedAgent.agent_type === "kimi_code" ? (
                   <KimiCodeConfigPanel
                     agent={selectedAgent}
+                    onSaved={refreshAgents}
+                  />
+                ) : selectedAgent.agent_type === "pi" ? (
+                  <PiConfigPanel
+                    agent={selectedAgent}
+                    saving={Boolean(savingEnv[selectedAgent.agent_type])}
+                    onSaveEnv={(env, enabled) =>
+                      persistEnv(
+                        selectedAgent.agent_type,
+                        enabled,
+                        envMapToText(env),
+                        selectedAgent.model_provider_id
+                      )
+                    }
                     onSaved={refreshAgents}
                   />
                 ) : (

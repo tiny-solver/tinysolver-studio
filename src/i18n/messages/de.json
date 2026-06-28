@@ -900,7 +900,11 @@
       "providerDisconnected": "{providerId} getrennt",
       "disconnectFailed": "Trennen von {providerId} fehlgeschlagen",
       "catalogRefreshed": "Katalog aktualisiert – {count} Provider",
-      "catalogRefreshFailed": "Aktualisieren des Katalogs fehlgeschlagen"
+      "catalogRefreshFailed": "Aktualisieren des Katalogs fehlgeschlagen",
+      "piSaved": "Pi-Konfiguration gespeichert",
+      "savePiFailed": "Pi-Konfiguration konnte nicht gespeichert werden",
+      "piRuntimeSaved": "Pi-Laufzeit gespeichert",
+      "savePiRuntimeFailed": "Pi-Laufzeit konnte nicht gespeichert werden"
     },
     "version": {
       "statusLabel": "Versionsstatus",
@@ -932,6 +936,49 @@
       "refresh": "Aktualisieren",
       "success": "Alle Plugins wurden erfolgreich installiert",
       "failed": "Plugin-Vorgang fehlgeschlagen"
+    },
+    "pi": {
+      "configManagement": "Pi-Konfiguration",
+      "configDescription": "Pi authentifiziert sich über den API-Schlüssel deines Modellanbieters. Der Schlüssel wird in ~/.pi/agent/auth.json und die Modellauswahl in settings.json geschrieben.",
+      "providerLabel": "Anbieter",
+      "modelLabel": "Modell",
+      "thinkingLabel": "Denken",
+      "thinking": {
+        "off": "Aus",
+        "low": "Niedrig",
+        "medium": "Mittel",
+        "high": "Hoch",
+        "minimal": "Minimal",
+        "xhigh": "Sehr hoch"
+      },
+      "apiKeyLabel": "API-Schlüssel",
+      "apiKeyHint": "Wird in ~/.pi/agent/auth.json für den ausgewählten Anbieter gespeichert.",
+      "apiKeySetPlaceholder": "•••••• (gespeichert – leer lassen zum Beibehalten)",
+      "saveConfig": "Pi-Konfiguration speichern",
+      "providerModelRequired": "Anbieter und Modell sind erforderlich",
+      "runtimeTitle": "Laufzeit",
+      "runtimeDescription": "Wähle, welches pi-Binary läuft. Standard verwenden oder auf deinen eigenen pi-Build verweisen.",
+      "modeDefault": "Standard-pi",
+      "modeDefaultHint": "Verwendet den integrierten pi-acp-Adapter mit dem pi in deinem PATH.",
+      "modeCustom": "Eigenes pi",
+      "modeCustomHint": "Führe deinen eigenen pi-Build, deine Installation oder einen Wrapper aus.",
+      "commandLabel": "pi-Befehl oder -Pfad",
+      "commandHint": "Ein absoluter Pfad, ein Befehlsname im PATH oder ein Wrapper-Skript (z. B. ./pi-test.sh eines Monorepos).",
+      "commandNotFound": "Befehl nicht gefunden",
+      "validate": "Prüfen",
+      "advanced": "Erweitert",
+      "configDirLabel": "Konfigurationsverzeichnis (PI_CODING_AGENT_DIR)",
+      "sessionDirLabel": "Sitzungsverzeichnis (PI_CODING_AGENT_SESSION_DIR)",
+      "flagsHint": "pi-acp leitet eigene pi-Flags (--approve, -e, …) nicht weiter – umhülle pi mit einem Skript und verweise den Befehl darauf.",
+      "customIncomplete": "Gib einen pi-Befehl zum Speichern ein",
+      "saveRuntime": "Laufzeit speichern",
+      "providerPlaceholder": "Anbieter auswählen",
+      "customProvider": "Eigener Anbieter…",
+      "providerIdLabel": "Anbieter-ID",
+      "apiProtocolLabel": "API-Protokoll",
+      "baseUrlLabel": "API-Endpunkt (Base URL)",
+      "customProviderHint": "Definiert einen Anbieter in ~/.pi/agent/models.json an Ihrem Endpunkt. Die meisten selbst gehosteten oder Proxy-Server nutzen openai-completions.",
+      "baseUrlRequired": "API-Endpunkt (Base URL) ist erforderlich"
     }
   },
   "SettingsPages": {

@@ -900,7 +900,11 @@
       "providerDisconnected": "تم قطع اتصال {providerId}",
       "disconnectFailed": "فشل قطع اتصال {providerId}",
       "catalogRefreshed": "تم تحديث الكتالوج — {count} مزودًا",
-      "catalogRefreshFailed": "فشل تحديث الكتالوج"
+      "catalogRefreshFailed": "فشل تحديث الكتالوج",
+      "piSaved": "تم حفظ إعدادات Pi",
+      "savePiFailed": "فشل حفظ إعدادات Pi",
+      "piRuntimeSaved": "تم حفظ وقت تشغيل Pi",
+      "savePiRuntimeFailed": "فشل حفظ وقت تشغيل Pi"
     },
     "version": {
       "statusLabel": "حالة الإصدار",
@@ -932,6 +936,49 @@
       "refresh": "تحديث",
       "success": "تم تثبيت جميع الإضافات بنجاح",
       "failed": "فشلت عملية الإضافة"
+    },
+    "pi": {
+      "configManagement": "إعدادات Pi",
+      "configDescription": "يصادق Pi عبر مفتاح API لمزوّد النموذج. يُكتب المفتاح في ~/.pi/agent/auth.json واختيار النموذج في settings.json.",
+      "providerLabel": "المزوّد",
+      "modelLabel": "النموذج",
+      "thinkingLabel": "التفكير",
+      "thinking": {
+        "off": "إيقاف",
+        "low": "منخفض",
+        "medium": "متوسط",
+        "high": "مرتفع",
+        "minimal": "الحد الأدنى",
+        "xhigh": "مرتفع جدًا"
+      },
+      "apiKeyLabel": "مفتاح API",
+      "apiKeyHint": "يُحفظ في ~/.pi/agent/auth.json للمزوّد المحدد.",
+      "apiKeySetPlaceholder": "•••••• (محفوظ — اتركه فارغًا للإبقاء عليه)",
+      "saveConfig": "حفظ إعدادات Pi",
+      "providerModelRequired": "المزوّد والنموذج مطلوبان",
+      "runtimeTitle": "وقت التشغيل",
+      "runtimeDescription": "اختر أي ملف pi يعمل. استخدم الافتراضي أو أشِر إلى بناء pi الخاص بك.",
+      "modeDefault": "pi الافتراضي",
+      "modeDefaultHint": "يستخدم محوّل pi-acp المدمج مع pi الموجود في PATH.",
+      "modeCustom": "pi مخصّص",
+      "modeCustomHint": "شغّل بناء pi أو تثبيته أو غلافه الخاص بك.",
+      "commandLabel": "أمر pi أو مساره",
+      "commandHint": "مسار مطلق، أو اسم أمر في PATH، أو نص غلاف (مثل ./pi-test.sh في monorepo).",
+      "commandNotFound": "الأمر غير موجود",
+      "validate": "تحقّق",
+      "advanced": "متقدّم",
+      "configDirLabel": "دليل الإعدادات (PI_CODING_AGENT_DIR)",
+      "sessionDirLabel": "دليل الجلسات (PI_CODING_AGENT_SESSION_DIR)",
+      "flagsHint": "لا يمرّر pi-acp رايات pi المخصّصة (‎--approve، ‎-e، …) — غلّف pi بنص وأشِر الأمر إليه.",
+      "customIncomplete": "أدخل أمر pi للحفظ",
+      "saveRuntime": "حفظ وقت التشغيل",
+      "providerPlaceholder": "اختر مزوّدًا",
+      "customProvider": "مزوّد مخصّص…",
+      "providerIdLabel": "معرّف المزوّد",
+      "apiProtocolLabel": "بروتوكول API",
+      "baseUrlLabel": "نقطة نهاية API (عنوان URL الأساسي)",
+      "customProviderHint": "يعرّف مزوّدًا في ~/.pi/agent/models.json عند نقطة النهاية الخاصة بك. تستخدم معظم الخوادم الذاتية الاستضافة أو الوسيطة openai-completions.",
+      "baseUrlRequired": "نقطة نهاية API (عنوان URL الأساسي) مطلوبة"
     }
   },
   "SettingsPages": {

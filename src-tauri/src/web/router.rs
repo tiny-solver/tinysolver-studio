@@ -639,6 +639,18 @@ pub fn build_router(
             post(handlers::acp::acp_fetch_kimi_models),
         )
         .route(
+            "/acp_update_pi_config",
+            post(handlers::acp::acp_update_pi_config),
+        )
+        .route(
+            "/acp_load_pi_config",
+            post(handlers::acp::acp_load_pi_config),
+        )
+        .route(
+            "/acp_validate_pi_command",
+            post(handlers::acp::acp_validate_pi_command),
+        )
+        .route(
             "/acp_download_agent_binary",
             post(handlers::acp::acp_download_agent_binary),
         )

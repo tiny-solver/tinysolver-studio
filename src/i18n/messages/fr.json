@@ -900,7 +900,11 @@
       "providerDisconnected": "{providerId} déconnecté",
       "disconnectFailed": "Échec de la déconnexion de {providerId}",
       "catalogRefreshed": "Catalogue actualisé — {count} fournisseurs",
-      "catalogRefreshFailed": "Échec de l''actualisation du catalogue"
+      "catalogRefreshFailed": "Échec de l''actualisation du catalogue",
+      "piSaved": "Configuration Pi enregistrée",
+      "savePiFailed": "Échec de l'enregistrement de la config Pi",
+      "piRuntimeSaved": "Exécution Pi enregistrée",
+      "savePiRuntimeFailed": "Échec de l'enregistrement de l'exécution Pi"
     },
     "version": {
       "statusLabel": "Statut de version",
@@ -932,6 +936,49 @@
       "refresh": "Actualiser",
       "success": "Tous les plugins ont été installés avec succès",
       "failed": "L'opération du plugin a échoué"
+    },
+    "pi": {
+      "configManagement": "Configuration de Pi",
+      "configDescription": "Pi s'authentifie via la clé API de votre fournisseur de modèle. La clé est écrite dans ~/.pi/agent/auth.json et le choix du modèle dans settings.json.",
+      "providerLabel": "Fournisseur",
+      "modelLabel": "Modèle",
+      "thinkingLabel": "Réflexion",
+      "thinking": {
+        "off": "Désactivé",
+        "low": "Faible",
+        "medium": "Moyen",
+        "high": "Élevé",
+        "minimal": "Minimal",
+        "xhigh": "Très élevé"
+      },
+      "apiKeyLabel": "Clé API",
+      "apiKeyHint": "Enregistrée dans ~/.pi/agent/auth.json pour le fournisseur sélectionné.",
+      "apiKeySetPlaceholder": "•••••• (enregistrée — laisser vide pour conserver)",
+      "saveConfig": "Enregistrer la config Pi",
+      "providerModelRequired": "Le fournisseur et le modèle sont requis",
+      "runtimeTitle": "Exécution",
+      "runtimeDescription": "Choisissez quel binaire pi s'exécute. Utilisez celui par défaut ou pointez vers votre propre build de pi.",
+      "modeDefault": "pi par défaut",
+      "modeDefaultHint": "Utilise l'adaptateur pi-acp intégré avec le pi de votre PATH.",
+      "modeCustom": "pi personnalisé",
+      "modeCustomHint": "Exécutez votre propre build, installation ou wrapper de pi.",
+      "commandLabel": "Commande ou chemin pi",
+      "commandHint": "Un chemin absolu, un nom de commande dans le PATH, ou un script wrapper (par ex. ./pi-test.sh d'un monorepo).",
+      "commandNotFound": "Commande introuvable",
+      "validate": "Valider",
+      "advanced": "Avancé",
+      "configDirLabel": "Répertoire de config (PI_CODING_AGENT_DIR)",
+      "sessionDirLabel": "Répertoire des sessions (PI_CODING_AGENT_SESSION_DIR)",
+      "flagsHint": "pi-acp ne transmet pas les options pi personnalisées (--approve, -e, …) — encapsulez pi dans un script et pointez-y la commande.",
+      "customIncomplete": "Saisissez une commande pi pour enregistrer",
+      "saveRuntime": "Enregistrer l'exécution",
+      "providerPlaceholder": "Sélectionner un fournisseur",
+      "customProvider": "Fournisseur personnalisé…",
+      "providerIdLabel": "ID du fournisseur",
+      "apiProtocolLabel": "Protocole API",
+      "baseUrlLabel": "Point de terminaison API (Base URL)",
+      "customProviderHint": "Définit un fournisseur dans ~/.pi/agent/models.json vers votre point de terminaison. La plupart des serveurs auto-hébergés ou proxy utilisent openai-completions.",
+      "baseUrlRequired": "Le point de terminaison API (Base URL) est requis"
     }
   },
   "SettingsPages": {
