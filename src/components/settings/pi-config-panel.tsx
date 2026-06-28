@@ -81,29 +81,43 @@ const PI_THINKING_LEVELS = [
 ] as const
 
 /**
- * Curated built-in providers for the enum. pi's authoritative full list lives in
- * its `env-api-keys.ts`; this is the api-key-based subset most users want.
- * Special-auth providers (azure / bedrock / vertex / github-copilot) are omitted
- * on purpose — they don't fit the single-API-key flow; use "Custom" for those.
+ * Curated built-in providers for the enum, as `{ id, label }`: the Select stores
+ * the `id` (pi's provider key, written to settings.json / auth.json) but shows the
+ * brand `label`. Mirrors pi's authoritative `env-api-keys.ts` `envMap` — the
+ * single-API-key subset most users want. Labels are brand names, not localized
+ * (same convention as `HERMES_PROVIDERS`). Special-auth providers (azure /
+ * bedrock / vertex / cloudflare / github-copilot) are omitted on purpose — they
+ * need more than a single key, so they don't fit this flow; use "Custom" for them.
  */
-const PI_BUILTIN_PROVIDERS = [
-  "anthropic",
-  "openai",
-  "google",
-  "openrouter",
-  "groq",
-  "xai",
-  "deepseek",
-  "cerebras",
-  "mistral",
-  "together",
-  "fireworks",
-  "moonshotai",
-  "zai",
-  "nvidia",
-  "minimax",
-  "huggingface",
-  "vercel-ai-gateway",
+const PI_BUILTIN_PROVIDERS: { id: string; label: string }[] = [
+  { id: "anthropic", label: "Anthropic" },
+  { id: "openai", label: "OpenAI" },
+  { id: "google", label: "Google Gemini" },
+  { id: "openrouter", label: "OpenRouter" },
+  { id: "vercel-ai-gateway", label: "Vercel AI Gateway" },
+  { id: "xai", label: "xAI" },
+  { id: "deepseek", label: "DeepSeek" },
+  { id: "groq", label: "Groq" },
+  { id: "cerebras", label: "Cerebras" },
+  { id: "mistral", label: "Mistral" },
+  { id: "nvidia", label: "NVIDIA NIM" },
+  { id: "together", label: "Together AI" },
+  { id: "fireworks", label: "Fireworks" },
+  { id: "huggingface", label: "Hugging Face" },
+  { id: "kimi-coding", label: "Kimi For Coding" },
+  { id: "moonshotai", label: "Moonshot AI" },
+  { id: "moonshotai-cn", label: "Moonshot AI (China)" },
+  { id: "zai", label: "Z.AI Coding Plan (Global)" },
+  { id: "zai-coding-cn", label: "Z.AI Coding Plan (China)" },
+  { id: "minimax", label: "MiniMax" },
+  { id: "minimax-cn", label: "MiniMax (China)" },
+  { id: "ant-ling", label: "Ant Ling" },
+  { id: "xiaomi", label: "Xiaomi MiMo" },
+  { id: "xiaomi-token-plan-cn", label: "Xiaomi MiMo Token Plan (China)" },
+  { id: "xiaomi-token-plan-ams", label: "Xiaomi MiMo Token Plan (Amsterdam)" },
+  { id: "xiaomi-token-plan-sgp", label: "Xiaomi MiMo Token Plan (Singapore)" },
+  { id: "opencode", label: "OpenCode Zen" },
+  { id: "opencode-go", label: "OpenCode Go" },
 ]
 
 /** Sentinel Select value that switches the credentials form to custom mode. */
@@ -298,12 +312,16 @@ export function PiConfigPanel({
     effectiveProvider !== "" && authProviders.includes(effectiveProvider)
 
   // Built-in enum, plus a loaded built-in that isn't in the curated list (so a
-  // pre-existing defaultProvider is never dropped from the dropdown).
+  // pre-existing defaultProvider is never dropped from the dropdown). An unknown
+  // id doubles as its own label since we have no friendly name for it.
   const providerOptions =
     selectedProvider &&
     selectedProvider !== PI_CUSTOM_SENTINEL &&
-    !PI_BUILTIN_PROVIDERS.includes(selectedProvider)
-      ? [...PI_BUILTIN_PROVIDERS, selectedProvider]
+    !PI_BUILTIN_PROVIDERS.some((p) => p.id === selectedProvider)
+      ? [
+          ...PI_BUILTIN_PROVIDERS,
+          { id: selectedProvider, label: selectedProvider },
+        ]
       : PI_BUILTIN_PROVIDERS
 
   const credsIncomplete =
@@ -813,15 +831,15 @@ export function PiConfigPanel({
               <SelectValue placeholder={t("pi.providerPlaceholder")} />
             </SelectTrigger>
             <SelectContent align="start">
-              {providerOptions.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-              <SelectSeparator />
               <SelectItem value={PI_CUSTOM_SENTINEL}>
                 {t("pi.customProvider")}
               </SelectItem>
+              <SelectSeparator />
+              {providerOptions.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
