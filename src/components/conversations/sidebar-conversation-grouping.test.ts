@@ -460,6 +460,66 @@ describe("buildRows", () => {
     )
   })
 
+  it("places Chat above Folders when sectionOrder is chats-first, keeping Pinned on top", () => {
+    const p1 = conv(1, 10, { pinned_at: new Date(2000).toISOString() })
+    const rows = buildRows({
+      pinned: [p1],
+      pinnedExpanded: true,
+      orderedFolderIds: [10],
+      byFolder: new Map([[10, [conv(2, 10)]]]),
+      folderExpanded: { 10: true },
+      folderTotalCounts: new Map([[10, 1]]),
+      foldersExpanded: true,
+      chatConversations: [conv(3, 99)],
+      chatsExpanded: true,
+      sectionOrder: "chats-first",
+    })
+    const pinnedIdx = rows.findIndex(
+      (r) => r.kind === "section" && r.section === "pinned"
+    )
+    const chatsIdx = rows.findIndex(
+      (r) => r.kind === "section" && r.section === "chats"
+    )
+    const foldersIdx = rows.findIndex(
+      (r) => r.kind === "section" && r.section === "folders"
+    )
+    // Pinned stays at the very top; Folders and Chat are swapped.
+    expect(pinnedIdx).toBe(0)
+    expect(chatsIdx).toBeGreaterThan(pinnedIdx)
+    expect(foldersIdx).toBeGreaterThan(chatsIdx)
+  })
+
+  it("places Folders above Chat when sectionOrder is folders-first (the default)", () => {
+    const args = {
+      pinned: [] as DbConversationSummary[],
+      pinnedExpanded: true,
+      orderedFolderIds: [10],
+      byFolder: new Map([[10, [conv(1, 10)]]]),
+      folderExpanded: { 10: true },
+      folderTotalCounts: new Map([[10, 1]]),
+      foldersExpanded: true,
+      chatConversations: [conv(2, 99)],
+      chatsExpanded: true,
+    }
+    const order = (rows: SidebarRow[]) => {
+      const f = rows.findIndex(
+        (r) => r.kind === "section" && r.section === "folders"
+      )
+      const c = rows.findIndex(
+        (r) => r.kind === "section" && r.section === "chats"
+      )
+      return { f, c }
+    }
+    // Explicit folders-first and the omitted default agree: Folders before Chat.
+    const explicit = order(
+      buildRows({ ...args, sectionOrder: "folders-first" })
+    )
+    const omitted = order(buildRows(args))
+    expect(explicit.f).toBeGreaterThanOrEqual(0)
+    expect(explicit.c).toBeGreaterThan(explicit.f)
+    expect(omitted.c).toBeGreaterThan(omitted.f)
+  })
+
   it("always emits the Chat section, with an empty hint when there are no chat conversations", () => {
     const rows = buildRows({
       pinned: [],

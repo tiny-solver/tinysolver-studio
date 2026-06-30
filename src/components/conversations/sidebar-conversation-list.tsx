@@ -69,6 +69,7 @@ import {
   saveConversationExpanded,
   type SidebarSectionCollapsed,
   type SidebarSortMode,
+  type SidebarSectionOrder,
 } from "@/lib/sidebar-view-mode-storage"
 import {
   FOLDER_THEME_COLOR_INHERIT,
@@ -578,12 +579,14 @@ export interface SidebarConversationListHandle {
 export interface SidebarConversationListProps {
   showCompleted?: boolean
   sortMode?: SidebarSortMode
+  sectionOrder?: SidebarSectionOrder
 }
 
 export function SidebarConversationList({
   ref,
   showCompleted = true,
   sortMode = "created",
+  sectionOrder = "folders-first",
 }: SidebarConversationListProps & {
   ref?: Ref<SidebarConversationListHandle>
 }) {
@@ -997,6 +1000,7 @@ export function SidebarConversationList({
         foldersExpanded,
         chatConversations,
         chatsExpanded,
+        sectionOrder,
         conversationExpanded,
         childrenByParent,
         childrenLoading,
@@ -1011,6 +1015,7 @@ export function SidebarConversationList({
       foldersExpanded,
       chatConversations,
       chatsExpanded,
+      sectionOrder,
       conversationExpanded,
       childrenByParent,
       childrenLoading,

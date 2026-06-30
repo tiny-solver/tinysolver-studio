@@ -1,5 +1,8 @@
 import type { DbConversationSummary } from "@/lib/types"
-import type { SidebarSortMode } from "@/lib/sidebar-view-mode-storage"
+import type {
+  SidebarSortMode,
+  SidebarSectionOrder,
+} from "@/lib/sidebar-view-mode-storage"
 
 export function parseTimestamp(value: string): number {
   const timestamp = Date.parse(value)
@@ -426,7 +429,11 @@ function pushConversationRow(
  * the Phase 1 memo chain). `timeLabel` stays computed at the row renderer from
  * the shared `now` against the row's `conversation`.
  *
- * Structure:
+ * Structure (top to bottom): the "Pinned" section (when present) is always
+ * first; the "Folders" and "Chat" sections follow in the order set by
+ * `sectionOrder` (default `folders-first` = Folders then Chat; `chats-first`
+ * swaps them). Each section's own presence/expansion rules are unchanged by
+ * that order:
  * - The "Pinned" section header + its conversations appear only when `pinned`
  *   is non-empty, and its rows only when `pinnedExpanded`.
  * - The "Folders" section header appears whenever there are folders; its folder
@@ -453,6 +460,10 @@ export function buildRows(args: {
   foldersExpanded: boolean
   chatConversations: readonly DbConversationSummary[]
   chatsExpanded: boolean
+  /** Vertical order of the Folders and Chat sections. The Pinned section (when
+   *  present) always stays on top regardless. Optional — omitted (e.g. in
+   *  tests) defaults to `folders-first`, the historical layout. */
+  sectionOrder?: SidebarSectionOrder
   /** Ids whose delegation subtree is open. A conversation row with
    *  `child_count > 0` and id in this set recurses into its cached children.
    *  Optional — omitted (e.g. in tests) means nothing is expanded. */
@@ -477,6 +488,7 @@ export function buildRows(args: {
     foldersExpanded,
     chatConversations,
     chatsExpanded,
+    sectionOrder = "folders-first",
     conversationExpanded = EMPTY_EXPANDED,
     childrenByParent = EMPTY_CHILDREN,
     childrenLoading = EMPTY_EXPANDED,
@@ -504,7 +516,13 @@ export function buildRows(args: {
     }
   }
 
-  if (orderedFolderIds.length > 0) {
+  // The Folders and Chat sections sit below the (always-top) Pinned section in
+  // an order the user controls via `sectionOrder`. Each is its own closure so
+  // the order they emit into `rows` is a one-line swap below — the conditional
+  // logic inside each (folders gated on count, chats header always present)
+  // stays intact regardless of position.
+  const pushFolders = () => {
+    if (orderedFolderIds.length === 0) return
     rows.push({
       kind: "section",
       section: "folders",
@@ -539,29 +557,39 @@ export function buildRows(args: {
     }
   }
 
-  // The Chat section header is always present (a permanent entry point), unlike
-  // the conditional Pinned/Folders headers above.
-  rows.push({
-    kind: "section",
-    section: "chats",
-    expanded: chatsExpanded,
-    count: chatConversations.length,
-  })
-  if (chatsExpanded) {
-    if (chatConversations.length === 0) {
-      rows.push({ kind: "chats-empty" })
-    } else {
-      for (const conv of chatConversations) {
-        pushConversationRow(
-          rows,
-          conv,
-          0,
-          conversationExpanded,
-          childrenByParent,
-          childrenLoading
-        )
+  const pushChats = () => {
+    // The Chat section header is always present (a permanent entry point),
+    // unlike the conditional Pinned/Folders headers.
+    rows.push({
+      kind: "section",
+      section: "chats",
+      expanded: chatsExpanded,
+      count: chatConversations.length,
+    })
+    if (chatsExpanded) {
+      if (chatConversations.length === 0) {
+        rows.push({ kind: "chats-empty" })
+      } else {
+        for (const conv of chatConversations) {
+          pushConversationRow(
+            rows,
+            conv,
+            0,
+            conversationExpanded,
+            childrenByParent,
+            childrenLoading
+          )
+        }
       }
     }
+  }
+
+  if (sectionOrder === "chats-first") {
+    pushChats()
+    pushFolders()
+  } else {
+    pushFolders()
+    pushChats()
   }
 
   return rows
