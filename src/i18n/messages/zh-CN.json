@@ -2476,6 +2476,16 @@
         "remove": "移除",
         "noDiffDataAvailable": "未找到 {filePath} 的差异数据"
       },
+      "replyArtifacts": {
+        "title": "改动文件",
+        "fileCount": "{count} 个文件",
+        "newFilesTitle": "新增文件",
+        "revealInFolder": "在访达/资源管理器中显示",
+        "openFile": "打开 {filePath}",
+        "openInEditor": "在编辑器中打开",
+        "remove": "移除",
+        "noDiffDataAvailable": "未找到 {filePath} 的差异数据"
+      },
       "askQuestion": {
         "title": "智能体需要你的选择",
         "subtitle": "回答后点击提交，可随时跳过",

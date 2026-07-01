@@ -2476,6 +2476,16 @@
         "remove": "Quitar",
         "noDiffDataAvailable": "No hay datos de diff disponibles para {filePath}"
       },
+      "replyArtifacts": {
+        "title": "Archivos modificados",
+        "fileCount": "{count, plural, one {# archivo} other {# archivos}}",
+        "newFilesTitle": "Archivos nuevos",
+        "revealInFolder": "Mostrar en el gestor de archivos",
+        "openFile": "Abrir {filePath}",
+        "openInEditor": "Abrir en el editor",
+        "remove": "Quitar",
+        "noDiffDataAvailable": "No hay datos de diff disponibles para {filePath}"
+      },
       "askQuestion": {
         "title": "El agente necesita tu elección",
         "subtitle": "Responde y luego envía. Puedes omitir en cualquier momento.",

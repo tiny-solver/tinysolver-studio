@@ -2476,6 +2476,16 @@
         "remove": "Remove",
         "noDiffDataAvailable": "No diff data available for {filePath}"
       },
+      "replyArtifacts": {
+        "title": "Files changed",
+        "fileCount": "{count, plural, one {# file} other {# files}}",
+        "newFilesTitle": "New files",
+        "revealInFolder": "Show in file manager",
+        "openFile": "Open {filePath}",
+        "openInEditor": "Open in editor",
+        "remove": "Remove",
+        "noDiffDataAvailable": "No diff data available for {filePath}"
+      },
       "askQuestion": {
         "title": "The agent needs your input",
         "subtitle": "Answer below, then submit. You can skip anytime.",

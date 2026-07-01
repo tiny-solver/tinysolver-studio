@@ -2476,6 +2476,16 @@
         "remove": "제거",
         "noDiffDataAvailable": "{filePath}에 대한 diff 데이터가 없습니다"
       },
+      "replyArtifacts": {
+        "title": "변경된 파일",
+        "fileCount": "{count, plural, one {#개 파일} other {#개 파일}}",
+        "newFilesTitle": "새 파일",
+        "revealInFolder": "파일 관리자에서 표시",
+        "openFile": "{filePath} 열기",
+        "openInEditor": "편집기에서 열기",
+        "remove": "제거",
+        "noDiffDataAvailable": "{filePath}에 대한 diff 데이터가 없습니다"
+      },
       "askQuestion": {
         "title": "에이전트가 선택을 요청합니다",
         "subtitle": "답변 후 제출하세요. 언제든 건너뛸 수 있습니다",

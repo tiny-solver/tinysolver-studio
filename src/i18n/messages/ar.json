@@ -2476,6 +2476,16 @@
         "remove": "إزالة",
         "noDiffDataAvailable": "لا توجد بيانات diff متاحة لـ {filePath}"
       },
+      "replyArtifacts": {
+        "title": "الملفات المتغيرة",
+        "fileCount": "{count, plural, one {# ملف} other {# ملفات}}",
+        "newFilesTitle": "ملفات جديدة",
+        "revealInFolder": "عرض في مدير الملفات",
+        "openFile": "فتح {filePath}",
+        "openInEditor": "فتح في المحرر",
+        "remove": "إزالة",
+        "noDiffDataAvailable": "لا توجد بيانات diff متاحة لـ {filePath}"
+      },
       "askQuestion": {
         "title": "يحتاج الوكيل إلى اختيارك",
         "subtitle": "أجب ثم أرسل. يمكنك التخطّي في أي وقت.",

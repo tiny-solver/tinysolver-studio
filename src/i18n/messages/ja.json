@@ -2476,6 +2476,16 @@
         "remove": "削除",
         "noDiffDataAvailable": "{filePath} の差分データがありません"
       },
+      "replyArtifacts": {
+        "title": "変更されたファイル",
+        "fileCount": "{count, plural, one {# 個のファイル} other {# 個のファイル}}",
+        "newFilesTitle": "新規ファイル",
+        "revealInFolder": "ファイルマネージャーで表示",
+        "openFile": "{filePath} を開く",
+        "openInEditor": "エディタで開く",
+        "remove": "削除",
+        "noDiffDataAvailable": "{filePath} の差分データがありません"
+      },
       "askQuestion": {
         "title": "エージェントが選択を求めています",
         "subtitle": "回答したら送信してください。いつでもスキップできます",
