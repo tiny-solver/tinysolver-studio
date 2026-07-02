@@ -7,7 +7,6 @@ import {
   FileDiff,
   FileIcon,
   FilePlus,
-  FolderOpen,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useActiveFolder } from "@/contexts/active-folder-context"
@@ -46,9 +45,9 @@ import { cn } from "@/lib/utils"
  * Two independently-collapsible sections:
  *  - "New files": every file the reply created, each as its own card in a
  *    container-responsive grid. The card body opens the file in the workspace
- *    tabs (an "open in editor" cue on hover); a distinct side button reveals it
- *    in the OS file manager. Open by default — a freshly written file is
- *    usually the thing you want to jump into.
+ *    tabs (an "open in editor" tooltip on hover); a distinct side button
+ *    reveals it in the OS file manager. Open by default — a freshly written
+ *    file is usually the thing you want to jump into.
  *  - "Files changed": modified/removed files as a single-open accordion (only
  *    one diff expanded at a time). Collapsed by default. Each row expands its
  *    diff inline within the SAME bordered card (no double border), and the
@@ -124,7 +123,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
             onClick={() => setNewFilesOpen((prev) => !prev)}
             className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
-            <FilePlus className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+            <FilePlus className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-xs font-medium text-foreground">
               {t("newFilesTitle")}
             </span>
@@ -160,7 +159,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                     return (
                       <div
                         key={file.id}
-                        className="group/newfile flex items-stretch overflow-hidden rounded-md border border-green-600/30 bg-green-500/5 transition-colors hover:border-green-600/50 hover:bg-green-500/10 dark:border-green-400/30 dark:hover:border-green-400/50"
+                        className="flex items-stretch overflow-hidden rounded-md border border-green-600/30 bg-green-500/5 transition-colors hover:border-green-600/50 hover:bg-green-500/10 dark:border-green-400/30 dark:hover:border-green-400/50"
                       >
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -173,7 +172,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                               })}
                               className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                             >
-                              <FileIcon className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+                              <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                               <span className="flex min-w-0 flex-1 flex-col">
                                 <span className="truncate text-xs font-medium text-foreground">
                                   {name}
@@ -190,8 +189,6 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                                   className="shrink-0 font-mono text-[10px]"
                                 />
                               )}
-                              {/* Hover cue that the body opens the file. */}
-                              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/newfile:opacity-70" />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="top">
@@ -208,7 +205,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                                 aria-label={t("revealInFolder")}
                                 className="flex w-9 shrink-0 items-center justify-center border-l border-green-600/30 text-muted-foreground transition-colors hover:bg-green-500/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:border-green-400/30"
                               >
-                                <FolderOpen className="h-3.5 w-3.5" />
+                                <ExternalLink className="h-3.5 w-3.5" />
                               </button>
                             </TooltipTrigger>
                             <TooltipContent side="top">
@@ -263,6 +260,11 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
             <ul className="max-h-[30rem] space-y-1.5 overflow-y-auto border-t border-border p-2">
               {changedFiles.map((file) => {
                 const displayPath = toFolderRelativePath(file.path, folderPath)
+                const name = fileNameOf(displayPath)
+                const dir =
+                  displayPath === name
+                    ? ""
+                    : displayPath.slice(0, displayPath.length - name.length - 1)
                 const isRemoved = isRemovedFileDiff(file.diff)
                 const isOpen = openPath === file.path
 
@@ -305,13 +307,20 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                             : "text-muted-foreground"
                         )}
                       />
-                      <span
-                        className={cn(
-                          "min-w-0 flex-1 truncate text-xs",
-                          isRemoved ? "text-destructive" : "text-foreground"
+                      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                        <span
+                          className={cn(
+                            "min-w-0 truncate text-xs",
+                            isRemoved ? "text-destructive" : "text-foreground"
+                          )}
+                        >
+                          {name}
+                        </span>
+                        {dir && (
+                          <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+                            {dir}
+                          </span>
                         )}
-                      >
-                        {fileNameOf(displayPath)}
                       </span>
                       {isRemoved ? (
                         <span className="inline-flex shrink-0 items-center rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 font-mono text-[10px] text-destructive">
