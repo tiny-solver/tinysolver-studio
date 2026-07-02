@@ -1,16 +1,20 @@
 // Centralized build/parse for file-workspace tab ids.
 //
-// Every tab id is namespaced by the owning folder's numeric id so the same
-// relative path opened from two workspace folders yields two distinct tabs.
-// All variable segments (paths, branches, commits, labels) are
-// encodeURIComponent-encoded, which guarantees they contain no ":" — the
-// segment separator — so parsing is a plain split with fixed segment counts.
-// Never assemble or regex these ids inline; extend this module instead.
+// Plain file tabs (and the external-conflict diff surface, which is a view of
+// one file) are identified by the file's ABSOLUTE normalized path — a file tab
+// carries no folder identity, so the same physical file opened from any
+// entrance is one tab. Git-scoped diff tabs (working/branch/commit/session)
+// remain namespaced by the owning folder's numeric id: they are repository
+// operations and need the repo root. All variable segments (paths, branches,
+// commits, labels) are encodeURIComponent-encoded, which guarantees they
+// contain no ":" — the segment separator — so parsing is a plain split with
+// fixed segment counts. Never assemble or regex these ids inline; extend this
+// module instead.
 //
 // Ids are session-only (never persisted), so the format can evolve freely.
 
 export type FileTabIdParts =
-  | { kind: "file"; folderId: number; path: string }
+  | { kind: "file"; path: string }
   | { kind: "diff-working-all"; folderId: number }
   | { kind: "diff-working"; folderId: number; path: string }
   | { kind: "diff-working-unified"; folderId: number; path: string }
@@ -34,7 +38,7 @@ export type FileTabIdParts =
       path: string | null
     }
   | { kind: "diff-session"; folderId: number; groupLabel: string; path: string }
-  | { kind: "diff-external-conflict"; folderId: number; path: string }
+  | { kind: "diff-external-conflict"; path: string }
 
 export type FileTabIdKind = FileTabIdParts["kind"]
 
@@ -64,7 +68,7 @@ function decodeNullableToken(token: string): string | null {
 export function buildFileTabId(parts: FileTabIdParts): string {
   switch (parts.kind) {
     case "file":
-      return `file:${parts.folderId}:${encodeToken(parts.path)}`
+      return `file:${encodeToken(parts.path)}`
     case "diff-working-all":
       return `diff:working-all:${parts.folderId}`
     case "diff-working":
@@ -82,7 +86,7 @@ export function buildFileTabId(parts: FileTabIdParts): string {
     case "diff-session":
       return `diff:session:${parts.folderId}:${encodeToken(parts.groupLabel)}:${encodeToken(parts.path)}`
     case "diff-external-conflict":
-      return `diff:external-conflict:${parts.folderId}:${encodeToken(parts.path)}`
+      return `diff:external-conflict:${encodeToken(parts.path)}`
   }
 }
 
@@ -98,14 +102,20 @@ export function parseFileTabId(id: string): FileTabIdParts | null {
   const head = segments[0]
 
   if (head === "file") {
-    if (segments.length !== 3) return null
-    const folderId = parseFolderIdSegment(segments[1])
-    if (folderId == null) return null
-    return { kind: "file", folderId, path: decodeToken(segments[2]) }
+    if (segments.length !== 2 || segments[1] === "") return null
+    return { kind: "file", path: decodeToken(segments[1]) }
   }
 
   if (head !== "diff") return null
   const variant = segments[1]
+
+  // external-conflict is file-identified (no folder segment) — branch before
+  // the shared folder-segment parse below.
+  if (variant === "external-conflict") {
+    if (segments.length !== 3 || segments[2] === "") return null
+    return { kind: "diff-external-conflict", path: decodeToken(segments[2]) }
+  }
+
   const folderId = parseFolderIdSegment(segments[2])
   if (folderId == null) return null
   const tail = segments.slice(3)
@@ -167,14 +177,6 @@ export function parseFileTabId(id: string): FileTabIdParts | null {
             folderId,
             groupLabel: decodeToken(tail[0]),
             path: decodeToken(tail[1]),
-          }
-        : null
-    case "external-conflict":
-      return tail.length === 1
-        ? {
-            kind: "diff-external-conflict",
-            folderId,
-            path: decodeToken(tail[0]),
           }
         : null
     default:

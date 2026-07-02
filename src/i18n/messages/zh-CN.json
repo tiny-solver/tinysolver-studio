@@ -1950,7 +1950,6 @@
       "commitDiffRequestTimedOut": "提交差异请求超时",
       "saveRequestTimedOut": "保存请求超时",
       "reloadRequestTimedOut": "重载请求超时",
-      "folderUnavailable": "该文件所属文件夹已不在工作区中",
       "noChanges": "暂无变更。",
       "noDiffOutput": "无差异输出。",
       "diffTitleWorkspace": "Diff · 工作区",
@@ -2230,7 +2229,6 @@
       "linkSafety": {
         "errorCannotOpen": "无法打开本地文件",
         "errorNoWorkspace": "当前没有活跃的工作区文件夹。",
-        "errorOutsideWorkspace": "该文件不在当前工作区文件夹内。",
         "errorFailedOpen": "打开本地文件失败",
         "errorFailedLink": "打开链接失败",
         "errorUnsupportedLinkProtocol": "不支持该链接协议。"

@@ -1950,7 +1950,6 @@
       "commitDiffRequestTimedOut": "Commit-Diff-Anfrage hat das Zeitlimit überschritten",
       "saveRequestTimedOut": "Speicheranfrage hat das Zeitlimit überschritten",
       "reloadRequestTimedOut": "Neuladeanfrage hat das Zeitlimit überschritten",
-      "folderUnavailable": "Der Ordner der Datei ist nicht mehr im Arbeitsbereich",
       "noChanges": "Keine Änderungen.",
       "noDiffOutput": "Keine Diff-Ausgabe.",
       "diffTitleWorkspace": "Diff · Arbeitsbereich",
@@ -2230,7 +2229,6 @@
       "linkSafety": {
         "errorCannotOpen": "Lokale Datei kann nicht geöffnet werden",
         "errorNoWorkspace": "Es ist kein Arbeitsbereichsordner aktiv.",
-        "errorOutsideWorkspace": "Die Datei befindet sich außerhalb des aktuellen Arbeitsbereichsordners.",
         "errorFailedOpen": "Lokale Datei konnte nicht geöffnet werden",
         "errorFailedLink": "Link konnte nicht geöffnet werden",
         "errorUnsupportedLinkProtocol": "Dieses Linkprotokoll wird nicht unterstützt."

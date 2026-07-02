@@ -101,7 +101,7 @@ describe("use-open-file-tabs-watch external-change coverage", () => {
     // workspace event — one batched setState marks them stale and the
     // activation path refreshes them.
     expect(watchSource).toMatch(/staleBatch/)
-    expect(watchSource).toMatch(/markTabsStaleBatch\(folderId, staleBatch\)/)
+    expect(watchSource).toMatch(/markTabsStaleBatch\(staleBatch\)/)
   })
 })
 
@@ -119,22 +119,29 @@ describe("file-workspace-panel routes active-tab openers by tab folder", () => {
     )
   })
 
-  it("markdown preview links resolve within the active tab's folder", () => {
-    expect(panelSource).toMatch(
-      /openFilePreview\(target, \{\s*folderId: activeFileTab\.folderId,?\s*\}\)/
+  it("markdown preview links open by absolute path", () => {
+    // preprocessMarkdownPaths resolves every local href against the
+    // document's ABSOLUTE directory, so the click handler must hand the
+    // target to openFilePreview as-is (keeping the leading slash) — never
+    // strip it back to a folder-relative path.
+    expect(panelSource).toMatch(/void openFilePreview\(target\)/)
+    expect(panelSource).not.toMatch(
+      /target\s*=\s*clean\s*\.replace\(\/\^\\\/\+\//
     )
   })
 })
 
-describe("workspace-context stale-aware save guard", () => {
-  it("verifies a stale dirty tab against disk inside saveFileTab", () => {
+describe("workspace-context divergence-aware save guard", () => {
+  it("verifies stale and unwatched dirty tabs against disk inside saveFileTab", () => {
     // Blocker #18: every write path funnels through saveFileTab, so the
     // guard must live there — a stale buffer is never written blindly.
+    // Files outside every registered folder have no live watcher, so
+    // their saves must ALWAYS pre-verify (`unwatched`).
     expect(providerSource).toMatch(
-      /if \(tab\.stale && !options\?\.force\)[\s\S]{0,600}readFileForEdit\(folderPath, tab\.path\)/
+      /if \(\(tab\.stale \|\| unwatched\) && !options\?\.force\)[\s\S]{0,600}readFileForEdit\(io\.rootPath, io\.ioPath\)/
     )
     expect(providerSource).toMatch(
-      /if \(tab\.stale && !options\?\.force\)[\s\S]{0,1200}enqueueExternalConflict/
+      /if \(\(tab\.stale \|\| unwatched\) && !options\?\.force\)[\s\S]{0,1200}enqueueExternalConflict/
     )
   })
 })

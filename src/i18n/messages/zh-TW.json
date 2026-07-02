@@ -1950,7 +1950,6 @@
       "commitDiffRequestTimedOut": "提交差異請求逾時",
       "saveRequestTimedOut": "儲存請求逾時",
       "reloadRequestTimedOut": "重載請求逾時",
-      "folderUnavailable": "該檔案所屬資料夾已不在工作區中",
       "noChanges": "暫無變更。",
       "noDiffOutput": "無差異輸出。",
       "diffTitleWorkspace": "Diff · 工作區",
@@ -2230,7 +2229,6 @@
       "linkSafety": {
         "errorCannotOpen": "無法開啟本地檔案",
         "errorNoWorkspace": "目前沒有活躍的工作區資料夾。",
-        "errorOutsideWorkspace": "該檔案不在目前的工作區資料夾內。",
         "errorFailedOpen": "開啟本地檔案失敗",
         "errorFailedLink": "開啟連結失敗",
         "errorUnsupportedLinkProtocol": "不支援此連結協議。"

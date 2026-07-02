@@ -1,0 +1,189 @@
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const getHomeDirectoryMock = vi.fn<() => Promise<string>>()
+
+vi.mock("@/lib/api", () => ({
+  getHomeDirectory: (...args: []) => getHomeDirectoryMock(...args),
+}))
+
+import {
+  expandHomePath,
+  findOwningFolder,
+  isHomeRelativePath,
+  joinRootRel,
+  normalizeAbsPath,
+  resetHomeDirCacheForTests,
+  splitAbsPath,
+} from "@/lib/file-open-target"
+
+describe("normalizeAbsPath", () => {
+  it("normalizes slashes and strips trailing slashes", () => {
+    expect(normalizeAbsPath("/repo/src/")).toBe("/repo/src")
+    expect(normalizeAbsPath("\\repo\\src\\a.ts")).toBe("/repo/src/a.ts")
+    expect(normalizeAbsPath("/repo//")).toBe("/repo")
+  })
+
+  it("keeps the bare roots", () => {
+    expect(normalizeAbsPath("/")).toBe("/")
+    expect(normalizeAbsPath("C:/")).toBe("C:/")
+    expect(normalizeAbsPath("c:\\")).toBe("C:/")
+  })
+
+  it("upper-cases Windows drive letters for one identity", () => {
+    expect(normalizeAbsPath("c:/Repo/x.ts")).toBe("C:/Repo/x.ts")
+  })
+})
+
+describe("splitAbsPath", () => {
+  it("splits into (dirname, basename)", () => {
+    expect(splitAbsPath("/repo/src/a.ts")).toEqual({
+      rootPath: "/repo/src",
+      ioPath: "a.ts",
+    })
+  })
+
+  it("handles root-level files with usable directory roots", () => {
+    expect(splitAbsPath("/hosts")).toEqual({ rootPath: "/", ioPath: "hosts" })
+    expect(splitAbsPath("C:/x.ts")).toEqual({ rootPath: "C:/", ioPath: "x.ts" })
+  })
+
+  it("returns null for non-files and relative paths", () => {
+    expect(splitAbsPath("/")).toBeNull()
+    expect(splitAbsPath("C:/")).toBeNull()
+    expect(splitAbsPath("src/a.ts")).toBeNull()
+    expect(splitAbsPath("")).toBeNull()
+  })
+
+  it("ignores trailing slashes", () => {
+    expect(splitAbsPath("/repo/src/a.ts/")).toEqual({
+      rootPath: "/repo/src",
+      ioPath: "a.ts",
+    })
+  })
+})
+
+describe("joinRootRel", () => {
+  it("joins byte-identically with normalizeAbsPath output", () => {
+    const joined = joinRootRel("/repo/", "src/a.ts")
+    expect(joined).toBe("/repo/src/a.ts")
+    expect(joined).toBe(normalizeAbsPath("/repo/src/a.ts"))
+  })
+
+  it("handles the bare roots without doubling slashes", () => {
+    expect(joinRootRel("/", "hosts")).toBe("/hosts")
+    expect(joinRootRel("C:/", "x.ts")).toBe("C:/x.ts")
+  })
+
+  it("strips leading ./ and / from the relative part", () => {
+    expect(joinRootRel("/repo", "./src/a.ts")).toBe("/repo/src/a.ts")
+    expect(joinRootRel("/repo", "/src/a.ts")).toBe("/repo/src/a.ts")
+    expect(joinRootRel("/repo", "src\\a.ts")).toBe("/repo/src/a.ts")
+  })
+
+  it("returns the root itself for an empty relative part", () => {
+    expect(joinRootRel("/repo", "")).toBe("/repo")
+  })
+})
+
+describe("findOwningFolder", () => {
+  const folders = [
+    { id: 1, path: "/repo" },
+    { id: 2, path: "/repo/packages/core" },
+    { id: 3, path: "/other/" },
+  ]
+
+  it("matches on path boundaries only", () => {
+    expect(findOwningFolder("/repo/src/a.ts", folders)).toMatchObject({
+      folderId: 1,
+      relPath: "src/a.ts",
+    })
+    // `/repo` must never claim `/repo-sibling/…`.
+    expect(findOwningFolder("/repo-sibling/a.ts", folders)).toBeNull()
+  })
+
+  it("prefers the deepest containing root", () => {
+    expect(
+      findOwningFolder("/repo/packages/core/src/i.ts", folders)
+    ).toMatchObject({
+      folderId: 2,
+      rootPath: "/repo/packages/core",
+      relPath: "src/i.ts",
+    })
+  })
+
+  it("does not match the folder root itself", () => {
+    expect(findOwningFolder("/repo", folders)).toBeNull()
+    expect(findOwningFolder("/repo/", folders)).toBeNull()
+  })
+
+  it("handles trailing-slash roots", () => {
+    expect(findOwningFolder("/other/x.md", folders)).toMatchObject({
+      folderId: 3,
+      rootPath: "/other",
+      relPath: "x.md",
+    })
+  })
+
+  it("compares Windows drive paths case-insensitively, keeping casing", () => {
+    const winFolders = [{ id: 9, path: "C:/Repo" }]
+    expect(findOwningFolder("c:/repo/Src/App.ts", winFolders)).toMatchObject({
+      folderId: 9,
+      relPath: "Src/App.ts",
+    })
+  })
+
+  it("stays case-sensitive on POSIX paths", () => {
+    expect(findOwningFolder("/Repo/src/a.ts", folders)).toBeNull()
+  })
+
+  it("returns null for relative input or when nothing contains the path", () => {
+    expect(findOwningFolder("src/a.ts", folders)).toBeNull()
+    expect(findOwningFolder("/elsewhere/a.ts", folders)).toBeNull()
+  })
+})
+
+describe("expandHomePath", () => {
+  beforeEach(() => {
+    getHomeDirectoryMock.mockReset()
+    resetHomeDirCacheForTests()
+  })
+
+  it("detects home-relative paths", () => {
+    expect(isHomeRelativePath("~/notes.md")).toBe(true)
+    expect(isHomeRelativePath("~")).toBe(true)
+    expect(isHomeRelativePath("~user/x")).toBe(false)
+    expect(isHomeRelativePath("/repo/~x")).toBe(false)
+  })
+
+  it("expands ~/ against the backend home directory", async () => {
+    getHomeDirectoryMock.mockResolvedValue("/Users/me")
+    await expect(expandHomePath("~/.claude/plans/x.md")).resolves.toBe(
+      "/Users/me/.claude/plans/x.md"
+    )
+  })
+
+  it("is lazy for non-home paths", async () => {
+    await expect(expandHomePath("/abs/x.md")).resolves.toBe("/abs/x.md")
+    await expect(expandHomePath("rel/x.md")).resolves.toBe("rel/x.md")
+    expect(getHomeDirectoryMock).not.toHaveBeenCalled()
+  })
+
+  it("caches the home lookup across calls and dedupes concurrency", async () => {
+    getHomeDirectoryMock.mockResolvedValue("/Users/me")
+    const [a, b] = await Promise.all([
+      expandHomePath("~/a.md"),
+      expandHomePath("~/b.md"),
+    ])
+    await expandHomePath("~/c.md")
+    expect(a).toBe("/Users/me/a.md")
+    expect(b).toBe("/Users/me/b.md")
+    expect(getHomeDirectoryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("passes through unchanged on failure and retries next call", async () => {
+    getHomeDirectoryMock.mockRejectedValueOnce(new Error("nope"))
+    await expect(expandHomePath("~/a.md")).resolves.toBe("~/a.md")
+    getHomeDirectoryMock.mockResolvedValue("/Users/me")
+    await expect(expandHomePath("~/a.md")).resolves.toBe("/Users/me/a.md")
+  })
+})

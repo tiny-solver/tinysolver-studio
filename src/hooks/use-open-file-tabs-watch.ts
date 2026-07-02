@@ -2,15 +2,19 @@
 
 // Provider-owned external-change watcher for open file tabs.
 //
-// Subscribes to the per-root workspace FS stream of EVERY folder that has
-// open file tabs — not just the active one — so a tab keeps receiving
-// external-change detection no matter which folder/conversation is active
-// and whether the (closed-by-default) aux file tree is mounted.
+// A file tab is identified by its absolute path; folder association is
+// DERIVED here: the watcher subscribes to the per-root workspace FS stream
+// of every registered folder that contains at least one open file tab —
+// regardless of which folder/conversation is active and whether the
+// (closed-by-default) aux file tree is mounted. Tabs outside every
+// registered folder get no live stream; they are covered by the
+// activation-time freshness pass at the bottom of this hook (plus the
+// provider's save pre-verify and the backend's etag CAS).
 //
 // Performance model (the load-bearing part):
 //   • The subscription effect depends ONLY on `watchSignature`, a
 //     collision-safe JSON string of the sorted (folderId, rootPath) pairs
-//     that currently have open file tabs. Keystrokes churn `fileTabs`
+//     derived from the open tabs' paths. Keystrokes churn `fileTabs`
 //     every render, but the signature string stays identical, so
 //     subscriptions are never torn down/rebuilt on typing — and the
 //     backend stream never restarts.
@@ -21,19 +25,26 @@
 //   • Our own saves echo back as change events. A one-shot etag record
 //     per save suppresses the immediate re-mark so switching tabs after
 //     an autosave doesn't flash a pointless reload.
-import { useEffect, useMemo, type RefObject } from "react"
+import { useEffect, useMemo, useRef, type RefObject } from "react"
 import { readFileForEdit } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
-import { isImageFile } from "@/lib/language-detect"
+import {
+  findOwningFolder,
+  isPathUnderRoot,
+  joinRootRel,
+  normalizeAbsPath,
+  splitAbsPath,
+} from "@/lib/file-open-target"
+import { isImageFile, isOfficePreviewable } from "@/lib/language-detect"
 import { getWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import type { FileEditContent } from "@/lib/types"
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 
 // One divergence between an open dirty buffer and the file on disk.
 // Queued FIFO in the provider and surfaced one at a time by the
-// external-conflict dialog; keyed/deduped by folderId + path + signature.
+// external-conflict dialog; keyed/deduped by absolute path + signature.
 export interface WorkspaceExternalConflict {
-  folderId: number
+  // Absolute normalized path — the tab identity.
   path: string
   diskContent: string
   unsavedContent: string
@@ -54,8 +65,12 @@ type FileChangeDecision =
     }
   | { kind: "missing"; path: string; error: string }
 
-function normalizeComparePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "")
+// The backend read pair for one file: `(directory, file name)` — every
+// read goes through the backend's root+relative contract regardless of
+// whether the file sits inside a registered folder.
+interface FileIoTarget {
+  rootPath: string
+  ioPath: string
 }
 
 // Per-tab disk-vs-buffer resolver. Compares the tab's known etag against
@@ -66,7 +81,7 @@ function normalizeComparePath(path: string): string {
 // the caller can write it via applyExternalReload without a second read.
 async function resolveFileChangeDecision(
   tabSnapshot: FileWorkspaceTab,
-  rootPath: string,
+  io: FileIoTarget,
   fileTabsRef: RefObject<FileWorkspaceTab[]>
 ): Promise<FileChangeDecision> {
   if (tabSnapshot.kind !== "file") return { kind: "none" }
@@ -79,18 +94,14 @@ async function resolveFileChangeDecision(
   const stillSameTab = (): FileWorkspaceTab | null => {
     const latestTab = (fileTabsRef.current ?? []).find((t) => t.id === tabId)
     if (!latestTab || latestTab.kind !== "file") return null
-    if (
-      normalizeComparePath(latestTab.path ?? "") !== normalizeComparePath(path)
-    ) {
-      return null
-    }
+    if (latestTab.path !== path) return null
     if (latestTab.loading) return null
     return latestTab
   }
 
   let latest: FileEditContent | undefined
   try {
-    latest = await readFileForEdit(rootPath, path)
+    latest = await readFileForEdit(io.rootPath, io.ioPath)
   } catch (error) {
     // Disk read failed — most commonly an external delete, but also
     // permission revocation, an exclusive lock, or a transient FS error.
@@ -124,12 +135,13 @@ async function resolveFileChangeDecision(
   return { kind: "reload", path, latest }
 }
 
-// True when `tabPath` (folder-relative) is the changed path itself or sits
-// under a changed directory. Boundary-safe: walks the tab path's ancestor
-// segments and looks each up in the changed set — "/a/foo" never matches a
-// change reported for "/a/foobar", and the cost is O(depth), not O(changed).
+// True when `tabPath` (absolute, normalized) is a changed path itself or
+// sits under a changed directory. Boundary-safe: walks the tab path's
+// ancestor segments and looks each up in the changed set — "/a/foo" never
+// matches a change reported for "/a/foobar", and the cost is O(depth),
+// not O(changed).
 function tabPathAffected(tabPath: string, changedSet: Set<string>): boolean {
-  const normalized = normalizeComparePath(tabPath)
+  const normalized = normalizeAbsPath(tabPath)
   if (changedSet.has(normalized)) return true
   let slash = normalized.lastIndexOf("/")
   while (slash > 0) {
@@ -147,28 +159,23 @@ export interface UseOpenFileTabsWatchParams {
   activeFileTabIdRef: RefObject<string | null>
   // Render-scoped active tab for the stale-on-activation pass.
   activeFileTab: FileWorkspaceTab | null
-  // Folder root resolution (reads the latest folder map through a ref).
-  resolveTabFolderPath: (folderId: number) => string | null
-  // Unstable render-scoped folder lookup — participates in the signature
-  // memo so a folder path change (rename/repath) re-keys subscriptions.
-  getFolder: (id: number) => { id: number; path: string } | undefined
+  // Registered folders — the derivation source for which roots to watch.
+  // Render-scoped; participates in the signature memo so folder add/remove
+  // (and path changes) re-key subscriptions.
+  allFolders: ReadonlyArray<{ id: number; path: string }>
   // Provider actions (stable identities).
   openFilePreview: (
     path: string,
     options?: { line?: number; reload?: boolean; folderId?: number }
   ) => Promise<void>
-  reloadOpenFileBackground: (folderId: number, path: string) => Promise<void>
-  applyExternalReload: (
-    folderId: number,
-    path: string,
-    fetched: FileEditContent
-  ) => Promise<void>
-  markTabsStale: (folderId: number, path: string) => void
-  markTabsStaleBatch: (folderId: number, paths: string[]) => void
-  rejectFileTab: (folderId: number, path: string, errorMessage: string) => void
+  reloadOpenFileBackground: (path: string) => Promise<void>
+  applyExternalReload: (path: string, fetched: FileEditContent) => Promise<void>
+  markTabsStale: (path: string) => void
+  markTabsStaleBatch: (paths: string[]) => void
+  rejectFileTab: (path: string, errorMessage: string) => void
   enqueueExternalConflict: (conflict: WorkspaceExternalConflict) => void
   // One-shot save-echo suppression (owned by the provider's saveFileTab).
-  consumeSelfWriteEcho: (folderId: number, path: string) => boolean
+  consumeSelfWriteEcho: (path: string) => boolean
 }
 
 export function useOpenFileTabsWatch({
@@ -176,8 +183,7 @@ export function useOpenFileTabsWatch({
   fileTabsRef,
   activeFileTabIdRef,
   activeFileTab,
-  resolveTabFolderPath,
-  getFolder,
+  allFolders,
   openFilePreview,
   reloadOpenFileBackground,
   applyExternalReload,
@@ -187,36 +193,36 @@ export function useOpenFileTabsWatch({
   enqueueExternalConflict,
   consumeSelfWriteEcho,
 }: UseOpenFileTabsWatchParams): void {
-  // Collision-safe, stable-by-value signature of the folders to watch.
-  // JSON encoding (not join) so no path content can forge a separator.
-  // Recomputed per render (cheap O(tabs)); the effect below only re-runs
-  // when the RESULTING STRING changes — i.e. when a folder gains its
-  // first open file tab, loses its last one, or its root path changes.
+  // Collision-safe, stable-by-value signature of the roots to watch: the
+  // deduped owning folders of the open file tabs. JSON encoding (not join)
+  // so no path content can forge a separator. Recomputed per render (cheap
+  // O(tabs × folders)); the effect below only re-runs when the RESULTING
+  // STRING changes — i.e. when a folder gains its first open file tab,
+  // loses its last one, is added/removed, or its root path changes.
   const watchSignature = useMemo(() => {
     const rootByFolder = new Map<number, string>()
     for (const tab of fileTabs) {
       if (tab.kind !== "file" || !tab.path) continue
-      if (rootByFolder.has(tab.folderId)) continue
-      const root = getFolder(tab.folderId)?.path
-      if (!root) continue
-      rootByFolder.set(tab.folderId, root)
+      const owning = findOwningFolder(tab.path, allFolders)
+      if (!owning) continue
+      rootByFolder.set(owning.folderId, owning.rootPath)
     }
     const entries = [...rootByFolder.entries()].sort((a, b) => a[0] - b[0])
     return JSON.stringify(entries)
-  }, [fileTabs, getFolder])
+  }, [fileTabs, allFolders])
 
   useEffect(() => {
     const targets = JSON.parse(watchSignature) as Array<[number, string]>
     if (targets.length === 0) return
 
-    const subscriptions = targets.map(([folderId, rootPath]) => {
+    const subscriptions = targets.map(([, rootPath]) => {
       const store = getWorkspaceStateStore(rootPath)
       // Paths-only: tab watching consumes changed_paths exclusively. The
       // backend runs tree/git scans on this root only while an aux
       // tree/git panel holds a full-mode token.
       const token = store.acquire("paths")
 
-      // Per-folder drainer: coalesces envelope bursts via queueMicrotask
+      // Per-root drainer: coalesces envelope bursts via queueMicrotask
       // and a single in-flight loop, mirroring the aux panel's original
       // reconciliation coroutine semantics.
       const pendingPaths = new Set<string>()
@@ -229,14 +235,26 @@ export function useOpenFileTabsWatch({
         paths: string[],
         fullScan: boolean
       ): Promise<void> => {
+        // Tabs covered by THIS stream: boundary containment on the
+        // absolute path. Nested roots (a worktree inside a parent repo,
+        // both watched) can both match one tab — the duplicate resolve is
+        // absorbed by the provider's generation guards.
         const openFileTabs = (fileTabsRef.current ?? []).filter(
           (t) =>
-            t.kind === "file" && t.path && !t.loading && t.folderId === folderId
+            t.kind === "file" &&
+            t.path &&
+            !t.loading &&
+            isPathUnderRoot(t.path, rootPath)
         )
+        if (openFileTabs.length === 0) return
 
         const candidates = (() => {
           if (fullScan) return openFileTabs
-          const changedSet = new Set(paths.map(normalizeComparePath))
+          // changed_paths are root-relative; join onto the stream root so
+          // they compare byte-identically with tab identities.
+          const changedSet = new Set(
+            paths.map((rel) => joinRootRel(rootPath, rel))
+          )
           return openFileTabs.filter(
             (t) => t.path && tabPathAffected(t.path, changedSet)
           )
@@ -259,13 +277,13 @@ export function useOpenFileTabsWatch({
           // event is (with overwhelming likelihood) our own write echo.
           // One-shot: the record is consumed, so any FURTHER event for
           // this path marks stale normally.
-          if (!tab.isDirty && consumeSelfWriteEcho(folderId, tab.path)) {
+          if (!tab.isDirty && consumeSelfWriteEcho(tab.path)) {
             continue
           }
           staleBatch.push(tab.path)
         }
         if (staleBatch.length > 0) {
-          markTabsStaleBatch(folderId, staleBatch)
+          markTabsStaleBatch(staleBatch)
         }
 
         for (const tab of eager) {
@@ -277,30 +295,21 @@ export function useOpenFileTabsWatch({
           // Bypass the text-file resolver: a single path-match is enough
           // to trigger a refresh.
           if (isImageFile(path)) {
-            void reloadOpenFileBackground(folderId, path)
+            void reloadOpenFileBackground(path)
             continue
           }
 
-          if (consumeSelfWriteEcho(folderId, path)) continue
+          if (consumeSelfWriteEcho(path)) continue
 
-          const rootNow = resolveTabFolderPath(folderId)
-          if (!rootNow) continue
-          const decision = await resolveFileChangeDecision(
-            tab,
-            rootNow,
-            fileTabsRef
-          )
+          const io = splitAbsPath(path)
+          if (!io) continue
+          const decision = await resolveFileChangeDecision(tab, io, fileTabsRef)
           if (disposed) return
-
-          // Folder-path drift guard: if the folder was re-pathed while the
-          // read was in flight, the payload belongs to the OLD root —
-          // discard rather than write foreign bytes into the tab.
-          if (resolveTabFolderPath(folderId) !== rootNow) continue
 
           if (decision.kind === "none") continue
 
           if (decision.kind === "reload") {
-            void applyExternalReload(folderId, decision.path, decision.latest)
+            void applyExternalReload(decision.path, decision.latest)
             continue
           }
 
@@ -309,9 +318,9 @@ export function useOpenFileTabsWatch({
               (t) => t.id === tab.id
             )
             if (liveTab?.isDirty) {
-              markTabsStale(folderId, decision.path)
+              markTabsStale(decision.path)
             } else {
-              rejectFileTab(folderId, decision.path, decision.error)
+              rejectFileTab(decision.path, decision.error)
             }
             continue
           }
@@ -321,14 +330,13 @@ export function useOpenFileTabsWatch({
           // of popping a dialog for a tab they just left.
           if (tab.id === activeFileTabIdRef.current) {
             enqueueExternalConflict({
-              folderId,
               path: decision.path,
               diskContent: decision.diskContent,
               unsavedContent: decision.unsavedContent,
               signature: decision.signature,
             })
           } else {
-            markTabsStale(folderId, decision.path)
+            markTabsStale(decision.path)
           }
         }
       }
@@ -366,7 +374,7 @@ export function useOpenFileTabsWatch({
             changed_paths.length === 0
           ) {
             // Resync or untargeted event — we cannot scope work, so cover
-            // every open tab of this folder. Targeted paths from later
+            // every open tab under this root. Targeted paths from later
             // envelopes are additive (full scan is a superset).
             pendingFullScan = true
           } else {
@@ -393,7 +401,6 @@ export function useOpenFileTabsWatch({
     watchSignature,
     fileTabsRef,
     activeFileTabIdRef,
-    resolveTabFolderPath,
     reloadOpenFileBackground,
     applyExternalReload,
     markTabsStale,
@@ -403,63 +410,93 @@ export function useOpenFileTabsWatch({
     consumeSelfWriteEcho,
   ])
 
-  // Stale-on-activation: when the user switches to (or just opened) a tab
-  // the watcher previously flagged stale, resolve it now — without waiting
-  // for the next workspace event. Clean stale is promoted to reload by
-  // openFilePreview's decideLoad path; this effect covers dirty stale
-  // (conflict detection) and the defensive fallback for clean stale that
-  // survived activation (e.g. switchFileTab, which bypasses decideLoad).
+  // Activation pass — one effect, three exclusive branches, no double
+  // reads:
+  //   ① stale + clean  → reload via openFilePreview's decideLoad promotion.
+  //   ② stale + dirty  → conflict detection via the resolver.
+  //   ③ unwatched fresh-check: a text tab OUTSIDE every registered folder
+  //     has no live stream, so verify it against disk once per activation
+  //     TRANSITION (never per re-render/keystroke; the ref below records
+  //     the id even on skipped runs so a cold load doesn't double-read).
+  const lastActivationCheckedTabIdRef = useRef<string | null>(null)
   useEffect(() => {
     const tab = activeFileTab
-    if (!tab || tab.kind !== "file" || !tab.path) return
-    if (!tab.stale || tab.loading) return
+    if (!tab || tab.kind !== "file" || !tab.path) {
+      lastActivationCheckedTabIdRef.current = null
+      return
+    }
+    const isTransition = lastActivationCheckedTabIdRef.current !== tab.id
+    lastActivationCheckedTabIdRef.current = tab.id
 
-    if (!tab.isDirty) {
-      // Route the reload to the TAB's own folder — the active workspace
-      // folder is not necessarily the tab's owner.
-      void openFilePreview(tab.path, {
-        reload: true,
-        folderId: tab.folderId,
-      })
+    if (tab.stale && !tab.loading) {
+      if (!tab.isDirty) {
+        // Clean stale — decideLoad promotes this reopen to a reload.
+        void openFilePreview(tab.path, { reload: true })
+        return
+      }
+      const io = splitAbsPath(tab.path)
+      if (!io) return
+      void (async () => {
+        const decision = await resolveFileChangeDecision(tab, io, fileTabsRef)
+        if (decision.kind === "conflict") {
+          enqueueExternalConflict({
+            path: decision.path,
+            diskContent: decision.diskContent,
+            unsavedContent: decision.unsavedContent,
+            signature: decision.signature,
+          })
+        } else if (decision.kind === "reload") {
+          void applyExternalReload(decision.path, decision.latest)
+        } else if (decision.kind === "missing") {
+          // File vanished while the dirty buffer sat in a non-active tab.
+          // The buffer is still dirty here (this branch only runs for
+          // tab.isDirty === true) so we keep the stale flag on the tab —
+          // refusing to silently lose the user's unsaved edits. The user
+          // discovers the deletion on save (backend recreates or errors).
+          markTabsStale(decision.path)
+        }
+      })()
       return
     }
 
-    const rootPath = resolveTabFolderPath(tab.folderId)
-    if (!rootPath) return
+    // Branch ③ — activation freshness for unwatched tabs.
+    if (!isTransition) return
+    if (tab.loading || tab.saveState === "saving") return
+    // Text files only: image tabs carry no etag (the resolver would
+    // misread a fine image as "missing"), and office tabs are refreshed
+    // by their own officecli watch.
+    if (isImageFile(tab.path) || isOfficePreviewable(tab.path)) return
+    if (findOwningFolder(tab.path, allFolders)) return
+    const io = splitAbsPath(tab.path)
+    if (!io) return
     void (async () => {
-      const decision = await resolveFileChangeDecision(
-        tab,
-        rootPath,
-        fileTabsRef
-      )
-      // Folder-path drift guard (same as the watcher loop).
-      if (resolveTabFolderPath(tab.folderId) !== rootPath) return
+      const decision = await resolveFileChangeDecision(tab, io, fileTabsRef)
       if (decision.kind === "conflict") {
         enqueueExternalConflict({
-          folderId: tab.folderId,
           path: decision.path,
           diskContent: decision.diskContent,
           unsavedContent: decision.unsavedContent,
           signature: decision.signature,
         })
       } else if (decision.kind === "reload") {
-        void applyExternalReload(tab.folderId, decision.path, decision.latest)
+        void applyExternalReload(decision.path, decision.latest)
       } else if (decision.kind === "missing") {
-        // File vanished while the dirty buffer sat in a non-active tab.
-        // The buffer is still dirty here (this branch only runs for
-        // tab.isDirty === true) so we keep the stale flag on the tab —
-        // refusing to silently lose the user's unsaved edits. The user
-        // discovers the deletion on save (backend recreates or errors).
-        markTabsStale(tab.folderId, decision.path)
+        const liveTab = (fileTabsRef.current ?? []).find((t) => t.id === tab.id)
+        if (liveTab?.isDirty) {
+          markTabsStale(decision.path)
+        } else {
+          rejectFileTab(decision.path, decision.error)
+        }
       }
     })()
   }, [
     activeFileTab,
     fileTabsRef,
-    resolveTabFolderPath,
+    allFolders,
     openFilePreview,
     applyExternalReload,
     enqueueExternalConflict,
     markTabsStale,
+    rejectFileTab,
   ])
 }

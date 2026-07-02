@@ -1950,7 +1950,6 @@
       "commitDiffRequestTimedOut": "La solicitud de Diff de commit agotó el tiempo",
       "saveRequestTimedOut": "La solicitud de guardado agotó el tiempo",
       "reloadRequestTimedOut": "La solicitud de recarga agotó el tiempo",
-      "folderUnavailable": "La carpeta del archivo ya no está en el espacio de trabajo",
       "noChanges": "Sin cambios.",
       "noDiffOutput": "Sin salida de diff.",
       "diffTitleWorkspace": "Diferencias · Espacio de trabajo",
@@ -2230,7 +2229,6 @@
       "linkSafety": {
         "errorCannotOpen": "No se puede abrir el archivo local",
         "errorNoWorkspace": "No hay ninguna carpeta de espacio de trabajo activa.",
-        "errorOutsideWorkspace": "El archivo está fuera de la carpeta del espacio de trabajo actual.",
         "errorFailedOpen": "Error al abrir el archivo local",
         "errorFailedLink": "Error al abrir el enlace",
         "errorUnsupportedLinkProtocol": "Este protocolo de enlace no es compatible."

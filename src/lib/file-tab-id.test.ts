@@ -7,9 +7,11 @@ import {
 
 describe("file-tab-id build↔parse round-trip", () => {
   const cases: FileTabIdParts[] = [
-    { kind: "file", folderId: 1, path: "src/app.ts" },
+    { kind: "file", path: "/repo/src/app.ts" },
     // Path containing the separator, spaces, and non-ASCII.
-    { kind: "file", folderId: 12, path: "weird:dir/文件 名.md" },
+    { kind: "file", path: "/repo/weird:dir/文件 名.md" },
+    // Windows drive path — the ":" must be token-encoded, never a separator.
+    { kind: "file", path: "C:/work/repo/src/app.ts" },
     { kind: "diff-working-all", folderId: 3 },
     { kind: "diff-working", folderId: 3, path: "a/b.rs" },
     { kind: "diff-working-unified", folderId: 3, path: "a:colon.rs" },
@@ -30,7 +32,7 @@ describe("file-tab-id build↔parse round-trip", () => {
       groupLabel: "Turn 3: fix & retry",
       path: "src/main.py",
     },
-    { kind: "diff-external-conflict", folderId: 4, path: "notes/读我.txt" },
+    { kind: "diff-external-conflict", path: "/repo/notes/读我.txt" },
   ]
 
   it.each(cases.map((parts) => [parts.kind, parts] as const))(
@@ -41,12 +43,17 @@ describe("file-tab-id build↔parse round-trip", () => {
     }
   )
 
-  it("keeps two folders' ids for the same relative path distinct", () => {
-    const a = buildFileTabId({ kind: "file", folderId: 1, path: "src/app.ts" })
-    const b = buildFileTabId({ kind: "file", folderId: 2, path: "src/app.ts" })
+  it("gives one identity per absolute path — no folder namespacing", () => {
+    const a = buildFileTabId({ kind: "file", path: "/repo1/src/app.ts" })
+    const b = buildFileTabId({ kind: "file", path: "/repo2/src/app.ts" })
+    const aAgain = buildFileTabId({ kind: "file", path: "/repo1/src/app.ts" })
     expect(a).not.toBe(b)
-    expect(parseFileTabId(a)).toMatchObject({ folderId: 1 })
-    expect(parseFileTabId(b)).toMatchObject({ folderId: 2 })
+    expect(a).toBe(aAgain)
+  })
+
+  it("encodes Windows drive colons into two fixed segments", () => {
+    const id = buildFileTabId({ kind: "file", path: "C:/work/x.ts" })
+    expect(id.split(":")).toHaveLength(2)
   })
 
   it("does not confuse a path named 'all' with the null-path sentinel", () => {
@@ -67,12 +74,15 @@ describe("file-tab-id build↔parse round-trip", () => {
     expect(parseFileTabId(withoutPath)).toMatchObject({ path: null })
   })
 
-  it("rejects malformed and legacy (un-namespaced) ids", () => {
-    expect(parseFileTabId("file:a.ts")).toBeNull()
-    expect(parseFileTabId("file:1x:a.ts")).toBeNull()
-    expect(parseFileTabId("file:-1:a.ts")).toBeNull()
-    expect(parseFileTabId("file:1")).toBeNull()
+  it("rejects malformed and legacy (folder-namespaced) ids", () => {
+    // Pre-unification format carried a folder segment: file:<folderId>:<path>.
+    expect(parseFileTabId("file:1:a.ts")).toBeNull()
+    expect(parseFileTabId("file:")).toBeNull()
+    expect(parseFileTabId("file")).toBeNull()
+    expect(parseFileTabId("diff:external-conflict:4:notes.txt")).toBeNull()
+    expect(parseFileTabId("diff:external-conflict:")).toBeNull()
     expect(parseFileTabId("diff:working:all")).toBeNull()
+    expect(parseFileTabId("diff:working::x")).toBeNull()
     expect(parseFileTabId("diff:unknown:1:x")).toBeNull()
     expect(parseFileTabId("diff:branch:1:main")).toBeNull()
     expect(parseFileTabId("")).toBeNull()

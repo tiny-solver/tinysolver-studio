@@ -119,8 +119,10 @@ describe("link safety direct opening", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Trigger link" }))
 
+    // Absolute paths pass through untouched — openFilePreview owns routing
+    // (owning-folder match or outside-workspace open) by absolute path.
     await waitFor(() => {
-      expect(mocks.openFilePreview).toHaveBeenCalledWith("src/app.ts", {
+      expect(mocks.openFilePreview).toHaveBeenCalledWith("/repo/src/app.ts", {
         line: 12,
       })
     })
@@ -133,11 +135,25 @@ describe("link safety direct opening", () => {
     fireEvent.click(screen.getByRole("button", { name: "Trigger link" }))
 
     await waitFor(() => {
-      expect(mocks.openFilePreview).toHaveBeenCalledWith("src/app.ts", {
+      expect(mocks.openFilePreview).toHaveBeenCalledWith("/repo/src/app.ts", {
         line: 10,
       })
     })
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  })
+
+  it("passes ~ paths through for home expansion by the opener", async () => {
+    render(<LinkSafetyHarness url="~/.claude/plans/notes.md" />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger link" }))
+
+    await waitFor(() => {
+      expect(mocks.openFilePreview).toHaveBeenCalledWith(
+        "~/.claude/plans/notes.md",
+        { line: undefined }
+      )
+    })
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it("blocks unsupported markdown link protocols without rendering a confirmation dialog", async () => {
@@ -157,20 +173,21 @@ describe("link safety direct opening", () => {
 
   it("treats protocol-relative // URLs as local paths, not browser links", async () => {
     // `//cdn.example.com/app.js` begins with "/", so parseLocalFileTarget
-    // claims it and it routes through the file opener (here: rejected as
-    // outside the workspace) rather than window.open. This is why
+    // claims it and it routes through the file opener (the nonexistent
+    // path then surfaces as a load-error tab, consistent with any other
+    // bad local path) rather than window.open. This is why
     // classifyResourceKind tags `//…` with the file icon, not the web icon.
     render(<LinkSafetyHarness url="//cdn.example.com/app.js" />)
 
     fireEvent.click(screen.getByRole("button", { name: "Trigger link" }))
 
     await waitFor(() => {
-      expect(mocks.toastError).toHaveBeenCalledWith("errorCannotOpen", {
-        description: "errorOutsideWorkspace",
-      })
+      expect(mocks.openFilePreview).toHaveBeenCalledWith(
+        "//cdn.example.com/app.js",
+        { line: undefined }
+      )
     })
     expect(window.open).not.toHaveBeenCalled()
-    expect(mocks.openFilePreview).not.toHaveBeenCalled()
   })
 
   it("opens file path labels directly in the workspace", async () => {
@@ -183,7 +200,7 @@ describe("link safety direct opening", () => {
     fireEvent.click(screen.getByRole("button", { name: "src/lib.ts" }))
 
     await waitFor(() => {
-      expect(mocks.openFilePreview).toHaveBeenCalledWith("src/lib.ts", {
+      expect(mocks.openFilePreview).toHaveBeenCalledWith("/repo/src/lib.ts", {
         line: 5,
       })
     })

@@ -1950,7 +1950,6 @@
       "commitDiffRequestTimedOut": "コミット Diff 要求がタイムアウトしました",
       "saveRequestTimedOut": "保存要求がタイムアウトしました",
       "reloadRequestTimedOut": "再読み込み要求がタイムアウトしました",
-      "folderUnavailable": "このファイルのフォルダはワークスペースに存在しません",
       "noChanges": "変更はありません。",
       "noDiffOutput": "Diff 出力がありません。",
       "diffTitleWorkspace": "Diff · ワークスペース",
@@ -2230,7 +2229,6 @@
       "linkSafety": {
         "errorCannotOpen": "ローカルファイルを開けません",
         "errorNoWorkspace": "現在アクティブなワークスペースフォルダがありません。",
-        "errorOutsideWorkspace": "ファイルが現在のワークスペースフォルダの外にあります。",
         "errorFailedOpen": "ローカルファイルを開けませんでした",
         "errorFailedLink": "リンクを開けませんでした",
         "errorUnsupportedLinkProtocol": "このリンクプロトコルはサポートされていません。"

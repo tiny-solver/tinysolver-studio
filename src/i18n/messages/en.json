@@ -1950,7 +1950,6 @@
       "commitDiffRequestTimedOut": "Commit diff request timed out",
       "saveRequestTimedOut": "Save request timed out",
       "reloadRequestTimedOut": "Reload request timed out",
-      "folderUnavailable": "The file's folder is no longer in the workspace",
       "noChanges": "No changes.",
       "noDiffOutput": "No diff output.",
       "diffTitleWorkspace": "Diff · Workspace",
@@ -2230,7 +2229,6 @@
       "linkSafety": {
         "errorCannotOpen": "Cannot open local file",
         "errorNoWorkspace": "No workspace folder is currently active.",
-        "errorOutsideWorkspace": "The file is outside the current workspace folder.",
         "errorFailedOpen": "Failed to open local file",
         "errorFailedLink": "Failed to open link",
         "errorUnsupportedLinkProtocol": "This link protocol is not supported."

@@ -15,7 +15,11 @@ import { useAppWorkspace } from "@/contexts/app-workspace-context"
 import { useTabContext } from "@/contexts/tab-context"
 import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import { formatFileRangeLabel } from "@/lib/reference-link"
-import { joinFsPath } from "@/lib/path-utils"
+import {
+  findOwningFolder,
+  normalizeAbsPath,
+  splitAbsPath,
+} from "@/lib/file-open-target"
 import { parseFileTabId } from "@/lib/file-tab-id"
 import {
   useWorkspaceActions,
@@ -67,28 +71,27 @@ function resolveRelativePath(base: string, relative: string): string {
 }
 
 /**
- * Pre-resolve relative paths in markdown image/link syntax before Streamdown.
+ * Pre-resolve local paths in markdown image/link syntax before Streamdown.
  *
  * rehype-harden resolves "../foo" via `new URL("../foo", "http://example.com")`
  * which loses directory context (e.g. "../images/a.png" from "docs/readme/"
  * becomes "/images/a.png" instead of "/docs/images/a.png").
  *
- * This function resolves relative paths against the file's directory BEFORE
- * Streamdown processes them, using "./" prefix so rehype-harden preserves them.
+ * `fileDir` is the document's ABSOLUTE directory, so relative references
+ * resolve to absolute filesystem paths. Author-written root-relative
+ * references ("/assets/x.png") resolve against `previewRoot` (the owning
+ * workspace folder, or the document directory for files outside every
+ * folder) so they also come out absolute — downstream consumers (image
+ * loader, link opener) treat every local target as an absolute path.
+ * The "./" prefix survives rehype-harden, which re-roots it to "/…".
  */
 function preprocessMarkdownPaths(
   content: string,
-  relativeFileDir: string
+  fileDir: string,
+  previewRoot: string | null
 ): string {
-  const resolveUrl = (url: string): string => {
-    // Skip absolute URLs, anchors, and already-root-relative paths
-    if (/^https?:\/\/|^data:|^blob:|^#|^\//.test(url)) return url
-    // Separate fragment/query from path
-    const fragIdx = url.search(/[#?]/)
-    const pathPart = fragIdx >= 0 ? url.slice(0, fragIdx) : url
-    const fragment = fragIdx >= 0 ? url.slice(fragIdx) : ""
-    // Resolve relative to file directory within project
-    const parts = relativeFileDir.split("/").filter(Boolean)
+  const resolveAgainst = (base: string, pathPart: string): string => {
+    const parts = base.split("/").filter(Boolean)
     for (const seg of pathPart.split("/")) {
       if (seg === "..") {
         if (parts.length > 0) parts.pop()
@@ -96,8 +99,23 @@ function preprocessMarkdownPaths(
         parts.push(seg)
       }
     }
-    // "./" prefix ensures rehype-harden recognizes it as relative
-    return "./" + parts.join("/") + fragment
+    return parts.join("/")
+  }
+
+  const resolveUrl = (url: string): string => {
+    // Skip remote URLs, protocol-relative URLs, and anchors
+    if (/^https?:\/\/|^data:|^blob:|^#|^\/\//.test(url)) return url
+    // Separate fragment/query from path
+    const fragIdx = url.search(/[#?]/)
+    const pathPart = fragIdx >= 0 ? url.slice(0, fragIdx) : url
+    const fragment = fragIdx >= 0 ? url.slice(fragIdx) : ""
+    if (pathPart.startsWith("/")) {
+      // Root-relative: the author means "from the project root".
+      if (!previewRoot) return url
+      return "./" + resolveAgainst(previewRoot, pathPart) + fragment
+    }
+    // Relative to the document's own (absolute) directory.
+    return "./" + resolveAgainst(fileDir, pathPart) + fragment
   }
 
   // Pre-resolve image paths: ![alt](url) or ![alt](url "title")
@@ -156,8 +174,7 @@ const MIME_BY_EXT: Record<string, string> = {
 
 function useLocalImageSrc(
   src: string | undefined,
-  fileDir: string | null,
-  folderPath: string | null
+  fileDir: string | null
 ): string | undefined {
   const [dataUrl, setDataUrl] = useState<string | undefined>(undefined)
 
@@ -166,12 +183,14 @@ function useLocalImageSrc(
   useEffect(() => {
     if (!isLocal || !src || !fileDir) return
     let cancelled = false
-    // rehype-harden resolves "../foo" to "/foo" via new URL(src, "http://example.com")
-    // Root-relative paths (starting with "/") should resolve against folderPath
-    const absPath =
-      src.startsWith("/") && folderPath
-        ? resolveRelativePath(folderPath, src)
-        : resolveRelativePath(fileDir, src)
+    // preprocessMarkdownPaths resolved every local reference against the
+    // document's ABSOLUTE directory (or the preview root), and
+    // rehype-harden re-roots "./x" to "/x" — so a "/"-prefixed src already
+    // IS the absolute filesystem path. Anything else (raw HTML that
+    // slipped past preprocessing) resolves against the document directory.
+    const absPath = src.startsWith("/")
+      ? normalizeAbsPath(src.replace(/[#?].*$/, ""))
+      : resolveRelativePath(fileDir, src)
     const ext = absPath.split(".").pop()?.toLowerCase() ?? ""
     const mime = MIME_BY_EXT[ext] ?? "image/png"
 
@@ -190,7 +209,7 @@ function useLocalImageSrc(
     return () => {
       cancelled = true
     }
-  }, [isLocal, src, fileDir, folderPath])
+  }, [isLocal, src, fileDir])
 
   if (!isLocal) return src
   return dataUrl
@@ -198,14 +217,12 @@ function useLocalImageSrc(
 
 function PreviewImage({
   fileDir,
-  folderPath,
   ...props
 }: React.ComponentProps<"img"> & {
   fileDir: string | null
-  folderPath: string | null
 }) {
   const src = typeof props.src === "string" ? props.src : undefined
-  const resolvedSrc = useLocalImageSrc(src, fileDir, folderPath)
+  const resolvedSrc = useLocalImageSrc(src, fileDir)
 
   // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
   return <img {...props} src={resolvedSrc} />
@@ -215,7 +232,9 @@ const AUTO_SAVE_DELAY_MS = 5000
 
 function buildMonacoModelPath(path: string | null, id: string): string {
   if (!path) return `inmemory://model/${encodeURIComponent(id)}`
-  const normalized = path.replace(/\\/g, "/")
+  // Absolute paths would otherwise yield "file:////…" — trim the leading
+  // slashes; the scheme supplies them.
+  const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "")
   const encoded = normalized.split("/").map(encodeURIComponent).join("/")
   return `file:///${encoded}`
 }
@@ -869,13 +888,25 @@ export function FileWorkspacePanel() {
     updateActiveFileContent,
   } = useWorkspaceActions()
   const { tabs, activeTabId } = useTabContext()
-  const { getFolder } = useAppWorkspace()
-  // The ACTIVE TAB's folder root — not the active workspace folder. Every
-  // preview / attach / diff affordance in this panel operates on the file
-  // shown in the active tab, which may belong to a background folder.
-  const folderPath = activeFileTab
-    ? (getFolder(activeFileTab.folderId)?.path ?? null)
-    : null
+  const { allFolders } = useAppWorkspace()
+  // The ACTIVE TAB's file location. File tabs are identified by their
+  // absolute path; the owning registered folder (when the file sits inside
+  // one) is derived here ONLY to pick the preview root — reads never need
+  // a folder.
+  const activeAbsPath =
+    activeFileTab?.kind === "file" ? (activeFileTab.path ?? null) : null
+  const activeIo = useMemo(
+    () => (activeAbsPath ? splitAbsPath(activeAbsPath) : null),
+    [activeAbsPath]
+  )
+  const owningFolder = useMemo(
+    () => (activeAbsPath ? findOwningFolder(activeAbsPath, allFolders) : null),
+    [activeAbsPath, allFolders]
+  )
+  // Root for HTML/markdown sub-resource resolution: the owning folder root
+  // keeps ../-style and root-relative references working for in-workspace
+  // files; files outside every folder are confined to their own directory.
+  const previewRoot = owningFolder?.rootPath ?? activeIo?.rootPath ?? null
   const activeScope = activeFileTab?.id ?? "__default__"
   const editorRef = useRef<MonacoEditorNs.IStandaloneCodeEditor | null>(null)
   const cursorListenerRef = useRef<{ dispose: () => void } | null>(null)
@@ -887,11 +918,10 @@ export function FileWorkspacePanel() {
   // flag (also mirrored into a Monaco context key that gates the triggers),
   // translations, and the disposables torn down on editor disposal.
   const attachContextRef = useRef<{
-    folderPath: string | null
-    filePath: string | null
+    absPath: string | null
     fileName: string
     sessionTabId: string | null
-  }>({ folderPath: null, filePath: null, fileName: "", sessionTabId: null })
+  }>({ absPath: null, fileName: "", sessionTabId: null })
   const attachableRef = useRef(false)
   const attachableKeyRef = useRef<MonacoEditorNs.IContextKey<boolean> | null>(
     null
@@ -932,17 +962,16 @@ export function FileWorkspacePanel() {
   // resolvable absolute path AND a conversation to receive it. The same Monaco
   // instance also renders some diff tabs, so this guard is required.
   const isAttachable =
-    isFileTab &&
-    Boolean(activeFileTab?.path) &&
-    Boolean(folderPath) &&
-    Boolean(activeSessionTabId)
+    isFileTab && Boolean(activeAbsPath) && Boolean(activeSessionTabId)
 
   // Read the live selection and emit it to the composer as a ranged file badge.
   // Reads only refs so it stays stable for the once-registered Monaco action.
   const addSelectionToChat = useCallback(() => {
     const editor = editorRef.current
     const ctx = attachContextRef.current
-    if (!editor || !ctx.sessionTabId || !ctx.folderPath || !ctx.filePath) return
+    const attachPath = ctx.absPath
+    const sessionTabId = ctx.sessionTabId
+    if (!editor || !sessionTabId || !attachPath) return
     const selection = editor.getSelection()
     if (!selection) return
     // With nothing selected the caret is an empty selection whose start and end
@@ -960,8 +989,8 @@ export function FileWorkspacePanel() {
     if (end < start) end = start
     const range = { start, end }
     emitAttachFileToSession({
-      tabId: ctx.sessionTabId,
-      path: joinFsPath(ctx.folderPath, ctx.filePath),
+      tabId: sessionTabId,
+      path: attachPath,
       range,
     })
     toast(
@@ -977,10 +1006,12 @@ export function FileWorkspacePanel() {
   // as a plain whole-file resource (same path file-tree / git-changes take).
   const addFileToChat = useCallback(() => {
     const ctx = attachContextRef.current
-    if (!ctx.sessionTabId || !ctx.folderPath || !ctx.filePath) return
+    const attachPath = ctx.absPath
+    const sessionTabId = ctx.sessionTabId
+    if (!sessionTabId || !attachPath) return
     emitAttachFileToSession({
-      tabId: ctx.sessionTabId,
-      path: joinFsPath(ctx.folderPath, ctx.filePath),
+      tabId: sessionTabId,
+      path: attachPath,
     })
     toast(tRef.current("addFileToChatDone", { label: ctx.fileName }))
   }, [])
@@ -1060,8 +1091,7 @@ export function FileWorkspacePanel() {
   useEffect(() => {
     tRef.current = t
     attachContextRef.current = {
-      folderPath,
-      filePath: activeFileTab?.path ?? null,
+      absPath: activeAbsPath,
       fileName: activeFileTab?.title ?? "",
       sessionTabId: activeSessionTabId,
     }
@@ -1071,14 +1101,7 @@ export function FileWorkspacePanel() {
       addToChatPillRef.current.setVisible(false, null)
       editorRef.current.layoutContentWidget(addToChatPillRef.current.widget)
     }
-  }, [
-    t,
-    folderPath,
-    activeFileTab?.path,
-    activeFileTab?.title,
-    activeSessionTabId,
-    isAttachable,
-  ])
+  }, [t, activeAbsPath, activeFileTab?.title, activeSessionTabId, isAttachable])
 
   // Refresh the cached action label when the locale changes. The initial
   // registration happens in handleEditorMount (the editor isn't mounted yet on
@@ -1474,9 +1497,8 @@ export function FileWorkspacePanel() {
     if (!pendingFileReveal) return
     if (!isFileTab || !activeFileTab || activeFileTab.loading) return
     if (!activeFileTab.path) return
-    // Same relative path can be open from several folders — only reveal in
-    // the tab the request actually targeted.
-    if (activeFileTab.folderId !== pendingFileReveal.folderId) return
+    // The absolute path IS the tab identity — only reveal in the tab the
+    // request actually targeted.
     if (
       normalizeWorkspacePath(activeFileTab.path) !==
       normalizeWorkspacePath(pendingFileReveal.path)
@@ -1710,8 +1732,9 @@ export function FileWorkspacePanel() {
 
     // Per-file diffs opened from an overview belong to the overview tab's
     // folder — pass it explicitly so a background-folder overview never
-    // routes its rows through the active folder.
-    const overviewFolderId = activeFileTab.folderId
+    // routes its rows through the active folder. (Diff tabs always carry a
+    // numeric folderId; the ?? undefined only satisfies the option type.)
+    const overviewFolderId = activeFileTab.folderId ?? undefined
     const handleOpenDiff = async (path: string) => {
       if (diffListContext.kind === "commit") {
         await openCommitDiff(diffListContext.commitHash, path, undefined, {
@@ -1772,8 +1795,8 @@ export function FileWorkspacePanel() {
     return (
       <OfficePreview
         key={activeFileTab.id}
-        tab={activeFileTab}
-        folderPath={folderPath}
+        rootPath={activeIo?.rootPath ?? null}
+        relPath={activeIo?.ioPath ?? null}
       />
     )
   }
@@ -1789,25 +1812,21 @@ export function FileWorkspacePanel() {
       <HtmlPreview
         key={activeFileTab.id}
         tab={activeFileTab}
-        folderPath={folderPath}
+        rootPath={previewRoot}
       />
     )
   }
 
   if (isPreviewMode && activeFileTab) {
-    const absFilePath =
-      activeFileTab.path && folderPath
-        ? `${folderPath}/${activeFileTab.path}`
-        : null
-    const fileDir = absFilePath
-      ? absFilePath.replace(/\/[^/]*$/, "")
-      : folderPath
-    // Pre-resolve relative paths before Streamdown/rehype-harden mangles them
-    const relativeFileDir = activeFileTab.path?.includes("/")
-      ? activeFileTab.path.replace(/\/[^/]*$/, "")
-      : ""
+    // The tab path is absolute, so the document directory is too — every
+    // local reference below resolves to an absolute filesystem path.
+    const fileDir = activeIo?.rootPath ?? null
+    // Pre-resolve relative AND root-relative paths before Streamdown /
+    // rehype-harden mangles them: relative ones against the document's own
+    // directory, root-relative ones ("/assets/x.png") against the preview
+    // root (owning folder when inside the workspace, else the directory).
     const preprocessedContent = normalizeMathDelimiters(
-      preprocessMarkdownPaths(renderedContent, relativeFileDir)
+      preprocessMarkdownPaths(renderedContent, fileDir ?? "", previewRoot)
     )
 
     const markdownColdLoad =
@@ -1830,11 +1849,7 @@ export function FileWorkspacePanel() {
               components={{
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 img: ({ node, ...imgProps }) => (
-                  <PreviewImage
-                    {...imgProps}
-                    fileDir={fileDir}
-                    folderPath={folderPath}
-                  />
+                  <PreviewImage {...imgProps} fileDir={fileDir} />
                 ),
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 a: ({ node, href, children, ...aProps }) => {
@@ -1847,18 +1862,14 @@ export function FileWorkspacePanel() {
                         href="#"
                         onClick={(e) => {
                           e.preventDefault()
-                          // After preprocessing + rehype-harden, paths are
-                          // root-relative like "/docs/images/foo.png"
-                          const clean = href.replace(/[#?].*$/, "")
-                          const target = clean
-                            .replace(/^\/+/, "")
+                          // After preprocessing (absolute document dir) +
+                          // rehype-harden, local hrefs ARE absolute
+                          // filesystem paths like "/repo/docs/foo.md" —
+                          // open directly; no folder involved.
+                          const target = href
+                            .replace(/[#?].*$/, "")
                             .replace(/\/\/+/g, "/")
-                          // The link lives in the ACTIVE TAB's document —
-                          // resolve within that tab's folder, not the
-                          // active workspace folder.
-                          void openFilePreview(target, {
-                            folderId: activeFileTab.folderId,
-                          })
+                          void openFilePreview(target)
                         }}
                       >
                         {children}

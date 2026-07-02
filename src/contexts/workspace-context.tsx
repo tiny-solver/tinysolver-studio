@@ -28,6 +28,15 @@ import {
 } from "@/lib/api"
 import type { FileEditContent } from "@/lib/types"
 import {
+  expandHomePath,
+  findOwningFolder,
+  isHomeRelativePath,
+  joinRootRel,
+  normalizeAbsPath,
+  splitAbsPath,
+} from "@/lib/file-open-target"
+import { isAbsoluteFilePath } from "@/lib/file-path-display"
+import {
   isHtmlPreviewable,
   isImageFile,
   isOfficePreviewable,
@@ -55,11 +64,13 @@ type LineEnding = "lf" | "crlf" | "mixed" | "none"
 export interface FileWorkspaceTab {
   id: string
   kind: FileWorkspaceTabKind
-  // Owning workspace folder. Every read/write/git operation for this tab
-  // resolves its root through this id — never through the active folder —
-  // so tabs from different folders coexist and stay functional regardless
-  // of which folder is currently active.
-  folderId: number
+  // Repo context for git-scoped diff tabs (working/branch/commit/session
+  // diffs are repository operations and need the repo root). Plain file
+  // tabs are folder-free: folderId is ALWAYS null and `path` holds the
+  // file's absolute normalized path — reads/writes derive (dirname,
+  // basename), and folder association (watching, git gutter, preview
+  // roots) is derived from the path on demand, never stored.
+  folderId: number | null
   title: string
   description: string | null
   path: string | null
@@ -99,33 +110,29 @@ interface WorkspaceActionsValue {
   closeOtherFileTabs: (tabId: string) => void
   closeAllFileTabs: () => void
   reorderFileTabs: (tabs: FileWorkspaceTab[]) => void
-  // Open a file tab. `folderId` targets a specific workspace folder; when
-  // omitted the active folder is used — every caller sitting in active-folder
-  // UI (file tree, git panels, search, artifacts, links) relies on that
-  // default. Callers that know the source folder (cross-folder entry points,
-  // diff overviews) must pass it explicitly.
+  // Open a file tab. Accepts absolute paths, `~/` paths (expanded via the
+  // backend home dir), and paths relative to a folder root. `folderId` is
+  // ONLY a resolution base for relative paths (defaults to the active
+  // folder); once the path is absolute it plays no further role — the tab
+  // is identified by the absolute path alone.
   openFilePreview: (
     path: string,
     options?: { line?: number; reload?: boolean; folderId?: number }
   ) => Promise<void>
-  // Refetch the open tab matching `folderId` + `path` without changing
+  // Refetch the open tab matching the absolute `path` without changing
   // activeFileTabId. No-op when no tab matches or when the tab has unsaved
   // local edits (use markTabsStale for that case).
-  reloadOpenFileBackground: (folderId: number, path: string) => Promise<void>
-  // Write prefetched file content into the open tab matching `folderId` +
+  reloadOpenFileBackground: (path: string) => Promise<void>
+  // Write prefetched file content into the open tab matching the absolute
   // `path` without issuing a second readFileForEdit. Used by the
   // change-detection watcher whose resolver has already paid for the read —
   // avoids the I/O double when many tabs are affected by a single workspace
   // event. Skips dirty tabs and tabs that aren't open.
-  applyExternalReload: (
-    folderId: number,
-    path: string,
-    fetched: FileEditContent
-  ) => Promise<void>
-  // Flip stale=true on the tab matching `folderId` + `path`. Activating a
+  applyExternalReload: (path: string, fetched: FileEditContent) => Promise<void>
+  // Flip stale=true on the tab matching the absolute `path`. Activating a
   // stale tab forces a refetch (clean) or triggers conflict resolution
   // (dirty).
-  markTabsStale: (folderId: number, path: string) => void
+  markTabsStale: (path: string) => void
   // Mark a clean open tab as load-failed, replacing its body with the
   // supplied error message and routing it into the editor's error state.
   // No-op when no tab matches OR when the tab is dirty — unsaved edits
@@ -133,7 +140,7 @@ interface WorkspaceActionsValue {
   // event reports a path whose disk read fails (external delete, locked,
   // permission revoked, …), so the user is never shown a stale buffer that
   // no longer corresponds to disk.
-  rejectFileTab: (folderId: number, path: string, errorMessage: string) => void
+  rejectFileTab: (path: string, errorMessage: string) => void
   consumePendingFileReveal: (requestId: number) => void
   openWorkingTreeDiff: (
     path?: string,
@@ -162,8 +169,7 @@ interface WorkspaceActionsValue {
   openExternalConflictDiff: (
     filePath: string,
     diskContent: string,
-    unsavedContent: string,
-    options?: { folderId?: number }
+    unsavedContent: string
   ) => void
   updateActiveFileContent: (content: string) => void
   saveActiveFile: (options?: { force?: boolean }) => Promise<boolean>
@@ -186,7 +192,7 @@ interface WorkspaceFileTabsValue {
   previewFileTabIds: Set<string>
   pendingFileReveal: {
     requestId: number
-    folderId: number
+    // Absolute normalized path — compared against the active tab's path.
     path: string
     line: number
   } | null
@@ -228,10 +234,10 @@ const WorkspaceFileTabsContext = createContext<WorkspaceFileTabsValue | null>(
 const WorkspaceExternalConflictContext =
   createContext<WorkspaceExternalConflictValue | null>(null)
 
-// Queue/dedup key for one folder+path divergence. NUL separator — cannot
-// occur in either component, so distinct pairs can never collide.
-function conflictKey(folderId: number, path: string): string {
-  return `${folderId}${String.fromCharCode(0)}${normalizePath(path)}`
+// Queue/dedup key for one file's divergence — the absolute normalized
+// path IS the identity, matching the tab id model.
+function conflictKey(path: string): string {
+  return normalizeAbsPath(path)
 }
 
 // One-shot save-echo records: our own saveFileContent writes come back as
@@ -280,7 +286,7 @@ const IMAGE_MIME: Record<string, string> = {
 
 function loadingTab(
   id: string,
-  folderId: number,
+  folderId: number | null,
   kind: FileWorkspaceTabKind,
   title: string,
   description: string | null,
@@ -336,7 +342,7 @@ interface WorkspaceProviderProps {
 export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const t = useTranslations("Folder.workspaceContext")
   const { activeFolder } = useActiveFolder()
-  const { getFolder, allFolders, foldersHydrated } = useAppWorkspace()
+  const { getFolder, allFolders } = useAppWorkspace()
   const folderPath = activeFolder?.path
   const [activePane, setActivePaneState] =
     useState<WorkspacePane>("conversation")
@@ -344,7 +350,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null)
   const [pendingFileReveal, setPendingFileReveal] = useState<{
     requestId: number
-    folderId: number
     path: string
     line: number
   } | null>(null)
@@ -375,6 +380,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const activeFileTabIdRef = useRef<string | null>(null)
   const activeFolderRef = useRef<{ id: number; path: string } | null>(null)
   const getFolderRef = useRef(getFolder)
+  const allFoldersRef = useRef(allFolders)
   const fileRevealRequestIdRef = useRef(0)
   // tabId -> generation of its current in-flight fetch. Serves two roles:
   //   (a) Dedup: `has(tabId)` collapses rapid re-clicks within one event
@@ -408,13 +414,17 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   }, [getFolder])
 
   useEffect(() => {
+    allFoldersRef.current = allFolders
+  }, [allFolders])
+
+  useEffect(() => {
     externalConflictQueueRef.current = externalConflictQueue
   }, [externalConflictQueue])
 
   const recordSelfWriteEcho = useCallback(
-    (folderId: number, path: string, etag: string | null | undefined) => {
+    (path: string, etag: string | null | undefined) => {
       if (!etag) return
-      selfWriteEchoRef.current.set(conflictKey(folderId, path), {
+      selfWriteEchoRef.current.set(conflictKey(path), {
         etag,
         at: Date.now(),
       })
@@ -426,25 +436,18 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // produced by our own write is suppressed — any later change for the
   // same path marks stale normally. The tab-etag equality check is done
   // by the caller being a CLEAN tab whose etag was set by that same save.
-  const consumeSelfWriteEcho = useCallback(
-    (folderId: number, path: string): boolean => {
-      const key = conflictKey(folderId, path)
-      const record = selfWriteEchoRef.current.get(key)
-      if (!record) return false
-      selfWriteEchoRef.current.delete(key)
-      if (Date.now() - record.at > SELF_WRITE_ECHO_TTL_MS) return false
-      const tabId = buildFileTabId({
-        kind: "file",
-        folderId,
-        path: normalizePath(path),
-      })
-      const tab = fileTabsRef.current.find((t) => t.id === tabId)
-      return Boolean(
-        tab && tab.kind === "file" && !tab.isDirty && tab.etag === record.etag
-      )
-    },
-    []
-  )
+  const consumeSelfWriteEcho = useCallback((path: string): boolean => {
+    const key = conflictKey(path)
+    const record = selfWriteEchoRef.current.get(key)
+    if (!record) return false
+    selfWriteEchoRef.current.delete(key)
+    if (Date.now() - record.at > SELF_WRITE_ECHO_TTL_MS) return false
+    const tabId = buildFileTabId({ kind: "file", path: key })
+    const tab = fileTabsRef.current.find((t) => t.id === tabId)
+    return Boolean(
+      tab && tab.kind === "file" && !tab.isDirty && tab.etag === record.etag
+    )
+  }, [])
 
   // Resolve the folder an opener should target: an explicitly requested
   // folder wins; otherwise the active folder. Returns null when neither
@@ -460,12 +463,37 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     []
   )
 
-  // Per-tab folder root. Null when the folder has been removed from the
-  // workspace — callers must fail gracefully instead of falling back to the
-  // active folder (writing to the wrong root would corrupt another repo).
-  const resolveTabFolderPath = useCallback(
-    (folderId: number): string | null => {
-      return getFolderRef.current(folderId)?.path ?? null
+  // Resolve an opener input into the canonical absolute path that is the
+  // tab's identity. Absolute and `~/` inputs need no folder at all;
+  // relative inputs are joined onto `folderId` (or the active folder) —
+  // that is the ONLY role a folder plays in opening a file.
+  const resolveOpenAbsolutePath = useCallback(
+    async (rawPath: string, baseFolderId?: number): Promise<string | null> => {
+      const input = isHomeRelativePath(rawPath)
+        ? await expandHomePath(rawPath)
+        : rawPath
+      if (isAbsoluteFilePath(input)) return normalizeAbsPath(input)
+      const base = resolveTargetFolder(baseFolderId)
+      if (!base) return null
+      return joinRootRel(base.path, normalizePath(input))
+    },
+    [resolveTargetFolder]
+  )
+
+  // Git gutter base for the file at absPath, derived from its owning
+  // registered folder at fetch time. Files outside every registered folder
+  // get no git context — the parent directory may sit inside some unrelated
+  // repo (a dotfiles repo in $HOME), and spawning git there would paint
+  // misleading gutters.
+  const fetchGitBase = useCallback(
+    async (absPath: string): Promise<string | undefined> => {
+      const owning = findOwningFolder(absPath, allFoldersRef.current)
+      if (!owning) return undefined
+      const tracked = await gitIsTracked(owning.rootPath, owning.relPath).catch(
+        () => false
+      )
+      if (!tracked) return undefined
+      return gitShowFile(owning.rootPath, owning.relPath).catch(() => "")
     },
     []
   )
@@ -505,80 +533,12 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     setActivePaneState((prev) => (prev === "files" ? prev : "files"))
   }, [])
 
-  // Drop tabs whose folder was removed from the workspace. Gated on
-  // foldersHydrated: during cold start / refresh the folder list is
-  // transiently empty, and treating that as "every folder was removed"
-  // would wipe all open tabs. Dirty tabs are never dropped silently —
-  // they survive as stale orphans so unsaved edits stay recoverable.
-  useEffect(() => {
-    if (!foldersHydrated) return
-    const validFolderIds = new Set(allFolders.map((folder) => folder.id))
-
-    // Drain conflicts whose folder is gone — their compare/reload/save
-    // targets no longer exist.
-    setExternalConflictQueue((prev) => {
-      if (prev.every((conflict) => validFolderIds.has(conflict.folderId))) {
-        return prev
-      }
-      for (const conflict of prev) {
-        if (!validFolderIds.has(conflict.folderId)) {
-          conflictSignatureByKeyRef.current.delete(
-            conflictKey(conflict.folderId, conflict.path)
-          )
-        }
-      }
-      return prev.filter((conflict) => validFolderIds.has(conflict.folderId))
-    })
-
-    setFileTabs((prev) => {
-      if (prev.every((tab) => validFolderIds.has(tab.folderId))) return prev
-
-      const removedIds = new Set<string>()
-      const next: FileWorkspaceTab[] = []
-      for (const tab of prev) {
-        if (validFolderIds.has(tab.folderId)) {
-          next.push(tab)
-          continue
-        }
-        if (isDirtyFileTab(tab)) {
-          next.push(tab.stale === true ? tab : { ...tab, stale: true })
-          continue
-        }
-        removedIds.add(tab.id)
-      }
-      if (removedIds.size === 0) {
-        // Only dirty orphans were touched (marked stale); commit if changed.
-        return next.every((tab, idx) => tab === prev[idx]) ? prev : next
-      }
-
-      for (const id of removedIds) {
-        inFlightLoadsRef.current.delete(id)
-      }
-      setActiveFileTabId((current) => {
-        if (!current || !removedIds.has(current)) return current
-        if (next.length === 0) {
-          activateConversationPane()
-          return null
-        }
-        const oldIdx = prev.findIndex((tab) => tab.id === current)
-        const nextIdx = Math.min(Math.max(oldIdx, 0), next.length - 1)
-        return next[nextIdx].id
-      })
-      setPreviewFileTabIds((current) => {
-        let touched = false
-        const updated = new Set<string>()
-        for (const id of current) {
-          if (removedIds.has(id)) {
-            touched = true
-          } else {
-            updated.add(id)
-          }
-        }
-        return touched ? updated : current
-      })
-      return next
-    })
-  }, [allFolders, foldersHydrated, activateConversationPane])
+  // NOTE: there is deliberately NO folder-removal cleanup for file tabs.
+  // A file tab is identified by its absolute path — removing a workspace
+  // folder does not delete the files, so its tabs stay open and simply
+  // degrade to unwatched (activation-time freshness + save pre-verify).
+  // Git-scoped diff tabs keep their folderId but are snapshots; a gone
+  // folder surfaces as a load error on the next refresh, not a wipe.
 
   // Pure activation — no content mutation.
   const activateTab = useCallback(
@@ -858,25 +818,24 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // so the next activation sees the latest bytes. Dirty tabs are off-limits
   // (conflict resolution belongs to the watcher via markTabsStale).
   const reloadOpenFileBackground = useCallback(
-    async (folderId: number, rawPath: string) => {
-      const folderPath = resolveTabFolderPath(folderId)
-      if (!folderPath) return
-      const path = normalizePath(rawPath)
-      const tabId = buildFileTabId({ kind: "file", folderId, path })
+    async (rawPath: string) => {
+      const absPath = normalizeAbsPath(rawPath)
+      const io = splitAbsPath(absPath)
+      if (!io) return
+      const tabId = buildFileTabId({ kind: "file", path: absPath })
       const existing = fileTabsRef.current.find((t) => t.id === tabId)
       if (!existing || existing.kind !== "file") return
       if (existing.isDirty) return
       if (inFlightLoadsRef.current.has(tabId)) return
 
-      const image = isImageFile(path)
+      const image = isImageFile(absPath)
 
       markTabRefreshing(tabId)
       const gen = beginFetchGeneration(tabId)
 
       try {
         if (image) {
-          const absPath = `${folderPath}/${path}`
-          const ext = path.split(".").pop()?.toLowerCase() ?? ""
+          const ext = absPath.split(".").pop()?.toLowerCase() ?? ""
           const mime = IMAGE_MIME[ext] ?? "image/png"
           const b64 = await withTimeout(
             readFileBase64(absPath),
@@ -904,14 +863,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
         const [result, gitBaseContent] = await withTimeout(
           Promise.all([
-            readFileForEdit(folderPath, path),
-            (async () => {
-              const tracked = await gitIsTracked(folderPath, path).catch(
-                () => false
-              )
-              if (!tracked) return undefined
-              return gitShowFile(folderPath, path).catch(() => "")
-            })(),
+            readFileForEdit(io.rootPath, io.ioPath),
+            fetchGitBase(absPath),
           ]),
           15_000,
           t("previewRequestTimedOut")
@@ -945,9 +898,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     },
     [
       beginFetchGeneration,
+      fetchGitBase,
       markTabRefreshing,
       rejectTab,
-      resolveTabFolderPath,
       settleFetch,
       t,
     ]
@@ -957,9 +910,11 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // reload (clean) or a conflict prompt (dirty). The watcher calls this for
   // dirty non-active tabs when an external change is observed, since silently
   // reloading would discard the user's unsaved edits.
-  const markTabsStale = useCallback((folderId: number, rawPath: string) => {
-    const path = normalizePath(rawPath)
-    const tabId = buildFileTabId({ kind: "file", folderId, path })
+  const markTabsStale = useCallback((rawPath: string) => {
+    const tabId = buildFileTabId({
+      kind: "file",
+      path: normalizeAbsPath(rawPath),
+    })
     setFileTabs((prev) => {
       const idx = prev.findIndex((tab) => tab.id === tabId)
       if (idx < 0) return prev
@@ -975,31 +930,24 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // background tabs cost ONE setState and zero disk reads. Patches ONLY
   // the `stale` flag — never content or any other field — so it composes
   // safely with concurrent keystroke updaters in the same React batch.
-  const markTabsStaleBatch = useCallback(
-    (folderId: number, rawPaths: string[]) => {
-      if (rawPaths.length === 0) return
-      const tabIds = new Set(
-        rawPaths.map((rawPath) =>
-          buildFileTabId({
-            kind: "file",
-            folderId,
-            path: normalizePath(rawPath),
-          })
-        )
+  const markTabsStaleBatch = useCallback((rawPaths: string[]) => {
+    if (rawPaths.length === 0) return
+    const tabIds = new Set(
+      rawPaths.map((rawPath) =>
+        buildFileTabId({ kind: "file", path: normalizeAbsPath(rawPath) })
       )
-      setFileTabs((prev) => {
-        let changed = false
-        const next = prev.map((tab) => {
-          if (!tabIds.has(tab.id) || tab.kind !== "file") return tab
-          if (tab.stale === true) return tab
-          changed = true
-          return { ...tab, stale: true }
-        })
-        return changed ? next : prev
+    )
+    setFileTabs((prev) => {
+      let changed = false
+      const next = prev.map((tab) => {
+        if (!tabIds.has(tab.id) || tab.kind !== "file") return tab
+        if (tab.stale === true) return tab
+        changed = true
+        return { ...tab, stale: true }
       })
-    },
-    []
-  )
+      return changed ? next : prev
+    })
+  }, [])
 
   // Write a prefetched FileEditContent into the matching tab. The change-
   // detection watcher uses this after its resolver has already read the
@@ -1015,11 +963,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // so a stuck git invocation cannot block a subsequent user-initiated
   // reload via the openFilePreview dedup path.
   const applyExternalReload = useCallback(
-    async (folderId: number, rawPath: string, fetched: FileEditContent) => {
-      const folderPath = resolveTabFolderPath(folderId)
-      if (!folderPath) return
-      const path = normalizePath(rawPath)
-      const tabId = buildFileTabId({ kind: "file", folderId, path })
+    async (rawPath: string, fetched: FileEditContent) => {
+      const absPath = normalizeAbsPath(rawPath)
+      const tabId = buildFileTabId({ kind: "file", path: absPath })
       // Outer existence check — purely to avoid bumping the in-flight gen
       // for a non-existent path (which would pollute openFilePreview's
       // dedup). The dirty guard is NOT outer: fileTabsRef can lag a tick
@@ -1082,13 +1028,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       void (async () => {
         try {
           const gitBaseContent = await withTimeout(
-            (async () => {
-              const tracked = await gitIsTracked(folderPath, path).catch(
-                () => false
-              )
-              if (!tracked) return undefined
-              return gitShowFile(folderPath, path).catch(() => "")
-            })(),
+            fetchGitBase(absPath),
             15_000,
             t("previewRequestTimedOut")
           )
@@ -1107,7 +1047,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         }
       })()
     },
-    [beginFetchGeneration, resolveTabFolderPath, settleFetch, t]
+    [beginFetchGeneration, fetchGitBase, settleFetch, t]
   )
 
   // Mark a clean open tab as load-failed. Used by the change-detection
@@ -1115,9 +1055,11 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // external delete). Dirty tabs are deliberately not touched here — the
   // watcher routes them to markTabsStale so unsaved edits are preserved.
   const rejectFileTab = useCallback(
-    (folderId: number, rawPath: string, errorMessage: string) => {
-      const path = normalizePath(rawPath)
-      const tabId = buildFileTabId({ kind: "file", folderId, path })
+    (rawPath: string, errorMessage: string) => {
+      const tabId = buildFileTabId({
+        kind: "file",
+        path: normalizeAbsPath(rawPath),
+      })
       // Outer existence check only; the dirty guard is atomic inside the
       // updater (see applyExternalReload for the same race shape).
       const existing = fileTabsRef.current.find((t) => t.id === tabId)
@@ -1154,10 +1096,10 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       rawPath: string,
       options?: { line?: number; reload?: boolean; folderId?: number }
     ) => {
-      const target = resolveTargetFolder(options?.folderId)
-      if (!target) return
-      const folderPath = target.path
-      const path = normalizePath(rawPath)
+      const absPath = await resolveOpenAbsolutePath(rawPath, options?.folderId)
+      if (!absPath) return
+      const io = splitAbsPath(absPath)
+      if (!io) return
       const requestedLine =
         typeof options?.line === "number" && Number.isFinite(options.line)
           ? Math.max(1, Math.floor(options.line))
@@ -1166,24 +1108,23 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         fileRevealRequestIdRef.current += 1
         setPendingFileReveal({
           requestId: fileRevealRequestIdRef.current,
-          folderId: target.id,
-          path,
+          path: absPath,
           line: requestedLine,
         })
       } else {
         setPendingFileReveal(null)
       }
-      const tabId = buildFileTabId({ kind: "file", folderId: target.id, path })
-      const image = isImageFile(path)
-      const office = !image && isOfficePreviewable(path)
+      const tabId = buildFileTabId({ kind: "file", path: absPath })
+      const image = isImageFile(absPath)
+      const office = !image && isOfficePreviewable(absPath)
       const seed = loadingTab(
         tabId,
-        target.id,
+        null,
         "file",
-        fileName(path),
-        path,
-        path,
-        image ? "image" : office ? "office" : languageFromPath(path)
+        fileName(absPath),
+        absPath,
+        absPath,
+        image ? "image" : office ? "office" : languageFromPath(absPath)
       )
 
       const decision = decideLoad(seed, options?.reload ?? false)
@@ -1215,8 +1156,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         }
 
         if (image) {
-          const absPath = `${folderPath}/${path}`
-          const ext = path.split(".").pop()?.toLowerCase() ?? ""
+          const ext = absPath.split(".").pop()?.toLowerCase() ?? ""
           const mime = IMAGE_MIME[ext] ?? "image/png"
           const b64 = await withTimeout(
             readFileBase64(absPath),
@@ -1244,14 +1184,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
         const [result, gitBaseContent] = await withTimeout(
           Promise.all([
-            readFileForEdit(folderPath, path),
-            (async () => {
-              const tracked = await gitIsTracked(folderPath, path).catch(
-                () => false
-              )
-              if (!tracked) return undefined
-              return gitShowFile(folderPath, path).catch(() => "")
-            })(),
+            readFileForEdit(io.rootPath, io.ioPath),
+            fetchGitBase(absPath),
           ]),
           15_000,
           t("previewRequestTimedOut")
@@ -1282,13 +1216,20 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         if (!settleFetch(tabId, gen)) return
         if (requestedLine) {
           setPendingFileReveal((prev) =>
-            prev && prev.path === path ? null : prev
+            prev && prev.path === absPath ? null : prev
           )
         }
         rejectTab(tabId, toErrorMessage(error))
       }
     },
-    [decideLoad, rejectTab, resolveTargetFolder, settleFetch, t]
+    [
+      decideLoad,
+      fetchGitBase,
+      rejectTab,
+      resolveOpenAbsolutePath,
+      settleFetch,
+      t,
+    ]
   )
 
   // Auto-surface office files (.docx/.xlsx/.pptx) the agent produces. This used
@@ -1320,27 +1261,24 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     // so we open on first sighting and remember it in `autoOpened` (which also
     // keeps a tab the user has since closed from popping back open).
     const autoOpened = new Set<string>()
+    const streamRoot = folderPath
     const unsubscribe = subscribeOfficeEnvelopes(({ changed_paths }) => {
       if (!changed_paths || changed_paths.length === 0) return
-      // This stream watches the ACTIVE folder, so only its tabs count as
-      // "already open" — an identically-named doc in another folder is a
-      // different file and must not suppress the preview.
+      // Tab identity is the absolute path, so joining the stream root onto
+      // the changed relative path compares exactly — an identically-named
+      // doc in another folder has a different absolute path and never
+      // suppresses this preview.
       const openPaths = new Set(
         fileTabsRef.current
-          .filter(
-            (tab) =>
-              tab.kind === "file" &&
-              tab.path &&
-              tab.folderId === activeFolderIdForOffice
-          )
-          .map((tab) => normalizePath(tab.path as string))
+          .filter((tab) => tab.kind === "file" && tab.path)
+          .map((tab) => tab.path as string)
       )
       for (const changed of changed_paths) {
         if (!isOfficePreviewable(changed)) continue
-        const norm = normalizePath(changed)
-        if (autoOpened.has(norm) || openPaths.has(norm)) continue
-        autoOpened.add(norm)
-        void openFilePreview(changed, { folderId: activeFolderIdForOffice })
+        const abs = joinRootRel(streamRoot, changed)
+        if (autoOpened.has(abs) || openPaths.has(abs)) continue
+        autoOpened.add(abs)
+        void openFilePreview(abs)
       }
     })
     return unsubscribe
@@ -1755,20 +1693,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   )
 
   const openExternalConflictDiff = useCallback(
-    (
-      filePath: string,
-      diskContent: string,
-      unsavedContent: string,
-      options?: { folderId?: number }
-    ) => {
-      const target = resolveTargetFolder(options?.folderId)
-      if (!target) return
-      const path = normalizePath(filePath)
-      const tabId = buildFileTabId({
-        kind: "diff-external-conflict",
-        folderId: target.id,
-        path,
-      })
+    (filePath: string, diskContent: string, unsavedContent: string) => {
+      const path = normalizeAbsPath(filePath)
+      const tabId = buildFileTabId({ kind: "diff-external-conflict", path })
       const title = t("diffTitleConflictFile", { name: fileName(path) })
       const description = t("diffDescriptionConflict", { path })
       const language = languageFromPath(path)
@@ -1776,7 +1703,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       const tab: FileWorkspaceTab = {
         id: tabId,
         kind: "rich-diff",
-        folderId: target.id,
+        folderId: null,
         title,
         description,
         path,
@@ -1789,14 +1716,14 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
       replaceTabContent(tab)
     },
-    [replaceTabContent, resolveTargetFolder, t]
+    [replaceTabContent, t]
   )
 
   // Queue a divergence for the conflict dialog. Deduped two ways: a
-  // signature already announced for this folder+path is dropped entirely
-  // (no flicker on repeated watcher events); a NEW signature for an
-  // already-queued folder+path replaces that entry in place (disk moved
-  // again while the prompt waited) instead of queueing a second prompt.
+  // signature already announced for this path is dropped entirely (no
+  // flicker on repeated watcher events); a NEW signature for an
+  // already-queued path replaces that entry in place (disk moved again
+  // while the prompt waited) instead of queueing a second prompt.
   //
   // `force` bypasses the shown-signature dedup: an explicit USER action
   // (a refused save) must re-surface the dialog even when the same
@@ -1805,14 +1732,12 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // announcements never force.
   const enqueueExternalConflict = useCallback(
     (conflict: WorkspaceExternalConflict, options?: { force?: boolean }) => {
-      const key = conflictKey(conflict.folderId, conflict.path)
+      const key = conflictKey(conflict.path)
       const shown = conflictSignatureByKeyRef.current.get(key)
       if (!options?.force && shown === conflict.signature) return
       conflictSignatureByKeyRef.current.set(key, conflict.signature)
       setExternalConflictQueue((prev) => {
-        const idx = prev.findIndex(
-          (queued) => conflictKey(queued.folderId, queued.path) === key
-        )
+        const idx = prev.findIndex((queued) => conflictKey(queued.path) === key)
         if (idx >= 0) {
           const next = [...prev]
           next[idx] = conflict
@@ -1833,9 +1758,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       const head = externalConflictQueueRef.current[0]
       if (!head) return null
       if (options?.clearSignature) {
-        conflictSignatureByKeyRef.current.delete(
-          conflictKey(head.folderId, head.path)
-        )
+        conflictSignatureByKeyRef.current.delete(conflictKey(head.path))
       }
       setExternalConflictQueue((prev) =>
         prev[0] === head ? prev.slice(1) : prev.filter((c) => c !== head)
@@ -1850,40 +1773,27 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     if (!head) return
     // Prefer the LIVE buffer content over the snapshot captured when the
     // conflict was detected — the user may have typed since.
-    const tabId = buildFileTabId({
-      kind: "file",
-      folderId: head.folderId,
-      path: normalizePath(head.path),
-    })
+    const tabId = buildFileTabId({ kind: "file", path: head.path })
     const latestTab = fileTabsRef.current.find((t) => t.id === tabId)
     const unsavedContent =
       latestTab && latestTab.kind === "file" && !latestTab.loading
         ? latestTab.content
         : head.unsavedContent
-    openExternalConflictDiff(head.path, head.diskContent, unsavedContent, {
-      folderId: head.folderId,
-    })
+    openExternalConflictDiff(head.path, head.diskContent, unsavedContent)
   }, [dequeueExternalConflict, openExternalConflictDiff])
 
   const reloadExternalConflict = useCallback(() => {
     const head = dequeueExternalConflict({ clearSignature: true })
     if (!head) return
-    void openFilePreview(head.path, {
-      reload: true,
-      folderId: head.folderId,
-    })
+    void openFilePreview(head.path, { reload: true })
   }, [dequeueExternalConflict, openFilePreview])
 
   const saveExternalConflictCopy = useCallback(async (): Promise<string> => {
     const head = externalConflictQueueRef.current[0]
     if (!head) throw new Error("no external conflict to resolve")
-    const folderPath = resolveTabFolderPath(head.folderId)
-    if (!folderPath) throw new Error(t("folderUnavailable"))
-    const tabId = buildFileTabId({
-      kind: "file",
-      folderId: head.folderId,
-      path: normalizePath(head.path),
-    })
+    const io = splitAbsPath(head.path)
+    if (!io) throw new Error("invalid file path")
+    const tabId = buildFileTabId({ kind: "file", path: head.path })
     const latestTab = fileTabsRef.current.find(
       (candidate) => candidate.id === tabId
     )
@@ -1893,10 +1803,10 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         : head.unsavedContent
     // Throws on failure BEFORE dequeueing — the conflict stays queued so
     // the user can retry or pick another resolution.
-    const result = await saveFileCopy(folderPath, head.path, unsavedContent)
+    const result = await saveFileCopy(io.rootPath, io.ioPath, unsavedContent)
     dequeueExternalConflict()
     return result.path
-  }, [dequeueExternalConflict, resolveTabFolderPath, t])
+  }, [dequeueExternalConflict])
 
   const dismissExternalConflict = useCallback(() => {
     dequeueExternalConflict()
@@ -1934,43 +1844,28 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       if (!tab.path) return false
       if (!tab.isDirty) return true
 
-      // The tab's OWN folder — never the active one. A missing folder
-      // (removed from the workspace mid-session) fails the save visibly
-      // instead of silently writing into whichever folder is active.
-      const folderPath = resolveTabFolderPath(tab.folderId)
-      if (!folderPath) {
-        setFileTabs((prev) =>
-          prev.map((candidate) =>
-            candidate.id === tabId
-              ? {
-                  ...candidate,
-                  saveState: "error",
-                  saveError: t("folderUnavailable"),
-                }
-              : candidate
-          )
-        )
-        return false
-      }
+      const io = splitAbsPath(tab.path)
+      if (!io) return false
 
-      // Stale-aware guard (covers EVERY write path — manual save, 5s
+      // Divergence guard (covers EVERY write path — manual save, 5s
       // autosave, blur/switch/close saves — because they all funnel here):
       // `stale` means the watcher observed an external change this buffer
-      // has not reconciled against. Never write blindly over it. Verify
-      // against disk first: an equal etag proves the flag was spurious
-      // (our own save echo) and the save proceeds; a different etag is a
-      // real divergence — surface the conflict prompt and refuse the save.
-      // `force: true` (the conflict dialog's own overwrite path) bypasses.
-      if (tab.stale && !options?.force) {
+      // has not reconciled against; a file OUTSIDE every registered folder
+      // has no watcher at all, so its saves ALWAYS pre-verify. Never write
+      // blindly: an equal etag proves the flag was spurious (our own save
+      // echo) and the save proceeds; a different etag is a real divergence
+      // — surface the conflict prompt and refuse the save. `force: true`
+      // (the conflict dialog's own overwrite path) bypasses.
+      const unwatched = !findOwningFolder(tab.path, allFoldersRef.current)
+      if ((tab.stale || unwatched) && !options?.force) {
         try {
-          const latest = await readFileForEdit(folderPath, tab.path)
+          const latest = await readFileForEdit(io.rootPath, io.ioPath)
           if ((latest.etag ?? null) !== (tab.etag ?? null)) {
             // Forced: the user just asked to save and the save is being
             // refused — the dialog must re-appear even if this divergence
             // was announced before and dismissed/compared.
             enqueueExternalConflict(
               {
-                folderId: tab.folderId,
                 path: tab.path,
                 diskContent: latest.content,
                 unsavedContent: tab.content,
@@ -2013,8 +1908,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       try {
         const result = await withTimeout(
           saveFileContent(
-            folderPath,
-            tab.path,
+            io.rootPath,
+            io.ioPath,
             contentAtSaveStart,
             expectedEtag
           ),
@@ -2024,7 +1919,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
         // One-shot echo record: the watcher will see this write as a
         // change event; suppress that single event for this path.
-        recordSelfWriteEcho(tab.folderId, tab.path, result.etag)
+        recordSelfWriteEcho(tab.path, result.etag)
 
         setFileTabs((prev) =>
           prev.map((candidate) => {
@@ -2067,7 +1962,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         return false
       }
     },
-    [enqueueExternalConflict, recordSelfWriteEcho, resolveTabFolderPath, t]
+    [enqueueExternalConflict, recordSelfWriteEcho, t]
   )
 
   const saveActiveFile = useCallback(
@@ -2086,22 +1981,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       )
       if (!tab || tab.kind !== "file" || !tab.path) return
       const tabPath = tab.path
-      const folderPath = resolveTabFolderPath(tab.folderId)
-      if (!folderPath) {
-        setFileTabs((prev) =>
-          prev.map((candidate) =>
-            candidate.id === tabId
-              ? {
-                  ...candidate,
-                  loading: false,
-                  saveState: "error",
-                  saveError: t("folderUnavailable"),
-                }
-              : candidate
-          )
-        )
-        return
-      }
+      const io = splitAbsPath(tabPath)
+      if (!io) return
 
       setFileTabs((prev) =>
         prev.map((candidate) =>
@@ -2119,14 +2000,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       try {
         const [result, gitBaseContent] = await withTimeout(
           Promise.all([
-            readFileForEdit(folderPath, tabPath),
-            (async () => {
-              const tracked = await gitIsTracked(folderPath, tabPath).catch(
-                () => false
-              )
-              if (!tracked) return undefined
-              return gitShowFile(folderPath, tabPath).catch(() => "")
-            })(),
+            readFileForEdit(io.rootPath, io.ioPath),
+            fetchGitBase(tabPath),
           ]),
           15_000,
           t("reloadRequestTimedOut")
@@ -2167,7 +2042,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         )
       }
     },
-    [resolveTabFolderPath, t]
+    [fetchGitBase, t]
   )
 
   const reloadActiveFile = useCallback(async () => {
@@ -2353,32 +2228,30 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     const tab = activeFileTab
     if (!tab || tab.kind !== "file" || !tab.path) return
     if (tab.loading || tab.isDirty) return
-    const key = conflictKey(tab.folderId, tab.path)
+    const key = conflictKey(tab.path)
     conflictSignatureByKeyRef.current.delete(key)
     /* eslint-disable react-hooks/set-state-in-effect */
     setExternalConflictQueue((prev) =>
-      prev.some(
-        (conflict) => conflictKey(conflict.folderId, conflict.path) === key
-      )
-        ? prev.filter(
-            (conflict) => conflictKey(conflict.folderId, conflict.path) !== key
-          )
+      prev.some((conflict) => conflictKey(conflict.path) === key)
+        ? prev.filter((conflict) => conflictKey(conflict.path) !== key)
         : prev
     )
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [activeFileTab])
 
-  // The watcher: per-folder FS stream subscriptions for every folder with
-  // open file tabs, lazy background staleness, eager active-tab
-  // reconciliation, and stale-on-activation. Owned here (always mounted)
-  // so detection works with the aux panel closed and across all folders.
+  // The watcher: per-root FS stream subscriptions derived from the open
+  // file tabs' absolute paths (owning registered folders only), lazy
+  // background staleness, eager active-tab reconciliation, and
+  // stale-on-activation. Owned here (always mounted) so detection works
+  // with the aux panel closed and across all folders. Tabs outside every
+  // registered folder are not live-watched; they get activation-time
+  // freshness checks instead.
   useOpenFileTabsWatch({
     fileTabs,
     fileTabsRef,
     activeFileTabIdRef,
     activeFileTab,
-    resolveTabFolderPath,
-    getFolder,
+    allFolders,
     openFilePreview,
     reloadOpenFileBackground,
     applyExternalReload,

@@ -25,9 +25,9 @@ import {
 } from "@/components/ui/tooltip"
 import {
   fileNameOf,
-  isAbsoluteFilePath,
   isAddedFileDiff,
   isRemovedFileDiff,
+  normalizeSlashPath,
   toAbsoluteFilePath,
   toFolderRelativePath,
 } from "@/lib/file-path-display"
@@ -100,13 +100,10 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
   const folderPath = folder?.path
 
   const openInTabs = (file: FileChangeStat) => {
-    const relative = toFolderRelativePath(file.path, folderPath)
-    // openFilePreview only accepts workspace-relative paths. If we could not
-    // strip the folder prefix (the file lives outside the workspace), the path
-    // is still absolute — skip rather than hand the backend a path it rejects
-    // with "Path must be relative".
-    if (isAbsoluteFilePath(relative)) return
-    void openFilePreview(relative)
+    // openFilePreview accepts absolute paths (any location) and paths
+    // relative to the active folder — agent-reported paths are one of the
+    // two, so hand them over as-is.
+    void openFilePreview(normalizeSlashPath(file.path))
   }
 
   const revealInFolder = (file: FileChangeStat) => {

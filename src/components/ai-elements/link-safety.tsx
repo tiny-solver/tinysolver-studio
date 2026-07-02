@@ -10,6 +10,8 @@ import type { LinkSafetyConfig, LinkSafetyModalProps } from "streamdown"
 import { toast } from "sonner"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useWorkspaceActions } from "@/contexts/workspace-context"
+import { isHomeRelativePath } from "@/lib/file-open-target"
+import { isAbsoluteFilePath } from "@/lib/file-path-display"
 import { cn } from "@/lib/utils"
 
 interface LocalFileTarget {
@@ -210,33 +212,11 @@ function dispatchOsHandlerUrl(url: string): void {
   }
 }
 
-function toWorkspaceRelativePath(
-  path: string,
-  workspacePath: string
-): string | null {
-  const normalizedPath = normalizeSlashPath(path)
-  const normalizedWorkspace = normalizeSlashPath(workspacePath).replace(
-    /\/+$/,
-    ""
-  )
-  if (!normalizedPath || !normalizedWorkspace) return null
-
-  if (!normalizedPath.startsWith("/") && !WINDOWS_ABSOLUTE_PATH.test(path)) {
-    return normalizedPath.replace(/^\.\/+/, "")
-  }
-
-  const isWindows = WINDOWS_ABSOLUTE_PATH.test(normalizedWorkspace)
-  const pathForCompare = isWindows
-    ? normalizedPath.toLowerCase()
-    : normalizedPath
-  const workspaceForCompare = isWindows
-    ? normalizedWorkspace.toLowerCase()
-    : normalizedWorkspace
-
-  if (pathForCompare === workspaceForCompare) return null
-  if (!pathForCompare.startsWith(`${workspaceForCompare}/`)) return null
-
-  return normalizedPath.slice(normalizedWorkspace.length + 1)
+// True when the opener needs no folder context at all: absolute paths and
+// `~/` paths are self-locating (openFilePreview expands the home dir and
+// routes them by absolute path — inside a registered folder or not).
+function isSelfLocatingPath(path: string): boolean {
+  return isAbsoluteFilePath(path) || isHomeRelativePath(path)
 }
 
 /**
@@ -301,26 +281,18 @@ export function useOpenLinkOrFile() {
     async (url: string) => {
       const localTarget = parseLocalFileTarget(url)
       if (localTarget) {
-        if (!folderPath) {
+        // Absolute and ~ paths open with no folder context (works in chat
+        // mode too); only folder-relative paths still need an active
+        // folder to resolve against.
+        if (!isSelfLocatingPath(localTarget.path) && !folderPath) {
           toast.error(t("errorCannotOpen"), {
             description: t("errorNoWorkspace"),
           })
           return
         }
 
-        const relativePath = toWorkspaceRelativePath(
-          localTarget.path,
-          folderPath
-        )
-        if (!relativePath) {
-          toast.error(t("errorCannotOpen"), {
-            description: t("errorOutsideWorkspace"),
-          })
-          return
-        }
-
         try {
-          await openFilePreview(relativePath, {
+          await openFilePreview(localTarget.path.replace(/^\.\/+/, ""), {
             line: localTarget.line ?? undefined,
           })
         } catch (error) {
@@ -381,25 +353,14 @@ export function useStreamdownLinkSafety(): LinkSafetyConfig {
 }
 
 /**
- * Resolve a tool-call file path (which may be absolute, workspace-relative, or
- * a bare relative path) into something `openFilePreview` can consume. Falls
- * back to the raw input when no other heuristic matches so the opener can
- * still surface a useful error toast.
+ * Normalize a tool-call file path (absolute, `~/`, workspace-relative, or a
+ * bare relative path) into something `openFilePreview` can consume. Only a
+ * relative path still depends on the active folder — the caller checks that.
  */
-function resolveToolFilePath(
-  rawPath: string,
-  workspacePath: string | null
-): string | null {
+function resolveToolFilePath(rawPath: string): string | null {
   const normalized = normalizeSlashPath(rawPath.trim())
   if (!normalized) return null
-
-  const isAbsolute =
-    normalized.startsWith("/") || WINDOWS_ABSOLUTE_PATH.test(normalized)
-  if (isAbsolute) {
-    if (!workspacePath) return null
-    return toWorkspaceRelativePath(normalized, workspacePath)
-  }
-
+  if (isSelfLocatingPath(normalized)) return normalized
   return normalized.replace(/^\.\/+/, "")
 }
 
@@ -433,23 +394,20 @@ export function FilePathLink({
 
   const handleOpen = useCallback(() => {
     if (openingRef.current) return
-    if (!folderPath) {
+    const target = resolveToolFilePath(filePath)
+    if (!target) return
+    // Only folder-relative paths need an active folder; absolute and ~
+    // paths are self-locating.
+    if (!isSelfLocatingPath(target) && !folderPath) {
       toast.error(t("errorCannotOpen"), {
         description: t("errorNoWorkspace"),
-      })
-      return
-    }
-    const relativePath = resolveToolFilePath(filePath, folderPath)
-    if (!relativePath) {
-      toast.error(t("errorCannotOpen"), {
-        description: t("errorOutsideWorkspace"),
       })
       return
     }
 
     openingRef.current = true
     setOpening(true)
-    void openFilePreview(relativePath, {
+    void openFilePreview(target, {
       line: line ?? undefined,
     })
       .catch((error) => {
