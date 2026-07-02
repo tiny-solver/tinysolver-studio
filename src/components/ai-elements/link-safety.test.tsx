@@ -158,6 +158,25 @@ describe("link safety direct opening", () => {
     })
   })
 
+  it("opens a UNC link through the real chat path (remark-rewritten backslash form)", async () => {
+    // In chat, remark-file-uri-links rewrites file://server/share/doc.md to
+    // the backslash UNC form BEFORE MarkdownLink sees it. That rewritten
+    // href must route to the file opener (as //server/share/doc.md), not
+    // the browser.
+    // JS string "\\\\server\\share\\doc.md" is the 2-backslash UNC form.
+    render(<LinkSafetyHarness url={"\\\\server\\share\\doc.md"} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger link" }))
+
+    await waitFor(() => {
+      expect(mocks.openFilePreview).toHaveBeenCalledWith(
+        "//server/share/doc.md",
+        { line: undefined }
+      )
+    })
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
   it("passes ~ paths through for home expansion by the opener", async () => {
     render(<LinkSafetyHarness url="~/.claude/plans/notes.md" />)
 

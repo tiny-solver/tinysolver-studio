@@ -28,10 +28,11 @@ const WINDOWS_ABSOLUTE_PATH = /^[a-zA-Z]:[\\/]/
 const URL_SCHEME = /^([a-zA-Z][a-zA-Z\d+\-.]*):/
 
 function isLocalPathLike(path: string): boolean {
-  // Mirrors link-safety.tsx: "//host/…" is protocol-relative (web), not a
-  // local path.
+  // Mirrors link-safety.tsx: forward-slash "//host/…" is protocol-relative
+  // (web); backslash "\\server\share" is a local UNC path.
   return (
     (path.startsWith("/") && !path.startsWith("//")) ||
+    path.startsWith("\\\\") ||
     path.startsWith("./") ||
     path.startsWith("../") ||
     path.startsWith("~/") ||

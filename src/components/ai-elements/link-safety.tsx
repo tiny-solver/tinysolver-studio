@@ -92,11 +92,14 @@ function splitPathAndLine(rawPath: string): LocalFileTarget {
 }
 
 function isLocalPathLike(path: string): boolean {
-  // "//host/…" is protocol-relative — a WEB url, not a local path. It must
-  // fall through to the external-URL route (the browser resolves it against
-  // the page protocol), never into local file IO.
+  // "//host/…" (forward slashes) is protocol-relative — a WEB url, not a
+  // local path. It must fall through to the external-URL route, never into
+  // local file IO. A "\\server\share" (backslashes) IS a local UNC path
+  // (a web url never uses backslashes) — the form remark-file-uri-links
+  // emits for file://server/share URIs.
   return (
     (path.startsWith("/") && !path.startsWith("//")) ||
+    path.startsWith("\\\\") ||
     path.startsWith("./") ||
     path.startsWith("../") ||
     path.startsWith("~/") ||

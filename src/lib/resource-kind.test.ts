@@ -13,6 +13,9 @@ describe("classifyResourceKind", () => {
     ["C:\\Users\\a\\notes.txt", "file"],
     ["C:/Users/a/notes.txt", "file"],
     ["d:\\repo\\src\\main.rs", "file"],
+    // Backslash UNC (the form remark-file-uri-links emits for a UNC
+    // file:// link) — local file, distinct from forward-slash // (web).
+    ["\\\\server\\share\\doc.md", "file"],
     // POSIX absolute / explicitly-relative paths
     ["/abs/path/file.ts", "file"],
     ["/abs/path/file.ts:42", "file"],
