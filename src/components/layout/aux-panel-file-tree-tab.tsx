@@ -20,7 +20,8 @@ import { useTerminalContext } from "@/contexts/terminal-context"
 import {
   type FileWorkspaceTab,
   isImageFile,
-  useWorkspaceContext,
+  useWorkspaceActions,
+  useWorkspaceFileTabs,
 } from "@/contexts/workspace-context"
 import { useWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import { AuxPanelNoFolderEmpty } from "@/components/layout/aux-panel-no-folder-empty"
@@ -894,10 +895,8 @@ export function FileTreeTab() {
   const { activeFolder: folder } = useActiveFolder()
   const { tabs, activeTabId } = useTabContext()
   const { createTerminalInDirectory } = useTerminalContext()
+  const { activeFileTab, activeFilePath, fileTabs } = useWorkspaceFileTabs()
   const {
-    activeFileTab,
-    activeFilePath,
-    fileTabs,
     openBranchDiff,
     openExternalConflictDiff,
     openFilePreview,
@@ -906,7 +905,7 @@ export function FileTreeTab() {
     applyExternalReload,
     markTabsStale,
     rejectFileTab,
-  } = useWorkspaceContext()
+  } = useWorkspaceActions()
   const workspaceState = useWorkspaceStateStore(folder?.path ?? null)
   const [nodes, setNodes] = useState<FileTreeNode[]>([])
   const [gitStatusByPath, setGitStatusByPath] = useState<Map<string, string>>(

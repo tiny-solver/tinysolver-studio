@@ -50,7 +50,8 @@ import {
 import { GitCredentialProvider } from "@/contexts/git-credential-context"
 import {
   WorkspaceProvider,
-  useWorkspaceContext,
+  useWorkspaceActions,
+  useWorkspaceView,
 } from "@/contexts/workspace-context"
 import { RemoteConnectionGate } from "@/contexts/remote-connection-context"
 import { UpdateProvider } from "@/components/providers/update-provider"
@@ -153,7 +154,8 @@ function resolvePanelSizeRange(
 }
 
 function WorkspaceContent({ children }: { children: React.ReactNode }) {
-  const { mode, setActivePane, filesMaximized } = useWorkspaceContext()
+  const { mode, filesMaximized } = useWorkspaceView()
+  const { setActivePane } = useWorkspaceActions()
   const panelGroupRef = useRef<ImperativePanelGroupHandle | null>(null)
   const fusionLayoutRef = useRef<[number, number]>(DEFAULT_FUSION_LAYOUT)
   const desiredLayoutRef = useRef<[number, number]>(DEFAULT_FUSION_LAYOUT)
@@ -306,7 +308,7 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
 }
 
 function MobileWorkspaceContent({ children }: { children: React.ReactNode }) {
-  const { mode, activePane } = useWorkspaceContext()
+  const { mode, activePane } = useWorkspaceView()
   const { isConversations } = useWorkbenchRoute()
 
   const showConversation =

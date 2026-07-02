@@ -16,7 +16,11 @@ import { useTranslations } from "next-intl"
 import { openPath } from "@/lib/platform"
 import { isHtmlPreviewable } from "@/lib/language-detect"
 import { useActiveFolder } from "@/contexts/active-folder-context"
-import { useWorkspaceContext } from "@/contexts/workspace-context"
+import {
+  useWorkspaceActions,
+  useWorkspaceFileTabs,
+  useWorkspaceView,
+} from "@/contexts/workspace-context"
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -34,21 +38,18 @@ import {
 
 export function FileWorkspaceTabBar() {
   const t = useTranslations("Folder.fileWorkspace")
+  const { mode, activePane, filesMaximized } = useWorkspaceView()
+  const { fileTabs, activeFileTabId, previewFileTabIds } =
+    useWorkspaceFileTabs()
   const {
-    mode,
-    activePane,
-    fileTabs,
-    activeFileTabId,
     switchFileTab,
     closeFileTab,
     closeOtherFileTabs,
     closeAllFileTabs,
     reorderFileTabs,
-    previewFileTabIds,
     toggleFileTabPreview,
-    filesMaximized,
     toggleFilesMaximized,
-  } = useWorkspaceContext()
+  } = useWorkspaceActions()
   const { activeFolder: folder } = useActiveFolder()
   const { shortcuts } = useShortcutSettings()
   const scrollRef = useRef<HTMLDivElement>(null)

@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useActiveFolder } from "@/contexts/active-folder-context"
-import { useWorkspaceContext } from "@/contexts/workspace-context"
+import { useWorkspaceActions } from "@/contexts/workspace-context"
 import {
   CommitFileAdditions,
   CommitFileDeletions,
@@ -66,7 +66,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
 }) {
   const t = useTranslations("Folder.chat.replyArtifacts")
   const { activeFolder: folder } = useActiveFolder()
-  const { openFilePreview } = useWorkspaceContext()
+  const { openFilePreview } = useWorkspaceActions()
   const [newFilesOpen, setNewFilesOpen] = useState(true)
   const [changedOpen, setChangedOpen] = useState(false)
   // Single-open accordion: the path of the one changed file whose diff is open.

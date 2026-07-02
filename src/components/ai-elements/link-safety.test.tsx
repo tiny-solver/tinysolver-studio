@@ -44,7 +44,7 @@ vi.mock("@/contexts/active-folder-context", () => ({
 }))
 
 vi.mock("@/contexts/workspace-context", () => ({
-  useWorkspaceContext: () => ({
+  useWorkspaceActions: () => ({
     openFilePreview: mocks.openFilePreview,
   }),
 }))
@@ -312,7 +312,7 @@ describe("link safety direct opening", () => {
       expect(initialOpenPreview).toHaveBeenCalledTimes(1)
     })
 
-    // Swap `useWorkspaceContext().openFilePreview` to a fresh vi.fn so the
+    // Swap `useWorkspaceActions().openFilePreview` to a fresh vi.fn so the
     // next render forces `useOpenLinkOrFile`'s `useCallback` to rebuild —
     // i.e. the `onAction` prop of `<DirectLinkOpen>` changes identity while
     // the original open is still pending. The previous `cancelled`-flag

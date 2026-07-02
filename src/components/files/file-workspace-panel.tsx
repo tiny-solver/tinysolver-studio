@@ -17,7 +17,8 @@ import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import { formatFileRangeLabel } from "@/lib/reference-link"
 import { joinFsPath } from "@/lib/path-utils"
 import {
-  useWorkspaceContext,
+  useWorkspaceActions,
+  useWorkspaceFileTabs,
   type FileWorkspaceTab,
 } from "@/contexts/workspace-context"
 import { ImagePreview } from "@/components/files/image-preview"
@@ -863,18 +864,17 @@ function DiffFileList({
 
 export function FileWorkspacePanel() {
   const t = useTranslations("Folder.fileWorkspacePanel")
+  const { activeFileTab, pendingFileReveal, previewFileTabIds } =
+    useWorkspaceFileTabs()
   const {
-    activeFileTab,
     consumePendingFileReveal,
-    pendingFileReveal,
     openBranchDiff,
     openCommitDiff,
     openFilePreview,
     openWorkingTreeDiff,
-    previewFileTabIds,
     saveActiveFile,
     updateActiveFileContent,
-  } = useWorkspaceContext()
+  } = useWorkspaceActions()
   const { tabs, activeTabId } = useTabContext()
   const { activeFolder: folder } = useActiveFolder()
   const folderPath = folder?.path ?? null

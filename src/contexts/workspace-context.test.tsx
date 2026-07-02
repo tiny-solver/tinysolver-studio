@@ -2,14 +2,22 @@ import { act, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   WorkspaceProvider,
+  useWorkspaceActions,
   useWorkspaceContext,
+  useWorkspaceFileTabs,
+  useWorkspaceView,
 } from "@/contexts/workspace-context"
 import * as api from "@/lib/api"
 
-vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string, values?: Record<string, string>) =>
-    values ? `${key}:${JSON.stringify(values)}` : key,
-}))
+vi.mock("next-intl", () => {
+  // Return a STABLE function instance across renders, mirroring next-intl's
+  // real behavior. An unstable `t` would churn every action callback that
+  // lists it as a dependency, silently breaking the actions-context
+  // stability the render-isolation suite asserts.
+  const t = (key: string, values?: Record<string, string>) =>
+    values ? `${key}:${JSON.stringify(values)}` : key
+  return { useTranslations: () => t }
+})
 
 vi.mock("@/contexts/active-folder-context", () => ({
   useActiveFolder: () => ({
@@ -1846,5 +1854,144 @@ describe("WorkspaceProvider office auto-preview", () => {
 
     expect(screen.getByTestId("file-tab-count")).toHaveTextContent("0")
     expect(screen.getByTestId("active-pane")).toHaveTextContent("conversation")
+  })
+})
+
+describe("context slice render isolation", () => {
+  // The whole point of the three-way context split: fileTabs churn
+  // (keystrokes, watcher reloads) must not re-render components that only
+  // subscribe to actions (conversation path) or view (layout chrome).
+  // Render counting goes through an `onRender` callback (same pattern as
+  // the `onCapture` probes above) — direct module-scope mutation inside a
+  // component body trips react-hooks/immutability.
+  const renderCounts = { actions: 0, view: 0, fileTabs: 0 }
+
+  function ActionsProbe({ onRender }: { onRender: () => void }) {
+    onRender()
+    const { openSessionFileDiff, updateActiveFileContent } =
+      useWorkspaceActions()
+    return (
+      <div>
+        <button
+          onClick={() => openSessionFileDiff("src/a.ts", "diff --git a", "T1")}
+        >
+          slice-open-a
+        </button>
+        <button
+          onClick={() => openSessionFileDiff("src/b.ts", "diff --git b", "T1")}
+        >
+          slice-open-b
+        </button>
+        <button onClick={() => updateActiveFileContent("typed")}>
+          slice-edit
+        </button>
+      </div>
+    )
+  }
+
+  function ViewProbe({ onRender }: { onRender: () => void }) {
+    onRender()
+    const { mode } = useWorkspaceView()
+    return <output data-testid="slice-mode">{mode}</output>
+  }
+
+  function FileTabsProbe({ onRender }: { onRender: () => void }) {
+    onRender()
+    const { fileTabs } = useWorkspaceFileTabs()
+    return <output data-testid="slice-tab-count">{fileTabs.length}</output>
+  }
+
+  const countActions = () => {
+    renderCounts.actions += 1
+  }
+  const countView = () => {
+    renderCounts.view += 1
+  }
+  const countFileTabs = () => {
+    renderCounts.fileTabs += 1
+  }
+
+  beforeEach(() => {
+    renderCounts.actions = 0
+    renderCounts.view = 0
+    renderCounts.fileTabs = 0
+  })
+
+  it("keeps actions/view consumers un-rendered when fileTabs change within fusion mode", async () => {
+    render(
+      <WorkspaceProvider>
+        <ActionsProbe onRender={countActions} />
+        <ViewProbe onRender={countView} />
+        <FileTabsProbe onRender={countFileTabs} />
+      </WorkspaceProvider>
+    )
+
+    // First open flips mode conversation→fusion, so the view consumer is
+    // expected to render once more here.
+    await act(async () => {
+      screen.getByText("slice-open-a").click()
+    })
+    expect(screen.getByTestId("slice-mode")).toHaveTextContent("fusion")
+    expect(screen.getByTestId("slice-tab-count")).toHaveTextContent("1")
+
+    const actionsBefore = renderCounts.actions
+    const viewBefore = renderCounts.view
+    const fileTabsBefore = renderCounts.fileTabs
+
+    // Second open mutates fileTabs but neither mode (stays fusion) nor
+    // activePane (stays files) — only the fileTabs consumer may render.
+    await act(async () => {
+      screen.getByText("slice-open-b").click()
+    })
+    expect(screen.getByTestId("slice-tab-count")).toHaveTextContent("2")
+    expect(renderCounts.actions).toBe(actionsBefore)
+    expect(renderCounts.view).toBe(viewBefore)
+    expect(renderCounts.fileTabs).toBeGreaterThan(fileTabsBefore)
+  })
+
+  it("keeps actions/view consumers un-rendered on per-keystroke content updates", async () => {
+    mockedApi.readFileForEdit.mockResolvedValueOnce({
+      path: "a.ts",
+      content: "v1",
+      etag: "e1",
+      mtime_ms: 1,
+      readonly: false,
+      line_ending: "lf",
+    })
+    mockedApi.gitIsTracked.mockResolvedValue(false)
+
+    function OpenFileProbe() {
+      const { openFilePreview } = useWorkspaceActions()
+      return (
+        <button onClick={() => void openFilePreview("a.ts")}>
+          slice-open-file
+        </button>
+      )
+    }
+
+    render(
+      <WorkspaceProvider>
+        <ActionsProbe onRender={countActions} />
+        <ViewProbe onRender={countView} />
+        <FileTabsProbe onRender={countFileTabs} />
+        <OpenFileProbe />
+      </WorkspaceProvider>
+    )
+
+    await act(async () => {
+      screen.getByText("slice-open-file").click()
+    })
+    expect(screen.getByTestId("slice-tab-count")).toHaveTextContent("1")
+
+    const actionsBefore = renderCounts.actions
+    const viewBefore = renderCounts.view
+
+    // Simulates the editor's onChange — the highest-frequency fileTabs write.
+    await act(async () => {
+      screen.getByText("slice-edit").click()
+    })
+
+    expect(renderCounts.actions).toBe(actionsBefore)
+    expect(renderCounts.view).toBe(viewBefore)
   })
 })
