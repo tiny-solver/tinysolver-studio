@@ -13,7 +13,7 @@ import {
 import { useTranslations } from "next-intl"
 import { openSettingsWindow } from "@/lib/api"
 import { getPetSettings, openPetWindow } from "@/lib/pet/api"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
 import { isDesktop, openFileDialog } from "@/lib/platform"
@@ -49,7 +49,7 @@ import {
 export function FolderTitleBar() {
   const tTitleBar = useTranslations("Folder.folderTitleBar")
   const tPet = useTranslations("Pet")
-  const { openFolder } = useAppWorkspace()
+  const openFolder = useAppWorkspaceStore((s) => s.openFolder)
   const { activeFolder } = useActiveFolder()
   const isChatMode = useIsActiveChatMode()
   const { isOpen, toggle } = useSidebarContext()

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Reorder } from "motion/react"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabContext } from "@/contexts/tab-context"
 import type { TabItem as TabItemData } from "@/contexts/tab-context"
 import { useWorkspaceView } from "@/contexts/workspace-context"
@@ -25,7 +25,8 @@ export function TabBar() {
     toggleTileMode,
     reorderTabs,
   } = useTabContext()
-  const { allFolders, branches } = useAppWorkspace()
+  const allFolders = useAppWorkspaceStore((s) => s.allFolders)
+  const branches = useAppWorkspaceStore((s) => s.branches)
   const { mode, activePane, filesMaximized } = useWorkspaceView()
 
   const folderIndex = useMemo(() => {

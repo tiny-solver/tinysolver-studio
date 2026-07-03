@@ -17,10 +17,7 @@ import {
   AppWorkspaceProvider,
   ConversationStatusEventBridge,
 } from "@/contexts/app-workspace-context"
-import {
-  ActiveFolderProvider,
-  useActiveFolder,
-} from "@/contexts/active-folder-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { TaskProvider } from "@/contexts/task-context"
 import { AlertProvider } from "@/contexts/alert-context"
 import {
@@ -870,54 +867,52 @@ function WorkbenchRouteConversationSync() {
 function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <AppWorkspaceProvider>
-      <ActiveFolderProvider>
-        <AlertProvider>
-          <GitCredentialProvider>
-            <TaskProvider>
-              <AcpConnectionsProvider>
-                <DelegationProvider>
-                  <ConversationStatusEventBridge />
-                  <ConversationRuntimeProvider>
-                    <WorkspaceProvider>
-                      <TabProvider>
-                        <WorkspaceDocumentTitle />
-                        <TabKeysSync />
-                        <DeepLinkBootstrap />
-                        <PetFocusBridge />
-                        {/* Always mounted: external-change conflicts must be
+      <AlertProvider>
+        <GitCredentialProvider>
+          <TaskProvider>
+            <AcpConnectionsProvider>
+              <DelegationProvider>
+                <ConversationStatusEventBridge />
+                <ConversationRuntimeProvider>
+                  <WorkspaceProvider>
+                    <TabProvider>
+                      <WorkspaceDocumentTitle />
+                      <TabKeysSync />
+                      <DeepLinkBootstrap />
+                      <PetFocusBridge />
+                      {/* Always mounted: external-change conflicts must be
                             resolvable even with the aux file tree closed. */}
-                        <ExternalConflictDialog />
-                        <SessionStatsProvider>
-                          <SidebarProvider>
-                            <AuxPanelProvider>
-                              <TerminalProvider>
-                                <SearchDialogProvider>
-                                  <AutomationsViewProvider>
-                                    <WorkbenchRouteProvider>
-                                      <WorkbenchRouteConversationSync />
-                                      {/* Inside WorkbenchRouteProvider: the
+                      <ExternalConflictDialog />
+                      <SessionStatsProvider>
+                        <SidebarProvider>
+                          <AuxPanelProvider>
+                            <TerminalProvider>
+                              <SearchDialogProvider>
+                                <AutomationsViewProvider>
+                                  <WorkbenchRouteProvider>
+                                    <WorkbenchRouteConversationSync />
+                                    {/* Inside WorkbenchRouteProvider: the
                                           listener calls openConversations() to
                                           surface a launcher-opened folder. */}
-                                      <WorkspaceOpenFolderListener />
-                                      <FolderLayoutShell>
-                                        {children}
-                                      </FolderLayoutShell>
-                                    </WorkbenchRouteProvider>
-                                  </AutomationsViewProvider>
-                                </SearchDialogProvider>
-                              </TerminalProvider>
-                            </AuxPanelProvider>
-                          </SidebarProvider>
-                        </SessionStatsProvider>
-                      </TabProvider>
-                    </WorkspaceProvider>
-                  </ConversationRuntimeProvider>
-                </DelegationProvider>
-              </AcpConnectionsProvider>
-            </TaskProvider>
-          </GitCredentialProvider>
-        </AlertProvider>
-      </ActiveFolderProvider>
+                                    <WorkspaceOpenFolderListener />
+                                    <FolderLayoutShell>
+                                      {children}
+                                    </FolderLayoutShell>
+                                  </WorkbenchRouteProvider>
+                                </AutomationsViewProvider>
+                              </SearchDialogProvider>
+                            </TerminalProvider>
+                          </AuxPanelProvider>
+                        </SidebarProvider>
+                      </SessionStatsProvider>
+                    </TabProvider>
+                  </WorkspaceProvider>
+                </ConversationRuntimeProvider>
+              </DelegationProvider>
+            </AcpConnectionsProvider>
+          </TaskProvider>
+        </GitCredentialProvider>
+      </AlertProvider>
     </AppWorkspaceProvider>
   )
 }

@@ -12,7 +12,7 @@ import {
   type SetStateAction,
 } from "react"
 import { useTranslations } from "next-intl"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useAcpActions } from "@/contexts/acp-connections-context"
 import { useWorkspaceActions } from "@/contexts/workspace-context"
 import { useSortedAvailableAgents } from "@/hooks/use-sorted-available-agents"
@@ -270,6 +270,28 @@ const TILE_MODE_STORAGE_KEY = "workspace:tile-mode"
  *  suppression, not the user, so nothing about it needs to persist. */
 const TAB_ORIGIN = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
+/** Field-wise equality for derived tab items. Backs the cross-derive reuse in
+ *  the `tabs` memo: an item whose every field matches the previous derive keeps
+ *  its old reference, so downstream `Object.is` gates (the context value, tab
+ *  consumers' memos) can short-circuit. TabItemInternal is a closed shape —
+ *  keep this list in sync when adding fields. */
+function sameDerivedTab(a: TabItemInternal, b: TabItemInternal): boolean {
+  return (
+    a.id === b.id &&
+    a.kind === b.kind &&
+    a.folderId === b.folderId &&
+    a.conversationId === b.conversationId &&
+    a.runtimeConversationId === b.runtimeConversationId &&
+    a.agentType === b.agentType &&
+    a.title === b.title &&
+    a.isPinned === b.isPinned &&
+    a.workingDir === b.workingDir &&
+    a.status === b.status &&
+    a.agentTypeProvisional === b.agentTypeProvisional &&
+    a.isChat === b.isChat
+  )
+}
+
 /** Build the persisted (synced) tab payload: conversation-bound tabs only
  *  (drafts are device-local), `position` = display index, and `is_active` set on
  *  the focused tab so focus mirrors across clients. (A draft- or null-focus
@@ -296,14 +318,14 @@ function buildPersistItems(
 export function TabProvider({ children }: TabProviderProps) {
   const t = useTranslations("Folder.tabContext")
   const { activateConversationPane } = useWorkspaceActions()
-  const {
-    conversations,
-    conversationsLoading,
-    folders,
-    allFolders,
-    foldersHydrated,
-    setActiveFolderId,
-  } = useAppWorkspace()
+  const conversations = useAppWorkspaceStore((s) => s.conversations)
+  const conversationsLoading = useAppWorkspaceStore(
+    (s) => s.conversationsLoading
+  )
+  const folders = useAppWorkspaceStore((s) => s.folders)
+  const allFolders = useAppWorkspaceStore((s) => s.allFolders)
+  const foldersHydrated = useAppWorkspaceStore((s) => s.foldersHydrated)
+  const setActiveFolderId = useAppWorkspaceStore((s) => s.setActiveFolderId)
   const { disconnect: acpDisconnect } = useAcpActions()
 
   const [tabState, setTabState] = useState<TabState>({
@@ -743,25 +765,54 @@ export function TabProvider({ children }: TabProviderProps) {
   // back to the sub-session cache for delegation children (absent from the
   // root-only `conversationMap`) so their tabs show the real title + a live
   // status dot instead of a frozen "Untitled".
+  //
+  // Reference reuse across derives: `conversationMap` changes on EVERY
+  // conversation status event in the workspace (any agent's turn start/stop),
+  // which re-runs this memo. Without reuse, every decorated item — and thus
+  // the array and the context value — changed identity each time, re-rendering
+  // all tab consumers (including every keep-alive ConversationTabView, whose
+  // memo cannot block a context change). Reusing the previous derive's item
+  // references when nothing visible changed keeps the array identity stable,
+  // so an event that touches no open tab re-renders no tab consumer at all.
+  const prevDerivedTabsRef = useRef<TabItemInternal[] | null>(null)
   const tabs = useMemo(() => {
-    if (conversationMap.size === 0 && childSummaries.size === 0) return rawTabs
-    return rawTabs.map((tab) => {
-      if (tab.conversationId != null) {
-        const conv =
-          conversationMap.get(
-            `${tab.folderId}-${tab.agentType}-${tab.conversationId}`
-          ) ?? childSummaries.get(tab.conversationId)
-        if (conv) {
-          const newTitle =
-            formatConversationTitle(conv.title) || t("untitledConversation")
-          const newStatus = conv.status as ConversationStatus | undefined
-          if (tab.title !== newTitle || tab.status !== newStatus) {
-            return { ...tab, title: newTitle, status: newStatus }
+    const prev = prevDerivedTabsRef.current
+    let next: TabItemInternal[]
+    if (conversationMap.size === 0 && childSummaries.size === 0) {
+      next = rawTabs
+    } else {
+      const prevById = prev ? new Map(prev.map((d) => [d.id, d])) : null
+      next = rawTabs.map((tab) => {
+        if (tab.conversationId != null) {
+          const conv =
+            conversationMap.get(
+              `${tab.folderId}-${tab.agentType}-${tab.conversationId}`
+            ) ?? childSummaries.get(tab.conversationId)
+          if (conv) {
+            const newTitle =
+              formatConversationTitle(conv.title) || t("untitledConversation")
+            const newStatus = conv.status as ConversationStatus | undefined
+            if (tab.title !== newTitle || tab.status !== newStatus) {
+              const derived = { ...tab, title: newTitle, status: newStatus }
+              const prevItem = prevById?.get(tab.id)
+              return prevItem && sameDerivedTab(prevItem, derived)
+                ? prevItem
+                : derived
+            }
           }
         }
-      }
-      return tab
-    })
+        return tab
+      })
+    }
+    if (
+      prev &&
+      prev.length === next.length &&
+      next.every((item, i) => item === prev[i])
+    ) {
+      return prev
+    }
+    prevDerivedTabsRef.current = next
+    return next
   }, [rawTabs, conversationMap, childSummaries, t])
 
   // Reconcile the sub-session cache to exactly the open child tabs: prune

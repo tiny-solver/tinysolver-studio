@@ -21,7 +21,7 @@ import {
   MessageSquare,
 } from "lucide-react"
 import type { OverlayScrollbarsComponentRef } from "overlayscrollbars-react"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabContext } from "@/contexts/tab-context"
 import { gitListAllBranches } from "@/lib/api"
 import {
@@ -139,7 +139,9 @@ export const ConversationFolderBranchPicker = memo(
     const t = useTranslations("Folder.conversationContextBar")
     const { tabs, activeTabId, openNewConversationTab, openChatModeTab } =
       useTabContext()
-    const { folders, allFolders, branches } = useAppWorkspace()
+    const folders = useAppWorkspaceStore((s) => s.folders)
+    const allFolders = useAppWorkspaceStore((s) => s.allFolders)
+    const branches = useAppWorkspaceStore((s) => s.branches)
     const switchToBranch = useSwitchToBranch()
 
     const ownTab = useMemo(() => {
@@ -283,7 +285,7 @@ export function useConversationFolderBranchPickerVisible(
   tabId?: string | null
 ): boolean {
   const { tabs, activeTabId } = useTabContext()
-  const { allFolders } = useAppWorkspace()
+  const allFolders = useAppWorkspaceStore((s) => s.allFolders)
   const lookupId = tabId ?? activeTabId
   const ownTab = tabs.find((x) => x.id === lookupId) ?? null
   const ownFolder = ownTab

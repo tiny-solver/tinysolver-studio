@@ -34,7 +34,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { useActiveFolder } from "@/contexts/active-folder-context"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabContext } from "@/contexts/tab-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useTaskContext } from "@/contexts/task-context"
@@ -572,19 +572,23 @@ export function SidebarConversationList({
   const { themeColor: appThemeColor } = useThemeColor()
   const { createTerminalInDirectory } = useTerminalContext()
   useZoomLevel()
-  const {
-    folders,
-    allFolders,
-    conversations,
-    conversationsLoading: loading,
-    conversationsError: error,
-    refreshConversations,
-    updateConversationLocal,
-    removeFolderFromWorkspace,
-    reorderFolders,
-    openFolder,
-    refreshFolder,
-  } = useAppWorkspace()
+  const folders = useAppWorkspaceStore((s) => s.folders)
+  const allFolders = useAppWorkspaceStore((s) => s.allFolders)
+  const conversations = useAppWorkspaceStore((s) => s.conversations)
+  const loading = useAppWorkspaceStore((s) => s.conversationsLoading)
+  const error = useAppWorkspaceStore((s) => s.conversationsError)
+  const refreshConversations = useAppWorkspaceStore(
+    (s) => s.refreshConversations
+  )
+  const updateConversationLocal = useAppWorkspaceStore(
+    (s) => s.updateConversationLocal
+  )
+  const removeFolderFromWorkspace = useAppWorkspaceStore(
+    (s) => s.removeFolderFromWorkspace
+  )
+  const reorderFolders = useAppWorkspaceStore((s) => s.reorderFolders)
+  const openFolder = useAppWorkspaceStore((s) => s.openFolder)
+  const refreshFolder = useAppWorkspaceStore((s) => s.refreshFolder)
   const refreshing = loading
   const { activeFolder } = useActiveFolder()
 

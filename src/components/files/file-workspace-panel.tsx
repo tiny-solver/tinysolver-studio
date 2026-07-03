@@ -11,7 +11,7 @@ import type {
 import type { Monaco, OnMount } from "@monaco-editor/react"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
-import { useAppWorkspace } from "@/contexts/app-workspace-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabContext } from "@/contexts/tab-context"
 import { emitAttachFileToSession } from "@/lib/session-attachment-events"
 import { formatFileRangeLabel } from "@/lib/reference-link"
@@ -892,7 +892,7 @@ export function FileWorkspacePanel() {
     updateActiveFileContent,
   } = useWorkspaceActions()
   const { tabs, activeTabId } = useTabContext()
-  const { allFolders } = useAppWorkspace()
+  const allFolders = useAppWorkspaceStore((s) => s.allFolders)
   // The ACTIVE TAB's file location. File tabs are identified by their
   // absolute path; the owning registered folder (when the file sits inside
   // one) is derived here ONLY to pick the preview root — reads never need
