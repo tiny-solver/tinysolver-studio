@@ -59,7 +59,12 @@ import {
   shouldRejectDuplicateCreate,
 } from "@/lib/queue-flush"
 import { TurnBusyError } from "@/lib/turn-busy"
-import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
+import {
+  getConversationIdByExternalIdFromStore,
+  getRuntimeSession,
+  useConversationRuntimeActions,
+  useConversationRuntimeStore,
+} from "@/stores/conversation-runtime-store"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
 import {
   extractUserImagesFromDraft,
@@ -220,7 +225,6 @@ const ConversationTabView = memo(function ConversationTabView({
     removeOptimisticTurn,
     appendViewerUserTurn,
     completeTurn,
-    getSession,
     refetchDetail,
     syncTurnMetadata,
     removeConversation,
@@ -229,7 +233,7 @@ const ConversationTabView = memo(function ConversationTabView({
     setLiveMessage,
     setPendingCleanup,
     setSyncState,
-  } = useConversationRuntime()
+  } = useConversationRuntimeActions()
   const acpActions = useAcpActions()
 
   // Stable runtime session key — set once at mount, never changes.
@@ -382,7 +386,11 @@ const ConversationTabView = memo(function ConversationTabView({
     acpLoadError,
   } = useConversationDetail(effectiveConversationId)
 
-  const runtimeSession = getSession(effectiveConversationId)
+  // Subscribe to only this tab's own session — an unrelated conversation's
+  // streaming token no longer re-renders this keep-alive panel.
+  const runtimeSession = useConversationRuntimeStore(
+    (s) => s.byConversationId.get(effectiveConversationId) ?? null
+  )
   const effectiveSessionStats = runtimeSession?.sessionStats ?? null
 
   useEffect(() => {
@@ -1533,10 +1541,8 @@ export function ConversationDetailPanel() {
   const tDetails = useTranslations("Folder.sessionDetails")
   const {
     completeTurn: runtimeCompleteTurn,
-    getConversationIdByExternalId,
-    getSession,
     removeConversation: runtimeRemoveConversation,
-  } = useConversationRuntime()
+  } = useConversationRuntimeActions()
   const { activeFolder: folder } = useActiveFolder()
   const conversations = useAppWorkspaceStore((s) => s.conversations)
   const allFolders = useAppWorkspaceStore((s) => s.allFolders)
@@ -1603,7 +1609,7 @@ export function ConversationDetailPanel() {
       (envelope: EventEnvelope) => {
         if (envelope.type !== "turn_complete") return
 
-        const runtimeConversationId = getConversationIdByExternalId(
+        const runtimeConversationId = getConversationIdByExternalIdFromStore(
           envelope.session_id
         )
         // Event-time read: fresher than a render capture ("`conversations`
@@ -1643,19 +1649,14 @@ export function ConversationDetailPanel() {
         // Promote liveMessage + optimisticTurns to localTurns immediately
         runtimeCompleteTurn(matchedConversationId)
 
-        // If tab was closed while agent was responding, clean up now
-        const session = getSession(matchedConversationId)
+        // If tab was closed while agent was responding, clean up now.
+        // Event-time read: fresh via getState(), no reactive subscription.
+        const session = getRuntimeSession(matchedConversationId)
         if (session?.pendingCleanup) {
           runtimeRemoveConversation(matchedConversationId)
         }
       },
-      [
-        tabs,
-        getConversationIdByExternalId,
-        getSession,
-        runtimeCompleteTurn,
-        runtimeRemoveConversation,
-      ]
+      [tabs, runtimeCompleteTurn, runtimeRemoveConversation]
     )
   )
 
@@ -1750,27 +1751,50 @@ export function ConversationDetailPanel() {
     closeTab(activeTabId)
   }, [activeTabId, closeTab])
 
-  const canExport =
-    activeConversationTab?.conversationId != null &&
-    getSession(activeConversationTab.conversationId)?.detail != null
+  // Narrow reactive reads for the ACTIVE conversation only — a background
+  // conversation's streaming token no longer re-renders this panel. `canExport`
+  // keys on the tab's persisted `conversationId`; the session-details
+  // resolution keys on `runtimeConversationId ?? conversationId` (a brand-new
+  // conversation streams under a virtual runtime id whose live stats differ), so
+  // the two are subscribed SEPARATELY — collapsing them to one lookup would
+  // diverge during the virtual→persisted reconciliation window.
+  const activeExportConversationId =
+    activeConversationTab?.conversationId ?? null
+  const canExport = useConversationRuntimeStore(
+    (s) =>
+      activeExportConversationId != null &&
+      s.byConversationId.get(activeExportConversationId)?.detail != null
+  )
 
   // Resolve the active conversation's summary + live token usage the same way
   // the tab view renders them — a new conversation streams under a virtual
   // `runtimeConversationId` with its usage on `sessionStats`. Extracted so the
   // resolution is unit-tested (see active-session-details.test.ts).
+  const activeRuntimeId =
+    activeConversationTab?.runtimeConversationId ??
+    activeConversationTab?.conversationId ??
+    null
+  const activeRuntimeSession = useConversationRuntimeStore((s) =>
+    activeRuntimeId != null
+      ? (s.byConversationId.get(activeRuntimeId) ?? null)
+      : null
+  )
   const {
     summary: activeSessionSummary,
     stats: activeSessionStats,
     model: activeSessionModel,
   } = resolveActiveSessionDetails(
     activeConversationTab,
-    getSession,
+    // resolveActiveSessionDetails reads only `getSession(runtimeId)`, and its
+    // internal `runtimeId` equals `activeRuntimeId` (identical computation), so
+    // resolving that single pre-selected session is exact.
+    (id) => (id === activeRuntimeId ? activeRuntimeSession : null),
     conversations
   )
 
   const getExportData = useCallback(() => {
     if (!activeConversationTab?.conversationId) return null
-    const session = getSession(activeConversationTab.conversationId)
+    const session = getRuntimeSession(activeConversationTab.conversationId)
     if (!session?.detail) return null
     return {
       summary: session.detail.summary,
@@ -1778,7 +1802,7 @@ export function ConversationDetailPanel() {
       sessionStats: session.detail.session_stats,
       labels: exportLabels,
     }
-  }, [activeConversationTab, getSession, exportLabels])
+  }, [activeConversationTab, exportLabels])
 
   const handleExportMarkdown = useCallback(async () => {
     const data = getExportData()

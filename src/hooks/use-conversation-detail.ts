@@ -1,7 +1,10 @@
 "use client"
 
 import { useEffect } from "react"
-import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
+import {
+  useConversationRuntimeActions,
+  useConversationRuntimeStore,
+} from "@/stores/conversation-runtime-store"
 import type { DbConversationDetail } from "@/lib/types"
 
 function isVirtualConversationId(conversationId: number): boolean {
@@ -28,8 +31,12 @@ export function useConversationDetail(
   acpLoadError: string | null
 } {
   const enabled = options?.enabled ?? true
-  const { getSession, fetchDetail } = useConversationRuntime()
-  const session = getSession(conversationId)
+  // Subscribe to only this conversation's session — an unrelated conversation's
+  // streaming token no longer re-renders this hook's consumers.
+  const session = useConversationRuntimeStore(
+    (s) => s.byConversationId.get(conversationId) ?? null
+  )
+  const { fetchDetail } = useConversationRuntimeActions()
   const isVirtual = isVirtualConversationId(conversationId)
 
   useEffect(() => {

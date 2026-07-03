@@ -1,7 +1,10 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useConversationRuntime } from "@/contexts/conversation-runtime-context"
+import {
+  selectTimelineTurns,
+  useConversationRuntimeStore,
+} from "@/stores/conversation-runtime-store"
 import { ContentPartsRenderer } from "./content-parts-renderer"
 import {
   createMessageTurnAdapter,
@@ -530,10 +533,17 @@ export function MessageListView({
 }: MessageListViewProps) {
   const t = useTranslations("Folder.chat.messageList")
   const sharedT = useTranslations("Folder.chat.shared")
-  const { getSession, getTimelineTurns } = useConversationRuntime()
-  const session = getSession(conversationId)
+  // Subscribe to only this conversation's session + derived timeline. Another
+  // conversation's streaming token no longer re-renders this view; the timeline
+  // selector returns a reference-stable array (memoized per session object) so
+  // unrelated dispatches are inert here.
+  const session = useConversationRuntimeStore(
+    (s) => s.byConversationId.get(conversationId) ?? null
+  )
   const liveMessage = session?.liveMessage ?? null
-  const timelineTurns = getTimelineTurns(conversationId)
+  const timelineTurns = useConversationRuntimeStore((s) =>
+    selectTimelineTurns(s, conversationId)
+  )
 
   const { setSessionStats } = useSessionStats()
 
