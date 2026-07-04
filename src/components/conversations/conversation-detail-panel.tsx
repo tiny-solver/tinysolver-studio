@@ -196,12 +196,10 @@ const ConversationTabView = memo(function ConversationTabView({
   const t = useTranslations("Folder.conversation")
   const tWelcome = useTranslations("Folder.chat.welcomeInputPanel")
   const sharedT = useTranslations("Folder.chat.shared")
-  const { activeFolder: folder, activeFolderId } = useActiveFolder()
   const refreshConversations = useAppWorkspaceStore(
     (s) => s.refreshConversations
   )
   const upsertFolder = useAppWorkspaceStore((s) => s.upsertFolder)
-  const folderId = activeFolderId ?? 0
   // Subscribe to ONLY this tab's own row (identified by `tabId`), not the whole
   // `tabs` array — so a sibling tab changing, or a tab-switch (isActive rides in
   // as a prop), never re-renders this keep-alive panel. `find` returns the same
@@ -209,6 +207,20 @@ const ConversationTabView = memo(function ConversationTabView({
   const ownTab = useTabStore(
     (s) => s.tabs.find((tab) => tab.id === tabId) ?? null
   )
+  // Resolve this panel's folder from ITS OWN tab, not the global active folder.
+  // A keep-alive panel for a background tab must NOT re-render when the active
+  // tab switches to a different folder. For the active tab this equals the old
+  // `activeFolderId` (which is itself derived from the active tab's folderId via
+  // `syncActiveFolderId`); it also avoids the brief post-switch window where the
+  // global `activeFolderId` still lags on the previous tab's folder (same
+  // rationale as the per-tab `workingDir` used for the connection below).
+  const ownFolderId = ownTab?.folderId ?? null
+  const folder = useAppWorkspaceStore((s) =>
+    ownFolderId != null
+      ? (s.allFolders.find((f) => f.id === ownFolderId) ?? null)
+      : null
+  )
+  const folderId = ownFolderId ?? 0
   const {
     bindConversationTab,
     setChatDraftWorkingDir,
