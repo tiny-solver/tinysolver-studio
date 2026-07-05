@@ -1683,7 +1683,10 @@ function computeTimeline(
   // client id that collided into another namespace — they are kept separately
   // (a recoverable visible duplicate) instead of one silently overwriting the
   // other, which could hide a user prompt.
-  const retainKey = (turn: MessageTurn) => JSON.stringify([turn.role, turn.id])
+  // Runs for every timeline entry on every streaming token, so avoid
+  // `JSON.stringify`. `role` is a fixed enum with no spaces, so the first space
+  // unambiguously splits role from id — a collision-free, far cheaper key.
+  const retainKey = (turn: MessageTurn) => `${turn.role} ${turn.id}`
   const retainIndexByKey = new Map<string, number>()
   result.forEach((entry, i) => {
     const key = retainKey(entry.turn)

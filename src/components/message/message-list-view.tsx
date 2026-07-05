@@ -148,6 +148,22 @@ const EMPTY_DELEGATIONS: DelegationCardSource[] = []
 // when a conversation has no user messages.
 const EMPTY_NAV_ENTRIES: MessageNavEntry[] = []
 
+// A single turn's `sourceTurns` is just `[turn]`. Cache the wrapper per turn
+// object so an unchanged historical turn keeps a stable `sourceTurns` reference
+// across streaming-token re-renders — that's the last prop preventing
+// `HistoricalMessageGroup`'s memo from bailing out (its `group` and the
+// phase-derived flags are already reference-/value-stable). The streaming turn
+// is rebuilt every token, so it gets a fresh wrapper and still re-renders.
+const sourceTurnsSingletonCache = new WeakMap<MessageTurn, MessageTurn[]>()
+export function singletonSourceTurns(turn: MessageTurn): MessageTurn[] {
+  let cached = sourceTurnsSingletonCache.get(turn)
+  if (!cached) {
+    cached = [turn]
+    sourceTurnsSingletonCache.set(turn, cached)
+  }
+  return cached
+}
+
 // Collect the `delegate_to_agent` tool calls within a turn's adapted parts,
 // recursing through tool-groups and goal-runs (a delegate call is normally a
 // standalone part — `isAgentLikeToolName` keeps it out of tool-groups — but we
@@ -640,7 +656,7 @@ export function MessageListView({
         showStats: false,
         isRoleTransition: false,
         previousUserIndex: null,
-        sourceTurns: [allTurns[i]],
+        sourceTurns: singletonSourceTurns(allTurns[i]),
       }
     })
 
