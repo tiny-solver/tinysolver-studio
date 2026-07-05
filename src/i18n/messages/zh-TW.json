@@ -2049,7 +2049,7 @@
         "quickMessages": "快捷訊息",
         "quickMessagesEmpty": "尚無快捷訊息",
         "quickMessagesLoading": "載入中...",
-        "paste": "貼上",
+        "pasteAsPlainText": "貼上純文字",
         "cut": "剪下",
         "copy": "複製",
         "selectAll": "全選",

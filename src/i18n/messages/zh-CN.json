@@ -2051,7 +2051,7 @@
         "quickMessages": "快捷消息",
         "quickMessagesEmpty": "暂无快捷消息",
         "quickMessagesLoading": "加载中...",
-        "paste": "粘贴",
+        "pasteAsPlainText": "粘贴为纯文本",
         "cut": "剪切",
         "copy": "复制",
         "selectAll": "全选",

@@ -2051,7 +2051,7 @@
         "quickMessages": "Quick messages",
         "quickMessagesEmpty": "No quick messages yet",
         "quickMessagesLoading": "Loading...",
-        "paste": "Paste",
+        "pasteAsPlainText": "Paste as plain text",
         "cut": "Cut",
         "copy": "Copy",
         "selectAll": "Select all",

@@ -2049,7 +2049,7 @@
         "quickMessages": "Schnellnachrichten",
         "quickMessagesEmpty": "Noch keine Schnellnachrichten",
         "quickMessagesLoading": "Wird geladen...",
-        "paste": "Einfügen",
+        "pasteAsPlainText": "Als reinen Text einfügen",
         "cut": "Ausschneiden",
         "copy": "Kopieren",
         "selectAll": "Alles auswählen",
