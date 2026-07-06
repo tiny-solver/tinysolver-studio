@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
@@ -341,6 +342,7 @@ impl ChatChannelManager {
         broadcaster: Arc<WebEventBroadcaster>,
         bus: Arc<crate::acp::InternalEventBus>,
         db_conn: DatabaseConnection,
+        data_dir: PathBuf,
         conn_mgr: ConnectionManager,
         emitter: EventEmitter,
     ) {
@@ -379,6 +381,7 @@ impl ChatChannelManager {
                 command_rx,
                 manager_for_cmds,
                 db_conn.clone(),
+                data_dir,
                 conn_mgr,
                 emitter,
                 bridge,

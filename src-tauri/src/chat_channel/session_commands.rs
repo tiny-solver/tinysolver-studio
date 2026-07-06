@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -18,6 +19,7 @@ use crate::db::entities::conversation;
 use crate::db::service::{
     conversation_service, folder_service, sender_context_service, thread_binding_service,
 };
+use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::EventEmitter;
 
@@ -414,6 +416,7 @@ pub async fn handle_task(
     bridge: &Arc<Mutex<SessionBridge>>,
     lang: Lang,
     prefix: &str,
+    data_dir: &Path,
 ) -> CommandMessageResult {
     if task_description.is_empty() {
         return CommandMessageResult::current_target(
@@ -472,6 +475,16 @@ pub async fn handle_task(
         }
     };
 
+    let runtime_env = match build_chat_session_runtime_env(db, agent_type, None, data_dir).await {
+        Ok(env) => env,
+        Err(e) => {
+            return CommandMessageResult::current_target(
+                RichMessage::error(format!("{}{e}", i18n::failed_to_start_agent_label(lang))),
+                target,
+            );
+        }
+    };
+
     let mut session_target = target.clone();
     if target.is_telegram_general_topic() {
         match manager
@@ -519,7 +532,7 @@ pub async fn handle_task(
             agent_type,
             Some(folder.path.clone()),
             None,
-            BTreeMap::new(),
+            runtime_env,
             owner_label,
             emitter.clone(),
             None,
@@ -723,6 +736,7 @@ pub async fn handle_resume(
     bridge: &Arc<Mutex<SessionBridge>>,
     lang: Lang,
     prefix: &str,
+    data_dir: &Path,
 ) -> RichMessage {
     if args.is_empty() {
         return list_recent_sessions(db, lang, prefix).await;
@@ -757,6 +771,20 @@ pub async fn handle_resume(
         }
     };
 
+    let runtime_env = match build_chat_session_runtime_env(
+        db,
+        conv.agent_type,
+        conv.external_id.as_deref(),
+        data_dir,
+    )
+    .await
+    {
+        Ok(env) => env,
+        Err(e) => {
+            return RichMessage::error(format!("{}{e}", i18n::failed_to_start_agent_label(lang)));
+        }
+    };
+
     // Spawn agent with session_id for resume
     let owner_label = owner_label_for(channel_id, sender_id, target);
     let connection_id = match conn_mgr
@@ -764,7 +792,7 @@ pub async fn handle_resume(
             conv.agent_type,
             Some(folder.path.clone()),
             conv.external_id.clone(),
-            BTreeMap::new(),
+            runtime_env,
             owner_label,
             emitter.clone(),
             None,
@@ -1189,6 +1217,21 @@ fn truncate_topic_title(task_description: &str) -> String {
     format!("Codeg: {title}").chars().take(128).collect()
 }
 
+async fn build_chat_session_runtime_env(
+    db: &DatabaseConnection,
+    agent_type: AgentType,
+    session_id: Option<&str>,
+    data_dir: &Path,
+) -> Result<BTreeMap<String, String>, crate::acp::error::AcpError> {
+    crate::commands::acp::build_session_runtime_env(
+        &AppDatabase { conn: db.clone() },
+        agent_type,
+        session_id,
+        data_dir,
+    )
+    .await
+}
+
 fn topic_has_active_session(lang: Lang, prefix: &str) -> String {
     match lang {
         Lang::ZhCn | Lang::ZhTw => {
@@ -1279,7 +1322,7 @@ fn truncate_title(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::service::{chat_channel_service, sender_context_service};
+    use crate::db::service::{agent_setting_service, chat_channel_service, sender_context_service};
     use crate::db::test_helpers::{fresh_in_memory_db, seed_conversation, seed_folder};
 
     async fn seed_chat_channel(db: &crate::db::AppDatabase) -> i32 {
@@ -1467,6 +1510,7 @@ mod tests {
             &bridge,
             Lang::En,
             "/",
+            std::path::Path::new("/tmp/codeg-topic-resume-data"),
         )
         .await;
 
@@ -1514,5 +1558,65 @@ mod tests {
         assert_eq!(refreshed.id, binding.id);
         assert!(refreshed.connection_id.is_none());
         assert!(message.body.contains("No active session"));
+    }
+
+    #[tokio::test]
+    async fn task_uses_agent_settings_before_spawning() {
+        let db = fresh_in_memory_db().await;
+        let channel_id = seed_chat_channel(&db).await;
+        let folder_id = seed_folder(&db, "/tmp/codeg-topic-disabled-agent").await;
+        sender_context_service::update_folder(&db.conn, channel_id, "sender-1", Some(folder_id))
+            .await
+            .expect("folder context");
+        sender_context_service::update_agent(
+            &db.conn,
+            channel_id,
+            "sender-1",
+            Some("codex".to_string()),
+        )
+        .await
+        .expect("agent context");
+        agent_setting_service::ensure_defaults(
+            &db.conn,
+            &[agent_setting_service::AgentDefaultInput {
+                agent_type: AgentType::Codex,
+                registry_id: "codex".to_string(),
+                default_sort_order: 0,
+            }],
+        )
+        .await
+        .expect("agent defaults");
+        agent_setting_service::update(
+            &db.conn,
+            AgentType::Codex,
+            agent_setting_service::AgentSettingsUpdate {
+                enabled: false,
+                env_json: None,
+                model_provider_id: None,
+            },
+        )
+        .await
+        .expect("disable agent");
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let target = ChannelMessageTarget::telegram_general(channel_id, "-100123");
+
+        let result = handle_task(
+            &db.conn,
+            "use saved model config",
+            channel_id,
+            "sender-1",
+            &target,
+            &ChatChannelManager::new(),
+            &ConnectionManager::new(),
+            &EventEmitter::Noop,
+            &bridge,
+            Lang::En,
+            "/",
+            std::path::Path::new("/tmp/codeg-topic-disabled-agent-data"),
+        )
+        .await;
+
+        assert!(result.message.body.contains("disabled in settings"));
+        assert_eq!(bridge.lock().await.all_sessions().count(), 0);
     }
 }

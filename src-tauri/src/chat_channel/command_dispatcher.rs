@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -57,6 +58,7 @@ pub fn spawn_command_dispatcher(
     mut command_rx: mpsc::Receiver<IncomingCommand>,
     manager: ChatChannelManager,
     db_conn: DatabaseConnection,
+    data_dir: PathBuf,
     conn_mgr: ConnectionManager,
     emitter: EventEmitter,
     bridge: Arc<Mutex<SessionBridge>>,
@@ -95,6 +97,7 @@ pub fn spawn_command_dispatcher(
                 &conn_mgr,
                 &emitter,
                 &bridge,
+                &data_dir,
                 cmd.channel_id,
                 &cmd.sender_id,
                 &cmd.target,
@@ -160,6 +163,7 @@ async fn dispatch_command(
     conn_mgr: &ConnectionManager,
     emitter: &EventEmitter,
     bridge: &Arc<Mutex<SessionBridge>>,
+    data_dir: &Path,
     channel_id: i32,
     sender_id: &str,
     target: &ChannelMessageTarget,
@@ -289,7 +293,7 @@ async fn dispatch_command(
         "task" | "do" => {
             let result = session_commands::handle_task(
                 db, args, channel_id, sender_id, target, manager, conn_mgr, emitter, bridge, lang,
-                prefix,
+                prefix, data_dir,
             )
             .await;
             DispatchResponse {
@@ -305,7 +309,7 @@ async fn dispatch_command(
         "resume" => DispatchResponse::current(
             session_commands::handle_resume(
                 db, args, channel_id, sender_id, target, manager, conn_mgr, emitter, bridge, lang,
-                prefix,
+                prefix, data_dir,
             )
             .await,
             target,
@@ -446,6 +450,7 @@ mod tests {
             &ConnectionManager::new(),
             &EventEmitter::Noop,
             &bridge,
+            std::path::Path::new("/tmp/codeg-dispatch-data"),
             channel_id,
             "sender-1",
             &target,
@@ -476,6 +481,7 @@ mod tests {
             &ConnectionManager::new(),
             &EventEmitter::Noop,
             &bridge,
+            std::path::Path::new("/tmp/codeg-dispatch-data"),
             channel_id,
             "sender-1",
             &target,
