@@ -303,8 +303,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "CodeBuddy",
             description: "Tencent Cloud's official AI coding assistant (ACP)",
             distribution: AgentDistribution::Npx {
-                version: "2.117.2",
-                package: "@tencent-ai/codebuddy-code@2.117.2",
+                version: "2.118.2",
+                package: "@tencent-ai/codebuddy-code@2.118.2",
                 cmd: "codebuddy",
                 args: &["--acp"],
                 env: &[],
@@ -317,8 +317,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Kimi Code",
             description: "Moonshot AI's official CLI coding assistant (ACP)",
             distribution: AgentDistribution::Npx {
-                version: "0.23.3",
-                package: "@moonshot-ai/kimi-code@0.23.3",
+                version: "0.23.5",
+                package: "@moonshot-ai/kimi-code@0.23.5",
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
@@ -506,14 +506,14 @@ mod tests {
         );
         assert_npx_version(
             AgentType::CodeBuddy,
-            "2.117.2",
-            "@tencent-ai/codebuddy-code@2.117.2",
+            "2.118.2",
+            "@tencent-ai/codebuddy-code@2.118.2",
             Some("22.0.0"),
         );
         assert_npx_version(
             AgentType::KimiCode,
-            "0.23.3",
-            "@moonshot-ai/kimi-code@0.23.3",
+            "0.23.5",
+            "@moonshot-ai/kimi-code@0.23.5",
             Some("22.19.0"),
         );
         assert_npx_version(
