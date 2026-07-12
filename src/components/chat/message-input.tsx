@@ -13,6 +13,7 @@ import {
   Cog,
   Copy,
   FileStack,
+  FlaskConical,
   FolderSearch,
   GitFork,
   Lock,
@@ -93,6 +94,7 @@ import type {
   AgentType,
   AvailableCommandInfo,
   ExpertListItem,
+  ScienceListItem,
   PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
@@ -129,9 +131,11 @@ import {
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
 import { useAgentSkills } from "@/hooks/use-agent-skills"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
+import { useBuiltInScience } from "@/hooks/use-built-in-science"
 import { useEnabledSkillIds } from "@/hooks/use-enabled-skill-ids"
 import { useScrollbarSafeDismiss } from "@/hooks/use-scrollbar-safe-dismiss"
 import { getExpertIcon, pickLocalized } from "@/lib/expert-presentation"
+import { getScienceIcon } from "@/lib/science-presentation"
 import { OFFICE_ACTIONS, type OfficeAction } from "@/lib/office-actions"
 import {
   clearMessageInputDraftV2,
@@ -541,12 +545,15 @@ export function MessageInput({
   const { shortcuts } = useShortcutSettings()
   const effectiveDraftStorageKey = draftStorageKey ?? null
   const resolvedPlaceholder = placeholder ?? t("askAnything")
-  // The "+" menu's expert / daily-office skill shortcuts mirror the welcome-page
-  // quick actions: localized labels (`tQa` reads the same namespace those cards
-  // use), the bundled experts, and per-agent skill-enabled gating.
+  // The "+" menu's expert / daily-office / research skill shortcuts mirror the
+  // welcome-page quick actions: localized labels, the bundled experts and
+  // science skills, and per-agent skill-enabled gating. Experts and science load
+  // their full lists from the backend (so every skill shows, not a curated
+  // subset); office is a fixed static set. `tQa` supplies office labels/prompts.
   const locale = useLocale()
   const tQa = useTranslations("Folder.chat.welcomePanel.quickActions")
   const experts = useBuiltInExperts()
+  const science = useBuiltInScience()
   const {
     enabledIds,
     ready: skillStatusReady,
@@ -1813,7 +1820,7 @@ export function MessageInput({
     chain.insertReference(commandToReference(cmd)).insertContent(" ").run()
   }, [])
 
-  // ── "+" menu skill shortcuts (experts / daily office) ──
+  // ── "+" menu skill shortcuts (experts / daily office / research) ──
   //
   // Surface the welcome-page skill families inside an active conversation. Each
   // item drops that skill's leading invocation badge into the composer. A skill
@@ -1828,6 +1835,16 @@ export function MessageInput({
           a.metadata.id.localeCompare(b.metadata.id)
       ),
     [experts]
+  )
+
+  const scienceSorted = useMemo(
+    () =>
+      [...science].sort(
+        (a, b) =>
+          (a.metadata.sort_order ?? 0) - (b.metadata.sort_order ?? 0) ||
+          a.metadata.id.localeCompare(b.metadata.id)
+      ),
+    [science]
   )
 
   const isSkillLocked = useCallback(
@@ -1911,6 +1928,21 @@ export function MessageInput({
       )
     },
     [tQa, isSkillLocked, notifySkillNotEnabled, insertSkillShortcut]
+  )
+
+  const handleScienceShortcut = useCallback(
+    (item: ScienceListItem) => {
+      const label =
+        pickLocalized(item.metadata.display_name, locale) || item.metadata.id
+      if (isSkillLocked(item.metadata.id)) {
+        notifySkillNotEnabled(label, "science")
+        return
+      }
+      // Science skills are open-ended methodologies: just the leading badge,
+      // no canned template (mirrors experts).
+      insertSkillShortcut({ id: item.metadata.id, label }, "")
+    },
+    [locale, isSkillLocked, notifySkillNotEnabled, insertSkillShortcut]
   )
 
   const handlePickFiles = useCallback(async () => {
@@ -2969,7 +3001,7 @@ export function MessageInput({
                     <DropdownMenuContent
                       side="top"
                       align="start"
-                      className="min-w-48"
+                      className="min-w-56 w-auto"
                     >
                       {showNativePaperclip ? (
                         <DropdownMenuItem
@@ -3231,6 +3263,45 @@ export function MessageInput({
                                       {label}
                                     </span>
                                     {isSkillLocked(action.skillId) && (
+                                      <Lock className="ml-auto size-3.5 shrink-0 text-muted-foreground/70" />
+                                    )}
+                                  </DropdownMenuItem>
+                                )
+                              })}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger
+                              disabled={scienceSorted.length === 0}
+                            >
+                              <FlaskConical className="size-4" />
+                              {t("research")}
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent
+                              className="min-w-44 overflow-y-auto"
+                              style={{
+                                maxWidth: "min(20rem, calc(100vw - 1rem))",
+                                maxHeight:
+                                  "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                              }}
+                            >
+                              {scienceSorted.map((item) => {
+                                const Icon = getScienceIcon(item.metadata.icon)
+                                const label =
+                                  pickLocalized(
+                                    item.metadata.display_name,
+                                    locale
+                                  ) || item.metadata.id
+                                return (
+                                  <DropdownMenuItem
+                                    key={item.metadata.id}
+                                    onClick={() => handleScienceShortcut(item)}
+                                  >
+                                    <Icon className="size-4" />
+                                    <span className="flex-1 truncate">
+                                      {label}
+                                    </span>
+                                    {isSkillLocked(item.metadata.id) && (
                                       <Lock className="ml-auto size-3.5 shrink-0 text-muted-foreground/70" />
                                     )}
                                   </DropdownMenuItem>

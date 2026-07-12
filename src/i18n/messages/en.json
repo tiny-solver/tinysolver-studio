@@ -2124,6 +2124,7 @@
         "slashSearchEmpty": "No matching commands",
         "experts": "Experts",
         "office": "Office Work",
+        "research": "Scientific Research",
         "attachUploadTooLarge": "{names} exceeds the {limit}MB upload limit and was skipped.",
         "attachUploadFailed": "Failed to upload {names}.",
         "attachUploadNotAFile": "{names} isn't a regular file (directory or special file) and was skipped.",

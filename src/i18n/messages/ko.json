@@ -2122,6 +2122,7 @@
         "slashSearchEmpty": "일치하는 명령이 없습니다",
         "experts": "전문가",
         "office": "일상 업무",
+        "research": "과학 연구",
         "attachLocalUpload": "로컬 파일 첨부",
         "attachServerFile": "서버 파일 첨부",
         "attachUploadTooLarge": "{names}이(가) {limit}MB 업로드 한도를 초과하여 건너뛰었습니다.",

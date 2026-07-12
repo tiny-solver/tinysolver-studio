@@ -55,6 +55,7 @@ vi.mock("@/hooks/use-shortcut-settings", () => ({
 }))
 vi.mock("@/hooks/use-agent-skills", () => ({ useAgentSkills: () => [] }))
 vi.mock("@/hooks/use-built-in-experts", () => ({ useBuiltInExperts: () => [] }))
+vi.mock("@/hooks/use-built-in-science", () => ({ useBuiltInScience: () => [] }))
 vi.mock("@/hooks/use-enabled-skill-ids", () => ({
   useEnabledSkillIds: () => ({
     enabledIds: new Set(),

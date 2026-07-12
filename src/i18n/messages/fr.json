@@ -2122,6 +2122,7 @@
         "slashSearchEmpty": "Aucune commande correspondante",
         "experts": "Experts",
         "office": "Bureautique",
+        "research": "Recherche",
         "attachLocalUpload": "Téléverser un fichier local",
         "attachServerFile": "Sélectionner un fichier serveur",
         "attachUploadTooLarge": "{names} dépasse la limite de téléversement de {limit} Mo et a été ignoré.",

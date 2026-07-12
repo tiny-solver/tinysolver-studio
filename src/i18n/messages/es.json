@@ -2122,6 +2122,7 @@
         "slashSearchEmpty": "Sin comandos coincidentes",
         "experts": "Expertos",
         "office": "Ofimática",
+        "research": "Investigación",
         "attachLocalUpload": "Subir archivo local",
         "attachServerFile": "Seleccionar archivo del servidor",
         "attachUploadTooLarge": "{names} supera el límite de carga de {limit}MB y se omitió.",
