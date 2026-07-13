@@ -929,4 +929,197 @@ mod tests {
         let agents = supported_agents().len();
         assert_eq!(rows.len() % agents, 0);
     }
+
+    #[test]
+    fn validate_skill_id_rejects_traversal_and_separators() {
+        // The load-bearing sanitizer every authoring path funnels through.
+        for bad in ["", "  ", "..", "../x", "a/b", "a\\b", ".hidden", "a:b", "a b"] {
+            assert!(validate_skill_id(bad).is_err(), "must reject {bad:?}");
+        }
+        for good in ["my-skill", "a.b_c-1", "Skill123"] {
+            assert!(validate_skill_id(good).is_ok(), "must accept {good:?}");
+        }
+    }
+
+    // ─── fs-mutation integration tests ──────────────────────────────────────
+    //
+    // These exercise the REAL create/save/duplicate/import/delete paths against
+    // a throwaway `$HOME`, so `central_experts_dir()` and the agent link dirs
+    // resolve inside a temp tree. `dirs::home_dir()` ignores `$HOME` on Windows
+    // (see the skill-storage spec tests), so they are unix-gated; the logic
+    // under test (id validation, unlink-before-delete ordering, recursive copy)
+    // is platform-independent. `temp_env` serializes the HOME mutation against
+    // other env-mutating tests via its own global lock.
+    #[cfg(unix)]
+    async fn with_temp_home<F, Fut, R>(body: F) -> R
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = R>,
+    {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // The future is built now but only polled (its fs ops run) after
+        // `async_with_vars` has pinned HOME. `tmp` outlives the await, then drops.
+        temp_env::async_with_vars([("HOME", Some(tmp.path()))], body()).await
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fs_roundtrip_create_read_save_delete() {
+        with_temp_home(|| async {
+            let id = "my-fs-roundtrip";
+            let content = "---\nname: My FS Roundtrip\ndescription: t\n---\nbody\n";
+            custom_create_skill(id.into(), content.into())
+                .await
+                .expect("create");
+
+            let md = central_experts_dir().join(id).join("SKILL.md");
+            assert!(md.is_file(), "SKILL.md should exist after create");
+            assert_eq!(fs::read_to_string(&md).unwrap(), content);
+            assert_eq!(
+                custom_read_skill(id.into()).await.expect("read"),
+                content,
+                "read must round-trip the created content"
+            );
+
+            let updated = "---\nname: My FS Roundtrip\n---\nnew body\n";
+            custom_save_skill(id.into(), updated.into())
+                .await
+                .expect("save");
+            assert_eq!(fs::read_to_string(&md).unwrap(), updated);
+
+            let dir = central_experts_dir().join(id);
+            let results = custom_delete_skills(vec![id.into()])
+                .await
+                .expect("delete batch");
+            assert!(results.iter().all(|r| r.ok), "{results:?}");
+            assert!(!dir.exists(), "central dir must be gone after delete");
+        })
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fs_delete_unlinks_agent_before_removing_central() {
+        with_temp_home(|| async {
+            let id = "my-linked-skill";
+            custom_create_skill(id.into(), "---\nname: L\n---\nx\n".into())
+                .await
+                .expect("create");
+
+            let res = custom_apply_links(vec![LinkOp {
+                expert_id: id.into(),
+                agent_type: AgentType::ClaudeCode,
+                enable: true,
+            }])
+            .await
+            .expect("apply batch");
+            assert!(res[0].ok, "link enable should succeed: {res:?}");
+
+            let link = agent_link_path(AgentType::ClaudeCode, id).expect("link path");
+            assert!(path_is_symlink(&link), "agent link should exist after enable");
+
+            let dir = central_experts_dir().join(id);
+            let del = custom_delete_skills(vec![id.into()])
+                .await
+                .expect("delete batch");
+            assert!(del[0].ok, "{del:?}");
+            assert!(
+                !path_is_symlink(&link) && !link.exists(),
+                "agent link must be removed (unlink-before-delete)"
+            );
+            assert!(!dir.exists(), "central dir must be removed after unlinking");
+        })
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fs_duplicate_and_import() {
+        with_temp_home(|| async {
+            custom_create_skill("orig-skill".into(), "---\nname: O\n---\nbody\n".into())
+                .await
+                .expect("create orig");
+            custom_duplicate_skill("orig-skill".into(), "copy-skill".into())
+                .await
+                .expect("duplicate");
+            assert!(
+                central_experts_dir()
+                    .join("copy-skill")
+                    .join("SKILL.md")
+                    .is_file(),
+                "duplicate must copy SKILL.md into the store"
+            );
+
+            // Import a bare `.md` file (wrapped as <id>/SKILL.md).
+            let src = tempfile::tempdir().expect("src tmp");
+            let src_md = src.path().join("imported.md");
+            fs::write(&src_md, "---\nname: Imported\n---\nz\n").unwrap();
+            custom_import_skill(src_md.to_string_lossy().into_owned(), None)
+                .await
+                .expect("import md");
+            assert!(central_experts_dir()
+                .join("imported")
+                .join("SKILL.md")
+                .is_file());
+
+            // Import a directory containing SKILL.md (copied whole).
+            let src_dir = src.path().join("dir-skill");
+            fs::create_dir_all(&src_dir).unwrap();
+            fs::write(src_dir.join("SKILL.md"), "---\nname: Dir\n---\nq\n").unwrap();
+            custom_import_skill(
+                src_dir.to_string_lossy().into_owned(),
+                Some("dir-skill".into()),
+            )
+            .await
+            .expect("import dir");
+            assert!(central_experts_dir()
+                .join("dir-skill")
+                .join("SKILL.md")
+                .is_file());
+        })
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fs_rejects_path_traversal_ids() {
+        with_temp_home(|| async {
+            // A sentinel OUTSIDE the store (directly under $HOME) that a `..`
+            // escape would target; it must survive every rejected op.
+            let store = central_experts_dir();
+            fs::create_dir_all(&store).unwrap();
+            let sentinel = store.parent().unwrap().join("SENTINEL.md");
+            fs::write(&sentinel, "keep me").unwrap();
+
+            for bad in ["../SENTINEL", "..", "/etc/passwd", "a/b", ".hidden"] {
+                assert!(
+                    custom_create_skill(bad.into(), "x".into()).await.is_err(),
+                    "create must reject {bad:?}"
+                );
+                assert!(
+                    custom_save_skill(bad.into(), "x".into()).await.is_err(),
+                    "save must reject {bad:?}"
+                );
+            }
+
+            // Batch delete reports each bad id as a validation failure (never a
+            // successful escape).
+            let del = custom_delete_skills(
+                ["../SENTINEL", "..", "/etc/passwd"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            )
+            .await
+            .expect("batch returns Ok");
+            assert!(
+                del.iter().all(|r| !r.ok && r.error.is_some()),
+                "{del:?}"
+            );
+
+            assert!(sentinel.is_file(), "sentinel outside the store must survive");
+            assert_eq!(fs::read_to_string(&sentinel).unwrap(), "keep me");
+        })
+        .await;
+    }
 }
