@@ -4865,7 +4865,7 @@ fn skill_name_from_id(id: &str) -> String {
 /// file's YAML frontmatter. Prefers `short-description` (commonly nested under
 /// a `metadata:` block) and falls back to a top-level `description`. Only the
 /// first 4 KiB is read; frontmatter always fits, and skill bodies can be large.
-fn read_skill_description(content_path: &Path) -> Option<String> {
+pub(crate) fn read_skill_description(content_path: &Path) -> Option<String> {
     use std::io::Read;
     let mut file = fs::File::open(content_path).ok()?;
     let mut buf = [0u8; 4096];
@@ -5115,7 +5115,7 @@ fn locate_existing_skill(
     None
 }
 
-fn locate_existing_skill_across_dirs(
+pub(crate) fn locate_existing_skill_across_dirs(
     dirs: &[PathBuf],
     kind: SkillStorageKind,
     skill_id: &str,

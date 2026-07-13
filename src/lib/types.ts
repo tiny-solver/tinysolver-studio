@@ -1686,6 +1686,44 @@ export interface LinkOpResult {
 }
 
 /**
+ * A user-authored "custom" skill. The fourth skill pack: unlike the bundled
+ * experts/science/office packs, these are created/edited/imported/deleted by
+ * the user, but live in the SAME central store (`~/.codeg/skills/<id>/`) and
+ * reuse the experts link primitives. A skill is "custom" iff its central-store
+ * directory id is not claimed by any bundled pack. Link statuses reuse
+ * `ExpertInstallStatus`/`LinkOp`/`LinkOpResult` (the `expertId` field carries
+ * the custom skill id).
+ */
+export interface CustomSkillItem {
+  id: string
+  /** Frontmatter `name:` if present, else the id. */
+  name: string
+  /** Best-effort one-line description from the SKILL.md frontmatter. */
+  description: string | null
+  central_path: string
+}
+
+/** Per-skill outcome of a batch delete (delete is skill-scoped, not per-agent). */
+export interface CustomDeleteResult {
+  id: string
+  ok: boolean
+  error: string | null
+}
+
+/**
+ * Per-skill outcome of importing an agent's own skills into the central store.
+ * `skipped` means the skill is already in the shared store (a linked built-in
+ * skill or one imported earlier) — an idempotent no-op, not a failure.
+ */
+export interface CustomImportResult {
+  id: string
+  name: string
+  ok: boolean
+  skipped: boolean
+  error: string | null
+}
+
+/**
  * Built-in scientific-research skills, curated from
  * K-Dense-AI/scientific-agent-skills and bundled into the codeg binary. They
  * share the central store (`~/.codeg/skills/`) and link primitives with

@@ -3178,7 +3178,8 @@
     "tabs": {
       "experts": "Experts",
       "science": "Science",
-      "office": "Outils bureautiques"
+      "office": "Outils bureautiques",
+      "custom": "Personnalisées"
     },
     "actions": {
       "openCentralDir": "Ouvrir le dossier central",
@@ -3708,5 +3709,88 @@
     "branchRemote": "Distante",
     "branchSearchPlaceholder": "Rechercher des branches…",
     "branchNone": "Aucune branche"
+  },
+  "CustomSkillsSettings": {
+    "loading": "Chargement des compétences personnalisées…",
+    "category": "Personnalisées",
+    "searchPlaceholder": "Rechercher des compétences personnalisées par nom, ID ou description",
+    "states": {
+      "not_linked": "Non activée",
+      "linked_to_codeg": "Activée",
+      "linked_elsewhere": "Liée ailleurs",
+      "blocked_by_real_directory": "Bloquée par un dossier réel",
+      "broken": "Lien rompu"
+    },
+    "actions": {
+      "new": "Nouvelle",
+      "import": "Importer",
+      "importFromAgent": "Importer depuis un agent",
+      "cancel": "Annuler",
+      "save": "Enregistrer"
+    },
+    "rowMenu": {
+      "edit": "Modifier",
+      "duplicate": "Dupliquer",
+      "delete": "Supprimer"
+    },
+    "bulk": {
+      "delete": "Supprimer la sélection"
+    },
+    "editor": {
+      "createTitle": "Nouvelle compétence personnalisée",
+      "editTitle": "Modifier la compétence personnalisée",
+      "description": "Les compétences personnalisées sont stockées dans le magasin partagé (~/.codeg/skills) et peuvent être activées pour n'importe quel agent.",
+      "idLabel": "ID de la compétence",
+      "idPlaceholder": "ex. my-workflow",
+      "contentLabel": "SKILL.md",
+      "contentPlaceholder": "Rédigez ici le SKILL.md de la compétence…",
+      "preview": "Aperçu",
+      "edit": "Modifier",
+      "emptyBody": "Aucun contenu pour le moment."
+    },
+    "duplicate": {
+      "title": "Dupliquer la compétence",
+      "description": "Créer une copie de « {id} » avec un nouvel ID.",
+      "newIdPlaceholder": "Nouvel ID de compétence",
+      "confirm": "Dupliquer"
+    },
+    "import": {
+      "title": "Choisir un dossier de compétence à importer"
+    },
+    "importFromAgent": {
+      "title": "Importer des compétences depuis un agent",
+      "description": "Copiez les compétences propres à un agent dans le magasin partagé pour les activer sur n'importe quel agent.",
+      "agentLabel": "Agent",
+      "agentPlaceholder": "Sélectionner un agent",
+      "selectAll": "Tout sélectionner ({count})",
+      "loading": "Chargement des compétences de l'agent…",
+      "unsupported": "Cet agent n'expose pas de répertoire de compétences.",
+      "empty": "Cet agent n'a aucune compétence à importer.",
+      "alreadyInLibrary": "Dans la bibliothèque",
+      "confirm": "Importer la sélection ({count})"
+    },
+    "delete": {
+      "title": "Supprimer les compétences personnalisées ?",
+      "body": "Cela retire {count} compétence(s) personnalisée(s) du magasin central et les dissocie de tous les agents. Action irréversible.",
+      "confirm": "Supprimer"
+    },
+    "toasts": {
+      "loadFailed": "Échec du chargement de la compétence",
+      "idRequired": "Veuillez saisir un ID de compétence",
+      "created": "Compétence personnalisée créée",
+      "updated": "Compétence personnalisée mise à jour",
+      "saveFailed": "Échec de l'enregistrement de la compétence",
+      "imported": "Compétence importée",
+      "importFailed": "Échec de l'importation de la compétence",
+      "duplicated": "Compétence dupliquée",
+      "duplicateFailed": "Échec de la duplication de la compétence",
+      "deleted": "{count} compétence(s) supprimée(s)",
+      "deletedPartial": "{ok} supprimée(s), {failed} en échec",
+      "deleteFailed": "Échec de la suppression des compétences",
+      "importedFromAgent": "{count} compétence(s) importée(s)",
+      "importedFromAgentPartial": "{ok} importée(s), {failed} en échec",
+      "importFromAgentAllSkipped": "Rien à importer — {count} déjà dans la bibliothèque",
+      "importFromAgentFailed": "Échec de l'import depuis l'agent"
+    }
   }
 }
