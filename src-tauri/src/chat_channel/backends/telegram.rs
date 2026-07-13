@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, OnceCell};
 
 use crate::chat_channel::error::ChatChannelError;
 use crate::chat_channel::traits::ChatChannelBackend;
@@ -16,6 +16,9 @@ pub struct TelegramBackend {
     status: Arc<Mutex<ChannelConnectionStatus>>,
     channel_id: i32,
     shutdown_tx: Arc<Mutex<Option<tokio::sync::watch::Sender<bool>>>>,
+    /// Cached canonical numeric chat id, resolved from an `@username`
+    /// `chat_id` via `getChat`. Empty for numeric configs (never populated).
+    resolved_chat_id: OnceCell<String>,
 }
 
 impl TelegramBackend {
@@ -32,11 +35,55 @@ impl TelegramBackend {
             status: Arc::new(Mutex::new(ChannelConnectionStatus::Disconnected)),
             channel_id,
             shutdown_tx: Arc::new(Mutex::new(None)),
+            resolved_chat_id: OnceCell::new(),
         }
     }
 
     fn api_url(&self, method: &str) -> String {
         format!("https://api.telegram.org/bot{}/{}", self.bot_token, method)
+    }
+
+    /// Canonical **numeric** chat id used for topic-binding keys.
+    ///
+    /// Telegram delivers inbound updates keyed by the numeric `/chat/id`, but a
+    /// channel may be configured with an `@username`. Topic bindings are written
+    /// from `create_thread`'s returned target and later looked up against inbound
+    /// targets, so both sides must agree on the id form or the lookup misses
+    /// (leaving follow-ups "unbound" and spawning a duplicate agent). Resolve
+    /// `@username` → numeric once via `getChat` and cache it; numeric ids pass
+    /// through untouched. On failure the cell stays empty so the next call
+    /// retries.
+    async fn canonical_chat_id(&self) -> Result<String, ChatChannelError> {
+        if !self.chat_id.trim_start().starts_with('@') {
+            return Ok(self.chat_id.clone());
+        }
+        self.resolved_chat_id
+            .get_or_try_init(|| async {
+                let body = serde_json::json!({ "chat_id": self.chat_id });
+                let resp = self
+                    .client
+                    .post(self.api_url("getChat"))
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+                    })?;
+                let result: serde_json::Value = resp.json().await.map_err(|e| {
+                    ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+                })?;
+                result
+                    .pointer("/result/id")
+                    .and_then(|v| v.as_i64())
+                    .map(|id| id.to_string())
+                    .ok_or_else(|| {
+                        ChatChannelError::SendFailed(
+                            "Telegram getChat returned no numeric chat id".to_string(),
+                        )
+                    })
+            })
+            .await
+            .cloned()
     }
 
     async fn send_text(
@@ -65,12 +112,16 @@ impl TelegramBackend {
             .json(&body)
             .send()
             .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
 
         let result: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
 
         if result.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let desc = result
@@ -162,12 +213,16 @@ impl ChatChannelBackend for TelegramBackend {
             .get(self.api_url("getMe"))
             .send()
             .await
-            .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::ConnectionFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
 
         let me_body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::ConnectionFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
 
         if me_body.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             *self.status.lock().await = ChannelConnectionStatus::Error;
@@ -191,7 +246,14 @@ impl ChatChannelBackend for TelegramBackend {
         let client = self.client.clone();
         let bot_token = self.bot_token.clone();
         let channel_id = self.channel_id;
-        let configured_chat_id = self.chat_id.clone();
+        // Resolve `@username` → numeric once so inbound targets/matching use the
+        // same id form the topic bindings are stored under. Falls back to the
+        // raw value on failure (`telegram_message_chat_matches` still matches via
+        // /chat/username).
+        let configured_chat_id = self
+            .canonical_chat_id()
+            .await
+            .unwrap_or_else(|_| self.chat_id.clone());
         let topic_mode = self.topic_mode;
         let status = self.status.clone();
 
@@ -367,7 +429,8 @@ impl ChatChannelBackend for TelegramBackend {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("[Telegram] polling error: {e}");
+                        let msg = redact_token(e.to_string(), &bot_token);
+                        tracing::error!("[Telegram] polling error: {msg}");
                         *status.lock().await = ChannelConnectionStatus::Error;
                         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     }
@@ -435,8 +498,11 @@ impl ChatChannelBackend for TelegramBackend {
             ));
         }
 
+        // Use the canonical numeric id so the binding written from the returned
+        // target matches inbound updates (which are keyed by numeric /chat/id).
+        let chat_id = self.canonical_chat_id().await?;
         let body = serde_json::json!({
-            "chat_id": self.chat_id,
+            "chat_id": chat_id.clone(),
             "name": telegram_topic_title(title),
         });
         let resp = self
@@ -445,11 +511,15 @@ impl ChatChannelBackend for TelegramBackend {
             .json(&body)
             .send()
             .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
         let result: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
         if result.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             let desc = result
                 .get("description")
@@ -467,7 +537,7 @@ impl ChatChannelBackend for TelegramBackend {
             })?;
         Ok(ChannelMessageTarget::telegram_forum_topic(
             self.channel_id,
-            self.chat_id.clone(),
+            chat_id,
             thread_id.to_string(),
         ))
     }
@@ -499,11 +569,15 @@ impl ChatChannelBackend for TelegramBackend {
             .json(&body)
             .send()
             .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
         let result: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| ChatChannelError::SendFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::SendFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
         if result.get("ok").and_then(|v| v.as_bool()) == Some(true) {
             Ok(())
         } else {
@@ -521,12 +595,16 @@ impl ChatChannelBackend for TelegramBackend {
             .get(self.api_url("getMe"))
             .send()
             .await
-            .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::ConnectionFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
 
         let body: serde_json::Value = resp
             .json()
             .await
-            .map_err(|e| ChatChannelError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| {
+                ChatChannelError::ConnectionFailed(redact_token(e.to_string(), &self.bot_token))
+            })?;
 
         if body.get("ok").and_then(|v| v.as_bool()) == Some(true) {
             Ok(())
@@ -537,6 +615,20 @@ impl ChatChannelBackend for TelegramBackend {
                 .unwrap_or("Invalid bot token");
             Err(ChatChannelError::AuthenticationFailed(desc.to_string()))
         }
+    }
+}
+
+/// Scrub the bot token from an error/log string before it escapes.
+///
+/// Telegram API URLs embed the token in the path (`/bot<TOKEN>/…`) and
+/// `reqwest::Error`'s `Display` appends `for url (<url>)`. That text is written
+/// to logs and — for topic create/edit failures — sent into the chat itself, so
+/// the raw token must never survive stringification. No-op on an empty token.
+fn redact_token(msg: String, token: &str) -> String {
+    if token.is_empty() {
+        msg
+    } else {
+        msg.replace(token, "***")
     }
 }
 
@@ -572,7 +664,8 @@ async fn answer_callback_query(client: &reqwest::Client, bot_token: &str, callba
         .send()
         .await;
     if let Err(e) = result {
-        tracing::warn!("[Telegram] answerCallbackQuery failed: {e}");
+        let msg = redact_token(e.to_string(), bot_token);
+        tracing::warn!("[Telegram] answerCallbackQuery failed: {msg}");
     }
 }
 
@@ -777,6 +870,34 @@ fn escape_markdown(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn redact_token_scrubs_token_from_error_url() {
+        let token = "123456:AAExampleSecretToken";
+        // Mirrors reqwest's `Display`, which appends the request URL (with the
+        // token in the path) to transport errors.
+        let leaked = format!(
+            "error sending request for url (https://api.telegram.org/bot{token}/createForumTopic)"
+        );
+        let scrubbed = redact_token(leaked, token);
+        assert!(!scrubbed.contains(token), "token must be scrubbed: {scrubbed}");
+        assert!(scrubbed.contains("bot***/createForumTopic"), "{scrubbed}");
+    }
+
+    #[test]
+    fn redact_token_is_noop_for_empty_token() {
+        let msg = "some error without any token".to_string();
+        assert_eq!(redact_token(msg.clone(), ""), msg);
+    }
+
+    #[tokio::test]
+    async fn canonical_chat_id_passes_numeric_through_without_network() {
+        // A numeric chat_id short-circuits before any getChat call, so this
+        // resolves offline. (The `@username` → getChat branch is covered by
+        // real-device / HTTP-mock testing.)
+        let backend = TelegramBackend::new(1, "token".into(), "-100123".into(), true);
+        assert_eq!(backend.canonical_chat_id().await.unwrap(), "-100123");
+    }
 
     #[test]
     fn chat_filter_matches_configured_numeric_chat() {
