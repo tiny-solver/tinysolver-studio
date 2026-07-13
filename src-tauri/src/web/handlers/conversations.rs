@@ -280,17 +280,12 @@ pub async fn update_conversation_title(
     .await?;
     conv_commands::emit_conversation_upsert(&state.emitter, &state.db.conn, params.conversation_id)
         .await;
-    if let Ok(conv) =
-        crate::db::service::conversation_service::get_by_id(&state.db.conn, params.conversation_id)
-            .await
-    {
-        if let Some(title) = conv.title.as_deref() {
-            state
-                .chat_channel_manager
-                .sync_conversation_title(&state.db.conn, params.conversation_id, title)
-                .await;
-        }
-    }
+    conv_commands::sync_conversation_title_to_channels_core(
+        &state.db.conn,
+        &state.chat_channel_manager,
+        params.conversation_id,
+    )
+    .await;
     Ok(Json(()))
 }
 

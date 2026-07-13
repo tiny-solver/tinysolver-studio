@@ -1311,6 +1311,24 @@ pub async fn update_conversation_title_core(
         .map_err(AppCommandError::from)
 }
 
+/// Re-read the persisted conversation title and best-effort sync it to any
+/// bound chat-channel threads (e.g. Telegram forum topics). Lives in
+/// `commands/` so web handlers route through a `_core` helper instead of
+/// calling the db service layer directly.
+pub async fn sync_conversation_title_to_channels_core(
+    conn: &sea_orm::DatabaseConnection,
+    chat_channel_manager: &crate::chat_channel::manager::ChatChannelManager,
+    conversation_id: i32,
+) {
+    if let Ok(conv) = conversation_service::get_by_id(conn, conversation_id).await {
+        if let Some(title) = conv.title.as_deref() {
+            chat_channel_manager
+                .sync_conversation_title(conn, conversation_id, title)
+                .await;
+        }
+    }
+}
+
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn update_conversation_title(
@@ -1322,13 +1340,7 @@ pub async fn update_conversation_title(
 ) -> Result<(), AppCommandError> {
     update_conversation_title_core(&db.conn, conversation_id, title).await?;
     emit_conversation_upsert(&EventEmitter::Tauri(app), &db.conn, conversation_id).await;
-    if let Ok(conv) = conversation_service::get_by_id(&db.conn, conversation_id).await {
-        if let Some(title) = conv.title.as_deref() {
-            chat_channel_manager
-                .sync_conversation_title(&db.conn, conversation_id, title)
-                .await;
-        }
-    }
+    sync_conversation_title_to_channels_core(&db.conn, &chat_channel_manager, conversation_id).await;
     Ok(())
 }
 
