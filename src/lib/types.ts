@@ -1567,6 +1567,9 @@ export interface AcpAgentInfo {
   opencode_auth_json: string | null
   codex_auth_json: string | null
   codex_config_toml: string | null
+  /** Compact structured codex model-catalog source (the custom-model list),
+   *  round-tripped into the settings editor. Codex + api-key mode only. */
+  codex_model_catalog: string | null
   cline_secrets_json: string | null
   /** Raw ~/.hermes/config.yaml text, for the Hermes panel's advanced editor. */
   hermes_config_yaml: string | null
@@ -2529,4 +2532,173 @@ export function serializeClaudeProviderModel(
   if (obj.customOptionDescription?.trim())
     cleaned.customOptionDescription = obj.customOptionDescription.trim()
   return Object.keys(cleaned).length === 0 ? null : JSON.stringify(cleaned)
+}
+
+// ── Codex structured model catalog ──
+//
+// Codex custom models are stored as a compact list (each entry = a snapshot
+// `base` slug + sparse `overrides`) inside the same single `model` string
+// column used for Claude. The backend expands each entry into a full codex
+// `ModelInfo` (cloning `base` from the bundled snapshot, forcing
+// `visibility:"list"` + `supported_in_api:true`) and writes a
+// `model_catalog_json` file. See src-tauri/src/acp/codex_model_catalog.rs.
+
+/** A codex `ModelInfo` entry (from `codex debug models`). Friendly fields are
+ *  typed; the rest stay opaque for the advanced editor + catalog cloning. */
+export interface CodexModelInfo {
+  slug: string
+  display_name?: string
+  description?: string | null
+  context_window?: number | null
+  max_context_window?: number | null
+  visibility?: string
+  [key: string]: unknown
+}
+
+/** One user-configured **custom** codex model, stored compactly. Heavy
+ *  ModelInfo fields are cloned from `base` (a live-catalog slug) at
+ *  catalog-generation time; `overrides` holds only fields the user changed. */
+export interface CodexCustomEntry {
+  slug: string
+  displayName?: string
+  contextWindow?: number
+  base: string
+  overrides?: Record<string, unknown>
+}
+
+/** The compact codex model config stored in a provider's `model` column / the
+ *  codex agent's catalog source sidecar. Mirrors the Rust `CodexModelConfig`.
+ *  Official models are auto-included from the live catalog, so only the user's
+ *  deviations (custom additions + removed officials) are persisted. */
+export interface CodexModelConfig {
+  customs: CodexCustomEntry[]
+  excludedOfficials?: string[]
+  default?: string
+}
+
+/** Recursively sort object keys so serialized `overrides` are byte-stable (the
+ *  edit dialog diffs `provider.model !== serialize(state)`). */
+function sortJsonValue(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(sortJsonValue)
+  if (v && typeof v === "object") {
+    const out: Record<string, unknown> = {}
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+      out[k] = sortJsonValue((v as Record<string, unknown>)[k])
+    }
+    return out
+  }
+  return v
+}
+
+/** Parse one custom entry (new `customs` shape or legacy `models` shape — they
+ *  are structurally identical). Returns null for a slug-less entry. */
+function parseCustomEntry(m: unknown): CodexCustomEntry | null {
+  if (!m || typeof m !== "object") return null
+  const e = m as Record<string, unknown>
+  const slug = typeof e.slug === "string" ? e.slug.trim() : ""
+  if (!slug) return null
+  const entry: CodexCustomEntry = {
+    slug,
+    base: typeof e.base === "string" && e.base.trim() ? e.base.trim() : slug,
+  }
+  if (typeof e.displayName === "string" && e.displayName.trim())
+    entry.displayName = e.displayName.trim()
+  if (typeof e.contextWindow === "number" && Number.isFinite(e.contextWindow))
+    entry.contextWindow = e.contextWindow
+  if (
+    e.overrides &&
+    typeof e.overrides === "object" &&
+    !Array.isArray(e.overrides) &&
+    Object.keys(e.overrides as object).length > 0
+  ) {
+    entry.overrides = e.overrides as Record<string, unknown>
+  }
+  return entry
+}
+
+function legacyBareSlug(raw: string): CodexModelConfig {
+  const slug = raw.trim()
+  return slug
+    ? { customs: [{ slug, base: slug }], default: slug }
+    : { customs: [] }
+}
+
+/** Parse the compact codex model config, with migration:
+ *  - new shape `{customs,excludedOfficials,default}` → parsed;
+ *  - legacy `{models}` → each model migrated to a custom;
+ *  - a bare slug string → a single custom (matches the Rust `parse_model_config`
+ *    back-compat so pre-existing providers keep working). */
+export function parseCodexModelConfig(raw: string | null): CodexModelConfig {
+  if (!raw || !raw.trim()) return { customs: [] }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return legacyBareSlug(raw)
+  }
+  if (typeof parsed === "string") return legacyBareSlug(parsed)
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return legacyBareSlug(raw)
+  }
+  const obj = parsed as Record<string, unknown>
+  const rawList = Array.isArray(obj.customs)
+    ? obj.customs
+    : Array.isArray(obj.models)
+      ? obj.models
+      : null
+  const customs: CodexCustomEntry[] = []
+  for (const m of rawList ?? []) {
+    const entry = parseCustomEntry(m)
+    if (entry) customs.push(entry)
+  }
+  const result: CodexModelConfig = { customs }
+  if (Array.isArray(obj.excludedOfficials)) {
+    const excluded = obj.excludedOfficials
+      .filter((s): s is string => typeof s === "string" && !!s.trim())
+      .map((s) => s.trim())
+    if (excluded.length) result.excludedOfficials = excluded
+  }
+  if (typeof obj.default === "string" && obj.default)
+    result.default = obj.default
+  return result
+}
+
+/** Serialize the compact codex model config to canonical JSON (fixed key order,
+ *  sorted `overrides` + `excludedOfficials`), or `null` when the user has made
+ *  no deviations (no customs, no removed officials). `serialize(parse(x)) === x`
+ *  for any canonical `x`, so an unedited form never reports a spurious change. */
+export function serializeCodexModelConfig(
+  obj: CodexModelConfig
+): string | null {
+  const customs = (obj.customs ?? [])
+    .filter((m) => m.slug && m.slug.trim())
+    .map((m) => {
+      const entry: Record<string, unknown> = { slug: m.slug.trim() }
+      if (m.displayName?.trim()) entry.displayName = m.displayName.trim()
+      if (
+        typeof m.contextWindow === "number" &&
+        Number.isFinite(m.contextWindow)
+      )
+        entry.contextWindow = m.contextWindow
+      entry.base = m.base?.trim() || m.slug.trim()
+      if (m.overrides && Object.keys(m.overrides).length > 0)
+        entry.overrides = sortJsonValue(m.overrides)
+      return entry
+    })
+  const excluded = Array.from(
+    new Set(
+      (obj.excludedOfficials ?? [])
+        .filter((s) => s && s.trim())
+        .map((s) => s.trim())
+    )
+  ).sort()
+  // No deviations from codex's own catalog → feature off.
+  if (customs.length === 0 && excluded.length === 0) return null
+  const out: Record<string, unknown> = { customs }
+  if (excluded.length) out.excludedOfficials = excluded
+  // Preserve the user's `default` verbatim (it may name an official the
+  // serializer can't see); the backend validates it against the live catalog at
+  // expand time and falls back if it names no listed model.
+  if (obj.default && obj.default.trim()) out.default = obj.default.trim()
+  return JSON.stringify(out)
 }

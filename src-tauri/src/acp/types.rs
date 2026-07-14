@@ -600,6 +600,10 @@ pub struct AcpAgentInfo {
     pub opencode_auth_json: Option<String>,
     pub codex_auth_json: Option<String>,
     pub codex_config_toml: Option<String>,
+    /// Compact structured codex model-catalog source (the `codeg` custom-model
+    /// list) round-tripped into the settings editor. Only populated for
+    /// `AgentType::Codex`, and only in api-key mode (no bound provider).
+    pub codex_model_catalog: Option<String>,
     pub cline_secrets_json: Option<String>,
     /// Raw `~/.hermes/config.yaml` text, attached for the Hermes settings panel's
     /// advanced editor. Only populated for `AgentType::Hermes`.
