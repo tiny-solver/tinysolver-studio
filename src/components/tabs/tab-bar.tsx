@@ -12,7 +12,7 @@ import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
 import { TabItem } from "./tab-item"
 import { cn } from "@/lib/utils"
 
-export function TabBar() {
+export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const isTileMode = useTabStore((s) => s.isTileMode)
@@ -115,7 +115,7 @@ export function TabBar() {
 
   if (tabs.length === 0) return null
 
-  return (
+  const group = (
     <Reorder.Group
       as="div"
       ref={scrollRef}
@@ -123,21 +123,33 @@ export function TabBar() {
       axis="x"
       values={tabs}
       onReorder={handleReorder}
-      onWheel={handleWheel}
+      // Embedded tabs shrink to fit (no overflow), so wheel-to-scroll is both
+      // unnecessary and wrong — `overflow-hidden` still scrolls programmatically.
+      onWheel={embedded ? undefined : handleWheel}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        "h-10 pt-1.5 px-1.5 flex items-stretch gap-1.5 border-b border-border",
-        "overflow-x-scroll",
-        isHovered
-          ? [
-              "pb-0.5",
-              "[&::-webkit-scrollbar]:h-1",
-              "[&::-webkit-scrollbar-track]:bg-transparent",
-              "[&::-webkit-scrollbar-thumb]:rounded-full",
-              "[&::-webkit-scrollbar-thumb]:bg-border",
+        "pt-1.5 px-1.5 flex items-stretch gap-1.5",
+        // Embedded in the title bar: fill its height, no scrollbar — the tabs
+        // shrink browser-style to share the row (see TabItem `embedded`), and
+        // the bar owns the bottom border. It sizes to its content (no `w-full`)
+        // so the wrapper's trailing drag spacer claims the leftover row.
+        // Standalone (mobile panel row): keep the h-10 row + border + horizontal
+        // scroll with a hover scrollbar.
+        embedded
+          ? "h-full min-w-0 overflow-hidden pb-1.5"
+          : [
+              "h-10 border-b border-border overflow-x-scroll",
+              isHovered
+                ? [
+                    "pb-0.5",
+                    "[&::-webkit-scrollbar]:h-1",
+                    "[&::-webkit-scrollbar-track]:bg-transparent",
+                    "[&::-webkit-scrollbar-thumb]:rounded-full",
+                    "[&::-webkit-scrollbar-thumb]:bg-border",
+                  ]
+                : ["pb-1.5", "[&::-webkit-scrollbar]:h-0"],
             ]
-          : ["pb-1.5", "[&::-webkit-scrollbar]:h-0"]
       )}
     >
       {tabs.map((tab) => {
@@ -148,6 +160,7 @@ export function TabBar() {
             tab={tab}
             isActive={tab.id === activeTabId}
             isTileMode={isTileMode}
+            embedded={embedded}
             folderName={folderInfo?.name ?? null}
             folderBranch={branches.get(tab.folderId) ?? null}
             onSwitch={switchTab}
@@ -164,5 +177,17 @@ export function TabBar() {
         )
       })}
     </Reorder.Group>
+  )
+
+  if (!embedded) return group
+
+  // Title-bar strip: the tabs sit at their natural width; the trailing spacer
+  // fills the leftover row and stays a window-drag region, so a lightly-tabbed
+  // bar can still be grabbed to move the window (browser-style).
+  return (
+    <div className="flex h-full w-full min-w-0 items-stretch">
+      {group}
+      <div data-tauri-drag-region className="h-full min-w-0 flex-1" />
+    </div>
   )
 }

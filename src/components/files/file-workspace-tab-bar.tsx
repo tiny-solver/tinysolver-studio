@@ -35,7 +35,11 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 
-export function FileWorkspaceTabBar() {
+export function FileWorkspaceTabBar({
+  embedded = false,
+}: {
+  embedded?: boolean
+} = {}) {
   const t = useTranslations("Folder.fileWorkspace")
   const { mode, activePane, filesMaximized } = useWorkspaceView()
   const { fileTabs, activeFileTabId, previewFileTabIds } =
@@ -131,7 +135,15 @@ export function FileWorkspaceTabBar() {
       ? previewFileTabIds.has(activeFileTabId)
       : false
 
+  // Embedded in the title bar: fill its height and let the bar own the bottom
+  // border. Standalone (mobile panel row): keep the h-10 row + border.
+  const rowHeight = embedded ? "h-full" : "h-10"
+  const rowBorder = embedded ? "" : "border-b border-border"
+
   if (fileTabs.length === 0) {
+    // In the title bar an empty file workspace shows nothing (only the
+    // conversation tabs remain); the standalone panel row keeps its label.
+    if (embedded) return null
     return (
       <div className="h-10 px-3 flex items-center border-b border-border text-xs text-muted-foreground">
         {t("files")}
@@ -140,7 +152,14 @@ export function FileWorkspaceTabBar() {
   }
 
   return (
-    <div className="flex items-stretch">
+    <div
+      className={cn(
+        "flex items-stretch",
+        // Embedded: fill the resizable panel that bounds our width in the title
+        // bar. Standalone: intrinsic size in the mobile panel row.
+        embedded && "h-full w-full min-w-0"
+      )}
+    >
       <Reorder.Group
         as="div"
         ref={scrollRef}
@@ -148,21 +167,36 @@ export function FileWorkspaceTabBar() {
         axis="x"
         values={fileTabs}
         onReorder={handleReorder}
-        onWheel={handleWheel}
+        // Embedded tabs shrink to fit (no overflow), so wheel-to-scroll is both
+        // unnecessary and wrong — `overflow-hidden` still scrolls programmatically.
+        onWheel={embedded ? undefined : handleWheel}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "h-10 pt-1.5 px-1.5 flex-1 min-w-0 flex items-stretch gap-1.5 border-b border-border",
-          "overflow-x-scroll",
-          isHovered
-            ? [
-                "pb-0.5",
-                "[&::-webkit-scrollbar]:h-1",
-                "[&::-webkit-scrollbar-track]:bg-transparent",
-                "[&::-webkit-scrollbar-thumb]:rounded-full",
-                "[&::-webkit-scrollbar-thumb]:bg-border",
+          "pt-1.5 px-1.5 min-w-0 flex items-stretch gap-1.5",
+          // Standalone row fills its container so the trailing action buttons
+          // sit flush right; embedded sizes to content so the wrapper's drag
+          // spacer claims the leftover row.
+          !embedded && "flex-1",
+          rowHeight,
+          rowBorder,
+          // Embedded: no scrollbar — tabs shrink browser-style to share the
+          // panel (see FileWorkspaceTabItem `embedded`). Standalone: horizontal
+          // scroll with a hover scrollbar (mobile panel row).
+          embedded
+            ? "overflow-hidden pb-1.5"
+            : [
+                "overflow-x-scroll",
+                isHovered
+                  ? [
+                      "pb-0.5",
+                      "[&::-webkit-scrollbar]:h-1",
+                      "[&::-webkit-scrollbar-track]:bg-transparent",
+                      "[&::-webkit-scrollbar-thumb]:rounded-full",
+                      "[&::-webkit-scrollbar-thumb]:bg-border",
+                    ]
+                  : ["pb-1.5", "[&::-webkit-scrollbar]:h-0"],
               ]
-            : ["pb-1.5", "[&::-webkit-scrollbar]:h-0"]
         )}
       >
         {fileTabs.map((tab) => (
@@ -170,6 +204,7 @@ export function FileWorkspaceTabBar() {
             key={tab.id}
             tab={tab}
             active={tab.id === activeFileTabId}
+            embedded={embedded}
             closeLabel={t("closeFileTab")}
             closeText={t("close")}
             closeOthersText={t("closeOthers")}
@@ -185,12 +220,21 @@ export function FileWorkspaceTabBar() {
           />
         ))}
       </Reorder.Group>
-      {canPreview && activeFileTabId && (
+      {/* Title-bar strip: fill the leftover panel width with a window-drag
+          region so a lightly-tabbed file bar can still move the window. */}
+      {embedded && (
+        <div data-tauri-drag-region className="h-full min-w-0 flex-1" />
+      )}
+      {/* Trailing file-action buttons render only in the standalone (mobile
+          panel) row. In the desktop title bar (embedded) they live in the file
+          detail header instead (FileWorkspaceHeader). */}
+      {!embedded && canPreview && activeFileTabId && (
         <button
           type="button"
           onClick={() => toggleFileTabPreview(activeFileTabId)}
           className={cn(
-            "shrink-0 flex items-center justify-center w-10 border-b border-border hover:bg-primary/8 transition-colors",
+            "shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors",
+            rowBorder,
             isPreviewActive && "text-primary"
           )}
           aria-label={isPreviewActive ? t("editSource") : t("preview")}
@@ -203,26 +247,30 @@ export function FileWorkspaceTabBar() {
           )}
         </button>
       )}
-      {canOpenInBrowser && activeTab?.path && (
+      {!embedded && canOpenInBrowser && activeTab?.path && (
         <button
           type="button"
           onClick={() => {
             // File tab paths are absolute — hand the path straight to the OS.
             openPath(activeTab.path as string).catch(() => {})
           }}
-          className="shrink-0 flex items-center justify-center w-10 border-b border-border hover:bg-primary/8 transition-colors"
+          className={cn(
+            "shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors",
+            rowBorder
+          )}
           aria-label={t("preview")}
           title={t("preview")}
         >
           <ExternalLink className="h-4 w-4" />
         </button>
       )}
-      {!isMobile && mode === "fusion" && (
+      {!embedded && !isMobile && mode === "fusion" && (
         <button
           type="button"
           onClick={toggleFilesMaximized}
           className={cn(
-            "shrink-0 flex items-center justify-center w-10 border-b border-border hover:bg-primary/8 transition-colors",
+            "shrink-0 flex items-center justify-center w-10 hover:bg-primary/8 transition-colors",
+            rowBorder,
             filesMaximized && "text-primary"
           )}
           aria-label={filesMaximized ? t("restore") : t("maximize")}
@@ -243,6 +291,7 @@ export function FileWorkspaceTabBar() {
 interface FileWorkspaceTabItemProps {
   tab: FileWorkspaceTab
   active: boolean
+  embedded: boolean
   closeLabel: string
   closeText: string
   closeOthersText: string
@@ -260,6 +309,7 @@ interface FileWorkspaceTabItemProps {
 const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
   tab,
   active,
+  embedded,
   closeLabel,
   closeText,
   closeOthersText,
@@ -304,7 +354,15 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
       whileDrag={whileDrag}
       {...gestureHandlers}
       className={cn(
-        "shrink-0 rounded-full cursor-grab active:cursor-grabbing",
+        "rounded-full cursor-grab active:cursor-grabbing",
+        // Embedded: share the row width (browser-style shrink). `grow-0 basis-48`
+        // keeps a few tabs at their natural width (leftover row stays a
+        // window-drag region) while still shrinking together once full;
+        // `overflow-hidden` clips the padded inner row so a shrunken tab can't
+        // paint/click over its neighbor. Standalone: intrinsic width (scroll row).
+        embedded
+          ? "min-w-0 grow-0 shrink basis-48 overflow-hidden"
+          : "shrink-0",
         isTouchSorting && "z-50 opacity-90 shadow-md ring-1 ring-primary/25"
       )}
     >
@@ -319,7 +377,8 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
             }
             className={cn(
               "group/filetab relative flex items-center h-full gap-1.5 px-3 text-xs rounded-full",
-              "cursor-pointer select-none shrink-0 hover:bg-primary/8 transition-colors",
+              "cursor-pointer select-none hover:bg-primary/8 transition-colors",
+              embedded ? "w-full min-w-0" : "shrink-0",
               active ? "bg-primary/10 text-foreground" : "text-muted-foreground"
             )}
             title={tab.description ?? tab.title}
@@ -329,7 +388,12 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
             ) : (
               <FileText className="h-3.5 w-3.5" />
             )}
-            <span className="truncate max-w-[180px]">
+            <span
+              className={cn(
+                "truncate",
+                embedded ? "min-w-0 flex-1" : "max-w-[180px]"
+              )}
+            >
               {tab.title}
               {isDirty ? " *" : ""}
             </span>

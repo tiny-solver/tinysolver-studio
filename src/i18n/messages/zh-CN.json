@@ -1289,7 +1289,8 @@
         "system": "系统",
         "toolResult": "结果",
         "toolError": "错误"
-      }
+      },
+      "moreActions": "更多操作"
     },
     "sessionDetails": {
       "menuLabel": "会话详情",

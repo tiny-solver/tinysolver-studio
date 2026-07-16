@@ -1289,7 +1289,8 @@
         "system": "システム",
         "toolResult": "結果",
         "toolError": "エラー"
-      }
+      },
+      "moreActions": "その他の操作"
     },
     "sessionDetails": {
       "menuLabel": "セッション詳細",

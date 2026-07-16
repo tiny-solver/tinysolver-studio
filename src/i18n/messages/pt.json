@@ -1289,7 +1289,8 @@
         "system": "Sistema",
         "toolResult": "Resultado",
         "toolError": "Erro"
-      }
+      },
+      "moreActions": "Mais ações"
     },
     "sessionDetails": {
       "menuLabel": "Detalhes da sessão",

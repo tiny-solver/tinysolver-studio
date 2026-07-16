@@ -55,6 +55,7 @@ import { TabBar } from "@/components/tabs/tab-bar"
 import { TerminalPanel } from "@/components/terminal/terminal-panel"
 import { AuxPanel } from "@/components/layout/aux-panel"
 import { FileWorkspaceTabBar } from "@/components/files/file-workspace-tab-bar"
+import { FileWorkspaceHeader } from "@/components/files/file-workspace-header"
 import { FileWorkspacePanel } from "@/components/files/file-workspace-panel"
 import { ExternalConflictDialog } from "@/components/files/external-conflict-dialog"
 import { AppToaster } from "@/components/ui/app-toaster"
@@ -274,7 +275,7 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
               onFocusCapture={markConversationActive}
               inert={filesMaximized || undefined}
             >
-              <TabBar />
+              {/* Conversation tabs now live in the title bar (FolderTitleBar). */}
               <div className="relative flex-1 min-h-0 overflow-hidden">
                 {children}
               </div>
@@ -316,7 +317,10 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
               onFocusCapture={markFileActive}
               aria-hidden={mode === "conversation"}
             >
-              <FileWorkspaceTabBar />
+              {/* File tabs now live in the title bar (FolderTitleBar); the
+                  per-file actions (preview/open-in-browser/maximize) live in
+                  this header, above every FileWorkspacePanel render branch. */}
+              <FileWorkspaceHeader />
               <div className="flex-1 min-h-0 overflow-hidden">
                 <FileWorkspacePanel />
               </div>

@@ -23,6 +23,7 @@ import { useSidebarContext } from "@/contexts/sidebar-context"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
 import { useTerminalContext } from "@/contexts/terminal-context"
 import { useTabActions } from "@/contexts/tab-context"
+import { useWorkspaceView } from "@/contexts/workspace-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useSearchDialog } from "@/contexts/search-dialog-context"
 import { useIsMac } from "@/hooks/use-is-mac"
@@ -34,6 +35,13 @@ import {
 import { AppTitleBar } from "./app-title-bar"
 import { NewFolderDropdown } from "./new-folder-dropdown"
 import { RemoteWorkspaceDropdown } from "./remote-workspace-dropdown"
+import { TabBar } from "@/components/tabs/tab-bar"
+import { FileWorkspaceTabBar } from "@/components/files/file-workspace-tab-bar"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -50,6 +58,10 @@ export function FolderTitleBar() {
   const openFolder = useAppWorkspaceStore((s) => s.openFolder)
   const { activeFolder } = useActiveFolder()
   const isChatMode = useIsActiveChatMode()
+  // Low-frequency subscription for the relocated tab strips: `mode` only flips
+  // on fusion/pane/maximize changes (never on streaming/keystroke churn). It
+  // decides whether the file tab strip + its resizable split are shown.
+  const { mode } = useWorkspaceView()
   const { isOpen, toggle } = useSidebarContext()
   const { isOpen: auxPanelOpen, toggle: toggleAuxPanel } = useAuxPanelContext()
   const { isOpen: terminalOpen, toggle: toggleTerminal } = useTerminalContext()
@@ -176,6 +188,9 @@ export function FolderTitleBar() {
   return (
     <>
       <AppTitleBar
+        // Desktop grows to h-10 to host the relocated conversation/file tab
+        // strips (their native row height); mobile keeps its h-11 default.
+        className={isMobile ? undefined : "h-10"}
         left={
           isMobile ? (
             <div className="flex min-w-0 items-center gap-2">
@@ -191,8 +206,11 @@ export function FolderTitleBar() {
               <RemoteWorkspaceDropdown />
             </div>
           ) : (
-            <div className="flex h-8 flex-1 items-center gap-6">
-              <div className="flex items-center gap-2">
+            // Explicit h-10 (matching the desktop bar): the AppTitleBar row is
+            // items-center, so a content-height wrapper won't stretch — the tab
+            // host's h-full resolves against this fixed height.
+            <div className="flex h-10 flex-1 items-center gap-3 min-w-0">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -220,7 +238,45 @@ export function FolderTitleBar() {
                   <PawPrint className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <div data-tauri-drag-region className="h-8 flex-1" />
+              {/* Relocated tab strips. Conversation mode: the conversation tabs
+                  fill the row. Fusion mode: a resizable split lets the user
+                  allocate width between the conversation tabs and the file tabs
+                  — the handle IS the divider. Tabs shrink browser-style within
+                  each side (no scrollbar). The trailing handle stays draggable
+                  so the window can still be moved from the title bar. */}
+              <div className="flex h-full min-w-0 flex-1 items-stretch">
+                {mode === "fusion" ? (
+                  <ResizablePanelGroup
+                    direction="horizontal"
+                    id="titlebar-tab-group"
+                    autoSaveId="titlebar-tab-split"
+                    className="min-w-0 flex-1"
+                  >
+                    <ResizablePanel
+                      id="titlebar-conv-tabs"
+                      order={1}
+                      defaultSize={60}
+                      minSize={25}
+                    >
+                      <TabBar embedded />
+                    </ResizablePanel>
+                    <ResizableHandle />
+                    <ResizablePanel
+                      id="titlebar-file-tabs"
+                      order={2}
+                      defaultSize={40}
+                      minSize={20}
+                    >
+                      <FileWorkspaceTabBar embedded />
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                ) : (
+                  <div className="flex min-w-0 flex-1">
+                    <TabBar embedded />
+                  </div>
+                )}
+                <div data-tauri-drag-region className="h-full w-8 shrink-0" />
+              </div>
             </div>
           )
         }

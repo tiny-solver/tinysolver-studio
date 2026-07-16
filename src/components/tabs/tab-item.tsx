@@ -21,6 +21,9 @@ interface TabItemProps {
   tab: TabItemData
   isActive: boolean
   isTileMode: boolean
+  /** Browser-style shrink: fill/shrink to share the row width instead of a
+   *  fixed intrinsic size (title-bar embedded strips). Off = mobile scroll row. */
+  embedded?: boolean
   folderName: string | null
   folderBranch: string | null
   onSwitch: (tabId: string) => void
@@ -39,6 +42,7 @@ export const TabItem = memo(function TabItem({
   tab,
   isActive,
   isTileMode,
+  embedded = false,
   folderName,
   folderBranch,
   onSwitch,
@@ -114,7 +118,17 @@ export const TabItem = memo(function TabItem({
       {...gestureHandlers}
       onLayoutAnimationComplete={clearResidualStyles}
       className={cn(
-        "shrink-0 rounded-full cursor-grab active:cursor-grabbing",
+        "rounded-full cursor-grab active:cursor-grabbing",
+        // Embedded: share the row via flex so tabs shrink uniformly (no
+        // scrollbar). `grow-0 basis-48` means a few tabs sit at their natural
+        // width (not stretched) — the leftover row is a window-drag region — yet
+        // still shrink together once the row fills. `overflow-hidden` clips the
+        // padded inner row to the (possibly tiny) item box so a shrunken tab's
+        // icon/close button can't paint or take clicks over its neighbor.
+        // Standalone: intrinsic size + horizontal scroll (mobile row).
+        embedded
+          ? "min-w-0 grow-0 shrink basis-48 overflow-hidden"
+          : "shrink-0",
         !isCoarsePointer && "active:opacity-90 active:shadow-md active:z-50",
         isTouchSorting && "z-50 opacity-90 shadow-md ring-1 ring-primary/25"
       )}
@@ -129,7 +143,10 @@ export const TabItem = memo(function TabItem({
             onMouseDown={(event) => handleMiddleClickClose(event, handleClose)}
             className={cn(
               "group/tab relative flex items-center h-full gap-1.5 px-3 text-xs rounded-full",
-              "cursor-pointer select-none shrink-0",
+              "cursor-pointer select-none",
+              // Embedded: fill + allow shrink so the label truncates as the row
+              // tightens. Standalone: intrinsic width (scroll row).
+              embedded ? "w-full min-w-0" : "shrink-0",
               "hover:bg-primary/8 transition-colors",
               isActive
                 ? "bg-primary/10 text-foreground"
@@ -141,7 +158,10 @@ export const TabItem = memo(function TabItem({
             />
             <span
               className={cn(
-                "truncate max-w-[140px]",
+                "truncate",
+                // Embedded: grow + shrink so the title truncates as the tab
+                // tightens. Standalone: fixed cap in the scroll row.
+                embedded ? "min-w-0 flex-1" : "max-w-[140px]",
                 !tab.isPinned && "[font-style:oblique]"
               )}
               title={tooltip}

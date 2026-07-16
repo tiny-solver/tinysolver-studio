@@ -1289,7 +1289,8 @@
         "system": "系統",
         "toolResult": "結果",
         "toolError": "錯誤"
-      }
+      },
+      "moreActions": "更多操作"
     },
     "sessionDetails": {
       "menuLabel": "對話詳情",
