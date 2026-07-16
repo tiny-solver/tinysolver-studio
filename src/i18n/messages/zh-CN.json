@@ -1293,6 +1293,7 @@
     },
     "sessionDetails": {
       "menuLabel": "会话详情",
+      "noActiveSession": "暂无活动会话",
       "title": "会话详情",
       "subtitle": "会话元信息与 Token 用量",
       "fieldTitle": "标题",

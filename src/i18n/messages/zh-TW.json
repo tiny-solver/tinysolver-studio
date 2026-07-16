@@ -1293,6 +1293,7 @@
     },
     "sessionDetails": {
       "menuLabel": "對話詳情",
+      "noActiveSession": "暫無使用中的對話",
       "title": "對話詳情",
       "subtitle": "對話中繼資料與 Token 用量",
       "fieldTitle": "標題",

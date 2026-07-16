@@ -1293,6 +1293,7 @@
     },
     "sessionDetails": {
       "menuLabel": "تفاصيل الجلسة",
+      "noActiveSession": "لا توجد جلسة نشطة",
       "title": "تفاصيل الجلسة",
       "subtitle": "بيانات الجلسة الوصفية واستخدام الرموز",
       "fieldTitle": "العنوان",

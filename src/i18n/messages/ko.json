@@ -1293,6 +1293,7 @@
     },
     "sessionDetails": {
       "menuLabel": "세션 세부 정보",
+      "noActiveSession": "활성 세션이 없습니다",
       "title": "세션 세부 정보",
       "subtitle": "세션 메타데이터 및 토큰 사용량",
       "fieldTitle": "제목",

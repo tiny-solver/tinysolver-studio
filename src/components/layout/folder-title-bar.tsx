@@ -32,8 +32,6 @@ import {
   matchShortcutEvent,
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
-import { BranchDropdown } from "./branch-dropdown"
-import { CommandDropdown } from "./command-dropdown"
 import { NewFolderDropdown } from "./new-folder-dropdown"
 import { RemoteWorkspaceDropdown } from "./remote-workspace-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
@@ -131,9 +129,10 @@ export function FolderTitleBar() {
         return
       }
       if (matchShortcutEvent(e, shortcuts.toggle_aux_panel)) {
-        // Chat mode hides the aux panel + its toggle; the shortcut must not
-        // re-open it either.
-        if (isChatMode) return
+        // The aux panel now hosts the Session Details tab, so it's usable in
+        // chat mode too; only suppress the toggle when there's nothing to show
+        // (no folder and not a chat session).
+        if (!activeFolder && !isChatMode) return
         e.preventDefault()
         toggleAuxPanel()
         return
@@ -190,7 +189,6 @@ export function FolderTitleBar() {
               </Button>
               <NewFolderDropdown />
               <RemoteWorkspaceDropdown />
-              <BranchDropdown />
             </div>
           ) : (
             <div className="flex h-8 flex-1 items-center gap-6">
@@ -222,7 +220,6 @@ export function FolderTitleBar() {
                   <PawPrint className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <BranchDropdown />
               <div data-tauri-drag-region className="h-8 flex-1" />
             </div>
           )
@@ -230,7 +227,6 @@ export function FolderTitleBar() {
         right={
           isMobile ? (
             <div className="flex items-center gap-1">
-              <CommandDropdown />
               {/* Search lives only in the left sidebar's fixed actions region
                   now (desktop + mobile sheet); no title-bar search entry on any
                   width. The ⌘K shortcut + SearchCommandDialog stay wired here. */}
@@ -241,16 +237,15 @@ export function FolderTitleBar() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {/* Folderless chat conversations hide the aux panel entirely. */}
-                  {!isChatMode && (
-                    <DropdownMenuItem
-                      onClick={toggleAuxPanel}
-                      disabled={!activeFolder}
-                    >
-                      <PanelRight className="h-3.5 w-3.5" />
-                      {tTitleBar("toggleAuxPanel")}
-                    </DropdownMenuItem>
-                  )}
+                  {/* The aux panel hosts the Session Details tab, so it's
+                      reachable in chat mode too. */}
+                  <DropdownMenuItem
+                    onClick={toggleAuxPanel}
+                    disabled={!activeFolder && !isChatMode}
+                  >
+                    <PanelRight className="h-3.5 w-3.5" />
+                    {tTitleBar("toggleAuxPanel")}
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => toggleTerminal()}
                     disabled={!activeFolder}
@@ -268,9 +263,6 @@ export function FolderTitleBar() {
           ) : (
             <div className="flex items-center gap-10">
               <div className="flex items-center gap-2">
-                <CommandDropdown />
-              </div>
-              <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -287,25 +279,24 @@ export function FolderTitleBar() {
                 >
                   <SquareTerminal className="h-3.5 w-3.5" />
                 </Button>
-                {/* Folderless chat conversations hide the aux panel entirely. */}
-                {!isChatMode && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-6 w-6 hover:text-foreground/80 ${auxPanelOpen ? "bg-accent" : ""}`}
-                    onClick={toggleAuxPanel}
-                    disabled={!activeFolder}
-                    title={tTitleBar("withShortcut", {
-                      label: tTitleBar("toggleAuxPanel"),
-                      shortcut: formatShortcutLabel(
-                        shortcuts.toggle_aux_panel,
-                        isMac
-                      ),
-                    })}
-                  >
-                    <PanelRight className="h-3.5 w-3.5" />
-                  </Button>
-                )}
+                {/* The aux panel hosts the Session Details tab, so keep its
+                    toggle available in chat mode too. */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-6 w-6 hover:text-foreground/80 ${auxPanelOpen ? "bg-accent" : ""}`}
+                  onClick={toggleAuxPanel}
+                  disabled={!activeFolder && !isChatMode}
+                  title={tTitleBar("withShortcut", {
+                    label: tTitleBar("toggleAuxPanel"),
+                    shortcut: formatShortcutLabel(
+                      shortcuts.toggle_aux_panel,
+                      isMac
+                    ),
+                  })}
+                >
+                  <PanelRight className="h-3.5 w-3.5" />
+                </Button>
                 {/* Desktop search moved into the sidebar's fixed top region;
                     the dialog + ⌘K shortcut still live here. */}
                 <Button

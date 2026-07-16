@@ -1293,6 +1293,7 @@
     },
     "sessionDetails": {
       "menuLabel": "Detalhes da sessão",
+      "noActiveSession": "Nenhuma sessão ativa",
       "title": "Detalhes da sessão",
       "subtitle": "Metadados da sessão e uso de tokens",
       "fieldTitle": "Título",
