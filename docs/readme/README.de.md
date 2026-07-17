@@ -47,6 +47,13 @@ Codeg (Code Generation) ist ein Multi-Agent-Coding-Workspace. Es vereint mehrere
     </td>
     <td>Vielen Dank an 合租巴士 für die Unterstützung dieses Projekts! 合租巴士 ist eine zuverlässige und effiziente KI-Relay-Plattform, die hochstabiles Relay für gängige Modelle wie Codex und Claude Code bietet. Das Aufladeverhältnis ist transparent (1:1), mit Codex-Ratenzuschüssen ab nur 0,08. <a href="https://hezu.ink/sign-up?aff=0wVz">Treten Sie der Gruppe über die offizielle Website bei und erhalten Sie 5 USD Testguthaben</a>.</td>
   </tr>
+  <tr>
+    <td align="center" width="220">
+      <a href="https://onehop.ai/platform/login?ref=CODEG&utm_source=github&utm_medium=readme_sponsor&utm_campaign=codeg&utm_content=sponsor_cta" target="_blank"><img src="../images/onehop.jpg" alt="OneHop" width="120" /></a><br/>
+      <strong><a href="https://onehop.ai/platform/login?ref=CODEG&utm_source=github&utm_medium=readme_sponsor&utm_campaign=codeg&utm_content=sponsor_cta">OneHop</a></strong>
+    </td>
+    <td>Vielen Dank an OneHop für die Unterstützung dieses Projekts! OneHop bietet Codeg-Nutzern einen einzigen OpenAI-kompatiblen API-Schlüssel für Hunderte führender Modelle, darunter GPT, Claude, Gemini, DeepSeek, Kimi und Qwen. Wechseln Sie zwischen Modellen, ohne mehrere Anbieterkonten zu verwalten oder Ihren Code immer wieder zu ändern, und zahlen Sie nur für das, was Sie nutzen. <a href="https://onehop.ai/platform/login?ref=CODEG&utm_source=github&utm_medium=readme_sponsor&utm_campaign=codeg&utm_content=sponsor_cta">Registrieren Sie sich über Codeg</a>, um 1 USD Guthaben zu erhalten, und treten Sie zusätzlich der OneHop-Community bei und nehmen Sie an der Willkommensaktion teil, um weitere 5 USD zu erhalten – insgesamt bis zu 6 USD Testguthaben.</td>
+  </tr>
 </table>
 
 > Möchten Sie Codeg-Sponsor werden? [Schreiben Sie uns gerne eine E-Mail.](mailto:itpkcn@gmail.com)

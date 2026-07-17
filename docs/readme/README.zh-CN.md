@@ -47,6 +47,13 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
     </td>
     <td>感谢合租巴士对本项目的赞助！合租巴士是一家可靠高效的 AI 中转服务平台，主要提供 Codex、Claude Code 等主流模型的高稳定中转能力，充值比例透明（1:1），Codex 倍率补贴低至 0.08。<a href="https://hezu.ink/sign-up?aff=0wVz">官网进群送 5 刀体验金</a>。</td>
   </tr>
+  <tr>
+    <td align="center" width="220">
+      <a href="https://onehop.ai/platform/login?ref=CODEG&utm_source=github&utm_medium=readme_sponsor&utm_campaign=codeg&utm_content=sponsor_cta" target="_blank"><img src="../images/onehop.jpg" alt="OneHop" width="120" /></a><br/>
+      <strong><a href="https://onehop.ai/platform/login?ref=CODEG&utm_source=github&utm_medium=readme_sponsor&utm_campaign=codeg&utm_content=sponsor_cta">OneHop</a></strong>
+    </td>
+    <td>感谢 OneHop 对本项目的赞助！OneHop 让 Codeg 用户仅用一个 OpenAI 兼容的 API 密钥即可调用数百款领先模型，包括 GPT、Claude、Gemini、DeepSeek、Kimi 和 Qwen。无需管理多个供应商账号或反复修改代码即可切换模型，且按用量付费。<a href="https://onehop.ai/platform/login?ref=CODEG&utm_source=github&utm_medium=readme_sponsor&utm_campaign=codeg&utm_content=sponsor_cta">通过 Codeg 注册</a>即可获得 1 美元额度，再加入 OneHop 社区并参与欢迎活动可额外获得 5 美元——最高共计 6 美元测试额度。</td>
+  </tr>
 </table>
 
 > 想成为 Codeg 赞助商？[欢迎通过邮件与我们联系。](mailto:itpkcn@gmail.com)
