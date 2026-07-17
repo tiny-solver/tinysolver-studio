@@ -1436,7 +1436,8 @@
       "preview": "Vista previa",
       "editSource": "Editar fuente",
       "maximize": "Maximizar",
-      "restore": "Restaurar"
+      "restore": "Restaurar",
+      "emptyDirectory": "Carpeta vacía"
     },
     "terminal": {
       "rename": "Renombrar",

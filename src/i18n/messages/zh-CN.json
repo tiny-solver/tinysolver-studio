@@ -1436,7 +1436,8 @@
       "preview": "预览",
       "editSource": "编辑源码",
       "maximize": "最大化",
-      "restore": "还原"
+      "restore": "还原",
+      "emptyDirectory": "空目录"
     },
     "terminal": {
       "rename": "重命名",

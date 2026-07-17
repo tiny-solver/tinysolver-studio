@@ -12,13 +12,16 @@ import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
 import { useIsMac } from "@/hooks/use-is-mac"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { formatShortcutLabel } from "@/lib/keyboard-shortcuts"
+import { RIGHT_CHROME_CLUSTER } from "@/lib/window-chrome"
 
 /**
- * The window's top-RIGHT edge cluster: terminal toggle + aux-panel toggle +
- * settings. Rendered inside whichever column occupies the window's right edge —
- * the AuxPanel header when it's open (macOS), else the right-most middle column's
- * top bar. Mirrors the right cluster that lived in the old full-width title bar
- * (folder-title-bar.tsx), preserving its disabled predicates and active styling.
+ * Contents of the window's fixed top-RIGHT chrome overlay: terminal + aux-panel
+ * toggles + settings. `FolderLayoutShell` pins this at the window's top-right
+ * corner (to the LEFT of the Windows/Linux caption buttons) so it never moves —
+ * or re-mounts — when the aux panel opens or closes. Preserves the old title
+ * bar's disabled predicates and active styling. A leading drag filler right-
+ * aligns the cluster and lets its empty space move the window; the fixed width
+ * matches the right-edge column's reservation (see `rightChromeReserve`).
  */
 export function RightEdgeChrome() {
   const tTitleBar = useTranslations("Folder.folderTitleBar")
@@ -36,45 +39,52 @@ export function RightEdgeChrome() {
   }, [])
 
   return (
-    <div className="flex h-full shrink-0 items-center gap-2 pl-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        className={`h-6 w-6 hover:text-foreground/80 ${terminalOpen ? "bg-accent" : ""}`}
-        onClick={() => toggleTerminal()}
-        disabled={!activeFolder}
-        title={tTitleBar("withShortcut", {
-          label: tTitleBar("toggleTerminal"),
-          shortcut: formatShortcutLabel(shortcuts.toggle_terminal, isMac),
-        })}
-      >
-        <SquareTerminal className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={`h-6 w-6 hover:text-foreground/80 ${auxPanelOpen ? "bg-accent" : ""}`}
-        onClick={toggleAuxPanel}
-        disabled={!activeFolder && !isChatMode}
-        title={tTitleBar("withShortcut", {
-          label: tTitleBar("toggleAuxPanel"),
-          shortcut: formatShortcutLabel(shortcuts.toggle_aux_panel, isMac),
-        })}
-      >
-        <PanelRight className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 hover:text-foreground/80"
-        onClick={handleOpenSettings}
-        title={tTitleBar("withShortcut", {
-          label: tTitleBar("openSettings"),
-          shortcut: formatShortcutLabel(shortcuts.open_settings, isMac),
-        })}
-      >
-        <Settings className="h-3.5 w-3.5" />
-      </Button>
+    <div
+      className="flex h-full items-center"
+      style={{ width: RIGHT_CHROME_CLUSTER }}
+    >
+      {/* Empty head is a window-drag region; buttons stay flush right. */}
+      <div data-tauri-drag-region className="h-full min-w-0 flex-1" />
+      <div className="flex items-center gap-1 pr-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-6 w-6 hover:bg-foreground/10 hover:text-foreground/80 dark:hover:bg-foreground/10 ${terminalOpen ? "bg-accent" : ""}`}
+          onClick={() => toggleTerminal()}
+          disabled={!activeFolder}
+          title={tTitleBar("withShortcut", {
+            label: tTitleBar("toggleTerminal"),
+            shortcut: formatShortcutLabel(shortcuts.toggle_terminal, isMac),
+          })}
+        >
+          <SquareTerminal className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-6 w-6 hover:bg-foreground/10 hover:text-foreground/80 dark:hover:bg-foreground/10 ${auxPanelOpen ? "bg-accent" : ""}`}
+          onClick={toggleAuxPanel}
+          disabled={!activeFolder && !isChatMode}
+          title={tTitleBar("withShortcut", {
+            label: tTitleBar("toggleAuxPanel"),
+            shortcut: formatShortcutLabel(shortcuts.toggle_aux_panel, isMac),
+          })}
+        >
+          <PanelRight className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 hover:bg-foreground/10 hover:text-foreground/80 dark:hover:bg-foreground/10"
+          onClick={handleOpenSettings}
+          title={tTitleBar("withShortcut", {
+            label: tTitleBar("openSettings"),
+            shortcut: formatShortcutLabel(shortcuts.open_settings, isMac),
+          })}
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   )
 }

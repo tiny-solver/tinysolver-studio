@@ -1,40 +1,31 @@
 "use client"
 
-import {
-  Code,
-  ExternalLink,
-  Eye,
-  FileText,
-  GitCompare,
-  Maximize2,
-  Minimize2,
-} from "lucide-react"
+import { Code, ExternalLink, Eye } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { openPath } from "@/lib/platform"
 import { isHtmlPreviewable } from "@/lib/language-detect"
 import {
   useWorkspaceActions,
   useWorkspaceFileTabs,
-  useWorkspaceView,
 } from "@/contexts/workspace-context"
+import { FilePathBreadcrumb } from "@/components/files/file-path-breadcrumb"
 import { cn } from "@/lib/utils"
 
 /**
  * Desktop file-detail header: the active file's name on the left, its file-type
- * actions on the right — markdown/html preview⇄source toggle, open-in-browser
- * (html), and maximize/restore. These moved out of the file tab strip
- * (`FileWorkspaceTabBar`) when the tabs were relocated into the title bar, so
- * the per-file operations now sit with the file content. Rendered only on
- * desktop (`WorkspaceContent`); the mobile panel row keeps these buttons in its
- * own tab bar. Sits above every `FileWorkspacePanel` render branch
- * (editor / preview / diff / image / office), so it wraps them all uniformly.
+ * actions on the right — the markdown/html preview⇄source toggle and
+ * open-in-browser (html). Maximize/restore lives in the file tab strip
+ * (`FileWorkspaceTabBar`, embedded) instead, flush right of the tabs. Rendered
+ * only on desktop (`WorkspaceContent`); the mobile panel row keeps these
+ * buttons in its own tab bar. Sits above every `FileWorkspacePanel` render
+ * branch (editor / preview / diff / image / office), so it wraps them all
+ * uniformly.
  */
 export function FileWorkspaceHeader() {
   const t = useTranslations("Folder.fileWorkspace")
   const { activeFileTab, activeFileTabId, previewFileTabIds } =
     useWorkspaceFileTabs()
-  const { toggleFileTabPreview, toggleFilesMaximized } = useWorkspaceActions()
-  const { mode, filesMaximized } = useWorkspaceView()
+  const { toggleFileTabPreview } = useWorkspaceActions()
 
   if (!activeFileTab) return null
 
@@ -59,20 +50,27 @@ export function FileWorkspaceHeader() {
     "flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-primary/8 transition-colors"
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
-        {isDiff ? (
-          <GitCompare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-3">
+      {/* No leading file-type icon — the folder name leads the breadcrumb, and
+          the text matches the conversation detail header's `text-sm` title. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+        {/* Diff tabs have no single navigable path — keep them as a plain
+            title. Plain files render a clickable path breadcrumb. */}
+        {isDiff || !activeFileTab.path ? (
+          <span
+            className="truncate text-foreground/90"
+            title={activeFileTab.description ?? activeFileTab.title}
+          >
+            {activeFileTab.title}
+            {isDirty ? " *" : ""}
+          </span>
         ) : (
-          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <FilePathBreadcrumb
+            path={activeFileTab.path}
+            fileName={activeFileTab.title}
+            isDirty={isDirty}
+          />
         )}
-        <span
-          className="truncate text-foreground/90"
-          title={activeFileTab.description ?? activeFileTab.title}
-        >
-          {activeFileTab.title}
-          {isDirty ? " *" : ""}
-        </span>
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
         {canPreview && activeFileTabId && (
@@ -102,22 +100,6 @@ export function FileWorkspaceHeader() {
             title={t("preview")}
           >
             <ExternalLink className="h-4 w-4" />
-          </button>
-        )}
-        {mode === "fusion" && (
-          <button
-            type="button"
-            onClick={toggleFilesMaximized}
-            className={cn(actionBtn, filesMaximized && "text-primary")}
-            aria-label={filesMaximized ? t("restore") : t("maximize")}
-            aria-pressed={filesMaximized}
-            title={filesMaximized ? t("restore") : t("maximize")}
-          >
-            {filesMaximized ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
           </button>
         )}
       </div>

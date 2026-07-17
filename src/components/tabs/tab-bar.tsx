@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Reorder } from "motion/react"
+import { SquarePen } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
+import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useTabActions, useTabStore } from "@/contexts/tab-context"
 import type { TabItem as TabItemData } from "@/contexts/tab-context"
 import { useWorkspaceView } from "@/contexts/workspace-context"
+import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { matchShortcutEvent } from "@/lib/keyboard-shortcuts"
@@ -13,6 +17,7 @@ import { TabItem } from "./tab-item"
 import { cn } from "@/lib/utils"
 
 export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
+  const t = useTranslations("Folder.conversationCard")
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const isTileMode = useTabStore((s) => s.isTileMode)
@@ -24,10 +29,27 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
     pinTab,
     toggleTileMode,
     reorderTabs,
+    openNewConversationTab,
+    openChatModeTab,
   } = useTabActions()
   const allFolders = useAppWorkspaceStore((s) => s.allFolders)
   const branches = useAppWorkspaceStore((s) => s.branches)
+  const { activeFolder } = useActiveFolder()
+  const { openConversations } = useWorkbenchRoute()
   const { mode, activePane, filesMaximized } = useWorkspaceView()
+
+  // New-conversation affordance at the end of the tab strip. Mirrors the
+  // sidebar's "New chat": return to the conversation workspace, then open a
+  // draft in the active folder — or a folderless chat when nothing is open, so
+  // the button is never a dead end.
+  const handleNewConversation = useCallback(() => {
+    openConversations()
+    if (!activeFolder) {
+      openChatModeTab()
+      return
+    }
+    openNewConversationTab(activeFolder.id, activeFolder.path)
+  }, [activeFolder, openChatModeTab, openConversations, openNewConversationTab])
 
   const folderIndex = useMemo(() => {
     const map = new Map<number, { name: string }>()
@@ -129,17 +151,20 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        "pt-1.5 px-1.5 flex items-stretch gap-1.5",
+        "pt-1.5 px-1.5 flex items-stretch",
         // Embedded in the title bar: fill its height, no scrollbar — the tabs
-        // shrink browser-style to share the row (see TabItem `embedded`), and
-        // the bar owns the bottom border. It sizes to its content (no `w-full`)
-        // so the wrapper's trailing drag spacer claims the leftover row.
+        // shrink browser-style to share the row (see TabItem `embedded`), sit
+        // flush (`gap-0`) so their hairline separators read as dividers, and the
+        // strip owns no bottom border. No bottom padding, so the tabs reach the
+        // strip's bottom edge and the active (white) one merges into the detail
+        // header below. It sizes to its content (no `w-full`) so the wrapper's
+        // trailing drag spacer claims the leftover row.
         // Standalone (mobile panel row): keep the h-10 row + border + horizontal
-        // scroll with a hover scrollbar.
+        // scroll with a hover scrollbar and the original inter-tab gap.
         embedded
-          ? "h-full min-w-0 overflow-hidden pb-1.5"
+          ? "h-full min-w-0 gap-0 overflow-hidden px-2"
           : [
-              "h-10 border-b border-border overflow-x-scroll",
+              "h-10 gap-1.5 border-b border-border overflow-x-scroll",
               isHovered
                 ? [
                     "pb-0.5",
@@ -181,12 +206,28 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
 
   if (!embedded) return group
 
-  // Title-bar strip: the tabs sit at their natural width; the trailing spacer
-  // fills the leftover row and stays a window-drag region, so a lightly-tabbed
-  // bar can still be grabbed to move the window (browser-style).
+  // Title-bar strip: the tabs sit at their natural width; a new-conversation
+  // button follows the last tab (browser-style), then the trailing spacer fills
+  // the leftover row and stays a window-drag region so a lightly-tabbed bar can
+  // still be grabbed to move the window.
   return (
     <div className="flex h-full w-full min-w-0 items-stretch">
       {group}
+      <button
+        type="button"
+        onClick={handleNewConversation}
+        // Ghost-style icon button hugging the last (content-sized) tab: no left
+        // margin, so it sits just past the group's `px-2` — close to the final
+        // tab's trailing edge, its gap roughly matching its `self-center h-7`
+        // top/bottom inset. `self-center` centers it on the h-10 strip's midline
+        // (matching the tab content). Hover darkens past the `bg-muted` strip
+        // (ghost's own `bg-muted` hover would be invisible on it).
+        className="mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+        aria-label={t("newConversation")}
+        title={t("newConversation")}
+      >
+        <SquarePen className="h-3.5 w-3.5" />
+      </button>
       <div data-tauri-drag-region className="h-full min-w-0 flex-1" />
     </div>
   )

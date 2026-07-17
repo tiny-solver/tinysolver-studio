@@ -1436,7 +1436,8 @@
       "preview": "معاينة",
       "editSource": "تحرير المصدر",
       "maximize": "تكبير",
-      "restore": "استعادة"
+      "restore": "استعادة",
+      "emptyDirectory": "مجلد فارغ"
     },
     "terminal": {
       "rename": "إعادة تسمية",

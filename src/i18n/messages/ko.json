@@ -1436,7 +1436,8 @@
       "preview": "미리보기",
       "editSource": "소스 편집",
       "maximize": "최대화",
-      "restore": "복원"
+      "restore": "복원",
+      "emptyDirectory": "빈 폴더"
     },
     "terminal": {
       "rename": "이름 변경",

@@ -1436,7 +1436,8 @@
       "preview": "プレビュー",
       "editSource": "ソースを編集",
       "maximize": "最大化",
-      "restore": "元に戻す"
+      "restore": "元に戻す",
+      "emptyDirectory": "空のフォルダー"
     },
     "terminal": {
       "rename": "名前を変更",

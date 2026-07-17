@@ -1436,7 +1436,8 @@
       "preview": "Vorschau",
       "editSource": "Quelle bearbeiten",
       "maximize": "Maximieren",
-      "restore": "Wiederherstellen"
+      "restore": "Wiederherstellen",
+      "emptyDirectory": "Leerer Ordner"
     },
     "terminal": {
       "rename": "Umbenennen",

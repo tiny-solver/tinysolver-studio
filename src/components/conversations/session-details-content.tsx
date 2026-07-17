@@ -289,7 +289,9 @@ export function SessionDetailsContent({
   const numeric = "font-mono tabular-nums"
 
   return (
-    <div className="min-w-0 space-y-5 text-sm">
+    // `@container` drives the identifier / token / timestamp grids: one column
+    // in the narrow aux-panel tab, two in the wider details dialog.
+    <div className="@container min-w-0 space-y-5 text-sm">
       {/* Identity: the conversation title with its agent and status. */}
       <div className="min-w-0 space-y-2">
         <p className="wrap-anywhere text-base font-medium leading-snug">
@@ -321,7 +323,7 @@ export function SessionDetailsContent({
       </div>
 
       {/* Identifiers, packed two-up to keep the view short. */}
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-4">
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 border-t pt-4 @[20rem]:grid-cols-2">
         <InfoItem label={t("sessionId")}>
           <CopyableValue
             text={String(summary.id)}
@@ -343,7 +345,7 @@ export function SessionDetailsContent({
             {summary.parent_id}
           </InfoItem>
         )}
-        <InfoItem label={t("externalId")} className="col-span-2">
+        <InfoItem label={t("externalId")} className="@[20rem]:col-span-2">
           {summary.external_id ? (
             <CopyableValue
               text={summary.external_id}
@@ -371,7 +373,7 @@ export function SessionDetailsContent({
         ) : statsError ? (
           <div className="text-muted-foreground">{t("loadFailed")}</div>
         ) : hasTokenInfo ? (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-3 @[20rem]:grid-cols-2">
             {totalTokens != null && (
               <InfoItem label={t("totalTokens")} valueClassName={numeric}>
                 {formatTokenCount(totalTokens)}
@@ -417,7 +419,7 @@ export function SessionDetailsContent({
         <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {t("timestampsHeading")}
         </h3>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-3 @[20rem]:grid-cols-2">
           <InfoItem label={t("createdAt")}>
             {formatDate(summary.created_at)}
           </InfoItem>

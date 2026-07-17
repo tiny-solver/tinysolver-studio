@@ -11,7 +11,9 @@ import { resolveActiveSessionDetails } from "@/components/conversations/active-s
 import { SessionDetailsContent } from "@/components/conversations/session-details-content"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
+import { cn } from "@/lib/utils"
 import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
 
@@ -36,6 +38,7 @@ export function SessionDetailsTab() {
   const { isOpen, activeTab } = useAuxPanelContext()
   const { activeFolderId } = useActiveFolder()
   const isChatMode = useIsActiveChatMode()
+  const isMobile = useIsMobile()
 
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
@@ -88,7 +91,15 @@ export function SessionDetailsTab() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {showFolderActions && (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-between gap-2 border-b px-3",
+            // Desktop: match the conversation/file detail headers — h-10 + the
+            // lightened border. Mobile (Sheet) keeps its original sizing, since
+            // it has no such headers to align with.
+            isMobile ? "border-border py-2" : "h-10 border-border/50"
+          )}
+        >
           <BranchDropdown />
           <CommandDropdown />
         </div>

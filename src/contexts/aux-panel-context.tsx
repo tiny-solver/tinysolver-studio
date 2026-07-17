@@ -30,17 +30,16 @@ const MIN_WIDTH = 200
 const MAX_WIDTH = 900
 const DEFAULT_IS_OPEN = false
 
-// The aux header is now the window's top-right edge. On macOS it hosts the right
-// window chrome (terminal/aux/settings); on Windows/Linux the native caption
-// buttons overlay its top-right 138px. Widen the minimum per-platform so the
-// four tab triggers always stay clickable (clear of the chrome / caption strip);
-// on web the old 200 is fine (no chrome, no caption).
+// The tabs now sit on their own row below the fixed top-right window-chrome
+// overlay (terminal/aux/settings), so they no longer need extra width to clear
+// it. The minimum only has to keep that overlay — and, on Windows/Linux, the
+// native caption strip beside it (~116 + 138) — from spilling past the panel's
+// left edge over the middle column. Elsewhere the base 200 is plenty.
 function resolveAuxMinWidth(): number {
   const platform = detectPlatform()
   if (isDesktop() && (platform === "windows" || platform === "linux")) {
-    return 320
+    return 260
   }
-  if (platform === "macos") return 280
   return MIN_WIDTH
 }
 

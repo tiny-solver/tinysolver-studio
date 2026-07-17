@@ -1436,7 +1436,8 @@
       "preview": "Aperçu",
       "editSource": "Modifier la source",
       "maximize": "Agrandir",
-      "restore": "Restaurer"
+      "restore": "Restaurer",
+      "emptyDirectory": "Dossier vide"
     },
     "terminal": {
       "rename": "Renommer",

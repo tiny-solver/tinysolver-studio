@@ -173,20 +173,23 @@ export function FileWorkspaceTabBar({
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "pt-1.5 px-1.5 min-w-0 flex items-stretch gap-1.5",
+          "pt-1.5 px-1.5 min-w-0 flex items-stretch",
           // Standalone row fills its container so the trailing action buttons
           // sit flush right; embedded sizes to content so the wrapper's drag
           // spacer claims the leftover row.
           !embedded && "flex-1",
           rowHeight,
           rowBorder,
-          // Embedded: no scrollbar — tabs shrink browser-style to share the
-          // panel (see FileWorkspaceTabItem `embedded`). Standalone: horizontal
-          // scroll with a hover scrollbar (mobile panel row).
+          // Embedded: no scrollbar — tabs shrink browser-style and sit flush
+          // (`gap-0`) so their hairline separators read as dividers (see
+          // FileWorkspaceTabItem `embedded`); no bottom padding so they reach
+          // the strip's bottom and the active (white) tab merges into the file
+          // detail header below. Standalone: horizontal scroll with a hover
+          // scrollbar + the original inter-tab gap (mobile panel row).
           embedded
-            ? "overflow-hidden pb-1.5"
+            ? "gap-0 overflow-hidden px-2"
             : [
-                "overflow-x-scroll",
+                "gap-1.5 overflow-x-scroll",
                 isHovered
                   ? [
                       "pb-0.5",
@@ -224,6 +227,34 @@ export function FileWorkspaceTabBar({
           region so a lightly-tabbed file bar can still move the window. */}
       {embedded && (
         <div data-tauri-drag-region className="h-full min-w-0 flex-1" />
+      )}
+      {/* Maximize/restore lives here — flush right of the file tabs — on the
+          desktop title bar (it used to sit in the file detail header). Only
+          meaningful in fusion, where the file column shares the row with the
+          conversation. */}
+      {embedded && mode === "fusion" && (
+        <button
+          type="button"
+          onClick={toggleFilesMaximized}
+          className={cn(
+            // Ghost-style icon button following the file tabs (mirrors the
+            // conversation new-tab button): `h-7 self-center` centers it on the
+            // h-10 strip midline (matching the tab content); hover darkens past
+            // the `bg-muted` strip (ghost's own `bg-muted` hover would be
+            // invisible on it).
+            "mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground",
+            filesMaximized && "text-primary"
+          )}
+          aria-label={filesMaximized ? t("restore") : t("maximize")}
+          aria-pressed={filesMaximized}
+          title={filesMaximized ? t("restore") : t("maximize")}
+        >
+          {filesMaximized ? (
+            <Minimize2 className="h-4 w-4" />
+          ) : (
+            <Maximize2 className="h-4 w-4" />
+          )}
+        </button>
       )}
       {/* Trailing file-action buttons render only in the standalone (mobile
           panel) row. In the desktop title bar (embedded) they live in the file
@@ -353,19 +384,30 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
       dragListener={!isCoarsePointer}
       whileDrag={whileDrag}
       {...gestureHandlers}
+      data-tab-item
+      data-active={embedded && active ? "true" : undefined}
       className={cn(
-        "rounded-full cursor-grab active:cursor-grabbing",
-        // Embedded: share the row width (browser-style shrink). `grow-0 basis-48`
-        // keeps a few tabs at their natural width (leftover row stays a
-        // window-drag region) while still shrinking together once full;
-        // `overflow-hidden` clips the padded inner row so a shrunken tab can't
-        // paint/click over its neighbor. Standalone: intrinsic width (scroll row).
+        "cursor-grab active:cursor-grabbing",
+        // Embedded (browser-style): each tab sizes to its content (`basis-auto`)
+        // up to `max-w-[15rem]` (leftover row stays a window-drag region);
+        // `grow-0` keeps them from stretching to fill, and they still `shrink`
+        // together (down to `min-w-0`, the label truncates) once full.
+        // `browser-tab-item` draws the left-edge hairline separator (globals.css)
+        // as a 1px divider at each shared edge — tabs sit flush (no gutter) so
+        // the line is the only separation, and the inner row owns its own
+        // `overflow-hidden`. The active tab is raised (`z-10`) so its
+        // reverse-corner seat is never covered by a hovered neighbour's flare.
+        // Standalone: rounded pill, intrinsic width (scroll).
         embedded
-          ? "min-w-0 grow-0 shrink basis-48 overflow-hidden"
-          : "shrink-0",
+          ? "browser-tab-item min-w-0 grow-0 shrink basis-auto max-w-[15rem] data-[active=true]:z-10"
+          : "rounded-full shrink-0",
         isTouchSorting && "z-50 opacity-90 shadow-md ring-1 ring-primary/25"
       )}
     >
+      {/* Reverse (concave) bottom corners — the browser-tab seat (globals.css).
+          Absolute + decorative, so it never affects layout. Rendered for every
+          embedded tab; CSS reveals it when the tab is active or hovered. */}
+      {embedded && <span aria-hidden className="browser-tab-seat" />}
       <ContextMenu>
         <ContextMenuTrigger asChild disabled={isTouchSorting}>
           <div
@@ -376,10 +418,27 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
               handleMiddleClickClose(event, () => onClose(tab.id))
             }
             className={cn(
-              "group/filetab relative flex items-center h-full gap-1.5 px-3 text-xs rounded-full",
-              "cursor-pointer select-none hover:bg-primary/8 transition-colors",
-              embedded ? "w-full min-w-0" : "shrink-0",
-              active ? "bg-primary/10 text-foreground" : "text-muted-foreground"
+              "group/filetab relative flex items-center h-full gap-1.5 text-xs",
+              "cursor-pointer select-none transition-colors",
+              embedded
+                ? [
+                    // Browser-style tab: white (bg-background) active fill,
+                    // rounded top, reaching the strip's bottom so it merges into
+                    // the file detail header below. `overflow-hidden` clips the
+                    // shrunken row. `pb-1.5` balances the group's `pt-1.5` gap so
+                    // the content centers on the h-10 strip midline, not 3px low
+                    // in the shorter tab box (fill still reaches the bottom).
+                    "w-full min-w-0 overflow-hidden rounded-t-lg px-2 pb-1.5",
+                    active
+                      ? "bg-background text-foreground"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                  ]
+                : [
+                    "shrink-0 rounded-full px-3 hover:bg-primary/8",
+                    active
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground",
+                  ]
             )}
             title={tab.description ?? tab.title}
           >
@@ -390,8 +449,11 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
             )}
             <span
               className={cn(
-                "truncate",
-                embedded ? "min-w-0 flex-1" : "max-w-[180px]"
+                // Embedded: grow + shrink and ellipsis-truncate as the tab
+                // tightens; the inline close button (below) reserves its own
+                // space, so the label never runs under it. Standalone: ellipsis
+                // cap in the scroll row.
+                embedded ? "min-w-0 flex-1 truncate" : "truncate max-w-[180px]"
               )}
             >
               {tab.title}
@@ -400,10 +462,23 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
             <button
               type="button"
               className={cn(
-                "rounded-full p-0.5 hover:bg-muted",
+                "rounded-md hover:bg-foreground/10",
+                // Embedded: an in-flow (inline) icon box that reserves its own
+                // space in the flex row, so it centers with the title via the
+                // row's `items-center` (no transform → crisp on WebKit, unlike a
+                // translated absolute overlay) and the label truncates before it.
+                // It stays laid out even while hidden (opacity-0) so revealing it
+                // on hover never shifts the tab width; pointer events are gated
+                // off while hidden so it can't eat clicks. Standalone: an in-flow
+                // chip in the scroll row.
+                embedded
+                  ? "flex h-4 w-4 shrink-0 items-center justify-center"
+                  : "shrink-0 p-0.5",
                 active
                   ? "opacity-100"
-                  : "opacity-0 group-hover/filetab:opacity-100"
+                  : embedded
+                    ? "opacity-0 pointer-events-none group-hover/filetab:opacity-100 group-hover/filetab:pointer-events-auto"
+                    : "opacity-0 group-hover/filetab:opacity-100"
               )}
               onClick={(event) => {
                 event.stopPropagation()

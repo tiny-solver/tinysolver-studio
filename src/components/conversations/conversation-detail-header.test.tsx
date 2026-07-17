@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
   openNewConversationTab: vi.fn(),
   updateConversationLocal: vi.fn(),
   refreshConversations: vi.fn(),
+  registerLocate: vi.fn(),
+  locateActiveConversation: vi.fn(),
 }))
 
 vi.mock("@/lib/api", () => ({
@@ -33,6 +35,12 @@ vi.mock("@/contexts/tab-context", () => ({
   useTabActions: () => ({
     closeTab: h.closeTab,
     openNewConversationTab: h.openNewConversationTab,
+  }),
+}))
+vi.mock("@/contexts/conversation-locate-context", () => ({
+  useConversationLocate: () => ({
+    registerLocate: h.registerLocate,
+    locateActiveConversation: h.locateActiveConversation,
   }),
 }))
 vi.mock("@/stores/app-workspace-store", () => {

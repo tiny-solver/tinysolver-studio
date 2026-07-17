@@ -26,6 +26,10 @@ vi.mock("@/contexts/active-folder-context", () => ({
 vi.mock("@/hooks/use-is-active-chat-mode", () => ({
   useIsActiveChatMode: vi.fn(),
 }))
+// The tab now reads viewport size to size its header (desktop h-10 vs the
+// mobile Sheet's original py-2); the real hook calls `window.matchMedia`, which
+// jsdom lacks, so mock it.
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: vi.fn() }))
 vi.mock("@/contexts/tab-context", () => ({ useTabStore: vi.fn() }))
 vi.mock("@/stores/conversation-runtime-store", () => ({
   useConversationRuntimeStore: vi.fn(),
@@ -38,6 +42,7 @@ import { SessionDetailsTab } from "./aux-panel-session-details-tab"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useTabStore } from "@/contexts/tab-context"
 import { useConversationRuntimeStore } from "@/stores/conversation-runtime-store"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
@@ -45,6 +50,7 @@ import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 const mockAux = useAuxPanelContext as unknown as Mock
 const mockFolder = useActiveFolder as unknown as Mock
 const mockChat = useIsActiveChatMode as unknown as Mock
+const mockMobile = useIsMobile as unknown as Mock
 const mockTabs = useTabStore as unknown as Mock
 const mockRuntime = useConversationRuntimeStore as unknown as Mock
 const mockWorkspace = useAppWorkspaceStore as unknown as Mock
@@ -87,10 +93,12 @@ function setupScene(opts: {
   activeFolderId: number | null
   isChatMode: boolean
   hasActiveConversation: boolean
+  isMobile?: boolean
 }) {
   mockAux.mockReturnValue({ isOpen: true, activeTab: "session_details" })
   mockFolder.mockReturnValue({ activeFolderId: opts.activeFolderId })
   mockChat.mockReturnValue(opts.isChatMode)
+  mockMobile.mockReturnValue(opts.isMobile ?? false)
 
   const tabState: TabSlice = {
     tabs: opts.hasActiveConversation ? [{ id: 1, conversationId: 7 }] : [],
@@ -152,5 +160,31 @@ describe("SessionDetailsTab", () => {
     const { getByText, queryByTestId } = renderTab()
     expect(getByText("No active session")).toBeTruthy()
     expect(queryByTestId("branch-dropdown")).toBeNull()
+  })
+
+  it("sizes the actions bar h-10 on desktop but keeps the mobile Sheet's py-2", () => {
+    // Desktop: the bar matches the conversation/file detail headers (h-10).
+    setupScene({
+      activeFolderId: 1,
+      isChatMode: false,
+      hasActiveConversation: true,
+      isMobile: false,
+    })
+    const desktop = renderTab()
+    const desktopBar = desktop.getByTestId("branch-dropdown").parentElement
+    expect(desktopBar?.className).toContain("h-10")
+    expect(desktopBar?.className).not.toContain("py-2")
+    desktop.unmount()
+
+    // Mobile (Sheet): unchanged from before — the original py-2, no fixed height.
+    setupScene({
+      activeFolderId: 1,
+      isChatMode: false,
+      hasActiveConversation: true,
+      isMobile: true,
+    })
+    const mobileBar = renderTab().getByTestId("branch-dropdown").parentElement
+    expect(mobileBar?.className).toContain("py-2")
+    expect(mobileBar?.className).not.toContain("h-10")
   })
 })

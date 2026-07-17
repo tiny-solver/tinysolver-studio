@@ -1436,7 +1436,8 @@
       "preview": "Preview",
       "editSource": "Edit Source",
       "maximize": "Maximize",
-      "restore": "Restore"
+      "restore": "Restore",
+      "emptyDirectory": "Empty folder"
     },
     "terminal": {
       "rename": "Rename",

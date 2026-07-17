@@ -1436,7 +1436,8 @@
       "preview": "預覽",
       "editSource": "編輯原始碼",
       "maximize": "最大化",
-      "restore": "還原"
+      "restore": "還原",
+      "emptyDirectory": "空目錄"
     },
     "terminal": {
       "rename": "重新命名",
