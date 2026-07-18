@@ -89,8 +89,10 @@ describe("ConversationDetailPanel new conversation layout", () => {
     // attached folder-branch-picker treatment still adds a solid surface
     // (`bg-background`, which goes transparent to reveal a workspace-bg image via
     // `ws-transparent-bg` instead of frosting) + the inset focus ring on top.
+    // The resting border is `border-foreground/20` (a touch darker than the
+    // near-invisible default `border-input`, and legible over a background image).
     expect(messageInputSource).toContain(
-      "rounded-xl border border-input bg-transparent transition-colors"
+      "rounded-xl border border-foreground/20 bg-transparent transition-colors"
     )
     expect(messageInputSource).toContain(
       '"bg-background ws-transparent-bg focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"'
