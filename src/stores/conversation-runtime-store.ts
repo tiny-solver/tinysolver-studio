@@ -146,6 +146,17 @@ export interface ConversationRuntimeSession {
   syncState: ConversationSyncState
   activeTurnToken: string | null
 
+  // True when THIS client DROVE the most recently promoted turn (an owner send,
+  // `awaiting_persist`), false when it merely VIEWED that turn. An owner's just-
+  // promoted reply lives only in `localTurns` and may not be flushed to the
+  // transcript yet (an ~8ms write race — see `completeTurn`'s no-refetch note),
+  // so a viewer-sync refetch must never clobber it; a VIEWED turn's reply is
+  // already persisted (it completed on the owner before this client saw the
+  // edge) and is safe to fold from disk. `completeTurn` collapses both owner and
+  // viewer to `idle`, erasing the live distinction, so it is captured here at
+  // promotion time. Consumed by `isPureViewerSession`.
+  lastTurnOwned: boolean
+
   // Read-only delegation-child viewer marker. When true, `getTimelineTurns`
   // suppresses the persisted copy of the (single) reply turn while this
   // session has a live or just-promoted reply — so the sub-agent dialog shows
@@ -372,6 +383,7 @@ function createEmptySession(
     liveMessage: null,
     syncState: "idle",
     activeTurnToken: null,
+    lastTurnOwned: false,
     liveOwnsActiveTurn: false,
     delegationKickoffText: null,
     sessionStats: null,
@@ -1442,6 +1454,12 @@ function reducer(
         liveMessage: null,
         syncState: "idle",
         activeTurnToken: null,
+        // Capture WHO drove this turn before `syncState` collapses to `idle`:
+        // an owner send is `awaiting_persist`, a viewer's watched turn is not.
+        // `isPureViewerSession` uses this to keep an owner's possibly-unflushed
+        // reply out of viewer-sync while still admitting a viewer whose promoted
+        // reply is already persisted.
+        lastTurnOwned: current.syncState === "awaiting_persist",
         pendingBackgroundSettlements: remainingSettlements,
       }))
     }
@@ -1784,6 +1802,10 @@ function reducer(
         liveMessage: mergedLiveMessage,
         syncState: to.syncState !== "idle" ? to.syncState : from.syncState,
         activeTurnToken: to.activeTurnToken ?? from.activeTurnToken,
+        // `from` (the draft) leads `localTurns`; treat the merged buffer as
+        // owner-driven if EITHER side drove its turn, so an owner's unflushed
+        // reply stays protected from viewer-sync after a draft→real migration.
+        lastTurnOwned: from.lastTurnOwned || to.lastTurnOwned,
         liveOwnsActiveTurn: to.liveOwnsActiveTurn || from.liveOwnsActiveTurn,
         delegationKickoffText:
           to.delegationKickoffText ?? from.delegationKickoffText,
@@ -1924,6 +1946,12 @@ export interface RuntimeActions {
     conversationId: number,
     options?: { preserveLive?: boolean }
   ) => void
+  /**
+   * Poll a passively-viewed conversation's persisted detail into sync after its
+   * turn completed on another client. No-op unless the session is open and this
+   * client is a pure viewer of it (never touches an owner's in-memory reply).
+   */
+  syncViewerDetail: (conversationId: number) => void
   syncTurnMetadata: (
     dbConversationId: number,
     runtimeConversationId?: number
@@ -2022,6 +2050,97 @@ function isLatestGeneration(
   generation: number
 ): boolean {
   return fetchGeneration.get(conversationId) === generation
+}
+
+// ─── Cross-client viewer detail sync ─────────────────────────────────────
+// A conversation whose turn completes on ANOTHER client (this client is only
+// VIEWING it) has no live promotion path here: the panel's promotion is edge-
+// triggered on the connection's `prompting → connected` transition, which a
+// viewer that missed the (short) live stream never observes, and the global
+// `conversation://changed` side-channel only patches the sidebar list — not the
+// open conversation's detail. So the viewer keeps rendering its stale detail
+// (the prompt, no reply). The fix polls the persisted transcript on that nudge.
+//
+// The catch (verified against the backend): every turn-end signal
+// (`conversation://changed` Status, `turn_complete`) fires off the ACP wire
+// stop-reason, which RACES the agent CLI flushing its transcript JSONL. Detail
+// is a live parse of whatever bytes are on disk, so a single refetch can still
+// return the pre-reply transcript. We therefore poll a bounded number of times,
+// backing off, and stop as soon as the transcript's last turn is no longer a
+// trailing USER turn (Claude/Codex append the assistant reply to the JSONL only
+// on completion, so a trailing user turn means the reply is still mid-flush).
+const VIEWER_DETAIL_SYNC_DELAYS_MS = [0, 300, 700, 1500, 2500] as const
+
+// Active viewer-sync polls, keyed by conversationId, so a fresh nudge supersedes
+// an in-flight poll (never stacks) and `removeConversation` / store reset can
+// cancel a poll whose tab has closed.
+const viewerDetailSyncCancels = new Map<number, () => void>()
+
+function cancelViewerDetailSync(conversationId: number): void {
+  const cancel = viewerDetailSyncCancels.get(conversationId)
+  if (cancel) cancel()
+}
+
+// Resolve the RUNTIME-session key for a `conversation://changed` nudge, which
+// carries the positive DB id. A tab opened from a draft keeps its virtual
+// (negative) runtime key for its whole life while storing the positive id in
+// `dbConversationId` (see `conversation-detail-panel.tsx`), so a direct lookup
+// by the nudged id misses it — fall back to a scan over the (few) open sessions.
+// A positive-keyed session is preferred when both exist. Returns null when no
+// open session matches, so a nudge for an unopened conversation cheaply no-ops.
+function resolveViewerRuntimeId(
+  byConversationId: Map<number, ConversationRuntimeSession>,
+  conversationId: number
+): number | null {
+  if (byConversationId.has(conversationId)) return conversationId
+  for (const [key, session] of byConversationId) {
+    if (session.dbConversationId === conversationId) return key
+  }
+  return null
+}
+
+// A "pure viewer" holds none of the in-memory copies of a reply that a transcript
+// refetch could race and clobber: no in-flight prompt (`awaiting_persist`), no
+// live stream (`liveMessage`), and no just-PROMOTED reply that persistence may
+// still lag. Only such a session may be refetched from the transcript.
+//
+// `localTurns` alone is NOT disqualifying: a viewer that streamed an EARLIER turn
+// promotes it into `localTurns` too, and that reply is already persisted (it
+// completed on the owner before this client observed the edge), so folding it
+// from disk is safe. Excluding every `localTurns` would permanently strand such
+// a viewer after its first captured turn — reproducing the very bug this sync
+// fixes. Only a PROMOTED reply that may still be mid-flush (`completeTurn`'s ~8ms
+// write race) must be protected, i.e. `localTurns.length > 0` AND either:
+//   - `lastTurnOwned` — this client DROVE the promoted turn (an owner send); its
+//     reply lives only in `localTurns` until the transcript catches up; or
+//   - `liveOwnsActiveTurn` — a delegation-child dialog adopted its reply from the
+//     wire ahead of persistence (see `sub-agent-session-dialog.tsx`, which then
+//     deliberately does NOT refetch) and owns its promotion/dedup path.
+// Both are gated on `localTurns.length > 0`: the pre-promotion streaming phase is
+// already covered by `liveMessage`, and a MARKER-ONLY delegation child (the no-
+// child-connection fallback that never streams or promotes) has nothing to guard,
+// so it must stay eligible to sync on a later completion nudge. The synthesized
+// viewer user turn lives in `optimisticTurns` WITHOUT `awaiting_persist`, so it
+// never blocks a detail load from replacing it.
+//
+// Known limitation: a client that DROVE a turn and then passively MISSES every
+// later turn (no live stream at all — a co-controlling client drove them) keeps
+// `lastTurnOwned` set and stays excluded until a settled fetch (tab switch /
+// reopen) clears its `localTurns`. This is deliberate: the alternative — admitting
+// a session whose `localTurns` may hold an unflushed reply — reintroduces the
+// hardware-evidenced content-drop `completeTurn` documents. The failure is safe
+// (stale, never wrong) and self-heals on any refetch or the next observed turn
+// (whose promotion re-stamps `lastTurnOwned` false). The common viewer — one that
+// never drove a turn — is unaffected.
+function isPureViewerSession(session: ConversationRuntimeSession): boolean {
+  return (
+    session.syncState !== "awaiting_persist" &&
+    session.liveMessage === null &&
+    !(
+      session.localTurns.length > 0 &&
+      (session.lastTurnOwned || session.liveOwnsActiveTurn)
+    )
+  )
 }
 
 /**
@@ -2376,6 +2495,142 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
       })
   }
 
+  // Bring a passively-VIEWED conversation's detail up to date after its turn
+  // completed on another client. See `viewerDetailSyncCancels` above for why the
+  // panel's live promotion never fires for such a viewer and why this must poll
+  // rather than refetch once. No-op (returns immediately) unless the session is
+  // open AND a pure viewer, so the owner's in-flight/just-completed reply is
+  // never touched. Never sets `detailLoading` — a passive background sync must
+  // not flash a spinner over the content the viewer is already reading.
+  const syncViewerDetail = (nudgedConversationId: number): void => {
+    // The nudge carries a positive DB id; map it to the runtime session key,
+    // which may be a virtual negative id for a draft-originated tab (issue: the
+    // `dbConversationId` fetch fallback below is unreachable without this).
+    const conversationId = resolveViewerRuntimeId(
+      get().byConversationId,
+      nudgedConversationId
+    )
+    if (conversationId == null) return
+    const session = get().byConversationId.get(conversationId)
+    if (!session || !isPureViewerSession(session)) return
+
+    // Restart, don't stack: a fresh nudge supersedes any in-flight poll.
+    cancelViewerDetailSync(conversationId)
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const cancel = (): void => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+      if (viewerDetailSyncCancels.get(conversationId) === cancel) {
+        viewerDetailSyncCancels.delete(conversationId)
+      }
+    }
+    viewerDetailSyncCancels.set(conversationId, cancel)
+
+    const attempt = (n: number): void => {
+      if (cancelled) return
+      const cur = get().byConversationId.get(conversationId)
+      // The session vanished (tab closed) or started driving its own turn
+      // (a local send / live stream) between ticks — stop; it is no longer a
+      // pure viewer this poll may refetch under.
+      if (!cur || !isPureViewerSession(cur)) {
+        cancel()
+        return
+      }
+      // Read the DB fetch id fresh each tick: a just-bound draft resolves its
+      // `dbConversationId` asynchronously, and the runtime key alone is not
+      // always fetchable (a virtual negative id). Falls back to the key.
+      const fetchId = cur.dbConversationId ?? conversationId
+      // `getFolderConversation` here can itself emit a `conversation://changed`
+      // upsert (auto-title backfill), which re-enters this poll (cancel +
+      // restart). That converges — the title only changes a bounded number of
+      // times and the attempt cap bounds each run — but it's why this is the one
+      // detail fetcher that both triggers and can re-trigger itself.
+      const generation = bumpFetchGeneration(conversationId)
+      getFolderConversation(fetchId)
+        .then((detail) => {
+          if (cancelled) return
+          const cur2 = get().byConversationId.get(conversationId)
+          if (!cur2 || !isPureViewerSession(cur2)) {
+            cancel()
+            return
+          }
+          // The generation gate governs only the COMMIT: a concurrent panel
+          // fetch/refetch (or a superseding nudge) that bumped the counter owns
+          // the detail now, so we must not clobber it with this (possibly older)
+          // read — but we still evaluate convergence below and keep polling,
+          // since that superseding read may have landed a pre-reply transcript.
+          const isLatest = isLatestGeneration(conversationId, generation)
+          // Convergence: keep polling while the reply isn't fully persisted:
+          //  - `in_flight_user_turn_id` is the backend's authoritative "a turn
+          //    is still running on this connection" flag (set from the pending
+          //    user message, cleared at TurnComplete) — it also covers agents
+          //    that persist a PARTIAL assistant turn mid-stream (OpenCode,
+          //    Gemini), where a role check alone would stop early; and
+          //  - a trailing USER turn means the turn ended (per the wire) but its
+          //    assistant record hasn't flushed to the JSONL yet (Claude/Codex).
+          // Any other settled tail (assistant reply, or no turns) means there is
+          // nothing more to wait for.
+          const lastTurn = detail.turns[detail.turns.length - 1]
+          const replyPending =
+            detail.in_flight_user_turn_id != null || lastTurn?.role === "user"
+          // Skip a no-op dispatch (identical transcript) so a multi-tick poll
+          // doesn't re-render the message list on every attempt. Compare the
+          // cheap byte watermark + turn count rather than deep-diffing turns.
+          // A FETCH_DETAIL_SUCCESS carrying the backend's in-flight stamp keeps
+          // the synthesized viewer prompt (`keepAllLiveBuffers`); a settled load
+          // replaces it — so "hi" only transiently disappears in the narrow case
+          // where a non-in-flight read that lacks the just-sent prompt commits
+          // between turns, and the next nudge re-surfaces it.
+          const prev = cur2.detail
+          const changed =
+            !prev ||
+            (prev.transcript_watermark ?? null) !==
+              (detail.transcript_watermark ?? null) ||
+            prev.turns.length !== detail.turns.length
+          // Commit when the transcript advanced (`changed`) OR when the reply
+          // just settled (`!replyPending`). The settle case lands the FINAL
+          // content for a no-watermark agent that grows its partial assistant
+          // turn IN PLACE (OpenCode/Gemini): its final read shares the partial's
+          // null watermark and turn count, so `changed` alone would suppress it
+          // and the poll would then stop, freezing the viewer on the partial.
+          if (isLatest && (changed || !replyPending)) {
+            dispatch({
+              type: "FETCH_DETAIL_SUCCESS",
+              conversationId,
+              detail,
+              preserveLive: false,
+            })
+          }
+          if (replyPending && n + 1 < VIEWER_DETAIL_SYNC_DELAYS_MS.length) {
+            timer = setTimeout(
+              () => attempt(n + 1),
+              VIEWER_DETAIL_SYNC_DELAYS_MS[n + 1]
+            )
+            return
+          }
+          cancel()
+        })
+        .catch(() => {
+          // A failed read is transient (the transcript may be mid-write); retry
+          // on the same schedule, then give up. Never surfaces a detailError —
+          // the viewer keeps its current content.
+          if (cancelled) return
+          if (n + 1 < VIEWER_DETAIL_SYNC_DELAYS_MS.length) {
+            timer = setTimeout(
+              () => attempt(n + 1),
+              VIEWER_DETAIL_SYNC_DELAYS_MS[n + 1]
+            )
+            return
+          }
+          cancel()
+        })
+    }
+
+    attempt(0)
+  }
+
   const syncTurnMetadata = (
     dbConversationId: number,
     runtimeConversationId?: number
@@ -2469,6 +2724,7 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
   const actions: RuntimeActions = {
     fetchDetail,
     refetchDetail,
+    syncViewerDetail,
     syncTurnMetadata,
     completeTurn: (conversationId, liveMessage) => {
       // Deliberately NO refetchDetail here (tried and reverted — see git
@@ -2558,6 +2814,10 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
       // late-arriving response can't resurrect the session with stale
       // detail. See `fetchGeneration` above.
       bumpFetchGeneration(conversationId)
+      // Stop a viewer-sync poll whose tab just closed (its own tick guard would
+      // also stop it on the next fire, but cancelling now drops the pending
+      // timer immediately).
+      cancelViewerDetailSync(conversationId)
       dispatch({ type: "REMOVE_CONVERSATION", conversationId })
     },
     reset: () => dispatch({ type: "RESET" }),
@@ -2636,6 +2896,8 @@ export function resetConversationRuntimeStore(): void {
   // have no concurrent fetches — but a real in-place backend switch would need a
   // backend epoch here. See `RemoteConnectionGate`.
   fetchGeneration.clear()
+  for (const cancel of viewerDetailSyncCancels.values()) cancel()
+  viewerDetailSyncCancels.clear()
   timelineCache = new WeakMap()
   useConversationRuntimeStore.setState({
     byConversationId: new Map(),
