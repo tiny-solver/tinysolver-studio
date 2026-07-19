@@ -42,9 +42,9 @@ export const DEFAULT_WORKSPACE_BG_IMAGE_BLUR = 0
 export const DEFAULT_WORKSPACE_BG_PANEL_OPACITY = 0.3
 export const DEFAULT_WORKSPACE_BG_FILL_MODE: WorkspaceBgFillMode = "cover"
 
-export const WORKSPACE_BG_MASK_OPACITY_RANGE = { min: 0, max: 0.9, step: 0.01 }
+export const WORKSPACE_BG_MASK_OPACITY_RANGE = { min: 0, max: 0.99, step: 0.01 }
 export const WORKSPACE_BG_IMAGE_BLUR_RANGE = { min: 0, max: 24, step: 1 }
-export const WORKSPACE_BG_PANEL_OPACITY_RANGE = { min: 0.3, max: 1, step: 0.01 }
+export const WORKSPACE_BG_PANEL_OPACITY_RANGE = { min: 0, max: 1, step: 0.01 }
 
 /** Client-side upload ceiling; matches the backend `MAX_BG_BYTES` (16 MiB). */
 export const MAX_WORKSPACE_BG_BYTES = 16 * 1024 * 1024
