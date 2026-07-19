@@ -185,8 +185,6 @@ export function DiffViewer({
           modified={modified}
           language={language}
           theme={editorTheme}
-          keepCurrentOriginalModel
-          keepCurrentModifiedModel
           beforeMount={defineMonacoThemes}
           onMount={handleEditorMount}
           loading={
