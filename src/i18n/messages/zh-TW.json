@@ -2190,7 +2190,8 @@
         "enableAgentFirstPlaceholder": "請先啟用至少一個 Agent 後開始會話...",
         "prepareSessionFailed": "無法準備聊天工作階段，請重試。",
         "createConversationFailed": "無法建立會話，請重試。",
-        "askAnythingPlaceholder": "請開始輸入..."
+        "askAnythingPlaceholder": "請開始輸入...",
+        "agentNotInstalled": "{agent} 尚未安裝 · 點擊前往 Agents 設定安裝"
       },
       "welcomePanel": {
         "greeting": "今天打算<highlight>做些什麼</highlight>呢？",
@@ -2290,7 +2291,8 @@
       },
       "agentSelector": {
         "noEnabledAgents": "暫無已啟用的 Agent",
-        "openAgentsSettings": "開啟 Agents 設定"
+        "openAgentsSettings": "開啟 Agents 設定",
+        "notInstalled": "未安裝"
       },
       "subAgentOverlay": {
         "title": "子智能體",

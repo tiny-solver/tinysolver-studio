@@ -2190,7 +2190,8 @@
         "enableAgentFirstPlaceholder": "セッション開始前に少なくとも1つのエージェントを有効化してください...",
         "prepareSessionFailed": "チャットセッションを準備できませんでした。もう一度お試しください。",
         "createConversationFailed": "会話を作成できませんでした。もう一度お試しください。",
-        "askAnythingPlaceholder": "何でも質問してください..."
+        "askAnythingPlaceholder": "何でも質問してください...",
+        "agentNotInstalled": "{agent} はインストールされていません · クリックして Agents 設定でインストール"
       },
       "welcomePanel": {
         "greeting": "今日は<highlight>何を</highlight>しましょうか？",
@@ -2290,7 +2291,8 @@
       },
       "agentSelector": {
         "noEnabledAgents": "有効なエージェントがありません",
-        "openAgentsSettings": "エージェント設定を開く"
+        "openAgentsSettings": "エージェント設定を開く",
+        "notInstalled": "未インストール"
       },
       "subAgentOverlay": {
         "title": "サブエージェント",

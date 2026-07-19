@@ -2190,7 +2190,8 @@
         "enableAgentFirstPlaceholder": "Enable at least one agent before starting a session...",
         "prepareSessionFailed": "Couldn't prepare the chat session. Please try again.",
         "createConversationFailed": "Couldn't create the conversation. Please try again.",
-        "askAnythingPlaceholder": "Ask anything..."
+        "askAnythingPlaceholder": "Ask anything...",
+        "agentNotInstalled": "{agent} is not installed — open Agents settings to install it"
       },
       "welcomePanel": {
         "greeting": "What would you like to <highlight>do today</highlight>?",
@@ -2290,7 +2291,8 @@
       },
       "agentSelector": {
         "noEnabledAgents": "No enabled agents",
-        "openAgentsSettings": "Open Agents settings"
+        "openAgentsSettings": "Open Agents settings",
+        "notInstalled": "Not installed"
       },
       "subAgentOverlay": {
         "title": "Sub-agents",
