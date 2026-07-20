@@ -138,6 +138,11 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
   if (tabs.length === 0) return null
 
   const activeIndex = tabs.findIndex((tab) => tab.id === activeTabId)
+  // When the LAST tab is active, the trailing new-conversation wrapper is its
+  // right neighbour — it needs the same baseline inset a tab neighbour gets
+  // (`data-adjacent-active`), so the active tab's right reverse-corner foot
+  // doesn't leave a stray line poking out from under it (globals.css).
+  const lastTabActive = activeIndex >= 0 && activeIndex === tabs.length - 1
 
   const group = (
     <Reorder.Group
@@ -153,7 +158,9 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        "pt-1.5 px-1.5 flex items-stretch",
+        // Horizontal padding is set per-branch below (not shared here), because
+        // the two modes need different gutters.
+        "pt-1.5 flex items-stretch",
         // Embedded in the title bar: fill its height, no scrollbar — the tabs
         // shrink browser-style to share the row (see TabItem `embedded`), sit
         // flush (`gap-0`) so their hairline separators read as dividers, and the
@@ -166,12 +173,18 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
         // button always hugs the last tab. (A nested content-sized group instead
         // let the engine resolve its `flex-basis:auto` to min-content — starving
         // the tabs to their label width and detaching the button from them.)
+        // `pl-2` only (NOT `px-2`): the first tab keeps its 0.5rem left gutter for
+        // the first-child seam-patch, but there is NO right padding — so the trailing
+        // wrapper's `ws-strip-line` reaches the group's right edge and the bottom
+        // hairline stays continuous into the right reserve. (A right `px-2` left an
+        // 8px hole in the hairline there, since the wrapper — not a tab — is the
+        // group's last child and gets no last-child seam-patch.)
         // Standalone (mobile panel row): keep the h-10 row + border + horizontal
         // scroll with a hover scrollbar and the original inter-tab gap.
         embedded
-          ? "h-full min-w-0 flex-1 gap-0 overflow-hidden px-2"
+          ? "h-full min-w-0 flex-1 gap-0 overflow-hidden pl-2"
           : [
-              "h-10 gap-1.5 border-b border-border overflow-x-scroll",
+              "h-10 gap-1.5 px-1.5 border-b border-border overflow-x-scroll",
               isHovered
                 ? [
                     "pb-0.5",
@@ -232,7 +245,12 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
           shrink to reserve it instead of it collapsing to 0 and clipping the
           button. Off (no bg image): ws-strip-line is inert. */}
       {embedded && (
-        <div className="flex h-full flex-1 items-stretch ws-strip-line">
+        <div
+          // `relative` anchors the `data-adjacent-active` inset baseline
+          // (globals.css `::after`) used when the last tab is active.
+          data-adjacent-active={lastTabActive ? "after" : undefined}
+          className="relative flex h-full flex-1 items-stretch ws-strip-line"
+        >
           <button
             type="button"
             onClick={handleNewConversation}
@@ -245,9 +263,12 @@ export function TabBar({ embedded = false }: { embedded?: boolean } = {}) {
             // still lands on the strip midline (matching the tab content).
             // `ml-1.5` adds a matching 6px LEFT gap from the last tab's edge — so
             // on hover the circle reads as evenly floated off the top, bottom, and
-            // left lines. Hover darkens past the `bg-muted` strip (ghost's own
-            // `bg-muted` hover would be invisible on it).
-            className="ml-1.5 mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+            // left lines. The hover fill reuses the changed-files reply card's
+            // collapsed-header tint (`bg-accent/40`, see reply-artifacts): a
+            // translucent accent that reads as a light frost over a workspace
+            // background image, instead of the opaque dark patch `bg-foreground/10`
+            // showed there.
+            className="ml-1.5 mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
             aria-label={t("newConversation")}
             title={t("newConversation")}
           >

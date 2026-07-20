@@ -2245,3 +2245,24 @@
   left: 0;
   right: 0.5rem;
 }
+/* 同款内缩，但用于末尾「新建会话」按钮 wrapper（它紧邻激活的末尾 tab 时挂 data-adjacent-active
+   ="after"）。激活 tab 的右反向圆角脚往外 flare 0.5rem 盖在这个 wrapper 上，而 wrapper 的
+   ws-strip-line 是全宽 border-bottom，会在脚下透出一小段横线（用户反馈「激活末尾 tab 右下角
+   下边框突出来」）。上面的规则只处理 tab 邻居——那里 ws-strip-line 是 .browser-tab-item 的
+   后代；这个尾部 wrapper 不是 tab，且 ws-strip-line 与 data-adjacent-active 同挂在它自己身上，
+   故用独立选择器。撤掉全宽 border-bottom、改画一条朝激活 tab 一侧内缩 0.5rem 的 ::after 平线
+   （起点正落在脚弧触地处）→ 脚下不再有横线。wrapper 的 position:relative 由组件提供。仅 bg-on
+   生效，关图零回归。 */
+[data-workspace-bg="on"] .ws-strip-line[data-adjacent-active="after"] {
+  border-bottom-width: 0;
+}
+[data-workspace-bg="on"] .ws-strip-line[data-adjacent-active="after"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0.5rem;
+  right: 0;
+  height: 1px;
+  background-color: var(--border);
+  pointer-events: none;
+}
