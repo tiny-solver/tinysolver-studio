@@ -1778,9 +1778,7 @@
       "newBranch": "فرع جديد...",
       "resetToHere": "إعادة الضبط إلى هنا",
       "resetDisabledReasonNotCurrentBranchView": "متاح فقط عند عرض الفرع الحالي",
-      "viewCommitDiffAria": "عرض diff للالتزام {hash}",
       "copyFullCommitHashAria": "نسخ hash الكامل للالتزام {hash}",
-      "changedFilesTitle": "تم تغيير {count} ملف",
       "pushStatus": {
         "pushed": "تم الدفع إلى البعيد",
         "notPushed": "لم يتم الدفع إلى البعيد",

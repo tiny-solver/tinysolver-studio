@@ -1778,9 +1778,7 @@
       "newBranch": "Neuer Branch...",
       "resetToHere": "Auf diesen Stand zurücksetzen",
       "resetDisabledReasonNotCurrentBranchView": "Nur in der Ansicht des aktuellen Branches verfügbar",
-      "viewCommitDiffAria": "Diff für Commit {hash} anzeigen",
       "copyFullCommitHashAria": "Vollständigen Commit-Hash {hash} kopieren",
-      "changedFilesTitle": "{count, plural, one {# Datei geändert} other {# Dateien geändert}}",
       "pushStatus": {
         "pushed": "Zum Remote gepusht",
         "notPushed": "Nicht zum Remote gepusht",

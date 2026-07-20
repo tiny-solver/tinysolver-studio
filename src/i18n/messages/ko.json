@@ -1778,9 +1778,7 @@
       "newBranch": "새 브랜치...",
       "resetToHere": "여기로 리셋",
       "resetDisabledReasonNotCurrentBranchView": "현재 브랜치 보기에서만 사용할 수 있습니다",
-      "viewCommitDiffAria": "커밋 {hash}의 diff 보기",
       "copyFullCommitHashAria": "전체 커밋 해시 {hash} 복사",
-      "changedFilesTitle": "파일 {count}개 변경",
       "pushStatus": {
         "pushed": "원격에 푸시됨",
         "notPushed": "원격에 푸시되지 않음",

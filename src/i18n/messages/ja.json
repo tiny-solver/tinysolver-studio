@@ -1778,9 +1778,7 @@
       "newBranch": "新規ブランチ...",
       "resetToHere": "ここにリセット",
       "resetDisabledReasonNotCurrentBranchView": "現在のブランチ表示時のみ利用できます",
-      "viewCommitDiffAria": "コミット {hash} の差分を表示",
       "copyFullCommitHashAria": "完全なコミットハッシュ {hash} をコピー",
-      "changedFilesTitle": "{count} 件のファイルを変更",
       "pushStatus": {
         "pushed": "リモートにプッシュ済み",
         "notPushed": "リモートに未プッシュ",

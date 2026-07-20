@@ -1778,9 +1778,7 @@
       "newBranch": "Nueva rama...",
       "resetToHere": "Resetear aquí",
       "resetDisabledReasonNotCurrentBranchView": "Disponible solo al ver la rama actual",
-      "viewCommitDiffAria": "Ver diff del commit {hash}",
       "copyFullCommitHashAria": "Copiar hash completo del commit {hash}",
-      "changedFilesTitle": "{count, plural, one {# archivo modificado} other {# archivos modificados}}",
       "pushStatus": {
         "pushed": "Enviado al remoto",
         "notPushed": "No enviado al remoto",
