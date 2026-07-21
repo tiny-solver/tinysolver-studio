@@ -158,10 +158,17 @@ export function TabBar() {
           so under many-tab overflow the tabs shrink to reserve it instead of it
           collapsing to 0 and clipping the button. */}
       <div
-        // `relative` anchors the `data-adjacent-active` inset baseline
-        // (globals.css `::after`) used when the last tab is active.
+        // `relative` anchors two decorative pseudo-elements: the
+        // `data-adjacent-active` inset baseline (globals.css `.ws-strip-line`
+        // `::after`) used when the last tab is active, and the `tab-strip-tail`
+        // `::before` vertical separator shown between the last NON-active tab and
+        // the new-conversation button. Inter-tab separators sit on each tab's
+        // LEFT edge (`.browser-tab-item::before`), so the last tab's RIGHT edge —
+        // where this flush-pinned button begins — otherwise has none. Only the
+        // conversation strip carries `tab-strip-tail`; the file strip floats its
+        // trailing button far-right past a drag spacer, so it stays divider-free.
         data-adjacent-active={lastTabActive ? "after" : undefined}
-        className="relative flex h-full flex-1 items-stretch ws-strip-line"
+        className="tab-strip-tail relative flex h-full flex-1 items-stretch ws-strip-line"
       >
         <button
           type="button"
@@ -172,11 +179,13 @@ export function TabBar() {
           // centering in the pt-shortened trailing box: with `h-7` on the `h-10`
           // strip that yields an equal 6px top and 6px bottom gap, so its center
           // still lands on the strip midline (matching the tab content). `ml-1.5`
-          // adds a matching 6px LEFT gap from the last tab's edge. The hover fill
-          // reuses the reply card's collapsed-header tint (`bg-accent/40`): a
-          // translucent accent that reads as a light frost over a workspace
-          // background image, instead of an opaque dark patch.
-          className="ml-1.5 mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+          // adds a matching 6px LEFT gap from the last tab's edge. The hover uses
+          // the chrome-standard adaptive tint (`bg-foreground/10`, matching the
+          // bottom branch/command blocks) plus `backdrop-blur-sm`: over the fully
+          // transparent strip (workspace bg image on) the fill reads as frosted
+          // glass rather than a muddy patch, and the tint is clearly visible in
+          // both light and dark themes (unlike the old near-white `bg-accent/40`).
+          className="ml-1.5 mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-muted-foreground backdrop-blur-sm transition-colors hover:bg-foreground/10 hover:text-foreground"
           aria-label={t("newConversation")}
           title={t("newConversation")}
         >

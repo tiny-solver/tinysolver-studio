@@ -744,7 +744,7 @@ export function BranchDropdown({
           <button
             className={cn(
               triggerClassName,
-              isStatusBar && "rounded-md px-2 hover:bg-foreground/10"
+              isStatusBar && "rounded-full px-2 hover:bg-foreground/10"
             )}
           >
             <GitFork className="h-3 w-3 shrink-0" />
@@ -779,7 +779,7 @@ export function BranchDropdown({
       <div
         className={cn(
           isStatusBar
-            ? "group/branch flex items-center rounded-md transition-colors hover:bg-foreground/10"
+            ? "group/branch flex items-center rounded-full transition-colors hover:bg-foreground/10"
             : "contents"
         )}
       >
@@ -791,7 +791,7 @@ export function BranchDropdown({
             <button
               className={cn(
                 triggerClassName,
-                isStatusBar && "rounded-l-md pr-1.5 pl-2"
+                isStatusBar && "rounded-l-full pr-1.5 pl-2"
               )}
               title={
                 isDetached
@@ -1040,7 +1040,7 @@ export function BranchDropdown({
               onClick={handlePull}
               disabled={loading}
               title={t("pullCode")}
-              className="flex h-6 items-center rounded-r-md pr-2 pl-1.5 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
+              className="flex h-6 items-center rounded-r-full pr-2 pl-1.5 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
             >
               <CloudDownload className="h-3 w-3" />
             </button>

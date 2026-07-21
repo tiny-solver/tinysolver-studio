@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { Play, Plus, Square } from "lucide-react"
+import { Play, Plus, Square, Terminal } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import {
@@ -248,7 +248,7 @@ export function CommandDropdown() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 px-2 text-xs gap-1 hover:text-foreground/80"
+          className="h-6 rounded-full px-2 text-xs gap-1 hover:text-foreground/80"
           onClick={() => setManageOpen(true)}
           disabled={bootstrapping}
         >
@@ -263,13 +263,14 @@ export function CommandDropdown() {
         // translucent overlay on purpose: the status-bar surface is already
         // `--muted`, so a `bg-muted`/`bg-accent` hover would be invisible against
         // it in light mode.
-        <div className="group/cmd flex items-center rounded-md text-xs transition-colors hover:bg-foreground/10">
+        <div className="group/cmd flex items-center rounded-full text-xs transition-colors hover:bg-foreground/10">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex h-6 min-w-0 items-center gap-1 rounded-l-md pr-1.5 pl-2 text-muted-foreground outline-none transition-colors hover:text-foreground"
+                className="flex h-6 min-w-0 items-center gap-1 rounded-l-full pr-1.5 pl-2 text-muted-foreground outline-none transition-colors hover:text-foreground"
               >
+                <Terminal className="h-3 w-3 shrink-0" />
                 <span className="max-w-24 truncate">{activeCmd?.name}</span>
               </button>
             </DropdownMenuTrigger>
@@ -310,7 +311,7 @@ export function CommandDropdown() {
                 : t("runCommandTitle", { command: activeCmd?.command ?? "" })
             }
             className={cn(
-              "flex h-6 items-center rounded-r-md pr-2 pl-1.5 outline-none transition-colors",
+              "flex h-6 items-center rounded-r-full pr-2 pl-1.5 outline-none transition-colors",
               isActiveCommandRunning
                 ? "text-destructive"
                 : "text-muted-foreground hover:text-foreground"
