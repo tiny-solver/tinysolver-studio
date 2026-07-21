@@ -1231,12 +1231,35 @@
    连续下边框无法在激活 tab 处「开口」（透明子元素盖不住祖先画的线），故平线逐段画在激活
    tab 的兄弟区域（预留区/非激活 tab/按钮/拖拽填充），激活 tab 及其祖先不画。拱门轮廓（顶 +
    两侧 + 反向圆角脚）与两端 group px-2 补缝都在下方 .browser-tab-item 区块。色 =
-   var(--border)（纯色，比 detail header 的 border/50 略深，让透出背景图时分隔线更清晰）。 */
+   var(--ws-chrome-border)（下方定义的加强色，与状态栏/header 等所有 chrome 分隔线统一）。 */
+
+/* ===== 结构性 chrome 分隔线加强色 --ws-chrome-border =====
+   状态栏顶边 / 会话·文件 header 底边 / 移动端标题栏·aux 标签条底边 / 标签条平线 + 激活 tab 拱门——
+   这些持久的 chrome 细分隔线原本用主题 --border（浅色主题=0.922 灰，在浅色磨砂面上几乎看不见；深色
+   主题=白/10%）。开启背景图后（默认遮罩 0.82 把画面veil向 --background），它们常被冲淡看不清（用户
+   反馈「边框很多时候不清楚」）。这里给它们一个 foreground 染色的加强 hairline：浅色主题转深、深色主题
+   转浅，自动在两侧都有对比；alpha 低只描出一条清晰细线。仅 bg-on 生效，关图零回归。单一变量=一处调深浅。 */
+[data-workspace-bg="on"] {
+  --ws-chrome-border: color-mix(in oklch, var(--foreground) 13%, transparent);
+}
+/* 老引擎无 color-mix 时回落到主题 --border（仍随主题，至少不崩）。 */
+@supports not (background: color-mix(in oklch, white, transparent)) {
+  [data-workspace-bg="on"] {
+    --ws-chrome-border: var(--border);
+  }
+}
+/* 组合式 utility（无 base 规则）：挂在已带 border-* / border-border* 的 chrome 元素上，开图时用加强色
+   覆盖其 border-color。unlayered 压过 Tailwind 的 layered border-border（与 specificity 无关）。关图无此
+   规则 → 元素保留自带 border 颜色，零回归。这些分隔线无 hover 变色，故 unlayered 覆盖不会误盖交互态。 */
+[data-workspace-bg="on"] .ws-chrome-border {
+  border-color: var(--ws-chrome-border);
+}
 
 /* 平线：挂到激活 tab 的兄弟/非祖先区域，逐段 border-bottom 连成一条线（各兄弟 h-full，
-   底都落在 strip 底 y=40）。激活 tab 不挂 → 留缺口给拱门。 */
+   底都落在 strip 底 y=40）。激活 tab 不挂 → 留缺口给拱门。色随 --ws-chrome-border（同上加强色，
+   与状态栏/header 分隔线统一）。 */
 [data-workspace-bg="on"] .ws-strip-line {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--ws-chrome-border);
 }
 
 /* 旧 WebKitGTK 无 color-mix 时降级为不透明（背景图仅在透明内容区透出，不崩）。 */
@@ -2017,6 +2040,33 @@
   opacity: 0;
 }
 
+/* Trailing separator between the last tab and the new-conversation button (the
+   conversation strip only — see tab-bar.tsx `tab-strip-tail`). Inter-tab
+   separators sit on each tab's LEFT edge, so the last tab's RIGHT edge, where
+   the flush-pinned button wrapper begins, has none. Same hairline geometry as
+   `.browser-tab-item::before` (the wrapper shares the tabs' flex box, so the
+   `calc(50% - 3px)` nudge centers it on the strip midline identically) and the
+   same `var(--border)` tone, so it reads as just another inter-tab separator.
+   Suppressed when the last tab is active or hovered, mirroring how a tab drops
+   the separators flanking the active/hovered tab. */
+.tab-strip-tail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(50% - 3px);
+  height: 1rem;
+  width: 1px;
+  transform: translateY(-50%);
+  background: var(--border);
+  opacity: 1;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+.browser-tab-item[data-active="true"] + .tab-strip-tail::before,
+.browser-tab-item:hover + .tab-strip-tail::before {
+  opacity: 0;
+}
+
 /* Embedded tab label — no ellipsis: fade the right edge so an overflowing title
    dissolves instead of hard-cutting with "…". Pairs with `overflow-hidden
    whitespace-nowrap` on the label (replaces `truncate`).
@@ -2187,7 +2237,7 @@
    0.5rem 见方的盒(left/right:-0.5rem, y32→40, box-sizing:border-box)，把**对角圆角 + 相邻
    两条边框**做成一段干净四分之一凹弧：左脚=右下角圆角+下/右边框，右脚=左下角圆角+下/左边框。
    弧顶(tab 边 y32)竖直切线接拱门 ::after 侧边、弧底(gutter 外沿 y40)水平切线接 ws-strip-line
-   平线，两端相切→过渡自然。清掉 mask 与填充色，只留描边，色 var(--border) 与拱门同深。 */
+   平线，两端相切→过渡自然。清掉 mask 与填充色，只留描边，色 var(--ws-chrome-border) 与拱门同深。 */
 [data-workspace-bg="on"]
   .browser-tab-item[data-active="true"]
   .browser-tab-seat::before,
@@ -2201,15 +2251,15 @@
 [data-workspace-bg="on"]
   .browser-tab-item[data-active="true"]
   .browser-tab-seat::before {
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--ws-chrome-border);
+  border-right: 1px solid var(--ws-chrome-border);
   border-bottom-right-radius: 0.5rem;
 }
 [data-workspace-bg="on"]
   .browser-tab-item[data-active="true"]
   .browser-tab-seat::after {
-  border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--ws-chrome-border);
+  border-left: 1px solid var(--ws-chrome-border);
   border-bottom-left-radius: 0.5rem;
 }
 
@@ -2229,9 +2279,9 @@
   left: -1px;
   right: -1px;
   bottom: 0.5rem;
-  border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--ws-chrome-border);
+  border-left: 1px solid var(--ws-chrome-border);
+  border-right: 1px solid var(--ws-chrome-border);
   border-top-left-radius: 0.5rem;
   border-top-right-radius: 0.5rem;
   pointer-events: none;
@@ -2254,7 +2304,7 @@
   bottom: 0;
   height: 1px;
   width: 0.5rem;
-  background-color: var(--border);
+  background-color: var(--ws-chrome-border);
   pointer-events: none;
 }
 [data-workspace-bg="on"]
@@ -2291,7 +2341,7 @@
   position: absolute;
   bottom: 0;
   height: 1px;
-  background-color: var(--border);
+  background-color: var(--ws-chrome-border);
   pointer-events: none;
 }
 [data-workspace-bg="on"]
@@ -2324,6 +2374,6 @@
   left: 0.5rem;
   right: 0;
   height: 1px;
-  background-color: var(--border);
+  background-color: var(--ws-chrome-border);
   pointer-events: none;
 }

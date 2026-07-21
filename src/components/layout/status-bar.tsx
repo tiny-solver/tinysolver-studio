@@ -19,7 +19,7 @@ export function StatusBar() {
     // (matching desktop) gives the h-6 branch/command controls room. Branch and
     // command self-hide in chat mode / without a repo.
     return (
-      <div className="h-8 shrink-0 border-t border-border ws-surface-muted px-3 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="h-8 shrink-0 border-t border-border ws-chrome-border ws-surface-muted px-3 flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex min-w-0 items-center gap-3">
           <BranchDropdown showFolderName={false} />
         </div>
@@ -33,7 +33,7 @@ export function StatusBar() {
   }
 
   return (
-    <div className="h-8 shrink-0 border-t border-border ws-surface-muted px-4 flex items-center justify-between text-xs text-muted-foreground">
+    <div className="h-8 shrink-0 border-t border-border ws-chrome-border ws-surface-muted px-4 flex items-center justify-between text-xs text-muted-foreground">
       <div className="flex items-center gap-3">
         <StatusBarStats />
         {/* Branch selector (moved from the aux "session details" tab). Folder

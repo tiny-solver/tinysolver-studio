@@ -73,7 +73,7 @@ export function FolderTitleBar() {
   }, [activeFolder, openChatModeTab, openNewConversationTab, openConversations])
 
   return (
-    <div className="flex h-10 shrink-0 items-stretch border-b border-border bg-muted/70 select-none">
+    <div className="flex h-10 shrink-0 items-stretch border-b border-border ws-chrome-border bg-muted/70 select-none">
       {/* macOS traffic-light inset — a window-drag region so the left cluster
           clears the OS-drawn lights. */}
       {showMacInset && (
