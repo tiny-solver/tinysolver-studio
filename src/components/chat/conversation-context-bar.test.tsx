@@ -2,7 +2,10 @@ import { render, screen, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConversationFolderBranchPicker } from "./conversation-context-bar"
+import {
+  ConversationFolderBranchPicker,
+  ConversationHeaderFolderPicker,
+} from "./conversation-context-bar"
 import type { FolderDetail } from "@/lib/types"
 import {
   resetAppWorkspaceStore,
@@ -163,5 +166,60 @@ describe("ConversationFolderBranchPicker — branch checkout", () => {
 
     expect(switchToBranch).not.toHaveBeenCalled()
     expect(gitCheckout).not.toHaveBeenCalled()
+  })
+})
+
+// The desktop conversation header renders this folder-only picker in place of
+// the old folder-name breadcrumb. `next-intl` is mocked to echo keys, so a
+// translated label like the chat-mode item reads back as its key.
+describe("ConversationHeaderFolderPicker", () => {
+  it("switches folders for a draft via openNewConversationTab", async () => {
+    const other = mkFolder({ id: 2, name: "other-repo", path: "/repo/other" })
+    useAppWorkspaceStore.setState({
+      folders: [repo, other],
+      allFolders: [repo, other],
+    })
+    tabs = [{ id: "tab-draft", folderId: 1, conversationId: null }]
+    activeTabId = "tab-draft"
+
+    const user = userEvent.setup()
+    render(<ConversationHeaderFolderPicker tabId="tab-draft" />)
+    // Draft → editable trigger showing the current folder name.
+    await user.click(screen.getByRole("button", { name: /repo/ }))
+    await user.click(await screen.findByText("other-repo"))
+
+    expect(openNewConversationTab).toHaveBeenCalledWith(2, "/repo/other", {
+      inheritFromActive: true,
+    })
+  })
+
+  it("renders a static (non-switchable) chip for an existing conversation", async () => {
+    const other = mkFolder({ id: 2, name: "other-repo", path: "/repo/other" })
+    useAppWorkspaceStore.setState({
+      folders: [repo, other],
+      allFolders: [repo, other],
+    })
+    tabs = [{ id: "tab-1", folderId: 1, conversationId: 42 }]
+    activeTabId = "tab-1"
+
+    const user = userEvent.setup()
+    render(<ConversationHeaderFolderPicker tabId="tab-1" />)
+    await user.click(screen.getByRole("button", { name: /repo/ }))
+    // Non-editable: clicking opens no folder list, so the other repo is
+    // unreachable and no switch fires.
+    expect(screen.queryByText("other-repo")).toBeNull()
+    expect(openNewConversationTab).not.toHaveBeenCalled()
+  })
+
+  it("shows the chat-mode label for a folderless chat tab", () => {
+    tabs = [
+      { id: "tab-chat", folderId: 999, conversationId: null, isChat: true },
+    ]
+    activeTabId = "tab-chat"
+
+    render(<ConversationHeaderFolderPicker tabId="tab-chat" />)
+    expect(
+      screen.getByRole("button", { name: /chatModeLabel/ })
+    ).toBeTruthy()
   })
 })

@@ -126,15 +126,31 @@ describe("SessionDetailsTab", () => {
     vi.clearAllMocks()
   })
 
-  it("renders the active session's details and the folder actions bar", () => {
+  it("renders the active session's details; desktop hides the folder actions bar", () => {
+    // Desktop: branch + command moved to the bottom status bar / conversation
+    // header, so the aux tab shows the details alone.
     setupScene({
       activeFolderId: 1,
       isChatMode: false,
       hasActiveConversation: true,
+      isMobile: false,
+    })
+    const { getByText, queryByTestId } = renderTab()
+    expect(getByText("My session")).toBeTruthy()
+    expect(getByText("Claude Code")).toBeTruthy()
+    expect(queryByTestId("branch-dropdown")).toBeNull()
+    expect(queryByTestId("command-dropdown")).toBeNull()
+  })
+
+  it("shows the folder actions bar on mobile (the Sheet has no status bar/header)", () => {
+    setupScene({
+      activeFolderId: 1,
+      isChatMode: false,
+      hasActiveConversation: true,
+      isMobile: true,
     })
     const { getByText, getByTestId } = renderTab()
     expect(getByText("My session")).toBeTruthy()
-    expect(getByText("Claude Code")).toBeTruthy()
     expect(getByTestId("branch-dropdown")).toBeTruthy()
     expect(getByTestId("command-dropdown")).toBeTruthy()
   })
@@ -144,6 +160,7 @@ describe("SessionDetailsTab", () => {
       activeFolderId: 1,
       isChatMode: true,
       hasActiveConversation: true,
+      isMobile: true,
     })
     const { getByText, queryByTestId } = renderTab()
     expect(getByText("My session")).toBeTruthy()
@@ -162,29 +179,26 @@ describe("SessionDetailsTab", () => {
     expect(queryByTestId("branch-dropdown")).toBeNull()
   })
 
-  it("sizes the actions bar h-10 on desktop but keeps the mobile Sheet's py-2", () => {
-    // Desktop: the bar matches the conversation/file detail headers (h-10).
-    setupScene({
-      activeFolderId: 1,
-      isChatMode: false,
-      hasActiveConversation: true,
-      isMobile: false,
-    })
-    const desktop = renderTab()
-    const desktopBar = desktop.getByTestId("branch-dropdown").parentElement
-    expect(desktopBar?.className).toContain("h-10")
-    expect(desktopBar?.className).not.toContain("py-2")
-    desktop.unmount()
-
-    // Mobile (Sheet): unchanged from before — the original py-2, no fixed height.
+  it("keeps the mobile actions bar padded (py-2) and desktop-free", () => {
+    // Mobile (Sheet): the bar shows with the original py-2 sizing.
     setupScene({
       activeFolderId: 1,
       isChatMode: false,
       hasActiveConversation: true,
       isMobile: true,
     })
-    const mobileBar = renderTab().getByTestId("branch-dropdown").parentElement
+    const mobile = renderTab()
+    const mobileBar = mobile.getByTestId("branch-dropdown").parentElement
     expect(mobileBar?.className).toContain("py-2")
-    expect(mobileBar?.className).not.toContain("h-10")
+    mobile.unmount()
+
+    // Desktop: no actions bar at all — branch/command live elsewhere.
+    setupScene({
+      activeFolderId: 1,
+      isChatMode: false,
+      hasActiveConversation: true,
+      isMobile: false,
+    })
+    expect(renderTab().queryByTestId("branch-dropdown")).toBeNull()
   })
 })

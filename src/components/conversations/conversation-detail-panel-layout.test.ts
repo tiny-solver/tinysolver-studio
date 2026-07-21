@@ -84,18 +84,20 @@ describe("ConversationDetailPanel new conversation layout", () => {
     )
     expect(messageInputSource).not.toContain("bg-muted/60")
     expect(messageInputSource).toContain(': "contents"')
-    // The rounded border lives in the always-on base (so the active-session flow
-    // gradient can overlay a real 1px border without a layout shift); the
-    // attached folder-branch-picker treatment still adds a solid surface
-    // (`bg-background`, which goes transparent to reveal a workspace-bg image via
-    // `ws-transparent-bg` instead of frosting) + the inset focus ring on top.
+    // The rounded border AND the solid surface now live in the always-on base:
+    // `bg-background` (which goes transparent to reveal a workspace-bg image via
+    // `ws-transparent-bg` instead of frosting) is no longer gated on the folder-
+    // branch picker, because on desktop that row no longer wraps the composer —
+    // the composer is a standalone rounded box and must carry its own surface.
     // The resting border is `border-foreground/20` (a touch darker than the
     // near-invisible default `border-input`, and legible over a background image).
     expect(messageInputSource).toContain(
-      "rounded-xl border border-foreground/20 bg-transparent transition-colors"
+      "rounded-xl border border-foreground/20 bg-background ws-transparent-bg transition-colors"
     )
+    // The attached (mobile) branch only adds the inset focus ring now — the
+    // surface moved to the base above.
     expect(messageInputSource).toContain(
-      '"bg-background ws-transparent-bg focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"'
+      '"focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"'
     )
     expect(pickerWrapper).not.toContain("border-t border-input")
     expect(pickerWrapper).not.toContain("bg-muted/30")
@@ -114,10 +116,11 @@ describe("ConversationDetailPanel new conversation layout", () => {
     expect(conversationShellSource).toContain(
       'className="mx-auto w-full max-w-3xl"'
     )
-    // Ordinary (active) chat input keeps its own px-4 gutter to align with the
-    // sibling cards in conversation-shell; only the welcome input drops it via
-    // `flush` (the welcome column already provides the px-4).
-    expect(chatInputSource).toContain('cn("pt-0 pb-1", !flush && "px-4")')
+    // Ordinary (active/historical) chat input keeps its own px-4 gutter to align
+    // with the sibling cards in conversation-shell AND gets extra bottom room
+    // (pb-4) since it docks at the very bottom; only the welcome input drops the
+    // gutter via `flush` (the welcome column already provides px-4) and stays pb-1.
+    expect(chatInputSource).toContain('cn("pt-0", flush ? "pb-1" : "px-4 pb-4")')
     expect(chatInputSource).toContain(
       'cn(tall ? "min-h-30" : "min-h-24", "max-h-60")'
     )

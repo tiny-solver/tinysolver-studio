@@ -3022,17 +3022,21 @@ export function MessageInput({
                 // the default `border-input`, which is near-invisible at rest and
                 // vanishes over a workspace background image); it adapts per theme
                 // (dark ink in light mode, light ink in dark) and stays legible.
-                // Focus still swaps to `border-ring` below.
-                "codeg-composer-chrome @container relative flex flex-col rounded-xl border border-foreground/20 bg-transparent transition-colors",
-                // Standard focus ring — always shown when the composer is
-                // focused (the plain default input style). `bg-background
+                // Focus still swaps to `border-ring` below. `bg-background
                 // ws-transparent-bg`: opaque surface normally, but with a
                 // workspace-bg image the composer goes transparent to reveal the
                 // real image like the rest of the canvas (no frosted treatment) —
-                // the border stays. Off (no image) it's the plain background,
-                // unchanged.
+                // the border stays. Always on now: the folder/branch row no
+                // longer wraps the composer on desktop, so the surface has to
+                // live on the composer itself rather than the (removed) wrapper.
+                "codeg-composer-chrome @container relative flex flex-col rounded-xl border border-foreground/20 bg-background ws-transparent-bg transition-colors",
+                // Standard focus ring — always shown when the composer is
+                // focused (the plain default input style). When the mobile
+                // folder/branch row is attached below, the composer is clipped by
+                // an `overflow-hidden` wrapper, so the ring must be inset to stay
+                // visible; standalone (desktop) it uses the normal outset ring.
                 folderBranchPickerAttached
-                  ? "bg-background ws-transparent-bg focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"
+                  ? "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"
                   : "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
                 // Active session, tiled across multiple sessions: a gradient
                 // flows around the border to mark which tile is active — but ONLY

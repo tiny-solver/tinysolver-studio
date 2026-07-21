@@ -2786,7 +2786,7 @@
       "noFolders": "No folders",
       "noBranches": "No branches",
       "noBranch": "(no branch)",
-      "chatModeLabel": "No-folder mode",
+      "chatModeLabel": "Chat mode",
       "commit": "Commit",
       "push": "Push",
       "merge": "Merge",

@@ -2786,7 +2786,7 @@
       "noFolders": "No folders",
       "noBranches": "No branches",
       "noBranch": "(no branch)",
-      "chatModeLabel": "폴더 없음 모드",
+      "chatModeLabel": "채팅 모드",
       "commit": "Commit",
       "push": "Push",
       "merge": "Merge",

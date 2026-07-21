@@ -14,7 +14,6 @@ import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useAuxPanelContext } from "@/contexts/aux-panel-context"
-import { cn } from "@/lib/utils"
 import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
 
@@ -84,23 +83,18 @@ export function SessionDetailsTab() {
     conversations
   )
 
-  // Branch + command are folder-scoped and both self-hide in chat mode / without
-  // a folder, so only surface the actions bar for a real folder workspace to
-  // avoid an empty bordered row.
-  const showFolderActions = activeFolderId != null && !isChatMode
+  // Branch + command are folder-scoped and self-hide in chat mode / without a
+  // folder. This actions bar is now MOBILE-ONLY: on desktop the branch selector
+  // moved to the bottom status bar and the folder chip to the conversation
+  // header, so the desktop aux "session details" tab shows the details alone.
+  // The mobile Sheet has no status bar / header to host them, so it keeps this
+  // bar unchanged.
+  const showFolderActions = isMobile && activeFolderId != null && !isChatMode
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {showFolderActions && (
-        <div
-          className={cn(
-            "flex shrink-0 items-center justify-between gap-2 border-b px-3",
-            // Desktop: match the conversation/file detail headers — h-10 + the
-            // lightened border. Mobile (Sheet) keeps its original sizing, since
-            // it has no such headers to align with.
-            isMobile ? "border-border py-2" : "h-10 border-border/50"
-          )}
-        >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
           <BranchDropdown />
           <CommandDropdown />
         </div>
