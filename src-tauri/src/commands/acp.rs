@@ -1564,46 +1564,55 @@ mod diagnostics_tests {
         // Binary agents (e.g. Cursor) do not need Node; a launchable cached/system
         // binary must read "ok" even with no node/npm on PATH — regression guard
         // against the npx model being applied to every distribution.
-        let mut inp = DiagInputs::default(); // node & npm absent
-        inp.agent = Some(AgentDiag {
-            name: "Cursor".to_string(),
-            cmd: "cursor-agent".to_string(),
-            distribution: "binary",
-            launchable: Some("/Users/u/.local/bin/cursor-agent".to_string()),
+        // node & npm absent
+        let inp = DiagInputs {
+            agent: Some(AgentDiag {
+                name: "Cursor".to_string(),
+                cmd: "cursor-agent".to_string(),
+                distribution: "binary",
+                launchable: Some("/Users/u/.local/bin/cursor-agent".to_string()),
+                ..Default::default()
+            }),
             ..Default::default()
-        });
+        };
         assert_eq!(compute_verdict(&inp).code, "ok");
     }
 
     #[test]
     fn verdict_binary_recorded_but_unresolved() {
-        let mut inp = DiagInputs::default();
-        inp.agent = Some(AgentDiag {
-            cmd: "cursor-agent".to_string(),
-            distribution: "binary",
-            db_version: Some("2026.07.16".to_string()),
+        let inp = DiagInputs {
+            agent: Some(AgentDiag {
+                cmd: "cursor-agent".to_string(),
+                distribution: "binary",
+                db_version: Some("2026.07.16".to_string()),
+                ..Default::default()
+            }),
             ..Default::default()
-        });
+        };
         assert_eq!(compute_verdict(&inp).code, "installed_but_unresolved");
     }
 
     #[test]
     fn verdict_uvx_launchable_ok_else_not_installed() {
-        let mut ok = DiagInputs::default();
-        ok.agent = Some(AgentDiag {
-            cmd: "hermes".to_string(),
-            distribution: "uvx",
-            launchable: Some("/Users/u/.local/bin/uvx".to_string()),
+        let ok = DiagInputs {
+            agent: Some(AgentDiag {
+                cmd: "hermes".to_string(),
+                distribution: "uvx",
+                launchable: Some("/Users/u/.local/bin/uvx".to_string()),
+                ..Default::default()
+            }),
             ..Default::default()
-        });
+        };
         assert_eq!(compute_verdict(&ok).code, "ok");
 
-        let mut missing = DiagInputs::default();
-        missing.agent = Some(AgentDiag {
-            cmd: "hermes".to_string(),
-            distribution: "uvx",
+        let missing = DiagInputs {
+            agent: Some(AgentDiag {
+                cmd: "hermes".to_string(),
+                distribution: "uvx",
+                ..Default::default()
+            }),
             ..Default::default()
-        });
+        };
         assert_eq!(compute_verdict(&missing).code, "not_installed");
     }
 
