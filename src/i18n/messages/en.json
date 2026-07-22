@@ -1372,6 +1372,7 @@
       "sectionFolders": "Folders",
       "sectionChats": "Chat",
       "noChats": "No chats",
+      "noFolders": "No folders open",
       "newChatAction": "New chat",
       "automations": "Automations",
       "loadingSubsessions": "Loading sub-conversations…"

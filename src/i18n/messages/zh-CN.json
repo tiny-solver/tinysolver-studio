@@ -1372,6 +1372,7 @@
       "sectionFolders": "文件夹",
       "sectionChats": "聊天",
       "noChats": "没有聊天",
+      "noFolders": "没有打开的文件夹",
       "newChatAction": "新建聊天",
       "automations": "自动化",
       "loadingSubsessions": "正在加载子会话…"

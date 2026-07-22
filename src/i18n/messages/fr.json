@@ -1372,6 +1372,7 @@
       "sectionFolders": "Dossiers",
       "sectionChats": "Discussion",
       "noChats": "Aucune discussion",
+      "noFolders": "Aucun dossier ouvert",
       "newChatAction": "Nouvelle discussion",
       "automations": "Automatisations",
       "loadingSubsessions": "Chargement des sous-conversations…"

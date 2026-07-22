@@ -1372,6 +1372,7 @@
       "sectionFolders": "フォルダ",
       "sectionChats": "チャット",
       "noChats": "チャットがありません",
+      "noFolders": "開いているフォルダがありません",
       "newChatAction": "新しいチャット",
       "automations": "オートメーション",
       "loadingSubsessions": "サブ会話を読み込み中…"

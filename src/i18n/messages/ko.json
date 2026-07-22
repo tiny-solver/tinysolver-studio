@@ -1372,6 +1372,7 @@
       "sectionFolders": "폴더",
       "sectionChats": "채팅",
       "noChats": "채팅 없음",
+      "noFolders": "열린 폴더 없음",
       "newChatAction": "새 채팅",
       "automations": "자동화",
       "loadingSubsessions": "하위 대화 로드 중…"

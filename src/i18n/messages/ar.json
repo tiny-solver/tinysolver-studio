@@ -1372,6 +1372,7 @@
       "sectionFolders": "المجلدات",
       "sectionChats": "محادثة",
       "noChats": "لا توجد محادثات",
+      "noFolders": "لا توجد مجلدات مفتوحة",
       "newChatAction": "محادثة جديدة",
       "automations": "الأتمتة",
       "loadingSubsessions": "جارٍ تحميل المحادثات الفرعية…"

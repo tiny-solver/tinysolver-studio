@@ -1372,6 +1372,7 @@
       "sectionFolders": "Pastas",
       "sectionChats": "Chat",
       "noChats": "Sem chats",
+      "noFolders": "Nenhuma pasta aberta",
       "newChatAction": "Novo chat",
       "automations": "Automações",
       "loadingSubsessions": "Carregando subconversas…"

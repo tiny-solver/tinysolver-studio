@@ -1372,6 +1372,7 @@
       "sectionFolders": "Ordner",
       "sectionChats": "Chat",
       "noChats": "Keine Chats",
+      "noFolders": "Keine Ordner geöffnet",
       "newChatAction": "Neuer Chat",
       "automations": "Automatisierungen",
       "loadingSubsessions": "Unterkonversationen werden geladen…"

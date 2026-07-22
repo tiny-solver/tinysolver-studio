@@ -1994,6 +1994,16 @@ export function SidebarConversationList({
         </div>
       )
     }
+    if (row.kind === "folders-empty") {
+      // Empty "Folders" section hint — mirrors chats-empty (folderless, no rail,
+      // aligned with the section header's text inset). The header's own hover
+      // actions (Open Folder / Clone / Import) are how you add the first folder.
+      return (
+        <div className="px-[0.5rem] py-[0.375rem] text-[0.75rem] text-muted-foreground/70">
+          {t("noFolders")}
+        </div>
+      )
+    }
     if (row.kind === "subsession-loading") {
       // Transient spinner at the child indent while children are fetched. The
       // left inset matches a depth-`row.depth` card's text start: rail axis
@@ -2052,6 +2062,7 @@ export function SidebarConversationList({
     if (row.kind === "folder") return `folder-${row.folderId}`
     if (row.kind === "empty") return `empty-${row.folderId}`
     if (row.kind === "chats-empty") return "chats-empty"
+    if (row.kind === "folders-empty") return "folders-empty"
     if (row.kind === "subsession-loading") return `subloading-${row.parentId}`
     return `conv-${row.conversation.agent_type}-${row.conversation.id}`
   }
