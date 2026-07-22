@@ -31,7 +31,6 @@ import { useAcpAgents } from "@/hooks/use-acp-agents"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabActions, useTabStore } from "@/contexts/tab-context"
-import { useSessionStats } from "@/contexts/session-stats-context"
 import { useTaskContext } from "@/contexts/task-context"
 import { cn, copyTextFromMenu, randomUUID } from "@/lib/utils"
 import { useConnectionLifecycle } from "@/hooks/use-connection-lifecycle"
@@ -242,7 +241,6 @@ const ConversationTabView = memo(function ConversationTabView({
     confirmDraftAgent,
     setDraftAgentFromFallback,
   } = useTabActions()
-  const { setSessionStats } = useSessionStats()
   const {
     appendOptimisticTurn,
     removeOptimisticTurn,
@@ -427,30 +425,22 @@ const ConversationTabView = memo(function ConversationTabView({
   // session — NOT the whole session object. The live-message sink rewrites the
   // session object on every streaming batch (~60/s, via SET_LIVE_MESSAGE); a
   // whole-object selector here would re-render this keep-alive panel (and the
-  // composer subtree it wraps) on every streaming token, even though none of
-  // these three fields change mid-stream. `useShallow` keeps the returned slice
+  // composer subtree it wraps) on every streaming token, even though neither of
+  // these two fields changes mid-stream. `useShallow` keeps the returned slice
   // reference-stable across batches, so the panel re-renders only when one of
   // them actually changes. (message-list-view subscribes to the session's
-  // liveMessage separately to render the live stream.)
-  const {
-    sessionStats: effectiveSessionStats,
-    externalId: runtimeExternalId,
-    syncState: runtimeSyncState,
-  } = useConversationRuntimeStore(
-    useShallow((s) => {
-      const session = s.byConversationId.get(effectiveConversationId)
-      return {
-        sessionStats: session?.sessionStats ?? null,
-        externalId: session?.externalId ?? null,
-        syncState: session?.syncState ?? "idle",
-      }
-    })
-  )
-
-  useEffect(() => {
-    if (!isActive) return
-    setSessionStats(effectiveSessionStats)
-  }, [effectiveSessionStats, isActive, setSessionStats])
+  // liveMessage separately to render the live stream; the context indicator
+  // reads its own session stats from the runtime store directly.)
+  const { externalId: runtimeExternalId, syncState: runtimeSyncState } =
+    useConversationRuntimeStore(
+      useShallow((s) => {
+        const session = s.byConversationId.get(effectiveConversationId)
+        return {
+          externalId: session?.externalId ?? null,
+          syncState: session?.syncState ?? "idle",
+        }
+      })
+    )
 
   // Two-source resolution for the session id passed to acp_connect:
   //   1. detail.summary.external_id — DB value, available for tabs opened
@@ -1429,7 +1419,6 @@ const ConversationTabView = memo(function ConversationTabView({
       connStatus={connStatus}
       isActive={isActive}
       sendSignal={sendSignal}
-      sessionStats={effectiveSessionStats}
       detailLoading={detailLoading}
       detailError={detailError}
       acpLoadError={acpLoadError}

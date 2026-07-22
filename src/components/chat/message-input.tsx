@@ -117,6 +117,8 @@ import {
   ConversationFolderBranchPicker,
   useConversationFolderBranchPickerVisible,
 } from "@/components/chat/conversation-context-bar"
+import { ComposerContextUsage } from "@/components/chat/composer-context-usage"
+import { ComposerConnectionStatus } from "@/components/chat/composer-connection-status"
 import { InlineModeSelector } from "@/components/chat/mode-selector"
 import { InlineSessionConfigSelector } from "@/components/chat/session-config-selector"
 import { ModelOptionPicker } from "@/components/chat/model-option-picker"
@@ -3582,18 +3584,21 @@ export function MessageInput({
           </ContextMenuContent>
         </ContextMenu>
         {hasFolderBranchPicker && (
-          // `pl-2` mirrors the action bar's `px-2` so this row lines up with the
-          // composer above. Kept on the rem scale (no px literals) so it tracks
-          // UI zoom; the folder icon then aligns with the centered "+" icon
-          // because both buttons add the same 1px transparent border (paired
-          // with the picker buttons' `px-1.5`).
-          <div
-            className={cn(
-              "flex items-center gap-1 pl-2 text-xs text-muted-foreground",
-              folderBranchPickerAttached ? "rounded-b-xl pt-1 pr-2" : "mt-1.5"
-            )}
-          >
-            <ConversationFolderBranchPicker tabId={attachmentTabId} />
+          // `px-2` mirrors the action bar so this row lines up with the composer
+          // above; the folder icon then aligns with the centered "+" icon (both
+          // add the same 1px transparent border, paired with the picker buttons'
+          // `px-1.5`). The row only renders while attached below the composer, so
+          // it always takes the rounded-bottom box treatment. Pickers sit at the
+          // left edge; the context-usage circle + agent connection status
+          // right-align at the trailing edge.
+          <div className="flex items-center justify-between gap-2 rounded-b-xl px-2 pt-1 text-xs text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-1">
+              <ConversationFolderBranchPicker tabId={attachmentTabId} />
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <ComposerContextUsage tabId={attachmentTabId ?? null} />
+              <ComposerConnectionStatus tabId={attachmentTabId ?? null} />
+            </div>
           </div>
         )}
       </div>

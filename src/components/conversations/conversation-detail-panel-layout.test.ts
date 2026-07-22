@@ -102,12 +102,22 @@ describe("ConversationDetailPanel new conversation layout", () => {
     expect(pickerWrapper).toContain("pt-1")
     expect(pickerWrapper).not.toContain("py-1")
     expect(pickerWrapper).toContain("rounded-b-xl")
-    expect(pickerWrapper).toContain("mt-1.5")
-    expect(pickerWrapper).toContain("pl-2")
+    // The row only renders while attached below the composer, so the detached
+    // `mt-1.5` else-branch is gone; it always takes the rounded-bottom box.
+    expect(pickerWrapper).not.toContain("mt-1.5")
+    // `px-2` keeps the left gutter aligned with the composer above while also
+    // padding the trailing edge where the status indicators sit.
+    expect(pickerWrapper).toContain("px-2")
     expect(pickerWrapper).not.toContain("pl-[")
     expect(pickerWrapper).not.toContain("pl-1.5")
     expect(pickerWrapper).not.toMatch(/\bborder-b\b/)
     expect(pickerWrapper).not.toMatch(/\bborder-x\b/)
+    // The context-usage circle + agent connection status moved here from the
+    // bottom status bar: they right-align at the trailing edge (justify-between)
+    // while the folder/branch pickers stay on the left.
+    expect(pickerWrapper).toContain("justify-between")
+    expect(pickerWrapper).toContain("<ComposerContextUsage")
+    expect(pickerWrapper).toContain("<ComposerConnectionStatus")
   })
 
   it("keeps ordinary chat input constrained to the message column width", () => {

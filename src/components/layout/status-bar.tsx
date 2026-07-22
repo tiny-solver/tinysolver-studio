@@ -2,8 +2,6 @@
 
 import { StatusBarStats } from "@/components/layout/status-bar-stats"
 import { StatusBarTasks } from "@/components/layout/status-bar-tasks"
-import { StatusBarTokens } from "@/components/layout/status-bar-tokens"
-import { StatusBarConnection } from "@/components/layout/status-bar-connection"
 import { StatusBarAlerts } from "@/components/layout/status-bar-alerts"
 import { StatusBarUpdate } from "@/components/layout/status-bar-update"
 import { CommandDropdown } from "@/components/layout/command-dropdown"
@@ -14,14 +12,13 @@ export function StatusBar() {
 
   if (isMobile) {
     // Mobile mirrors the desktop bar's right side: the command launcher +
-    // context-window circle + alerts. `h-8` (matching desktop) gives the h-6
-    // command control room. The branch selector now lives in the below-composer
+    // alerts. `h-8` (matching desktop) gives the h-6 command control room. The
+    // branch selector and context-window circle now live in the below-composer
     // row, so the bar has nothing on the left and right-aligns its controls.
     return (
       <div className="h-8 shrink-0 border-t border-border ws-chrome-border ws-surface-muted px-3 flex items-center justify-end text-xs text-muted-foreground">
         <div className="flex items-center gap-3">
           <CommandDropdown />
-          <StatusBarTokens />
           <StatusBarAlerts />
         </div>
       </div>
@@ -30,8 +27,9 @@ export function StatusBar() {
 
   return (
     <div className="h-8 shrink-0 border-t border-border ws-chrome-border ws-surface-muted px-4 flex items-center justify-between text-xs text-muted-foreground">
-      {/* The branch selector moved to the below-composer folder/branch row; the
-          left side now carries just the workspace stats. */}
+      {/* The branch selector, context-window circle and agent connection status
+          moved to the below-composer folder/branch row; the left side now
+          carries just the workspace stats. */}
       <div className="flex items-center gap-3">
         <StatusBarStats />
       </div>
@@ -41,8 +39,6 @@ export function StatusBar() {
         {/* Command launcher (moved from the aux "session details" tab), taking
             the slot the old static branch label (StatusBarSessionInfo) held. */}
         <CommandDropdown />
-        <StatusBarTokens />
-        <StatusBarConnection />
         <StatusBarAlerts />
       </div>
     </div>
