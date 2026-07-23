@@ -15,8 +15,11 @@ const spies = vi.hoisted(() => ({
   setRoute: vi.fn(),
   openConversations: vi.fn(),
   // Latest props the (stubbed) conversation list was rendered with, so tests can
-  // assert what the sidebar threads down (e.g. showWorktrees).
-  listProps: null as { showWorktrees?: boolean } | null,
+  // assert what the sidebar threads down (e.g. showWorktrees / showCompleted).
+  listProps: null as {
+    showWorktrees?: boolean
+    showCompleted?: boolean
+  } | null,
 }))
 const mockState = vi.hoisted(() => ({
   activeFolder: { id: 7, path: "/x" } as { id: number; path: string } | null,
@@ -25,7 +28,10 @@ const mockState = vi.hoisted(() => ({
 // The conversation list is irrelevant here — stub it so the test exercises only
 // the sidebar's header + fixed New chat / Search region.
 vi.mock("@/components/conversations/sidebar-conversation-list", () => ({
-  SidebarConversationList: (props: { showWorktrees?: boolean }) => {
+  SidebarConversationList: (props: {
+    showWorktrees?: boolean
+    showCompleted?: boolean
+  }) => {
     spies.listProps = props
     return null
   },
@@ -134,30 +140,31 @@ describe("Sidebar — fixed New chat / Search region", () => {
   })
 })
 
-describe("Sidebar — Show worktrees toggle", () => {
+describe("Sidebar — Show worktree folders toggle", () => {
   beforeEach(() => {
     localStorage.clear()
     spies.listProps = null
     mockState.activeFolder = { id: 7, path: "/x" }
   })
 
-  it("defaults Show worktrees off and threads it to the conversation list", () => {
+  it("defaults Show worktree folders on and threads it to the conversation list", () => {
     renderSidebar()
-    expect(spies.listProps?.showWorktrees).toBe(false)
-  })
-
-  it("hydrates Show worktrees from localStorage and threads it down", () => {
-    localStorage.setItem("workspace:sidebar-show-worktrees", "true")
-    renderSidebar()
-    // Hydration runs in a mount effect (flushed by render's act), which flips the
-    // state and re-renders the (stubbed) list with the persisted value.
     expect(spies.listProps?.showWorktrees).toBe(true)
   })
 
-  it("toggling the funnel item persists the choice and threads it down", async () => {
+  it("respects an explicitly-stored 'false' from localStorage", () => {
+    localStorage.setItem("workspace:sidebar-show-worktrees", "false")
+    renderSidebar()
+    // Hydration runs in a mount effect (flushed by render's act): a user who
+    // unchecked it keeps it off despite the default-on.
+    expect(spies.listProps?.showWorktrees).toBe(false)
+  })
+
+  it("toggling the funnel item off persists the choice and threads it down", async () => {
     const user = userEvent.setup()
     renderSidebar()
-    expect(spies.listProps?.showWorktrees).toBe(false)
+    // Default on with a cleared store.
+    expect(spies.listProps?.showWorktrees).toBe(true)
 
     await user.click(screen.getByRole("button", { name: "View options" }))
     await user.click(
@@ -165,8 +172,27 @@ describe("Sidebar — Show worktrees toggle", () => {
     )
 
     expect(localStorage.getItem("workspace:sidebar-show-worktrees")).toBe(
-      "true"
+      "false"
     )
-    expect(spies.listProps?.showWorktrees).toBe(true)
+    expect(spies.listProps?.showWorktrees).toBe(false)
+  })
+})
+
+describe("Sidebar — Show completed default", () => {
+  beforeEach(() => {
+    localStorage.clear()
+    spies.listProps = null
+    mockState.activeFolder = { id: 7, path: "/x" }
+  })
+
+  it("defaults Show completed on and threads it to the conversation list", () => {
+    renderSidebar()
+    expect(spies.listProps?.showCompleted).toBe(true)
+  })
+
+  it("respects an explicitly-stored 'false' from localStorage", () => {
+    localStorage.setItem("workspace:sidebar-show-completed", "false")
+    renderSidebar()
+    expect(spies.listProps?.showCompleted).toBe(false)
   })
 })

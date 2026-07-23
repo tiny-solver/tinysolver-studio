@@ -82,15 +82,18 @@ export function saveConversationExpanded(ids: number[]): void {
   }
 }
 
+/** Whether completed conversations are shown in the sidebar list. Defaults to
+ *  ON; only an explicitly-stored "false" (the user unchecked it) hides them. */
 export function loadShowCompleted(): boolean {
-  if (typeof window === "undefined") return false
+  if (typeof window === "undefined") return true
   try {
     const raw = localStorage.getItem(SHOW_COMPLETED_KEY)
+    if (raw === "false") return false
     if (raw === "true") return true
   } catch {
     /* ignore */
   }
-  return false
+  return true
 }
 
 export function saveShowCompleted(value: boolean): void {
@@ -104,16 +107,18 @@ export function saveShowCompleted(value: boolean): void {
 
 /** Whether the sidebar splits each repo's worktree child folders into their own
  *  indented sub-groups (instead of merging them flat into the parent group).
- *  Defaults to off — the historical flattened layout. */
+ *  Defaults to ON; only an explicitly-stored "false" (the user unchecked it)
+ *  falls back to the flattened layout. */
 export function loadShowWorktrees(): boolean {
-  if (typeof window === "undefined") return false
+  if (typeof window === "undefined") return true
   try {
     const raw = localStorage.getItem(SHOW_WORKTREES_KEY)
+    if (raw === "false") return false
     if (raw === "true") return true
   } catch {
     /* ignore */
   }
-  return false
+  return true
 }
 
 export function saveShowWorktrees(value: boolean): void {
