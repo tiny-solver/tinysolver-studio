@@ -20,6 +20,7 @@
  */
 
 import { extractEmbeddedJsonObject } from "@/lib/embedded-json"
+import { isUnsettledToolCall } from "@/lib/tool-call-lifecycle"
 import type {
   AdaptedToolCallPart,
   ToolCallState,
@@ -535,12 +536,10 @@ export function buildDelegationTaskRows(
     // gets a (spinner) row immediately instead of all-but-the-first vanishing
     // until the batch resolves.
     const count = Math.max(reports.length, inputIds.length)
-    const inFlight =
-      poll.state === "input-available" || poll.state === "input-streaming"
     for (let i = 0; i < count; i++) {
       const report = reports[i] ?? EMPTY_STATUS_REPORT
       const taskId = report.taskId ?? inputIds[i] ?? null
-      // Drop an in-flight poll that carries no identity AND nothing to show yet.
+      // Drop an unsettled poll that carries no identity AND nothing to show yet.
       // claude-agent-acp ships an arg-less initial `tool_call` (rawInput `{}`)
       // and only fills the real `task_ids` on a later update — which, for a long
       // `wait_ms` status check, lands near completion — so a poll that is still
@@ -548,11 +547,15 @@ export function buildDelegationTaskRows(
       // would otherwise become its own anonymous "waiting for a task's result"
       // row, stacking identical duplicates of the same wait. It folds into its
       // task's row the moment an id or report arrives, and the settled transcript
-      // (whose polls always carry the id) is unaffected. A settled id-less report
-      // — a real interim note or terminal status — still gets its own row below.
+      // (whose polls always carry the id) is unaffected. `isUnsettledToolCall`
+      // (not a bare live-state check) also covers an orphan promoted into
+      // `localTurns` at COMPLETE_TURN — output-available yet never settled — which
+      // would otherwise re-stack after the turn completes. A genuinely settled
+      // id-less report — a real interim note or terminal status — still gets its
+      // own row below.
       if (
         taskId == null &&
-        inFlight &&
+        isUnsettledToolCall(poll) &&
         report.status == null &&
         (report.text == null || report.text.trim() === "")
       ) {

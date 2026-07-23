@@ -142,6 +142,14 @@ export type ContentBlock =
       tool_name: string
       input_preview: string | null
       /**
+       * ACP tool-call status when known. Live and promoted turns forward it
+       * from `ToolCallInfo.status` in `buildStreamingTurnsFromLiveMessage`;
+       * DB-persisted rows omit it (`undefined`). Lets the render layer tell a
+       * still-unsettled orphan (interrupted/retried arg-less call promoted into
+       * `localTurns`) from a completed no-op. See `dropEmptyInFlightToolCalls`.
+       */
+      status?: string | null
+      /**
        * ACP extensibility metadata for this tool call. Opaque pass-through
        * — both the live snapshot (`ToolCallState.meta`) and the persisted
        * message-row variant carry the same shape. Delegation writes
