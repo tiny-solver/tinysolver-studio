@@ -1823,6 +1823,7 @@
       "copyMessage": "Copier le message",
       "author": "Auteur",
       "noFileChangeDetails": "Aucun détail de changement de fichier disponible.",
+      "loadingFiles": "Chargement des fichiers...",
       "branchesTitle": "Branches Git",
       "loadingBranches": "Chargement des branches...",
       "noContainingBranches": "Aucune branche contenant ce commit.",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "{branch} a été réinitialisée sur {shortHash} avec {mode}",
         "resetFailed": "Échec de la réinitialisation"
       },
+      "authorFilter": {
+        "label": "Auteur",
+        "searchPlaceholder": "Rechercher un auteur",
+        "noAuthors": "Aucun auteur trouvé",
+        "you": "vous",
+        "filterByAuthorAria": "Filtrer les commits par auteur",
+        "filterByQuery": "Filtrer par « {query} »",
+        "clearAuthorFilterAria": "Effacer le filtre par auteur",
+        "recent": "Récents",
+        "matchingAuthors": "Auteurs correspondants",
+        "removeFromRecent": "Retirer {name} des récents"
+      },
       "branchSelector": {
+        "label": "Branche",
         "searchBranch": "Rechercher une branche...",
         "noBranches": "Aucune branche",
         "selectBranchPlaceholder": "Sélectionner une branche...",
         "localBranches": "Branches locales",
         "current": "Actuelle",
         "remoteBranches": "Branches distantes",
-        "refreshCommitHistory": "Actualiser l’historique des commits"
+        "refreshCommitHistory": "Actualiser l’historique des commits",
+        "clearBranchFilterAria": "Effacer le filtre par branche"
       },
       "dialogs": {
         "newBranchTitle": "Nouvelle branche",

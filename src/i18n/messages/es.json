@@ -1823,6 +1823,7 @@
       "copyMessage": "Copiar mensaje",
       "author": "Autor",
       "noFileChangeDetails": "No hay detalles de cambios de archivo disponibles.",
+      "loadingFiles": "Cargando archivos...",
       "branchesTitle": "Ramas",
       "loadingBranches": "Cargando ramas...",
       "noContainingBranches": "No se encontraron ramas contenedoras.",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "{branch} se reseteó a {shortHash} con {mode}",
         "resetFailed": "Falló el reset"
       },
+      "authorFilter": {
+        "label": "Autor",
+        "searchPlaceholder": "Buscar autor",
+        "noAuthors": "No se encontraron autores",
+        "you": "tú",
+        "filterByAuthorAria": "Filtrar commits por autor",
+        "filterByQuery": "Filtrar por \"{query}\"",
+        "clearAuthorFilterAria": "Borrar filtro de autor",
+        "recent": "Recientes",
+        "matchingAuthors": "Autores coincidentes",
+        "removeFromRecent": "Quitar {name} de recientes"
+      },
       "branchSelector": {
+        "label": "Rama",
         "searchBranch": "Buscar rama...",
         "noBranches": "Sin ramas",
         "selectBranchPlaceholder": "Seleccionar rama...",
         "localBranches": "Ramas locales",
         "current": "Actual",
         "remoteBranches": "Ramas remotas",
-        "refreshCommitHistory": "Actualizar historial de commits"
+        "refreshCommitHistory": "Actualizar historial de commits",
+        "clearBranchFilterAria": "Borrar filtro de rama"
       },
       "dialogs": {
         "newBranchTitle": "Nueva rama",

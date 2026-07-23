@@ -1823,6 +1823,7 @@
       "copyMessage": "複製提交訊息",
       "author": "作者",
       "noFileChangeDetails": "暫無檔案變更詳情。",
+      "loadingFiles": "正在載入檔案…",
       "branchesTitle": "分支",
       "loadingBranches": "正在載入分支...",
       "noContainingBranches": "未找到包含此提交的分支。",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "已將 {branch} 以 {mode} 重設到 {shortHash}",
         "resetFailed": "重設失敗"
       },
+      "authorFilter": {
+        "label": "作者",
+        "searchPlaceholder": "搜尋作者",
+        "noAuthors": "找不到作者",
+        "you": "你",
+        "filterByAuthorAria": "依作者篩選提交",
+        "filterByQuery": "依「{query}」篩選",
+        "clearAuthorFilterAria": "清除作者篩選",
+        "recent": "最近",
+        "matchingAuthors": "符合的作者",
+        "removeFromRecent": "從最近列表移除 {name}"
+      },
       "branchSelector": {
+        "label": "分支",
         "searchBranch": "搜尋分支...",
         "noBranches": "無分支",
         "selectBranchPlaceholder": "選擇分支...",
         "localBranches": "本地分支",
         "current": "目前",
         "remoteBranches": "遠端分支",
-        "refreshCommitHistory": "刷新提交記錄"
+        "refreshCommitHistory": "刷新提交記錄",
+        "clearBranchFilterAria": "清除分支篩選"
       },
       "dialogs": {
         "newBranchTitle": "新增分支",

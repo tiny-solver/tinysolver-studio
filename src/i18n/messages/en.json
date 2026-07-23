@@ -1823,6 +1823,7 @@
       "copyMessage": "Copy message",
       "author": "Author",
       "noFileChangeDetails": "No file change details available.",
+      "loadingFiles": "Loading files...",
       "branchesTitle": "Branches",
       "loadingBranches": "Loading branches...",
       "noContainingBranches": "No containing branches found.",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "{branch} reset to {shortHash} with {mode}",
         "resetFailed": "Reset failed"
       },
+      "authorFilter": {
+        "label": "Author",
+        "searchPlaceholder": "Search author",
+        "noAuthors": "No authors found",
+        "you": "you",
+        "filterByAuthorAria": "Filter commits by author",
+        "filterByQuery": "Filter by \"{query}\"",
+        "clearAuthorFilterAria": "Clear author filter",
+        "recent": "Recent",
+        "matchingAuthors": "Matching authors",
+        "removeFromRecent": "Remove {name} from recent"
+      },
       "branchSelector": {
+        "label": "Branch",
         "searchBranch": "Search branch...",
         "noBranches": "No branches",
         "selectBranchPlaceholder": "Select branch...",
         "localBranches": "Local branches",
         "current": "Current",
         "remoteBranches": "Remote branches",
-        "refreshCommitHistory": "Refresh commit history"
+        "refreshCommitHistory": "Refresh commit history",
+        "clearBranchFilterAria": "Clear branch filter"
       },
       "dialogs": {
         "newBranchTitle": "New branch",

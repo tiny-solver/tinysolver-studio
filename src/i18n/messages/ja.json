@@ -1823,6 +1823,7 @@
       "copyMessage": "メッセージをコピー",
       "author": "作成者",
       "noFileChangeDetails": "ファイル変更の詳細はありません。",
+      "loadingFiles": "ファイルを読み込み中…",
       "branchesTitle": "ブランチ",
       "loadingBranches": "ブランチを読み込み中...",
       "noContainingBranches": "含まれるブランチが見つかりません。",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "{branch} を {mode} で {shortHash} にリセットしました",
         "resetFailed": "リセットに失敗しました"
       },
+      "authorFilter": {
+        "label": "作成者",
+        "searchPlaceholder": "作成者を検索",
+        "noAuthors": "作成者が見つかりません",
+        "you": "あなた",
+        "filterByAuthorAria": "作成者でコミットを絞り込む",
+        "filterByQuery": "「{query}」で絞り込む",
+        "clearAuthorFilterAria": "作成者フィルターをクリア",
+        "recent": "最近",
+        "matchingAuthors": "一致する作成者",
+        "removeFromRecent": "{name} を最近から削除"
+      },
       "branchSelector": {
+        "label": "ブランチ",
         "searchBranch": "ブランチを検索...",
         "noBranches": "ブランチがありません",
         "selectBranchPlaceholder": "ブランチを選択...",
         "localBranches": "ローカルブランチ",
         "current": "現在",
         "remoteBranches": "リモートブランチ",
-        "refreshCommitHistory": "コミット履歴を更新"
+        "refreshCommitHistory": "コミット履歴を更新",
+        "clearBranchFilterAria": "ブランチフィルターをクリア"
       },
       "dialogs": {
         "newBranchTitle": "新規ブランチ",

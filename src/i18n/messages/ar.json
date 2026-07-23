@@ -1823,6 +1823,7 @@
       "copyMessage": "نسخ الرسالة",
       "author": "المؤلف",
       "noFileChangeDetails": "لا توجد تفاصيل تغييرات ملفات متاحة.",
+      "loadingFiles": "جارٍ تحميل الملفات...",
       "branchesTitle": "الفروع",
       "loadingBranches": "جارٍ تحميل الفروع...",
       "noContainingBranches": "لم يتم العثور على فروع تحتوي هذا الالتزام.",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "تمت إعادة ضبط {branch} إلى {shortHash} باستخدام {mode}",
         "resetFailed": "فشلت إعادة الضبط"
       },
+      "authorFilter": {
+        "label": "المؤلف",
+        "searchPlaceholder": "بحث عن مؤلف",
+        "noAuthors": "لم يتم العثور على مؤلفين",
+        "you": "أنت",
+        "filterByAuthorAria": "تصفية الإيداعات حسب المؤلف",
+        "filterByQuery": "تصفية حسب \"{query}\"",
+        "clearAuthorFilterAria": "مسح تصفية المؤلف",
+        "recent": "الأخيرة",
+        "matchingAuthors": "المؤلفون المطابقون",
+        "removeFromRecent": "إزالة {name} من الأخيرة"
+      },
       "branchSelector": {
+        "label": "الفرع",
         "searchBranch": "بحث عن فرع...",
         "noBranches": "لا توجد فروع",
         "selectBranchPlaceholder": "اختر فرعًا...",
         "localBranches": "الفروع المحلية",
         "current": "الحالي",
         "remoteBranches": "الفروع البعيدة",
-        "refreshCommitHistory": "تحديث سجل الالتزامات"
+        "refreshCommitHistory": "تحديث سجل الالتزامات",
+        "clearBranchFilterAria": "مسح تصفية الفرع"
       },
       "dialogs": {
         "newBranchTitle": "فرع جديد",

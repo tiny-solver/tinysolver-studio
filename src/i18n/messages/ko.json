@@ -1823,6 +1823,7 @@
       "copyMessage": "메시지 복사",
       "author": "작성자",
       "noFileChangeDetails": "파일 변경 상세 정보가 없습니다.",
+      "loadingFiles": "파일 로딩 중…",
       "branchesTitle": "브랜치",
       "loadingBranches": "브랜치 로딩 중...",
       "noContainingBranches": "포함하는 브랜치를 찾을 수 없습니다.",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "{branch}을(를) {mode}로 {shortHash}에 리셋했습니다",
         "resetFailed": "리셋 실패"
       },
+      "authorFilter": {
+        "label": "작성자",
+        "searchPlaceholder": "작성자 검색",
+        "noAuthors": "작성자를 찾을 수 없습니다",
+        "you": "나",
+        "filterByAuthorAria": "작성자별로 커밋 필터링",
+        "filterByQuery": "\"{query}\"(으)로 필터링",
+        "clearAuthorFilterAria": "작성자 필터 지우기",
+        "recent": "최근",
+        "matchingAuthors": "일치하는 작성자",
+        "removeFromRecent": "최근에서 {name} 제거"
+      },
       "branchSelector": {
+        "label": "브랜치",
         "searchBranch": "브랜치 검색...",
         "noBranches": "브랜치 없음",
         "selectBranchPlaceholder": "브랜치 선택...",
         "localBranches": "로컬 브랜치",
         "current": "현재",
         "remoteBranches": "원격 브랜치",
-        "refreshCommitHistory": "커밋 히스토리 새로고침"
+        "refreshCommitHistory": "커밋 히스토리 새로고침",
+        "clearBranchFilterAria": "브랜치 필터 지우기"
       },
       "dialogs": {
         "newBranchTitle": "새 브랜치",

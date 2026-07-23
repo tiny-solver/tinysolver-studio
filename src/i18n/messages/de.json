@@ -1823,6 +1823,7 @@
       "copyMessage": "Nachricht kopieren",
       "author": "Autor",
       "noFileChangeDetails": "Keine Details zu Dateiänderungen verfügbar.",
+      "loadingFiles": "Dateien werden geladen...",
       "branchesTitle": "Zweige",
       "loadingBranches": "Branches werden geladen...",
       "noContainingBranches": "Keine enthaltenen Branches gefunden.",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "{branch} wurde mit {mode} auf {shortHash} zurückgesetzt",
         "resetFailed": "Zurücksetzen fehlgeschlagen"
       },
+      "authorFilter": {
+        "label": "Autor",
+        "searchPlaceholder": "Autor suchen",
+        "noAuthors": "Keine Autoren gefunden",
+        "you": "du",
+        "filterByAuthorAria": "Commits nach Autor filtern",
+        "filterByQuery": "Nach \"{query}\" filtern",
+        "clearAuthorFilterAria": "Autorfilter löschen",
+        "recent": "Zuletzt verwendet",
+        "matchingAuthors": "Passende Autoren",
+        "removeFromRecent": "{name} aus „Zuletzt verwendet“ entfernen"
+      },
       "branchSelector": {
+        "label": "Branch",
         "searchBranch": "Branch suchen...",
         "noBranches": "Keine Branches",
         "selectBranchPlaceholder": "Branch auswählen...",
         "localBranches": "Lokale Branches",
         "current": "Aktuell",
         "remoteBranches": "Remote-Branches",
-        "refreshCommitHistory": "Commit-Verlauf aktualisieren"
+        "refreshCommitHistory": "Commit-Verlauf aktualisieren",
+        "clearBranchFilterAria": "Branch-Filter löschen"
       },
       "dialogs": {
         "newBranchTitle": "Neuer Branch",

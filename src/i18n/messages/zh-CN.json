@@ -1823,6 +1823,7 @@
       "copyMessage": "复制提交消息",
       "author": "作者",
       "noFileChangeDetails": "暂无文件变更详情。",
+      "loadingFiles": "正在加载文件…",
       "branchesTitle": "分支",
       "loadingBranches": "正在加载分支...",
       "noContainingBranches": "未找到包含此提交的分支。",
@@ -1851,14 +1852,28 @@
         "resetSuccessDescription": "已将 {branch} 以 {mode} 重置到 {shortHash}",
         "resetFailed": "重置失败"
       },
+      "authorFilter": {
+        "label": "作者",
+        "searchPlaceholder": "搜索作者",
+        "noAuthors": "未找到作者",
+        "you": "你",
+        "filterByAuthorAria": "按作者筛选提交",
+        "filterByQuery": "按“{query}”过滤",
+        "clearAuthorFilterAria": "清除作者过滤",
+        "recent": "最近",
+        "matchingAuthors": "匹配的作者",
+        "removeFromRecent": "从最近列表移除 {name}"
+      },
       "branchSelector": {
+        "label": "分支",
         "searchBranch": "搜索分支...",
         "noBranches": "无分支",
         "selectBranchPlaceholder": "选择分支...",
         "localBranches": "本地分支",
         "current": "当前",
         "remoteBranches": "远程分支",
-        "refreshCommitHistory": "刷新提交记录"
+        "refreshCommitHistory": "刷新提交记录",
+        "clearBranchFilterAria": "清除分支过滤"
       },
       "dialogs": {
         "newBranchTitle": "新建分支",
