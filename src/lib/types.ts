@@ -293,9 +293,10 @@ export interface MessageTurn {
    * nothing an agent could look up.
    *
    * Present only where the turn can be a fork point ("fork from here"), which
-   * today means Claude assistant turns. Its absence does NOT mean the turn
-   * cannot be forked at: codex forks by content fingerprint instead, resolved
-   * entirely in the backend — so never gate the fork affordance on this. */
+   * today means Claude and DeepSeek assistant turns. Its absence does NOT mean
+   * the turn cannot be forked at: codex forks by content fingerprint instead,
+   * and DeepSeek falls back to one — all resolved entirely in the backend, so
+   * never gate the fork affordance on this. */
   agent_message_id?: string | null
   /** CLIENT-ONLY, never on the wire. The id the PARSER gave this turn.
    *
@@ -3791,6 +3792,22 @@ export interface LocalMcpServer {
   id: string
   spec: Record<string, unknown>
   apps: McpAppType[]
+}
+
+/** One agent whose MCP config the scan could not read. */
+export interface LocalMcpSourceWarning {
+  app: McpAppType
+  message: string
+}
+
+/**
+ * A local MCP scan: everything codeg could read, plus a warning per source it
+ * could not. A single unreadable config degrades to a warning instead of
+ * failing the whole scan (issue #632).
+ */
+export interface LocalMcpScan {
+  servers: LocalMcpServer[]
+  warnings: LocalMcpSourceWarning[]
 }
 
 export interface McpMarketplaceProvider {
