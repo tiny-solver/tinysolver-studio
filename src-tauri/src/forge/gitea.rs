@@ -2164,9 +2164,18 @@ mod tests {
     /// hung up long before the end.
     #[tokio::test]
     async fn an_oversized_diff_is_abandoned_mid_stream_rather_than_buffered() {
-        // One megabyte per chunk, far more of them than the cap allows.
+        // One megabyte per chunk, far more of them than the cap allows. The
+        // stream is lazy, so a long one costs nothing that is never asked for.
         const CHUNK: usize = 1024 * 1024;
-        const CHUNKS: usize = 64;
+        const CHUNKS: usize = 128;
+        // What the transport will take off the stream AFTER the client has
+        // stopped reading: the kernel keeps accepting writes until the send and
+        // receive buffers are full, and on Linux those auto-tune into the
+        // megabytes on loopback (macOS parks at 128 KB, which is why this only
+        // ever bit CI). Slack for that, not a second cap — the assertion below
+        // is about the transfer being abandoned, and nothing here is under the
+        // client's control once it has hung up.
+        const BUFFER_SLACK: usize = 32 * 1024 * 1024;
         let served = Arc::new(AtomicUsize::new(0));
         let counter = served.clone();
 
@@ -2223,12 +2232,13 @@ mod tests {
             (Some(9), Some(1))
         );
 
-        // The point: the transfer was abandoned, not consumed. A couple of
-        // chunks can be in flight past the cap, so this is a bound rather than
-        // an exact count — what it rules out is having read all 64 MB.
+        // The point: the transfer was abandoned, not consumed. Whatever the
+        // sockets had already swallowed is served past the cap, so this is a
+        // bound rather than an exact count — what it rules out is having read
+        // all 128 MB, which is precisely what buffering the body would do.
         let served = served.load(Ordering::SeqCst);
         assert!(
-            served <= DIFF_BYTE_CAP / CHUNK + 4,
+            served * CHUNK <= DIFF_BYTE_CAP + BUFFER_SLACK,
             "read {served} chunks of {CHUNK} bytes; the cap is {DIFF_BYTE_CAP}"
         );
         assert!(served < CHUNKS, "the whole stream was consumed");
