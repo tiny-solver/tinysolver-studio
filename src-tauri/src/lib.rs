@@ -1598,6 +1598,7 @@ mod tauri_app {
                 mcp_commands::mcp_set_server_apps,
                 mcp_commands::mcp_remove_server,
                 notification::send_notification,
+                notification::open_system_notification_settings,
                 file_io::save_binary_file,
                 file_io::save_text_file,
                 backup::backup_create,
