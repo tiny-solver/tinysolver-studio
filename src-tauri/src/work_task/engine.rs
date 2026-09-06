@@ -5925,11 +5925,19 @@ enum PushRefusal {
 /// the failure this classification exists to stop.
 fn classify_push_refusal(error: &str) -> PushRefusal {
     let lower = error.to_lowercase();
+    // The status codes are matched in the phrasing git and curl actually
+    // print, not as bare digits: "403" on its own also matches a branch called
+    // `fix/403-page` or a repository named after an issue number, and the whole
+    // point of this function is to stop it handing out confident wrong advice.
     let permission = [
         "permission to",
         "denied to",
-        "403",
-        "401",
+        "error: 403",
+        "error: 401",
+        "http 403",
+        "http 401",
+        "status code 403",
+        "status code 401",
         "authentication failed",
         "write access",
         "read-only",
@@ -6993,6 +7001,21 @@ mod tests {
             PushRefusal::Unknown
         );
         assert_eq!(classify_push_refusal(""), PushRefusal::Unknown);
+    }
+
+    /// A status code has to be matched in the phrasing that carries it. Branch
+    /// and repository names are part of every push error, and plenty of them
+    /// are named after an issue number.
+    #[test]
+    fn a_number_in_a_branch_name_is_not_a_status_code() {
+        let stale_on_an_issue_branch = "git push failed: ! [rejected] fix/403-page -> \
+             fix/401-redirect (fetch first)\nerror: failed to push some refs to \
+             'https://github.com/owner/repo-403.git'";
+        assert_eq!(
+            classify_push_refusal(stale_on_an_issue_branch),
+            PushRefusal::BranchMoved,
+            "a 403 in a ref name must not be read as a permission refusal"
+        );
     }
 
     #[test]

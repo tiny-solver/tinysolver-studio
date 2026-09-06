@@ -59,9 +59,43 @@ fn git_failure_message(err: AppCommandError) -> String {
         .map(str::trim)
         .filter(|d| !d.is_empty())
     {
-        Some(detail) => format!("{}: {}", err.message, truncate_chars(detail)),
+        Some(detail) => format!("{}: {}", err.message, truncate_chars(&redact_userinfo(detail))),
         None => err.message,
     }
+}
+
+/// Blank out `scheme://user:secret@host` in text about to be shown and stored.
+///
+/// The account's token never travels in a URL — it reaches git through
+/// `GIT_ASKPASS` — so this is not about that. It is about the URL git echoes
+/// back in its errors: `web_origin` returns a self-hosted `server_url` verbatim,
+/// so a user who typed credentials into their own forge address would have them
+/// come back out here, in a string that is persisted and rendered. Cheap to
+/// scrub, and this is a failure path where nothing is worth that risk.
+fn redact_userinfo(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(scheme_end) = rest.find("://") {
+        let authority_start = scheme_end + "://".len();
+        // The authority runs to the first character that can only follow it.
+        // Quotes count: git wraps the URL in them ('https://…/repo.git/').
+        let authority_end = rest[authority_start..]
+            .find(|c: char| matches!(c, '/' | '?' | '#' | '\'' | '"') || c.is_whitespace())
+            .map(|i| authority_start + i)
+            .unwrap_or(rest.len());
+        let authority = &rest[authority_start..authority_end];
+        match authority.rfind('@') {
+            Some(at) => {
+                out.push_str(&rest[..authority_start]);
+                out.push_str("***@");
+                out.push_str(&authority[at + 1..]);
+            }
+            None => out.push_str(&rest[..authority_end]),
+        }
+        rest = &rest[authority_end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Cut on a character boundary, never a byte one — git happily reports branch
@@ -879,6 +913,37 @@ mod tests {
         assert_eq!(git_failure_message(bare), "git push: network error");
         let blank = AppCommandError::network("git push: network error").with_detail("   ");
         assert_eq!(git_failure_message(blank), "git push: network error");
+    }
+
+    /// Git echoes the remote URL in its errors, and `web_origin` hands back a
+    /// self-hosted `server_url` verbatim — so credentials a user typed into
+    /// their own forge address would otherwise come back out in a string that
+    /// is persisted and rendered.
+    #[test]
+    fn a_flattened_failure_blanks_credentials_git_echoed_back() {
+        let echoed = "fatal: unable to access \
+             'https://me:s3cret@git.example.com/team/app.git/': The requested URL returned \
+             error: 403";
+        let flattened = git_failure_message(
+            AppCommandError::network("git push failed").with_detail(echoed),
+        );
+        assert!(!flattened.contains("s3cret"), "{flattened}");
+        assert!(flattened.contains("https://***@git.example.com/team/app.git/"), "{flattened}");
+        // The rest of git's sentence has to survive the scrub intact.
+        assert!(flattened.contains("returned error: 403"), "{flattened}");
+    }
+
+    #[test]
+    fn a_flattened_failure_leaves_a_credential_free_url_alone() {
+        let plain = "! [rejected] a -> b (fetch first)\nerror: failed to push some refs to \
+             'https://github.com/owner/repo.git'";
+        let flattened =
+            git_failure_message(AppCommandError::network("git push failed").with_detail(plain));
+        assert!(
+            flattened.contains("'https://github.com/owner/repo.git'"),
+            "{flattened}"
+        );
+        assert!(!flattened.contains("***"), "{flattened}");
     }
 
     /// This string is persisted and rendered, and the detail is another
