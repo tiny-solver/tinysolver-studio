@@ -196,7 +196,33 @@
       "panelOpacityHint": "How opaque the sidebar, panels and tab bars are. Lower lets more of the image show through.",
       "errorTooLarge": "Image is too large (max 16 MB).",
       "errorUnsupportedFormat": "Unsupported image format. Choose a PNG, JPEG, WebP or GIF.",
-      "errorUploadFailed": "Failed to set the background image."
+      "errorUploadFailed": "Failed to set the background image.",
+      "market": {
+        "open": "Wallpaper market",
+        "title": "Wallpaper market",
+        "description": "Browse the public Wallhaven gallery; click to download and apply.",
+        "searchPlaceholder": "Search wallpapers…",
+        "categories": {
+          "all": "All",
+          "general": "General",
+          "anime": "Anime",
+          "people": "People"
+        },
+        "pageInfo": "Page {page} of {lastPage}",
+        "prevPage": "Previous",
+        "nextPage": "Next",
+        "refresh": "Refresh",
+        "empty": "No wallpapers matched.",
+        "error": "Failed to load the wallpaper market.",
+        "retry": "Retry",
+        "cardLabel": "Apply wallpaper {id}",
+        "applied": "In use",
+        "unavailable": "Unavailable",
+        "tooLarge": "Too large for a background: {actual} (limit {limit})",
+        "downloadFailed": "Download failed. Please retry.",
+        "appliedToast": "Wallpaper applied",
+        "credit": "Images from wallhaven.cc · SFW only"
+      }
     }
   },
   "SystemSettings": {
