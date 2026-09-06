@@ -43,6 +43,15 @@ use crate::app_error::AppCommandError;
 /// there once cost a reader a long detour, because the caller filled the
 /// silence with a guess about repository permissions when git had actually
 /// said the branch was out of date.
+///
+/// The detail is bounded. It is arbitrary output from another program, and
+/// this string does not just get read once — it is persisted on the task row
+/// and rendered in the UI, so a server-side hook that answers a push with a
+/// screenful of banner would otherwise all end up in the database. Git leads
+/// with the part that identifies the failure and follows with hints, so a
+/// prefix is the right thing to keep.
+const MAX_GIT_DETAIL_CHARS: usize = 800;
+
 fn git_failure_message(err: AppCommandError) -> String {
     match err
         .detail
@@ -50,8 +59,18 @@ fn git_failure_message(err: AppCommandError) -> String {
         .map(str::trim)
         .filter(|d| !d.is_empty())
     {
-        Some(detail) => format!("{}: {detail}", err.message),
+        Some(detail) => format!("{}: {}", err.message, truncate_chars(detail)),
         None => err.message,
+    }
+}
+
+/// Cut on a character boundary, never a byte one — git happily reports branch
+/// names and hook banners in any encoding, and slicing those mid-codepoint
+/// would panic on the failure path.
+fn truncate_chars(text: &str) -> String {
+    match text.char_indices().nth(MAX_GIT_DETAIL_CHARS) {
+        Some((cut, _)) => format!("{}…", &text[..cut]),
+        None => text.to_string(),
     }
 }
 
@@ -860,6 +879,28 @@ mod tests {
         assert_eq!(git_failure_message(bare), "git push: network error");
         let blank = AppCommandError::network("git push: network error").with_detail("   ");
         assert_eq!(git_failure_message(blank), "git push: network error");
+    }
+
+    /// This string is persisted and rendered, and the detail is another
+    /// program's output — a hook that answers a push with a banner must not
+    /// land in the database whole. Multi-byte input is the case that would
+    /// panic if the cut were taken on bytes.
+    #[test]
+    fn a_flattened_failure_bounds_a_runaway_detail() {
+        let banner = "の".repeat(MAX_GIT_DETAIL_CHARS * 2);
+        let flattened =
+            git_failure_message(AppCommandError::network("git push failed").with_detail(&banner));
+        assert!(flattened.starts_with("git push failed: の"), "{flattened}");
+        assert!(flattened.ends_with('…'), "expected an elision marker");
+        assert_eq!(
+            flattened.chars().count(),
+            "git push failed: ".chars().count() + MAX_GIT_DETAIL_CHARS + 1
+        );
+        // Exactly at the limit is kept whole, with no marker implying loss.
+        let exact = "x".repeat(MAX_GIT_DETAIL_CHARS);
+        let kept =
+            git_failure_message(AppCommandError::network("git push failed").with_detail(&exact));
+        assert!(kept.ends_with('x'), "{kept}");
     }
 
     fn pr(number: i64, head_sha: &str, head_ref: &str, base: &str, repo: &str) -> ForgePr {
