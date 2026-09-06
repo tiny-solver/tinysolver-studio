@@ -4473,7 +4473,15 @@
       "button": "Export backup",
       "inProgress": "Creating backup…",
       "success": "Backup created.",
-      "started": "Backup download started."
+      "started": "Backup download started.",
+      "degradedTitle": "Some agent session databases needed special handling",
+      "degradedHint": "These agents keep their sessions in SQLite. The backup still contains them unless marked otherwise below.",
+      "degradedMore": "…and {count} more.",
+      "degradedLevel": {
+        "recoveredOnCopy": "recovered from a private copy — complete",
+        "bareFileOnly": "archived without its write-ahead log — the newest messages may be missing",
+        "notArchived": "not archived — it kept changing while being copied"
+      }
     },
     "restore": {
       "selectFile": "Select backup file",
@@ -4511,11 +4519,37 @@
         "scanning": "Checking for conflicts…",
         "noConflicts": "No existing files would be overwritten.",
         "conflictCount": "{count} existing file(s) would be affected.",
-        "conflictSkipNote": "Existing files are kept (skipped) unless you enable overwrite."
+        "conflictSkipNote": "Existing files are kept (skipped) unless you enable overwrite.",
+        "agentsRunning": "{count} agent(s) are running ({agents}). Close them first, or the transcripts will be kept in a side folder instead of written back."
       },
-      "restartFailed": "Restore staged, but the server couldn't restart. Restart it manually to apply the restore."
+      "restartFailed": "Restore staged, but the server couldn't restart. Restart it manually to apply the restore.",
+      "discardPending": "Discard staged restore",
+      "discarded": "The staged restore was discarded.",
+      "pendingBlockedHint": "A restore is already staged and waiting for a restart. Discard it to stage a different one.",
+      "result": {
+        "title": "Restore staged",
+        "needsRestart": "It will be applied on the next start. Your current data is snapshotted first.",
+        "downgraded": "{agents} were running, so conversation transcripts were not written back to their original locations. They were kept in {path}.",
+        "skipped": "{count} existing file(s) were kept",
+        "refused": "{count} session database(s) were not written back",
+        "refusedHint": "They come from an older backup that stored a database and its write-ahead log separately, and the two cannot be proven to match. Your existing databases were left untouched — restore to a side folder to get the raw files.",
+        "restartNow": "Restart now",
+        "later": "Later"
+      }
     },
-    "remoteUnsupported": "Backup & restore acts on the data of the machine running codeg. You're connected to a remote workspace — manage its backups from that server directly."
+    "remoteUnsupported": "Backup & restore acts on the data of the machine running codeg. You're connected to a remote workspace — manage its backups from that server directly.",
+    "progress": {
+      "cancel": "Cancel"
+    },
+    "snapshots": {
+      "title": "Pre-restore snapshots",
+      "hint": "Each restore snapshots your current data first. The two newest are kept.",
+      "empty": "No snapshots yet.",
+      "rollback": "Roll back to this",
+      "unsupported": "Inspect only",
+      "rollbackConfirmTitle": "Roll back to this snapshot?",
+      "rollbackConfirmBody": "This replaces your current data with the snapshot, then restarts. The data being replaced is snapshotted first."
+    }
   },
   "backup": {
     "restore": {
@@ -4592,6 +4626,9 @@
     "permissionDefaultHint": "This browser has not been asked yet. Notifications stay silent until you allow them.",
     "permissionUnsupportedHint": "Notifications need a secure context. Reach this server over HTTPS or on localhost.",
     "permissionManagedByOsHint": "The desktop app posts through the system notification centre, which does not report back whether Codeg is allowed. Send a test to find out.",
+    "identityTitle": "Delivered as",
+    "identityHint": "The system files these notifications under this app — its own switches are the ones that apply.",
+    "identityDegradedHint": "Codeg's own identifier could not be claimed, so the system posts these as {bundleId} and that app's switches apply instead. Installing Codeg to your Applications folder restores its own identity.",
     "requestPermission": "Allow notifications",
     "permissionGrantedToast": "Notifications allowed.",
     "permissionDeniedToast": "Notifications were blocked. Re-enable them in your browser's site settings.",

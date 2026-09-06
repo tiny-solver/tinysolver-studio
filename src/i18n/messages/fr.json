@@ -4473,7 +4473,15 @@
       "button": "Exporter la sauvegarde",
       "inProgress": "Création de la sauvegarde…",
       "success": "Sauvegarde créée.",
-      "started": "Téléchargement de la sauvegarde lancé."
+      "started": "Téléchargement de la sauvegarde lancé.",
+      "degradedTitle": "Certaines bases de sessions d'agents ont demandé un traitement particulier",
+      "degradedHint": "Ces agents stockent leurs sessions dans SQLite. Sauf mention contraire ci-dessous, la sauvegarde les contient bien.",
+      "degradedMore": "…et {count} de plus.",
+      "degradedLevel": {
+        "recoveredOnCopy": "restaurée depuis une copie privée — complète",
+        "bareFileOnly": "archivée sans son journal d'écriture anticipée — les messages les plus récents peuvent manquer",
+        "notArchived": "non archivée — elle changeait pendant la copie"
+      }
     },
     "restore": {
       "selectFile": "Sélectionner le fichier de sauvegarde",
@@ -4511,11 +4519,37 @@
         "scanning": "Vérification des conflits…",
         "noConflicts": "Aucun fichier existant ne sera écrasé.",
         "conflictCount": "{count} fichier(s) existant(s) seraient concerné(s).",
-        "conflictSkipNote": "Les fichiers existants sont conservés (ignorés) sauf si vous activez l'écrasement."
+        "conflictSkipNote": "Les fichiers existants sont conservés (ignorés) sauf si vous activez l'écrasement.",
+        "agentsRunning": "{count} agent(s) en cours d'exécution ({agents}). Ferme-les d'abord, sinon les transcriptions seront placées dans un dossier annexe au lieu d'être réécrites à leur emplacement d'origine."
       },
-      "restartFailed": "Restauration préparée, mais le serveur n'a pas pu redémarrer. Redémarrez-le manuellement pour l'appliquer."
+      "restartFailed": "Restauration préparée, mais le serveur n'a pas pu redémarrer. Redémarrez-le manuellement pour l'appliquer.",
+      "discardPending": "Abandonner la restauration préparée",
+      "discarded": "La restauration préparée a été abandonnée.",
+      "pendingBlockedHint": "Une restauration est déjà préparée et attend un redémarrage. Abandonne-la pour en préparer une autre.",
+      "result": {
+        "title": "Restauration préparée",
+        "needsRestart": "Elle sera appliquée au prochain démarrage. Un instantané de tes données actuelles est pris avant.",
+        "downgraded": "{agents} étai(en)t en cours d'exécution : les transcriptions n'ont pas été réécrites à leur emplacement d'origine, elles ont été placées dans {path}.",
+        "skipped": "{count} fichier(s) existant(s) ont été conservés",
+        "refused": "{count} base(s) de sessions n'ont pas été réécrites",
+        "refusedHint": "Elles proviennent d'une sauvegarde ancienne qui stockait la base et son journal d'écriture anticipée séparément, et rien ne prouve qu'ils se correspondent. Tes bases existantes n'ont pas été touchées — restaure vers un dossier annexe pour récupérer les fichiers bruts.",
+        "restartNow": "Redémarrer maintenant",
+        "later": "Plus tard"
+      }
     },
-    "remoteUnsupported": "La sauvegarde et la restauration agissent sur les données de la machine qui exécute codeg. Vous êtes connecté à un espace de travail distant : gérez ses sauvegardes directement depuis ce serveur."
+    "remoteUnsupported": "La sauvegarde et la restauration agissent sur les données de la machine qui exécute codeg. Vous êtes connecté à un espace de travail distant : gérez ses sauvegardes directement depuis ce serveur.",
+    "progress": {
+      "cancel": "Annuler"
+    },
+    "snapshots": {
+      "title": "Instantanés d'avant restauration",
+      "hint": "Chaque restauration prend d'abord un instantané de tes données actuelles. Les deux plus récents sont conservés.",
+      "empty": "Aucun instantané pour le moment.",
+      "rollback": "Revenir à celui-ci",
+      "unsupported": "Consultation seule",
+      "rollbackConfirmTitle": "Revenir à cet instantané ?",
+      "rollbackConfirmBody": "Cela remplace tes données actuelles par l'instantané puis redémarre. Un instantané des données remplacées est pris avant."
+    }
   },
   "backup": {
     "restore": {
@@ -4592,6 +4626,9 @@
     "permissionDefaultHint": "Ce navigateur n'a pas encore été sollicité. Aucune notification tant que vous ne les autorisez pas.",
     "permissionUnsupportedHint": "Les notifications exigent un contexte sécurisé. Accédez à ce serveur en HTTPS ou via localhost.",
     "permissionManagedByOsHint": "L'application de bureau passe par le centre de notifications du système, qui n'indique pas si Codeg est autorisé. Envoyez un test pour le savoir.",
+    "identityTitle": "Envoyé en tant que",
+    "identityHint": "Le système rattache ces notifications à cette app ; ce sont ses propres interrupteurs qui s'appliquent.",
+    "identityDegradedHint": "L'identifiant propre à Codeg n'a pas pu être revendiqué, le système les envoie donc en tant que {bundleId} et ce sont les réglages de cette app qui s'appliquent. Installez Codeg dans le dossier Applications pour rétablir son identité.",
     "requestPermission": "Autoriser les notifications",
     "permissionGrantedToast": "Notifications autorisées.",
     "permissionDeniedToast": "Les notifications ont été bloquées. Réactivez-les dans les paramètres de site de votre navigateur.",

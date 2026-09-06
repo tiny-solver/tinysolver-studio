@@ -4473,7 +4473,15 @@
       "button": "백업 내보내기",
       "inProgress": "백업 만드는 중…",
       "success": "백업을 만들었습니다.",
-      "started": "백업 다운로드를 시작했습니다."
+      "started": "백업 다운로드를 시작했습니다.",
+      "degradedTitle": "일부 에이전트 세션 데이터베이스는 특별한 처리가 필요했습니다",
+      "degradedHint": "이 에이전트들은 세션을 SQLite에 저장합니다. 아래에 별도 표시가 없으면 백업에 포함되어 있습니다.",
+      "degradedMore": "…외 {count}건.",
+      "degradedLevel": {
+        "recoveredOnCopy": "전용 사본에서 복구됨 — 완전함",
+        "bareFileOnly": "선행 기록 로그 없이 보관됨 — 최신 메시지가 빠졌을 수 있음",
+        "notArchived": "백업하지 않음 — 복사하는 동안 계속 변경됨"
+      }
     },
     "restore": {
       "selectFile": "백업 파일 선택",
@@ -4511,11 +4519,37 @@
         "scanning": "충돌 확인 중…",
         "noConflicts": "덮어쓸 기존 파일이 없습니다.",
         "conflictCount": "기존 파일 {count}개가 영향을 받습니다.",
-        "conflictSkipNote": "덮어쓰기를 켜지 않으면 기존 파일은 유지(건너뜀)됩니다."
+        "conflictSkipNote": "덮어쓰기를 켜지 않으면 기존 파일은 유지(건너뜀)됩니다.",
+        "agentsRunning": "에이전트 {count}개가 실행 중입니다({agents}). 먼저 종료하세요. 그렇지 않으면 기록이 원래 위치에 기록되지 않고 별도 폴더에 보관됩니다."
       },
-      "restartFailed": "복원이 준비되었지만 서버를 다시 시작하지 못했습니다. 수동으로 다시 시작해 복원을 적용하세요."
+      "restartFailed": "복원이 준비되었지만 서버를 다시 시작하지 못했습니다. 수동으로 다시 시작해 복원을 적용하세요.",
+      "discardPending": "대기 중인 복원 취소",
+      "discarded": "대기 중이던 복원을 취소했습니다.",
+      "pendingBlockedHint": "재시작을 기다리는 복원이 이미 있습니다. 다른 것을 준비하려면 먼저 취소하세요.",
+      "result": {
+        "title": "복원이 준비되었습니다",
+        "needsRestart": "다음 시작 시 적용됩니다. 현재 데이터는 먼저 스냅샷으로 보관됩니다.",
+        "downgraded": "{agents}이(가) 실행 중이어서 대화 기록을 원래 위치에 기록하지 않고 {path}에 보관했습니다.",
+        "skipped": "기존 파일 {count}개를 그대로 두었습니다",
+        "refused": "세션 데이터베이스 {count}개를 기록하지 않았습니다",
+        "refusedHint": "데이터베이스와 선행 기록 로그를 따로 저장하던 이전 백업에서 온 것으로, 둘이 서로 맞는지 증명할 수 없습니다. 기존 데이터베이스는 그대로 두었습니다 — 별도 폴더로 복원하면 원본 파일을 받을 수 있습니다.",
+        "restartNow": "지금 재시작",
+        "later": "나중에"
+      }
     },
-    "remoteUnsupported": "백업 및 복원은 codeg를 실행 중인 컴퓨터의 데이터를 대상으로 합니다. 현재 원격 작업 공간에 연결되어 있습니다. 해당 서버에서 직접 백업을 관리하세요."
+    "remoteUnsupported": "백업 및 복원은 codeg를 실행 중인 컴퓨터의 데이터를 대상으로 합니다. 현재 원격 작업 공간에 연결되어 있습니다. 해당 서버에서 직접 백업을 관리하세요.",
+    "progress": {
+      "cancel": "취소"
+    },
+    "snapshots": {
+      "title": "복원 전 스냅샷",
+      "hint": "복원할 때마다 현재 데이터를 먼저 스냅샷으로 남기고, 최신 두 개를 보관합니다.",
+      "empty": "아직 스냅샷이 없습니다.",
+      "rollback": "이 시점으로 되돌리기",
+      "unsupported": "보기 전용",
+      "rollbackConfirmTitle": "이 스냅샷으로 되돌릴까요?",
+      "rollbackConfirmBody": "현재 데이터를 이 스냅샷으로 바꾸고 재시작합니다. 교체되는 데이터는 먼저 스냅샷으로 보관됩니다."
+    }
   },
   "backup": {
     "restore": {
@@ -4592,6 +4626,9 @@
     "permissionDefaultHint": "아직 이 브라우저에 요청하지 않았습니다. 허용하기 전까지는 알림이 오지 않습니다.",
     "permissionUnsupportedHint": "알림에는 보안 컨텍스트가 필요합니다. HTTPS 또는 localhost로 접속하세요.",
     "permissionManagedByOsHint": "데스크톱 앱은 시스템 알림 센터를 통해 보내며, OS는 Codeg가 허용되었는지 알려주지 않습니다. 테스트를 보내 확인하세요.",
+    "identityTitle": "전송 주체",
+    "identityHint": "시스템은 이 알림을 이 앱의 것으로 처리합니다. 실제로 적용되는 것은 그 앱의 알림 스위치입니다.",
+    "identityDegradedHint": "Codeg 자체 식별자를 사용할 수 없어 시스템이 {bundleId} 이름으로 알림을 보내며, 해당 앱의 알림 스위치가 적용됩니다. Codeg을 응용 프로그램 폴더에 설치하면 원래 신원으로 돌아갑니다.",
     "requestPermission": "알림 허용",
     "permissionGrantedToast": "알림이 허용되었습니다.",
     "permissionDeniedToast": "알림이 차단되었습니다. 브라우저의 사이트 설정에서 다시 허용하세요.",

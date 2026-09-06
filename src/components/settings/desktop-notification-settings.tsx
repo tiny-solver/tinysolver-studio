@@ -19,6 +19,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
+  AlertTriangle,
+  AppWindow,
   Bell,
   BellRing,
   Clock,
@@ -51,12 +53,15 @@ import {
   type NotifyWhen,
 } from "@/lib/desktop-notification-prefs"
 import {
+  getNotificationIdentity,
   getNotificationPermission,
   openSystemNotificationSettings,
   requestNotificationPermission,
+  type NotificationIdentity,
   type NotificationPermissionState,
 } from "@/lib/notification"
 import { toErrorMessage } from "@/lib/app-error"
+import { cn } from "@/lib/utils"
 
 // Literal message keys per id — next-intl only resolves literal keys, so the
 // lookup tables keep the rows data-driven without losing key checking.
@@ -115,9 +120,42 @@ export function DesktopNotificationSettingsSection() {
   const [requesting, setRequesting] = useState(false)
   const [testing, setTesting] = useState(false)
 
+  // Which app the OS files our notifications under. Desktop-only, and `null`
+  // until the backend answers — same reasoning as `permission` above.
+  const [identity, setIdentity] = useState<NotificationIdentity | null>(null)
+
+  // Always folded on arrival, however the master switch is set: this is one of
+  // several sections on the General tab, and a page that opens with every knob
+  // on screen is one nobody can scan.
+  const [expanded, setExpanded] = useState(false)
+
   useEffect(() => {
     setPermission(getNotificationPermission())
   }, [])
+
+  // With notifications off there is nothing under the heading to fold, so the
+  // section stays the plain one-liner it already was rather than growing a
+  // chevron that opens onto an empty box.
+  const sectionOpen = prefs.enabled && expanded
+
+  useEffect(() => {
+    // Only while the section is expanded: the first read is what claims the
+    // identity on the backend, and there is no reason to do that for a
+    // collapsed section the user never opened.
+    if (!sectionOpen) return
+    let cancelled = false
+    void getNotificationIdentity()
+      .then((next) => {
+        if (!cancelled) setIdentity(next)
+      })
+      // A backend that cannot answer leaves the row hidden, which is the
+      // honest rendering of "we don't know" — the same stance the permission
+      // badge takes before it has a value.
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [sectionOpen])
 
   const onRequestPermission = useCallback(async () => {
     setRequesting(true)
@@ -173,19 +211,30 @@ export function DesktopNotificationSettingsSection() {
   return (
     // The master switch is the section's heading row: with notifications off
     // the whole section is that one line, and the knobs it gates appear under
-    // it rather than in a card repeating "Enable desktop notifications".
+    // it rather than in a card repeating "Enable desktop notifications". With
+    // them on the heading also folds those knobs away, and starts folded.
     <SettingsSection
       icon={Bell}
       title={t("title")}
       description={t("description")}
+      // Only labels the switch while there is nothing to fold; once the
+      // heading is the disclosure button the switch names itself instead.
       htmlFor="desktop-notification-enabled"
+      collapsible
+      open={expanded}
+      onOpenChange={setExpanded}
       control={
         <Switch
           id="desktop-notification-enabled"
+          aria-label={t("title")}
           checked={prefs.enabled}
-          onCheckedChange={(enabled) =>
+          onCheckedChange={(enabled) => {
             saveDesktopNotificationPrefs({ ...prefs, enabled })
-          }
+            // Switching it on is a request to see what it does, so unfold in
+            // the same gesture. Only here, never on mount: arriving at the tab
+            // is not that request.
+            if (enabled) setExpanded(true)
+          }}
         />
       }
     >
@@ -256,6 +305,38 @@ export function DesktopNotificationSettingsSection() {
               )}
             </div>
           </SettingRow>
+
+          {/* Names the app the OS actually attributes our notifications to.
+              Without it the panel implies the user's own "codeg" switches are
+              what govern delivery, and when the identity has degraded that is
+              simply false — they'd be tuning an app that receives nothing. */}
+          {identity && (
+            <SettingRow
+              icon={identity.degraded ? AlertTriangle : AppWindow}
+              title={t("identityTitle")}
+              description={
+                identity.degraded
+                  ? t("identityDegradedHint", { bundleId: identity.bundleId })
+                  : t("identityHint")
+              }
+              control={
+                <span
+                  // `title` because a bundle id is one long unbreakable token:
+                  // truncation is the only layout that survives, so the full
+                  // value has to stay reachable.
+                  title={identity.bundleId}
+                  className={cn(
+                    "block max-w-[11rem] truncate rounded-md border px-2 py-0.5 font-mono text-xs",
+                    identity.degraded
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : "border-border/70 bg-background text-muted-foreground"
+                  )}
+                >
+                  {identity.bundleId}
+                </span>
+              }
+            />
+          )}
         </SettingCard>
       )}
 
