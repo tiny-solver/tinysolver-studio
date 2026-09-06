@@ -31,6 +31,29 @@ use super::auth::ResolvedAuth;
 use super::{
     github, gitlab, urlencode_query, web_origin, ForgeError, ForgeItemKind, ForgeProvider,
 };
+use crate::app_error::AppCommandError;
+
+/// Flatten a classified git failure into one line, git's own words included.
+///
+/// `AppCommandError`'s `Display` is `{message}` alone, and
+/// `classify_remote_git_error` puts everything specific — the whole of git's
+/// stderr — in `detail`. A plain `to_string()` here therefore hands the caller
+/// nothing but "git push failed", and the delivery path has no second channel
+/// to the failure: that one string is what a human reads. Losing the detail
+/// there once cost a reader a long detour, because the caller filled the
+/// silence with a guess about repository permissions when git had actually
+/// said the branch was out of date.
+fn git_failure_message(err: AppCommandError) -> String {
+    match err
+        .detail
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+    {
+        Some(detail) => format!("{}: {detail}", err.message),
+        None => err.message,
+    }
+}
 
 /// A pull request as far as delivery cares. Deliberately not the full API
 /// object: everything here is either an adoption criterion or shown to the user.
@@ -543,9 +566,9 @@ async fn push_work_branch(
         .await
         .map_err(|e| format!("could not run git push: {e}"))?;
     if !output.status.success() {
-        return Err(
-            crate::commands::folders::classify_remote_git_error("push", &output.stderr).to_string(),
-        );
+        return Err(git_failure_message(
+            crate::commands::folders::classify_remote_git_error("push", &output.stderr),
+        ));
     }
     Ok(())
 }
@@ -575,8 +598,9 @@ async fn fetch_into_ref(
         .await
         .map_err(|e| format!("could not run git fetch: {e}"))?;
     if !out.status.success() {
-        return Err(crate::commands::folders::classify_remote_git_error("fetch", &out.stderr)
-            .to_string());
+        return Err(git_failure_message(
+            crate::commands::folders::classify_remote_git_error("fetch", &out.stderr),
+        ));
     }
     crate::work_task::git::rev_parse(repo_path, local_ref)
         .await
@@ -802,6 +826,29 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    /// The delivery error string is the only thing a human sees when a push
+    /// fails, and `classify_remote_git_error` files everything specific under
+    /// `detail`. `Display` prints `message` alone, so flattening has to reach
+    /// for the detail explicitly or the reader is left with "git push failed".
+    #[test]
+    fn a_flattened_git_failure_keeps_what_git_said() {
+        let stderr = b"! [rejected]        task/57 -> feat/x (fetch first)\n\
+                       error: failed to push some refs";
+        let flattened = git_failure_message(crate::commands::folders::classify_remote_git_error(
+            "push", stderr,
+        ));
+        assert!(flattened.starts_with("git push failed"), "{flattened}");
+        assert!(flattened.contains("(fetch first)"), "{flattened}");
+    }
+
+    #[test]
+    fn a_flattened_failure_without_detail_stays_one_clause() {
+        let bare = AppCommandError::network("git push: network error");
+        assert_eq!(git_failure_message(bare), "git push: network error");
+        let blank = AppCommandError::network("git push: network error").with_detail("   ");
+        assert_eq!(git_failure_message(blank), "git push: network error");
+    }
 
     fn pr(number: i64, head_sha: &str, head_ref: &str, base: &str, repo: &str) -> ForgePr {
         ForgePr {
