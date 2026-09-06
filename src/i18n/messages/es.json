@@ -2041,6 +2041,48 @@
           "more": "Más"
         },
         "showPet": "Mostrar mascota"
+      },
+      "mcp": {
+        "title": "Servicio codeg-mcp",
+        "state": {
+          "running": "En ejecución",
+          "stopped": "Detenido",
+          "disabled": "Sin herramientas activas",
+          "unavailable": "Falta el complemento",
+          "unknown": "Desconocido"
+        },
+        "hint": {
+          "running": "Los agentes iniciados aquí reciben las herramientas propias de codeg: delegación, feedback en vivo, preguntas al usuario y consulta de sesiones.",
+          "stopped": "El socket del broker no responde, así que los complementos no pueden alcanzar codeg. Iniciarlo vuelve a abrir esa vía.",
+          "disabled": "El servicio funciona, pero todos los grupos de herramientas están desactivados, así que no se inyecta ningún complemento.",
+          "unavailable": "El broker está escuchando, pero el binario codeg-mcp no está en el disco. Reinstala codeg o apunta CODEG_MCP_BIN hacia él.",
+          "unknown": "No se pudo leer el estado."
+        },
+        "socket": "Socket del broker",
+        "socketPath": "Dirección",
+        "socketListening": "Escuchando",
+        "socketDown": "Sin respuesta",
+        "binary": "Complemento",
+        "binaryMissing": "No encontrado",
+        "startedAt": "Iniciado",
+        "sessions": "Sesiones de agente",
+        "activeDelegations": "Delegaciones en curso",
+        "depthLimit": "Límite de profundidad",
+        "tools": "Herramientas activas",
+        "toolsAllOff": "Todos los grupos de herramientas están desactivados.",
+        "groupDelegation": "Delegación",
+        "groupFeedback": "Feedback en vivo",
+        "groupAsk": "Preguntar al usuario",
+        "groupSessions": "Consulta de sesiones",
+        "groupAutomations": "Crear automatización",
+        "groupTaskboard": "Crear tarea",
+        "start": "Iniciar servicio",
+        "starting": "Iniciando…",
+        "startFailed": "No se pudo iniciar: {message}",
+        "lastError": "Último error: {message}",
+        "loadFailed": "No se pudo leer el estado: {message}",
+        "openSettings": "Ajustes",
+        "refresh": "Actualizar"
       }
     },
     "auxPanel": {

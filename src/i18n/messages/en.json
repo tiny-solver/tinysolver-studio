@@ -2041,6 +2041,48 @@
           "more": "More"
         },
         "showPet": "Show pet"
+      },
+      "mcp": {
+        "title": "codeg-mcp service",
+        "state": {
+          "running": "Running",
+          "stopped": "Not running",
+          "disabled": "No tools enabled",
+          "unavailable": "Companion missing",
+          "unknown": "Unknown"
+        },
+        "hint": {
+          "running": "Agents launched from here get codeg's own tools: delegation, live feedback, ask-a-question and session lookup.",
+          "stopped": "The broker socket isn't answering, so companions can't reach codeg. Starting it reopens that path.",
+          "disabled": "The service is healthy, but every tool group is switched off, so no companion is injected.",
+          "unavailable": "The broker is listening, but the codeg-mcp binary isn't on disk. Reinstall codeg, or point CODEG_MCP_BIN at it.",
+          "unknown": "The status could not be read."
+        },
+        "socket": "Broker socket",
+        "socketPath": "Address",
+        "socketListening": "Listening",
+        "socketDown": "Not answering",
+        "binary": "Companion",
+        "binaryMissing": "Not found",
+        "startedAt": "Started",
+        "sessions": "Agent sessions",
+        "activeDelegations": "Running delegations",
+        "depthLimit": "Chain depth limit",
+        "tools": "Enabled tools",
+        "toolsAllOff": "All tool groups are switched off.",
+        "groupDelegation": "Delegation",
+        "groupFeedback": "Live feedback",
+        "groupAsk": "Ask a question",
+        "groupSessions": "Session lookup",
+        "groupAutomations": "Create automation",
+        "groupTaskboard": "Create task",
+        "start": "Start service",
+        "starting": "Starting…",
+        "startFailed": "Could not start: {message}",
+        "lastError": "Last error: {message}",
+        "loadFailed": "Could not read the status: {message}",
+        "openSettings": "Settings",
+        "refresh": "Refresh"
       }
     },
     "auxPanel": {

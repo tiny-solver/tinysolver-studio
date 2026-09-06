@@ -2041,6 +2041,48 @@
           "more": "المزيد"
         },
         "showPet": "إظهار الحيوان الأليف"
+      },
+      "mcp": {
+        "title": "خدمة codeg-mcp",
+        "state": {
+          "running": "قيد التشغيل",
+          "stopped": "متوقفة",
+          "disabled": "لا أدوات مفعّلة",
+          "unavailable": "المرافق مفقود",
+          "unknown": "غير معروف"
+        },
+        "hint": {
+          "running": "الوكلاء الذين يبدأون من هنا يحصلون على أدوات codeg الخاصة: التفويض، والملاحظات الحية، وسؤال المستخدم، والاطلاع على الجلسات.",
+          "stopped": "مقبس الوسيط لا يستجيب، لذا لا تستطيع العمليات المرافقة الوصول إلى codeg. بدء الخدمة يعيد فتح هذا المسار.",
+          "disabled": "الخدمة سليمة، لكن جميع مجموعات الأدوات مُطفأة، لذا لا يتم حقن أي عملية مرافقة.",
+          "unavailable": "الوسيط يستمع، لكن ملف codeg-mcp التنفيذي غير موجود على القرص. أعد تثبيت codeg أو وجّه CODEG_MCP_BIN إليه.",
+          "unknown": "تعذّرت قراءة الحالة."
+        },
+        "socket": "مقبس الوسيط",
+        "socketPath": "العنوان",
+        "socketListening": "يستمع",
+        "socketDown": "لا يستجيب",
+        "binary": "المرافق",
+        "binaryMissing": "غير موجود",
+        "startedAt": "بدأت في",
+        "sessions": "جلسات الوكلاء",
+        "activeDelegations": "التفويضات الجارية",
+        "depthLimit": "حد عمق السلسلة",
+        "tools": "الأدوات المفعّلة",
+        "toolsAllOff": "جميع مجموعات الأدوات مُطفأة.",
+        "groupDelegation": "التفويض",
+        "groupFeedback": "الملاحظات الحية",
+        "groupAsk": "سؤال المستخدم",
+        "groupSessions": "الاطلاع على الجلسات",
+        "groupAutomations": "إنشاء أتمتة",
+        "groupTaskboard": "إنشاء مهمة",
+        "start": "بدء الخدمة",
+        "starting": "جارٍ البدء…",
+        "startFailed": "تعذّر البدء: {message}",
+        "lastError": "آخر خطأ: {message}",
+        "loadFailed": "تعذّرت قراءة الحالة: {message}",
+        "openSettings": "الإعدادات",
+        "refresh": "تحديث"
       }
     },
     "auxPanel": {

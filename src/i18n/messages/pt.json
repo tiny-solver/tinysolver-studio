@@ -2041,6 +2041,48 @@
           "more": "Mais"
         },
         "showPet": "Mostrar pet"
+      },
+      "mcp": {
+        "title": "Serviço codeg-mcp",
+        "state": {
+          "running": "Em execução",
+          "stopped": "Parado",
+          "disabled": "Sem ferramentas ativas",
+          "unavailable": "Companion ausente",
+          "unknown": "Desconhecido"
+        },
+        "hint": {
+          "running": "Os agentes iniciados aqui recebem as ferramentas do próprio codeg: delegação, feedback ao vivo, perguntas ao usuário e consulta de sessões.",
+          "stopped": "O socket do broker não responde, então os companions não alcançam o codeg. Iniciá-lo reabre esse caminho.",
+          "disabled": "O serviço está saudável, mas todos os grupos de ferramentas estão desligados, então nenhum companion é injetado.",
+          "unavailable": "O broker está escutando, mas o binário codeg-mcp não está no disco. Reinstale o codeg ou aponte CODEG_MCP_BIN para ele.",
+          "unknown": "Não foi possível ler o estado."
+        },
+        "socket": "Socket do broker",
+        "socketPath": "Endereço",
+        "socketListening": "Escutando",
+        "socketDown": "Sem resposta",
+        "binary": "Companion",
+        "binaryMissing": "Não encontrado",
+        "startedAt": "Iniciado",
+        "sessions": "Sessões de agente",
+        "activeDelegations": "Delegações em curso",
+        "depthLimit": "Limite de profundidade",
+        "tools": "Ferramentas ativas",
+        "toolsAllOff": "Todos os grupos de ferramentas estão desligados.",
+        "groupDelegation": "Delegação",
+        "groupFeedback": "Feedback ao vivo",
+        "groupAsk": "Perguntar ao usuário",
+        "groupSessions": "Consulta de sessões",
+        "groupAutomations": "Criar automação",
+        "groupTaskboard": "Criar tarefa",
+        "start": "Iniciar serviço",
+        "starting": "Iniciando…",
+        "startFailed": "Não foi possível iniciar: {message}",
+        "lastError": "Último erro: {message}",
+        "loadFailed": "Não foi possível ler o estado: {message}",
+        "openSettings": "Configurações",
+        "refresh": "Atualizar"
       }
     },
     "auxPanel": {

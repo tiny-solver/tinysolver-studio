@@ -2041,6 +2041,48 @@
           "more": "その他"
         },
         "showPet": "ペットを表示"
+      },
+      "mcp": {
+        "title": "codeg-mcp サービス",
+        "state": {
+          "running": "実行中",
+          "stopped": "停止中",
+          "disabled": "ツール無効",
+          "unavailable": "コンパニオン未検出",
+          "unknown": "不明"
+        },
+        "hint": {
+          "running": "ここから起動したエージェントは codeg 独自のツール（委任、ライブフィードバック、ユーザーへの質問、セッション参照）を利用できます。",
+          "stopped": "ブローカーソケットが応答せず、コンパニオンが codeg に接続できません。起動すると、この経路が再び開きます。",
+          "disabled": "サービスは正常ですが、すべてのツールグループが無効のため、コンパニオンは注入されません。",
+          "unavailable": "ブローカーは待ち受けていますが、codeg-mcp バイナリが見つかりません。codeg を再インストールするか、CODEG_MCP_BIN でパスを指定してください。",
+          "unknown": "状態を取得できませんでした。"
+        },
+        "socket": "ブローカーソケット",
+        "socketPath": "アドレス",
+        "socketListening": "待ち受け中",
+        "socketDown": "応答なし",
+        "binary": "コンパニオン",
+        "binaryMissing": "見つかりません",
+        "startedAt": "起動時刻",
+        "sessions": "エージェントセッション",
+        "activeDelegations": "実行中の委任",
+        "depthLimit": "委任チェーンの深さ上限",
+        "tools": "有効なツール",
+        "toolsAllOff": "すべてのツールグループが無効です。",
+        "groupDelegation": "委任",
+        "groupFeedback": "ライブフィードバック",
+        "groupAsk": "ユーザーに質問",
+        "groupSessions": "セッション参照",
+        "groupAutomations": "自動化を作成",
+        "groupTaskboard": "タスクを作成",
+        "start": "サービスを起動",
+        "starting": "起動中…",
+        "startFailed": "起動できませんでした: {message}",
+        "lastError": "前回のエラー: {message}",
+        "loadFailed": "状態を取得できませんでした: {message}",
+        "openSettings": "設定",
+        "refresh": "更新"
       }
     },
     "auxPanel": {

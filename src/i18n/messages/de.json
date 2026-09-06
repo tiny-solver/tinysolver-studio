@@ -2041,6 +2041,48 @@
           "more": "Mehr"
         },
         "showPet": "Pet anzeigen"
+      },
+      "mcp": {
+        "title": "codeg-mcp-Dienst",
+        "state": {
+          "running": "Läuft",
+          "stopped": "Läuft nicht",
+          "disabled": "Keine Tools aktiv",
+          "unavailable": "Companion fehlt",
+          "unknown": "Unbekannt"
+        },
+        "hint": {
+          "running": "Von hier gestartete Agenten erhalten codegs eigene Tools: Delegation, Live-Feedback, Rückfragen und Sitzungsabfrage.",
+          "stopped": "Der Broker-Socket antwortet nicht, Companions erreichen codeg also nicht. Ein Start öffnet diesen Weg wieder.",
+          "disabled": "Der Dienst läuft, aber alle Tool-Gruppen sind ausgeschaltet, daher wird kein Companion injiziert.",
+          "unavailable": "Der Broker lauscht, aber die codeg-mcp-Binary liegt nicht auf der Platte. Installiere codeg neu oder setze CODEG_MCP_BIN.",
+          "unknown": "Der Status konnte nicht gelesen werden."
+        },
+        "socket": "Broker-Socket",
+        "socketPath": "Adresse",
+        "socketListening": "Lauscht",
+        "socketDown": "Keine Antwort",
+        "binary": "Companion",
+        "binaryMissing": "Nicht gefunden",
+        "startedAt": "Gestartet",
+        "sessions": "Agenten-Sitzungen",
+        "activeDelegations": "Laufende Delegationen",
+        "depthLimit": "Maximale Kettentiefe",
+        "tools": "Aktive Tools",
+        "toolsAllOff": "Alle Tool-Gruppen sind ausgeschaltet.",
+        "groupDelegation": "Delegation",
+        "groupFeedback": "Live-Feedback",
+        "groupAsk": "Rückfrage stellen",
+        "groupSessions": "Sitzungsabfrage",
+        "groupAutomations": "Automatisierung erstellen",
+        "groupTaskboard": "Aufgabe erstellen",
+        "start": "Dienst starten",
+        "starting": "Wird gestartet…",
+        "startFailed": "Start fehlgeschlagen: {message}",
+        "lastError": "Letzter Fehler: {message}",
+        "loadFailed": "Status konnte nicht gelesen werden: {message}",
+        "openSettings": "Einstellungen",
+        "refresh": "Aktualisieren"
       }
     },
     "auxPanel": {

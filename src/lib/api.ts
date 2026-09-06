@@ -4884,6 +4884,52 @@ export async function setDelegationSettings(
   return getTransport().call("set_delegation_settings", { settings })
 }
 
+// ─── codeg-mcp service status ──────────────────────────────────────────
+
+/** Headline verdict from Rust `CodegMcpServiceState`. Ordered by which problem
+ * to solve first: only `stopped` is repairable from this process. */
+export type CodegMcpServiceState =
+  | "stopped"
+  | "unavailable"
+  | "disabled"
+  | "running"
+
+/** One toggleable companion tool group, named by its `--features` slug. */
+export interface CodegMcpToolGroup {
+  key: string
+  enabled: boolean
+}
+
+/** Mirror of Rust `CodegMcpServiceStatus`. */
+export interface CodegMcpServiceStatus {
+  state: CodegMcpServiceState
+  /** Whether the broker socket answered a liveness ping just now. */
+  listening: boolean
+  socket_path: string
+  /** Resolved `codeg-mcp` path; `null` when the lookup came up empty. */
+  binary_path: string | null
+  tool_groups: CodegMcpToolGroup[]
+  companion_count: number
+  session_count: number
+  active_delegations: number
+  depth_limit: number
+  /** Unix millis of the bind that produced the current accept loop. */
+  started_at: number | null
+  last_error: string | null
+  /** False in runtimes that never bound a socket — hide the start button
+   * rather than offer one that can only fail. */
+  can_start: boolean
+}
+
+export async function getCodegMcpServiceStatus(): Promise<CodegMcpServiceStatus> {
+  return getTransport().call("get_codeg_mcp_service_status")
+}
+
+/** Bind the broker socket if it isn't already answering. Idempotent. */
+export async function startCodegMcpService(): Promise<void> {
+  return getTransport().call("start_codeg_mcp_service")
+}
+
 // ─── Live feedback settings + submit ───────────────────────────────────
 
 /** Mirror of Rust `FeedbackSettings`. */

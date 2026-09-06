@@ -2041,6 +2041,48 @@
           "more": "更多"
         },
         "showPet": "显示宠物"
+      },
+      "mcp": {
+        "title": "codeg-mcp 服务",
+        "state": {
+          "running": "运行中",
+          "stopped": "未运行",
+          "disabled": "未启用工具",
+          "unavailable": "伴生程序缺失",
+          "unknown": "未知"
+        },
+        "hint": {
+          "running": "从这里启动的智能体可以使用 codeg 自带的工具：多智能体委派、实时反馈、向用户提问、会话查询。",
+          "stopped": "Broker 套接字没有响应，伴生进程无法连回 codeg。启动即可重新打开这条通路。",
+          "disabled": "服务本身正常，但所有工具组都已关闭，因此不会注入伴生进程。",
+          "unavailable": "Broker 正在监听，但磁盘上找不到 codeg-mcp 可执行文件。请重新安装 codeg，或用 CODEG_MCP_BIN 指定路径。",
+          "unknown": "无法读取状态。"
+        },
+        "socket": "Broker 套接字",
+        "socketPath": "地址",
+        "socketListening": "监听中",
+        "socketDown": "无响应",
+        "binary": "伴生程序",
+        "binaryMissing": "未找到",
+        "startedAt": "启动于",
+        "sessions": "智能体会话",
+        "activeDelegations": "进行中的委派",
+        "depthLimit": "委派链深度上限",
+        "tools": "已启用的工具",
+        "toolsAllOff": "所有工具组均已关闭。",
+        "groupDelegation": "多智能体委派",
+        "groupFeedback": "实时反馈",
+        "groupAsk": "向用户提问",
+        "groupSessions": "会话查询",
+        "groupAutomations": "创建自动化",
+        "groupTaskboard": "创建任务",
+        "start": "启动服务",
+        "starting": "正在启动…",
+        "startFailed": "启动失败：{message}",
+        "lastError": "上次错误：{message}",
+        "loadFailed": "无法读取状态：{message}",
+        "openSettings": "设置",
+        "refresh": "刷新"
       }
     },
     "auxPanel": {

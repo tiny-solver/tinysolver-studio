@@ -66,6 +66,14 @@ pub fn build_router(
             post(handlers::delegation::set_delegation_settings),
         )
         .route(
+            "/get_codeg_mcp_service_status",
+            post(handlers::mcp_service::get_codeg_mcp_service_status),
+        )
+        .route(
+            "/start_codeg_mcp_service",
+            post(handlers::mcp_service::start_codeg_mcp_service),
+        )
+        .route(
             "/get_feedback_settings",
             post(handlers::feedback::get_feedback_settings),
         )
