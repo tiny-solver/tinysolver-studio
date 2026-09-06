@@ -12,14 +12,36 @@ import {
 // without another wallhaven fetch. Each consumer mints its own blob URL and
 // revokes it on unmount, so a shared entry can never be revoked out from
 // under a still-mounted consumer.
+//
+// Bounded, because the entries are whole base64 images and nothing here is
+// scoped to the dialog's lifetime: an unbounded map would keep every thumbnail
+// ever scrolled past for as long as the page lives. Insertion order makes `Map`
+// an LRU for free — re-inserting on a hit moves an entry to the young end.
 const assetCache = new Map<string, Promise<BackgroundAsset>>()
+/** Ten pages of listings (24 per page) — deep enough that ordinary back-paging
+ *  never re-fetches, shallow enough to stay a few MB. */
+const DEFAULT_ASSET_CACHE_LIMIT = 240
+let assetCacheLimit = DEFAULT_ASSET_CACHE_LIMIT
+
+function rememberAsset(url: string, asset: Promise<BackgroundAsset>): void {
+  assetCache.delete(url)
+  assetCache.set(url, asset)
+  while (assetCache.size > assetCacheLimit) {
+    const oldest = assetCache.keys().next()
+    if (oldest.done) break
+    assetCache.delete(oldest.value)
+  }
+}
 
 function loadAsset(url: string): Promise<BackgroundAsset> {
   const existing = assetCache.get(url)
-  if (existing) return existing
+  if (existing) {
+    rememberAsset(url, existing)
+    return existing
+  }
 
   const promise = fetchWorkspaceBgMarketAsset(url)
-  assetCache.set(url, promise)
+  rememberAsset(url, promise)
   // Don't cache a rejection — a transient network blip stays retryable. The
   // eviction is identity-guarded so a superseded request's late failure
   // can't evict a newer entry.
@@ -86,7 +108,14 @@ export function useProxiedBackgroundThumb(url: string): ProxiedThumb {
   return { src: null, loading: true, failed: false }
 }
 
-/** Test-only: drop cached asset data so module state doesn't leak across tests. */
-export function __resetBackgroundThumbCacheForTests(): void {
+/**
+ * Test-only: drop cached asset data so module state doesn't leak across tests.
+ * `limit` shrinks the cache so eviction can be exercised without mounting 240
+ * hooks; omit it to restore the production ceiling.
+ */
+export function __resetBackgroundThumbCacheForTests(
+  limit: number = DEFAULT_ASSET_CACHE_LIMIT
+): void {
   assetCache.clear()
+  assetCacheLimit = limit
 }

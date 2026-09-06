@@ -80,4 +80,29 @@ describe("useProxiedBackgroundThumb", () => {
     await waitFor(() => expect(second.result.current.src).toBeTruthy())
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  // Entries are whole base64 images and nothing evicts them on dialog close, so
+  // the map has to bound itself — otherwise every thumbnail ever scrolled past
+  // is retained for the life of the page.
+  it("evicts the least recently used entry past the cache limit", async () => {
+    __resetBackgroundThumbCacheForTests(2)
+    fetchMock.mockResolvedValue(JPEG)
+    const url = (i: number) => `https://th.wallhaven.cc/small/ab/${i}.jpg`
+    const load = async (i: number) => {
+      const { result } = renderHook(() => useProxiedBackgroundThumb(url(i)))
+      await waitFor(() => expect(result.current.src).toBeTruthy())
+    }
+
+    await load(0)
+    await load(1)
+    // Re-reading 0 makes it the youngest, so 1 is the one the next insert drops.
+    await load(0)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await load(2)
+    await load(0)
+    expect(fetchMock).toHaveBeenCalledTimes(3) // 0 survived
+    await load(1)
+    expect(fetchMock).toHaveBeenCalledTimes(4) // 1 was evicted
+  })
 })

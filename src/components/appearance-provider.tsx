@@ -1004,6 +1004,12 @@ export function AppearanceProvider({
       if (e.key === STORAGE_KEY_WORKSPACE_BG_IMAGE_VERSION) {
         void reloadWorkspaceBackgroundImage()
       }
+      // 来源页跟着图一起变（另一窗口换成市场图 / 本地图 / 移除）。不同步的话本窗口
+      // 的市场面板会继续把一张已被换掉的壁纸标成「使用中」—— 那不是标记丢了，
+      // 而是标记在说谎。removeItem 时 newValue 为 null。
+      if (e.key === STORAGE_KEY_WORKSPACE_BG_SOURCE_URL) {
+        setWorkspaceBgSourceUrlState(e.newValue ?? null)
+      }
       // 自定义样式跨窗口同步。主题与 CSS 都要顺手重置防抖基线，否则本窗口会把
       // 刚收到的别人的值当成本地编辑再写回去，两个窗口互相回声。
       if (e.key === STORAGE_KEY_CUSTOM_THEME) {
