@@ -18,14 +18,16 @@
 //! indicator renders, with a single headline [`CodegMcpServiceState`] so the
 //! popover can offer exactly one next step.
 //!
-//! Only #2 is startable from here — #1 needs a reinstall and #3 is a settings
-//! write the frontend already owns.
+//! Only #2 is startable from here — #1 needs a reinstall. #3 is a settings
+//! write, which [`set_codeg_mcp_tool_group_core`] performs through the very
+//! same `_core` setters the settings window uses.
 
 // Only the Tauri command signatures (and the tests) name `Arc` directly; the
 // `_core` helpers take plain references so both transports can share them.
 #[cfg(any(test, feature = "tauri-runtime"))]
 use std::sync::Arc;
 
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 
 use crate::acp::chat_authoring::ChatAuthoringRuntimeConfig;
@@ -36,6 +38,7 @@ use crate::acp::feedback::FeedbackRuntimeConfig;
 use crate::acp::question::QuestionRuntimeConfig;
 use crate::acp::session_info::SessionInfoRuntimeConfig;
 use crate::app_error::AppCommandError;
+use crate::web::event_bridge::EventEmitter;
 
 /// Headline verdict. Ordered by which problem to solve first, not by severity:
 /// the socket is the only piece this process can repair, so it outranks a
@@ -197,6 +200,101 @@ pub async fn codeg_mcp_service_status_core(
     }
 }
 
+/// The configs a tool-group toggle writes through. Deliberately not
+/// [`CodegMcpStatusSources`]: a write needs neither the token registry (a
+/// read-only census) nor, conversely, can it do without the database and the
+/// event emitter that the read path never touches.
+pub struct CodegMcpToolGroupTargets<'a> {
+    pub broker: &'a DelegationBroker,
+    pub feedback: &'a FeedbackRuntimeConfig,
+    pub question: &'a QuestionRuntimeConfig,
+    pub session_info: &'a SessionInfoRuntimeConfig,
+    pub authoring: &'a ChatAuthoringRuntimeConfig,
+}
+
+/// Flip one tool group by the same slug [`codeg_mcp_service_status_core`]
+/// reports.
+///
+/// This dispatches into each feature's own settings module rather than writing
+/// the metadata keys itself, so the popover inherits the settings window's
+/// clamping and its cross-window change events (a conversation's feedback bar
+/// only learns the flag moved through that backend broadcast).
+///
+/// Every arm writes exactly the one key it owns. The whole-struct
+/// `set_*_settings_core` writers are wrong here: `delegation` also carries
+/// `depth_limit`, `completed_cache_max_mb` and the per-agent defaults, and
+/// `automations`/`taskboard` are two switches over one record that sit one
+/// click apart in this very popover — a read-modify-write of the pair loses
+/// whichever flip lands first. `feedback`, `ask` and `sessions` each own a
+/// single-field record, so their existing writer is already narrow.
+pub async fn set_codeg_mcp_tool_group_core(
+    conn: &DatabaseConnection,
+    targets: CodegMcpToolGroupTargets<'_>,
+    emitter: &EventEmitter,
+    key: &str,
+    enabled: bool,
+) -> Result<(), AppCommandError> {
+    use crate::commands::chat_authoring::ChatAuthoringFlag;
+    use crate::commands::{chat_authoring, delegation, feedback, question, session_info};
+
+    match key {
+        "delegation" => {
+            delegation::set_delegation_enabled_core(conn, targets.broker, emitter, enabled).await?;
+        }
+        "feedback" => {
+            feedback::set_feedback_settings_core(
+                conn,
+                targets.feedback,
+                emitter,
+                feedback::FeedbackSettings { enabled },
+            )
+            .await?;
+        }
+        "ask" => {
+            question::set_question_settings_core(
+                conn,
+                targets.question,
+                emitter,
+                question::QuestionSettings { enabled },
+            )
+            .await?;
+        }
+        "sessions" => {
+            session_info::set_session_info_settings_core(
+                conn,
+                targets.session_info,
+                emitter,
+                session_info::SessionInfoSettings { enabled },
+            )
+            .await?;
+        }
+        "automations" | "taskboard" => {
+            let flag = if key == "automations" {
+                ChatAuthoringFlag::Automations
+            } else {
+                ChatAuthoringFlag::WorkTasks
+            };
+            chat_authoring::set_chat_authoring_flag_core(
+                conn,
+                targets.authoring,
+                emitter,
+                flag,
+                enabled,
+            )
+            .await?;
+        }
+        // A slug the backend never reports. Refusing beats writing nothing and
+        // returning success, which would leave the popover's switch stuck in a
+        // position no setting backs.
+        other => {
+            return Err(AppCommandError::configuration_invalid(format!(
+                "unknown codeg-mcp tool group: {other}"
+            )))
+        }
+    }
+    Ok(())
+}
+
 /// Bind the broker socket if it isn't already answering. Idempotent — a click
 /// on an already-healthy service is a no-op success, not an error, because the
 /// UI's view of "stopped" can be a probe or two out of date.
@@ -245,6 +343,49 @@ pub async fn get_codeg_mcp_service_status(
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn start_codeg_mcp_service() -> Result<(), AppCommandError> {
     start_codeg_mcp_service_core().await
+}
+
+// Five runtime configs plus the db, the app handle and the two payload fields.
+// Tauri injects managed state positionally, so these cannot be bundled the way
+// `CodegMcpToolGroupTargets` bundles them for the `_core` helper below.
+#[allow(clippy::too_many_arguments)]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn set_codeg_mcp_tool_group(
+    #[cfg(feature = "tauri-runtime")] app: tauri::AppHandle,
+    #[cfg(feature = "tauri-runtime")] db: tauri::State<'_, crate::db::AppDatabase>,
+    #[cfg(feature = "tauri-runtime")] broker: tauri::State<'_, Arc<DelegationBroker>>,
+    #[cfg(feature = "tauri-runtime")] feedback: tauri::State<'_, FeedbackRuntimeConfig>,
+    #[cfg(feature = "tauri-runtime")] question: tauri::State<'_, QuestionRuntimeConfig>,
+    #[cfg(feature = "tauri-runtime")] session_info: tauri::State<'_, SessionInfoRuntimeConfig>,
+    #[cfg(feature = "tauri-runtime")] authoring: tauri::State<'_, ChatAuthoringRuntimeConfig>,
+    key: String,
+    enabled: bool,
+) -> Result<(), AppCommandError> {
+    #[cfg(feature = "tauri-runtime")]
+    {
+        // `app.emit` fans out to every window, so the settings window's own
+        // switch for this group converges with the one just flipped here.
+        let emitter = EventEmitter::Tauri(app);
+        set_codeg_mcp_tool_group_core(
+            &db.conn,
+            CodegMcpToolGroupTargets {
+                broker: broker.inner(),
+                feedback: feedback.inner(),
+                question: question.inner(),
+                session_info: session_info.inner(),
+                authoring: authoring.inner(),
+            },
+            &emitter,
+            &key,
+            enabled,
+        )
+        .await
+    }
+    #[cfg(not(feature = "tauri-runtime"))]
+    {
+        let _ = (key, enabled);
+        Err(AppCommandError::configuration_invalid("tauri-only command"))
+    }
 }
 
 #[cfg(test)]
@@ -305,6 +446,28 @@ mod tests {
 
         async fn status(&self) -> CodegMcpServiceStatus {
             codeg_mcp_service_status_core(self.sources()).await
+        }
+
+        async fn set_group(
+            &self,
+            conn: &sea_orm::DatabaseConnection,
+            key: &str,
+            enabled: bool,
+        ) -> Result<(), AppCommandError> {
+            set_codeg_mcp_tool_group_core(
+                conn,
+                CodegMcpToolGroupTargets {
+                    broker: &self.broker,
+                    feedback: &self.feedback,
+                    question: &self.question,
+                    session_info: &self.session_info,
+                    authoring: &self.authoring,
+                },
+                &EventEmitter::Noop,
+                key,
+                enabled,
+            )
+            .await
         }
     }
 
@@ -368,6 +531,127 @@ mod tests {
         assert_eq!(status.depth_limit, 5);
         // `tasks` is per-spawn, never a switch — it must not appear.
         assert!(status.tool_groups.iter().all(|g| g.key != "tasks"));
+    }
+
+    /// The popover's per-group switches must go through the same writers the
+    /// settings window uses, which means a toggle carries the sibling fields
+    /// forward untouched. `delegation` is the sharp case: its record also holds
+    /// `depth_limit` and the per-agent defaults, so a writer that sent a fresh
+    /// struct would reset a user's configured depth on every switch flip.
+    #[tokio::test]
+    async fn toggling_delegation_preserves_the_rest_of_its_record() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let f = Fixture::new();
+        crate::commands::delegation::set_delegation_settings_core(
+            &db.conn,
+            &f.broker,
+            &EventEmitter::Noop,
+            crate::commands::delegation::DelegationSettings {
+                enabled: false,
+                depth_limit: 4,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        f.set_group(&db.conn, "delegation", true).await.unwrap();
+
+        let saved = crate::commands::delegation::load_delegation_settings(&db.conn).await;
+        assert!(saved.enabled, "the flip must land");
+        assert_eq!(saved.depth_limit, 4, "the depth limit must survive it");
+        // The broker is re-applied too, so the very next status read agrees.
+        assert!(f.broker.config_snapshot().await.enabled);
+    }
+
+    /// `automations` and `taskboard` share one settings record, so each must
+    /// carry the other across — the two switches sit adjacent in the popover
+    /// and are the likeliest pair to be flipped in sequence.
+    #[tokio::test]
+    async fn the_two_authoring_switches_do_not_clobber_each_other() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let f = Fixture::new();
+
+        f.set_group(&db.conn, "automations", true).await.unwrap();
+        f.set_group(&db.conn, "taskboard", true).await.unwrap();
+
+        let saved = crate::commands::chat_authoring::load_chat_authoring_settings(&db.conn).await;
+        assert!(saved.automations_enabled);
+        assert!(saved.work_tasks_enabled);
+
+        f.set_group(&db.conn, "taskboard", false).await.unwrap();
+        let saved = crate::commands::chat_authoring::load_chat_authoring_settings(&db.conn).await;
+        assert!(saved.automations_enabled, "the sibling must be untouched");
+        assert!(!saved.work_tasks_enabled);
+    }
+
+    /// The sharp version of the case above: the popover leaves every switch
+    /// but the in-flight one live, so the two authoring toggles can genuinely
+    /// be in flight together. A writer that read the pair, edited one field and
+    /// wrote the pair back would drop whichever flip lost the race — both must
+    /// survive regardless of interleaving.
+    #[tokio::test]
+    async fn concurrent_authoring_flips_both_survive() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let f = Fixture::new();
+
+        let (a, b) = tokio::join!(
+            f.set_group(&db.conn, "automations", true),
+            f.set_group(&db.conn, "taskboard", true),
+        );
+        a.unwrap();
+        b.unwrap();
+
+        let saved = crate::commands::chat_authoring::load_chat_authoring_settings(&db.conn).await;
+        assert!(saved.automations_enabled, "the automations flip was lost");
+        assert!(saved.work_tasks_enabled, "the taskboard flip was lost");
+        // The runtime config the companion actually reads must agree with the
+        // database, not with whichever writer happened to finish last.
+        let live = f.authoring.snapshot().await;
+        assert!(live.automations_enabled && live.work_tasks_enabled);
+    }
+
+    /// The popover owns one bool per group. Flipping delegation must not
+    /// republish the rest of that record, which the settings form owns.
+    #[tokio::test]
+    async fn toggling_delegation_does_not_republish_its_siblings() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let f = Fixture::new();
+        crate::commands::delegation::set_delegation_settings_core(
+            &db.conn,
+            &f.broker,
+            &EventEmitter::Noop,
+            crate::commands::delegation::DelegationSettings {
+                enabled: false,
+                depth_limit: 4,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        f.set_group(&db.conn, "delegation", true).await.unwrap();
+
+        let saved = crate::commands::delegation::load_delegation_settings(&db.conn).await;
+        assert!(saved.enabled);
+        assert_eq!(saved.depth_limit, 4, "the depth limit must survive it");
+    }
+
+    /// Every slug the status report emits must be writable. A group added to
+    /// the read side without a matching write arm would render a switch that
+    /// errors on click, so pin the two lists together.
+    #[tokio::test]
+    async fn every_reported_group_is_toggleable() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let f = Fixture::new();
+        for group in f.status().await.tool_groups {
+            f.set_group(&db.conn, &group.key, true)
+                .await
+                .unwrap_or_else(|e| panic!("group {} is not writable: {e}", group.key));
+        }
+        // …and only those. An unknown slug is refused rather than silently
+        // succeeding with nothing written.
+        assert!(f.set_group(&db.conn, "tasks", true).await.is_err());
     }
 
     /// Two companions on one connection is one session, not two — the popover

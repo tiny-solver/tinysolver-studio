@@ -1,8 +1,20 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Plug, Unplug, RotateCw, Settings2 } from "lucide-react"
-import { useLocale, useTranslations } from "next-intl"
+import {
+  Bubbles,
+  CalendarClock,
+  HelpCircle,
+  ListTodo,
+  MessageSquare,
+  MessageSquarePlus,
+  Plug,
+  RotateCw,
+  Settings2,
+  Unplug,
+  type LucideIcon,
+} from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import {
   Popover,
@@ -10,9 +22,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import {
   getCodegMcpServiceStatus,
   openSettingsWindow,
+  setCodegMcpToolGroup,
   startCodegMcpService,
   type CodegMcpServiceState,
   type CodegMcpServiceStatus,
@@ -29,9 +43,9 @@ const POLL_MS = 60_000
  * nothing about the service and must not be painted as a service fault. */
 type IndicatorState = CodegMcpServiceState | "unknown"
 
-/** Tool-group slugs the backend can send, mapped to their message keys. An
- * unmapped slug (a group added backend-first) falls back to the raw slug rather
- * than throwing a missing-message error. */
+/** Message keys for a tool group's name and one-line description. An unmapped
+ * slug (a group added backend-first) falls back to the raw slug and no
+ * description rather than throwing a missing-message error. */
 type GroupLabelKey =
   | "groupDelegation"
   | "groupFeedback"
@@ -40,70 +54,99 @@ type GroupLabelKey =
   | "groupAutomations"
   | "groupTaskboard"
 
-const GROUP_LABEL_KEYS: Record<string, GroupLabelKey | undefined> = {
-  delegation: "groupDelegation",
-  feedback: "groupFeedback",
-  ask: "groupAsk",
-  sessions: "groupSessions",
-  automations: "groupAutomations",
-  taskboard: "groupTaskboard",
+type GroupDescKey =
+  | "descDelegation"
+  | "descFeedback"
+  | "descAsk"
+  | "descSessions"
+  | "descAutomations"
+  | "descTaskboard"
+
+interface GroupPresentation {
+  label: GroupLabelKey
+  desc: GroupDescKey
+  icon: LucideIcon
+  /** Tint for the leading glyph. Distinct hues make the six rows scannable by
+   * shape *and* colour, which is what carries a list this dense. */
+  tone: string
 }
 
-/** Trigger colour per state. `disabled` stays muted on purpose: the service is
- * healthy, the user simply switched its tools off, and colouring that as a
- * fault would train people to ignore the indicator. */
-const TRIGGER_TONE: Record<IndicatorState, string> = {
-  running: "text-emerald-500 hover:text-emerald-400",
-  disabled: "hover:text-foreground",
-  stopped: "text-red-500 hover:text-red-400",
-  unavailable: "text-yellow-500 hover:text-yellow-400",
-  unknown: "hover:text-foreground",
+/**
+ * Presentation per tool group.
+ *
+ * The icons are deliberately the same ones the General settings page uses for
+ * these very switches — `AgentToolsSettingsSection`'s `TOOL_ROWS` for the five
+ * agent tools, and `DelegationSettingsSection`'s heading glyph for delegation.
+ * The popover's "Open full settings" button leads straight there, so a
+ * different glyph on each side would make one control look like two.
+ */
+const GROUPS: Record<string, GroupPresentation | undefined> = {
+  delegation: {
+    label: "groupDelegation",
+    desc: "descDelegation",
+    icon: Bubbles,
+    tone: "bg-blue-500/10 text-blue-500",
+  },
+  feedback: {
+    label: "groupFeedback",
+    desc: "descFeedback",
+    icon: MessageSquarePlus,
+    tone: "bg-indigo-500/10 text-indigo-500",
+  },
+  ask: {
+    label: "groupAsk",
+    desc: "descAsk",
+    icon: HelpCircle,
+    tone: "bg-sky-500/10 text-sky-500",
+  },
+  sessions: {
+    label: "groupSessions",
+    desc: "descSessions",
+    icon: MessageSquare,
+    tone: "bg-emerald-500/10 text-emerald-500",
+  },
+  automations: {
+    label: "groupAutomations",
+    desc: "descAutomations",
+    icon: CalendarClock,
+    tone: "bg-violet-500/10 text-violet-500",
+  },
+  taskboard: {
+    label: "groupTaskboard",
+    desc: "descTaskboard",
+    icon: ListTodo,
+    tone: "bg-amber-500/10 text-amber-500",
+  },
 }
 
-function StateDot({ state }: { state: IndicatorState }) {
+/** Badge tint per state. `disabled` and `unknown` stay neutral on purpose: the
+ * service is not faulty in either case, and colouring them would train people
+ * to ignore the badge when it does go red. */
+const BADGE_TONE: Record<IndicatorState, string> = {
+  running: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  stopped: "bg-red-500/10 text-red-600 dark:text-red-400",
+  unavailable: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-500",
+  disabled: "bg-muted text-muted-foreground",
+  unknown: "bg-muted text-muted-foreground",
+}
+
+const DOT_TONE: Record<IndicatorState, string> = {
+  running: "bg-emerald-500",
+  stopped: "bg-red-500",
+  unavailable: "bg-yellow-500",
+  disabled: "bg-muted-foreground/50",
+  unknown: "bg-muted-foreground/50",
+}
+
+/** One cell of the stat strip: value on top, label under it. */
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "size-1.5 shrink-0 rounded-full",
-        state === "running" && "bg-emerald-500",
-        state === "stopped" && "bg-red-500",
-        state === "unavailable" && "bg-yellow-500",
-        (state === "disabled" || state === "unknown") &&
-          "bg-muted-foreground/50"
-      )}
-    />
-  )
-}
-
-/** One `label — value` line. `mono` is for paths, which are the thing people
- * copy out of here. */
-function DetailRow({
-  label,
-  value,
-  mono,
-  tone,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-  tone?: "ok" | "bad" | "muted"
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="shrink-0 text-2xs text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          "min-w-0 truncate text-right text-2xs",
-          mono && "font-mono",
-          tone === "ok" && "text-emerald-500",
-          tone === "bad" && "text-red-500",
-          tone === "muted" && "text-muted-foreground",
-          !tone && "text-foreground"
-        )}
-        title={value}
-      >
+    <div className="flex min-w-0 flex-col items-center gap-0.5 px-1 text-center [&+&]:border-l">
+      <span className="w-full truncate text-sm leading-none font-semibold tabular-nums">
         {value}
+      </span>
+      <span className="text-3xs leading-tight text-muted-foreground">
+        {label}
       </span>
     </div>
   )
@@ -114,24 +157,26 @@ function DetailRow({
  *
  * The companion is what carries codeg's own tools into an agent session —
  * delegation, live feedback, ask-user-question, session lookup, the two
- * create-from-chat writers. Until now its three failure modes were all silent
- * from the workspace: a missing companion binary logged one line at spawn time,
- * a dead broker socket logged nothing, and "every tool group switched off"
- * looked identical to both from inside a conversation.
+ * create-from-chat writers. Its three failure modes are all silent from the
+ * workspace: a missing companion binary logs one line at spawn time, a dead
+ * broker socket logs nothing, and "every tool group switched off" looks
+ * identical to both from inside a conversation.
  *
- * So: one dot that says which of those is true, a popover that shows the
- * evidence (socket path, resolved binary, per-group switches, live companion
- * count), and — for the one failure this process can repair — a button that
- * rebinds the socket without an app restart.
+ * So: a badge that says which of those is true, a strip of live counts, a
+ * switch per tool group, and — for the one failure this process can repair —
+ * a button that rebinds the socket without an app restart.
  */
 export function StatusBarMcp() {
   const t = useTranslations("Folder.statusBar.mcp")
-  const locale = useLocale()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<CodegMcpServiceStatus | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
-  const [startError, setStartError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  /** Group key → the value being written, held only while the write is in
+   * flight. Without it the switch would snap back to the stale `status` for
+   * the length of the round trip. */
+  const [pending, setPending] = useState<Record<string, boolean>>({})
   // Guards against a slow in-flight refresh landing after unmount, and against
   // the 60s tick overwriting a fresher result the popover just fetched.
   const seqRef = useRef(0)
@@ -163,21 +208,42 @@ export function StatusBarMcp() {
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
     if (next) {
-      setStartError(null)
+      setActionError(null)
       void refresh()
     }
   }
 
   const handleStart = async () => {
     setStarting(true)
-    setStartError(null)
+    setActionError(null)
     try {
       await startCodegMcpService()
       await refresh()
     } catch (e) {
-      if (aliveRef.current) setStartError(toErrorMessage(e))
+      if (aliveRef.current) setActionError(toErrorMessage(e))
     } finally {
       if (aliveRef.current) setStarting(false)
+    }
+  }
+
+  const handleToggle = async (key: string, next: boolean) => {
+    setPending((prev) => ({ ...prev, [key]: next }))
+    setActionError(null)
+    try {
+      await setCodegMcpToolGroup(key, next)
+      // Re-read before releasing the optimistic value, so the switch hands
+      // over to a `status` that already reflects the write.
+      await refresh()
+    } catch (e) {
+      // No refresh on failure: `status` still holds the pre-toggle truth, so
+      // dropping the override below snaps the switch back to it.
+      if (aliveRef.current) setActionError(toErrorMessage(e))
+    } finally {
+      if (!aliveRef.current) return
+      setPending((prev) => {
+        const { [key]: _dropped, ...rest } = prev
+        return rest
+      })
     }
   }
 
@@ -185,24 +251,26 @@ export function StatusBarMcp() {
     ? "unknown"
     : (status?.state ?? "unknown")
   const down = state === "stopped" || state === "unavailable"
-  const enabledGroups = (status?.tool_groups ?? []).filter((g) => g.enabled)
   // Only the socket is repairable from here; a missing binary needs a
-  // reinstall and switched-off groups are a settings write.
+  // reinstall and switched-off groups are the switches below.
   const canStart = state === "stopped" && !!status?.can_start
 
-  const startedLabel =
-    status?.started_at != null
-      ? new Intl.DateTimeFormat(locale, { timeStyle: "medium" }).format(
-          new Date(status.started_at)
-        )
-      : null
+  // The two paths are the evidence behind the headline, and the thing people
+  // copy out of here. They hang off the state badge — which is the socket
+  // verdict — rather than spending a column each.
+  const pathsTitle = status
+    ? [
+        `${t("socketPath")}: ${status.socket_path || "—"}`,
+        `${t("binary")}: ${status.binary_path ?? t("binaryMissing")}`,
+      ].join("\n")
+    : undefined
 
-  // A failed start outranks a recorded bind error — it is the newer fact, and
+  // A failed action outranks a recorded bind error — it is the newer fact, and
   // it is the one the user just caused. A stale `last_error` is suppressed
   // while the status itself is unreadable, since `status` is then whatever the
   // last successful poll happened to say.
-  const errorBanner = startError
-    ? t("startFailed", { message: startError })
+  const errorBanner = actionError
+    ? t("actionFailed", { message: actionError })
     : !loadError && status?.last_error
       ? t("lastError", { message: status.last_error })
       : null
@@ -210,117 +278,114 @@ export function StatusBarMcp() {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
+        {/* Deliberately as plain as every other glyph on the bar: no tone, no
+            count. The state is carried by the icon's shape (a pulled plug
+            reads at a glance and stays monochrome), the tooltip, and the
+            popover — a permanently coloured, permanently numbered indicator in
+            the corner is noise the other 95% of the time. */}
         <button
           aria-label={t("title")}
           title={`${t("title")} · ${t(`state.${state}`)}`}
-          className={cn(
-            "flex items-center gap-1 transition-colors",
-            TRIGGER_TONE[state]
-          )}
+          className="flex items-center transition-colors hover:text-foreground"
         >
           {down ? (
             <Unplug className="size-3.5" />
           ) : (
             <Plug className="size-3.5" />
           )}
-          {state === "running" && !!status?.session_count && (
-            <span>{status.session_count}</span>
-          )}
         </button>
       </PopoverTrigger>
-      <PopoverContent side="top" align="end" className="w-80 gap-3 p-3">
+      <PopoverContent side="top" align="end" className="w-88 gap-2 p-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <StateDot state={state} />
-            <span className="truncate text-xs font-medium">{t("title")}</span>
+          <span className="truncate text-xs font-medium">{t("title")}</span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              title={pathsTitle}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",
+                BADGE_TONE[state]
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn("size-1.5 rounded-full", DOT_TONE[state])}
+              />
+              {t(`state.${state}`)}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              title={t("refresh")}
+              aria-label={t("refresh")}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <RotateCw className="h-3 w-3" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            title={t("refresh")}
-            aria-label={t("refresh")}
-            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <RotateCw className="h-3 w-3" />
-          </button>
         </div>
 
-        <p className="text-2xs leading-5 text-muted-foreground">
+        <p className="truncate text-2xs text-muted-foreground">
           {loadError
             ? t("loadFailed", { message: loadError })
             : t(`hint.${state}`)}
         </p>
 
         {status && !loadError && (
-          <div className="space-y-1.5 rounded-md border bg-background/70 px-2.5 py-2">
-            <DetailRow
-              label={t("socket")}
-              value={status.listening ? t("socketListening") : t("socketDown")}
-              tone={status.listening ? "ok" : "bad"}
+          // No status column: `stopped` is exactly `not listening`, so the
+          // badge above already carries that reading. These three are the ones
+          // it does not.
+          <div className="grid grid-cols-3 rounded-lg border bg-muted/30 py-2">
+            <Stat label={t("sessions")} value={String(status.session_count)} />
+            <Stat
+              label={t("activeDelegations")}
+              value={String(status.active_delegations)}
             />
-            <DetailRow
-              label={t("socketPath")}
-              value={status.socket_path || "—"}
-              mono
-              tone="muted"
-            />
-            <DetailRow
-              label={t("binary")}
-              value={status.binary_path ?? t("binaryMissing")}
-              mono={!!status.binary_path}
-              tone={status.binary_path ? "muted" : "bad"}
-            />
-            {startedLabel && (
-              <DetailRow
-                label={t("startedAt")}
-                value={startedLabel}
-                tone="muted"
-              />
-            )}
-            {status.state === "running" && (
-              <>
-                <DetailRow
-                  label={t("sessions")}
-                  value={String(status.session_count)}
-                />
-                <DetailRow
-                  label={t("activeDelegations")}
-                  value={String(status.active_delegations)}
-                />
-                <DetailRow
-                  label={t("depthLimit")}
-                  value={String(status.depth_limit)}
-                  tone="muted"
-                />
-              </>
-            )}
+            <Stat label={t("depthLimit")} value={String(status.depth_limit)} />
           </div>
         )}
 
         {status && !loadError && (
-          <div className="space-y-1.5">
-            <div className="text-2xs font-medium text-muted-foreground">
-              {t("tools")}
-            </div>
-            {enabledGroups.length === 0 ? (
-              <div className="text-2xs text-muted-foreground/80">
-                {t("toolsAllOff")}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {enabledGroups.map((group) => {
-                  const key = GROUP_LABEL_KEYS[group.key]
-                  return (
-                    <span
-                      key={group.key}
-                      className="rounded bg-accent px-1.5 py-0.5 text-3xs text-accent-foreground"
-                    >
-                      {key ? t(key) : group.key}
+          // One bordered, divided block rather than six floating rows: the
+          // switches are a single control surface and read as one.
+          <div className="divide-y overflow-hidden rounded-lg border">
+            {status.tool_groups.map((group) => {
+              const meta = GROUPS[group.key]
+              const label = meta ? t(meta.label) : group.key
+              const Icon = meta?.icon ?? Plug
+              return (
+                <label
+                  key={group.key}
+                  className="flex cursor-pointer items-center gap-2 px-2 py-1.5 transition-colors hover:bg-accent/40"
+                >
+                  <span
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-lg",
+                      meta?.tone ?? "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-2xs font-medium">
+                      {label}
                     </span>
-                  )
-                })}
-              </div>
-            )}
+                    {meta && (
+                      <span className="block text-3xs leading-snug text-muted-foreground">
+                        {t(meta.desc)}
+                      </span>
+                    )}
+                  </span>
+                  <Switch
+                    checked={pending[group.key] ?? group.enabled}
+                    disabled={group.key in pending}
+                    aria-label={label}
+                    onCheckedChange={(next) =>
+                      void handleToggle(group.key, next)
+                    }
+                  />
+                </label>
+              )
+            })}
           </div>
         )}
 
@@ -330,30 +395,32 @@ export function StatusBarMcp() {
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2">
+        {canStart && (
           <Button
             size="sm"
-            variant="ghost"
-            onClick={() => {
-              openSettingsWindow().catch((err) => {
-                console.error("[StatusBarMcp] failed to open settings:", err)
-              })
-            }}
+            className="w-full"
+            onClick={() => void handleStart()}
+            disabled={starting}
           >
-            <Settings2 className="h-3.5 w-3.5" />
-            {t("openSettings")}
+            <Plug className="h-3.5 w-3.5" />
+            {starting ? t("starting") : t("start")}
           </Button>
-          {canStart && (
-            <Button
-              size="sm"
-              onClick={() => void handleStart()}
-              disabled={starting}
-            >
-              <Plug className="h-3.5 w-3.5" />
-              {starting ? t("starting") : t("start")}
-            </Button>
-          )}
-        </div>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            // The General page is where these same switches live in full, with
+            // the depth limit and the per-agent defaults beside them.
+            openSettingsWindow("general").catch((err) => {
+              console.error("[StatusBarMcp] failed to open settings:", err)
+            })
+          }}
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          {t("openSettings")}
+        </Button>
       </PopoverContent>
     </Popover>
   )

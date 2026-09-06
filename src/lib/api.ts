@@ -3026,6 +3026,7 @@ export async function openCommitWindow(folderId: number): Promise<void> {
 }
 
 export type SettingsSection =
+  | "general"
   | "appearance"
   | "agents"
   | "mcp"
@@ -4928,6 +4929,16 @@ export async function getCodegMcpServiceStatus(): Promise<CodegMcpServiceStatus>
 /** Bind the broker socket if it isn't already answering. Idempotent. */
 export async function startCodegMcpService(): Promise<void> {
   return getTransport().call("start_codeg_mcp_service")
+}
+
+/** Flip one tool group by the slug the status report uses. The backend
+ * dispatches to that feature's own settings writer, so this is the same write
+ * the settings window performs — sibling fields and change events included. */
+export async function setCodegMcpToolGroup(
+  key: string,
+  enabled: boolean
+): Promise<void> {
+  return getTransport().call("set_codeg_mcp_tool_group", { key, enabled })
 }
 
 // ─── Live feedback settings + submit ───────────────────────────────────

@@ -51,7 +51,13 @@ vi.mock("@/lib/api", () => ({
 }))
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
-vi.mock("@/lib/platform", () => ({ isDesktop: () => true }))
+vi.mock("@/lib/platform", () => ({
+  isDesktop: () => true,
+  // The delegation and agent-tools sections subscribe to their settings-change
+  // broadcasts so a form left open converges instead of reverting a write made
+  // elsewhere (the status-bar codeg-mcp popover).
+  subscribe: () => Promise.resolve(() => {}),
+}))
 vi.mock("@/lib/transport", () => ({
   getActiveRemoteConnectionId: () => null,
   // Read by the desktop-notification section to decide whether permission is

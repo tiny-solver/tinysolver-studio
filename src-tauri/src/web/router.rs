@@ -74,6 +74,10 @@ pub fn build_router(
             post(handlers::mcp_service::start_codeg_mcp_service),
         )
         .route(
+            "/set_codeg_mcp_tool_group",
+            post(handlers::mcp_service::set_codeg_mcp_tool_group),
+        )
+        .route(
             "/get_feedback_settings",
             post(handlers::feedback::get_feedback_settings),
         )

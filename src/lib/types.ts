@@ -557,6 +557,23 @@ export const FOLDER_LINKS_CHANGED_EVENT = "folder://links-changed"
  *  frontend-only cache. Mirrors the Rust `FEEDBACK_SETTINGS_CHANGED_EVENT`. */
 export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
 
+/** Global side-channel announcing a create-from-chat switch move (payload is
+ *  `ChatAuthoringSettings`). Load-bearing rather than cosmetic: these two flags
+ *  share one record and have two editors — the settings form, which writes the
+ *  pair, and the status-bar codeg-mcp popover, which writes one key. Without
+ *  this broadcast an open settings form keeps a stale value for the switch it
+ *  did not touch and reverts it on the next save. Mirrors the Rust
+ *  `CHAT_AUTHORING_SETTINGS_CHANGED_EVENT`. */
+export const CHAT_AUTHORING_SETTINGS_CHANGED_EVENT =
+  "chat-authoring-settings://changed"
+
+/** Global side-channel announcing a delegation-settings write (payload is
+ *  `DelegationSettings`). Same two-editor problem as
+ *  [CHAT_AUTHORING_SETTINGS_CHANGED_EVENT]: the settings form writes all four
+ *  keys, the status-bar codeg-mcp popover writes only `enabled`. Mirrors the
+ *  Rust `DELEGATION_SETTINGS_CHANGED_EVENT`. */
+export const DELEGATION_SETTINGS_CHANGED_EVENT = "delegation-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a

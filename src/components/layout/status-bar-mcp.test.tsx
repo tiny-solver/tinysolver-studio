@@ -5,11 +5,13 @@ import type { CodegMcpServiceStatus } from "@/lib/api"
 
 const getCodegMcpServiceStatus = vi.fn<() => Promise<CodegMcpServiceStatus>>()
 const startCodegMcpService = vi.fn<() => Promise<void>>()
+const setCodegMcpToolGroup = vi.fn<(k: string, e: boolean) => Promise<void>>()
 const openSettingsWindow = vi.fn()
 
 vi.mock("@/lib/api", () => ({
   getCodegMcpServiceStatus: () => getCodegMcpServiceStatus(),
   startCodegMcpService: () => startCodegMcpService(),
+  setCodegMcpToolGroup: (k: string, e: boolean) => setCodegMcpToolGroup(k, e),
   openSettingsWindow: (...args: unknown[]) => openSettingsWindow(...args),
 }))
 
@@ -56,15 +58,24 @@ async function mount() {
 /** Open the popover. The trigger is the only button until it opens. */
 async function openPopover() {
   fireEvent.click(screen.getAllByRole("button")[0])
-  await screen.findByText("Broker socket")
+  await screen.findByText("Sessions")
+}
+
+/** The switch for one tool group, addressed by its visible label. */
+function toolSwitch(label: string) {
+  return screen.getByRole("switch", { name: label })
 }
 
 beforeEach(() => {
   getCodegMcpServiceStatus.mockReset()
   startCodegMcpService.mockReset()
+  setCodegMcpToolGroup.mockReset()
   openSettingsWindow.mockReset()
   getCodegMcpServiceStatus.mockResolvedValue(makeStatus())
   startCodegMcpService.mockResolvedValue(undefined)
+  setCodegMcpToolGroup.mockResolvedValue(undefined)
+  // The real one returns a promise the component attaches a `.catch` to.
+  openSettingsWindow.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -72,27 +83,120 @@ afterEach(() => {
 })
 
 describe("StatusBarMcp", () => {
-  it("shows the live session count on the trigger while running", async () => {
+  /** The bar glyph is as plain as its neighbours: the state lives in the
+   * tooltip, not in a colour or a badge. */
+  it("keeps the trigger plain, with the state only in its tooltip", async () => {
     await mount()
-    expect(await screen.findByTitle(/Running/)).toHaveTextContent("2")
+    const trigger = await screen.findByTitle(/Running/)
+    expect(trigger).toHaveTextContent("")
+    expect(trigger.className).not.toMatch(/text-(emerald|red|yellow)/)
   })
 
-  it("reports the socket, the resolved binary and only the enabled groups", async () => {
+  /** `stopped` is exactly `not listening`, so a socket column would restate
+   * the badge. The strip carries only what the badge cannot. */
+  it("shows the three counts the badge does not already carry", async () => {
     await mount()
     await openPopover()
 
-    expect(screen.getByText("Listening")).toBeInTheDocument()
+    for (const label of ["Sessions", "Delegations", "Depth cap"]) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+    expect(screen.queryByText("Status")).not.toBeInTheDocument()
+    // The badge is the single place the socket verdict is stated.
+    expect(screen.getAllByText("Running")).toHaveLength(1)
+  })
+
+  /** The paths never had a column, so they must still be reachable — they are
+   * what people copy out of this popover. */
+  it("keeps the socket and binary paths on the state badge", async () => {
+    await mount()
+    await openPopover()
+
+    const glyph = screen.getByTitle(/codeg-delegation-4242\.sock/)
+    expect(glyph).toHaveAttribute(
+      "title",
+      expect.stringContaining(
+        "/Applications/codeg.app/Contents/MacOS/codeg-mcp"
+      )
+    )
+  })
+
+  /** Each row names the tool and says what it lets an agent do — the switch
+   * alone does not tell someone whether they want it on. */
+  it("describes every tool group beside its switch", async () => {
+    await mount()
+    await openPopover()
+
     expect(
-      screen.getByText("/tmp/codeg-delegation-4242.sock")
+      screen.getByText("Hand a task to another agent.")
     ).toBeInTheDocument()
     expect(
-      screen.getByText("/Applications/codeg.app/Contents/MacOS/codeg-mcp")
+      screen.getByText("Create and manage work tasks.")
     ).toBeInTheDocument()
-    expect(screen.getByText("Delegation")).toBeInTheDocument()
-    expect(screen.getByText("Live feedback")).toBeInTheDocument()
-    // Disabled groups are absent, not greyed — the list answers "what does an
-    // agent get", so a switched-off group has nothing to say here.
-    expect(screen.queryByText("Ask a question")).not.toBeInTheDocument()
+  })
+
+  /** Every group gets a row, switched off ones included — the list is now a
+   * control surface, so hiding the off ones would hide the way to turn them on. */
+  it("lists every tool group with its current switch position", async () => {
+    await mount()
+    await openPopover()
+
+    expect(toolSwitch("Delegation")).toBeChecked()
+    expect(toolSwitch("Live feedback")).toBeChecked()
+    expect(toolSwitch("Ask a question")).not.toBeChecked()
+    expect(toolSwitch("Session lookup")).not.toBeChecked()
+  })
+
+  it("writes a group toggle through and re-reads the status", async () => {
+    await mount()
+    await openPopover()
+
+    getCodegMcpServiceStatus.mockResolvedValue(
+      makeStatus({
+        tool_groups: [
+          { key: "delegation", enabled: true },
+          { key: "feedback", enabled: true },
+          { key: "ask", enabled: true },
+          { key: "sessions", enabled: false },
+          { key: "automations", enabled: false },
+          { key: "taskboard", enabled: false },
+        ],
+      })
+    )
+    fireEvent.click(toolSwitch("Ask a question"))
+
+    await waitFor(() =>
+      expect(setCodegMcpToolGroup).toHaveBeenCalledWith("ask", true)
+    )
+    await waitFor(() => expect(toolSwitch("Ask a question")).toBeChecked())
+  })
+
+  /** A rejected write must not leave the switch showing a position no setting
+   * backs — it snaps back to the last known truth and says why. */
+  it("reverts a switch whose write was refused", async () => {
+    setCodegMcpToolGroup.mockRejectedValue(new Error("database is locked"))
+    await mount()
+    await openPopover()
+
+    fireEvent.click(toolSwitch("Ask a question"))
+
+    expect(
+      await screen.findByText(/Failed: database is locked/)
+    ).toBeInTheDocument()
+    await waitFor(() => expect(toolSwitch("Ask a question")).not.toBeChecked())
+    // The refusal is not a reason to re-read: the status never changed.
+    expect(getCodegMcpServiceStatus).toHaveBeenCalledTimes(2)
+  })
+
+  /** Settings must land on the page that actually holds these switches. With
+   * no section the desktop transport falls back to Appearance, which has
+   * nothing to do with the popover the click came from. */
+  it("opens settings on the general page", async () => {
+    await mount()
+    await openPopover()
+
+    fireEvent.click(screen.getByRole("button", { name: /Open full settings/ }))
+    expect(openSettingsWindow).toHaveBeenCalledWith("general")
   })
 
   /** The headline promise of the feature: a dead socket is repairable in place. */
@@ -134,7 +238,8 @@ describe("StatusBarMcp", () => {
     ).not.toBeInTheDocument()
   })
 
-  /** Every other state is a healthy socket, so nothing here can start it. */
+  /** Every other state is a healthy socket, so nothing here can start it. The
+   * missing binary is named by the hint line, not by a row of its own. */
   it("does not offer a start button for a missing companion binary", async () => {
     getCodegMcpServiceStatus.mockResolvedValue(
       makeStatus({ state: "unavailable", binary_path: null })
@@ -142,7 +247,9 @@ describe("StatusBarMcp", () => {
     await mount()
     await openPopover()
 
-    expect(screen.getByText("Not found")).toBeInTheDocument()
+    expect(
+      screen.getByText("The codeg-mcp binary is not on disk.")
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: /Start service/ })
     ).not.toBeInTheDocument()
@@ -158,7 +265,7 @@ describe("StatusBarMcp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Start service/ }))
     expect(
-      await screen.findByText(/Could not start: address already in use/)
+      await screen.findByText(/Failed: address already in use/)
     ).toBeInTheDocument()
   })
 
@@ -172,13 +279,15 @@ describe("StatusBarMcp", () => {
     expect(
       screen.getByText(/Could not read the status: transport offline/)
     ).toBeInTheDocument()
-    expect(screen.queryByText("Broker socket")).not.toBeInTheDocument()
+    // No strip and no switches: there is no status to render either from.
+    expect(screen.queryByText("Sessions")).not.toBeInTheDocument()
+    expect(screen.queryAllByRole("switch")).toHaveLength(0)
   })
 })
 
-/** Variant of {@link openPopover} for the error path, where the detail block
- * (and its "Broker socket" row) is never rendered. */
+/** Variant of {@link openPopover} for the error path, where neither the stat
+ * strip nor the tool switches are rendered. */
 async function openPopover2() {
   fireEvent.click(screen.getAllByRole("button")[0])
-  await screen.findByRole("button", { name: /Settings/ })
+  await screen.findByRole("button", { name: /Open full settings/ })
 }
