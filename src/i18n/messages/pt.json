@@ -3637,7 +3637,9 @@
         "compacting": "Compactando o contexto…",
         "compacted": "Contexto compactado",
         "compactedTokens": "Contexto compactado · {before} → {after} tokens",
-        "failed": "Falha ao compactar o contexto"
+        "failed": "Falha ao compactar o contexto",
+        "triggerManual": "Acionada manualmente",
+        "triggerAutomatic": "Acionada automaticamente"
       },
       "sessionFailure": {
         "category": {

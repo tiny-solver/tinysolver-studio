@@ -12356,8 +12356,9 @@ fn grok_ext_notification_is_alert(dispatch: &Dispatch, agent_type: AgentType) ->
     }
 }
 
-/// codex-acp 1.9.0's `_auth/status_update` — the agent reporting which identity
-/// IT is logged in with.
+/// `_auth/status_update` — the agent reporting which identity IT is logged in
+/// with. Introduced by codex-acp 1.9.0; claude-agent-acp 0.75.0 adopted the
+/// same method with its own vocabulary.
 ///
 /// Connection-level: unlike every other agent push codeg reads, the params carry
 /// NO `sessionId`, which is exactly why it needs a handler of its own (see
@@ -12373,11 +12374,22 @@ struct AuthStatusUpdateNotification {
 
 /// Claim `_auth/status_update` and drop it, loudly enough to be greppable.
 ///
-/// codex-acp pushes this unconditionally — once right after the `initialize`
-/// response, then on every authenticate / logout / session create, and whenever
-/// the app-server reports `account/updated`. It is not gated on anything codeg
-/// advertises; the agent merely ANNOUNCES the channel with
-/// `agentCapabilities._meta.authStatus = {}`.
+/// Two agents push it, both unconditionally. codex-acp 1.9.0: once right after
+/// the `initialize` response, then on every authenticate / logout / session
+/// create, and whenever the app-server reports `account/updated`.
+/// claude-agent-acp 0.75.0: the same points PLUS one codex does not have — the
+/// start of every user prompt, which fires an async `claude auth status --json`
+/// probe (5s timeout), so a push can land MID-TURN and a consumer must not
+/// assume the channel is quiet while a turn is open. Neither is gated on
+/// anything codeg advertises; the agent merely ANNOUNCES the channel with
+/// `agentCapabilities._meta.authStatus = {}`, and codeg registers this handler
+/// for every agent rather than per type, so a third adopter is already claimed.
+///
+/// Both push only when the payload DIFFERS from the last one sent, so the
+/// absence of a push means "unchanged", never "not signed in". Claude draws one
+/// more distinction worth keeping: it stays SILENT when it cannot determine the
+/// identity at all (probe failed, timed out, unparseable), and reserves
+/// `kind: "none"` for a known signed-OUT state.
 ///
 /// A handler is registered rather than letting it fall through because falling
 /// through is not free. sacp walks the handler chain, finds no claimant (the
@@ -12390,11 +12402,12 @@ struct AuthStatusUpdateNotification {
 /// the bump from introducing that.
 ///
 /// Nothing consumes the payload yet, and that is a deliberate stop: the status
-/// describes the AGENT-owned login only (routing codeg itself configured through
-/// `providers/set` is explicitly excluded upstream), and every failure it could
-/// warn about already arrives as an AIR `sessionFailure` carrying an actionable
-/// `login`. The shape is recorded here so a future consumer does not have to
-/// re-derive it:
+/// describes the AGENT-owned login only (on codex, routing codeg itself
+/// configured through `providers/set` is explicitly excluded upstream), and on
+/// both agents every failure it could warn about already arrives as an AIR
+/// `sessionFailure` carrying an actionable `login` — claude 0.74.0 additionally
+/// rejects the prompt with `authRequired`. The shape is recorded here so a
+/// future consumer does not have to re-derive it:
 ///
 ///   {"authStatus": {"kind": "account" | "api_key" | "external" | "gateway"
 ///                           | "none",
@@ -12406,13 +12419,16 @@ struct AuthStatusUpdateNotification {
 ///
 /// Observed against a live 1.10.0 whose `~/.codex/config.toml` selects a custom
 /// provider: `{"kind":"gateway","label":"Custom model gateway","detail":"codeg"}`.
+/// Against a live claude-agent-acp 0.75.1 with no credential:
+/// `{"kind":"none","label":"Not logged in"}`.
 /// The payload is NOT logged whole: `account.email` and `account.organization`
 /// are the signed-in person's identity, and codeg's log file is user-visible
 /// (and shipped in diagnostics). `kind` and `label` are the two fields that
 /// answer "which identity is this connection using", and neither identifies a
-/// person — `label` is one of a fixed vocabulary ("ChatGPT Pro", "OpenAI API
-/// key", "Custom model gateway", "Not logged in") plus, for a gateway, the
-/// provider id the user configured locally.
+/// person — `label` is one of a fixed per-agent vocabulary ("ChatGPT Pro",
+/// "OpenAI API key", "Custom model gateway", "Not logged in" on codex; "Claude
+/// Max", "Anthropic API key", "AWS Bedrock", "Not logged in" on claude) plus,
+/// for a gateway, the provider id the user configured locally.
 fn handle_auth_status_update(agent_type: AgentType, notif: AuthStatusUpdateNotification) {
     let field = |key: &str| {
         notif

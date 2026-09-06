@@ -693,6 +693,75 @@ fn is_context_continuation(content: &[ContentBlock]) -> bool {
     })
 }
 
+/// The compaction divider for a `system`/`compact_boundary` record, as the
+/// provider-neutral tool pair every agent's compaction renders through.
+///
+/// The live ACP path gets this for free: claude-agent-acp 0.75.0 streams a
+/// `tool_call` tagged `_meta.contextCompaction` (the same key codex-acp 1.3.0
+/// introduced), which `<ContextCompactionCard>` matches on `_meta` alone rather
+/// than per agent. This is the history half, so reopening a conversation shows
+/// the same divider in the same place — and it works for sessions run through
+/// the plain `claude` CLI too, which writes the record but speaks no ACP.
+///
+/// Two shape rules, both borrowed from `parsers::grok` and `parsers::deepseek`:
+/// the ToolUse needs its paired ToolResult or the card reads as a call still
+/// running, and `tool_use_id` is the record's own uuid so re-parsing the same
+/// transcript yields the same block.
+///
+/// The record is bookkeeping, not a message, so it never carries usage or a
+/// model, and the caller leaves `agent_message_id` unset.
+fn compaction_blocks(value: &serde_json::Value, tool_use_id: String) -> Vec<ContentBlock> {
+    let meta = value.get("compactMetadata");
+    let field = |key: &str| meta.and_then(|m| m.get(key));
+
+    let mut marker = serde_json::Map::new();
+    marker.insert("version".to_string(), serde_json::Value::from(1));
+    // The transcript spells the automatic trigger `auto`; the wire spells it
+    // `automatic` (the adapter's `contextCompactionMetadataFromBoundary` does
+    // exactly this rename before streaming it). Renaming here too is what keeps
+    // the tooltip from changing depending on whether the session is live.
+    if let Some(trigger) = field("trigger").and_then(|v| v.as_str()) {
+        let trigger = if trigger == "auto" {
+            "automatic"
+        } else {
+            trigger
+        };
+        marker.insert("trigger".to_string(), serde_json::Value::from(trigger));
+    }
+    // Each count is independently optional in the SDK's own type, and the card
+    // degrades to the plain "compacted" label when either side is missing —
+    // so a partial record still renders a divider rather than nothing.
+    for key in ["preTokens", "postTokens", "durationMs"] {
+        if let Some(n) = field(key).and_then(serde_json::Value::as_u64) {
+            marker.insert(key.to_string(), serde_json::Value::from(n));
+        }
+    }
+
+    vec![
+        ContentBlock::ToolUse {
+            tool_use_id: Some(tool_use_id.clone()),
+            tool_name: "context_compaction".to_string(),
+            input_preview: None,
+            status: None,
+            meta: Some(serde_json::Value::Object(
+                [(
+                    "contextCompaction".to_string(),
+                    serde_json::Value::Object(marker),
+                )]
+                .into_iter()
+                .collect(),
+            )),
+        },
+        ContentBlock::ToolResult {
+            tool_use_id: Some(tool_use_id),
+            output_preview: None,
+            is_error: false,
+            agent_stats: None,
+            images: Vec::new(),
+        },
+    ]
+}
+
 /// `pub(crate)`: Qoder stamps the same `<synthetic>` model on the assistant
 /// record it writes for a failed API turn (alongside `isApiErrorMessage`), so
 /// `parsers::qoder` shares this predicate — see `is_non_conversational_assistant`
@@ -1678,17 +1747,54 @@ impl ClaudeRecordAccumulator {
             }
             "system" => {
                 let subtype = value.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
-                if subtype == "turn_duration" {
-                    if let Some(duration) = value.get("durationMs").and_then(|d| d.as_u64()) {
-                        // Attach to the last assistant message
-                        if let Some(last) = messages
-                            .iter_mut()
-                            .rev()
-                            .find(|m| matches!(m.role, MessageRole::Assistant))
-                        {
-                            last.duration_ms = Some(duration);
+                match subtype {
+                    "turn_duration" => {
+                        if let Some(duration) = value.get("durationMs").and_then(|d| d.as_u64()) {
+                            // Attach to the last assistant message
+                            if let Some(last) = messages
+                                .iter_mut()
+                                .rev()
+                                .find(|m| matches!(m.role, MessageRole::Assistant))
+                            {
+                                last.duration_ms = Some(duration);
+                            }
                         }
                     }
+                    // The history half of what claude-agent-acp 0.75.0 streams
+                    // live as a `_meta.contextCompaction` tool-call lifecycle:
+                    // without this arm the divider card appears while the turn
+                    // runs and then vanishes when the conversation is reopened.
+                    // Synthesizing it here — rather than only in the ACP
+                    // transcript — also covers sessions run through the plain
+                    // `claude` CLI, which writes this record but speaks no ACP.
+                    "compact_boundary" => {
+                        let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                        let id = value
+                            .get("uuid")
+                            .and_then(|u| u.as_str())
+                            .filter(|u| !u.is_empty())
+                            .map_or_else(
+                                || format!("claude-compaction-{}", messages.len()),
+                                str::to_string,
+                            );
+                        messages.push(UnifiedMessage {
+                            id: format!("synth-compaction-{}", messages.len()),
+                            role: MessageRole::Assistant,
+                            content: compaction_blocks(&value, id),
+                            timestamp,
+                            usage: None,
+                            duration_ms: None,
+                            model: None,
+                            completed_at: Some(timestamp),
+                            // Nothing in the model's own history to fork at:
+                            // this record is transcript bookkeeping, not an
+                            // assistant message. `acp::fork` forks such turns
+                            // at the tail rather than fingerprinting their
+                            // empty text.
+                            agent_message_id: None,
+                        });
+                    }
+                    _ => {}
                 }
             }
             "tool_use" => {
@@ -2713,6 +2819,119 @@ mod tests {
 
     use super::*;
     use serde_json::json;
+
+    /// A compaction is a boundary between turns, so history has to draw the
+    /// same divider the live ACP stream does — claude-agent-acp 0.75.0 streams
+    /// `_meta.contextCompaction`, and without the parser half the card would
+    /// appear during the turn and disappear when the conversation is reopened.
+    #[test]
+    fn compact_boundary_becomes_a_compaction_divider_turn() {
+        let dir = tempfile::tempdir().unwrap();
+        let proj = dir.path().join("-Users-test-proj");
+        std::fs::create_dir_all(&proj).unwrap();
+        let path = proj.join("sess-compaction.jsonl");
+        let lines = [
+            r#"{"type":"user","timestamp":"2026-09-05T03:40:00.000Z","uuid":"u1","cwd":"/Users/test/proj","message":{"role":"user","content":[{"type":"text","text":"keep going"}]}}"#,
+            r#"{"type":"assistant","timestamp":"2026-09-05T03:40:05.000Z","uuid":"a1","message":{"id":"msg_01","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"Working on it."}]}}"#,
+            r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-09-05T03:41:00.000Z","uuid":"cb1","parentUuid":null,"logicalParentUuid":"a1","content":"Conversation compacted","compactMetadata":{"trigger":"auto","preTokens":312909,"postTokens":17018,"durationMs":97559,"cumulativeDroppedTokens":295891}}"#,
+            r#"{"type":"user","timestamp":"2026-09-05T03:41:01.000Z","uuid":"cs1","isCompactSummary":true,"cwd":"/Users/test/proj","message":{"role":"user","content":"This session is being continued from a previous conversation…"}}"#,
+            r#"{"type":"assistant","timestamp":"2026-09-05T03:41:09.000Z","uuid":"a2","message":{"id":"msg_02","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"Picking it back up."}]}}"#,
+        ];
+        std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+
+        let parser = ClaudeParser::with_base_dir(dir.path().to_path_buf());
+        let detail = parser.get_conversation("sess-compaction").unwrap();
+
+        // Its own turn, sitting BETWEEN the two replies — the frontend hoists a
+        // compaction-only group into a standalone divider, which it can only do
+        // when the blocks are not folded into a neighbouring turn.
+        let idx = detail
+            .turns
+            .iter()
+            .position(|t| {
+                t.blocks.iter().any(|b| {
+                    matches!(b, ContentBlock::ToolUse { tool_name, .. }
+                        if tool_name == "context_compaction")
+                })
+            })
+            .expect("the boundary record must produce a compaction turn");
+        let turn = &detail.turns[idx];
+        assert!(matches!(turn.role, TurnRole::Assistant));
+        assert_eq!(turn.blocks.len(), 2, "the ToolUse and its paired result");
+        // Bookkeeping, not a message: naming it as a fork point would send
+        // `fingerprint("")`, which matches every text-free grouping at once.
+        assert!(turn.agent_message_id.is_none());
+
+        let ContentBlock::ToolUse {
+            tool_use_id, meta, ..
+        } = &turn.blocks[0]
+        else {
+            panic!("expected the compaction ToolUse first");
+        };
+        // The record's own uuid, so re-parsing the transcript is idempotent.
+        assert_eq!(tool_use_id.as_deref(), Some("cb1"));
+        assert_eq!(
+            meta.as_ref().and_then(|m| m.get("contextCompaction")),
+            Some(&json!({
+                "version": 1,
+                // Renamed from the transcript's `auto` so the card's tooltip
+                // reads the same live and in history.
+                "trigger": "automatic",
+                "preTokens": 312909,
+                "postTokens": 17018,
+                "durationMs": 97559,
+            }))
+        );
+        // A ToolUse with no result reads as a call still running.
+        assert!(matches!(
+            &turn.blocks[1],
+            ContentBlock::ToolResult { tool_use_id, is_error: false, .. }
+                if tool_use_id.as_deref() == Some("cb1")
+        ));
+
+        // Positive half: the divider is inserted, not substituted — both
+        // replies and the continuation summary survive around it.
+        let rendered = serde_json::to_string(&detail.turns).unwrap();
+        assert!(rendered.contains("Working on it."));
+        assert!(rendered.contains("Picking it back up."));
+        assert!(detail.turns[..idx]
+            .iter()
+            .any(|t| matches!(t.role, TurnRole::Assistant)));
+        assert!(detail.turns[idx + 1..]
+            .iter()
+            .any(|t| matches!(t.role, TurnRole::Assistant)));
+    }
+
+    /// `manual` is already the wire spelling, so only `auto` is renamed — and a
+    /// record whose metadata never arrived still marks the boundary, because
+    /// the card degrades to its plain label when the counts are missing.
+    #[test]
+    fn compaction_trigger_is_renamed_only_for_auto() {
+        let manual = json!({
+            "type": "system", "subtype": "compact_boundary", "uuid": "cb1",
+            "compactMetadata": {"trigger": "manual", "preTokens": 100, "postTokens": 10},
+        });
+        let ContentBlock::ToolUse { meta, .. } = &compaction_blocks(&manual, "cb1".into())[0]
+        else {
+            panic!("expected a ToolUse");
+        };
+        assert_eq!(
+            meta.as_ref().and_then(|m| m.get("contextCompaction")),
+            Some(&json!({"version": 1, "trigger": "manual", "preTokens": 100, "postTokens": 10}))
+        );
+
+        let bare = json!({"type": "system", "subtype": "compact_boundary", "uuid": "cb2"});
+        let blocks = compaction_blocks(&bare, "cb2".into());
+        let ContentBlock::ToolUse { meta, .. } = &blocks[0] else {
+            panic!("expected a ToolUse");
+        };
+        assert_eq!(
+            meta.as_ref().and_then(|m| m.get("contextCompaction")),
+            Some(&json!({"version": 1})),
+            "the version alone is what `isContextCompactionMeta` matches on"
+        );
+        assert_eq!(blocks.len(), 2, "still a well-formed pair");
+    }
 
     /// Cancelling a turn makes Claude Code append a `user` record reading
     /// `[Request interrupted by user]`. It is addressed to the MODEL — it
