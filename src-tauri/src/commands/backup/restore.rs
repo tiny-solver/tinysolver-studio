@@ -431,7 +431,7 @@ pub fn prune_safety_snapshots(data_dir: &Path, keep: usize) {
             dated.push((key, path));
         }
     }
-    dated.sort_by(|a, b| b.0.cmp(&a.0));
+    dated.sort_by_key(|a| std::cmp::Reverse(a.0));
     for (_, path) in dated.into_iter().skip(keep) {
         tracing::info!("[RESTORE] pruning safety snapshot {}", path.display());
         let _ = std::fs::remove_dir_all(&path);
@@ -496,7 +496,7 @@ pub fn list_safety_snapshots_core(data_dir: &Path) -> Vec<SafetySnapshot> {
             },
         ));
     }
-    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.sort_by_key(|a| std::cmp::Reverse(a.0));
     out.into_iter().map(|(_, s)| s).collect()
 }
 
