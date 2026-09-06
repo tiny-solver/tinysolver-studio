@@ -1874,6 +1874,16 @@ export async function validateGitLabToken(
   return getTransport().call("validate_gitlab_token", { serverUrl, token })
 }
 
+/** Same answer shape again, from Gitea's `GET /api/v1/user`. `scopes` always
+ *  comes back empty: Gitea reports a token's scopes only on an endpoint that
+ *  wants the account password and refuses the token being checked. */
+export async function validateGiteaToken(
+  serverUrl: string,
+  token: string
+): Promise<GitHubTokenValidation> {
+  return getTransport().call("validate_gitea_token", { serverUrl, token })
+}
+
 export async function updateGitHubAccounts(
   settings: GitHubAccountsSettings
 ): Promise<GitHubAccountsSettings> {
@@ -4881,14 +4891,29 @@ export async function setFeedbackSettings(
  * steering path). Returns the stored note (it also arrives via the
  * `feedback_submitted` event). Rejects when no turn is in flight — callers
  * detect that with `isNoActiveTurnRejection` and fall back to a normal prompt.
+ *
+ * `blocks` (optional) is the full prompt-block draft when the note carries
+ * image attachments; `text` stays the recorded/display form. Blocks ride the
+ * native `_session/steering` wire only — the backend rejects them on the pull
+ * path (same `NoActiveTurn` fallback) so an attachment is never silently
+ * dropped. Uploaded payloads are stripped to their `file://` markers in every
+ * HTTP-body mode, exactly like `acpPrompt`; the backend re-hydrates them.
  */
 export async function submitSessionFeedback(
   connectionId: string,
-  text: string
+  text: string,
+  blocks?: PromptInputBlock[] | null
 ): Promise<FeedbackItem> {
   return getTransport().call("submit_session_feedback", {
     connectionId,
     text,
+    blocks:
+      blocks && blocks.length > 0
+        ? stripUploadedImagePayloads(
+            blocks,
+            !isDesktop() || getActiveRemoteConnectionId() !== null
+          )
+        : null,
   })
 }
 

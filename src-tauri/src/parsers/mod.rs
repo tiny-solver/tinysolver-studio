@@ -875,7 +875,13 @@ pub fn infer_context_window_max_tokens(model: Option<&str>) -> Option<u64> {
         "gpt-4" => Some(8_192),
         "o3" | "o3-mini" | "o1" => Some(200_000),
         _ => {
-            if normalized.starts_with("gpt-5") {
+            // 258K is the *effective* window OpenAI's own catalog advertises for
+            // this whole generation: `context_window: 272000` with
+            // `effective_context_window_percent: 95`. gpt-6 shares that profile
+            // byte for byte (see `resources/codex/bundled-catalog.json`), so it
+            // rides the same lane rather than falling through to `None` and
+            // leaving those sessions with no context meter at all.
+            if normalized.starts_with("gpt-5") || normalized.starts_with("gpt-6") {
                 Some(258_000)
             } else if normalized.starts_with("gpt-4o")
                 || normalized.starts_with("gpt-4.1")
@@ -2096,6 +2102,16 @@ mod tests {
         assert_eq!(
             infer_context_window_max_tokens(Some("grok-7-experimental")),
             Some(256_000)
+        );
+        // gpt-6 shares gpt-5's 272K/95% profile, so it takes the same effective
+        // window instead of falling through to `None`.
+        assert_eq!(
+            infer_context_window_max_tokens(Some("gpt-6-astra")),
+            Some(258_000)
+        );
+        assert_eq!(
+            infer_context_window_max_tokens(Some("gpt-5.6-sol")),
+            Some(258_000)
         );
         assert_eq!(infer_context_window_max_tokens(Some("unknown-model")), None);
     }
