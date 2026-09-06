@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const shellCall = vi.fn(async () => undefined)
+const shellCall = vi.fn<(command: string, args?: unknown) => Promise<unknown>>(
+  async () => undefined
+)
 const remoteCall = vi.fn(async () => undefined)
 const desktop = vi.fn(() => true)
 
@@ -15,6 +17,7 @@ vi.mock("./transport", () => ({
 
 import {
   deliverSystemNotification,
+  getNotificationIdentity,
   getNotificationPermission,
   openSystemNotificationSettings,
   requestNotificationPermission,
@@ -171,6 +174,56 @@ describe("deliverSystemNotification", () => {
     await expect(deliverSystemNotification("t", "b")).rejects.toThrow(
       /not available/i
     )
+  })
+})
+
+describe("getNotificationIdentity", () => {
+  it("reads the delivering identity over the LOCAL shell transport", async () => {
+    // Same reasoning as delivery: in a remote-desktop window `getTransport()`
+    // points at a host that never registers this command, and the identity we
+    // want to report is the one on the screen in front of the user.
+    shellCall.mockResolvedValueOnce({
+      bundleId: "app.codeg",
+      requestedBundleId: "app.codeg",
+      degraded: false,
+    })
+
+    await expect(getNotificationIdentity()).resolves.toEqual({
+      bundleId: "app.codeg",
+      requestedBundleId: "app.codeg",
+      degraded: false,
+    })
+    expect(shellCall).toHaveBeenCalledWith("notification_identity")
+    expect(remoteCall).not.toHaveBeenCalled()
+  })
+
+  it("reports a degraded identity verbatim", async () => {
+    // The case this whole surface exists for: notifications posted under an
+    // app the user never configured, while codeg's own switches govern
+    // nothing.
+    shellCall.mockResolvedValueOnce({
+      bundleId: "com.apple.Terminal",
+      requestedBundleId: "app.codeg",
+      degraded: true,
+    })
+
+    await expect(getNotificationIdentity()).resolves.toMatchObject({
+      bundleId: "com.apple.Terminal",
+      degraded: true,
+    })
+  })
+
+  it("has nothing to report in a browser", async () => {
+    desktop.mockReturnValue(false)
+    await expect(getNotificationIdentity()).resolves.toBeNull()
+    expect(shellCall).not.toHaveBeenCalled()
+  })
+
+  it("passes through a desktop that declines to name an identity", async () => {
+    // Windows and Linux: the backend answers `null` rather than claiming an
+    // identity it cannot actually verify.
+    shellCall.mockResolvedValueOnce(null)
+    await expect(getNotificationIdentity()).resolves.toBeNull()
   })
 })
 

@@ -123,6 +123,44 @@ export async function deliverSystemNotification(
 }
 
 /**
+ * Which app the OS files our notifications under.
+ *
+ * On macOS this is not a formality. `NSUserNotification` has no concept of an
+ * unbundled process, so the backend claims a bundle id and the OS attributes
+ * the notification — and its permission, icon and System Settings page — to
+ * THAT app. When `bundleId` differs from `requestedBundleId` the switches the
+ * user can see under "codeg" govern nothing.
+ */
+export interface NotificationIdentity {
+  /** Bundle id notifications are actually delivered under. */
+  bundleId: string
+  /** Bundle id we asked for — this app's own identifier. */
+  requestedBundleId: string
+  /** Delivery fell back to another app's identity. */
+  degraded: boolean
+}
+
+/**
+ * Read the delivering identity, or `null` where there is nothing trustworthy
+ * to report — a browser (it posts as itself), and every desktop platform but
+ * macOS (only macOS impersonates another app to deliver; see the Rust
+ * `resolve_notification_identity` for why Windows is excluded rather than
+ * guessed at).
+ *
+ * The first call is what establishes the identity, so this is a write as much
+ * as a read; see the Rust `notification_identity` for why calling it from a
+ * settings panel is safe.
+ */
+export async function getNotificationIdentity(): Promise<NotificationIdentity | null> {
+  if (!isDesktop()) return null
+  // Same shell-transport reasoning as delivery: the notification, and the
+  // identity it is filed under, belong to the machine in front of the user.
+  return await getShellTransport().call<NotificationIdentity | null>(
+    "notification_identity"
+  )
+}
+
+/**
  * Open the OS pane that owns notification permission for this app.
  *
  * Desktop only — a browser's per-site permission lives in the browser's own UI,
