@@ -21,7 +21,9 @@
 //! resolved bundle id so the settings panel can name it instead of implying
 //! the user's own toggles are in play.
 
-#[cfg(feature = "tauri-runtime")]
+// Only the macOS identity static needs it; anywhere else this is an unused
+// import, which `-D warnings` rejects.
+#[cfg(all(feature = "tauri-runtime", target_os = "macos"))]
 use std::sync::OnceLock;
 
 #[cfg(feature = "tauri-runtime")]
