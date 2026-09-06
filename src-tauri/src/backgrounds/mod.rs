@@ -417,8 +417,16 @@ mod tests {
             fs::write(path, b"x").expect("seed");
         }
         let old = SystemTime::now() - STALE_TMP_AGE - Duration::from_secs(60);
-        fs::File::open(&stale)
-            .expect("open")
+        // Opened for writing rather than with `File::open`: Windows backs
+        // `set_modified` with `SetFileTime`, which needs `FILE_WRITE_ATTRIBUTES`
+        // on the handle, and only a write-mode open asks for it. A read-only
+        // handle backdates happily on Unix — `futimens` gates an explicit
+        // timestamp on the file's ownership, not the descriptor's access mode —
+        // and fails with "Access is denied" on Windows.
+        fs::File::options()
+            .write(true)
+            .open(&stale)
+            .expect("open for backdating")
             .set_modified(old)
             .expect("backdate");
 
