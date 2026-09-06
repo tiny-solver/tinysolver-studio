@@ -810,11 +810,48 @@ fn claude_context_window_max_tokens_for_model(model: Option<&str>) -> Option<u64
     None
 }
 
-/// The Anthropic-usage-shape occupancy rule now lives in
-/// [`super::latest_turn_prompt_usage_tokens`] so Qoder — which writes the same
-/// counters — reads the gauge the same way instead of re-deriving it.
+/// Post-compaction occupancy carried by a synthesized compaction divider, if
+/// this turn is one. See [`compaction_blocks`] for where the marker is built.
+fn compaction_post_tokens(turn: &MessageTurn) -> Option<u64> {
+    turn.blocks.iter().find_map(|b| match b {
+        ContentBlock::ToolUse {
+            tool_name, meta, ..
+        } if tool_name == "context_compaction" => meta
+            .as_ref()?
+            .get("contextCompaction")?
+            .get("postTokens")?
+            .as_u64(),
+        _ => None,
+    })
+}
+
+/// Context-window occupancy: the Anthropic-usage-shape rule from
+/// [`super::latest_turn_prompt_usage_tokens`] (shared with Qoder, which writes
+/// the same counters), plus the one thing that rule cannot see.
+///
+/// A compaction REPLACES the prompt window, and the record announcing it
+/// carries no usage of its own — so the plain rule walks straight past it to
+/// the last pre-compaction reply and reports a window that no longer exists.
+/// Right after a `/compact` with no follow-up turn yet, that is the full
+/// pre-compaction number: measured on a real transcript, 108,307 reported for
+/// a window the boundary itself says is 4,462.
+///
+/// `postTokens` is the same value the adapter feeds the live gauge — 0.75.0
+/// answers a `compact_boundary` with `usage_update {used: post_tokens}` — so
+/// honouring it here is what makes the reopened conversation agree with the
+/// session that was just streaming.
+///
+/// Reverse scan, first hit wins: a reply AFTER the compaction already prices
+/// the compacted window, so it outranks the boundary; the boundary only speaks
+/// when nothing has been said since. The two are disjoint per turn — a
+/// compaction divider is synthesized as a turn of its own and never carries
+/// usage.
 fn latest_claude_context_window_used_tokens(turns: &[MessageTurn]) -> Option<u64> {
-    super::latest_turn_prompt_usage_tokens(turns)
+    turns.iter().rev().find_map(|turn| {
+        compaction_post_tokens(turn).or_else(|| super::latest_turn_prompt_usage_tokens(
+            std::slice::from_ref(turn),
+        ))
+    })
 }
 
 fn merge_claude_context_window_stats(
@@ -1210,6 +1247,16 @@ pub(crate) struct ClaudeRecordAccumulator {
     /// thinking-only fragments from one response share a message without
     /// crossing text, tool, or user boundaries.
     pending_assistant_message_id: Option<String>,
+    /// `uuid`s of the `system`/`compact_boundary` records already turned into a
+    /// divider, because a transcript repeats them VERBATIM.
+    ///
+    /// Every resume replays the surviving history into the same file, boundary
+    /// records included — same uuid, same timestamp, same `compactMetadata`.
+    /// Measured on one real 19,435-line transcript: 22 boundary records for 7
+    /// actual compactions, one of them written six times. Keyed on the record
+    /// uuid rather than the metadata so two genuine compactions that happen to
+    /// reduce the same amount still get a divider each.
+    seen_compaction_uuids: std::collections::HashSet<String>,
 }
 
 impl ClaudeRecordAccumulator {
@@ -1232,6 +1279,7 @@ impl ClaudeRecordAccumulator {
             background_notifications: std::collections::HashMap::new(),
             usage_owner_by_message_id: std::collections::HashMap::new(),
             pending_assistant_message_id: None,
+            seen_compaction_uuids: std::collections::HashSet::new(),
         }
     }
 
@@ -1339,6 +1387,7 @@ impl ClaudeRecordAccumulator {
             background_notifications,
             usage_owner_by_message_id,
             pending_assistant_message_id,
+            seen_compaction_uuids,
         } = self;
 
         let msg_type = value.get("type").and_then(|t| t.as_str()).unwrap_or("");
@@ -1777,6 +1826,13 @@ impl ClaudeRecordAccumulator {
                                 || format!("claude-compaction-{}", messages.len()),
                                 str::to_string,
                             );
+                        // A resume replays the surviving history into the same
+                        // file, boundary records included — so one compaction
+                        // can appear a dozen lines apart, byte-identical. Draw
+                        // it once. See `seen_compaction_uuids`.
+                        if !seen_compaction_uuids.insert(id.clone()) {
+                            return;
+                        }
                         messages.push(UnifiedMessage {
                             id: format!("synth-compaction-{}", messages.len()),
                             role: MessageRole::Assistant,
@@ -2819,6 +2875,125 @@ mod tests {
 
     use super::*;
     use serde_json::json;
+
+    /// A resume replays the surviving history into the SAME transcript,
+    /// boundary records included — byte-identical, original uuid and timestamp
+    /// intact. One real 19,435-line transcript holds 22 boundary records for 7
+    /// compactions, one of them written six times; without dedup that session
+    /// draws six identical dividers in a row.
+    #[test]
+    fn a_replayed_compact_boundary_draws_only_one_divider() {
+        let dir = tempfile::tempdir().unwrap();
+        let proj = dir.path().join("-Users-test-proj");
+        std::fs::create_dir_all(&proj).unwrap();
+        let path = proj.join("sess-replay.jsonl");
+        let boundary = r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-09-05T03:41:00.000Z","uuid":"cb1","compactMetadata":{"trigger":"manual","preTokens":467393,"postTokens":11875,"durationMs":142463}}"#;
+        // A SECOND compaction, distinct uuid — must still get its own divider.
+        let other = r#"{"type":"system","subtype":"compact_boundary","timestamp":"2026-09-05T06:00:00.000Z","uuid":"cb2","compactMetadata":{"trigger":"manual","preTokens":475949,"postTokens":12634,"durationMs":134503}}"#;
+        let reply = |uuid: &str, ts: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"{ts}","uuid":"{uuid}","message":{{"id":"m-{uuid}","role":"assistant","model":"claude-opus-5","content":[{{"type":"text","text":"reply {uuid}"}}]}}}}"#
+            )
+        };
+        let lines = [
+            boundary.to_string(),
+            reply("a1", "2026-09-05T03:42:00.000Z"),
+            boundary.to_string(),
+            other.to_string(),
+            reply("a2", "2026-09-05T06:02:00.000Z"),
+            boundary.to_string(),
+        ];
+        std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+
+        let parser = ClaudeParser::with_base_dir(dir.path().to_path_buf());
+        let detail = parser.get_conversation("sess-replay").unwrap();
+        let ids: Vec<&str> = detail
+            .turns
+            .iter()
+            .filter_map(|t| {
+                t.blocks.iter().find_map(|b| match b {
+                    ContentBlock::ToolUse {
+                        tool_name,
+                        tool_use_id,
+                        ..
+                    } if tool_name == "context_compaction" => tool_use_id.as_deref(),
+                    _ => None,
+                })
+            })
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["cb1", "cb2"],
+            "one divider per DISTINCT boundary, in first-seen order"
+        );
+    }
+
+    /// The gauge after a `/compact` with nothing said since.
+    ///
+    /// The boundary carries no usage of its own, so the plain
+    /// last-turn-with-usage rule walks past it to the pre-compaction reply and
+    /// reports a window that no longer exists — measured on a real transcript,
+    /// 108,307 for a window the boundary itself puts at 4,462. Live is right
+    /// because the adapter answers the boundary with `usage_update {used:
+    /// post_tokens}`; history has to agree.
+    #[test]
+    fn compaction_post_tokens_become_the_context_gauge() {
+        let usage_turn = |id: &str, prompt: u64| MessageTurn {
+            id: id.into(),
+            role: TurnRole::Assistant,
+            blocks: vec![ContentBlock::Text {
+                text: "reply".into(),
+            }],
+            timestamp: Utc::now(),
+            usage: Some(TurnUsage {
+                input_tokens: prompt,
+                output_tokens: 500,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
+            }),
+            duration_ms: None,
+            model: None,
+            completed_at: None,
+            agent_message_id: Some(id.into()),
+        };
+        let compaction = |post: u64| MessageTurn {
+            id: "turn-c".into(),
+            role: TurnRole::Assistant,
+            blocks: compaction_blocks(
+                &json!({"compactMetadata": {"trigger": "manual", "preTokens": 108716, "postTokens": post, "durationMs": 92728}}),
+                "cb1".into(),
+            ),
+            timestamp: Utc::now(),
+            usage: None,
+            duration_ms: None,
+            model: None,
+            completed_at: None,
+            agent_message_id: None,
+        };
+
+        // Nothing since the compaction: the boundary is the only honest number.
+        assert_eq!(
+            latest_claude_context_window_used_tokens(&[
+                usage_turn("turn-0", 108_307),
+                compaction(4_462),
+            ]),
+            Some(4_462)
+        );
+        // A reply AFTER it already prices the compacted window, so it wins.
+        assert_eq!(
+            latest_claude_context_window_used_tokens(&[
+                usage_turn("turn-0", 108_307),
+                compaction(4_462),
+                usage_turn("turn-2", 9_000),
+            ]),
+            Some(9_000)
+        );
+        // No compaction anywhere leaves the original rule untouched.
+        assert_eq!(
+            latest_claude_context_window_used_tokens(&[usage_turn("turn-0", 108_307)]),
+            Some(108_307)
+        );
+    }
 
     /// A compaction is a boundary between turns, so history has to draw the
     /// same divider the live ACP stream does — claude-agent-acp 0.75.0 streams
