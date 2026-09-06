@@ -4296,7 +4296,7 @@ pub struct DelegationInjection {
 /// injection — never paper over with a phantom path, because that fails
 /// inside the agent's MCP spawn loop and may take the entire ACP session
 /// down on stricter agents.
-fn locate_codeg_mcp_binary() -> Option<PathBuf> {
+pub fn locate_codeg_mcp_binary() -> Option<PathBuf> {
     let filename = if cfg!(windows) {
         "codeg-mcp.exe"
     } else {

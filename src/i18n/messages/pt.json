@@ -2041,6 +2041,49 @@
           "more": "Mais"
         },
         "showPet": "Mostrar pet"
+      },
+      "mcp": {
+        "title": "Serviço codeg-mcp",
+        "state": {
+          "running": "Em execução",
+          "stopped": "Parado",
+          "disabled": "Sem ferramentas ativas",
+          "unavailable": "Companion ausente",
+          "unknown": "Desconhecido"
+        },
+        "hint": {
+          "running": "Agentes iniciados aqui usam as ferramentas do codeg.",
+          "stopped": "O socket do broker não responde.",
+          "disabled": "Todos os grupos de ferramentas estão desativados.",
+          "unavailable": "O binário codeg-mcp não está no disco.",
+          "unknown": "Não foi possível ler o estado."
+        },
+        "socketPath": "Endereço",
+        "binary": "Companion",
+        "binaryMissing": "Não encontrado",
+        "sessions": "Sessões",
+        "activeDelegations": "Delegações",
+        "depthLimit": "Profundidade",
+        "tools": "Ferramentas",
+        "groupDelegation": "Delegação",
+        "descDelegation": "Passa uma tarefa para outro agente.",
+        "groupFeedback": "Feedback ao vivo",
+        "descFeedback": "Acrescenta notas sem interromper o turno.",
+        "groupAsk": "Perguntar ao usuário",
+        "descAsk": "Deixa o agente perguntar antes de decidir.",
+        "groupSessions": "Consulta de sessões",
+        "descSessions": "Consulta sessões anteriores e seus resultados.",
+        "groupAutomations": "Criar automação",
+        "descAutomations": "Cria e gere automações agendadas.",
+        "groupTaskboard": "Criar tarefa",
+        "descTaskboard": "Cria e gere tarefas de trabalho.",
+        "start": "Iniciar serviço",
+        "starting": "Iniciando…",
+        "actionFailed": "Falhou: {message}",
+        "lastError": "Último erro: {message}",
+        "loadFailed": "Não foi possível ler o estado: {message}",
+        "openSettings": "Abrir configurações",
+        "refresh": "Atualizar"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "Alternar para a visualização lado a lado",
         "unified": "Alternar para a visualização em linha"
+      },
+      "binaryFile": "Arquivo binário — conteúdo não exibido",
+      "image": {
+        "sideBySide": "Alternar para a visualização lado a lado",
+        "swipe": "Alternar para a visualização deslizante",
+        "swipeHandle": "Controle deslizante de comparação de imagens",
+        "noImage": "Nenhuma imagem nesta revisão",
+        "unavailable": "Não foi possível carregar este lado",
+        "tooLarge": "Imagem muito grande para pré-visualizar ({size})",
+        "loading": "Carregando imagens..."
       }
     },
     "conversationContextBar": {

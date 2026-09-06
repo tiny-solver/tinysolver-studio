@@ -2041,6 +2041,49 @@
           "more": "更多"
         },
         "showPet": "显示宠物"
+      },
+      "mcp": {
+        "title": "codeg-mcp 服务",
+        "state": {
+          "running": "运行中",
+          "stopped": "未运行",
+          "disabled": "未启用工具",
+          "unavailable": "伴生程序缺失",
+          "unknown": "未知"
+        },
+        "hint": {
+          "running": "从这里启动的智能体可使用 codeg 自带的工具。",
+          "stopped": "Broker 套接字没有响应，伴生进程连不回 codeg。",
+          "disabled": "所有工具组都已关闭，不会注入伴生进程。",
+          "unavailable": "磁盘上找不到 codeg-mcp 可执行文件。",
+          "unknown": "无法读取状态。"
+        },
+        "socketPath": "地址",
+        "binary": "伴生程序",
+        "binaryMissing": "未找到",
+        "sessions": "智能体会话",
+        "activeDelegations": "进行中的委派",
+        "depthLimit": "深度上限",
+        "tools": "工具",
+        "groupDelegation": "多智能体委派",
+        "descDelegation": "把任务交给另一个智能体处理。",
+        "groupFeedback": "实时反馈",
+        "descFeedback": "回合进行中补充说明，不打断执行。",
+        "groupAsk": "向用户提问",
+        "descAsk": "让智能体拿不准时先问你。",
+        "groupSessions": "会话查询",
+        "descSessions": "查询历史会话及其结果。",
+        "groupAutomations": "创建自动化",
+        "descAutomations": "创建和管理定时自动化。",
+        "groupTaskboard": "创建任务",
+        "descTaskboard": "创建和管理工作任务。",
+        "start": "启动服务",
+        "starting": "正在启动…",
+        "actionFailed": "操作失败：{message}",
+        "lastError": "上次错误：{message}",
+        "loadFailed": "无法读取状态：{message}",
+        "openSettings": "打开详细设置",
+        "refresh": "刷新"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "切换为左右分栏视图",
         "unified": "切换为内联视图"
+      },
+      "binaryFile": "二进制文件 — 不显示内容",
+      "image": {
+        "sideBySide": "切换为左右分栏视图",
+        "swipe": "切换为滑动对比视图",
+        "swipeHandle": "图片对比滑块",
+        "noImage": "此版本没有图片",
+        "unavailable": "无法加载此侧内容",
+        "tooLarge": "图片过大，无法预览（{size}）",
+        "loading": "正在加载图片..."
       }
     },
     "conversationContextBar": {

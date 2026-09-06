@@ -2041,6 +2041,49 @@
           "more": "Plus"
         },
         "showPet": "Afficher la mascotte"
+      },
+      "mcp": {
+        "title": "Service codeg-mcp",
+        "state": {
+          "running": "En cours",
+          "stopped": "Arrêté",
+          "disabled": "Aucun outil activé",
+          "unavailable": "Compagnon introuvable",
+          "unknown": "Inconnu"
+        },
+        "hint": {
+          "running": "Les agents lancés ici peuvent utiliser les outils de codeg.",
+          "stopped": "Le socket du broker ne répond pas.",
+          "disabled": "Tous les groupes d'outils sont désactivés.",
+          "unavailable": "Le binaire codeg-mcp est introuvable.",
+          "unknown": "Impossible de lire l'état."
+        },
+        "socketPath": "Adresse",
+        "binary": "Compagnon",
+        "binaryMissing": "Introuvable",
+        "sessions": "Sessions",
+        "activeDelegations": "Délégations",
+        "depthLimit": "Profondeur",
+        "tools": "Outils",
+        "groupDelegation": "Délégation",
+        "descDelegation": "Confie une tâche à un autre agent.",
+        "groupFeedback": "Retour en direct",
+        "descFeedback": "Ajoute des notes sans interrompre le tour.",
+        "groupAsk": "Question à l'utilisateur",
+        "descAsk": "Laisse l'agent vous consulter avant de décider.",
+        "groupSessions": "Consultation de session",
+        "descSessions": "Consulte les sessions passées et leurs résultats.",
+        "groupAutomations": "Créer une automatisation",
+        "descAutomations": "Crée et gère des automatisations planifiées.",
+        "groupTaskboard": "Créer une tâche",
+        "descTaskboard": "Crée et gère des tâches de travail.",
+        "start": "Démarrer le service",
+        "starting": "Démarrage…",
+        "actionFailed": "Échec : {message}",
+        "lastError": "Dernière erreur : {message}",
+        "loadFailed": "Impossible de lire l'état : {message}",
+        "openSettings": "Ouvrir les paramètres",
+        "refresh": "Actualiser"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "Passer à la vue côte à côte",
         "unified": "Passer à la vue en ligne"
+      },
+      "binaryFile": "Fichier binaire — contenu non affiché",
+      "image": {
+        "sideBySide": "Passer à la vue côte à côte",
+        "swipe": "Passer à la vue par balayage",
+        "swipeHandle": "Curseur de comparaison d'images",
+        "noImage": "Aucune image dans cette révision",
+        "unavailable": "Impossible de charger ce côté",
+        "tooLarge": "Image trop grande pour l'aperçu ({size})",
+        "loading": "Chargement des images..."
       }
     },
     "conversationContextBar": {

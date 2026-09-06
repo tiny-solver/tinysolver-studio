@@ -2041,6 +2041,49 @@
           "more": "Mehr"
         },
         "showPet": "Pet anzeigen"
+      },
+      "mcp": {
+        "title": "codeg-mcp-Dienst",
+        "state": {
+          "running": "Läuft",
+          "stopped": "Läuft nicht",
+          "disabled": "Keine Tools aktiv",
+          "unavailable": "Companion fehlt",
+          "unknown": "Unbekannt"
+        },
+        "hint": {
+          "running": "Hier gestartete Agenten können codegs Tools nutzen.",
+          "stopped": "Der Broker-Socket antwortet nicht.",
+          "disabled": "Alle Tool-Gruppen sind ausgeschaltet.",
+          "unavailable": "Die codeg-mcp-Binärdatei fehlt auf der Festplatte.",
+          "unknown": "Der Status konnte nicht gelesen werden."
+        },
+        "socketPath": "Adresse",
+        "binary": "Companion",
+        "binaryMissing": "Nicht gefunden",
+        "sessions": "Sitzungen",
+        "activeDelegations": "Delegationen",
+        "depthLimit": "Max. Tiefe",
+        "tools": "Tools",
+        "groupDelegation": "Delegation",
+        "descDelegation": "Gibt eine Aufgabe an einen anderen Agenten ab.",
+        "groupFeedback": "Live-Feedback",
+        "descFeedback": "Ergänzt Hinweise, ohne den Zug zu unterbrechen.",
+        "groupAsk": "Rückfrage stellen",
+        "descAsk": "Lässt den Agenten vor einer Entscheidung nachfragen.",
+        "groupSessions": "Sitzungsabfrage",
+        "descSessions": "Schlägt frühere Sitzungen und Ergebnisse nach.",
+        "groupAutomations": "Automatisierung erstellen",
+        "descAutomations": "Erstellt und verwaltet geplante Automationen.",
+        "groupTaskboard": "Aufgabe erstellen",
+        "descTaskboard": "Erstellt und verwaltet Arbeitsaufgaben.",
+        "start": "Dienst starten",
+        "starting": "Wird gestartet…",
+        "actionFailed": "Fehlgeschlagen: {message}",
+        "lastError": "Letzter Fehler: {message}",
+        "loadFailed": "Status konnte nicht gelesen werden: {message}",
+        "openSettings": "Alle Einstellungen öffnen",
+        "refresh": "Aktualisieren"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "Zur Zwei-Spalten-Ansicht wechseln",
         "unified": "Zur Inline-Ansicht wechseln"
+      },
+      "binaryFile": "Binärdatei — Inhalt wird nicht angezeigt",
+      "image": {
+        "sideBySide": "Zur Zwei-Spalten-Ansicht wechseln",
+        "swipe": "Zur Wisch-Ansicht wechseln",
+        "swipeHandle": "Schieberegler für Bildvergleich",
+        "noImage": "Kein Bild in dieser Revision",
+        "unavailable": "Diese Seite konnte nicht geladen werden",
+        "tooLarge": "Bild zu groß für die Vorschau ({size})",
+        "loading": "Bilder werden geladen..."
       }
     },
     "conversationContextBar": {

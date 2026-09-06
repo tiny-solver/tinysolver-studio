@@ -2041,6 +2041,49 @@
           "more": "More"
         },
         "showPet": "Show pet"
+      },
+      "mcp": {
+        "title": "codeg-mcp service",
+        "state": {
+          "running": "Running",
+          "stopped": "Not running",
+          "disabled": "No tools enabled",
+          "unavailable": "Companion missing",
+          "unknown": "Unknown"
+        },
+        "hint": {
+          "running": "Agents launched here can use codeg's own tools.",
+          "stopped": "The broker socket is not answering.",
+          "disabled": "Every tool group is off — nothing is injected.",
+          "unavailable": "The codeg-mcp binary is not on disk.",
+          "unknown": "The status could not be read."
+        },
+        "socketPath": "Address",
+        "binary": "Companion",
+        "binaryMissing": "Not found",
+        "sessions": "Sessions",
+        "activeDelegations": "Delegations",
+        "depthLimit": "Depth cap",
+        "tools": "Tools",
+        "groupDelegation": "Delegation",
+        "descDelegation": "Hand a task to another agent.",
+        "groupFeedback": "Live feedback",
+        "descFeedback": "Add notes mid-turn without interrupting.",
+        "groupAsk": "Ask a question",
+        "descAsk": "Let the agent ask you before it decides.",
+        "groupSessions": "Session lookup",
+        "descSessions": "Look up past sessions and their results.",
+        "groupAutomations": "Create automation",
+        "descAutomations": "Create and manage scheduled automations.",
+        "groupTaskboard": "Create task",
+        "descTaskboard": "Create and manage work tasks.",
+        "start": "Start service",
+        "starting": "Starting…",
+        "actionFailed": "Failed: {message}",
+        "lastError": "Last error: {message}",
+        "loadFailed": "Could not read the status: {message}",
+        "openSettings": "Open full settings",
+        "refresh": "Refresh"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "Switch to side-by-side view",
         "unified": "Switch to inline view"
+      },
+      "binaryFile": "Binary file — content not shown",
+      "image": {
+        "sideBySide": "Switch to side-by-side view",
+        "swipe": "Switch to swipe view",
+        "swipeHandle": "Image comparison slider",
+        "noImage": "No image at this revision",
+        "unavailable": "Could not load this side",
+        "tooLarge": "Image too large to preview ({size})",
+        "loading": "Loading images..."
       }
     },
     "conversationContextBar": {

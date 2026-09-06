@@ -2041,6 +2041,49 @@
           "more": "その他"
         },
         "showPet": "ペットを表示"
+      },
+      "mcp": {
+        "title": "codeg-mcp サービス",
+        "state": {
+          "running": "実行中",
+          "stopped": "停止中",
+          "disabled": "ツール無効",
+          "unavailable": "コンパニオン未検出",
+          "unknown": "不明"
+        },
+        "hint": {
+          "running": "ここから起動したエージェントは codeg のツールを使えます。",
+          "stopped": "Broker ソケットが応答していません。",
+          "disabled": "すべてのツールグループが無効です。",
+          "unavailable": "codeg-mcp の実行ファイルが見つかりません。",
+          "unknown": "状態を読み取れませんでした。"
+        },
+        "socketPath": "アドレス",
+        "binary": "コンパニオン",
+        "binaryMissing": "見つかりません",
+        "sessions": "セッション",
+        "activeDelegations": "委任",
+        "depthLimit": "深さ上限",
+        "tools": "ツール",
+        "groupDelegation": "委任",
+        "descDelegation": "タスクを別のエージェントに任せます。",
+        "groupFeedback": "ライブフィードバック",
+        "descFeedback": "実行を止めずに補足を送れます。",
+        "groupAsk": "ユーザーに質問",
+        "descAsk": "判断に迷ったら質問させます。",
+        "groupSessions": "セッション参照",
+        "descSessions": "過去のセッションと結果を調べます。",
+        "groupAutomations": "自動化を作成",
+        "descAutomations": "定期自動化を作成・管理します。",
+        "groupTaskboard": "タスクを作成",
+        "descTaskboard": "作業タスクを作成・管理します。",
+        "start": "サービスを起動",
+        "starting": "起動中…",
+        "actionFailed": "操作に失敗しました: {message}",
+        "lastError": "前回のエラー: {message}",
+        "loadFailed": "状態を取得できませんでした: {message}",
+        "openSettings": "詳細設定を開く",
+        "refresh": "更新"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "左右分割ビューに切り替え",
         "unified": "インラインビューに切り替え"
+      },
+      "binaryFile": "バイナリファイル — 内容は表示されません",
+      "image": {
+        "sideBySide": "左右分割ビューに切り替え",
+        "swipe": "スワイプ比較ビューに切り替え",
+        "swipeHandle": "画像比較スライダー",
+        "noImage": "このリビジョンに画像はありません",
+        "unavailable": "この側を読み込めませんでした",
+        "tooLarge": "画像が大きすぎてプレビューできません（{size}）",
+        "loading": "画像を読み込み中..."
       }
     },
     "conversationContextBar": {

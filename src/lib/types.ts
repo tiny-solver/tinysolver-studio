@@ -557,6 +557,23 @@ export const FOLDER_LINKS_CHANGED_EVENT = "folder://links-changed"
  *  frontend-only cache. Mirrors the Rust `FEEDBACK_SETTINGS_CHANGED_EVENT`. */
 export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
 
+/** Global side-channel announcing a create-from-chat switch move (payload is
+ *  `ChatAuthoringSettings`). Load-bearing rather than cosmetic: these two flags
+ *  share one record and have two editors — the settings form, which writes the
+ *  pair, and the status-bar codeg-mcp popover, which writes one key. Without
+ *  this broadcast an open settings form keeps a stale value for the switch it
+ *  did not touch and reverts it on the next save. Mirrors the Rust
+ *  `CHAT_AUTHORING_SETTINGS_CHANGED_EVENT`. */
+export const CHAT_AUTHORING_SETTINGS_CHANGED_EVENT =
+  "chat-authoring-settings://changed"
+
+/** Global side-channel announcing a delegation-settings write (payload is
+ *  `DelegationSettings`). Same two-editor problem as
+ *  [CHAT_AUTHORING_SETTINGS_CHANGED_EVENT]: the settings form writes all four
+ *  keys, the status-bar codeg-mcp popover writes only `enabled`. Mirrors the
+ *  Rust `DELEGATION_SETTINGS_CHANGED_EVENT`. */
+export const DELEGATION_SETTINGS_CHANGED_EVENT = "delegation-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a
@@ -3928,6 +3945,25 @@ export interface QuickMessage {
 export interface GitStatusEntry {
   status: string
   file: string
+}
+
+/**
+ * A file's raw bytes at a git ref (mirrors Rust `GitBlobBase64`). The binary
+ * counterpart of `gitShowFile`, which refuses anything with a NUL byte — image
+ * diffs read their "before" side through this.
+ */
+export interface GitBlobBase64 {
+  /** False when the path does not exist at that ref: an added or deleted file. */
+  exists: boolean
+  /** True when the *revision* is what did not resolve, rather than the path in
+   *  it — only the caller knows whether that is expected (the parent of a root
+   *  commit) or a failure (a branch that stopped resolving). */
+  ref_missing: boolean
+  /** Base64 of the blob; empty when `exists` is false or `too_large` is true. */
+  data: string
+  /** Size git records for the blob, reported even when the bytes were skipped. */
+  byte_size: number
+  too_large: boolean
 }
 
 export type GitResetMode = "soft" | "mixed" | "hard" | "keep"

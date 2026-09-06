@@ -2041,6 +2041,49 @@
           "more": "Más"
         },
         "showPet": "Mostrar mascota"
+      },
+      "mcp": {
+        "title": "Servicio codeg-mcp",
+        "state": {
+          "running": "En ejecución",
+          "stopped": "Detenido",
+          "disabled": "Sin herramientas activas",
+          "unavailable": "Falta el complemento",
+          "unknown": "Desconocido"
+        },
+        "hint": {
+          "running": "Los agentes de aquí pueden usar las herramientas de codeg.",
+          "stopped": "El socket del broker no responde.",
+          "disabled": "Todos los grupos de herramientas están desactivados.",
+          "unavailable": "No se encuentra el binario codeg-mcp.",
+          "unknown": "No se pudo leer el estado."
+        },
+        "socketPath": "Dirección",
+        "binary": "Complemento",
+        "binaryMissing": "No encontrado",
+        "sessions": "Sesiones",
+        "activeDelegations": "Delegaciones",
+        "depthLimit": "Profundidad",
+        "tools": "Herramientas",
+        "groupDelegation": "Delegación",
+        "descDelegation": "Pasa una tarea a otro agente.",
+        "groupFeedback": "Feedback en vivo",
+        "descFeedback": "Añade notas sin interrumpir el turno.",
+        "groupAsk": "Preguntar al usuario",
+        "descAsk": "Deja que el agente te consulte antes de decidir.",
+        "groupSessions": "Consulta de sesiones",
+        "descSessions": "Consulta sesiones pasadas y sus resultados.",
+        "groupAutomations": "Crear automatización",
+        "descAutomations": "Crea y gestiona automatizaciones programadas.",
+        "groupTaskboard": "Crear tarea",
+        "descTaskboard": "Crea y gestiona tareas de trabajo.",
+        "start": "Iniciar servicio",
+        "starting": "Iniciando…",
+        "actionFailed": "Error: {message}",
+        "lastError": "Último error: {message}",
+        "loadFailed": "No se pudo leer el estado: {message}",
+        "openSettings": "Abrir ajustes completos",
+        "refresh": "Actualizar"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "Cambiar a la vista lado a lado",
         "unified": "Cambiar a la vista en línea"
+      },
+      "binaryFile": "Archivo binario — contenido no mostrado",
+      "image": {
+        "sideBySide": "Cambiar a la vista lado a lado",
+        "swipe": "Cambiar a la vista deslizante",
+        "swipeHandle": "Control deslizante de comparación de imágenes",
+        "noImage": "No hay imagen en esta revisión",
+        "unavailable": "No se pudo cargar este lado",
+        "tooLarge": "Imagen demasiado grande para previsualizar ({size})",
+        "loading": "Cargando imágenes..."
       }
     },
     "conversationContextBar": {

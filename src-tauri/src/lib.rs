@@ -853,9 +853,19 @@ mod tauri_app {
                             ),
                         ),
                     );
+                    // Bind through the service handle rather than a bare
+                    // `listener.run` spawn: it keeps the bind error and the
+                    // accept-loop handle around, which is what lets the
+                    // workspace status indicator report why the broker socket
+                    // is down and rebind it without an app restart.
+                    let service = crate::acp::delegation::service::DelegationService::new(
+                        listener,
+                        socket_path,
+                    );
+                    crate::acp::delegation::service::install(service.clone());
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = listener.run(socket_path).await {
-                            tracing::info!("[delegation] listener exited: {e}");
+                        if let Err(e) = service.start().await {
+                            tracing::error!("[delegation] listener failed to start: {e}");
                         }
                     });
                     broker
@@ -1251,6 +1261,7 @@ mod tauri_app {
                 folders::git_diff_with_branch,
                 folders::git_show_diff,
                 folders::git_show_file,
+                folders::git_show_file_base64,
                 folders::git_commit,
                 folders::git_rollback_file,
                 folders::git_add_files,
@@ -1382,6 +1393,9 @@ mod tauri_app {
                 logging_commands::open_logs_dir,
                 delegation_commands::get_delegation_settings,
                 delegation_commands::set_delegation_settings,
+                crate::commands::mcp_service::get_codeg_mcp_service_status,
+                crate::commands::mcp_service::start_codeg_mcp_service,
+                crate::commands::mcp_service::set_codeg_mcp_tool_group,
                 feedback_commands::get_feedback_settings,
                 feedback_commands::set_feedback_settings,
                 feedback_commands::submit_session_feedback,

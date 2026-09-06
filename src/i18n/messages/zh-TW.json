@@ -2041,6 +2041,49 @@
           "more": "更多"
         },
         "showPet": "顯示寵物"
+      },
+      "mcp": {
+        "title": "codeg-mcp 服務",
+        "state": {
+          "running": "執行中",
+          "stopped": "未執行",
+          "disabled": "未啟用工具",
+          "unavailable": "伴生程式缺失",
+          "unknown": "未知"
+        },
+        "hint": {
+          "running": "從這裡啟動的代理可使用 codeg 內建的工具。",
+          "stopped": "Broker 通訊端沒有回應，伴生程序連不回 codeg。",
+          "disabled": "所有工具群組都已關閉，不會注入伴生程序。",
+          "unavailable": "磁碟上找不到 codeg-mcp 執行檔。",
+          "unknown": "無法讀取狀態。"
+        },
+        "socketPath": "位址",
+        "binary": "伴生程式",
+        "binaryMissing": "找不到",
+        "sessions": "代理工作階段",
+        "activeDelegations": "進行中的委派",
+        "depthLimit": "深度上限",
+        "tools": "工具",
+        "groupDelegation": "多代理委派",
+        "descDelegation": "把任務交給另一個代理處理。",
+        "groupFeedback": "即時回饋",
+        "descFeedback": "回合進行中補充說明，不打斷執行。",
+        "groupAsk": "向使用者提問",
+        "descAsk": "讓代理拿不準時先問你。",
+        "groupSessions": "工作階段查詢",
+        "descSessions": "查詢歷史工作階段及其結果。",
+        "groupAutomations": "建立自動化",
+        "descAutomations": "建立和管理定時自動化。",
+        "groupTaskboard": "建立任務",
+        "descTaskboard": "建立和管理工作任務。",
+        "start": "啟動服務",
+        "starting": "正在啟動…",
+        "actionFailed": "操作失敗：{message}",
+        "lastError": "上次錯誤：{message}",
+        "loadFailed": "無法讀取狀態：{message}",
+        "openSettings": "開啟詳細設定",
+        "refresh": "重新整理"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "切換為左右分欄視圖",
         "unified": "切換為內聯視圖"
+      },
+      "binaryFile": "二進位檔案 — 不顯示內容",
+      "image": {
+        "sideBySide": "切換為左右分欄視圖",
+        "swipe": "切換為滑動比較視圖",
+        "swipeHandle": "圖片比較滑桿",
+        "noImage": "此版本沒有圖片",
+        "unavailable": "無法載入此側內容",
+        "tooLarge": "圖片過大，無法預覽（{size}）",
+        "loading": "正在載入圖片..."
       }
     },
     "conversationContextBar": {

@@ -2041,6 +2041,49 @@
           "more": "المزيد"
         },
         "showPet": "إظهار الحيوان الأليف"
+      },
+      "mcp": {
+        "title": "خدمة codeg-mcp",
+        "state": {
+          "running": "قيد التشغيل",
+          "stopped": "متوقفة",
+          "disabled": "لا أدوات مفعّلة",
+          "unavailable": "المرافق مفقود",
+          "unknown": "غير معروف"
+        },
+        "hint": {
+          "running": "الوكلاء المشغّلون من هنا يمكنهم استخدام أدوات codeg.",
+          "stopped": "مقبس الوسيط لا يستجيب.",
+          "disabled": "جميع مجموعات الأدوات معطّلة.",
+          "unavailable": "ملف codeg-mcp التنفيذي غير موجود على القرص.",
+          "unknown": "تعذّرت قراءة الحالة."
+        },
+        "socketPath": "العنوان",
+        "binary": "المرافق",
+        "binaryMissing": "غير موجود",
+        "sessions": "الجلسات",
+        "activeDelegations": "التفويضات",
+        "depthLimit": "حد العمق",
+        "tools": "الأدوات",
+        "groupDelegation": "التفويض",
+        "descDelegation": "يسلّم مهمة إلى وكيل آخر.",
+        "groupFeedback": "الملاحظات الحية",
+        "descFeedback": "يضيف ملاحظات دون مقاطعة الدور.",
+        "groupAsk": "سؤال المستخدم",
+        "descAsk": "يدع الوكيل يسألك قبل أن يقرر.",
+        "groupSessions": "الاطلاع على الجلسات",
+        "descSessions": "يبحث في الجلسات السابقة ونتائجها.",
+        "groupAutomations": "إنشاء أتمتة",
+        "descAutomations": "ينشئ الأتمتة المجدولة ويديرها.",
+        "groupTaskboard": "إنشاء مهمة",
+        "descTaskboard": "ينشئ مهام العمل ويديرها.",
+        "start": "بدء الخدمة",
+        "starting": "جارٍ البدء…",
+        "actionFailed": "فشلت العملية: {message}",
+        "lastError": "آخر خطأ: {message}",
+        "loadFailed": "تعذّرت قراءة الحالة: {message}",
+        "openSettings": "فتح الإعدادات الكاملة",
+        "refresh": "تحديث"
       }
     },
     "auxPanel": {
@@ -3697,6 +3740,16 @@
       "viewMode": {
         "split": "التبديل إلى العرض جنباً إلى جنب",
         "unified": "التبديل إلى العرض المضمّن"
+      },
+      "binaryFile": "ملف ثنائي — لا يتم عرض المحتوى",
+      "image": {
+        "sideBySide": "التبديل إلى العرض جنباً إلى جنب",
+        "swipe": "التبديل إلى عرض التمرير",
+        "swipeHandle": "شريط تمرير مقارنة الصور",
+        "noImage": "لا توجد صورة في هذه المراجعة",
+        "unavailable": "تعذر تحميل هذا الجانب",
+        "tooLarge": "الصورة كبيرة جدًا للمعاينة ({size})",
+        "loading": "جارٍ تحميل الصور..."
       }
     },
     "conversationContextBar": {
