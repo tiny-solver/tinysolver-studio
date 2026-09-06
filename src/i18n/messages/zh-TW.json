@@ -4447,7 +4447,15 @@
       "button": "匯出備份",
       "inProgress": "正在建立備份…",
       "success": "備份已建立。",
-      "started": "已開始下載備份。"
+      "started": "已開始下載備份。",
+      "degradedTitle": "部分智能體工作階段資料庫需要特殊處理",
+      "degradedHint": "這些智能體以 SQLite 儲存工作階段。除非下方另有說明，備份中仍包含它們。",
+      "degradedMore": "……還有 {count} 項。",
+      "degradedLevel": {
+        "recoveredOnCopy": "已在私有副本上復原——內容完整",
+        "bareFileOnly": "未包含預寫日誌——最新的訊息可能缺失",
+        "notArchived": "未納入備份——複製期間它一直在變動"
+      }
     },
     "restore": {
       "selectFile": "選擇備份檔案",
@@ -4485,11 +4493,37 @@
         "scanning": "正在檢查衝突…",
         "noConflicts": "不會覆寫任何已存在的檔案。",
         "conflictCount": "將影響 {count} 個已存在的檔案。",
-        "conflictSkipNote": "未啟用覆寫時，已存在的檔案將被保留（略過）。"
+        "conflictSkipNote": "未啟用覆寫時，已存在的檔案將被保留（略過）。",
+        "agentsRunning": "有 {count} 個智能體正在執行（{agents}）。請先關閉，否則工作階段記錄會保留在旁路資料夾，不會寫回原始位置。"
       },
-      "restartFailed": "還原已就緒，但伺服器未能重新啟動。請手動重新啟動以套用此次還原。"
+      "restartFailed": "還原已就緒，但伺服器未能重新啟動。請手動重新啟動以套用此次還原。",
+      "discardPending": "捨棄已暫存的還原",
+      "discarded": "已捨棄暫存的還原。",
+      "pendingBlockedHint": "已有一個還原在等待重新啟動生效。捨棄它才能暫存另一個。",
+      "result": {
+        "title": "還原已暫存",
+        "needsRestart": "將在下次啟動時生效。目前資料會先建立快照。",
+        "downgraded": "{agents} 正在執行，工作階段記錄未寫回原始位置，已保留在 {path}。",
+        "skipped": "保留了 {count} 個已存在的檔案",
+        "refused": "有 {count} 個工作階段資料庫未寫回",
+        "refusedHint": "它們來自舊版備份，資料庫與其預寫日誌是分開儲存的，無法證明兩者相符。你現有的資料庫未被更動——選擇還原到旁路資料夾即可取得原始檔案。",
+        "restartNow": "立即重新啟動",
+        "later": "稍後"
+      }
     },
-    "remoteUnsupported": "備份與還原作用於執行 codeg 的那台機器上的資料。你目前連線的是遠端工作區——請直接在該伺服器上管理其備份。"
+    "remoteUnsupported": "備份與還原作用於執行 codeg 的那台機器上的資料。你目前連線的是遠端工作區——請直接在該伺服器上管理其備份。",
+    "progress": {
+      "cancel": "取消"
+    },
+    "snapshots": {
+      "title": "還原前快照",
+      "hint": "每次還原都會先為目前資料建立快照，保留最近兩份。",
+      "empty": "尚無快照。",
+      "rollback": "回復到這份",
+      "unsupported": "僅可檢視",
+      "rollbackConfirmTitle": "回復到這份快照？",
+      "rollbackConfirmBody": "這會用該快照取代目前資料並重新啟動。被取代的資料會先建立快照。"
+    }
   },
   "backup": {
     "restore": {

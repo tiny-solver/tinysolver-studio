@@ -4447,7 +4447,15 @@
       "button": "Sicherung exportieren",
       "inProgress": "Sicherung wird erstellt…",
       "success": "Sicherung erstellt.",
-      "started": "Download der Sicherung gestartet."
+      "started": "Download der Sicherung gestartet.",
+      "degradedTitle": "Einige Sitzungsdatenbanken von Agenten brauchten eine Sonderbehandlung",
+      "degradedHint": "Diese Agenten speichern ihre Sitzungen in SQLite. Sofern unten nichts anderes steht, sind sie in der Sicherung enthalten.",
+      "degradedMore": "…und {count} weitere.",
+      "degradedLevel": {
+        "recoveredOnCopy": "aus einer eigenen Kopie wiederhergestellt – vollständig",
+        "bareFileOnly": "ohne Write-Ahead-Log gesichert – die neuesten Nachrichten fehlen womöglich",
+        "notArchived": "nicht gesichert – sie veränderte sich während des Kopierens laufend"
+      }
     },
     "restore": {
       "selectFile": "Sicherungsdatei auswählen",
@@ -4485,11 +4493,37 @@
         "scanning": "Konflikte werden geprüft…",
         "noConflicts": "Es werden keine vorhandenen Dateien überschrieben.",
         "conflictCount": "{count} vorhandene Datei(en) wären betroffen.",
-        "conflictSkipNote": "Vorhandene Dateien bleiben erhalten (übersprungen), sofern du das Überschreiben nicht aktivierst."
+        "conflictSkipNote": "Vorhandene Dateien bleiben erhalten (übersprungen), sofern du das Überschreiben nicht aktivierst.",
+        "agentsRunning": "{count} Agent(en) laufen ({agents}). Schließe sie zuerst, sonst landen die Verläufe in einem Nebenordner statt an ihrem ursprünglichen Ort."
       },
-      "restartFailed": "Wiederherstellung vorbereitet, aber der Server konnte nicht neu starten. Starte ihn manuell neu, um sie anzuwenden."
+      "restartFailed": "Wiederherstellung vorbereitet, aber der Server konnte nicht neu starten. Starte ihn manuell neu, um sie anzuwenden.",
+      "discardPending": "Vorbereitete Wiederherstellung verwerfen",
+      "discarded": "Die vorbereitete Wiederherstellung wurde verworfen.",
+      "pendingBlockedHint": "Es wartet bereits eine vorbereitete Wiederherstellung auf einen Neustart. Verwirf sie, um eine andere vorzubereiten.",
+      "result": {
+        "title": "Wiederherstellung vorbereitet",
+        "needsRestart": "Sie wird beim nächsten Start angewendet. Von deinen aktuellen Daten wird vorher eine Momentaufnahme angelegt.",
+        "downgraded": "{agents} liefen, daher wurden die Gesprächsverläufe nicht an ihren ursprünglichen Ort zurückgeschrieben, sondern unter {path} abgelegt.",
+        "skipped": "{count} vorhandene Datei(en) wurden beibehalten",
+        "refused": "{count} Sitzungsdatenbank(en) wurden nicht zurückgeschrieben",
+        "refusedHint": "Sie stammen aus einer älteren Sicherung, die Datenbank und Write-Ahead-Log getrennt ablegte; dass beide zusammengehören, lässt sich nicht belegen. Deine vorhandenen Datenbanken blieben unangetastet – stelle in einen Nebenordner wieder her, um die Rohdateien zu erhalten.",
+        "restartNow": "Jetzt neu starten",
+        "later": "Später"
+      }
     },
-    "remoteUnsupported": "Sicherung & Wiederherstellung wirken auf die Daten des Rechners, auf dem codeg läuft. Du bist mit einem entfernten Arbeitsbereich verbunden – verwalte dessen Sicherungen direkt auf jenem Server."
+    "remoteUnsupported": "Sicherung & Wiederherstellung wirken auf die Daten des Rechners, auf dem codeg läuft. Du bist mit einem entfernten Arbeitsbereich verbunden – verwalte dessen Sicherungen direkt auf jenem Server.",
+    "progress": {
+      "cancel": "Abbrechen"
+    },
+    "snapshots": {
+      "title": "Momentaufnahmen vor der Wiederherstellung",
+      "hint": "Jede Wiederherstellung legt zuerst eine Momentaufnahme deiner aktuellen Daten an. Die beiden neuesten werden aufbewahrt.",
+      "empty": "Noch keine Momentaufnahmen.",
+      "rollback": "Hierauf zurücksetzen",
+      "unsupported": "Nur ansehen",
+      "rollbackConfirmTitle": "Auf diese Momentaufnahme zurücksetzen?",
+      "rollbackConfirmBody": "Damit werden deine aktuellen Daten durch die Momentaufnahme ersetzt und die App startet neu. Von den ersetzten Daten wird vorher eine Momentaufnahme angelegt."
+    }
   },
   "backup": {
     "restore": {

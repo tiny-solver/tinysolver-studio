@@ -4447,7 +4447,15 @@
       "button": "Exportar backup",
       "inProgress": "Criando backup…",
       "success": "Backup criado.",
-      "started": "Download do backup iniciado."
+      "started": "Download do backup iniciado.",
+      "degradedTitle": "Alguns bancos de dados de sessões de agentes exigiram tratamento especial",
+      "degradedHint": "Esses agentes guardam as sessões em SQLite. Salvo indicação em contrário abaixo, o backup continua a contê-las.",
+      "degradedMore": "…e mais {count}.",
+      "degradedLevel": {
+        "recoveredOnCopy": "recuperado a partir de uma cópia privada — completo",
+        "bareFileOnly": "arquivado sem o registro de escrita antecipada — as mensagens mais recentes podem faltar",
+        "notArchived": "não arquivado — continuou mudando durante a cópia"
+      }
     },
     "restore": {
       "selectFile": "Selecionar arquivo de backup",
@@ -4485,11 +4493,37 @@
         "scanning": "Verificando conflitos…",
         "noConflicts": "Nenhum arquivo existente será sobrescrito.",
         "conflictCount": "{count} arquivo(s) existente(s) seriam afetados.",
-        "conflictSkipNote": "Os arquivos existentes são mantidos (ignorados) a menos que você ative a sobrescrita."
+        "conflictSkipNote": "Os arquivos existentes são mantidos (ignorados) a menos que você ative a sobrescrita.",
+        "agentsRunning": "{count} agente(s) em execução ({agents}). Feche-os primeiro, ou as transcrições ficarão em uma pasta à parte em vez de voltarem ao lugar de origem."
       },
-      "restartFailed": "Restauração preparada, mas o servidor não conseguiu reiniciar. Reinicie-o manualmente para aplicá-la."
+      "restartFailed": "Restauração preparada, mas o servidor não conseguiu reiniciar. Reinicie-o manualmente para aplicá-la.",
+      "discardPending": "Descartar a restauração preparada",
+      "discarded": "A restauração preparada foi descartada.",
+      "pendingBlockedHint": "Já há uma restauração preparada aguardando reinício. Descarte-a para preparar outra.",
+      "result": {
+        "title": "Restauração preparada",
+        "needsRestart": "Será aplicada no próximo início. Antes disso é feito um instantâneo dos seus dados atuais.",
+        "downgraded": "{agents} estava(m) em execução, então as transcrições não voltaram às suas localizações originais. Ficaram em {path}.",
+        "skipped": "{count} arquivo(s) existente(s) foram mantidos",
+        "refused": "{count} banco(s) de dados de sessão não foram regravados",
+        "refusedHint": "Vêm de um backup antigo que guardava o banco e o registro de escrita antecipada separadamente, e não é possível provar que correspondem. Seus bancos atuais ficaram intactos — restaure para uma pasta à parte para obter os arquivos originais.",
+        "restartNow": "Reiniciar agora",
+        "later": "Depois"
+      }
     },
-    "remoteUnsupported": "O backup e a restauração atuam sobre os dados da máquina que executa o codeg. Você está conectado a um espaço de trabalho remoto — gerencie os backups dele diretamente nesse servidor."
+    "remoteUnsupported": "O backup e a restauração atuam sobre os dados da máquina que executa o codeg. Você está conectado a um espaço de trabalho remoto — gerencie os backups dele diretamente nesse servidor.",
+    "progress": {
+      "cancel": "Cancelar"
+    },
+    "snapshots": {
+      "title": "Instantâneos anteriores à restauração",
+      "hint": "Cada restauração faz antes um instantâneo dos seus dados atuais. Os dois mais recentes são mantidos.",
+      "empty": "Ainda não há instantâneos.",
+      "rollback": "Voltar para este",
+      "unsupported": "Somente consulta",
+      "rollbackConfirmTitle": "Voltar para este instantâneo?",
+      "rollbackConfirmBody": "Isto substitui seus dados atuais pelo instantâneo e reinicia. Antes é feito um instantâneo dos dados substituídos."
+    }
   },
   "backup": {
     "restore": {

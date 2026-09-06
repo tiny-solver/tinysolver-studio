@@ -4447,7 +4447,15 @@
       "button": "导出备份",
       "inProgress": "正在创建备份…",
       "success": "备份已创建。",
-      "started": "已开始下载备份。"
+      "started": "已开始下载备份。",
+      "degradedTitle": "部分智能体会话数据库需要特殊处理",
+      "degradedHint": "这些智能体用 SQLite 保存会话。除非下方另有说明，备份中仍包含它们。",
+      "degradedMore": "……还有 {count} 项。",
+      "degradedLevel": {
+        "recoveredOnCopy": "已在私有副本上恢复——内容完整",
+        "bareFileOnly": "未包含预写日志——最新的消息可能缺失",
+        "notArchived": "未纳入备份——拷贝期间它一直在变化"
+      }
     },
     "restore": {
       "selectFile": "选择备份文件",
@@ -4485,11 +4493,37 @@
         "scanning": "正在检查冲突…",
         "noConflicts": "不会覆盖任何已存在的文件。",
         "conflictCount": "将影响 {count} 个已存在的文件。",
-        "conflictSkipNote": "未启用覆盖时，已存在的文件将被保留（跳过）。"
+        "conflictSkipNote": "未启用覆盖时，已存在的文件将被保留（跳过）。",
+        "agentsRunning": "有 {count} 个智能体正在运行（{agents}）。请先关闭，否则会话记录会被保留在旁路目录，而不会写回原始位置。"
       },
-      "restartFailed": "恢复已就绪，但服务未能重启。请手动重启以应用此次恢复。"
+      "restartFailed": "恢复已就绪，但服务未能重启。请手动重启以应用此次恢复。",
+      "discardPending": "放弃已暂存的恢复",
+      "discarded": "已放弃暂存的恢复。",
+      "pendingBlockedHint": "已有一个恢复在等待重启生效。放弃它才能暂存另一个。",
+      "result": {
+        "title": "恢复已暂存",
+        "needsRestart": "将在下次启动时生效。当前数据会先做快照。",
+        "downgraded": "{agents} 正在运行，会话记录未写回原始位置，已保留在 {path}。",
+        "skipped": "保留了 {count} 个已存在的文件",
+        "refused": "有 {count} 个会话数据库未写回",
+        "refusedHint": "它们来自旧版备份，数据库与其预写日志是分开保存的，无法证明二者匹配。你现有的数据库未被改动——选择恢复到旁路目录即可拿到原始文件。",
+        "restartNow": "立即重启",
+        "later": "稍后"
+      }
     },
-    "remoteUnsupported": "备份与恢复作用于运行 codeg 的那台机器上的数据。你当前连接的是远程工作区——请直接在该服务器上管理其备份。"
+    "remoteUnsupported": "备份与恢复作用于运行 codeg 的那台机器上的数据。你当前连接的是远程工作区——请直接在该服务器上管理其备份。",
+    "progress": {
+      "cancel": "取消"
+    },
+    "snapshots": {
+      "title": "恢复前快照",
+      "hint": "每次恢复都会先为当前数据做快照，保留最近两份。",
+      "empty": "暂无快照。",
+      "rollback": "回退到这份",
+      "unsupported": "仅可查看",
+      "rollbackConfirmTitle": "回退到这份快照？",
+      "rollbackConfirmBody": "这会用该快照替换当前数据并重启。被替换的数据会先做快照。"
+    }
   },
   "backup": {
     "restore": {

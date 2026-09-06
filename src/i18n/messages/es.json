@@ -4447,7 +4447,15 @@
       "button": "Exportar copia",
       "inProgress": "Creando copia de seguridad…",
       "success": "Copia de seguridad creada.",
-      "started": "Descarga de la copia iniciada."
+      "started": "Descarga de la copia iniciada.",
+      "degradedTitle": "Algunas bases de datos de sesiones de agentes necesitaron un tratamiento especial",
+      "degradedHint": "Estos agentes guardan sus sesiones en SQLite. La copia sigue conteniéndolas salvo que se indique lo contrario abajo.",
+      "degradedMore": "…y {count} más.",
+      "degradedLevel": {
+        "recoveredOnCopy": "recuperada desde una copia privada: completa",
+        "bareFileOnly": "archivada sin su registro de escritura anticipada: pueden faltar los mensajes más recientes",
+        "notArchived": "no archivada: cambiaba mientras se copiaba"
+      }
     },
     "restore": {
       "selectFile": "Seleccionar archivo de copia",
@@ -4485,11 +4493,37 @@
         "scanning": "Comprobando conflictos…",
         "noConflicts": "No se sobrescribirá ningún archivo existente.",
         "conflictCount": "Se verían afectados {count} archivo(s) existente(s).",
-        "conflictSkipNote": "Los archivos existentes se conservan (se omiten) salvo que actives la sobrescritura."
+        "conflictSkipNote": "Los archivos existentes se conservan (se omiten) salvo que actives la sobrescritura.",
+        "agentsRunning": "Hay {count} agente(s) en ejecución ({agents}). Ciérralos primero o las transcripciones se guardarán en una carpeta aparte en lugar de volver a su sitio."
       },
-      "restartFailed": "La restauración quedó preparada, pero el servidor no pudo reiniciarse. Reinícialo manualmente para aplicarla."
+      "restartFailed": "La restauración quedó preparada, pero el servidor no pudo reiniciarse. Reinícialo manualmente para aplicarla.",
+      "discardPending": "Descartar la restauración preparada",
+      "discarded": "Se descartó la restauración preparada.",
+      "pendingBlockedHint": "Ya hay una restauración preparada esperando un reinicio. Descártala para preparar otra.",
+      "result": {
+        "title": "Restauración preparada",
+        "needsRestart": "Se aplicará en el próximo arranque. Antes se guarda una instantánea de tus datos actuales.",
+        "downgraded": "{agents} estaba(n) en ejecución, así que las transcripciones no se escribieron en sus ubicaciones originales. Se guardaron en {path}.",
+        "skipped": "Se conservaron {count} archivo(s) existente(s)",
+        "refused": "No se reescribieron {count} base(s) de datos de sesión",
+        "refusedHint": "Provienen de una copia antigua que guardaba la base de datos y su registro de escritura anticipada por separado, y no se puede demostrar que se correspondan. Tus bases de datos actuales quedaron intactas: restaura a una carpeta aparte para obtener los archivos originales.",
+        "restartNow": "Reiniciar ahora",
+        "later": "Más tarde"
+      }
     },
-    "remoteUnsupported": "La copia de seguridad y la restauración actúan sobre los datos de la máquina que ejecuta codeg. Estás conectado a un espacio de trabajo remoto: gestiona sus copias desde ese servidor directamente."
+    "remoteUnsupported": "La copia de seguridad y la restauración actúan sobre los datos de la máquina que ejecuta codeg. Estás conectado a un espacio de trabajo remoto: gestiona sus copias desde ese servidor directamente.",
+    "progress": {
+      "cancel": "Cancelar"
+    },
+    "snapshots": {
+      "title": "Instantáneas previas a la restauración",
+      "hint": "Cada restauración guarda antes una instantánea de tus datos actuales. Se conservan las dos más recientes.",
+      "empty": "Aún no hay instantáneas.",
+      "rollback": "Volver a esta",
+      "unsupported": "Solo consulta",
+      "rollbackConfirmTitle": "¿Volver a esta instantánea?",
+      "rollbackConfirmBody": "Esto reemplaza tus datos actuales por la instantánea y reinicia. Antes se guarda una instantánea de los datos que se reemplazan."
+    }
   },
   "backup": {
     "restore": {
