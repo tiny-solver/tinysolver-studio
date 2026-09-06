@@ -124,17 +124,25 @@ export function DesktopNotificationSettingsSection() {
   // until the backend answers — same reasoning as `permission` above.
   const [identity, setIdentity] = useState<NotificationIdentity | null>(null)
 
+  // Always folded on arrival, however the master switch is set: this is one of
+  // several sections on the General tab, and a page that opens with every knob
+  // on screen is one nobody can scan.
+  const [expanded, setExpanded] = useState(false)
+
   useEffect(() => {
     setPermission(getNotificationPermission())
   }, [])
 
-  const sectionEnabled = prefs.enabled
+  // With notifications off there is nothing under the heading to fold, so the
+  // section stays the plain one-liner it already was rather than growing a
+  // chevron that opens onto an empty box.
+  const sectionOpen = prefs.enabled && expanded
 
   useEffect(() => {
     // Only while the section is expanded: the first read is what claims the
     // identity on the backend, and there is no reason to do that for a
     // collapsed section the user never opened.
-    if (!sectionEnabled) return
+    if (!sectionOpen) return
     let cancelled = false
     void getNotificationIdentity()
       .then((next) => {
@@ -147,7 +155,7 @@ export function DesktopNotificationSettingsSection() {
     return () => {
       cancelled = true
     }
-  }, [sectionEnabled])
+  }, [sectionOpen])
 
   const onRequestPermission = useCallback(async () => {
     setRequesting(true)
@@ -203,19 +211,30 @@ export function DesktopNotificationSettingsSection() {
   return (
     // The master switch is the section's heading row: with notifications off
     // the whole section is that one line, and the knobs it gates appear under
-    // it rather than in a card repeating "Enable desktop notifications".
+    // it rather than in a card repeating "Enable desktop notifications". With
+    // them on the heading also folds those knobs away, and starts folded.
     <SettingsSection
       icon={Bell}
       title={t("title")}
       description={t("description")}
+      // Only labels the switch while there is nothing to fold; once the
+      // heading is the disclosure button the switch names itself instead.
       htmlFor="desktop-notification-enabled"
+      collapsible
+      open={expanded}
+      onOpenChange={setExpanded}
       control={
         <Switch
           id="desktop-notification-enabled"
+          aria-label={t("title")}
           checked={prefs.enabled}
-          onCheckedChange={(enabled) =>
+          onCheckedChange={(enabled) => {
             saveDesktopNotificationPrefs({ ...prefs, enabled })
-          }
+            // Switching it on is a request to see what it does, so unfold in
+            // the same gesture. Only here, never on mount: arriving at the tab
+            // is not that request.
+            if (enabled) setExpanded(true)
+          }}
         />
       }
     >

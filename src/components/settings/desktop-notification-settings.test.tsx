@@ -43,6 +43,14 @@ function renderSection() {
   )
 }
 
+/**
+ * Unfold the section. Everything below the heading arrives collapsed, so any
+ * assertion about the knobs has to open it first.
+ */
+function expandSection() {
+  fireEvent.click(screen.getByRole("button", { name: "Desktop notifications" }))
+}
+
 /** Write the key the way another window would, then announce it. */
 function writeFromAnotherWindow(prefs: DesktopNotificationPrefs) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
@@ -68,6 +76,21 @@ describe("DesktopNotificationSettingsSection", () => {
     expect(
       screen.getByRole("switch", { name: /desktop notifications/i })
     ).toBeChecked()
+  })
+
+  it("arrives folded even though notifications are on", () => {
+    // The General tab is a stack of sections; an enabled one still opens as
+    // its heading line, not as six event rows.
+    renderSection()
+
+    expect(screen.getAllByRole("switch")).toHaveLength(1)
+    expect(screen.queryByText("Turn Complete")).not.toBeInTheDocument()
+  })
+
+  it("reveals every event once unfolded", () => {
+    renderSection()
+    expandSection()
+
     for (const label of [
       "Turn Complete",
       "Permission Request",
@@ -82,19 +105,59 @@ describe("DesktopNotificationSettingsSection", () => {
 
   it("collapses to the master switch when turned off", () => {
     renderSection()
+    expandSection()
+    expect(screen.getByText("Turn Complete")).toBeInTheDocument()
 
     fireEvent.click(
       screen.getByRole("switch", { name: /desktop notifications/i })
     )
 
     expect(loadDesktopNotificationPrefs().enabled).toBe(false)
-    // The section IS the master switch once off: no event rows, no gates.
+    // The section IS the master switch once off: no event rows, no gates —
+    // and no disclosure button either, since there is nothing left to unfold.
     expect(screen.getAllByRole("switch")).toHaveLength(1)
     expect(screen.queryByText("Turn Complete")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "Desktop notifications" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("unfolds in the same gesture that switches it back on", () => {
+    // Folding is the arrival state, not a preference: asking for the feature
+    // is asking to see it, so the knobs come with the switch.
+    renderSection()
+    const master = screen.getByRole("switch", {
+      name: /desktop notifications/i,
+    })
+    fireEvent.click(master)
+    expect(screen.queryByText("Turn Complete")).not.toBeInTheDocument()
+
+    fireEvent.click(master)
+
+    expect(screen.getByText("Turn Complete")).toBeInTheDocument()
+  })
+
+  it("keeps the master switch mounted while the body comes and goes", () => {
+    // The heading must not be rebuilt when the knobs under it appear or go
+    // away: a remounted switch drops keyboard focus mid-toggle, which is
+    // exactly when someone is using it.
+    renderSection()
+    const master = screen.getByRole("switch", {
+      name: /desktop notifications/i,
+    })
+    master.focus()
+
+    fireEvent.click(master)
+
+    expect(screen.getByRole("switch", { name: /desktop notifications/i })).toBe(
+      master
+    )
+    expect(document.activeElement).toBe(master)
   })
 
   it("persists a per-event switch without touching the others", () => {
     renderSection()
+    expandSection()
 
     fireEvent.click(screen.getByRole("switch", { name: "Agent Error" }))
 
@@ -105,6 +168,7 @@ describe("DesktopNotificationSettingsSection", () => {
 
   it("persists the delivery gate", async () => {
     renderSection()
+    expandSection()
 
     // The trigger reflects the default before anything is touched.
     expect(
@@ -144,6 +208,7 @@ describe("the permission card", () => {
     // notifications" button there would do nothing at all.
     permission.mockReturnValue("managed_by_os")
     renderSection()
+    expandSection()
 
     expect(screen.getByText("Managed by the system")).toBeInTheDocument()
     expect(
@@ -159,6 +224,7 @@ describe("the permission card", () => {
   it("offers the request button only while the browser is undecided", async () => {
     permission.mockReturnValue("default")
     renderSection()
+    expandSection()
 
     expect(screen.getByText("Not requested")).toBeInTheDocument()
     fireEvent.click(
@@ -178,6 +244,7 @@ describe("the permission card", () => {
     // cannot raise the prompt again.
     permission.mockReturnValue("denied")
     renderSection()
+    expandSection()
 
     expect(screen.getByText("Blocked")).toBeInTheDocument()
     expect(
@@ -190,6 +257,7 @@ describe("the permission card", () => {
     // context, so there is nothing to test.
     permission.mockReturnValue("unsupported")
     renderSection()
+    expandSection()
 
     expect(screen.getByText("Unavailable")).toBeInTheDocument()
     expect(
@@ -199,6 +267,7 @@ describe("the permission card", () => {
 
   it("sends a test notification", async () => {
     renderSection()
+    expandSection()
 
     fireEvent.click(screen.getByRole("button", { name: /send a test/i }))
 
@@ -220,6 +289,7 @@ describe("the delivering identity", () => {
       degraded: false,
     })
     renderSection()
+    expandSection()
 
     expect(await screen.findByText("app.codeg")).toBeInTheDocument()
     expect(screen.getByText("Delivered as")).toBeInTheDocument()
@@ -236,6 +306,7 @@ describe("the delivering identity", () => {
       degraded: true,
     })
     renderSection()
+    expandSection()
 
     expect(await screen.findByText("com.apple.Terminal")).toBeInTheDocument()
     expect(screen.getByText(/could not be claimed/i)).toBeInTheDocument()
@@ -245,10 +316,20 @@ describe("the delivering identity", () => {
     permission.mockReturnValue("managed_by_os")
     identity.mockRejectedValue(new Error("no such command"))
     renderSection()
+    expandSection()
 
     // "We don't know" renders as nothing, not as a guess.
     await waitFor(() => expect(identity).toHaveBeenCalled())
     expect(screen.queryByText("Delivered as")).not.toBeInTheDocument()
+  })
+
+  it("claims no identity for a section nobody has unfolded", () => {
+    // Reading the identity is what claims it on the backend, so the section
+    // must not reach for it just because it is on screen and enabled.
+    permission.mockReturnValue("managed_by_os")
+    renderSection()
+
+    expect(identity).not.toHaveBeenCalled()
   })
 
   it("claims no identity for a section the user turned off", () => {
