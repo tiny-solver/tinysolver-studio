@@ -43,11 +43,30 @@ window.location.href = "codeg://session/214"
   Apple Event, or Windows/Linux argv through the single-instance plugin). The
   main window is shown and `workspace://focus-conversation` opens the tab
   without reloading.
-- **Cold start:** the URL is resolved against the database and the main
-  window loads `/workspace?folderId=…&conversationId=…&agent=…`. The existing
-  `DeepLinkBootstrap` then opens the tab after folders and tabs hydrate.
+- **Cold start:** the URL is resolved against the database before the tab can
+  exist, so it cannot simply be emitted — Tauri delivers an event only to
+  webviews that already registered a listener, and the workspace has not
+  mounted yet. Two paths cover this, by platform:
+  - **Windows / Linux** hand the URL over as argv, which the deep-link plugin
+    parses during its own setup. It is already available when the main window
+    is created, so the window loads
+    `/workspace?folderId=…&conversationId=…&agent=…` and `DeepLinkBootstrap`
+    opens the tab after folders and tabs hydrate.
+  - **macOS** delivers the URL as an Apple Event *after* the setup hook has
+    run, so there is nothing to bake into the window path. The resolved target
+    is parked in the backend instead and `PetFocusBridge` drains it with
+    `take_pending_deep_link` as soon as it is listening.
 
 The scheme is registered by the desktop installer (`CFBundleURLTypes` on
-macOS, protocol handler on Windows, `x-scheme-handler/codeg` on Linux). It
-is not available in `codeg-server` / browser-only mode — use the
+macOS, protocol handler on Windows, `x-scheme-handler/codeg` on Linux). On
+Windows and Linux release builds the app additionally calls the plugin's
+`register_all()` at startup: Tauri's Linux bundler writes a `.desktop` whose
+`Exec` line has no `%u` field code ([tauri#16014]), so the installed package
+is advertised as the scheme owner but is launched without the URL — the
+plugin's own handler entry passes it. On Windows this also covers a
+portable/zip copy that never ran the installer.
+
+It is not available in `codeg-server` / browser-only mode — use the
 `/workspace?folderId=&conversationId=&agent=` query string there.
+
+[tauri#16014]: https://github.com/tauri-apps/tauri/issues/16014

@@ -983,6 +983,9 @@ mod tauri_app {
                 // Cold-start URLs are also read here and baked into the main
                 // window path — an event emitted before the webview subscribes
                 // would be dropped, but `DeepLinkBootstrap` reads the query.
+                // macOS delivers its launch URL only after this hook returns,
+                // so that path lands on the listener below and is parked for
+                // `take_pending_deep_link` instead.
                 {
                     use tauri_plugin_deep_link::DeepLinkExt;
                     let handle = app.handle().clone();
@@ -991,6 +994,20 @@ mod tauri_app {
                             event.urls().iter().map(|url| url.to_string()).collect();
                         crate::deep_link::handle_raw_urls(&handle, &urls);
                     });
+                    // The Linux bundler writes a `.desktop` whose `Exec` has no
+                    // `%u` field code (tauri#16014), so an installed deb/rpm/
+                    // AppImage is advertised as the `x-scheme-handler/codeg`
+                    // owner but is launched with no argument at all. The
+                    // plugin's own registration writes a handler entry that
+                    // does pass `%u`; on Windows it adds the HKCU class key a
+                    // portable/zip copy never gets from the installer. Debug
+                    // builds are skipped so a dev run cannot steal the scheme
+                    // from the installed app (same reason single-instance is
+                    // release-only above).
+                    #[cfg(all(not(debug_assertions), any(windows, target_os = "linux")))]
+                    if let Err(e) = app.deep_link().register_all() {
+                        tracing::warn!("[deep-link] scheme registration failed: {e}");
+                    }
                 }
                 let startup_urls: Vec<String> = {
                     use tauri_plugin_deep_link::DeepLinkExt;
@@ -1379,6 +1396,7 @@ mod tauri_app {
                 windows::close_pet_panel,
                 windows::resize_pet_panel,
                 windows::focus_conversation,
+                crate::deep_link::take_pending_deep_link,
                 windows::update_traffic_light_position,
                 windows::update_appearance_mode,
                 windows::set_tray_locale,

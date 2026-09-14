@@ -12,6 +12,7 @@ import {
 let tabs: { tabsHydrated: boolean; openTab: ReturnType<typeof vi.fn> }
 let addFolderToWorkspaceById: ReturnType<typeof vi.fn>
 let capturedHandler: ((p: unknown) => void) | null = null
+let takePendingDeepLink: ReturnType<typeof vi.fn>
 
 vi.mock("@/contexts/tab-context", () => ({
   useTabStore: (selector: (s: typeof tabs) => unknown) => selector(tabs),
@@ -25,12 +26,16 @@ vi.mock("@/lib/transport", () => ({
     },
   }),
 }))
+vi.mock("@/lib/deep-link", () => ({
+  takePendingDeepLink: () => takePendingDeepLink(),
+}))
 
 import { PetFocusBridge } from "./deep-link-bootstrap"
 
 describe("PetFocusBridge", () => {
   beforeEach(() => {
     capturedHandler = null
+    takePendingDeepLink = vi.fn(async () => null)
     addFolderToWorkspaceById = vi.fn()
     resetAppWorkspaceStore()
     useAppWorkspaceStore.setState({
@@ -74,6 +79,57 @@ describe("PetFocusBridge", () => {
       expect(tabs.openTab).toHaveBeenCalledWith(7, 9, "codex", true)
     )
     expect(addFolderToWorkspaceById).not.toHaveBeenCalled()
+  })
+
+  // A `codeg://session/<id>` that reaches the backend before this component
+  // subscribes (macOS cold start) is parked there, not emitted: Tauri drops an
+  // event that has no registered listener yet.
+  it("opens the tab for a deep link parked before it subscribed", async () => {
+    takePendingDeepLink = vi.fn(async () => ({
+      folderId: 7,
+      conversationId: 314,
+      agent: "grok",
+    }))
+    const { rerender } = render(<PetFocusBridge />)
+
+    // Still queued while hydrating, exactly like a live request.
+    await waitFor(() => expect(takePendingDeepLink).toHaveBeenCalled())
+    expect(tabs.openTab).not.toHaveBeenCalled()
+
+    tabs = { ...tabs, tabsHydrated: true }
+    rerender(<PetFocusBridge />)
+    act(() => {
+      useAppWorkspaceStore.setState({ foldersHydrated: true })
+    })
+    await waitFor(() =>
+      expect(tabs.openTab).toHaveBeenCalledWith(7, 314, "grok", true)
+    )
+  })
+
+  // The drain runs on every mount so a warm-start link can't leave a target
+  // behind — but the event it was emitted alongside wins if it got here first.
+  it("drains without clobbering a request the live event already queued", async () => {
+    let release: (v: null) => void = () => {}
+    takePendingDeepLink = vi.fn(
+      () =>
+        new Promise<null>((resolve) => {
+          release = resolve
+        })
+    )
+    useAppWorkspaceStore.setState({ foldersHydrated: true })
+    tabs = { ...tabs, tabsHydrated: true }
+    render(<PetFocusBridge />)
+    await waitFor(() => expect(capturedHandler).toBeTruthy())
+
+    capturedHandler!({ folderId: 7, conversationId: 42, agent: "codex" })
+    await act(async () => {
+      release(null)
+    })
+
+    await waitFor(() =>
+      expect(tabs.openTab).toHaveBeenCalledWith(7, 42, "codex", true)
+    )
+    expect(tabs.openTab).toHaveBeenCalledTimes(1)
   })
 
   it("ignores malformed payloads", async () => {

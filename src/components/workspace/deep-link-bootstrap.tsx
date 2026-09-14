@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabStore, useTabActions } from "@/contexts/tab-context"
+import { takePendingDeepLink } from "@/lib/deep-link"
 import type { AgentType } from "@/lib/types"
 
 /**
@@ -101,6 +102,13 @@ type FocusRequest = {
  * command after bringing the main window forward) and opens the conversation
  * via `openTab` — no URL reload, so in-memory tab/session state survives.
  *
+ * Also the landing point for an OS `codeg://session/<id>` deep link that the
+ * backend resolved before this subscription existed. Tauri delivers an event
+ * only to webviews that already registered a listener, so the emit for a
+ * cold-start link is dropped on the floor; the backend parks the target and
+ * this drains it right after subscribing. The drain also runs on every mount,
+ * which is what clears a target left behind by a warm-start link.
+ *
  * Latest workspace state is held in a ref so the single subscription always
  * sees fresh state without re-subscribing on every change. A request that
  * arrives before folders/tabs hydrate is queued and replayed.
@@ -188,6 +196,16 @@ export function PetFocusBridge() {
       } catch (err) {
         console.warn("[PetFocusBridge] subscription failed:", err)
       }
+
+      // Only now that the listener is live (or has failed) is it safe to drain
+      // the parked target: draining first would leave a window in which the
+      // backend resolves a link, finds no subscriber, and parks it into a slot
+      // nobody reads again. A live event that beat us here already filled
+      // `pendingRef`, so don't clobber it — the drain still runs, to discard.
+      const parked = await takePendingDeepLink()
+      if (cancelled || !parked || pendingRef.current) return
+      pendingRef.current = parked
+      attempt()
     })()
 
     return () => {

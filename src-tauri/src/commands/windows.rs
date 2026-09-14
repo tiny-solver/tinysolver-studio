@@ -1715,21 +1715,25 @@ pub async fn resize_pet_panel(app: AppHandle, height: f64) -> Result<(), AppComm
 /// state survives — `PetFocusBridge` in the main window calls `openTab`.
 /// Shared by the pet panel, the `focus_conversation` command, and `codeg://`
 /// OS deep links.
+///
+/// Note that a successful emit does **not** mean the workspace saw it: Tauri
+/// delivers an event only to webviews that already registered a JS listener,
+/// so this is fire-and-forget while the window is still booting. Callers that
+/// can reach the workspace before it hydrates must also park the target (see
+/// `deep_link::PENDING_FOCUS`).
 pub fn emit_focus_conversation(
     app: &AppHandle,
     folder_id: i32,
     conversation_id: i32,
     agent: &str,
-) {
+) -> Result<(), tauri::Error> {
     show_main_window(app);
     let payload = serde_json::json!({
         "folderId": folder_id,
         "conversationId": conversation_id,
         "agent": agent,
     });
-    if let Err(e) = app.emit_to("main", "workspace://focus-conversation", payload) {
-        tracing::warn!("[deep-link] failed to signal main window: {e}");
-    }
+    app.emit_to("main", "workspace://focus-conversation", payload)
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -1740,7 +1744,8 @@ pub async fn focus_conversation(
     conversation_id: i32,
     agent: String,
 ) -> Result<(), AppCommandError> {
-    emit_focus_conversation(&app, folder_id, conversation_id, &agent);
+    emit_focus_conversation(&app, folder_id, conversation_id, &agent)
+        .map_err(|e| AppCommandError::window("Failed to signal main window", e.to_string()))?;
     Ok(())
 }
 

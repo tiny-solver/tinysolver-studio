@@ -38,7 +38,11 @@ pub enum DeepLink {
 }
 
 /// Resolved target for [`crate::commands::windows::emit_focus_conversation`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Also the payload of [`take_pending_deep_link`], so it serializes in the
+/// same camelCase shape as the `workspace://focus-conversation` event.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FocusTarget {
     pub folder_id: i32,
     pub conversation_id: i32,
@@ -86,11 +90,15 @@ pub fn parse_deep_link(raw: &str) -> Option<DeepLink> {
     if path.eq_ignore_ascii_case("workspace") {
         return parse_workspace_query(query.unwrap_or(""));
     }
-    if let Some(session_ref) = path
-        .strip_prefix("session/")
-        .or_else(|| path.strip_prefix("SESSION/"))
-    {
-        return parse_session_ref(session_ref);
+    // `session` is the URL's host component, which the `url` crate lower-cases
+    // before we ever see it — but an argv-delivered link on Windows/Linux keeps
+    // whatever case the caller typed, so match the segment case-insensitively
+    // like `open`/`workspace` above. The ref itself stays case-sensitive: an
+    // agent's `external_id` is an opaque, case-significant token.
+    if let Some((head, session_ref)) = path.split_once('/') {
+        if head.eq_ignore_ascii_case("session") {
+            return parse_session_ref(session_ref);
+        }
     }
     None
 }
@@ -193,6 +201,35 @@ pub async fn resolve_deep_link(
     }
 }
 
+/// A resolved target that has been emitted but may not have been received.
+///
+/// `workspace://focus-conversation` is delivered only to webviews that have
+/// *already* registered a JS listener (Tauri drops the emit otherwise), so a
+/// link resolved while the workspace is still booting would vanish. That is the
+/// normal case on macOS: the launch URL arrives as `RunEvent::Opened` after the
+/// setup hook has run, i.e. after the main window was created but long before
+/// React mounts `PetFocusBridge`. Park the target here and let the frontend
+/// drain it once it is listening; the same drain discards the slot after a
+/// warm-start link so it can never re-fire on a later reload.
+static PENDING_FOCUS: std::sync::Mutex<Option<FocusTarget>> = std::sync::Mutex::new(None);
+
+/// Only the desktop URL handler parks targets; `codeg-server` compiles the
+/// parser and the lookup but has no OS scheme to feed them.
+#[cfg(any(feature = "tauri-runtime", test))]
+fn set_pending_focus(target: FocusTarget) {
+    if let Ok(mut slot) = PENDING_FOCUS.lock() {
+        *slot = Some(target);
+    }
+}
+
+/// Hand the workspace the deep link that was resolved before it was listening,
+/// clearing the slot. Returns `None` when the app was not opened by a link (or
+/// the live event already delivered it).
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub fn take_pending_deep_link() -> Option<FocusTarget> {
+    PENDING_FOCUS.lock().ok().and_then(|mut slot| slot.take())
+}
+
 /// Collect `codeg:` URLs from a process argv (Windows / Linux second launch).
 pub fn urls_from_argv(argv: &[impl AsRef<str>]) -> Vec<String> {
     argv.iter()
@@ -232,12 +269,18 @@ pub fn handle_raw_urls(app: &tauri::AppHandle, urls: &[String]) {
             };
             match resolve_deep_link(&db, &link).await {
                 Ok(Some(target)) => {
-                    windows::emit_focus_conversation(
+                    // Park it first: the emit below is a no-op when the
+                    // workspace webview has not subscribed yet (macOS cold
+                    // start), and `PetFocusBridge` drains the slot on mount.
+                    set_pending_focus(target.clone());
+                    if let Err(err) = windows::emit_focus_conversation(
                         &app,
                         target.folder_id,
                         target.conversation_id,
                         &target.agent,
-                    );
+                    ) {
+                        tracing::warn!("[deep-link] failed to signal main window: {err}");
+                    }
                     focused = true;
                 }
                 Ok(None) => {
@@ -263,6 +306,13 @@ pub fn handle_argv(app: &tauri::AppHandle, argv: &[String]) {
 /// load `/workspace?folderId=…` on a cold start. `DeepLinkBootstrap` then
 /// opens the tab after folders/tabs hydrate — an event emitted here would
 /// race the webview's subscription.
+///
+/// This only fires where the plugin already knows the launch URL by the time
+/// the setup hook runs, i.e. Windows/Linux (argv, parsed during plugin setup).
+/// On macOS the URL arrives later as `RunEvent::Opened`, so `get_current()` is
+/// empty here and the cold start is carried by [`PENDING_FOCUS`] instead. The
+/// two paths are mutually exclusive: whichever delivery populated the plugin
+/// before our `on_open_url` listener existed is the one that wins.
 pub async fn startup_workspace_path(db: &AppDatabase, urls: &[String]) -> String {
     for raw in urls {
         let Some(link) = parse_deep_link(raw) else {
@@ -323,6 +373,27 @@ mod tests {
                 session_ref: "codex_abc 123".into()
             })
         );
+    }
+
+    /// The `url` crate lower-cases a URL's host before `event.urls()` hands it
+    /// over, but an argv-delivered link keeps the caller's casing, so the
+    /// `session` segment must match either way. The ref after it must not — an
+    /// `external_id` is an opaque token.
+    #[test]
+    fn session_segment_is_case_insensitive_but_the_ref_is_not() {
+        for raw in [
+            "codeg://SESSION/Codex_AbC",
+            "codeg://Session/Codex_AbC",
+            "codeg://sEsSiOn/Codex_AbC",
+        ] {
+            assert_eq!(
+                parse_deep_link(raw),
+                Some(DeepLink::Session {
+                    session_ref: "Codex_AbC".into()
+                }),
+                "{raw}"
+            );
+        }
     }
 
     #[test]
@@ -419,6 +490,102 @@ mod tests {
         .await
         .expect("missing");
         assert_eq!(missing, None);
+    }
+
+    /// Nothing stops an agent from issuing all-digit session ids, so an
+    /// all-digit ref that matches no live primary key must still be tried as
+    /// an `external_id` rather than reported as a dead link.
+    #[tokio::test]
+    async fn numeric_ref_falls_back_to_external_id() {
+        let db = fresh_in_memory_db().await;
+        let folder = seed_folder(&db, "/tmp/codeg-deep-link-numeric").await;
+        let id = seed_conversation(&db, folder, AgentType::Codex).await;
+
+        // An external id that can never collide with a live PK.
+        let external = "90210";
+        assert_ne!(external.parse::<i32>().ok(), Some(id));
+        let mut active: crate::db::entities::conversation::ActiveModel =
+            crate::db::entities::conversation::Entity::find_by_id(id)
+                .one(&db.conn)
+                .await
+                .expect("load")
+                .expect("row")
+                .into();
+        active.external_id = Set(Some(external.into()));
+        active.update(&db.conn).await.expect("set external_id");
+
+        let resolved = resolve_deep_link(
+            &db,
+            &DeepLink::Session {
+                session_ref: external.into(),
+            },
+        )
+        .await
+        .expect("lookup numeric external");
+        assert_eq!(resolved.as_ref().map(|t| t.conversation_id), Some(id));
+    }
+
+    /// The parked-target handoff that carries a macOS cold start, where the
+    /// `workspace://focus-conversation` emit lands before the webview listens.
+    /// Single test on purpose: `PENDING_FOCUS` is process-global.
+    #[test]
+    fn pending_focus_is_taken_exactly_once() {
+        assert_eq!(take_pending_deep_link(), None);
+        let target = FocusTarget {
+            folder_id: 3,
+            conversation_id: 9,
+            agent: "grok".into(),
+        };
+        set_pending_focus(target.clone());
+        assert_eq!(take_pending_deep_link(), Some(target));
+        assert_eq!(take_pending_deep_link(), None);
+    }
+
+    #[test]
+    fn pending_focus_serializes_like_the_focus_event() {
+        let json = serde_json::to_value(FocusTarget {
+            folder_id: 3,
+            conversation_id: 9,
+            agent: "claude_code".into(),
+        })
+        .expect("serialize");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "folderId": 3,
+                "conversationId": 9,
+                "agent": "claude_code",
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn startup_path_resolves_first_session_url_else_plain_workspace() {
+        let db = fresh_in_memory_db().await;
+        let folder = seed_folder(&db, "/tmp/codeg-deep-link-startup").await;
+        let id = seed_conversation(&db, folder, AgentType::Grok).await;
+
+        assert_eq!(startup_workspace_path(&db, &[]).await, "workspace");
+        assert_eq!(
+            startup_workspace_path(&db, &["codeg://open".into()]).await,
+            "workspace"
+        );
+        assert_eq!(
+            startup_workspace_path(&db, &["codeg://session/999999".into()]).await,
+            "workspace"
+        );
+        assert_eq!(
+            startup_workspace_path(
+                &db,
+                &[
+                    "--some-flag".into(),
+                    "codeg://open".into(),
+                    format!("codeg://session/{id}"),
+                ]
+            )
+            .await,
+            format!("workspace?folderId={folder}&conversationId={id}&agent=grok")
+        );
     }
 
     #[tokio::test]
