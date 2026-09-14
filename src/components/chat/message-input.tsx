@@ -96,6 +96,7 @@ import {
 } from "@/lib/model-config-groups"
 import { useAgentSkills } from "@/hooks/use-agent-skills"
 import { useScrollbarSafeDismiss } from "@/hooks/use-scrollbar-safe-dismiss"
+import { useAgentVocabulary } from "@/hooks/use-agent-vocabulary"
 import {
   clearMessageInputDraftV2,
   loadMessageInputDraftV2,
@@ -694,10 +695,20 @@ export function MessageInput({
     setComposerReady(true)
   }, [])
 
-  const availableModes = useMemo(() => modes ?? [], [modes])
+  // Localised HERE, once, rather than at each selector: the composer renders
+  // this data through three independent paths (the searchable model picker,
+  // the inline dropdowns, and the collapsed panel's own projection), and a
+  // per-selector fix leaves whichever one the reader is not looking at in the
+  // agent's own language. Non-DeepSeek agents get their arrays back unchanged,
+  // identity included, so the memos below do not churn.
+  const vocabulary = useAgentVocabulary(agentType)
+  const availableModes = useMemo(
+    () => vocabulary.modes(modes ?? []),
+    [modes, vocabulary]
+  )
   const availableConfigOptions = useMemo(
-    () => configOptions ?? [],
-    [configOptions]
+    () => vocabulary.configOptions(configOptions ?? []),
+    [configOptions, vocabulary]
   )
   const hasConfigOptions = availableConfigOptions.length > 0
   const hasModes = availableModes.length > 0
