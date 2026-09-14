@@ -72,10 +72,27 @@ export function CloseRequestDialog() {
     // close press for the rest of the session. A freshly mounted listener means
     // no dialog is on screen, so any flag still set is stale: cancel it.
     // Subscribe first, so a press landing in this window is still delivered.
-    const clearStalePrompt = () => {
-      void resolveCloseRequest("cancel", false).catch((err) => {
-        console.error("[close] failed to clear stale close request:", err)
-      })
+    //
+    // This is also how the backend learns a dialog exists at all: `main` is
+    // visible from the first frame, long before React gets here, and an emit
+    // into that gap would be reported as delivered while nothing was listening.
+    // Until this call lands the close button keeps its pre-preference
+    // behavior — so a failure here degrades to "hide to tray", never to a
+    // press that vanishes. It is also the ONLY call that raises that signal,
+    // and nothing else will try again for the rest of the session, so a
+    // transient IPC hiccup gets a few retries rather than silently costing the
+    // user their preference until the next launch.
+    const clearStalePrompt = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (disposed) return
+        try {
+          await resolveCloseRequest("cancel", false)
+          return
+        } catch (err) {
+          console.error("[close] failed to clear stale close request:", err)
+          await new Promise((resolve) => setTimeout(resolve, 250))
+        }
+      }
     }
 
     void (async () => {
@@ -94,7 +111,7 @@ export function CloseRequestDialog() {
         return
       }
       unsubscribe = fn
-      clearStalePrompt()
+      await clearStalePrompt()
     })().catch((err) => {
       console.error("[close] failed to subscribe to close requests:", err)
     })

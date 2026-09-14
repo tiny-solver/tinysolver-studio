@@ -147,7 +147,7 @@ import type {
   SystemProxySettings,
   CloseRequestPayload,
   CloseWindowBehavior,
-  SystemCloseBehaviorSettings,
+  SystemCloseBehaviorSettingsView,
   SystemRenderingSettings,
   SystemAutostartSettings,
   SystemTerminalSettings,
@@ -1832,16 +1832,21 @@ export async function updateSystemAutostartSettings(
 
 // --- Close window behavior ---
 
-/** Emitted to the main window only when a close press needs an answer. */
+/**
+ * Emitted when a close press needs an answer. Addressed to `main`, but the
+ * Tauri transport subscribes with `EventTarget::Any`, so every webview sharing
+ * the root layout still receives it — `CloseRequestDialog` gates on the window
+ * label rather than trusting the target.
+ */
 export const CLOSE_REQUEST_EVENT = "app://close-request"
 
-export async function getSystemCloseBehaviorSettings(): Promise<SystemCloseBehaviorSettings> {
+export async function getSystemCloseBehaviorSettings(): Promise<SystemCloseBehaviorSettingsView> {
   return getTransport().call("get_system_close_behavior_settings")
 }
 
 export async function updateSystemCloseBehaviorSettings(
   behavior: CloseWindowBehavior
-): Promise<SystemCloseBehaviorSettings> {
+): Promise<SystemCloseBehaviorSettingsView> {
   return getTransport().call("update_system_close_behavior_settings", {
     behavior,
   })

@@ -4,11 +4,11 @@ import { NextIntlClientProvider } from "next-intl"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import enMessages from "@/i18n/messages/en.json"
-import type { SystemCloseBehaviorSettings } from "@/lib/types"
+import type { SystemCloseBehaviorSettingsView } from "@/lib/types"
 
-const getSettings = vi.fn<() => Promise<SystemCloseBehaviorSettings>>()
+const getSettings = vi.fn<() => Promise<SystemCloseBehaviorSettingsView>>()
 const updateSettings =
-  vi.fn<(b: string) => Promise<SystemCloseBehaviorSettings>>()
+  vi.fn<(b: string) => Promise<SystemCloseBehaviorSettingsView>>()
 const toastError = vi.fn()
 let desktop = true
 let remoteConnectionId: number | null = null

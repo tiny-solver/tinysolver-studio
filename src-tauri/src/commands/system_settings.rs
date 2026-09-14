@@ -309,6 +309,19 @@ static CLOSE_BEHAVIOR_CACHE: std::sync::atomic::AtomicU8 =
 static CLOSE_PROMPT_OPEN: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// Whether the main webview has a close-prompt listener up.
+///
+/// `main` is built visible, so the close button is clickable from the first
+/// frame — seconds before React mounts `CloseRequestDialog` and subscribes.
+/// Emitting into that gap is indistinguishable from a successful emit
+/// (`Emitter::emit*` reports delivery to the bus, not to a listener), so the
+/// press would land in a window that simply does not react. Until the dialog
+/// has proved it exists, the close button behaves the way it did before the
+/// preference existed.
+#[cfg(feature = "tauri-runtime")]
+static CLOSE_PROMPT_LISTENER_READY: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Payload of [`CLOSE_REQUEST_EVENT`]. One event covers both prompts so the
 /// frontend has a single listener and the backend a single de-dup flag.
 #[cfg(feature = "tauri-runtime")]
@@ -399,6 +412,23 @@ pub(crate) fn release_close_prompt() {
     CLOSE_PROMPT_OPEN.store(false, std::sync::atomic::Ordering::Release);
 }
 
+/// Whether a prompt emitted now would reach a dialog.
+///
+/// See [`CLOSE_PROMPT_LISTENER_READY`]. One-way: nothing lowers it, because a
+/// listener that answered once is the best evidence available that the webview
+/// is alive, and a false negative costs the user the prompt they asked for.
+#[cfg(feature = "tauri-runtime")]
+pub(crate) fn close_prompt_listener_ready() -> bool {
+    CLOSE_PROMPT_LISTENER_READY.load(std::sync::atomic::Ordering::Acquire)
+}
+
+/// Raised by [`resolve_close_request`] — the only call the dialog makes, and
+/// one it makes on mount as well as on every answer.
+#[cfg(feature = "tauri-runtime")]
+pub(crate) fn mark_close_prompt_listener_ready() {
+    CLOSE_PROMPT_LISTENER_READY.store(true, std::sync::atomic::Ordering::Release);
+}
+
 /// Claims the right to show one close prompt. `false` means one is already up.
 #[cfg(feature = "tauri-runtime")]
 pub(crate) fn try_open_close_prompt() -> bool {
@@ -445,6 +475,13 @@ pub async fn update_system_close_behavior_settings(
 ///
 /// Releasing the prompt flag is the FIRST thing this does, so a persistence
 /// failure below cannot leave the flag stuck and the close button dead.
+///
+/// Doubles as the dialog's "I am listening" signal — it is the one call the
+/// dialog makes, and it makes it on mount (with `"cancel"`, to clear a flag a
+/// webview reload left behind) as well as on every answer. Reaching this
+/// function at all therefore proves a listener exists, which is what
+/// [`close_prompt_listener_ready`] reports and the close handler needs before
+/// it is willing to hand a press to a dialog.
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn resolve_close_request(
@@ -453,6 +490,7 @@ pub async fn resolve_close_request(
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<(), AppCommandError> {
+    mark_close_prompt_listener_ready();
     release_close_prompt();
 
     let behavior = match action.as_str() {
@@ -1289,5 +1327,74 @@ mod close_behavior_tests {
         apply_persisted_close_behavior(&db.conn).await;
 
         assert_eq!(cached_close_behavior(), CloseWindowBehavior::Exit);
+    }
+
+    /// `CLOSE_PROMPT_OPEN` / `CLOSE_PROMPT_LISTENER_READY` are process globals
+    /// too, and the readiness one is deliberately one-way in production — so a
+    /// test that raises it has to put it back by hand or every later assertion
+    /// about the un-booted state passes for free.
+    struct RestoreClosePromptFlags {
+        open: bool,
+        ready: bool,
+    }
+
+    impl RestoreClosePromptFlags {
+        fn capture() -> Self {
+            Self {
+                open: CLOSE_PROMPT_OPEN.load(std::sync::atomic::Ordering::Acquire),
+                ready: close_prompt_listener_ready(),
+            }
+        }
+    }
+
+    impl Drop for RestoreClosePromptFlags {
+        fn drop(&mut self) {
+            CLOSE_PROMPT_OPEN.store(self.open, std::sync::atomic::Ordering::Release);
+            CLOSE_PROMPT_LISTENER_READY.store(self.ready, std::sync::atomic::Ordering::Release);
+        }
+    }
+
+    /// The de-dup flag: one prompt at a time, and the claim is reusable only
+    /// after it is given back. Without this the close button — which stays
+    /// clickable while the dialog is up — stacks one dialog per press.
+    #[tokio::test]
+    async fn close_prompt_claim_is_exclusive_until_released() {
+        let _serial = CLOSE_BEHAVIOR_SERIAL.lock().await;
+        let _restore = RestoreClosePromptFlags::capture();
+        release_close_prompt();
+
+        assert!(try_open_close_prompt(), "first press claims the prompt");
+        assert!(
+            !try_open_close_prompt(),
+            "a press while the dialog is up is a duplicate"
+        );
+
+        release_close_prompt();
+
+        assert!(
+            try_open_close_prompt(),
+            "the next press claims it again once the dialog has answered"
+        );
+    }
+
+    /// `main` is visible before its webview has a listener, and an emit into
+    /// that gap looks successful. The close handler asks this first, so the
+    /// press falls through to the preference instead of disappearing.
+    #[tokio::test]
+    async fn listener_readiness_starts_false_and_is_raised_by_the_dialog() {
+        let _serial = CLOSE_BEHAVIOR_SERIAL.lock().await;
+        let _restore = RestoreClosePromptFlags::capture();
+        CLOSE_PROMPT_LISTENER_READY.store(false, std::sync::atomic::Ordering::Release);
+
+        assert!(
+            !close_prompt_listener_ready(),
+            "nothing is listening until the dialog says so"
+        );
+
+        // What the dialog does on mount — `resolve_close_request` is its only
+        // call, and this is the half of it that does not need a Tauri handle.
+        mark_close_prompt_listener_ready();
+
+        assert!(close_prompt_listener_ready());
     }
 }

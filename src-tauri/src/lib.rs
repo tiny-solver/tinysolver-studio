@@ -92,8 +92,11 @@ mod tauri_app {
     ///
     /// Called with the close already prevented; every branch is responsible
     /// for what happens instead. The prompt branches must never be able to
-    /// swallow the press: if the event cannot be delivered there is no dialog
-    /// to answer it, so each falls back to acting on its own.
+    /// swallow the press: if no dialog can answer it, each falls back to
+    /// acting on its own. `main` is built visible and the dialog only starts
+    /// listening once React has mounted in it, so "no dialog can answer it"
+    /// is the normal state for the first seconds of every launch — see
+    /// [`system_settings::close_prompt_listener_ready`].
     fn handle_main_close_request(window: &tauri::Window, label: &str) {
         use crate::commands::system_settings;
         use crate::models::CloseWindowBehavior;
@@ -118,6 +121,16 @@ mod tauri_app {
         };
 
         let prompt = |mode: &'static str, count: usize| -> bool {
+            if !system_settings::close_prompt_listener_ready() {
+                // Nothing in the main webview is listening yet — it is still
+                // booting, or its JS never came up at all. Emitting anyway
+                // would claim the prompt flag, show no dialog, and leave the
+                // press unanswered: the window would simply not react, and
+                // every later press would be suppressed as a duplicate until
+                // the dialog mounts and clears the flag. Report "could not
+                // prompt" so the caller acts on the preference instead.
+                return false;
+            }
             if !system_settings::try_open_close_prompt() {
                 // A dialog is already up; this press is a duplicate.
                 return true;
@@ -126,10 +139,14 @@ mod tauri_app {
                 mode,
                 running_terminals: count,
             };
-            // Main window only. The root layout is shared by the pet /
-            // settings / pet-panel webviews, so `app.emit` would open a dialog
-            // in each of them.
-            match window.emit(system_settings::CLOSE_REQUEST_EVENT, payload) {
+            // Addressed to `main`, which is where the only listener lives.
+            // Note this is intent, not enforcement: `TauriTransport.subscribe`
+            // registers with `EventTarget::Any`, and Tauri delivers to those
+            // listeners whatever the emit targets. What actually keeps the
+            // prompt out of the pet / settings / pet-panel webviews — which
+            // share the root layout the dialog is mounted in — is the window
+            // label gate inside `CloseRequestDialog`.
+            match window.emit_to(label, system_settings::CLOSE_REQUEST_EVENT, payload) {
                 Ok(()) => true,
                 Err(err) => {
                     tracing::warn!("[close] failed to deliver close prompt: {err}");

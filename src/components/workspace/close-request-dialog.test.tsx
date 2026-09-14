@@ -174,6 +174,21 @@ describe("CloseRequestDialog", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull()
   })
 
+  // That same call is what tells the backend a dialog exists; nothing else
+  // raises the signal, so losing it to one transient IPC failure would cost the
+  // user their close preference for the whole session.
+  it("retries the mount-time handshake when it fails", async () => {
+    resolveCloseRequest
+      .mockRejectedValueOnce(new Error("ipc not up"))
+      .mockResolvedValue(undefined)
+    renderDialog()
+
+    await waitFor(() => expect(resolveCloseRequest).toHaveBeenCalledTimes(2), {
+      timeout: 3000,
+    })
+    expect(resolveCloseRequest).toHaveBeenLastCalledWith("cancel", false)
+  })
+
   // The component sits in the root layout, which the pet / settings / panel
   // webviews load too. Without the label gate each of them would open its own
   // copy of the prompt and race to answer the one pending close request.

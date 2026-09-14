@@ -3734,12 +3734,18 @@ export interface SystemAutostartSettings {
 export type CloseWindowBehavior = "ask" | "minimize" | "exit"
 
 /**
- * `tray_available` is a live platform capability, not a stored value. Where the
- * tray is unusable (Linux without one, failed tray install) hiding the window
- * would strand the workspace, so the close button force-exits and the
- * preference cannot apply — the UI disables the control and says so.
+ * What the settings UI reads: the stored preference plus a live platform
+ * capability, same shape of pairing as {@link LogSettingsView}. `tray_available`
+ * is never persisted — where the tray is unusable (Linux without one, failed
+ * tray install) hiding the window would strand the workspace, so the close
+ * button force-exits and the preference cannot apply; the UI disables the
+ * control and says so.
+ *
+ * Named for the Rust `SystemCloseBehaviorSettingsView` it mirrors: the Rust
+ * `SystemCloseBehaviorSettings` is the stored row alone and has no
+ * `tray_available`.
  */
-export interface SystemCloseBehaviorSettings {
+export interface SystemCloseBehaviorSettingsView {
   behavior: CloseWindowBehavior
   tray_available: boolean
 }
