@@ -612,18 +612,28 @@ async fn ensure_binary_with_progress(
         // Avoid leaving empty version/platform directories on failed downloads.
         let _ = std::fs::remove_dir_all(&dir);
     } else {
-        apply_cursor_acp_retry_compat(agent_id, version);
+        apply_cursor_acp_retry_compat_after_install(agent_id, version);
     }
 
     result
 }
 
+/// Hook for a cache HIT: the install was already on disk, so the compat layer
+/// may answer from its per-process memo instead of re-reading the bundle.
 fn apply_cursor_acp_retry_compat(agent_id: &str, version: &str) {
-    let platform_dir = match binary_dir(agent_id, version) {
-        Ok(dir) => dir,
-        Err(_) => return,
+    let Ok(platform_dir) = binary_dir(agent_id, version) else {
+        return;
     };
     cursor_acp_retry_compat::maybe_apply_for_agent(agent_id, &platform_dir, version);
+}
+
+/// Hook for a fresh install: the extraction just replaced the bytes any
+/// earlier outcome described, so the memo must not short-circuit this one.
+fn apply_cursor_acp_retry_compat_after_install(agent_id: &str, version: &str) {
+    let Ok(platform_dir) = binary_dir(agent_id, version) else {
+        return;
+    };
+    cursor_acp_retry_compat::apply_after_install_for_agent(agent_id, &platform_dir, version);
 }
 
 /// Move a dir-tree archive's extracted content into the final per-version
