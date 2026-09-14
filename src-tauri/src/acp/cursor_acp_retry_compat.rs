@@ -189,7 +189,19 @@ pub fn maybe_apply(platform_dir: &Path, version: &str) -> CompatPatchStatus {
     CompatPatchStatus::Applied
 }
 
-/// Terminal outcomes already reached for a managed install in this process.
+/// How many times the same install may answer `PatternMismatch` before that is
+/// taken as settled.
+///
+/// `Applied` / `AlreadyFixed` are stable by construction and memoized on the
+/// first pass, but `PatternMismatch` is also where every transient failure
+/// lands — a read that lost a race with an antivirus scan, a `rename` the
+/// filesystem refused. Memoizing the first of those would suppress the patch
+/// for the rest of the process; retrying it forever would put the ~9 MB scan
+/// back on a hot path. A few attempts is both.
+const MAX_MISMATCH_ATTEMPTS: u32 = 3;
+
+/// Outcomes already reached for a managed install in this process, with the
+/// number of attempts behind each.
 ///
 /// Resolving the bundle means reading every `*.index.js` chunk in
 /// `dist-package` until the ACP one turns up (~9 MB across ~70 files for
@@ -198,8 +210,8 @@ pub fn maybe_apply(platform_dir: &Path, version: &str) -> CompatPatchStatus {
 /// blocking I/O on an async worker, for the lifetime of the app. Locking it
 /// also serializes patch attempts, so two callers never write the same bundle
 /// at once.
-fn attempted() -> &'static Mutex<HashMap<PathBuf, CompatPatchStatus>> {
-    static ATTEMPTED: OnceLock<Mutex<HashMap<PathBuf, CompatPatchStatus>>> = OnceLock::new();
+fn attempted() -> &'static Mutex<HashMap<PathBuf, (CompatPatchStatus, u32)>> {
+    static ATTEMPTED: OnceLock<Mutex<HashMap<PathBuf, (CompatPatchStatus, u32)>>> = OnceLock::new();
     ATTEMPTED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -242,14 +254,24 @@ fn apply_for_agent(
         // touch the bundle again on the strength of that.
         return CompatPatchStatus::PatternMismatch;
     };
+    let previous = attempted.get(platform_dir).copied();
     if !force {
-        if let Some(status) = attempted.get(platform_dir) {
-            return *status;
+        if let Some((status, attempts)) = previous {
+            if status != CompatPatchStatus::PatternMismatch || attempts >= MAX_MISMATCH_ATTEMPTS {
+                return status;
+            }
         }
     }
     let status = maybe_apply(platform_dir, version);
     if status != CompatPatchStatus::NotApplicable {
-        attempted.insert(platform_dir.to_path_buf(), status);
+        // A fresh install starts its own attempt budget: the bytes the earlier
+        // mismatches were counted against are gone.
+        let attempts = if force {
+            1
+        } else {
+            previous.map_or(1, |(_, attempts)| attempts + 1)
+        };
+        attempted.insert(platform_dir.to_path_buf(), (status, attempts));
     }
     status
 }
@@ -514,6 +536,51 @@ mod tests {
         assert!(std::fs::read_to_string(bundle)
             .unwrap()
             .contains(PATCHED_RUN_OPTIONS));
+    }
+
+    // Every transient failure lands on `PatternMismatch` too, so memoizing the
+    // first one would let a momentary hiccup — a locked file, a refused rename
+    // — leave the agent unpatched for the rest of the session.
+    #[test]
+    fn a_transient_mismatch_does_not_settle_the_install() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(
+            maybe_apply_for_agent(CURSOR_AGENT_ID, tmp.path(), AFFECTED_VERSIONS[0]),
+            CompatPatchStatus::PatternMismatch
+        );
+
+        write_bundle(tmp.path(), &vulnerable_fixture());
+        assert_eq!(
+            maybe_apply_for_agent(CURSOR_AGENT_ID, tmp.path(), AFFECTED_VERSIONS[0]),
+            CompatPatchStatus::Applied,
+            "a later call must still be allowed to look"
+        );
+    }
+
+    // ...but an install that keeps mismatching is an install whose bytes we do
+    // not recognise, and re-reading its chunks on every connect / preflight /
+    // diagnostics call would be pure waste.
+    #[test]
+    fn a_persistent_mismatch_stops_rescanning() {
+        let tmp = tempfile::tempdir().unwrap();
+        for _ in 0..MAX_MISMATCH_ATTEMPTS {
+            assert_eq!(
+                maybe_apply_for_agent(CURSOR_AGENT_ID, tmp.path(), AFFECTED_VERSIONS[0]),
+                CompatPatchStatus::PatternMismatch
+            );
+        }
+
+        write_bundle(tmp.path(), &vulnerable_fixture());
+        assert_eq!(
+            maybe_apply_for_agent(CURSOR_AGENT_ID, tmp.path(), AFFECTED_VERSIONS[0]),
+            CompatPatchStatus::PatternMismatch,
+            "the budget is spent; the cache-hit hook stops looking"
+        );
+        assert_eq!(
+            apply_after_install_for_agent(CURSOR_AGENT_ID, tmp.path(), AFFECTED_VERSIONS[0]),
+            CompatPatchStatus::Applied,
+            "a re-install still gets a fresh look"
+        );
     }
 
     // The patch is a byte-exact splice, so it silently stops doing anything
