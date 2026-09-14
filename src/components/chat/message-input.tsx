@@ -371,6 +371,19 @@ export function MessageInput({
       buildKnownInvocations(availableCommands, availableSkills, skillPrefix),
     [availableCommands, availableSkills, skillPrefix]
   )
+  // The hydration effects below read the list through this ref inside their
+  // deferred frame, never from their dependency array. `buildKnownInvocations`
+  // mints a fresh Set whenever the agent re-advertises (and on every render for
+  // a host that passes `availableCommands={conn.availableCommands ?? []}`), and
+  // those effects claim a one-shot guard synchronously but do the restore in a
+  // rAF whose cleanup cancels it: a new identity landing in that gap would
+  // cancel the frame and then bail on the already-claimed guard, dropping the
+  // draft entirely. Reading it late is also the more accurate answer — it is
+  // whatever the agent advertises at the moment the content is actually seeded.
+  const knownInvocationsRef = useRef(knownInvocations)
+  useEffect(() => {
+    knownInvocationsRef.current = knownInvocations
+  }, [knownInvocations])
   const { shortcuts } = useShortcutSettings()
   const effectiveDraftStorageKey = draftStorageKey ?? null
   const resolvedPlaceholder = placeholder ?? t("askAnything")
@@ -538,7 +551,11 @@ export function MessageInput({
         const editor = ed.getEditor()
         if (editingDraftBlocks && editingDraftBlocks.length > 0 && editor) {
           // Full fidelity: restore inline badges + images from the blocks.
-          hydrateFromBlocks(editor, editingDraftBlocks, knownInvocations)
+          hydrateFromBlocks(
+            editor,
+            editingDraftBlocks,
+            knownInvocationsRef.current
+          )
         } else if (editingDraftText != null) {
           ed.setText(editingDraftText)
         }
@@ -562,7 +579,6 @@ export function MessageInput({
     editingDraftBlocks,
     effectiveDraftStorageKey,
     hydrateFromBlocks,
-    knownInvocations,
   ])
 
   // Focus the composer the moment the editor exists and this tab is active, so
@@ -600,7 +616,11 @@ export function MessageInput({
       const raf = requestAnimationFrame(() => {
         const editor = editorRef.current?.getEditor()
         if (editingDraftBlocks && editingDraftBlocks.length > 0 && editor) {
-          hydrateFromBlocks(editor, editingDraftBlocks, knownInvocations)
+          hydrateFromBlocks(
+            editor,
+            editingDraftBlocks,
+            knownInvocationsRef.current
+          )
         } else if (editingDraftText != null) {
           editorRef.current?.setText(editingDraftText)
         }
@@ -617,7 +637,6 @@ export function MessageInput({
     editingDraftText,
     editingDraftBlocks,
     hydrateFromBlocks,
-    knownInvocations,
   ])
 
   useEffect(() => {

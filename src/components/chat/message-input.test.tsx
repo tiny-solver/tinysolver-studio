@@ -1101,6 +1101,108 @@ describe("MessageInput slash badges", () => {
   })
 })
 
+// The queue-edit / draft restore claims its one-shot guard synchronously but
+// mutates the editor in a rAF whose cleanup cancels that frame. Anything in the
+// effect's dependency array that changes identity in between therefore cancels
+// the restore and then bails on the already-claimed guard — nothing is ever
+// restored. The advertised-command list is exactly such a value: it lands with
+// the ACP connection, and the Set built from it is fresh every time.
+describe("MessageInput queue-edit restore vs. a late command list", () => {
+  afterEach(() => {
+    cleanup()
+    composerHandle.current = null
+    vi.unstubAllGlobals()
+  })
+
+  /** Hold every rAF callback so the test decides when the frame runs. */
+  function captureFrames(): { flush: () => void } {
+    const frames: (FrameRequestCallback | null)[] = []
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
+      frames.push(cb)
+    )
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      frames[id - 1] = null
+    })
+    return {
+      flush: () => {
+        act(() => {
+          // Indexed, not iterated: a callback may queue another frame.
+          for (let i = 0; i < frames.length; i++) {
+            const cb = frames[i]
+            frames[i] = null
+            cb?.(0)
+          }
+        })
+      },
+    }
+  }
+
+  /** The identity the ACP connection replaces once it advertises. */
+  const NO_COMMANDS: React.ComponentProps<
+    typeof MessageInput
+  >["availableCommands"] = []
+
+  function renderAgain(
+    view: ReturnType<typeof renderInput>,
+    props: Partial<React.ComponentProps<typeof MessageInput>>
+  ) {
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <MessageInput onSend={vi.fn()} promptCapabilities={CAPS} {...props} />
+      </NextIntlClientProvider>
+    )
+  }
+
+  it("restores the queued message when the commands land before its frame", async () => {
+    const { flush } = captureFrames()
+    const editing = {
+      isEditingQueueItem: true,
+      editingItemId: "q1",
+      editingDraftBlocks: [{ type: "text" as const, text: "queued prose" }],
+    }
+    const view = renderInput({ availableCommands: NO_COMMANDS, ...editing })
+    await waitFor(
+      () => expect(composerHandle.current?.getEditor()).toBeTruthy(),
+      { timeout: 5000 }
+    )
+    // The connection comes up: a brand-new command list, and so a brand-new
+    // `knownInvocations` Set, while the restore's frame is still pending.
+    renderAgain(view, {
+      availableCommands: [{ name: "compact", description: "Compact" }],
+      ...editing,
+    })
+    flush()
+    expect(composerHandle.current?.getText()).toBe("queued prose")
+  })
+
+  // The "re-edit a DIFFERENT queued item" restore is a second effect with its
+  // own one-shot guard (the last hydrated item id), so it needs its own case.
+  it("restores the next queued item picked while its frame is pending", async () => {
+    const { flush } = captureFrames()
+    const view = renderInput({ availableCommands: NO_COMMANDS })
+    await waitFor(
+      () => expect(composerHandle.current?.getEditor()).toBeTruthy(),
+      { timeout: 5000 }
+    )
+    flush()
+
+    // The user clicks "edit" on a queued message…
+    const editing = {
+      isEditingQueueItem: true,
+      editingItemId: "q2",
+      editingDraftBlocks: [{ type: "text" as const, text: "the next one" }],
+    }
+    renderAgain(view, { availableCommands: NO_COMMANDS, ...editing })
+    // …and the command list lands before that restore's frame runs.
+    renderAgain(view, {
+      availableCommands: [{ name: "compact", description: "Compact" }],
+      ...editing,
+    })
+    flush()
+    expect(composerHandle.current?.getText()).toBe("the next one")
+  })
+})
+
 describe("MessageInput mid-turn send (live-feedback channel)", () => {
   afterEach(() => {
     cleanup()
