@@ -83,9 +83,46 @@ export interface AgentGrantPayload {
   origin: string | null
 }
 
-/** What an agent did to a page. One value today; acting on a page adds to
- *  this rather than reinterpreting it. */
-export type AgentAction = "read"
+/** What an agent did to a page: read it, or one of the five ways of acting
+ *  on it. One value per kind, so a run of clicks on the activity strip does
+ *  not swallow the keystroke among them. */
+export type AgentAction =
+  | "read"
+  | "click"
+  | "hover"
+  | "type"
+  | "press"
+  | "select"
+
+export type PointerButton = "left" | "right"
+
+/** What an agent asks to do to an element (`browser_agent_act`). Mirrors
+ *  `agent::ActionKind`; the world bundle takes the same shape. */
+export type ActionKind =
+  | { kind: "click"; button?: PointerButton; count?: number }
+  | { kind: "hover" }
+  /** Replaces the field's value. */
+  | { kind: "type"; text: string; submit?: boolean }
+  /** `ref` may be left out: the key goes to whatever has focus. */
+  | { kind: "press"; key: string }
+  | { kind: "select"; values: string[] }
+
+export interface ActionRequest {
+  /** The `generation` of the snapshot that named `ref`. */
+  generation: string
+  ref?: string
+  action: ActionKind
+}
+
+/** How an action reached the page: events dispatched by script, or a real
+ *  input event the platform delivered (WebView2 only). */
+export type Fidelity = "synthetic" | "trusted"
+
+export interface ActionOutcome {
+  fidelity: Fidelity
+  /** Where the page was when the action was done. */
+  url: string
+}
 
 /** Whether it happened. Refusals and failures are reported too: the activity
  *  strip is only worth reading if seeing nothing on it means nothing

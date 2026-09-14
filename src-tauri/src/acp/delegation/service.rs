@@ -373,7 +373,20 @@ mod tests {
                 "stub",
             )
         }
-    }
+    
+
+        async fn act(
+            &self,
+            tab_id: &str,
+            _request: crate::browser::agent::ActionRequest,
+        ) -> crate::acp::browser_tools::BrowserActOutcome {
+            crate::acp::browser_tools::BrowserActOutcome::refused(
+                tab_id,
+                crate::acp::browser_tools::ERROR_UNAVAILABLE,
+                crate::acp::browser_tools::NO_BROWSER_NOTE,
+            )
+        }
+}
 
     fn make_service(socket_path: PathBuf) -> Arc<DelegationService> {
         let broker = Arc::new(DelegationBroker::new(

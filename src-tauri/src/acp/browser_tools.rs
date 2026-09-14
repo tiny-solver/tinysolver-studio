@@ -1,13 +1,15 @@
 //! Listener-facing access for the built-in browser's agent tools
-//! (`browser_list_tabs` / `browser_snapshot`) carried by codeg-mcp.
+//! (`browser_list_tabs` / `browser_snapshot`, and the five action tools
+//! `browser_click` / `browser_hover` / `browser_type` / `browser_press_key` /
+//! `browser_select_option`) carried by codeg-mcp.
 //!
-//! Nothing here decides whether a page may be read. That decision is
-//! `crate::browser::agent`'s, and it is enforced inside
-//! `commands::browser::agent_snapshot_core`, which the production impl calls —
-//! so an MCP read passes the same grant check, and leaves the same line on the
-//! tab's activity strip, as any other read. A tool surface that reimplemented
-//! the check would be a second place to get it wrong, and the first place
-//! someone forgot to emit the audit line from.
+//! Nothing here decides whether a page may be read or acted on. That decision
+//! is `crate::browser::agent`'s, and it is enforced inside
+//! `commands::browser::agent_snapshot_core` / `agent_act_core`, which the
+//! production impl calls — so an MCP read passes the same grant check, and
+//! leaves the same line on the tab's activity strip, as any other read. A tool
+//! surface that reimplemented the check would be a second place to get it
+//! wrong, and the first place someone forgot to emit the audit line from.
 //!
 //! Two things this module does own:
 //!
@@ -27,7 +29,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::browser::agent::{AgentTabSummary, PageSnapshot};
+use crate::browser::agent::{ActionOutcome, ActionRequest, AgentTabSummary, PageSnapshot};
 
 /// The tab exists, and this agent may not read it: nobody shared it, or the
 /// page left the origin it was shared for.
@@ -49,6 +51,21 @@ pub const ERROR_READ_FAILED: &str = "browser_read_failed";
 /// This build has no built-in browser to read (server mode), or the user has
 /// switched the browser tool group off since this agent was launched.
 pub const ERROR_UNAVAILABLE: &str = "browser_unavailable";
+
+/// The tab is shared for reading and the agent asked to act on it. Its own
+/// slug because the person has a different thing to do than for
+/// [`ERROR_GRANT_REQUIRED`]: not share the tab, but allow actions on a tab
+/// they already shared.
+pub const ERROR_CONTROL_REQUIRED: &str = "browser_control_required";
+
+/// The ref the action named is from a snapshot the page has moved past — or
+/// the element has left the page. Not a permission matter: take a new
+/// snapshot and use a ref from it.
+pub const ERROR_STALE_REF: &str = "browser_stale_ref";
+
+/// The action was allowed and could not be done: the element is covered by
+/// another, takes no text, has no such option. The note says which.
+pub const ERROR_ACTION_FAILED: &str = "browser_action_failed";
 
 /// What a `browser_snapshot` asks for when the caller names no cap.
 ///
@@ -136,7 +153,75 @@ impl BrowserSnapshotOutcome {
     }
 }
 
-/// Listener-facing access to the built-in browser's read surface. The
+/// What an action tool answers: that it was done and how it reached the
+/// page, or why it did not happen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserActOutcome {
+    pub tab_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<ActionOutcome>,
+    /// One of the `browser_*` slugs above. `None` exactly when `action` is
+    /// `Some`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl BrowserActOutcome {
+    pub fn done(tab_id: &str, outcome: ActionOutcome) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            action: Some(outcome),
+            error: None,
+            note: None,
+        }
+    }
+
+    pub fn refused(tab_id: &str, error: &str, note: impl Into<String>) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            action: None,
+            error: Some(error.to_string()),
+            note: Some(note.into()),
+        }
+    }
+
+    /// The tab is not shared at all — the same words the read gives, because
+    /// the agent should not learn that it was the level rather than the share
+    /// that stopped it.
+    pub fn grant_required(tab_id: &str) -> Self {
+        let read = BrowserSnapshotOutcome::grant_required(tab_id);
+        Self::refused(tab_id, ERROR_GRANT_REQUIRED, read.note.unwrap_or_default())
+    }
+
+    pub fn control_required(tab_id: &str) -> Self {
+        Self::refused(
+            tab_id,
+            ERROR_CONTROL_REQUIRED,
+            format!(
+                "Browser tab {tab_id} is shared with you for reading only. Ask the user to allow \
+                 actions on it: in that tab's toolbar they open the \"Shared\" menu and choose \
+                 \"Allow actions\". Only they can; retrying will not change it. You can still \
+                 read the page with browser_snapshot."
+            ),
+        )
+    }
+
+    pub fn stale_ref(tab_id: &str, detail: &str) -> Self {
+        Self::refused(
+            tab_id,
+            ERROR_STALE_REF,
+            format!(
+                "{detail}. Call browser_snapshot on tab {tab_id} again and use a ref from the new \
+                 snapshot."
+            ),
+        )
+    }
+}
+
+/// Listener-facing access to the built-in browser's agent surface. The
 /// production impl (`crate::commands::browser::McpBrowserTools`) exists only in
 /// the desktop build; server mode and tests use [`NoBrowserTabs`]. Mirrors
 /// [`crate::acp::session_info::SessionInfoAccess`].
@@ -149,6 +234,10 @@ pub trait BrowserToolAccess: Send + Sync {
     /// Read one shared page. `max_chars` is the caller's own cap; `None` means
     /// [`DEFAULT_SNAPSHOT_MAX_CHARS`].
     async fn snapshot(&self, tab_id: &str, max_chars: Option<usize>) -> BrowserSnapshotOutcome;
+
+    /// Act on one shared page, by a ref from a snapshot of it. Needs the tab
+    /// shared at `control`.
+    async fn act(&self, tab_id: &str, request: ActionRequest) -> BrowserActOutcome;
 }
 
 /// The answer where there is no built-in browser: server mode, and the stub in
@@ -169,6 +258,10 @@ impl BrowserToolAccess for NoBrowserTabs {
 
     async fn snapshot(&self, tab_id: &str, _max_chars: Option<usize>) -> BrowserSnapshotOutcome {
         BrowserSnapshotOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
+    }
+
+    async fn act(&self, tab_id: &str, _request: ActionRequest) -> BrowserActOutcome {
+        BrowserActOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
     }
 }
 
@@ -277,6 +370,38 @@ mod tests {
 
         let refused = NoBrowserTabs.snapshot("t1", None).await;
         assert_eq!(refused.error.as_deref(), Some(ERROR_UNAVAILABLE));
+    }
+
+    /// The refusals an action tool can give each name the tab and the thing
+    /// the agent (or the user) does next; `action` and `error` are exclusive.
+    #[test]
+    fn an_action_refusal_says_what_to_do_next() {
+        let control = BrowserActOutcome::control_required("t3");
+        assert_eq!(control.error.as_deref(), Some(ERROR_CONTROL_REQUIRED));
+        let note = control.note.clone().unwrap();
+        assert!(note.contains("t3"));
+        assert!(note.contains("Allow actions"));
+        assert!(control.action.is_none());
+
+        let stale = BrowserActOutcome::stale_ref("t3", "e9 is gone");
+        assert_eq!(stale.error.as_deref(), Some(ERROR_STALE_REF));
+        assert!(stale.note.unwrap().contains("browser_snapshot"));
+
+        // Unshared: the same words as a read, so the level is not disclosed.
+        let none = BrowserActOutcome::grant_required("t3");
+        assert_eq!(none.note, BrowserSnapshotOutcome::grant_required("t3").note);
+
+        let done = serde_json::to_value(BrowserActOutcome::done(
+            "t3",
+            ActionOutcome {
+                fidelity: crate::browser::agent::Fidelity::Synthetic,
+                url: "https://example.com/".into(),
+            },
+        ))
+        .unwrap();
+        assert_eq!(done["action"]["fidelity"], "synthetic");
+        assert_eq!(done["tabId"], "t3");
+        assert!(done.get("error").is_none());
     }
 
     #[tokio::test]

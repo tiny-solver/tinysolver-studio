@@ -121,18 +121,39 @@ describe("the share control", () => {
   })
   afterEach(() => resetBrowserTabStoreForTests())
 
-  it("hands the page over at the read level, and says which site that was", async () => {
+  it("offers the two levels, and says which site the page was handed over at", async () => {
     wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
     const button = screen.getByRole("button", { name: "Share with agents" })
     expect(button).not.toBeDisabled()
+    await openMenu(button)
     await act(async () => {
-      fireEvent.click(button)
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Let agents read this page" })
+      )
       await Promise.resolve()
     })
-    // Never `control`: nothing in the app can act on a page yet.
     expect(mocks.browserAgentGrant).toHaveBeenCalledWith("abc", "read")
     expect(mocks.success).toHaveBeenCalledWith(
       "Agents can now read example.com"
+    )
+  })
+
+  // Acting is the second decision, made in the same place as the first — and
+  // the toast says which one was made.
+  it("hands the page over for acting from the same menu", async () => {
+    wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
+    await openMenu(screen.getByRole("button", { name: "Share with agents" }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("menuitem", {
+          name: "Let agents read and act on this page",
+        })
+      )
+      await Promise.resolve()
+    })
+    expect(mocks.browserAgentGrant).toHaveBeenCalledWith("abc", "control")
+    expect(mocks.success).toHaveBeenCalledWith(
+      "Agents can now read and act on example.com"
     )
   })
 
@@ -203,6 +224,63 @@ describe("the share control", () => {
     expect(mocks.success).not.toHaveBeenCalled()
   })
 
+  // A read-only share can be widened to acting, and an acting share pulled
+  // back to reading, without ending it — and the chip says which it is.
+  it("moves a shared tab between reading and acting from its menu", async () => {
+    const { unmount } = wrap(
+      <BrowserAgentShareControl
+        tab={tab}
+        state={state({
+          agentGrant: {
+            level: "read",
+            origin: "https://example.com",
+            grantedAt: 1,
+          },
+        })}
+      />
+    )
+    await openMenu(
+      screen.getByRole("button", { name: "Agents can read example.com" })
+    )
+    expect(
+      screen.queryByRole("menuitem", { name: "Reading only" })
+    ).not.toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Allow actions on this page" })
+      )
+      await Promise.resolve()
+    })
+    expect(mocks.browserAgentGrant).toHaveBeenCalledWith("abc", "control")
+    unmount()
+
+    wrap(
+      <BrowserAgentShareControl
+        tab={tab}
+        state={state({
+          agentGrant: {
+            level: "control",
+            origin: "https://example.com",
+            grantedAt: 1,
+          },
+        })}
+      />
+    )
+    const chip = screen.getByRole("button", {
+      name: "Agents can read and act on example.com",
+    })
+    expect(chip).toHaveTextContent("Shared · can act")
+    await openMenu(chip)
+    expect(
+      screen.queryByRole("menuitem", { name: "Allow actions on this page" })
+    ).not.toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Reading only" }))
+      await Promise.resolve()
+    })
+    expect(mocks.browserAgentGrant).toHaveBeenLastCalledWith("abc", "read")
+  })
+
   // For a loopback address the site is not the whole boundary — the port can
   // change hands under a page that never moved — so the menu has to say what
   // the grant is actually pinned to, before the notice that names it.
@@ -260,8 +338,11 @@ describe("the share control", () => {
       Promise.reject(new Error("no origin"))
     )
     wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
+    await openMenu(screen.getByRole("button", { name: "Share with agents" }))
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Share with agents" }))
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Let agents read this page" })
+      )
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -289,6 +370,24 @@ describe("the activity strip", () => {
     read({ outcome: "refused" })
     wrap(<BrowserAgentStrip tab={tab} />)
     expect(screen.getByText(/Refused: this page isn't shared/)).toBeVisible()
+  })
+
+  // Each kind of touch is its own line, in its own words, so a run of clicks
+  // does not swallow the keystroke among them — and a refused action says
+  // what was refused, which is not the same sentence as a refused read.
+  it("names each kind of action, done or refused", () => {
+    read({ at: 1, action: "click" })
+    read({ at: 2, action: "type" })
+    read({ at: 3, action: "select", outcome: "failed" })
+    read({ at: 4, action: "press", outcome: "refused" })
+    wrap(<BrowserAgentStrip tab={tab} />)
+    expect(
+      screen.getByText(/Refused to press a key: actions aren't allowed/)
+    ).toBeVisible()
+    fireEvent.click(screen.getByRole("button", { name: /3 more/ }))
+    expect(screen.getByText(/Couldn't choose the option/)).toBeVisible()
+    expect(screen.getByText(/Typed into a field/)).toBeVisible()
+    expect(screen.getByText(/^Clicked/)).toBeVisible()
   })
 
   it("counts a run rather than repeating it, and keeps the older lines behind a disclosure", async () => {

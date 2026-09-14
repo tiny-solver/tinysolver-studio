@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "Diese Seite für Agenten freigeben ({origin})",
       "shareLabel": "Für Agenten freigeben",
+      "shareRead": "Agenten diese Seite lesen lassen",
+      "shareControl": "Agenten diese Seite lesen und bedienen lassen",
       "notShareable": "Diese Seite hat keine Webadresse, die für Agenten freigegeben werden könnte",
       "shared": "Freigegeben",
+      "sharedControl": "Geteilt · darf bedienen",
       "sharedWith": "Agenten können {origin} lesen",
+      "sharedWithControl": "Agenten können {origin} lesen und bedienen",
       "sharedScope": "Die Freigabe endet, sobald die Seite diese Website verlässt.",
       "sharedScopeProgram": "Sie endet auch, wenn ein anderes Programm diesen Port von {program} übernimmt.",
       "sharedToast": "Agenten können jetzt {origin} lesen",
+      "sharedControlToast": "Agenten können {origin} jetzt lesen und bedienen",
       "stopSharing": "Freigabe beenden",
+      "allowActions": "Aktionen auf dieser Seite erlauben",
+      "readOnly": "Nur lesen",
       "shareFailed": "Diese Seite kann nicht für Agenten freigegeben werden",
-      "activityRead": "Seite gelesen",
-      "activityRefused": "Abgelehnt: Diese Seite ist nicht freigegeben",
-      "activityFailed": "Seite konnte nicht gelesen werden",
+      "activity": {
+        "read": {
+          "done": "Seite gelesen",
+          "refused": "Abgelehnt: Diese Seite ist nicht freigegeben",
+          "failed": "Seite konnte nicht gelesen werden"
+        },
+        "click": {
+          "done": "Geklickt",
+          "refused": "Klick abgelehnt: Aktionen sind auf dieser Seite nicht erlaubt",
+          "failed": "Klick nicht möglich"
+        },
+        "hover": {
+          "done": "Darübergefahren",
+          "refused": "Hover abgelehnt: Aktionen sind auf dieser Seite nicht erlaubt",
+          "failed": "Hover nicht möglich"
+        },
+        "type": {
+          "done": "In ein Feld getippt",
+          "refused": "Eingabe abgelehnt: Aktionen sind auf dieser Seite nicht erlaubt",
+          "failed": "Eingabe nicht möglich"
+        },
+        "press": {
+          "done": "Eine Taste gedrückt",
+          "refused": "Tastendruck abgelehnt: Aktionen sind auf dieser Seite nicht erlaubt",
+          "failed": "Tastendruck nicht möglich"
+        },
+        "select": {
+          "done": "Eine Option gewählt",
+          "refused": "Auswahl abgelehnt: Aktionen sind auf dieser Seite nicht erlaubt",
+          "failed": "Auswahl nicht möglich"
+        }
+      },
       "activityCount": "{count}×",
       "expand": "{count} weitere",
       "collapse": "Weniger"

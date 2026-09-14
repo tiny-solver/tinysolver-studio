@@ -200,6 +200,19 @@ pub fn eval_in_world(
 /// overlay, so it takes the frame as displayed now (`afterScreenUpdates:
 /// false`) and encodes as JPEG through AppKit — a 5-megapixel PNG would take
 /// longer to encode than the overlay's own open animation.
+/// WKWebView has no channel for input at a page point: the only way to hand
+/// it an event is the window's event queue, which delivers to wherever the
+/// pointer is on screen. `BrowserSurface::supports_trusted_input` answers
+/// false here before anyone reaches this; it exists so the child surface has
+/// one call on every platform it is built for.
+pub fn dispatch_pointer(
+    _webview: &wry::WebView,
+    _gesture: super::super::surface::PointerGesture,
+    _done: impl FnOnce(Result<(), super::super::surface::PointerFailure>) + 'static,
+) -> Result<(), String> {
+    Err("this platform delivers no trusted input".into())
+}
+
 pub fn snapshot_jpeg(
     webview: &wry::WebView,
     quality: f64,

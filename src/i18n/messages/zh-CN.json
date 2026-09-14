@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "把此页面共享给智能体（{origin}）",
       "shareLabel": "共享给智能体",
+      "shareRead": "让智能体读取此页面",
+      "shareControl": "让智能体读取并操作此页面",
       "notShareable": "此页面没有可共享给智能体的网址",
       "shared": "已共享",
+      "sharedControl": "已共享 · 可操作",
       "sharedWith": "智能体可读取 {origin}",
+      "sharedWithControl": "智能体可以读取并操作 {origin}",
       "sharedScope": "页面一旦离开该站点，共享即结束。",
       "sharedScopeProgram": "如果这个端口从 {program} 换成了别的程序，共享同样结束。",
       "sharedToast": "智能体现在可以读取 {origin}",
+      "sharedControlToast": "智能体现在可以读取并操作 {origin}",
       "stopSharing": "停止共享",
+      "allowActions": "允许在此页面上操作",
+      "readOnly": "仅读取",
       "shareFailed": "此页面无法共享给智能体",
-      "activityRead": "读取了页面",
-      "activityRefused": "已拒绝：此页面未共享",
-      "activityFailed": "读取页面失败",
+      "activity": {
+        "read": {
+          "done": "读取了页面",
+          "refused": "已拒绝：此页面未共享",
+          "failed": "读取页面失败"
+        },
+        "click": {
+          "done": "点击了",
+          "refused": "已拒绝点击：此页面不允许操作",
+          "failed": "无法点击"
+        },
+        "hover": {
+          "done": "悬停了",
+          "refused": "已拒绝悬停：此页面不允许操作",
+          "failed": "无法悬停"
+        },
+        "type": {
+          "done": "在输入框中输入了",
+          "refused": "已拒绝输入：此页面不允许操作",
+          "failed": "无法输入"
+        },
+        "press": {
+          "done": "按下了一个键",
+          "refused": "已拒绝按键：此页面不允许操作",
+          "failed": "无法按键"
+        },
+        "select": {
+          "done": "选择了一个选项",
+          "refused": "已拒绝选择：此页面不允许操作",
+          "failed": "无法选择选项"
+        }
+      },
       "activityCount": "{count} 次",
       "expand": "还有 {count} 条",
       "collapse": "收起"

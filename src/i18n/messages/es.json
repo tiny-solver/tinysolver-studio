@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "Compartir esta página con los agentes ({origin})",
       "shareLabel": "Compartir con los agentes",
+      "shareRead": "Permitir que los agentes lean esta página",
+      "shareControl": "Permitir que los agentes lean y actúen en esta página",
       "notShareable": "Esta página no tiene una dirección web que compartir con los agentes",
       "shared": "Compartida",
+      "sharedControl": "Compartida · puede actuar",
       "sharedWith": "Los agentes pueden leer {origin}",
+      "sharedWithControl": "Los agentes pueden leer y actuar en {origin}",
       "sharedScope": "El acceso termina en cuanto la página sale de este sitio.",
       "sharedScopeProgram": "También termina si otro programa le quita este puerto a {program}.",
       "sharedToast": "Los agentes ya pueden leer {origin}",
+      "sharedControlToast": "Los agentes ya pueden leer y actuar en {origin}",
       "stopSharing": "Dejar de compartir",
+      "allowActions": "Permitir acciones en esta página",
+      "readOnly": "Solo lectura",
       "shareFailed": "Esta página no se puede compartir con los agentes",
-      "activityRead": "Leyó la página",
-      "activityRefused": "Rechazado: esta página no está compartida",
-      "activityFailed": "No se pudo leer la página",
+      "activity": {
+        "read": {
+          "done": "Leyó la página",
+          "refused": "Rechazado: esta página no está compartida",
+          "failed": "No se pudo leer la página"
+        },
+        "click": {
+          "done": "Hizo clic",
+          "refused": "Clic rechazado: no se permiten acciones en esta página",
+          "failed": "No se pudo hacer clic"
+        },
+        "hover": {
+          "done": "Pasó el puntero",
+          "refused": "Hover rechazado: no se permiten acciones en esta página",
+          "failed": "No se pudo pasar el puntero"
+        },
+        "type": {
+          "done": "Escribió en un campo",
+          "refused": "Escritura rechazada: no se permiten acciones en esta página",
+          "failed": "No se pudo escribir"
+        },
+        "press": {
+          "done": "Pulsó una tecla",
+          "refused": "Pulsación rechazada: no se permiten acciones en esta página",
+          "failed": "No se pudo pulsar la tecla"
+        },
+        "select": {
+          "done": "Eligió una opción",
+          "refused": "Selección rechazada: no se permiten acciones en esta página",
+          "failed": "No se pudo elegir la opción"
+        }
+      },
       "activityCount": "{count}×",
       "expand": "{count} más",
       "collapse": "Menos"

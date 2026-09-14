@@ -1,8 +1,8 @@
 # browser-agent
 
 The script a browser tab's **isolated world** runs when an agent needs to read
-the page. Built by esbuild into `src-tauri/src/browser/js/agent.bundle.js`,
-which is committed.
+the page, or act on it. Built by esbuild into
+`src-tauri/src/browser/js/agent.bundle.js`, which is committed.
 
 ```
 pnpm browser:agent          # build the bundle
@@ -15,8 +15,10 @@ pnpm browser:agent:probe    # drive the bundle in real Chrome
 
 `vendor/playwright/` is Playwright's aria tree, copied byte-for-byte at v1.63.0
 (see `vendor/playwright/VENDOR.md`). `src/index.ts` calls it in **`ai` mode** —
-the mode Playwright MCP uses — and puts `snapshot` and `elementForRef` on
-`globalThis.__codegAgent` for Rust to call through world-scoped eval.
+the mode Playwright MCP uses — and puts `snapshot`, `elementForRef`, `act` and
+`locate` on `globalThis.__codegAgent` for Rust to call through world-scoped
+eval. `src/act.ts` is the acting half: given an element, it clicks, hovers,
+types, presses or selects by dispatching events at it.
 
 `ai` mode is why there is no second pass over the DOM here. It gives a ref to
 every element that is _visible and receives pointer events_, so a `<div>` with
@@ -70,13 +72,45 @@ the question rather than believe the page ended. A cap that lands inside the
 very first line has no boundary to use; the cap wins there and the line is cut
 where it falls.
 
+## Acting
+
+`act(generation, ref, request)` resolves the ref under the same rules and, in
+the same evaluation, does one of `click`, `hover`, `type`, `press`, `select`
+to the element. Same evaluation is the point: nothing can happen to the page
+between deciding the element is still the one and touching it.
+
+Everything is dispatched JavaScript — what the host reports as **`synthetic`**
+fidelity. A dispatched `click` still carries the element's activation
+behaviour (a link is followed, a submit button submits, a checkbox toggles),
+and the parts a dispatched event does *not* do that a real one would are
+emulated where they are what the key is for: focus moves on mousedown, Enter
+in a field submits its form through the default button, Space activates a
+button, Tab moves focus, a printable key types. What cannot be emulated — a
+popup needs user activation, `:hover` needs a real pointer — is why the
+fidelity field exists. Typing goes through `execCommand("insertText")` first,
+so the page sees the engine's own `beforeinput` / `input`, and falls back to
+setting the value through the prototype's setter (past any instance property a
+framework put on the node) plus a dispatched `input`.
+
+A click is refused when something else is on top at the point a pointer would
+land — the user could not click it either, and a dialog's backdrop is the
+usual case. The refusal names what is in the way.
+
+For the third floor the snapshot section leaves open — the A → B → A route —
+the world records `history.length` and counts `popstate` / `hashchange`, which
+between them see what a page's own `pushState` leaves behind even though the
+call itself is invisible from here. A `replaceState` away and back is still
+uncaught; it changes nothing observable.
+
+`locate(generation, ref)` is for a host with a trusted-input channel (WebView2's
+CDP `Input.*`): it scrolls the element into view, checks nothing covers it, and
+answers with the viewport point for the host to deliver a real pointer to.
+
 ## What is not here
 
-Nothing reads this bundle yet. The Rust seam is where **authorization** lives —
-`none / read / control`, per tab and origin, with no automatic grants — and
-until that exists there must be no code path that reads a page on an agent's
-behalf. The bundle and the grant model land together, in the package that adds
-the `browser_*` tools.
+Authorization. The Rust seam decides whether an agent may read or act on a tab
+at all — `none / read / control`, per tab and origin, with no automatic grants —
+and evaluates nothing here until it has.
 
 ## Where it runs
 

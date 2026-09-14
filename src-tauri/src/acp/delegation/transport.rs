@@ -268,6 +268,18 @@ pub struct BrokerBrowserSnapshotRequest {
     pub max_chars: Option<usize>,
 }
 
+/// Act on one shared page. Backs the five action tools (`browser_click`,
+/// `browser_hover`, `browser_type`, `browser_press_key`,
+/// `browser_select_option`), which differ only in the action they carry; the
+/// `control` check, the ref check and the audit line all happen behind it, in
+/// `agent_act_core`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerBrowserActRequest {
+    pub token: String,
+    pub tab_id: String,
+    pub request: crate::browser::agent::ActionRequest,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -289,6 +301,7 @@ pub enum BrokerMessage {
     CreateWorkTask(BrokerCreateWorkTaskRequest),
     BrowserTabs(BrokerBrowserTabsRequest),
     BrowserSnapshot(BrokerBrowserSnapshotRequest),
+    BrowserAct(BrokerBrowserActRequest),
     /// Liveness probe. Unlike every other variant this one is NOT sent by a
     /// companion — it comes from codeg's own service-status check
     /// (`acp::delegation::service`), which is why it carries no `token`: a
@@ -506,6 +519,15 @@ pub async fn client_browser_snapshot_round_trip(
     req: &BrokerBrowserSnapshotRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::BrowserSnapshot(req.clone())).await
+}
+
+/// Dispatch an action request and read back the serialized
+/// [`crate::acp::browser_tools::BrowserActOutcome`].
+pub async fn client_browser_act_round_trip(
+    socket_path: &str,
+    req: &BrokerBrowserActRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::BrowserAct(req.clone())).await
 }
 
 /// Probe the listener: write a [`BrokerMessage::Ping`] and read the

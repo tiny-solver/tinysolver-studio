@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "このページをエージェントに共有（{origin}）",
       "shareLabel": "エージェントに共有",
+      "shareRead": "エージェントにこのページの読み取りを許可",
+      "shareControl": "エージェントにこのページの読み取りと操作を許可",
       "notShareable": "このページには共有できるウェブアドレスがありません",
       "shared": "共有中",
+      "sharedControl": "共有中 · 操作可",
       "sharedWith": "エージェントは {origin} を読み取れます",
+      "sharedWithControl": "エージェントは {origin} を読み取り、操作できます",
       "sharedScope": "ページがこのサイトを離れた時点で共有は終了します。",
       "sharedScopeProgram": "このポートが {program} から別のプログラムに替わった場合も共有は終了します。",
       "sharedToast": "エージェントが {origin} を読み取れるようになりました",
+      "sharedControlToast": "エージェントが {origin} を読み取り、操作できるようになりました",
       "stopSharing": "共有を停止",
+      "allowActions": "このページでの操作を許可",
+      "readOnly": "読み取りのみ",
       "shareFailed": "このページはエージェントに共有できません",
-      "activityRead": "ページを読み取りました",
-      "activityRefused": "拒否：このページは共有されていません",
-      "activityFailed": "ページを読み取れませんでした",
+      "activity": {
+        "read": {
+          "done": "ページを読み取りました",
+          "refused": "拒否：このページは共有されていません",
+          "failed": "ページを読み取れませんでした"
+        },
+        "click": {
+          "done": "クリックしました",
+          "refused": "クリックを拒否：このページでは操作が許可されていません",
+          "failed": "クリックできませんでした"
+        },
+        "hover": {
+          "done": "ホバーしました",
+          "refused": "ホバーを拒否：このページでは操作が許可されていません",
+          "failed": "ホバーできませんでした"
+        },
+        "type": {
+          "done": "入力欄に入力しました",
+          "refused": "入力を拒否：このページでは操作が許可されていません",
+          "failed": "入力できませんでした"
+        },
+        "press": {
+          "done": "キーを押しました",
+          "refused": "キー入力を拒否：このページでは操作が許可されていません",
+          "failed": "キーを押せませんでした"
+        },
+        "select": {
+          "done": "オプションを選択しました",
+          "refused": "選択を拒否：このページでは操作が許可されていません",
+          "failed": "オプションを選択できませんでした"
+        }
+      },
       "activityCount": "{count} 回",
       "expand": "他 {count} 件",
       "collapse": "折りたたむ"

@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "이 페이지를 에이전트와 공유({origin})",
       "shareLabel": "에이전트와 공유",
+      "shareRead": "에이전트가 이 페이지를 읽도록 허용",
+      "shareControl": "에이전트가 이 페이지를 읽고 조작하도록 허용",
       "notShareable": "이 페이지에는 에이전트와 공유할 웹 주소가 없습니다",
       "shared": "공유됨",
+      "sharedControl": "공유됨 · 조작 가능",
       "sharedWith": "에이전트가 {origin}을(를) 읽을 수 있습니다",
+      "sharedWithControl": "에이전트가 {origin}을(를) 읽고 조작할 수 있습니다",
       "sharedScope": "페이지가 이 사이트를 벗어나면 공유가 끝납니다.",
       "sharedScopeProgram": "이 포트가 {program}에서 다른 프로그램으로 바뀌어도 공유가 끝납니다.",
       "sharedToast": "이제 에이전트가 {origin}을(를) 읽을 수 있습니다",
+      "sharedControlToast": "이제 에이전트가 {origin}을(를) 읽고 조작할 수 있습니다",
       "stopSharing": "공유 중지",
+      "allowActions": "이 페이지에서 조작 허용",
+      "readOnly": "읽기만",
       "shareFailed": "이 페이지는 에이전트와 공유할 수 없습니다",
-      "activityRead": "페이지를 읽음",
-      "activityRefused": "거부됨: 이 페이지는 공유되지 않았습니다",
-      "activityFailed": "페이지를 읽지 못했습니다",
+      "activity": {
+        "read": {
+          "done": "페이지를 읽음",
+          "refused": "거부됨: 이 페이지는 공유되지 않았습니다",
+          "failed": "페이지를 읽지 못했습니다"
+        },
+        "click": {
+          "done": "클릭함",
+          "refused": "클릭 거부됨: 이 페이지에서는 조작이 허용되지 않습니다",
+          "failed": "클릭할 수 없음"
+        },
+        "hover": {
+          "done": "마우스를 올림",
+          "refused": "호버 거부됨: 이 페이지에서는 조작이 허용되지 않습니다",
+          "failed": "마우스를 올릴 수 없음"
+        },
+        "type": {
+          "done": "입력란에 입력함",
+          "refused": "입력 거부됨: 이 페이지에서는 조작이 허용되지 않습니다",
+          "failed": "입력할 수 없음"
+        },
+        "press": {
+          "done": "키를 누름",
+          "refused": "키 입력 거부됨: 이 페이지에서는 조작이 허용되지 않습니다",
+          "failed": "키를 누를 수 없음"
+        },
+        "select": {
+          "done": "옵션을 선택함",
+          "refused": "선택 거부됨: 이 페이지에서는 조작이 허용되지 않습니다",
+          "failed": "옵션을 선택할 수 없음"
+        }
+      },
       "activityCount": "{count}회",
       "expand": "{count}개 더",
       "collapse": "접기"

@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "Partilhar esta página com os agentes ({origin})",
       "shareLabel": "Partilhar com os agentes",
+      "shareRead": "Permitir que os agentes leiam esta página",
+      "shareControl": "Permitir que os agentes leiam e ajam nesta página",
       "notShareable": "Esta página não tem um endereço web para partilhar com os agentes",
       "shared": "Partilhada",
+      "sharedControl": "Compartilhada · pode agir",
       "sharedWith": "Os agentes podem ler {origin}",
+      "sharedWithControl": "Os agentes podem ler e agir em {origin}",
       "sharedScope": "A partilha termina assim que a página sai deste site.",
       "sharedScopeProgram": "Também termina se outro programa tomar esta porta a {program}.",
       "sharedToast": "Os agentes já podem ler {origin}",
+      "sharedControlToast": "Os agentes agora podem ler e agir em {origin}",
       "stopSharing": "Parar de partilhar",
+      "allowActions": "Permitir ações nesta página",
+      "readOnly": "Somente leitura",
       "shareFailed": "Esta página não pode ser partilhada com os agentes",
-      "activityRead": "Leu a página",
-      "activityRefused": "Recusado: esta página não está partilhada",
-      "activityFailed": "Não foi possível ler a página",
+      "activity": {
+        "read": {
+          "done": "Leu a página",
+          "refused": "Recusado: esta página não está partilhada",
+          "failed": "Não foi possível ler a página"
+        },
+        "click": {
+          "done": "Clicou",
+          "refused": "Clique recusado: ações não são permitidas nesta página",
+          "failed": "Não foi possível clicar"
+        },
+        "hover": {
+          "done": "Passou o ponteiro",
+          "refused": "Hover recusado: ações não são permitidas nesta página",
+          "failed": "Não foi possível passar o ponteiro"
+        },
+        "type": {
+          "done": "Digitou em um campo",
+          "refused": "Digitação recusada: ações não são permitidas nesta página",
+          "failed": "Não foi possível digitar"
+        },
+        "press": {
+          "done": "Pressionou uma tecla",
+          "refused": "Tecla recusada: ações não são permitidas nesta página",
+          "failed": "Não foi possível pressionar a tecla"
+        },
+        "select": {
+          "done": "Escolheu uma opção",
+          "refused": "Seleção recusada: ações não são permitidas nesta página",
+          "failed": "Não foi possível escolher a opção"
+        }
+      },
       "activityCount": "{count}×",
       "expand": "mais {count}",
       "collapse": "Menos"

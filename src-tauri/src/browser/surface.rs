@@ -20,6 +20,36 @@ use super::surface_child::ChildHandle;
 #[error("{0}")]
 pub struct SurfaceError(pub String);
 
+/// Why a trusted gesture did not complete, and whether any of it reached the
+/// page. `delivered` is what the caller's fallback decision turns on: a
+/// gesture that failed before its first event can be redone another way; one
+/// that failed after a press has already happened, and redoing it would do
+/// it twice. Where the platform cannot tell (a timeout, a dropped answer) it
+/// says `delivered: true`, which is the safe reading.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointerFailure {
+    pub delivered: bool,
+    pub error: String,
+}
+
+/// A pointer event to be delivered as *real* input — not dispatched by script
+/// — at a point in viewport CSS pixels. What `BrowserSurface::dispatch_pointer`
+/// takes, on the one platform that has a channel for it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PointerGesture {
+    Move {
+        x: f64,
+        y: f64,
+    },
+    Click {
+        x: f64,
+        y: f64,
+        button: super::agent::PointerButton,
+        /// 1 for a click, 2 for a double click.
+        count: u8,
+    },
+}
+
 impl From<tauri::Error> for SurfaceError {
     fn from(err: tauri::Error) -> Self {
         SurfaceError(err.to_string())
@@ -177,6 +207,31 @@ impl BrowserSurface {
         per_surface!(self,
             child: |c| Ok(c.eval_in_world(expression, callback)?),
             window: |w| surface_window::eval_in_world(w, expression, callback))
+    }
+
+    /// Whether this surface can deliver real input events at a point — as
+    /// opposed to events dispatched by script in the page. Only WebView2 has
+    /// a channel for it (CDP `Input.*`). The WebKit engines take no
+    /// synthesized input short of the window's own event queue, which goes to
+    /// wherever the pointer happens to be on screen, not to a page point.
+    pub fn supports_trusted_input(&self) -> bool {
+        per_surface!(self, child: |_c| cfg!(target_os = "windows"), window: |_w| false)
+    }
+
+    /// Deliver `gesture` as real input; `done` hears whether the engine took
+    /// it. Only where `supports_trusted_input` — anywhere else this is an
+    /// error, not a fallback.
+    pub fn dispatch_pointer(
+        &self,
+        gesture: PointerGesture,
+        done: impl FnOnce(Result<(), PointerFailure>) + Send + 'static,
+    ) -> Result<(), SurfaceError> {
+        per_surface!(self,
+            child: |c| Ok(c.dispatch_pointer(gesture, done)?),
+            window: |_w| {
+                let _ = (gesture, done);
+                Err(SurfaceError("this surface delivers no trusted input".into()))
+            })
     }
 
     pub fn snapshot_png(

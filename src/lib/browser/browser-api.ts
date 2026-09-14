@@ -7,6 +7,8 @@ import { getTransport, isDesktop } from "@/lib/transport"
 
 import type { HostRule } from "./host-rules"
 import type {
+  ActionOutcome,
+  ActionRequest,
   Bounds,
   BrowserCapabilities,
   BrowserDownload,
@@ -270,6 +272,20 @@ export function browserAgentSnapshot(
   return getTransport().call<PageSnapshot>("browser_agent_snapshot", {
     tabId,
     maxChars: maxChars ?? null,
+  })
+}
+
+/** Act on a shared page by a ref from a snapshot of it. Needs the tab shared
+ *  at `control`; rejects with a permission error otherwise, and with an
+ *  invalid-input error carrying `browser.agent.error.staleRef` when the ref
+ *  is from a page that has moved on. */
+export function browserAgentAct(
+  tabId: string,
+  request: ActionRequest
+): Promise<ActionOutcome> {
+  return getTransport().call<ActionOutcome>("browser_agent_act", {
+    tabId,
+    request,
   })
 }
 

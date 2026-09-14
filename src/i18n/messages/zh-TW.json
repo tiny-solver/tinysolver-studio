@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "將此頁面分享給智慧代理（{origin}）",
       "shareLabel": "分享給智慧代理",
+      "shareRead": "讓智慧代理讀取此頁面",
+      "shareControl": "讓智慧代理讀取並操作此頁面",
       "notShareable": "此頁面沒有可分享給智慧代理的網址",
       "shared": "已分享",
+      "sharedControl": "已共享 · 可操作",
       "sharedWith": "智慧代理可讀取 {origin}",
+      "sharedWithControl": "智慧代理可以讀取並操作 {origin}",
       "sharedScope": "頁面一旦離開該網站，分享即結束。",
       "sharedScopeProgram": "如果這個連接埠從 {program} 換成了別的程式，分享同樣結束。",
       "sharedToast": "智慧代理現在可以讀取 {origin}",
+      "sharedControlToast": "智慧代理現在可以讀取並操作 {origin}",
       "stopSharing": "停止分享",
+      "allowActions": "允許在此頁面上操作",
+      "readOnly": "僅讀取",
       "shareFailed": "此頁面無法分享給智慧代理",
-      "activityRead": "讀取了頁面",
-      "activityRefused": "已拒絕：此頁面未分享",
-      "activityFailed": "讀取頁面失敗",
+      "activity": {
+        "read": {
+          "done": "讀取了頁面",
+          "refused": "已拒絕：此頁面未分享",
+          "failed": "讀取頁面失敗"
+        },
+        "click": {
+          "done": "點擊了",
+          "refused": "已拒絕點擊：此頁面不允許操作",
+          "failed": "無法點擊"
+        },
+        "hover": {
+          "done": "懸停了",
+          "refused": "已拒絕懸停：此頁面不允許操作",
+          "failed": "無法懸停"
+        },
+        "type": {
+          "done": "在輸入框中輸入了",
+          "refused": "已拒絕輸入：此頁面不允許操作",
+          "failed": "無法輸入"
+        },
+        "press": {
+          "done": "按下了一個鍵",
+          "refused": "已拒絕按鍵：此頁面不允許操作",
+          "failed": "無法按鍵"
+        },
+        "select": {
+          "done": "選擇了一個選項",
+          "refused": "已拒絕選擇：此頁面不允許操作",
+          "failed": "無法選擇選項"
+        }
+      },
       "activityCount": "{count} 次",
       "expand": "還有 {count} 筆",
       "collapse": "收合"

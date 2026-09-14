@@ -1239,6 +1239,7 @@ mod tauri_app {
                 browser_commands::browser_doc_state,
                 browser_commands::browser_agent_grant,
                 browser_commands::browser_agent_snapshot,
+                browser_commands::browser_agent_act,
                 conversations::list_conversations,
                 conversations::get_conversation,
                 conversations::list_all_conversations,

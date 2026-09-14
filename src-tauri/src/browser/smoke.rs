@@ -404,6 +404,24 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
             .map_err(err_string)?;
             Ok(json!(snapshot))
         }
+        // The acting half: `request` is the wire `ActionRequest`
+        // (`{generation, ref?, action: {kind, …}}`), the same shape the MCP
+        // tools build.
+        "browser_agent_act" => {
+            let request: crate::browser::agent::ActionRequest = serde_json::from_value(
+                cmd.get("request").cloned().ok_or("request required")?,
+            )
+            .map_err(err_string)?;
+            let outcome = browser_commands::agent_act_core(
+                app,
+                &registry,
+                &str_arg(cmd, "tab_id")?,
+                &request,
+            )
+            .await
+            .map_err(err_string)?;
+            Ok(json!(outcome))
+        }
         "browser_url" => {
             let surface = registry
                 .surface(&str_arg(cmd, "tab_id")?)

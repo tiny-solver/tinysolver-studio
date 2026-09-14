@@ -62,9 +62,11 @@ use windows::Win32::Foundation::RECT;
 use windows::Win32::System::Com::{IStream, STREAM_SEEK_SET};
 use windows::Win32::UI::Shell::SHCreateMemStream;
 
+use super::super::agent::PointerButton;
 use super::super::channel::MessageSink;
 use super::super::hooks::LoadFailure;
 use super::super::profile;
+use super::super::surface::{PointerFailure, PointerGesture};
 use super::super::types::BrowserErrorKind;
 pub use super::{NavigationEvent, NavigationSink};
 
@@ -710,6 +712,88 @@ pub fn eval_in_world(
                 .ok_or_else(|| "non-string result".to_string())
         }));
     })
+}
+
+// ---------------------------------------------------------------------------
+// Trusted input
+// ---------------------------------------------------------------------------
+
+/// Deliver a real pointer event through CDP `Input.dispatchMouseEvent`.
+///
+/// Coordinates are viewport CSS pixels — the unit the world's `locate`
+/// answers in and the unit the protocol takes, so nothing is scaled. A click
+/// is a move followed by a press and a release per count, each sent only
+/// after the previous one completed: the engine would order them anyway, but
+/// a press issued before its move is processed lands where the pointer was.
+/// `done` hears the first failure, or success once the last step completed.
+/// A failure says whether anything reached the page: nothing has if the
+/// very first step — the move, before any button — is what failed, and the
+/// caller may then do the gesture another way; after that a retry would
+/// deliver a press the page already saw.
+///
+/// If a step cannot be issued at all, `done` is dropped unheard; the caller's
+/// channel closes and it reads that as the request having been dropped, which
+/// it was — and, not knowing how far it got, as delivered.
+pub fn dispatch_pointer(
+    webview: &wry::WebView,
+    gesture: PointerGesture,
+    done: impl FnOnce(Result<(), PointerFailure>) + 'static,
+) -> Result<(), String> {
+    let webview2 = core(webview);
+    let steps = match gesture {
+        PointerGesture::Move { x, y } => vec![mouse_event("mouseMoved", x, y, "none", 0)],
+        PointerGesture::Click { x, y, button, count } => {
+            let name = match button {
+                PointerButton::Left => "left",
+                PointerButton::Right => "right",
+            };
+            let mut steps = vec![mouse_event("mouseMoved", x, y, "none", 0)];
+            for n in 1..=count.max(1) {
+                steps.push(mouse_event("mousePressed", x, y, name, n));
+                steps.push(mouse_event("mouseReleased", x, y, name, n));
+            }
+            steps
+        }
+    };
+    run_input_steps(webview2, steps.into_iter().enumerate(), Box::new(done));
+    Ok(())
+}
+
+fn mouse_event(kind: &str, x: f64, y: f64, button: &str, click_count: u8) -> String {
+    json!({
+        "type": kind,
+        "x": x,
+        "y": y,
+        "button": button,
+        "clickCount": click_count,
+    })
+    .to_string()
+}
+
+fn run_input_steps(
+    webview: ICoreWebView2,
+    mut steps: std::iter::Enumerate<std::vec::IntoIter<String>>,
+    done: Box<dyn FnOnce(Result<(), PointerFailure>)>,
+) {
+    let Some((index, params)) = steps.next() else {
+        done(Ok(()));
+        return;
+    };
+    let next = webview.clone();
+    let issued = call_async(&webview, "Input.dispatchMouseEvent", &params, move |answer| {
+        match answer {
+            Ok(_) => run_input_steps(next, steps, done),
+            Err(error) => done(Err(PointerFailure {
+                // Step 0 is the move; a button event has reached the page
+                // only once a later step has run.
+                delivered: index > 0,
+                error,
+            })),
+        }
+    });
+    if let Err(err) = issued {
+        tracing::warn!("[browser] Input.dispatchMouseEvent could not be issued: {err}");
+    }
 }
 
 // ---------------------------------------------------------------------------

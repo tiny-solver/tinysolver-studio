@@ -17,11 +17,12 @@ use tokio::sync::RwLock;
 
 use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::browser_tools::{
-    BrowserSnapshotOutcome, BrowserTabsOutcome, BrowserToolAccess, ERROR_NO_SUCH_TAB,
+    BrowserActOutcome, BrowserSnapshotOutcome, BrowserTabsOutcome, BrowserToolAccess,
+    ERROR_NO_SUCH_TAB,
 };
 use crate::acp::delegation::transport::{
-    read_frame, write_frame, BrokerAskRequest, BrokerBrowserSnapshotRequest,
-    BrokerBrowserTabsRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
+    read_frame, write_frame, BrokerAskRequest, BrokerBrowserActRequest,
+    BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
     BrokerCreateAutomationRequest, BrokerCreateWorkTaskRequest, BrokerResponse,
     BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest,
@@ -148,8 +149,9 @@ pub struct DelegationListener {
     /// feature flags at call time, so flipping the setting off stops writes
     /// from sessions that were launched while it was on.
     pub authoring: Arc<dyn ChatAuthoringAccess>,
-    /// Lists the built-in browser's tabs and reads a shared page
-    /// (`browser_list_tabs` / `browser_snapshot`). Like the authoring impl it
+    /// Lists the built-in browser's tabs, reads a shared page and acts on one
+    /// (`browser_list_tabs` / `browser_snapshot` / the action tools). Like the
+    /// authoring impl it
     /// re-checks its feature flag at call time; unlike every other arm here it
     /// exists only in the desktop build, because a browser tab is a native
     /// webview — server mode gets `NoBrowserTabs`.
@@ -503,6 +505,12 @@ impl DelegationListener {
                 // own end, and a caller that walked away simply gets no answer.
                 browser_snapshot_response(self.process_browser_snapshot(req).await)?
             }
+            BrokerMessage::BrowserAct(req) => {
+                // Same shape as the read: bounded by the engine's own
+                // timeouts, and an action that has happened has to leave its
+                // line on the strip whether or not the caller is still there.
+                browser_act_response(self.process_browser_act(req).await)?
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -765,6 +773,20 @@ impl DelegationListener {
         self.browser.snapshot(&req.tab_id, req.max_chars).await
     }
 
+    /// Validate the token and act on one shared page. An invalid token gets
+    /// the same "no such tab" a wrong id gets, for the reason given on
+    /// [`Self::process_browser_snapshot`].
+    async fn process_browser_act(&self, req: BrokerBrowserActRequest) -> BrowserActOutcome {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return BrowserActOutcome::refused(
+                &req.tab_id,
+                ERROR_NO_SUCH_TAB,
+                format!("No browser tab {} is open.", req.tab_id),
+            );
+        }
+        self.browser.act(&req.tab_id, req.request).await
+    }
+
     /// Validate the token and hand the progress report to the task engine,
     /// which resolves the parent connection to its owning task + generation.
     async fn process_task_progress(&self, req: BrokerTaskProgressRequest) -> TaskReportAck {
@@ -974,6 +996,16 @@ fn browser_tabs_response(outcome: BrowserTabsOutcome) -> std::io::Result<BrokerR
 fn browser_snapshot_response(
     outcome: BrowserSnapshotOutcome,
 ) -> std::io::Result<BrokerResponse> {
+    Ok(BrokerResponse {
+        outcome: serde_json::to_value(&outcome).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
+        })?,
+    })
+}
+
+/// Serialize a [`BrowserActOutcome`] into a [`BrokerResponse`] for the
+/// `BrowserAct` arm — the companion renders it into the action tool's result.
+fn browser_act_response(outcome: BrowserActOutcome) -> std::io::Result<BrokerResponse> {
     Ok(BrokerResponse {
         outcome: serde_json::to_value(&outcome).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
@@ -1255,6 +1287,18 @@ mod tests {
                 .await
                 .push(format!("snapshot {tab_id} {max_chars:?}"));
             BrowserSnapshotOutcome::grant_required(tab_id)
+        }
+        async fn act(
+            &self,
+            tab_id: &str,
+            request: crate::browser::agent::ActionRequest,
+        ) -> BrowserActOutcome {
+            self.calls.lock().await.push(format!(
+                "act {tab_id} {} {:?}",
+                request.generation,
+                serde_json::to_value(&request.action).unwrap()
+            ));
+            BrowserActOutcome::control_required(tab_id)
         }
     }
 
@@ -2829,6 +2873,43 @@ mod tests {
         );
     }
 
+    /// An action reaches the browser with the whole request — token checked,
+    /// nothing reinterpreted on the way — and its refusal comes back as a
+    /// value the companion can render.
+    #[tokio::test]
+    async fn an_action_reaches_the_browser_with_its_request() {
+        use crate::browser::agent::{ActionKind, ActionRequest};
+        let browser = Arc::new(StubBrowser::default());
+        let listener = make_browser_listener(browser_tokens().await, browser.clone());
+
+        let acted = browser_round_trip(
+            listener,
+            BrokerMessage::BrowserAct(BrokerBrowserActRequest {
+                token: "tok".into(),
+                tab_id: "t1".into(),
+                request: ActionRequest {
+                    generation: "g.4.2".into(),
+                    target: Some("e5".into()),
+                    action: ActionKind::Type {
+                        text: "Ada".into(),
+                        submit: true,
+                    },
+                },
+            }),
+        )
+        .await;
+        assert_eq!(
+            acted.outcome["error"],
+            crate::acp::browser_tools::ERROR_CONTROL_REQUIRED
+        );
+        assert_eq!(acted.outcome["tabId"], "t1");
+        assert_eq!(
+            browser.calls.lock().await.as_slice(),
+            &[r#"act t1 g.4.2 Object {"kind": String("type"), "submit": Bool(true), "text": String("Ada")}"#
+                .to_string()]
+        );
+    }
+
     /// A caller who cannot prove it is a companion is told the same thing a
     /// user with no tabs open would be told, and the browser is never asked.
     /// Anything else would make the refusal codes a way to enumerate someone's
@@ -2860,6 +2941,22 @@ mod tests {
         // `t1` really is open and really is shared — and the answer is the one
         // a nonexistent tab gets.
         assert_eq!(read.outcome["error"], ERROR_NO_SUCH_TAB);
+        assert!(browser.calls.lock().await.is_empty());
+
+        let acted = browser_round_trip(
+            make_browser_listener(browser_tokens().await, browser.clone()),
+            BrokerMessage::BrowserAct(BrokerBrowserActRequest {
+                token: "not-a-token".into(),
+                tab_id: "t1".into(),
+                request: crate::browser::agent::ActionRequest {
+                    generation: "g".into(),
+                    target: Some("e1".into()),
+                    action: crate::browser::agent::ActionKind::Hover,
+                },
+            }),
+        )
+        .await;
+        assert_eq!(acted.outcome["error"], ERROR_NO_SUCH_TAB);
         assert!(browser.calls.lock().await.is_empty());
     }
 }

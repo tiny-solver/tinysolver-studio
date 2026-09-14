@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react"
 
-import { Bot, ChevronDown, ShieldOff, TriangleAlert } from "lucide-react"
+import {
+  Bot,
+  ChevronDown,
+  Eye,
+  MousePointerClick,
+  ShieldOff,
+  TriangleAlert,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -21,7 +28,13 @@ import {
   type BrowserAgentActivity,
 } from "@/lib/browser/browser-tab-store"
 import { displayHostPort } from "@/lib/browser/browser-url"
-import type { AgentGrant, BrowserTabState } from "@/lib/browser/types"
+import type {
+  AgentAction,
+  AgentGrant,
+  AgentOutcome,
+  BrowserTabState,
+  GrantLevel,
+} from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
 import { cn } from "@/lib/utils"
 
@@ -29,11 +42,10 @@ import { cn } from "@/lib/utils"
  * The one place a person hands a page to an agent, and the running account of
  * what agents did with it.
  *
- * Only the `read` level is offered. The model has three, and the backend
- * understands all three, but nothing in the app can act on a page yet: a
- * "control" entry in this menu would be the interface promising something the
- * product does not do. It becomes a two-entry menu the day acting on a page
- * exists, not before.
+ * Two levels are offered, `read` and `control`, as two entries of one menu:
+ * reading a page cannot change it, acting on it can, and they are different
+ * decisions for the person to make. A shared tab can be moved between the two
+ * without being taken back first.
  */
 
 /** How long the page border stays lit after an agent touches the tab. Long
@@ -136,13 +148,16 @@ export function BrowserAgentShareControl({
   const grant = state?.agentGrant ?? null
   const origin = shareableOrigin(state)
 
-  const share = (level: "read" | "none") => {
+  const share = (level: GrantLevel) => {
     if (!backendId) return
     void browserAgentGrant(backendId, level)
       .then(() => {
-        if (level === "read" && origin) {
-          toast.success(t("sharedToast", { origin: displayOrigin(origin) }))
-        }
+        if (level === "none" || !origin) return
+        toast.success(
+          t(level === "control" ? "sharedControlToast" : "sharedToast", {
+            origin: displayOrigin(origin),
+          })
+        )
       })
       .catch((error: unknown) => {
         toast.error(t("shareFailed"), { description: String(error) })
@@ -151,27 +166,47 @@ export function BrowserAgentShareControl({
 
   if (!grant) {
     return (
-      <button
-        type="button"
-        className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground",
-          "transition-colors hover:bg-primary/8 hover:text-foreground",
-          "disabled:pointer-events-none disabled:opacity-40"
-        )}
-        title={
-          origin
-            ? t("share", { origin: displayOrigin(origin) })
-            : t("notShareable")
-        }
-        aria-label={t("shareLabel")}
-        disabled={!backendId || !origin}
-        onClick={() => share("read")}
-      >
-        <Bot className="h-4 w-4" />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground",
+              "transition-colors hover:bg-primary/8 hover:text-foreground",
+              "disabled:pointer-events-none disabled:opacity-40"
+            )}
+            title={
+              origin
+                ? t("share", { origin: displayOrigin(origin) })
+                : t("notShareable")
+            }
+            aria-label={t("shareLabel")}
+            disabled={!backendId || !origin}
+          >
+            <Bot className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+            {origin ? t("share", { origin: displayOrigin(origin) }) : null}
+          </DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => share("read")}>
+            <Eye className="h-3.5 w-3.5" />
+            <span>{t("shareRead")}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => share("control")}>
+            <MousePointerClick className="h-3.5 w-3.5" />
+            <span>{t("shareControl")}</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     )
   }
 
+  const acting = grant.level === "control"
+  const sharedWith = t(acting ? "sharedWithControl" : "sharedWith", {
+    origin: displayOrigin(grant.origin),
+  })
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -182,16 +217,16 @@ export function BrowserAgentShareControl({
             "bg-violet-500/12 transition-colors hover:bg-violet-500/20",
             AGENT_MARK
           )}
-          title={t("sharedWith", { origin: displayOrigin(grant.origin) })}
-          aria-label={t("sharedWith", { origin: displayOrigin(grant.origin) })}
+          title={sharedWith}
+          aria-label={sharedWith}
         >
           <Bot className="h-3.5 w-3.5 shrink-0" />
-          <span>{t("shared")}</span>
+          <span>{t(acting ? "sharedControl" : "shared")}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          {t("sharedWith", { origin: displayOrigin(grant.origin) })}
+          {sharedWith}
         </DropdownMenuLabel>
         {/* What the grant is actually bound to, in the words that matter: it
             outlives this page and ends at the edge of this site. */}
@@ -208,6 +243,20 @@ export function BrowserAgentShareControl({
           </DropdownMenuLabel>
         ) : null}
         <DropdownMenuSeparator />
+        {/* The other level, whichever that is: a person who shared for
+            reading is asked whether agents may act; one who allowed actions
+            can pull back to reading without ending the share. */}
+        {acting ? (
+          <DropdownMenuItem onSelect={() => share("read")}>
+            <Eye className="h-3.5 w-3.5" />
+            <span>{t("readOnly")}</span>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => share("control")}>
+            <MousePointerClick className="h-3.5 w-3.5" />
+            <span>{t("allowActions")}</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => share("none")}>
           <ShieldOff className="h-3.5 w-3.5" />
           <span>{t("stopSharing")}</span>
@@ -223,13 +272,47 @@ function displayOrigin(origin: string): string {
   return displayHostPort(origin) ?? origin
 }
 
+// One line per (action, outcome), spelled out rather than composed: "Refused
+// to click" and "Couldn't click" are different sentences in most languages,
+// not one template with a verb dropped in.
+const ACTIVITY_KEYS = {
+  read: {
+    done: "activity.read.done",
+    refused: "activity.read.refused",
+    failed: "activity.read.failed",
+  },
+  click: {
+    done: "activity.click.done",
+    refused: "activity.click.refused",
+    failed: "activity.click.failed",
+  },
+  hover: {
+    done: "activity.hover.done",
+    refused: "activity.hover.refused",
+    failed: "activity.hover.failed",
+  },
+  type: {
+    done: "activity.type.done",
+    refused: "activity.type.refused",
+    failed: "activity.type.failed",
+  },
+  press: {
+    done: "activity.press.done",
+    refused: "activity.press.refused",
+    failed: "activity.press.failed",
+  },
+  select: {
+    done: "activity.select.done",
+    refused: "activity.select.refused",
+    failed: "activity.select.failed",
+  },
+} as const satisfies Record<AgentAction, Record<AgentOutcome, string>>
+
 function activityLabel(
   t: ReturnType<typeof useTranslations<"Browser.agent">>,
   entry: BrowserAgentActivity
 ): string {
-  if (entry.outcome === "refused") return t("activityRefused")
-  if (entry.outcome === "failed") return t("activityFailed")
-  return t("activityRead")
+  return t(ACTIVITY_KEYS[entry.action][entry.outcome])
 }
 
 /**

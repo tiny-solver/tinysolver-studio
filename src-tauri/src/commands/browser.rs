@@ -15,7 +15,7 @@ use crate::browser::doc_guest::{self, DocGuestState, DocGuests, DocMode};
 use crate::browser::downloads::{BrowserDownload, BrowserDownloads};
 use crate::browser::policy::{BrowserPolicy, HostRule};
 use crate::browser::registry::{BrowserRegistry, BrowserTab};
-use crate::browser::surface::BrowserSurface;
+use crate::browser::surface::{BrowserSurface, PointerFailure, PointerGesture};
 use crate::browser::types::{
     Bounds, BrowserCapabilities, BrowserErrorInfo, BrowserErrorKind, BrowserTabState, ChannelKind,
     FrozenFrame, SurfaceChoice, SurfaceKind, TabKind,
@@ -1093,6 +1093,40 @@ fn grant_required(tab_id: &str) -> AppCommandError {
 /// the prompt that offers to share the tab.
 pub const BROWSER_I18N_KEY_GRANT_REQUIRED: &str = "browser.agent.error.grantRequired";
 
+/// The tab is shared for reading and an agent asked to act on it. A separate
+/// key from `grantRequired` because the person has a different button to
+/// press: not "share", but "allow actions" on a tab they already shared.
+pub const BROWSER_I18N_KEY_CONTROL_REQUIRED: &str = "browser.agent.error.controlRequired";
+
+/// The ref an action named is from a snapshot the page has moved past. Not a
+/// permission matter: the agent takes a new snapshot and carries on.
+pub const BROWSER_I18N_KEY_STALE_REF: &str = "browser.agent.error.staleRef";
+
+/// The action was allowed and could not be done: the element is covered,
+/// takes no text, has no such option. The message says which.
+pub const BROWSER_I18N_KEY_ACTION_FAILED: &str = "browser.agent.error.actionFailed";
+
+fn control_required(tab_id: &str) -> AppCommandError {
+    AppCommandError::permission_denied(format!(
+        "browser tab {tab_id} is shared for reading only; acting on it needs the person to \
+         allow actions"
+    ))
+    .with_i18n(BROWSER_I18N_KEY_CONTROL_REQUIRED, std::collections::BTreeMap::new())
+}
+
+fn stale_ref(detail: &str) -> AppCommandError {
+    AppCommandError::invalid_input(detail)
+        .with_i18n(BROWSER_I18N_KEY_STALE_REF, std::collections::BTreeMap::new())
+}
+
+fn action_failed(error: agent::ActionError, detail: &str) -> AppCommandError {
+    let mut params = std::collections::BTreeMap::new();
+    if let Some(slug) = serde_json::to_value(error).ok().and_then(|v| v.as_str().map(str::to_string)) {
+        params.insert("error".to_string(), slug);
+    }
+    AppCommandError::invalid_input(detail).with_i18n(BROWSER_I18N_KEY_ACTION_FAILED, params)
+}
+
 fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1347,6 +1381,326 @@ async fn read_shared_page(
     Ok(snapshot)
 }
 
+/// Act on a shared page — click, hover, type, press, select — by the ref a
+/// snapshot handed out.
+///
+/// Gated on [`GrantLevel::Control`], which a person grants separately from
+/// reading and can take back on its own. Reading a page cannot change it;
+/// acting can, and the two are different decisions for the person to make.
+///
+/// The checks run before the page is touched, because unlike a read there is
+/// nothing to withhold afterwards: a click that happened has happened. So the
+/// grant is checked first, then the host's half of the ref's freshness (the
+/// epoch it embedded in the snapshot's token), and only then is the world
+/// asked — which checks its own half and acts in the same evaluation, so
+/// nothing can happen to the page between the two.
+///
+/// Every attempt on an existing tab leaves a line on that tab's activity
+/// strip, under the kind of action it was.
+pub async fn agent_act_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    request: &agent::ActionRequest,
+) -> Result<agent::ActionOutcome, AppCommandError> {
+    revoke_if_listener_replaced(app, registry, tab_id).await;
+    let action = agent::AgentAction::from(&request.action);
+    let (outcome, answer) = match act_on_shared_page(registry, tab_id, request).await {
+        Ok(Settled { outcome, record }) => (
+            record.then_some(agent::AgentOutcome::Done),
+            Ok(outcome),
+        ),
+        Err((outcome, err)) => (outcome, Err(err)),
+    };
+    if let Some(outcome) = outcome {
+        events::emit_agent_activity(app, tab_id, action, outcome, now_millis());
+    }
+    answer
+}
+
+/// An action that happened, and whether the tab it happened on is still the
+/// tab under that id — if not, there is no strip to write to.
+struct Settled {
+    outcome: agent::ActionOutcome,
+    record: bool,
+}
+
+/// Whether an action may still go ahead, read fresh: same tab incarnation,
+/// a grant that still allows acting, and a page that has not moved past the
+/// snapshot the ref came from.
+///
+/// Asked more than once on the way to the page, because every `await` between
+/// the first answer and the delivery is time in which the person can take the
+/// grant back or the page can move. It cannot make the delivery atomic — the
+/// registry lock is never held across a main-thread hop — but it makes the
+/// window the length of the hop rather than of the whole exchange.
+fn still_actionable(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    generation: u64,
+    quoted: &str,
+) -> Result<String, ReadFailure> {
+    let now = registry.read(tab_id, |tab| {
+        (
+            tab.generation,
+            agent::epoch(tab.generation, tab.nav_epoch),
+            agent::level_of(tab.state.agent_grant.as_ref()),
+        )
+    });
+    let Some((generation_now, epoch, level)) = now else {
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    };
+    if generation_now != generation {
+        // Another tab under the same id: not the one the ref came from, and
+        // not one this attempt is about.
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    }
+    // An unshared tab gets the same answer as for a read: the agent should
+    // not learn that it would have been the level, rather than the share,
+    // that stopped it.
+    if !level.allows(GrantLevel::Read) {
+        return Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id)));
+    }
+    if !level.allows(GrantLevel::Control) {
+        return Err((Some(agent::AgentOutcome::Refused), control_required(tab_id)));
+    }
+    // The host's half of "is this ref from the page as it is now". The world
+    // would refuse an old token too, but only from its next snapshot on; the
+    // host knows now, and knows about navigations the world cannot see.
+    if !agent::ref_is_current(quoted, &epoch) {
+        return Err((
+            Some(agent::AgentOutcome::Failed),
+            stale_ref("the page has navigated since that snapshot; take a new one"),
+        ));
+    }
+    Ok(epoch)
+}
+
+async fn act_on_shared_page(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    request: &agent::ActionRequest,
+) -> Result<Settled, ReadFailure> {
+    let Some((surface, generation)) =
+        registry.read(tab_id, |tab| (tab.surface.clone(), tab.generation))
+    else {
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    };
+    let failed = |err: AppCommandError| (Some(agent::AgentOutcome::Failed), err);
+    still_actionable(registry, tab_id, generation, &request.generation)?;
+    if request.target.is_none() && !matches!(request.action, agent::ActionKind::Press { .. }) {
+        return Err(failed(AppCommandError::invalid_input(
+            "this action needs the ref of an element from a snapshot",
+        )));
+    }
+
+    // A real pointer where the platform has one. A failure before anything
+    // reached the page falls back to the dispatched kind, and the outcome
+    // says which it was; a failure after that is reported as what it is.
+    if surface.supports_trusted_input() && request.action.is_pointer() {
+        if let Some(target) = request.target.as_deref() {
+            if let Some(outcome) =
+                deliver_trusted_pointer(registry, tab_id, generation, &surface, target, request)
+                    .await?
+            {
+                return settle(registry, tab_id, generation, outcome);
+            }
+            // Time has passed on the trusted path; ask again before the
+            // dispatched one touches the page.
+            still_actionable(registry, tab_id, generation, &request.generation)?;
+        }
+    }
+
+    let raw = eval_in_world_string(&surface, &agent::act_call(request))
+        .await
+        .map_err(failed)?;
+    if raw == agent::ENGINE_ABSENT {
+        // No snapshot was ever taken in this document, so whatever ref the
+        // caller holds is from another one.
+        return Err(failed(stale_ref(
+            "no snapshot has been taken of this page; take one first",
+        )));
+    }
+    let answer: agent::WorldAnswer = serde_json::from_str(&raw).map_err(|e| {
+        failed(window_err("Failed to act on the page", format!("unreadable answer: {e}")))
+    })?;
+    let outcome = accept(answer, agent::Fidelity::Synthetic).map_err(failed)?;
+    settle(registry, tab_id, generation, outcome)
+}
+
+/// Ask the world where the element is and put a real pointer there.
+///
+/// `Ok(None)` when the platform delivered nothing — the caller falls back to
+/// dispatching. `Err` for what the world itself refused (a stale ref, a
+/// covered element), which a fallback would not change, and for a gesture
+/// that failed after part of it had reached the page, which a fallback would
+/// do twice.
+async fn deliver_trusted_pointer(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    tab_generation: u64,
+    surface: &BrowserSurface,
+    target: &str,
+    request: &agent::ActionRequest,
+) -> Result<Option<agent::ActionOutcome>, ReadFailure> {
+    let failed = |err: AppCommandError| (Some(agent::AgentOutcome::Failed), err);
+    let generation = request.generation.as_str();
+    let action = &request.action;
+    let raw = eval_in_world_string(surface, &agent::locate_call(generation, target))
+        .await
+        .map_err(failed)?;
+    if raw == agent::ENGINE_ABSENT {
+        return Err(failed(stale_ref(
+            "no snapshot has been taken of this page; take one first",
+        )));
+    }
+    let answer: agent::WorldAnswer = serde_json::from_str(&raw).map_err(|e| {
+        failed(window_err("Failed to act on the page", format!("unreadable answer: {e}")))
+    })?;
+    let (Some(x), Some(y)) = (answer.x, answer.y) else {
+        // Not ok, or ok with no point — the first is a refusal, the second a
+        // world this host does not understand; neither is improved by a
+        // synthetic retry against the same answer.
+        return match accept(answer, agent::Fidelity::Trusted) {
+            Ok(_) => Ok(None),
+            Err(err) => Err(failed(err)),
+        };
+    };
+    let gesture = match action {
+        agent::ActionKind::Click { button, count } => PointerGesture::Click {
+            x,
+            y,
+            button: button.unwrap_or_default(),
+            count: count.unwrap_or(1).clamp(1, 3),
+        },
+        agent::ActionKind::Hover => PointerGesture::Move { x, y },
+        _ => return Ok(None),
+    };
+    // The world's answer is a moment old by now, and the pointer is about to
+    // land for real: the grant and the page have to be as they were.
+    still_actionable(registry, tab_id, tab_generation, generation)?;
+    match dispatch_pointer(surface, gesture).await {
+        Ok(()) => Ok(Some(agent::ActionOutcome {
+            fidelity: agent::Fidelity::Trusted,
+            url: answer.url,
+        })),
+        Err(PointerFailure {
+            delivered: false,
+            error,
+        }) => {
+            tracing::warn!("[browser] trusted input not delivered, dispatching instead: {error}");
+            Ok(None)
+        }
+        Err(PointerFailure { error, .. }) => Err(failed(window_err(
+            "Failed to act on the page",
+            format!("the pointer was delivered only in part: {error}"),
+        ))),
+    }
+}
+
+async fn dispatch_pointer(
+    surface: &BrowserSurface,
+    gesture: PointerGesture,
+) -> Result<(), PointerFailure> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), PointerFailure>>();
+    surface
+        .dispatch_pointer(gesture, move |result| {
+            let _ = tx.send(result);
+        })
+        .map_err(|e| PointerFailure {
+            delivered: false,
+            error: e.to_string(),
+        })?;
+    // Not knowing how far a gesture got is read as it having got somewhere.
+    match tokio::time::timeout(Duration::from_secs(5), rx).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err(PointerFailure {
+            delivered: true,
+            error: "the request was dropped".into(),
+        }),
+        Err(_) => Err(PointerFailure {
+            delivered: true,
+            error: "the engine did not answer".into(),
+        }),
+    }
+}
+
+/// The world's answer as the agent's: the outcome, or the refusal it was.
+fn accept(
+    answer: agent::WorldAnswer,
+    fidelity: agent::Fidelity,
+) -> Result<agent::ActionOutcome, AppCommandError> {
+    if answer.ok {
+        return Ok(agent::ActionOutcome {
+            fidelity,
+            url: answer.url,
+        });
+    }
+    let detail = answer
+        .detail
+        .unwrap_or_else(|| "the action could not be done".to_string());
+    match answer.error {
+        Some(agent::ActionError::Stale) | None => Err(stale_ref(&detail)),
+        Some(error) => Err(action_failed(error, &detail)),
+    }
+}
+
+/// After the action. It has happened, so nothing here can withhold it; what
+/// is decided is what to tell the agent and the strip.
+///
+/// The page the world says it acted on is one the grant covers — always, since
+/// the world acts only at the address its snapshot was taken at and that
+/// address passed the read's check — so that part is a guard on the
+/// reasoning, not a decision; if it ever fails, the agent gets the ordinary
+/// refusal and the strip a refusal. A grant that was taken back while the
+/// action was in the air does not change the answer: the click landed, and
+/// saying otherwise would be false in both places. The next attempt is
+/// refused.
+///
+/// A tab that is a different incarnation by now — closed and reopened under
+/// the same id while the action was in flight — is not the one anything
+/// happened on. The agent still hears what happened; the new tab's strip
+/// does not.
+fn settle(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    generation: u64,
+    outcome: agent::ActionOutcome,
+) -> Result<Settled, ReadFailure> {
+    let walked_origin = Url::parse(&outcome.url).ok().as_ref().and_then(hooks::origin_of);
+    let (same_tab, elsewhere) = registry
+        .read(tab_id, |tab| {
+            (
+                tab.generation == generation,
+                tab.state
+                    .agent_grant
+                    .as_ref()
+                    .is_some_and(|grant| !grant.covers(walked_origin.as_deref())),
+            )
+        })
+        .unwrap_or((false, false));
+    if same_tab && elsewhere {
+        tracing::warn!(
+            "[browser] tab {tab_id}: an action was done at {} which the grant does not cover",
+            outcome.url
+        );
+        return Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id)));
+    }
+    Ok(Settled {
+        outcome,
+        record: same_tab,
+    })
+}
+
 /// The two browser tools an agent gets, answered from this process's tab
 /// registry.
 ///
@@ -1433,6 +1787,41 @@ impl crate::acp::browser_tools::BrowserToolAccess for McpBrowserTools {
                 )
             }
             Err(err) => BrowserSnapshotOutcome::refused(tab_id, ERROR_READ_FAILED, err.message),
+        }
+    }
+
+    async fn act(
+        &self,
+        tab_id: &str,
+        request: agent::ActionRequest,
+    ) -> crate::acp::browser_tools::BrowserActOutcome {
+        use crate::acp::browser_tools::{
+            BrowserActOutcome, ERROR_ACTION_FAILED, ERROR_NO_SUCH_TAB, ERROR_UNAVAILABLE,
+            NO_BROWSER_NOTE,
+        };
+        let Some(registry) = self.registry().await else {
+            return BrowserActOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+        };
+        match agent_act_core(&self.app, &registry, tab_id, &request).await {
+            Ok(outcome) => BrowserActOutcome::done(tab_id, outcome),
+            Err(err) => match err.i18n_key.as_deref() {
+                Some(BROWSER_I18N_KEY_GRANT_REQUIRED) => BrowserActOutcome::grant_required(tab_id),
+                Some(BROWSER_I18N_KEY_CONTROL_REQUIRED) => {
+                    BrowserActOutcome::control_required(tab_id)
+                }
+                Some(BROWSER_I18N_KEY_STALE_REF) => BrowserActOutcome::stale_ref(tab_id, &err.message),
+                _ if matches!(err.code, crate::app_error::AppErrorCode::NotFound) => {
+                    BrowserActOutcome::refused(
+                        tab_id,
+                        ERROR_NO_SUCH_TAB,
+                        format!(
+                            "No browser tab {tab_id} is open. Call browser_list_tabs for the ids \
+                             that are."
+                        ),
+                    )
+                }
+                _ => BrowserActOutcome::refused(tab_id, ERROR_ACTION_FAILED, err.message),
+            },
         }
     }
 }
@@ -1764,6 +2153,18 @@ pub async fn browser_agent_snapshot(
     max_chars: Option<usize>,
 ) -> Result<agent::PageSnapshot, AppCommandError> {
     agent_snapshot_core(&app, &registry, &tab_id, &agent::SnapshotRequest { max_chars }).await
+}
+
+/// Act on a shared page by ref. The check for `control` is inside
+/// `agent_act_core`, so every caller gets it.
+#[tauri::command]
+pub async fn browser_agent_act(
+    app: AppHandle,
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+    request: agent::ActionRequest,
+) -> Result<agent::ActionOutcome, AppCommandError> {
+    agent_act_core(&app, &registry, &tab_id, &request).await
 }
 
 /// Downloads this run started, oldest first. The frontend hydrates from it on

@@ -2790,6 +2790,597 @@
     ariaNode[elementSymbol] = element;
   }
 
+  // browser-agent/src/act.ts
+  function pointAt(el) {
+    el.scrollIntoView?.({
+      block: "center",
+      inline: "center",
+      behavior: "instant"
+    });
+    const box = visibleBox(el);
+    if (!box)
+      return {
+        error: "not-visible",
+        detail: `${describe(el)} has no visible box on screen`
+      };
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  }
+  function visibleBox(el) {
+    const rects = Array.from(el.getClientRects());
+    const box = rects.length ? rects.reduce((a, b) => a.width * a.height >= b.width * b.height ? a : b) : el.getBoundingClientRect();
+    const left = Math.max(box.left, 0);
+    const top = Math.max(box.top, 0);
+    const right = Math.min(box.right, window.innerWidth);
+    const bottom = Math.min(box.bottom, window.innerHeight);
+    if (right - left < 1 || bottom - top < 1) return null;
+    return new DOMRect(left, top, right - left, bottom - top);
+  }
+  function obstructionAt(x, y, target) {
+    const hit = deepElementFromPoint(x, y);
+    if (!hit) return document.documentElement;
+    for (let node = hit; node; node = parentOf(node)) {
+      if (node === target) return null;
+    }
+    return hit;
+  }
+  function deepElementFromPoint(x, y) {
+    let el = document.elementFromPoint(x, y);
+    while (el?.shadowRoot) {
+      const inner = el.shadowRoot.elementFromPoint(x, y);
+      if (!inner || inner === el) break;
+      el = inner;
+    }
+    return el;
+  }
+  function parentOf(node) {
+    const parent = node.parentNode;
+    return parent instanceof ShadowRoot ? parent.host : parent;
+  }
+  var PointerCtor = typeof PointerEvent === "function" ? PointerEvent : MouseEvent;
+  function clickAt(el, point, button, count, stillCurrent = () => true) {
+    const buttonCode = button === "right" ? 2 : 0;
+    const held = button === "right" ? 2 : 1;
+    const base = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: point.x,
+      clientY: point.y,
+      screenX: point.x,
+      screenY: point.y,
+      button: buttonCode
+    };
+    const pointer = (type, init = {}) => el.dispatchEvent(
+      new PointerCtor(type, {
+        ...base,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true,
+        ...init
+      })
+    );
+    const mouse = (type, init = {}) => el.dispatchEvent(new MouseEvent(type, { ...base, ...init }));
+    enter(el, point);
+    let delivered = 0;
+    for (let i = 1; i <= count; i++) {
+      if (i > 1 && !stillCurrent()) break;
+      const downOk = pointer("pointerdown", { detail: i, buttons: held });
+      if (downOk) {
+        const mouseDownOk = mouse("mousedown", { detail: i, buttons: held });
+        if (mouseDownOk) focusFrom(el);
+      }
+      pointer("pointerup", { detail: i, buttons: 0 });
+      if (downOk) mouse("mouseup", { detail: i, buttons: 0 });
+      if (button === "right") mouse("contextmenu", { detail: i });
+      else mouse("click", { detail: i });
+      delivered = i;
+    }
+    if (button === "left" && count >= 2 && delivered === count)
+      mouse("dblclick", { detail: delivered });
+    return delivered;
+  }
+  function isDisabledControl(el) {
+    try {
+      return el.matches(":disabled");
+    } catch {
+      return el.disabled === true;
+    }
+  }
+  function isRendered(el) {
+    const check = el.checkVisibility;
+    if (typeof check === "function")
+      return check.call(el, { visibilityProperty: true });
+    if (getComputedStyle(el).visibility === "hidden") return false;
+    for (let node = el; node; node = parentElementOf(node)) {
+      const style = getComputedStyle(node);
+      if (style.display === "none" || style.contentVisibility === "hidden")
+        return false;
+    }
+    return true;
+  }
+  function hoverAt(el, point) {
+    enter(el, point);
+  }
+  function enter(el, point) {
+    const base = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: point.x,
+      clientY: point.y,
+      screenX: point.x,
+      screenY: point.y
+    };
+    const pointer = (type, init = {}) => el.dispatchEvent(
+      new PointerCtor(type, {
+        ...base,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true,
+        ...init
+      })
+    );
+    const mouse = (type, init = {}) => el.dispatchEvent(new MouseEvent(type, { ...base, ...init }));
+    pointer("pointerover");
+    pointer("pointerenter", { bubbles: false });
+    mouse("mouseover");
+    mouse("mouseenter", { bubbles: false });
+    pointer("pointermove");
+    mouse("mousemove");
+  }
+  function focusFrom(el) {
+    for (let node = el; node; node = parentElementOf(node)) {
+      if (node instanceof HTMLElement && isFocusable2(node)) {
+        node.focus({ preventScroll: true });
+        return;
+      }
+    }
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) active.blur();
+  }
+  function parentElementOf(el) {
+    const parent = el.parentNode;
+    if (parent instanceof ShadowRoot) return parent.host;
+    return parent instanceof Element ? parent : null;
+  }
+  function isFocusable2(el) {
+    return el.tabIndex >= 0 || el.hasAttribute("tabindex") || el.isContentEditable;
+  }
+  var NON_TEXT_INPUTS = /* @__PURE__ */ new Set([
+    "button",
+    "checkbox",
+    "radio",
+    "submit",
+    "reset",
+    "file",
+    "image",
+    "hidden"
+  ]);
+  function isTextControl(el) {
+    if (el instanceof HTMLTextAreaElement) return true;
+    return el instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(el.type);
+  }
+  function editableFrom(el) {
+    if (isTextControl(el)) return el;
+    const reachable = (candidate) => candidate && isTextControl(candidate) && isRendered(candidate) ? candidate : null;
+    if (el instanceof HTMLLabelElement) return reachable(el.control);
+    if (el instanceof HTMLElement && el.isContentEditable) {
+      let host = el;
+      while (host.parentElement instanceof HTMLElement && host.parentElement.isContentEditable)
+        host = host.parentElement;
+      return host;
+    }
+    return reachable(el.querySelector("input:not([type=hidden]), textarea"));
+  }
+  function typeInto(el, text) {
+    const target = editableFrom(el);
+    if (!target)
+      return { error: "not-editable", detail: `${describe(el)} takes no text` };
+    if (isTextControl(target)) {
+      if (isDisabledControl(target))
+        return {
+          error: "disabled",
+          detail: `${describe(target)} is disabled`
+        };
+      if (target.readOnly)
+        return {
+          error: "not-editable",
+          detail: `${describe(target)} is read-only`
+        };
+      target.focus({ preventScroll: true });
+      replaceValue(target, text);
+      return null;
+    }
+    target.focus({ preventScroll: true });
+    replaceContents(target, text);
+    return null;
+  }
+  function replaceValue(input, text) {
+    let done = false;
+    try {
+      input.select();
+      done = text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text);
+    } catch {
+      done = false;
+    }
+    if (!done || input.value !== text) {
+      setNativeValue(input, text);
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          composed: true,
+          inputType: text ? "insertText" : "deleteContentBackward",
+          data: text || null
+        })
+      );
+    }
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function setNativeValue(el, value) {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    if (setter) setter.call(el, value);
+    else el.value = value;
+  }
+  function replaceContents(host, text) {
+    const selection = window.getSelection();
+    if (selection) {
+      const range = document.createRange();
+      range.selectNodeContents(host);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    let done = false;
+    try {
+      done = text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text);
+    } catch {
+      done = false;
+    }
+    if (!done) {
+      host.textContent = text;
+      host.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          composed: true,
+          inputType: text ? "insertText" : "deleteContentBackward",
+          data: text || null
+        })
+      );
+    }
+  }
+  var NAMED_KEYS = {
+    Enter: { code: "Enter", keyCode: 13 },
+    Tab: { code: "Tab", keyCode: 9 },
+    Escape: { code: "Escape", keyCode: 27 },
+    Backspace: { code: "Backspace", keyCode: 8 },
+    Delete: { code: "Delete", keyCode: 46 },
+    Insert: { code: "Insert", keyCode: 45 },
+    ArrowUp: { code: "ArrowUp", keyCode: 38 },
+    ArrowDown: { code: "ArrowDown", keyCode: 40 },
+    ArrowLeft: { code: "ArrowLeft", keyCode: 37 },
+    ArrowRight: { code: "ArrowRight", keyCode: 39 },
+    Home: { code: "Home", keyCode: 36 },
+    End: { code: "End", keyCode: 35 },
+    PageUp: { code: "PageUp", keyCode: 33 },
+    PageDown: { code: "PageDown", keyCode: 34 },
+    Space: { code: "Space", keyCode: 32, key: " " }
+  };
+  for (let n = 1; n <= 12; n++)
+    NAMED_KEYS[`F${n}`] = { code: `F${n}`, keyCode: 111 + n };
+  var KEY_ALIASES = {
+    Return: "Enter",
+    Esc: "Escape",
+    Del: "Delete",
+    Up: "ArrowUp",
+    Down: "ArrowDown",
+    Left: "ArrowLeft",
+    Right: "ArrowRight",
+    " ": "Space",
+    Spacebar: "Space"
+  };
+  var MODIFIER_ALIASES = {
+    Control: "ctrl",
+    Ctrl: "ctrl",
+    Shift: "shift",
+    Alt: "alt",
+    Option: "alt",
+    Meta: "meta",
+    Cmd: "meta",
+    Command: "meta",
+    Super: "meta"
+  };
+  var PUNCTUATION = {
+    "-": { code: "Minus", keyCode: 189 },
+    "=": { code: "Equal", keyCode: 187 },
+    "[": { code: "BracketLeft", keyCode: 219 },
+    "]": { code: "BracketRight", keyCode: 221 },
+    "\\": { code: "Backslash", keyCode: 220 },
+    ";": { code: "Semicolon", keyCode: 186 },
+    "'": { code: "Quote", keyCode: 222 },
+    ",": { code: "Comma", keyCode: 188 },
+    ".": { code: "Period", keyCode: 190 },
+    "/": { code: "Slash", keyCode: 191 },
+    "`": { code: "Backquote", keyCode: 192 }
+  };
+  function keyDescription(spec) {
+    const parts = spec.split("+");
+    const last = parts.pop() ?? "";
+    let name = last === "" && spec.endsWith("+") ? "+" : last;
+    const mods = { ctrl: false, shift: false, alt: false, meta: false };
+    for (const part of parts) {
+      if (part === "") continue;
+      const mod = MODIFIER_ALIASES[part];
+      if (!mod) return null;
+      mods[mod] = true;
+    }
+    name = KEY_ALIASES[name] ?? name;
+    if (name.length === 1) {
+      const upper = name.toUpperCase();
+      let code = "";
+      let keyCode = 0;
+      if (/[A-Z]/.test(upper)) {
+        code = `Key${upper}`;
+        keyCode = upper.charCodeAt(0);
+      } else if (/[0-9]/.test(name)) {
+        code = `Digit${name}`;
+        keyCode = name.charCodeAt(0);
+      } else if (PUNCTUATION[name]) {
+        ;
+        ({ code, keyCode } = PUNCTUATION[name]);
+      }
+      return { key: name, code, keyCode, ...mods, printable: true };
+    }
+    const named = NAMED_KEYS[name];
+    if (!named) return null;
+    return {
+      key: named.key ?? name,
+      code: named.code,
+      keyCode: named.keyCode,
+      ...mods,
+      printable: false
+    };
+  }
+  function pressOn(el, spec) {
+    const desc = keyDescription(spec);
+    if (!desc)
+      return {
+        error: "unsupported",
+        detail: `"${spec}" is not a key this browser knows`
+      };
+    if (el && isDisabledControl(el))
+      return { error: "disabled", detail: `${describe(el)} is disabled` };
+    if (el instanceof HTMLElement && deepActiveElement() !== el)
+      el.focus({ preventScroll: true });
+    const target = el ?? deepActiveElement() ?? document.body;
+    if (!target)
+      return { error: "not-visible", detail: "the page has no body yet" };
+    const init = {
+      key: desc.key,
+      code: desc.code,
+      keyCode: desc.keyCode,
+      which: desc.keyCode,
+      ctrlKey: desc.ctrl,
+      shiftKey: desc.shift,
+      altKey: desc.alt,
+      metaKey: desc.meta,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    };
+    const proceed = target.dispatchEvent(new KeyboardEvent("keydown", init));
+    if (proceed) {
+      const plain = !desc.ctrl && !desc.alt && !desc.meta;
+      if (desc.printable && plain) {
+        if (target.dispatchEvent(
+          new KeyboardEvent("keypress", {
+            ...init,
+            charCode: desc.key.charCodeAt(0)
+          })
+        ))
+          insertTyped(target, desc.key);
+      } else {
+        defaultActionFor(target, desc);
+      }
+    }
+    target.dispatchEvent(
+      new KeyboardEvent("keyup", { ...init, cancelable: false })
+    );
+    return null;
+  }
+  function deepActiveElement() {
+    let active = document.activeElement;
+    while (active?.shadowRoot?.activeElement)
+      active = active.shadowRoot.activeElement;
+    return active;
+  }
+  function insertTyped(target, char) {
+    const editable = editableFrom(target);
+    if (!editable) return;
+    if (isTextControl(editable) && (isDisabledControl(editable) || editable.readOnly))
+      return;
+    let done = false;
+    try {
+      done = document.execCommand("insertText", false, char);
+    } catch {
+      done = false;
+    }
+    if (done) return;
+    if (isTextControl(editable)) {
+      const start = editable.selectionStart ?? editable.value.length;
+      const end = editable.selectionEnd ?? editable.value.length;
+      setNativeValue(
+        editable,
+        editable.value.slice(0, start) + char + editable.value.slice(end)
+      );
+      try {
+        editable.setSelectionRange(start + char.length, start + char.length);
+      } catch {
+      }
+    } else {
+      editable.textContent = (editable.textContent ?? "") + char;
+    }
+    editable.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        composed: true,
+        inputType: "insertText",
+        data: char
+      })
+    );
+  }
+  function defaultActionFor(target, desc) {
+    const plain = !desc.ctrl && !desc.alt && !desc.meta;
+    switch (desc.key) {
+      case "Enter": {
+        if (desc.alt) return;
+        if (target instanceof HTMLTextAreaElement && plain) {
+          insertTyped(target, "\n");
+          return;
+        }
+        if (target instanceof HTMLElement && target.isContentEditable && plain) {
+          try {
+            document.execCommand("insertParagraph");
+          } catch {
+          }
+          return;
+        }
+        if (target instanceof HTMLInputElement && isTextControl(target)) {
+          submitImplicitly(target);
+          return;
+        }
+        if (isActivatable(target)) target.click();
+        return;
+      }
+      case " ": {
+        if (!plain) return;
+        if (target instanceof HTMLButtonElement || isCheckable(target)) {
+          target.click();
+          return;
+        }
+        insertTyped(target, " ");
+        return;
+      }
+      case "Tab": {
+        if (desc.ctrl || desc.alt || desc.meta) return;
+        moveFocus(target, desc.shift ? -1 : 1);
+        return;
+      }
+      case "Backspace":
+      case "Delete": {
+        if (!plain) return;
+        const editable = editableFrom(target);
+        if (!editable) return;
+        try {
+          document.execCommand(
+            desc.key === "Backspace" ? "delete" : "forwardDelete"
+          );
+        } catch {
+        }
+        return;
+      }
+      default:
+        return;
+    }
+  }
+  function isActivatable(el) {
+    if (el instanceof HTMLButtonElement) return true;
+    if (el instanceof HTMLAnchorElement) return el.hasAttribute("href");
+    if (el instanceof HTMLInputElement)
+      return el.type === "submit" || el.type === "button" || el.type === "reset" || el.type === "image";
+    return false;
+  }
+  function isCheckable(el) {
+    return el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio");
+  }
+  function submitImplicitly(input) {
+    const form = input.form;
+    if (!form || isDisabledControl(input)) return;
+    const elements = Array.from(form.elements);
+    const button = elements.find(
+      (el) => el instanceof HTMLButtonElement && el.type === "submit" || el instanceof HTMLInputElement && (el.type === "submit" || el.type === "image")
+    );
+    if (button instanceof HTMLElement) {
+      if (!button.disabled) button.click();
+      return;
+    }
+    const blocking = elements.filter(
+      (el) => el instanceof HTMLInputElement && isTextControl(el) && el.type !== "hidden"
+    );
+    if (blocking.length > 1) return;
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else form.submit();
+  }
+  function moveFocus(from, direction) {
+    const candidates = Array.from(
+      document.querySelectorAll(
+        "a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]"
+      )
+    ).filter((el) => isTabbable(el));
+    if (candidates.length === 0) return;
+    const index = candidates.indexOf(from);
+    const next = index === -1 ? direction === 1 ? candidates[0] : candidates[candidates.length - 1] : candidates[(index + direction + candidates.length) % candidates.length];
+    next.focus({ preventScroll: true });
+  }
+  function isTabbable(el) {
+    if (el.tabIndex < 0) return false;
+    if (el.disabled) return false;
+    if (el instanceof HTMLInputElement && el.type === "hidden") return false;
+    const style = getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    return el.getClientRects().length > 0;
+  }
+  var OPTIONS_LISTED = 20;
+  function selectIn(el, values) {
+    const other = el instanceof HTMLLabelElement ? el.control : el.closest("select") ?? el.querySelector("select");
+    const select = el instanceof HTMLSelectElement ? el : other instanceof HTMLSelectElement && isRendered(other) ? other : null;
+    if (!select)
+      return { error: "not-editable", detail: `${describe(el)} is not a select` };
+    if (isDisabledControl(select))
+      return { error: "disabled", detail: `${describe(select)} is disabled` };
+    if (values.length === 0)
+      return { error: "unsupported", detail: "no value to select" };
+    if (!select.multiple && values.length > 1)
+      return {
+        error: "unsupported",
+        detail: `${describe(select)} takes one value`
+      };
+    const options = Array.from(select.options);
+    const picked = [];
+    for (const wanted of values) {
+      const matches = (o) => o.value === wanted || o.label === wanted || (o.textContent ?? "").trim() === wanted;
+      const usable = (o) => !o.disabled && !(o.parentElement instanceof HTMLOptGroupElement && o.parentElement.disabled);
+      const option = options.find((o) => usable(o) && o.value === wanted) ?? options.find((o) => usable(o) && matches(o));
+      if (!option) {
+        const disabled = options.find((o) => !usable(o) && matches(o));
+        if (disabled)
+          return {
+            error: "disabled",
+            detail: `option ${JSON.stringify(wanted)} in ${describe(select)} is disabled`
+          };
+        const listed = options.slice(0, OPTIONS_LISTED).map((o) => JSON.stringify(o.value || o.label)).join(", ");
+        const more = options.length > OPTIONS_LISTED ? `, \u2026 (${options.length} in all)` : "";
+        return {
+          error: "no-option",
+          detail: `no option ${JSON.stringify(wanted)} in ${describe(select)}; the options are ${listed}${more}`
+        };
+      }
+      picked.push(option);
+    }
+    select.focus({ preventScroll: true });
+    for (const option of options) option.selected = false;
+    for (const option of picked) option.selected = true;
+    select.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    return null;
+  }
+  function describe(el) {
+    let name = el.tagName.toLowerCase();
+    if (el.id) name += `#${el.id}`;
+    const text = (el.textContent ?? "").trim().replace(/\s+/g, " ");
+    if (text) name += ` "${text.length > 40 ? `${text.slice(0, 40)}\u2026` : text}"`;
+    return name;
+  }
+
   // browser-agent/src/index.ts
   var GENERATION = generationToken();
   function generationToken() {
@@ -2802,21 +3393,42 @@
   }
   var refs = /* @__PURE__ */ new Map();
   var refsTakenAt = "";
+  var refsHistoryLength = 0;
+  var refsNavTicks = 0;
+  var navTicks = 0;
+  addEventListener("popstate", () => void navTicks++);
+  addEventListener("hashchange", () => void navTicks++);
+  function navigationEntryId() {
+    const nav = globalThis.navigation;
+    return nav?.currentEntry?.id ?? null;
+  }
+  var refsEntryId = null;
+  var snapshotSeq = 0;
   var refsToken = "";
   function snapshot(options = {}) {
     const root = document.body ?? document.documentElement;
     const next = /* @__PURE__ */ new Map();
     let rendered = "";
+    const lineToNode = /* @__PURE__ */ new Map();
     if (root) {
       const aria = generateAriaTree(root, { mode: "ai" });
       for (const [ref, info] of aria.info) next.set(ref, info.element);
       const { json } = renderAriaTreeAsJSON(aria, { mode: "ai" });
-      rendered = renderAriaSnapshotAsYaml(json);
+      rendered = renderAriaSnapshotAsYaml(json, { lineToNode });
+    }
+    const { text, truncated } = truncate(rendered, options.maxChars);
+    if (truncated) {
+      const shown = shownRefs(lineToNode, rendered, text);
+      for (const ref of Array.from(next.keys()))
+        if (!shown.has(ref)) next.delete(ref);
     }
     refs = next;
     refsTakenAt = location.href;
-    refsToken = options.epoch !== void 0 ? `${GENERATION}.${options.epoch}` : GENERATION;
-    const { text, truncated } = truncate(rendered, options.maxChars);
+    refsHistoryLength = history.length;
+    refsNavTicks = navTicks;
+    refsEntryId = navigationEntryId();
+    const own = `${GENERATION}.${++snapshotSeq}`;
+    refsToken = options.epoch !== void 0 ? `${own}.${options.epoch}` : own;
     return {
       generation: refsToken,
       url: refsTakenAt,
@@ -2831,12 +3443,140 @@
       truncated
     };
   }
+  function shownRefs(lineToNode, rendered, kept) {
+    const shown = /* @__PURE__ */ new Set();
+    const wholeLines = kept.length === rendered.length || rendered.startsWith(`${kept}
+`);
+    if (!wholeLines) return shown;
+    const lines = kept.length === 0 ? 0 : kept.split("\n").length;
+    for (const [line, node] of lineToNode)
+      if (line < lines && node.ref) shown.add(node.ref);
+    return shown;
+  }
   function elementForRef(generation, ref) {
-    if (!refsToken || generation !== refsToken) return null;
-    if (location.href !== refsTakenAt) return null;
+    if (!refsAreCurrent(generation)) return null;
     const element = refs.get(ref);
     if (!element?.isConnected) return null;
     return element;
+  }
+  function refsAreCurrent(generation) {
+    if (!refsToken || generation !== refsToken) return false;
+    if (location.href !== refsTakenAt) return false;
+    if (history.length !== refsHistoryLength) return false;
+    if (navTicks !== refsNavTicks) return false;
+    if (navigationEntryId() !== refsEntryId) return false;
+    return true;
+  }
+  function stale(ref) {
+    return {
+      error: "stale",
+      detail: ref ? `${ref} does not name an element on the page as it is now; take a new snapshot` : "the page has changed since that snapshot; take a new one"
+    };
+  }
+  function clamp(n, low, high, fallback) {
+    const value = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : fallback;
+    return Math.min(high, Math.max(low, value));
+  }
+  function act(generation, ref, request) {
+    const url = location.href;
+    const failed = (failure) => ({
+      ok: false,
+      url,
+      ...failure
+    });
+    let element = null;
+    if (ref !== null) {
+      element = elementForRef(generation, ref);
+      if (!element) return failed(stale(ref));
+    } else if (!refsAreCurrent(generation)) {
+      return failed(stale(null));
+    } else if (request.kind !== "press") {
+      return failed({
+        error: "unsupported",
+        detail: `${request.kind} needs a ref`
+      });
+    }
+    switch (request.kind) {
+      case "click":
+      case "hover": {
+        const target = element;
+        if (isDisabledControl(target))
+          return failed({
+            error: "disabled",
+            detail: `${describe(target)} is disabled`
+          });
+        const point = pointAt(target);
+        if ("error" in point) return failed(point);
+        const cover = obstructionAt(point.x, point.y, target);
+        if (cover)
+          return failed({
+            error: "obscured",
+            detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`
+          });
+        if (request.kind === "click") {
+          const count = clamp(request.count, 1, 3, 1);
+          const delivered = clickAt(
+            target,
+            point,
+            request.button === "right" ? "right" : "left",
+            count,
+            () => refsAreCurrent(generation) && target.isConnected
+          );
+          if (delivered < count)
+            return failed({
+              error: "stale",
+              detail: `the page changed after click ${delivered} of ${count}; take a new snapshot`
+            });
+        } else hoverAt(target, point);
+        return { ok: true, url: location.href };
+      }
+      case "type": {
+        const failure = typeInto(element, String(request.text ?? ""));
+        if (failure) return failed(failure);
+        if (request.submit) {
+          const after = pressOn(null, "Enter");
+          if (after) return failed(after);
+        }
+        return { ok: true, url: location.href };
+      }
+      case "press": {
+        const failure = pressOn(element, String(request.key ?? ""));
+        return failure ? failed(failure) : { ok: true, url: location.href };
+      }
+      case "select": {
+        const values = Array.isArray(request.values) ? request.values.map(String) : [String(request.values ?? "")];
+        const failure = selectIn(element, values);
+        return failure ? failed(failure) : { ok: true, url: location.href };
+      }
+      default:
+        return failed({
+          error: "unsupported",
+          detail: `"${String(request.kind)}" is not an action`
+        });
+    }
+  }
+  function locate(generation, ref) {
+    const url = location.href;
+    const element = elementForRef(generation, ref);
+    if (!element) return { ok: false, url, ...stale(ref) };
+    if (isDisabledControl(element))
+      return {
+        ok: false,
+        url,
+        error: "disabled",
+        detail: `${describe(element)} is disabled`
+      };
+    const point = pointAt(element);
+    if ("error" in point) return { ok: false, url, ...point };
+    const cover = obstructionAt(point.x, point.y, element);
+    if (cover)
+      return {
+        ok: false,
+        url,
+        error: "obscured",
+        detail: `${describe(cover)} is on top of ${describe(element)} where a pointer would land`
+      };
+    return { ok: true, url: location.href, x: point.x, y: point.y };
   }
   function truncate(text, maxChars) {
     if (!maxChars || maxChars <= 0 || text.length <= maxChars)
@@ -2847,5 +3587,5 @@
       truncated: true
     };
   }
-  globalThis.__codegAgent = { snapshot, elementForRef };
+  globalThis.__codegAgent = { snapshot, elementForRef, act, locate };
 })();

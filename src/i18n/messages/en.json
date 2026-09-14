@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "Share this page with agents ({origin})",
       "shareLabel": "Share with agents",
+      "shareRead": "Let agents read this page",
+      "shareControl": "Let agents read and act on this page",
       "notShareable": "This page has no web address to share with agents",
       "shared": "Shared",
+      "sharedControl": "Shared · can act",
       "sharedWith": "Agents can read {origin}",
+      "sharedWithControl": "Agents can read and act on {origin}",
       "sharedScope": "Sharing ends as soon as the page leaves this site.",
       "sharedScopeProgram": "It also ends if another program takes this port from {program}.",
       "sharedToast": "Agents can now read {origin}",
+      "sharedControlToast": "Agents can now read and act on {origin}",
       "stopSharing": "Stop sharing",
+      "allowActions": "Allow actions on this page",
+      "readOnly": "Reading only",
       "shareFailed": "This page can't be shared with agents",
-      "activityRead": "Read the page",
-      "activityRefused": "Refused: this page isn't shared",
-      "activityFailed": "Couldn't read the page",
+      "activity": {
+        "read": {
+          "done": "Read the page",
+          "refused": "Refused: this page isn't shared",
+          "failed": "Couldn't read the page"
+        },
+        "click": {
+          "done": "Clicked",
+          "refused": "Refused to click: actions aren't allowed on this page",
+          "failed": "Couldn't click"
+        },
+        "hover": {
+          "done": "Hovered",
+          "refused": "Refused to hover: actions aren't allowed on this page",
+          "failed": "Couldn't hover"
+        },
+        "type": {
+          "done": "Typed into a field",
+          "refused": "Refused to type: actions aren't allowed on this page",
+          "failed": "Couldn't type"
+        },
+        "press": {
+          "done": "Pressed a key",
+          "refused": "Refused to press a key: actions aren't allowed on this page",
+          "failed": "Couldn't press the key"
+        },
+        "select": {
+          "done": "Chose an option",
+          "refused": "Refused to choose an option: actions aren't allowed on this page",
+          "failed": "Couldn't choose the option"
+        }
+      },
       "activityCount": "{count}×",
       "expand": "{count} more",
       "collapse": "Less"

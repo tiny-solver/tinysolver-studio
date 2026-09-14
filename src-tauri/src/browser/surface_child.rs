@@ -413,6 +413,17 @@ impl ChildHandle {
             .map_err(ChildError::Op)
     }
 
+    /// Deliver a real pointer event at a page point; see
+    /// `shim::dispatch_pointer`.
+    pub fn dispatch_pointer(
+        &self,
+        gesture: super::surface::PointerGesture,
+        done: impl FnOnce(Result<(), super::surface::PointerFailure>) + Send + 'static,
+    ) -> Result<(), ChildError> {
+        self.with(move |wv| shim::dispatch_pointer(wv, gesture, done))?
+            .map_err(ChildError::Op)
+    }
+
     pub fn snapshot_png(
         &self,
         callback: impl Fn(Result<Vec<u8>, String>) + Send + 'static,

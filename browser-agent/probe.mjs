@@ -43,7 +43,42 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
   <div id="focusable" tabindex="0">Focusable but neither</div>
   <div id="hidden" style="display:none"><button>Invisible</button></div>
   <ul><li>alpha</li><li>beta</li></ul>
-</main></body></html>`
+  <section id="act">
+    <button id="count" onclick="this.dataset.n = (Number(this.dataset.n || 0) + 1)">Count</button>
+    <form id="f" onsubmit="event.preventDefault(); this.dataset.submitted = document.getElementById('name').value">
+      <label>Name <input id="name" name="name"></label>
+      <button type="submit" id="save" onclick="this.dataset.clicked = 1">Save</button>
+    </form>
+    <label>Size <select id="size"><option value="s">Small</option><option value="m" selected>Medium</option><option value="l">Large</option></select></label>
+    <div id="note" contenteditable="true">draft</div>
+    <div style="position:relative;height:60px">
+      <button id="under">Under</button>
+      <div id="veil" style="position:absolute;inset:0;background:rgba(0,0,0,.2)"></div>
+    </div>
+    <a id="anchor" href="#went">Anchor</a>
+  </section>
+</main>
+<script>
+  // What a React-style page does to a field: track the value on the instance
+  // and only treat an input event as a change when the DOM disagrees.
+  const name = document.getElementById("name")
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")
+  let tracked = ""
+  Object.defineProperty(name, "value", {
+    configurable: true,
+    get: () => setter.get.call(name),
+    set: (v) => { tracked = v; setter.set.call(name, v) },
+  })
+  name.addEventListener("input", () => {
+    if (setter.get.call(name) !== tracked) name.dataset.seen = setter.get.call(name)
+  })
+  document.getElementById("size").addEventListener("change", (e) => {
+    e.target.dataset.changed = e.target.value
+  })
+  document.getElementById("count").addEventListener("pointerdown", function () {
+    this.dataset.pointer = "1"
+  })
+</script></body></html>`
 
 const dir = mkdtempSync(join(tmpdir(), "codeg-agent-probe-"))
 const pageFile = join(dir, "probe.html")
@@ -182,14 +217,19 @@ try {
   check("a capped tree reports the cut", cut.truncated, true)
   check("a capped tree ends on a line boundary", cut.tree.endsWith(":"), true)
 
-  const g = JSON.stringify(snap.generation)
+  // Every snapshot hands out its own token, and the capped one above was a
+  // snapshot: the refs used from here on come from a fresh one.
+  const live = JSON.parse(
+    await run("JSON.stringify(__codegAgent.snapshot({}))")
+  )
+  const g = JSON.stringify(live.generation)
   // Two refs: one to spend on the removal case, one that must stay in the page
   // so the same-document case cannot pass for the wrong reason.
   const kept = JSON.stringify(
-    snap.tree.match(/button "Export" \[ref=(e\d+)\]/)[1]
+    live.tree.match(/button "Export" \[ref=(e\d+)\]/)[1]
   )
   const spent = JSON.stringify(
-    snap.tree.match(/listitem \[ref=(e\d+)\]: alpha/)[1]
+    live.tree.match(/listitem \[ref=(e\d+)\]: alpha/)[1]
   )
 
   check(
@@ -234,24 +274,289 @@ try {
     true
   )
 
-  // The boundary of what this world can know, pinned so that it reads as
-  // known rather than as overlooked. An address is not an identity: a route
-  // that leaves and comes back arrives at a string that matches, and a
-  // framework may have kept the node and changed what it means. The world
-  // cannot see the transition — the page's own `pushState` is invisible from
-  // an isolated world — so the ref still resolves here.
+  // An address is not an identity: a route that leaves and comes back
+  // arrives at a string that matches, and a framework may have kept the node
+  // and changed what it means. The world cannot see the transition — the
+  // page's own `pushState` is invisible from an isolated world — but it can
+  // see what the transition leaves behind: two more history entries.
   check(
-    "an address that leaves and returns defeats the address check",
+    "an address that leaves and returns is caught by the history length",
     await run(
       `(() => { const here = location.href;
                 const s = __codegAgent.snapshot({});
                 const m = s.tree.match(/button "Export" \\[ref=(e\\d+)\\]/);
                 history.pushState({}, "", "?elsewhere");
                 history.pushState({}, "", here);
-                return !!__codegAgent.elementForRef(s.generation, m[1]) })()`
+                return __codegAgent.elementForRef(s.generation, m[1]) })()`
     ),
-    true
+    null
   )
+  // …and a back-and-forward that lands where it started moves neither the
+  // address nor the length, and is caught by the events it fires.
+  check(
+    "a back and forward that return to the same page are caught by popstate",
+    await new Promise(async (resolve) => {
+      await run(
+        `history.pushState({}, "", "?one"); history.pushState({}, "", "?two");
+         history.back();`
+      )
+      await sleep(150)
+      await run(
+        `globalThis.__s = __codegAgent.snapshot({});
+         globalThis.__m = __s.tree.match(/button "Export" \\[ref=(e\\d+)\\]/)[1];
+         history.back(); history.forward();`
+      )
+      await sleep(250)
+      resolve(await run(`__codegAgent.elementForRef(__s.generation, __m)`))
+    }),
+    null
+  )
+
+  // ── acting ─────────────────────────────────────────────────────────────
+
+  const fresh = async () => {
+    const s = JSON.parse(await run("JSON.stringify(__codegAgent.snapshot({}))"))
+    const ref = (pattern) => {
+      const m = s.tree.match(pattern)
+      if (!m) throw new Error(`no match for ${pattern} in\n${s.tree}`)
+      return m[1]
+    }
+    return { gen: JSON.stringify(s.generation), ref }
+  }
+  const actJson = async (gen, ref, request) =>
+    JSON.parse(
+      await run(
+        `JSON.stringify(__codegAgent.act(${gen}, ${JSON.stringify(ref)}, ${JSON.stringify(request)}))`
+      )
+    )
+
+  {
+    const { gen, ref } = await fresh()
+    const count = ref(/button "Count" \[ref=(e\d+)\]/)
+    const result = await actJson(gen, count, { kind: "click" })
+    check(
+      "a click lands: handler ran, pointerdown seen, element focused",
+      [
+        result.ok,
+        await run(`document.getElementById("count").dataset.n`),
+        await run(`document.getElementById("count").dataset.pointer`),
+        await run(`document.activeElement.id`),
+      ],
+      [true, "1", "1", "count"]
+    )
+    check(
+      "a second click with the same ref still works — the page did not move",
+      (await actJson(gen, count, { kind: "click" })).ok &&
+        (await run(`document.getElementById("count").dataset.n`)),
+      "2"
+    )
+  }
+  {
+    const { gen, ref } = await fresh()
+    const name = ref(/textbox "Name" \[ref=(e\d+)\]/)
+    const result = await actJson(gen, name, { kind: "type", text: "Ada" })
+    check(
+      "typing replaces the value and a React-style tracker sees the change",
+      [
+        result.ok,
+        await run(`document.getElementById("name").value`),
+        await run(`document.getElementById("name").dataset.seen`),
+      ],
+      [true, "Ada", "Ada"]
+    )
+    const submit = await actJson(gen, name, {
+      kind: "type",
+      text: "Grace",
+      submit: true,
+    })
+    check(
+      "type with submit goes through the form's default button",
+      [
+        submit.ok,
+        await run(`document.getElementById("save").dataset.clicked`),
+        await run(`document.getElementById("f").dataset.submitted`),
+      ],
+      [true, "1", "Grace"]
+    )
+  }
+  {
+    const { gen, ref } = await fresh()
+    const size = ref(/combobox "Size" \[ref=(e\d+)\]/)
+    check(
+      "select by label fires change with the new value",
+      [
+        (await actJson(gen, size, { kind: "select", values: ["Large"] })).ok,
+        await run(`document.getElementById("size").value`),
+        await run(`document.getElementById("size").dataset.changed`),
+      ],
+      [true, "l", "l"]
+    )
+    const missing = await actJson(gen, size, { kind: "select", values: ["XL"] })
+    check(
+      "a value that is not an option is refused with the options listed",
+      [missing.ok, missing.error, missing.detail.includes('"m"')],
+      [false, "no-option", true]
+    )
+  }
+  {
+    const { gen, ref } = await fresh()
+    const note = ref(/generic \[ref=(e\d+)\]: draft/)
+    check(
+      "typing into a contenteditable replaces its text",
+      [
+        (await actJson(gen, note, { kind: "type", text: "final" })).ok,
+        await run(`document.getElementById("note").textContent`),
+      ],
+      [true, "final"]
+    )
+  }
+  {
+    const { gen, ref } = await fresh()
+    const under = ref(/button "Under" \[ref=(e\d+)\]/)
+    const result = await actJson(gen, under, { kind: "click" })
+    check(
+      "a click on a covered element is refused, naming what covers it",
+      [result.ok, result.error, result.detail.includes("div#veil")],
+      [false, "obscured", true]
+    )
+    const located = JSON.parse(
+      await run(
+        `JSON.stringify(__codegAgent.locate(${gen}, ${JSON.stringify(under)}))`
+      )
+    )
+    check("locate refuses on the same grounds", located.error, "obscured")
+    const count = ref(/button "Count" \[ref=(e\d+)\]/)
+    const point = JSON.parse(
+      await run(
+        `JSON.stringify(__codegAgent.locate(${gen}, ${JSON.stringify(count)}))`
+      )
+    )
+    check(
+      "locate answers with the point inside the element's box",
+      point.ok &&
+        (await run(
+          `(() => { const r = document.getElementById("count").getBoundingClientRect();
+                  return ${point.x} > r.left && ${point.x} < r.right && ${point.y} > r.top && ${point.y} < r.bottom })()`
+        )),
+      true
+    )
+  }
+  {
+    const { gen, ref } = await fresh()
+    const spent = ref(/listitem \[ref=(e\d+)\]: beta/)
+    await run(
+      `__codegAgent.elementForRef(${gen}, ${JSON.stringify(spent)}).remove()`
+    )
+    const result = await actJson(gen, spent, { kind: "click" })
+    check(
+      "acting on a removed element is stale, not a click on something else",
+      [result.ok, result.error],
+      [false, "stale"]
+    )
+    check(
+      "a key press to the focused element needs a current snapshot too",
+      (
+        await actJson(JSON.stringify("other"), null, {
+          kind: "press",
+          key: "Escape",
+        })
+      ).error,
+      "stale"
+    )
+  }
+  {
+    // Two snapshots of one document under one epoch are two snapshots: a
+    // token from the first does not resolve refs against the second's map.
+    const a = JSON.parse(await run("JSON.stringify(__codegAgent.snapshot({}))"))
+    const b = JSON.parse(await run("JSON.stringify(__codegAgent.snapshot({}))"))
+    const m = b.tree.match(/button "Count" \[ref=(e\d+)\]/)[1]
+    check(
+      "each snapshot hands out its own token, and an older one is refused",
+      [
+        a.generation !== b.generation,
+        await run(
+          `__codegAgent.elementForRef(${JSON.stringify(a.generation)}, ${JSON.stringify(m)})`
+        ),
+        !!(await run(
+          `__codegAgent.elementForRef(${JSON.stringify(b.generation)}, ${JSON.stringify(m)})`
+        )),
+      ],
+      [true, null, true]
+    )
+    // A capped tree hands out only the refs it showed.
+    const cut = JSON.parse(
+      await run("JSON.stringify(__codegAgent.snapshot({maxChars: 60}))")
+    )
+    const shown = [...cut.tree.matchAll(/\[ref=(e\d+)\]/g)].map((x) => x[1])
+    const hidden = "e" + (Math.max(...shown.map((r) => Number(r.slice(1)))) + 3)
+    check(
+      "a ref the cap hid from the agent is not actable",
+      [
+        cut.truncated,
+        shown.length > 0,
+        await run(
+          `__codegAgent.elementForRef(${JSON.stringify(cut.generation)}, ${JSON.stringify(hidden)})`
+        ),
+      ],
+      [true, true, null]
+    )
+  }
+  {
+    // Where the engine has the Navigation API, even a replaceState away and
+    // back — no length change, no event, same address — is caught.
+    const has = await run(
+      "typeof navigation !== 'undefined' && !!navigation.currentEntry"
+    )
+    if (has) {
+      check(
+        "with the Navigation API, replaceState away and back is caught",
+        await run(
+          `(() => { const here = location.href;
+                    const s = __codegAgent.snapshot({});
+                    const m = s.tree.match(/button "Count" \\[ref=(e\\d+)\\]/)[1];
+                    history.replaceState({}, "", "?away"); history.replaceState({}, "", here);
+                    return __codegAgent.elementForRef(s.generation, m) })()`
+        ),
+        null
+      )
+    } else console.log("skip  Navigation API not present in this engine")
+  }
+  {
+    // A disabled control is refused before anything is dispatched.
+    await run(`document.getElementById("count").disabled = true`)
+    const { gen, ref } = await fresh()
+    void ref
+    const s2 = JSON.parse(
+      await run("JSON.stringify(__codegAgent.snapshot({}))")
+    )
+    const m = (s2.tree.match(/button "Count" \[ref=(e\d+)\]/) || [])[1]
+    if (m) {
+      const r = await actJson(JSON.stringify(s2.generation), m, {
+        kind: "click",
+      })
+      check("a disabled button is refused as disabled", r.error, "disabled")
+    } else
+      console.log(
+        "skip  disabled button is not named by the tree (as ai mode has it)"
+      )
+    await run(`document.getElementById("count").disabled = false`)
+    void gen
+  }
+  {
+    const { gen, ref } = await fresh()
+    const anchor = ref(/link "Anchor" \[ref=(e\d+)\]/)
+    void anchor
+    const before = await run("location.href")
+    const result = await actJson(gen, anchor, { kind: "click" })
+    check(
+      "a dispatched click on a link follows it",
+      [
+        result.ok,
+        (await run("location.href")) !== before && (await run("location.hash")),
+      ],
+      [true, "#went"]
+    )
+  }
 
   // …which is why the token carries whatever the host puts in it. The host
   // does see the transition, and a ref quoting an epoch it has moved past is

@@ -45,13 +45,14 @@ use crate::acp::chat_authoring::{
     NewAutomationSpec, NewWorkTaskSpec, MAX_PROMPT_CHARS, MAX_TITLE_CHARS,
 };
 use crate::acp::delegation::transport::{
-    client_ask_round_trip, client_browser_snapshot_round_trip, client_browser_tabs_round_trip,
+    client_ask_round_trip, client_browser_act_round_trip, client_browser_snapshot_round_trip,
+    client_browser_tabs_round_trip,
     client_cancel, client_cancel_task_round_trip, client_commit_feedback,
     client_create_automation_round_trip, client_create_work_task_round_trip,
     client_feedback_round_trip, client_resume_task_round_trip, client_round_trip,
     client_session_round_trip, client_status_round_trip, client_task_complete_round_trip,
-    client_task_progress_round_trip, BrokerAskRequest, BrokerBrowserSnapshotRequest,
-    BrokerBrowserTabsRequest, BrokerCancelRequest,
+    client_task_progress_round_trip, BrokerAskRequest, BrokerBrowserActRequest,
+    BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest, BrokerCancelRequest,
     BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerCreateAutomationRequest,
     BrokerCreateWorkTaskRequest, BrokerFeedbackRequest, BrokerRequest, BrokerResponse,
     BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest,
@@ -155,10 +156,13 @@ pub struct CompanionFeatures {
     pub automations: bool,
     /// `create_work_task` — queue a card on the work-task board from chat.
     pub taskboard: bool,
-    /// `browser_list_tabs` / `browser_snapshot` — the built-in browser's read
-    /// surface. Off unless the desktop build's setting says otherwise: the
-    /// listing names the sites the user has open, and nothing else codeg hands
-    /// an agent is a window onto what they are looking at right now.
+    /// `browser_list_tabs` / `browser_snapshot` and the five action tools
+    /// (`browser_click`, `browser_hover`, `browser_type`, `browser_press_key`,
+    /// `browser_select_option`) — the built-in browser's agent surface. Off
+    /// unless the desktop build's setting says otherwise: the listing names
+    /// the sites the user has open, and nothing else codeg hands an agent is a
+    /// window onto what they are looking at right now. Reading and acting are
+    /// then each gated per tab by the person, behind this switch.
     pub browser: bool,
 }
 
@@ -217,7 +221,8 @@ impl CompanionFeatures {
             "task_progress" | "task_complete" => self.tasks,
             "create_automation" => self.automations,
             "create_work_task" => self.taskboard,
-            "browser_list_tabs" | "browser_snapshot" => self.browser,
+            "browser_list_tabs" | "browser_snapshot" | "browser_click" | "browser_hover"
+            | "browser_type" | "browser_press_key" | "browser_select_option" => self.browser,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -732,6 +737,27 @@ async fn build_tools_call_spawn(
             let round_trip =
                 Box::pin(async move { client_browser_snapshot_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_browser_snapshot_result).await
+        }
+        "browser_click" | "browser_hover" | "browser_type" | "browser_press_key"
+        | "browser_select_option" => {
+            // Five names, one request: they differ only in the action they
+            // carry, and the checks (control grant, ref freshness) and the
+            // audit line are the same for all of them on the codeg side.
+            let (tab_id, request) = match browser_action_request(name.as_str(), &arguments) {
+                Ok(parsed) => parsed,
+                Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
+            };
+            let req = BrokerBrowserActRequest {
+                token: ctx.token.clone(),
+                tab_id,
+                request,
+            };
+            // No external_handle, and no broker-side cancel, as for the read:
+            // an action that has been sent to the page has happened, and the
+            // line it leaves on the strip is written on the codeg side.
+            let round_trip =
+                Box::pin(async move { client_browser_act_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_browser_act_result).await
         }
         "task_progress" => {
             let message = arguments
@@ -1442,6 +1468,160 @@ fn parse_max_chars(arguments: &Value) -> Option<usize> {
         None
     };
     raw.map(|n| usize::try_from(n).unwrap_or(usize::MAX))
+}
+
+/// Build the one request the five action tools share from a tool's
+/// arguments, or say what is missing in words the model can act on.
+///
+/// `tabId` / `generation` / `ref` are common; each tool adds its own. A
+/// missing `ref` is an argument error for every tool but `browser_press_key`,
+/// where leaving it out means "whatever has focus".
+pub fn browser_action_request(
+    name: &str,
+    arguments: &Value,
+) -> Result<(String, crate::browser::agent::ActionRequest), String> {
+    use crate::browser::agent::{ActionKind, ActionRequest, PointerButton};
+    let text = |key: &str| {
+        arguments
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let tab_id = text("tabId").or_else(|| text("tab_id")).ok_or_else(|| {
+        format!("{name} requires a non-empty `tabId` string (from browser_list_tabs)")
+    })?;
+    let generation = text("generation").ok_or_else(|| {
+        format!(
+            "{name} requires `generation`: the token from the browser_snapshot that named the \
+             ref, echoed exactly"
+        )
+    })?;
+    let target = text("ref");
+    // An option that is present has to be one this tool understands. A
+    // `button: "middle"` silently becoming a left click, or a `doubleClick:
+    // "yes"` silently becoming a single one, would do a different action
+    // from the one asked for and report it as done.
+    let flag = |key: &str| -> Result<bool, String> {
+        match arguments.get(key) {
+            None | Some(Value::Null) => Ok(false),
+            Some(Value::Bool(b)) => Ok(*b),
+            Some(other) => Err(format!("{name}: `{key}` must be true or false, not {other}")),
+        }
+    };
+    let action = match name {
+        "browser_click" => ActionKind::Click {
+            button: match arguments.get("button") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(b)) if b == "left" => None,
+                Some(Value::String(b)) if b == "right" => Some(PointerButton::Right),
+                Some(other) => {
+                    return Err(format!(
+                        "{name}: `button` must be \"left\" or \"right\", not {other}"
+                    ))
+                }
+            },
+            count: flag("doubleClick")?.then_some(2),
+        },
+        "browser_hover" => ActionKind::Hover,
+        "browser_type" => ActionKind::Type {
+            // `as_str`, not `text`: an empty string is a request to clear the
+            // field, and is a value.
+            text: arguments
+                .get("text")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!("{name} requires `text` (a string; pass \"\" to clear the field)")
+                })?,
+            submit: flag("submit")?,
+        },
+        "browser_press_key" => ActionKind::Press {
+            key: text("key").ok_or_else(|| {
+                format!("{name} requires `key` (e.g. \"Enter\", \"a\", \"Control+k\")")
+            })?,
+        },
+        "browser_select_option" => {
+            let values: Vec<String> = match arguments.get("values") {
+                Some(Value::Array(items)) => {
+                    // Every member, or none: dropping a non-string member
+                    // would select a different set than the one asked for.
+                    let mut values = Vec::with_capacity(items.len());
+                    for item in items {
+                        match item.as_str() {
+                            Some(v) => values.push(v.to_string()),
+                            None => {
+                                return Err(format!(
+                                    "{name}: every entry of `values` must be a string, not {item}"
+                                ))
+                            }
+                        }
+                    }
+                    values
+                }
+                Some(Value::String(one)) => vec![one.clone()],
+                _ => Vec::new(),
+            };
+            if values.is_empty() {
+                return Err(format!(
+                    "{name} requires `values`: a non-empty array of option values or labels"
+                ));
+            }
+            ActionKind::Select { values }
+        }
+        _ => return Err(format!("unknown tool: {name}")),
+    };
+    if target.is_none() && name != "browser_press_key" {
+        return Err(format!(
+            "{name} requires `ref`: an element ref from browser_snapshot (e.g. \"e12\")"
+        ));
+    }
+    Ok((
+        tab_id,
+        ActionRequest {
+            generation,
+            target,
+            action,
+        },
+    ))
+}
+
+/// Map an action tool's round-trip outcome (a serialized
+/// [`crate::acp::browser_tools::BrowserActOutcome`]) into an MCP `tools/call`
+/// result.
+///
+/// Soft refusals are `isError: false` like the read's: a stale ref or a
+/// missing grant is an instruction (snapshot again; ask the user), not a
+/// failure the turn should abort on.
+pub fn render_browser_act_result(outcome: &Value) -> Value {
+    let text = match outcome.get("action") {
+        Some(action) if action.is_object() => {
+            let fidelity = action
+                .get("fidelity")
+                .and_then(Value::as_str)
+                .unwrap_or("synthetic");
+            let url = action.get("url").and_then(Value::as_str).unwrap_or("");
+            let how = match fidelity {
+                "trusted" => "as a real input event",
+                _ => "as events dispatched by script (synthetic)",
+            };
+            format!(
+                "Done, {how}. The page was at {url}. Take a browser_snapshot to see what came \
+                 of it."
+            )
+        }
+        _ => outcome
+            .get("note")
+            .and_then(Value::as_str)
+            .unwrap_or("The action could not be done.")
+            .to_string(),
+    };
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": false,
+        "structuredContent": outcome.clone(),
+    })
 }
 
 /// Map a `browser_list_tabs` round-trip outcome (a serialized
@@ -3266,9 +3446,245 @@ mod tests {
             names,
             vec![
                 "browser_list_tabs".to_string(),
-                "browser_snapshot".to_string()
+                "browser_snapshot".to_string(),
+                "browser_click".to_string(),
+                "browser_hover".to_string(),
+                "browser_type".to_string(),
+                "browser_press_key".to_string(),
+                "browser_select_option".to_string(),
             ]
         );
+    }
+
+    /// The five action tools build one request. What each needs, and what
+    /// each refuses up front so the model can fix the call without a round
+    /// trip to codeg.
+    #[test]
+    fn action_tools_build_one_request_and_name_what_is_missing() {
+        use crate::browser::agent::{ActionKind, PointerButton};
+        let base = json!({ "tabId": "t1", "generation": "g.3.1", "ref": "e7" });
+        let with = |extra: Value| {
+            let mut v = base.clone();
+            for (k, val) in extra.as_object().unwrap() {
+                v[k] = val.clone();
+            }
+            v
+        };
+
+        let (tab, req) = browser_action_request("browser_click", &base).unwrap();
+        assert_eq!(tab, "t1");
+        assert_eq!(req.generation, "g.3.1");
+        assert_eq!(req.target.as_deref(), Some("e7"));
+        assert_eq!(
+            req.action,
+            ActionKind::Click {
+                button: None,
+                count: None
+            }
+        );
+        let (_, req) = browser_action_request(
+            "browser_click",
+            &with(json!({ "button": "right", "doubleClick": true })),
+        )
+        .unwrap();
+        assert_eq!(
+            req.action,
+            ActionKind::Click {
+                button: Some(PointerButton::Right),
+                count: Some(2)
+            }
+        );
+        // `doubleClick: false` is not a count of anything.
+        let (_, req) =
+            browser_action_request("browser_click", &with(json!({ "doubleClick": false })))
+                .unwrap();
+        assert_eq!(
+            req.action,
+            ActionKind::Click {
+                button: None,
+                count: None
+            }
+        );
+
+        let (_, req) = browser_action_request("browser_hover", &base).unwrap();
+        assert_eq!(req.action, ActionKind::Hover);
+
+        // An empty string is a value: it clears the field.
+        let (_, req) =
+            browser_action_request("browser_type", &with(json!({ "text": "" }))).unwrap();
+        assert_eq!(
+            req.action,
+            ActionKind::Type {
+                text: String::new(),
+                submit: false
+            }
+        );
+        let (_, req) = browser_action_request(
+            "browser_type",
+            &with(json!({ "text": "Ada", "submit": true })),
+        )
+        .unwrap();
+        assert_eq!(
+            req.action,
+            ActionKind::Type {
+                text: "Ada".into(),
+                submit: true
+            }
+        );
+        assert!(browser_action_request("browser_type", &base)
+            .unwrap_err()
+            .contains("`text`"));
+
+        // A key press may go without a ref — to whatever has focus — but not
+        // without a current snapshot.
+        let (_, req) = browser_action_request(
+            "browser_press_key",
+            &json!({ "tabId": "t1", "generation": "g.3.1", "key": "Enter" }),
+        )
+        .unwrap();
+        assert_eq!(req.target, None);
+        assert_eq!(
+            req.action,
+            ActionKind::Press {
+                key: "Enter".into()
+            }
+        );
+        assert!(browser_action_request("browser_press_key", &base)
+            .unwrap_err()
+            .contains("`key`"));
+
+        let (_, req) = browser_action_request(
+            "browser_select_option",
+            &with(json!({ "values": ["l", "Large"] })),
+        )
+        .unwrap();
+        assert_eq!(
+            req.action,
+            ActionKind::Select {
+                values: vec!["l".into(), "Large".into()]
+            }
+        );
+        // A single string is taken as a list of one, since that is how a model
+        // that forgot the brackets meant it.
+        let (_, req) = browser_action_request(
+            "browser_select_option",
+            &with(json!({ "values": "l" })),
+        )
+        .unwrap();
+        assert_eq!(
+            req.action,
+            ActionKind::Select {
+                values: vec!["l".into()]
+            }
+        );
+        assert!(
+            browser_action_request("browser_select_option", &with(json!({ "values": [] })))
+                .unwrap_err()
+                .contains("`values`")
+        );
+
+        // An option that is present and wrong is an error, not a default:
+        // the action done must be the action asked for.
+        for bad in [
+            json!({ "button": "middle" }),
+            json!({ "button": 2 }),
+            json!({ "doubleClick": "yes" }),
+        ] {
+            let err = browser_action_request("browser_click", &with(bad.clone())).unwrap_err();
+            assert!(err.contains("`button`") || err.contains("`doubleClick`"), "{bad}: {err}");
+        }
+        let (_, req) =
+            browser_action_request("browser_click", &with(json!({ "button": "left" }))).unwrap();
+        assert!(matches!(req.action, ActionKind::Click { button: None, .. }));
+        assert!(browser_action_request("browser_type", &with(json!({ "text": "x", "submit": 1 })))
+            .unwrap_err()
+            .contains("`submit`"));
+        assert!(browser_action_request(
+            "browser_select_option",
+            &with(json!({ "values": ["one", 2] }))
+        )
+        .unwrap_err()
+        .contains("`values`"));
+
+        // Every tool but press needs a ref; every tool needs the generation.
+        for name in ["browser_click", "browser_hover", "browser_type", "browser_select_option"] {
+            let err = browser_action_request(
+                name,
+                &json!({ "tabId": "t1", "generation": "g", "text": "x", "values": ["v"] }),
+            )
+            .unwrap_err();
+            assert!(err.contains("`ref`"), "{name}: {err}");
+        }
+        let err = browser_action_request("browser_click", &json!({ "tabId": "t1", "ref": "e1" }))
+            .unwrap_err();
+        assert!(err.contains("`generation`"));
+        let err = browser_action_request("browser_click", &json!({ "generation": "g", "ref": "e1" }))
+            .unwrap_err();
+        assert!(err.contains("`tabId`"));
+    }
+
+    /// The action tools go to the broker when the group is on, and are
+    /// refused synchronously with an argument error when a call is malformed.
+    #[tokio::test]
+    async fn action_tools_spawn_when_enabled_and_refuse_malformed_calls_up_front() {
+        let click = json!({
+            "jsonrpc": "2.0", "id": 64, "method": "tools/call",
+            "params": { "name": "browser_click",
+                        "arguments": { "tabId": "t1", "generation": "g.1.0", "ref": "e2" } }
+        })
+        .to_string();
+        assert!(matches!(
+            dispatch_with_features(BROWSER_ONLY, &click).await,
+            LineAction::Spawn(_)
+        ));
+        // Off by default, like the read tools.
+        let resp = unwrap_respond(dispatch_for_test(&click).await);
+        assert!(resp.error.unwrap().message.contains("unknown tool"));
+
+        let no_ref = json!({
+            "jsonrpc": "2.0", "id": 65, "method": "tools/call",
+            "params": { "name": "browser_type",
+                        "arguments": { "tabId": "t1", "generation": "g.1.0", "text": "x" } }
+        })
+        .to_string();
+        let resp = unwrap_respond(dispatch_with_features(BROWSER_ONLY, &no_ref).await);
+        let e = resp.error.unwrap();
+        assert_eq!(e.code, -32602);
+        assert!(e.message.contains("`ref`"));
+    }
+
+    #[test]
+    fn an_action_result_says_how_it_reached_the_page_and_what_to_do_next() {
+        let done = render_browser_act_result(&json!({
+            "tabId": "t1",
+            "action": { "fidelity": "synthetic", "url": "http://localhost:3000/orders" }
+        }));
+        let text = done["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("synthetic"));
+        assert!(text.contains("http://localhost:3000/orders"));
+        assert!(text.contains("browser_snapshot"));
+        assert_eq!(done["isError"], false);
+
+        let trusted = render_browser_act_result(&json!({
+            "tabId": "t1",
+            "action": { "fidelity": "trusted", "url": "http://localhost:3000/" }
+        }));
+        assert!(trusted["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("real input event"));
+
+        let stale = render_browser_act_result(&json!({
+            "tabId": "t1",
+            "error": "browser_stale_ref",
+            "note": "e2 does not name an element on the page as it is now."
+        }));
+        assert_eq!(
+            stale["content"][0]["text"],
+            "e2 does not name an element on the page as it is now."
+        );
+        assert_eq!(stale["isError"], false);
+        assert_eq!(stale["structuredContent"]["error"], "browser_stale_ref");
     }
 
     #[tokio::test]

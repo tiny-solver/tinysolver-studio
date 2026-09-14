@@ -243,16 +243,35 @@ pub const AGENT_GRANT_EVENT: &str = "browser://agent-grant";
 
 /// What an agent did to a page, for the person watching it.
 ///
-/// One variant today because there is one thing an agent can do. Acting on a
-/// page (W3.2) extends this rather than reinterpreting it, which is the point
-/// of spelling out a single-variant enum: the alternative — a bare "an agent
-/// touched this tab" — would have to be redefined the first time two kinds of
-/// touch existed.
+/// One variant per kind of touch, rather than "read" and "acted": the strip
+/// collapses runs of the same line, and a run of forty clicks should not
+/// swallow the one keystroke among them. The activity strip's label for each
+/// is in the frontend; nothing here decides how it reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentAction {
     /// Took a snapshot of the page.
     Read,
+    Click,
+    Hover,
+    /// Replaced a field's text.
+    Type,
+    /// Pressed a key.
+    Press,
+    /// Chose an option.
+    Select,
+}
+
+impl From<&ActionKind> for AgentAction {
+    fn from(kind: &ActionKind) -> Self {
+        match kind {
+            ActionKind::Click { .. } => AgentAction::Click,
+            ActionKind::Hover => AgentAction::Hover,
+            ActionKind::Type { .. } => AgentAction::Type,
+            ActionKind::Press { .. } => AgentAction::Press,
+            ActionKind::Select { .. } => AgentAction::Select,
+        }
+    }
 }
 
 /// Whether the action happened.
@@ -580,6 +599,188 @@ pub fn install_and_snapshot(request: &SnapshotRequest, epoch: &str) -> String {
     format!(
         "(function(){{\n{AGENT_BUNDLE}\n;return {call};}})()",
         call = snapshot_call(request, epoch),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Acting
+// ---------------------------------------------------------------------------
+
+/// Which mouse button a click is made with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum PointerButton {
+    #[default]
+    Left,
+    Right,
+}
+
+/// What an agent asks to do to an element. Serialized exactly as the world's
+/// `ActionRequest` expects it (`{"kind": "click", …}`), so the host builds the
+/// call by serializing this and nothing else.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ActionKind {
+    Click {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        button: Option<PointerButton>,
+        /// 1 for a click, 2 for a double click.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        count: Option<u8>,
+    },
+    Hover,
+    /// Replace a field's value with `text`. `submit` presses Enter after.
+    Type {
+        text: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        submit: bool,
+    },
+    /// Press a key — `"Enter"`, `"a"`, `"Control+Shift+k"` — on the element,
+    /// or on whatever has focus when the request names none.
+    Press { key: String },
+    /// Choose options of a `<select>`, by value or by label.
+    Select { values: Vec<String> },
+}
+
+impl ActionKind {
+    /// Whether this action goes to a point on screen — the two the platform
+    /// can deliver a real pointer for.
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, ActionKind::Click { .. } | ActionKind::Hover)
+    }
+}
+
+/// One action on one tab.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionRequest {
+    /// The `generation` of the snapshot that named [`Self::target`]: the token
+    /// an agent echoes back, opaque to it, checked by both the host and the
+    /// world.
+    pub generation: String,
+    /// The element's ref. `None` only for [`ActionKind::Press`], which then
+    /// goes to whatever has focus.
+    #[serde(rename = "ref", default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    pub action: ActionKind,
+}
+
+/// How an action reached the page.
+///
+/// Reported with every outcome because the two are not the same click. A
+/// dispatched event has `isTrusted: false`, cannot open a popup or enter
+/// fullscreen, and does not move `:hover`; a page that checks any of those
+/// behaves differently, and the agent should know which kind it got rather
+/// than guess from what happened next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Fidelity {
+    /// Events dispatched by script in the isolated world.
+    Synthetic,
+    /// A real input event the platform delivered (WebView2's CDP `Input.*`).
+    Trusted,
+}
+
+/// Why the world declined, in its own words. Mirrors `ActionError` in
+/// `browser-agent/src/act.ts`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ActionError {
+    /// The ref no longer names anything. The one answer for another
+    /// document, a moved page, a removed element, a token the host or the
+    /// world has moved past: take a new snapshot.
+    Stale,
+    NotVisible,
+    /// Something else is on top where a pointer would land.
+    Obscured,
+    NotEditable,
+    NoOption,
+    /// The control is disabled; a person could not operate it either.
+    Disabled,
+    Unsupported,
+}
+
+/// What the world answers to `act` and to `locate`, before the host has
+/// decided what to make of it. `x` / `y` only from `locate`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldAnswer {
+    pub ok: bool,
+    /// Where the page was at the moment of the answer.
+    pub url: String,
+    #[serde(default)]
+    pub error: Option<ActionError>,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub x: Option<f64>,
+    #[serde(default)]
+    pub y: Option<f64>,
+}
+
+/// What an agent gets back from an action that happened.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionOutcome {
+    pub fidelity: Fidelity,
+    /// Where the page was when the action was done. A click that navigates
+    /// has not navigated yet by then; the agent takes a snapshot to see what
+    /// came of it.
+    pub url: String,
+}
+
+/// The host's half of the staleness check: whether `generation` — the token a
+/// snapshot handed out — was issued under the epoch the tab is at now.
+///
+/// The world made the token as `<its generation>.<host epoch>`, so the host
+/// reads its own half back from after the first dot and compares. Checked
+/// before the page is touched: the world would refuse an old token too, but
+/// only from the next snapshot onwards (see [`epoch`]), and the host learns of
+/// some navigations the world cannot see.
+pub fn ref_is_current(generation: &str, epoch: &str) -> bool {
+    // The host's half is the last two dot-separated counters; the world's
+    // half is whatever precedes them, and is not assumed to be dot-free —
+    // read from the right, so a world generation that happened to contain a
+    // dot could neither be rejected nor mistaken for a host counter.
+    let Some((tab_generation, nav_epoch)) = epoch.split_once('.') else {
+        return false;
+    };
+    let mut parts = generation.rsplitn(3, '.');
+    let (Some(quoted_nav), Some(quoted_tab), Some(_world)) =
+        (parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    quoted_nav == nav_epoch && quoted_tab == tab_generation
+}
+
+/// `JSON.stringify(__codegAgent.act(generation, ref, action))`, or
+/// [`ENGINE_ABSENT`] when the engine is not in this document — which for an
+/// action means no snapshot was ever taken here, so whatever ref the caller
+/// holds is from another document and is stale.
+///
+/// Not installed on this path. Installing is what a *read* does; an action
+/// with no snapshot behind it has nothing to act on.
+pub fn act_call(request: &ActionRequest) -> String {
+    format!(
+        "typeof globalThis.{AGENT_GLOBAL} === 'undefined' ? {absent} : \
+         JSON.stringify(globalThis.{AGENT_GLOBAL}.act({generation}, {target}, {action}))",
+        absent = serde_json::Value::from(ENGINE_ABSENT),
+        generation = serde_json::Value::from(request.generation.as_str()),
+        target = serde_json::to_value(&request.target).unwrap_or(serde_json::Value::Null),
+        action = serde_json::to_value(&request.action).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+/// `JSON.stringify(__codegAgent.locate(generation, ref))`: where a pointer
+/// would have to land, for a platform that delivers its own.
+pub fn locate_call(generation: &str, target: &str) -> String {
+    format!(
+        "typeof globalThis.{AGENT_GLOBAL} === 'undefined' ? {absent} : \
+         JSON.stringify(globalThis.{AGENT_GLOBAL}.locate({generation}, {target}))",
+        absent = serde_json::Value::from(ENGINE_ABSENT),
+        generation = serde_json::Value::from(generation),
+        target = serde_json::Value::from(target),
     )
 }
 
@@ -1036,5 +1237,140 @@ mod tests {
         assert!(AGENT_BUNDLE.contains(&format!("globalThis.{AGENT_GLOBAL} = ")));
         assert!(AGENT_BUNDLE.contains("snapshot"));
         assert!(AGENT_BUNDLE.contains("elementForRef"));
+    }
+
+    // ── acting ─────────────────────────────────────────────────────────────
+
+    /// The host's half of the ref check reads its own epoch back from the
+    /// token the world made (`<world>.<generation>.<nav_epoch>`), and is not
+    /// fooled by a suffix match.
+    #[test]
+    fn a_ref_is_current_only_under_the_epoch_it_was_issued_in() {
+        let now = epoch(3, 1);
+        assert!(ref_is_current(&format!("k9x2.{now}"), &now));
+        assert!(!ref_is_current("k9x2.3.2", &now));
+        assert!(!ref_is_current("k9x2.4.1", &now));
+        // ".13.1" ends with ".3.1" and is another tab's token.
+        assert!(!ref_is_current("k9x2.13.1", &now));
+        // A world half that itself contains a dot is still read correctly.
+        assert!(ref_is_current("k9.x2.3.1", &now));
+        assert!(!ref_is_current("k9.x2.3.2", &now));
+        assert!(!ref_is_current("k9x2", &now));
+        assert!(!ref_is_current("3.1", &now));
+        assert!(!ref_is_current("", &now));
+    }
+
+    /// The request goes to the world as the shape `act.ts` expects — the
+    /// action tagged by `kind`, the ref as a JSON string or null — behind the
+    /// same "is the engine here" guard the read uses, and never installs it.
+    #[test]
+    fn the_act_call_carries_the_request_as_json_and_never_installs_the_engine() {
+        let request = ActionRequest {
+            generation: "k9x2.3.1".into(),
+            target: Some("e7".into()),
+            action: ActionKind::Type {
+                text: "it's \"quoted\"".into(),
+                submit: true,
+            },
+        };
+        let call = act_call(&request);
+        assert!(call.starts_with("typeof globalThis.__codegAgent === 'undefined' ? \"absent\" :"));
+        assert!(call.contains(".act(\"k9x2.3.1\", \"e7\", {"));
+        assert!(call.contains("\"kind\":\"type\""));
+        assert!(call.contains("\"submit\":true"));
+        assert!(call.contains("\"text\":\"it's \\\"quoted\\\"\""));
+        assert!(!call.contains(AGENT_BUNDLE));
+
+        let keyless = ActionRequest {
+            generation: "g".into(),
+            target: None,
+            action: ActionKind::Press { key: "Enter".into() },
+        };
+        assert!(act_call(&keyless).contains(".act(\"g\", null, {\"key\":\"Enter\",\"kind\":\"press\"}))"));
+
+        let locate = locate_call("g", "e1");
+        assert!(locate.contains(".locate(\"g\", \"e1\"))"));
+        assert!(locate.starts_with("typeof globalThis.__codegAgent === 'undefined'"));
+    }
+
+    /// The wire shapes both sides agree on: kebab-case kinds and errors, the
+    /// optional fields absent rather than null, and the world's answer read
+    /// back with whichever fields it had.
+    #[test]
+    fn action_wire_shapes_are_the_ones_the_world_and_the_frontend_read() {
+        let click = serde_json::to_value(ActionKind::Click {
+            button: None,
+            count: None,
+        })
+        .unwrap();
+        assert_eq!(click, serde_json::json!({ "kind": "click" }));
+        let click = serde_json::to_value(ActionKind::Click {
+            button: Some(PointerButton::Right),
+            count: Some(2),
+        })
+        .unwrap();
+        assert_eq!(click["button"], "right");
+        assert_eq!(click["count"], 2);
+        let select = serde_json::to_value(ActionKind::Select {
+            values: vec!["l".into()],
+        })
+        .unwrap();
+        assert_eq!(select, serde_json::json!({ "kind": "select", "values": ["l"] }));
+
+        let request: ActionRequest = serde_json::from_str(
+            r#"{"generation":"g.1.0","ref":"e3","action":{"kind":"hover"}}"#,
+        )
+        .unwrap();
+        assert_eq!(request.target.as_deref(), Some("e3"));
+        assert_eq!(request.action, ActionKind::Hover);
+        let request: ActionRequest =
+            serde_json::from_str(r#"{"generation":"g.1.0","action":{"kind":"press","key":"a"}}"#)
+                .unwrap();
+        assert_eq!(request.target, None);
+
+        let refused: WorldAnswer = serde_json::from_str(
+            r#"{"ok":false,"url":"http://x/","error":"obscured","detail":"div#veil is on top"}"#,
+        )
+        .unwrap();
+        assert_eq!(refused.error, Some(ActionError::Obscured));
+        // Every error the world can name has to deserialize, or a refusal
+        // reads as an unreadable answer.
+        for slug in ["stale", "not-visible", "obscured", "not-editable", "no-option", "disabled", "unsupported"] {
+            let answer: WorldAnswer = serde_json::from_str(&format!(
+                r#"{{"ok":false,"url":"http://x/","error":"{slug}","detail":"d"}}"#
+            ))
+            .unwrap_or_else(|e| panic!("{slug}: {e}"));
+            assert!(answer.error.is_some(), "{slug}");
+        }
+        let located: WorldAnswer =
+            serde_json::from_str(r#"{"ok":true,"url":"http://x/","x":12.5,"y":40}"#).unwrap();
+        assert_eq!((located.x, located.y), (Some(12.5), Some(40.0)));
+
+        let outcome = serde_json::to_value(ActionOutcome {
+            fidelity: Fidelity::Trusted,
+            url: "http://x/".into(),
+        })
+        .unwrap();
+        assert_eq!(outcome, serde_json::json!({ "fidelity": "trusted", "url": "http://x/" }));
+
+        for (kind, action) in [
+            (ActionKind::Hover, AgentAction::Hover),
+            (ActionKind::Press { key: "a".into() }, AgentAction::Press),
+            (ActionKind::Select { values: vec![] }, AgentAction::Select),
+        ] {
+            assert_eq!(AgentAction::from(&kind), action);
+        }
+        assert_eq!(serde_json::to_value(AgentAction::Press).unwrap(), "press");
+    }
+
+    /// The `control` level is above `read`, and asking for `read` of a
+    /// `control` grant is allowed — the ranks are what the two checks in the
+    /// act path lean on.
+    #[test]
+    fn control_allows_reading_and_reading_does_not_allow_control() {
+        assert!(GrantLevel::Control.allows(GrantLevel::Read));
+        assert!(GrantLevel::Control.allows(GrantLevel::Control));
+        assert!(!GrantLevel::Read.allows(GrantLevel::Control));
+        assert!(!GrantLevel::None.allows(GrantLevel::Read));
     }
 }

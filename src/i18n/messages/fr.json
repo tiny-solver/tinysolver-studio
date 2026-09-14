@@ -5992,17 +5992,53 @@
     "agent": {
       "share": "Partager cette page avec les agents ({origin})",
       "shareLabel": "Partager avec les agents",
+      "shareRead": "Laisser les agents lire cette page",
+      "shareControl": "Laisser les agents lire et agir sur cette page",
       "notShareable": "Cette page n'a pas d'adresse web à partager avec les agents",
       "shared": "Partagée",
+      "sharedControl": "Partagée · peut agir",
       "sharedWith": "Les agents peuvent lire {origin}",
+      "sharedWithControl": "Les agents peuvent lire et agir sur {origin}",
       "sharedScope": "Le partage prend fin dès que la page quitte ce site.",
       "sharedScopeProgram": "Il prend aussi fin si un autre programme reprend ce port à {program}.",
       "sharedToast": "Les agents peuvent désormais lire {origin}",
+      "sharedControlToast": "Les agents peuvent maintenant lire et agir sur {origin}",
       "stopSharing": "Arrêter le partage",
+      "allowActions": "Autoriser les actions sur cette page",
+      "readOnly": "Lecture seule",
       "shareFailed": "Cette page ne peut pas être partagée avec les agents",
-      "activityRead": "A lu la page",
-      "activityRefused": "Refusé : cette page n'est pas partagée",
-      "activityFailed": "Impossible de lire la page",
+      "activity": {
+        "read": {
+          "done": "A lu la page",
+          "refused": "Refusé : cette page n'est pas partagée",
+          "failed": "Impossible de lire la page"
+        },
+        "click": {
+          "done": "A cliqué",
+          "refused": "Clic refusé : les actions ne sont pas autorisées sur cette page",
+          "failed": "Impossible de cliquer"
+        },
+        "hover": {
+          "done": "A survolé",
+          "refused": "Survol refusé : les actions ne sont pas autorisées sur cette page",
+          "failed": "Impossible de survoler"
+        },
+        "type": {
+          "done": "A saisi dans un champ",
+          "refused": "Saisie refusée : les actions ne sont pas autorisées sur cette page",
+          "failed": "Impossible de saisir"
+        },
+        "press": {
+          "done": "A appuyé sur une touche",
+          "refused": "Appui refusé : les actions ne sont pas autorisées sur cette page",
+          "failed": "Impossible d'appuyer sur la touche"
+        },
+        "select": {
+          "done": "A choisi une option",
+          "refused": "Sélection refusée : les actions ne sont pas autorisées sur cette page",
+          "failed": "Impossible de choisir l'option"
+        }
+      },
       "activityCount": "{count}×",
       "expand": "{count} de plus",
       "collapse": "Moins"
