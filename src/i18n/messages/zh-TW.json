@@ -674,6 +674,8 @@
       "configJson": "MCP 配置(JSON)",
       "draftTitle": "新建 MCP",
       "draftDescription": "填寫 Server ID 與設定以建立本地 MCP 伺服器。",
+      "suggestedLabel": "從一個已知的伺服器開始",
+      "suggestedChromeNote": "把表單填成 Google 官方的 chrome-devtools-mcp——registry 裡有同名的仿冒套件，這裡釘死的是真的那個。它驅動的是**另一個** Chrome，codeg 管不到：你會拿到內建瀏覽器工具沒有的網路與效能資料，也拿不到它們的那套防護——沒有按分頁分享、沒有活動列、沒有逐段程式碼確認。`npx` 會在第一次執行時從 npm 下載這個套件。",
       "serverIdLabel": "Server ID",
       "serverIdPlaceholder": "Server ID（例如：my-mcp）",
       "typeHint": "支援類型：stdio、http（別名 streamable-http、streamableHttp）、sse。env 僅適用於 stdio；遠端 MCP 請透過 headers 欄位傳遞認證 token。",

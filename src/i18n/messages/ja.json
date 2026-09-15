@@ -674,6 +674,8 @@
       "configJson": "MCP設定 (JSON)",
       "draftTitle": "新規 MCP",
       "draftDescription": "Server ID と設定を入力してローカル MCP サーバーを作成します。",
+      "suggestedLabel": "既知のサーバーから始める",
+      "suggestedChromeNote": "Google 公式の chrome-devtools-mcp をフォームに入れます。レジストリには同名の偽物があるため、ここでは本物を指定します。これは codeg の管理外にある**別の** Chrome を操作します。内蔵ブラウザーのツールにはないネットワークやパフォーマンスの情報が得られる一方、その保護（タブごとの共有、アクティビティ表示、コードごとの承認）はどれもありません。`npx` は初回実行時に npm からパッケージをダウンロードします。",
       "serverIdLabel": "Server ID",
       "serverIdPlaceholder": "Server ID（例：my-mcp）",
       "typeHint": "対応タイプ：stdio、http（エイリアス streamable-http、streamableHttp）、sse。env は stdio 専用です。リモート MCP の認証トークンは headers で渡してください。",

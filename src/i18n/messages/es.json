@@ -674,6 +674,8 @@
       "configJson": "Configuración MCP (JSON)",
       "draftTitle": "Nuevo MCP",
       "draftDescription": "Indica un Server ID y la configuración para crear un servidor MCP local.",
+      "suggestedLabel": "Empezar desde un servidor conocido",
+      "suggestedChromeNote": "Rellena el formulario con el chrome-devtools-mcp oficial de Google; el registro incluye imitaciones con el mismo nombre, así que esto fija el auténtico. Controla un Chrome APARTE que codeg no supervisa: obtienes datos de red y rendimiento que las herramientas del navegador integrado no ofrecen, y ninguna de sus protecciones: sin compartir por pestaña, sin barra de actividad, sin aprobación por fragmento. `npx` descarga el paquete de npm la primera vez que se ejecuta.",
       "serverIdLabel": "Server ID",
       "serverIdPlaceholder": "Server ID (p. ej. my-mcp)",
       "typeHint": "Tipos admitidos: stdio, http (alias: streamable-http, streamableHttp), sse. env solo se usa con stdio; para MCP remotos usa headers para llevar tokens de autenticación.",

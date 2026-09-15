@@ -674,6 +674,8 @@
       "configJson": "MCP 구성 (JSON)",
       "draftTitle": "새 MCP",
       "draftDescription": "Server ID와 설정을 입력하여 로컬 MCP 서버를 생성합니다.",
+      "suggestedLabel": "알려진 서버에서 시작",
+      "suggestedChromeNote": "Google 공식 chrome-devtools-mcp로 양식을 채웁니다. 레지스트리에는 같은 이름의 유사 패키지가 있어 여기서는 진짜를 고정합니다. 이것은 codeg가 관리하지 않는 **별도의** Chrome을 조작합니다. 내장 브라우저 도구에 없는 네트워크·성능 정보를 얻는 대신, 그 보호 장치(탭별 공유, 활동 표시줄, 코드별 승인)는 하나도 없습니다. `npx`는 처음 실행할 때 npm에서 패키지를 내려받습니다.",
       "serverIdLabel": "Server ID",
       "serverIdPlaceholder": "Server ID (예: my-mcp)",
       "typeHint": "지원 타입: stdio, http (별칭: streamable-http, streamableHttp), sse. env는 stdio 전용이며, 원격 MCP는 인증 토큰을 headers로 전달해야 합니다.",
