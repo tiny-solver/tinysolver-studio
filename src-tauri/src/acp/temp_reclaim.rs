@@ -250,7 +250,7 @@ pub fn scan() -> LeakedTempScan {
         });
     }
 
-    entries.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.bytes));
     LeakedTempScan {
         root: root.to_string_lossy().into_owned(),
         entries,
