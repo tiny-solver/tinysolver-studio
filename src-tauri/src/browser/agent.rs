@@ -264,6 +264,12 @@ pub enum AgentAction {
     Capture,
     /// Read the console.
     Console,
+    /// Ran its own code on the page, with the person's say-so for that
+    /// snippet. Its own line rather than a kind of `Type` or `Click`, because
+    /// it is the one entry on this list whose reach the label cannot bound:
+    /// every other line says what was done, and this one says only that
+    /// something was.
+    Eval,
 }
 
 impl From<&ActionKind> for AgentAction {

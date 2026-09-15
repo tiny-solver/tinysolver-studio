@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
   CalendarClock,
+  Code2,
   Globe,
   HelpCircle,
   ListTodo,
@@ -64,6 +65,7 @@ interface AgentToolValues {
   question: boolean
   sessionInfo: boolean
   browserTools: boolean
+  browserEval: boolean
   automations: boolean
   workTasks: boolean
 }
@@ -79,6 +81,7 @@ const DEFAULTS: AgentToolValues = {
   question: true,
   sessionInfo: true,
   browserTools: false,
+  browserEval: false,
   automations: false,
   workTasks: false,
 }
@@ -114,6 +117,17 @@ const TOOL_ROWS = [
     label: "browserToolsLabel",
     hint: "browserToolsHint",
   },
+  // The one switch on this panel that is not "may an agent see X". It hands
+  // an agent a way to run its own code on a page, so it sits behind the
+  // browser switch rather than beside it, and even on, every snippet is shown
+  // to the user and approved on its own.
+  {
+    key: "browserEval",
+    id: "agent-tools-browser-eval",
+    icon: Code2,
+    label: "browserEvalLabel",
+    hint: "browserEvalHint",
+  },
   {
     key: "automations",
     id: "agent-tools-automations",
@@ -135,6 +149,14 @@ const TOOL_ROWS = [
   label: string
   hint: string
 }>
+
+/** Rows that only mean anything while another row is on: shown off and not
+ *  touchable until it is. Kept beside the table rather than in it, so the
+ *  rows stay `as const` and next-intl keeps checking their message keys. */
+const REQUIRES: Partial<Record<keyof AgentToolValues, keyof AgentToolValues>> =
+  {
+    browserEval: "browserTools",
+  }
 
 export function AgentToolsSettingsSection() {
   const t = useTranslations("AgentToolsSettings")
@@ -185,9 +207,10 @@ export function AgentToolsSettingsSection() {
       if (sessionInfo.status === "fulfilled")
         next.sessionInfo = sessionInfo.value.enabled
       else failures.push(toErrorMessage(sessionInfo.reason))
-      if (browserTools.status === "fulfilled")
+      if (browserTools.status === "fulfilled") {
         next.browserTools = browserTools.value.enabled
-      else failures.push(toErrorMessage(browserTools.reason))
+        next.browserEval = browserTools.value.eval
+      } else failures.push(toErrorMessage(browserTools.reason))
       if (chat.status === "fulfilled") {
         next.automations = chat.value.automations_enabled
         next.workTasks = chat.value.work_tasks_enabled
@@ -269,6 +292,7 @@ export function AgentToolsSettingsSection() {
     values.question !== baseline.question ||
     values.sessionInfo !== baseline.sessionInfo ||
     values.browserTools !== baseline.browserTools ||
+    values.browserEval !== baseline.browserEval ||
     values.automations !== baseline.automations ||
     values.workTasks !== baseline.workTasks
 
@@ -301,11 +325,21 @@ export function AgentToolsSettingsSection() {
           )
         )
       }
-      if (values.browserTools !== baseline.browserTools) {
+      if (
+        values.browserTools !== baseline.browserTools ||
+        values.browserEval !== baseline.browserEval
+      ) {
         writes.push(
-          setBrowserToolsSettings({ enabled: values.browserTools }).then(
-            (applied) => ({ browserTools: applied.enabled })
-          )
+          setBrowserToolsSettings({
+            enabled: values.browserTools,
+            // What the row shows while the group is off, sent as what it
+            // shows. The backend drops it too; agreeing with it here is what
+            // keeps the switch from springing back on after a save.
+            eval: values.browserEval && values.browserTools,
+          }).then((applied) => ({
+            browserTools: applied.enabled,
+            browserEval: applied.eval,
+          }))
         )
       }
       if (
@@ -362,25 +396,29 @@ export function AgentToolsSettingsSection() {
           agent reaches: the conversation, the app state behind it, or the page
           on screen next to it. */}
       <SettingCard>
-        {TOOL_ROWS.map((row) => (
-          <SettingRow
-            key={row.key}
-            icon={row.icon}
-            title={t(row.label)}
-            description={t(row.hint)}
-            htmlFor={row.id}
-            control={
-              <Switch
-                id={row.id}
-                checked={values[row.key]}
-                onCheckedChange={(next) =>
-                  setValues((prev) => ({ ...prev, [row.key]: next }))
-                }
-                disabled={loading}
-              />
-            }
-          />
-        ))}
+        {TOOL_ROWS.map((row) => {
+          const gate = REQUIRES[row.key]
+          const available = !gate || values[gate]
+          return (
+            <SettingRow
+              key={row.key}
+              icon={row.icon}
+              title={t(row.label)}
+              description={t(row.hint)}
+              htmlFor={row.id}
+              control={
+                <Switch
+                  id={row.id}
+                  checked={values[row.key] && available}
+                  onCheckedChange={(next) =>
+                    setValues((prev) => ({ ...prev, [row.key]: next }))
+                  }
+                  disabled={loading || !available}
+                />
+              }
+            />
+          )
+        })}
       </SettingCard>
 
       <SettingsSaveBar

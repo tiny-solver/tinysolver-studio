@@ -5077,6 +5077,13 @@ export async function setSessionInfoSettings(
  *  may read is a separate, per-tab decision made from the tab's own toolbar. */
 export interface BrowserToolsSettings {
   enabled: boolean
+  /** Whether `browser_eval` exists: an agent running its own code on a shared
+   *  page. Off by default and separate from `enabled`, because everything else
+   *  in the group is a named act a person sharing a tab can picture and this
+   *  is not one of them. Never in force with `enabled` off — the backend drops
+   *  it, so a stale `true` cannot outlive the switch above it. Even on, every
+   *  individual snippet is shown to the person and approved on its own. */
+  eval: boolean
 }
 
 export async function getBrowserToolsSettings(): Promise<BrowserToolsSettings> {

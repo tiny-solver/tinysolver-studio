@@ -33,6 +33,7 @@ use tokio::sync::RwLock;
 use crate::browser::agent::{ActionOutcome, ActionRequest, AgentTabSummary, PageSnapshot};
 use crate::browser::capture::{CaptureOutcome, CaptureRequest};
 use crate::browser::console::{ConsoleQuery, ConsoleReadout};
+use crate::browser::eval::{EvalOutcome, EvalRequest};
 
 /// The tab exists, and this agent may not read it: nobody shared it, or the
 /// page left the origin it was shared for.
@@ -69,6 +70,20 @@ pub const ERROR_STALE_REF: &str = "browser_stale_ref";
 /// The action was allowed and could not be done: the element is covered by
 /// another, takes no text, has no such option. The note says which.
 pub const ERROR_ACTION_FAILED: &str = "browser_action_failed";
+
+/// The browser tools are on and `browser_eval` in particular is not. Its own
+/// slug, and its own sentence: the user has a different switch to find than
+/// the one that turns the group on, and the agent should say which.
+pub const ERROR_EVAL_DISABLED: &str = "browser_eval_disabled";
+
+/// The person was asked about this snippet and said no — or said nothing, and
+/// the question lapsed. Not a permission level the agent can get raised: the
+/// question is per snippet, and the answer to this one has been given.
+pub const ERROR_EVAL_DECLINED: &str = "browser_eval_declined";
+
+/// Another snippet is already in front of the person, or this tab is in the
+/// quiet period a refusal buys. Worth retrying later, unlike the two above.
+pub const ERROR_EVAL_BUSY: &str = "browser_eval_busy";
 
 /// What a `browser_snapshot` asks for when the caller names no cap.
 ///
@@ -313,6 +328,74 @@ impl BrowserCaptureOutcome {
     }
 }
 
+/// What `browser_eval` answers: what the snippet produced, or why it did not
+/// run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserEvalOutcome {
+    pub tab_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<EvalOutcome>,
+    /// One of the `browser_*` slugs above. `None` exactly when `result` is
+    /// `Some`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl BrowserEvalOutcome {
+    pub fn ran(tab_id: &str, result: EvalOutcome) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            result: Some(result),
+            error: None,
+            note: None,
+        }
+    }
+
+    pub fn refused(tab_id: &str, error: &str, note: impl Into<String>) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            result: None,
+            error: Some(error.to_string()),
+            note: Some(note.into()),
+        }
+    }
+
+    /// Nobody shared the tab — the same words a read gets, so the agent does
+    /// not learn from the refusal which of the gates it fell at.
+    pub fn grant_required(tab_id: &str) -> Self {
+        let read = BrowserSnapshotOutcome::grant_required(tab_id);
+        Self::refused(tab_id, ERROR_GRANT_REQUIRED, read.note.unwrap_or_default())
+    }
+
+    /// Shared for reading only. Running code is at least an action, so it
+    /// needs at least what an action needs.
+    pub fn control_required(tab_id: &str) -> Self {
+        let act = BrowserActOutcome::control_required(tab_id);
+        Self::refused(tab_id, ERROR_CONTROL_REQUIRED, act.note.unwrap_or_default())
+    }
+
+    /// The person said no, or said nothing. Says plainly that retrying is not
+    /// the move: a model that reads "declined" as "ask again" turns a refusal
+    /// into a queue of dialogs, which is how someone ends up approving one by
+    /// accident.
+    pub fn declined(tab_id: &str) -> Self {
+        Self::refused(
+            tab_id,
+            ERROR_EVAL_DECLINED,
+            format!(
+                "The user did not approve running that code on browser tab {tab_id}. Every \
+                 browser_eval call is shown to them and approved on its own; there is no setting \
+                 that makes it automatic. Do not send the same snippet again — say what you \
+                 wanted to find out, and use browser_snapshot, browser_console_messages or the \
+                 action tools if they can answer it."
+            ),
+        )
+    }
+}
+
 /// Listener-facing access to the built-in browser's agent surface. The
 /// production impl (`crate::commands::browser::McpBrowserTools`) exists only in
 /// the desktop build; server mode and tests use [`NoBrowserTabs`]. Mirrors
@@ -337,6 +420,12 @@ pub trait BrowserToolAccess: Send + Sync {
     /// A screenshot of one shared page, or of one element of it. A read,
     /// like a snapshot.
     async fn capture(&self, tab_id: &str, request: CaptureRequest) -> BrowserCaptureOutcome;
+
+    /// Run the caller's own code on one shared page. Needs the tab shared at
+    /// `control`, the `browser_eval` switch on, AND the person to approve this
+    /// particular snippet — so this call blocks on a human and can take as
+    /// long as one takes to read it.
+    async fn eval(&self, tab_id: &str, request: EvalRequest) -> BrowserEvalOutcome;
 }
 
 /// The answer where there is no built-in browser: server mode, and the stub in
@@ -370,6 +459,10 @@ impl BrowserToolAccess for NoBrowserTabs {
     async fn capture(&self, tab_id: &str, _request: CaptureRequest) -> BrowserCaptureOutcome {
         BrowserCaptureOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
     }
+
+    async fn eval(&self, tab_id: &str, _request: EvalRequest) -> BrowserEvalOutcome {
+        BrowserEvalOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
+    }
 }
 
 /// The hot-swappable feature config read at MCP injection time, and again at
@@ -383,6 +476,10 @@ impl BrowserToolAccess for NoBrowserTabs {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BrowserToolsConfig {
     pub enabled: bool,
+    /// `browser_eval`, which is off unless someone turned it on *and* left the
+    /// group on. Never true with `enabled` false — see
+    /// `commands::browser_tools`, which is the only writer.
+    pub eval: bool,
 }
 
 /// Shared, hot-swappable handle to [`BrowserToolsConfig`]. Cloned into
@@ -408,6 +505,14 @@ impl BrowserToolsRuntimeConfig {
 
     pub async fn is_enabled(&self) -> bool {
         self.inner.read().await.enabled
+    }
+
+    /// Whether `browser_eval` exists right now. Read at call time as well as
+    /// at injection, for the same reason as the group: someone reaching for
+    /// this switch means the session in front of them.
+    pub async fn is_eval_enabled(&self) -> bool {
+        let cfg = self.inner.read().await;
+        cfg.enabled && cfg.eval
     }
 }
 
@@ -543,8 +648,74 @@ mod tests {
     async fn runtime_config_round_trips() {
         let cfg = BrowserToolsRuntimeConfig::new();
         assert!(!cfg.is_enabled().await);
-        cfg.set(BrowserToolsConfig { enabled: true }).await;
+        assert!(!cfg.is_eval_enabled().await);
+        let on = BrowserToolsConfig {
+            enabled: true,
+            eval: false,
+        };
+        cfg.set(on.clone()).await;
         assert!(cfg.is_enabled().await);
-        assert_eq!(cfg.snapshot().await, BrowserToolsConfig { enabled: true });
+        // The group being on says nothing about eval.
+        assert!(!cfg.is_eval_enabled().await);
+        assert_eq!(cfg.snapshot().await, on);
+
+        cfg.set(BrowserToolsConfig {
+            enabled: true,
+            eval: true,
+        })
+        .await;
+        assert!(cfg.is_eval_enabled().await);
+
+        // Belt and braces against a caller that sets the pair by hand: eval
+        // without the group is not a state the runtime will report.
+        cfg.set(BrowserToolsConfig {
+            enabled: false,
+            eval: true,
+        })
+        .await;
+        assert!(!cfg.is_eval_enabled().await);
+    }
+
+    /// The refusals `browser_eval` can give are distinguishable, and the one
+    /// the person caused says not to try again.
+    #[tokio::test]
+    async fn an_eval_refusal_says_whether_asking_again_is_worth_anything() {
+        let declined = BrowserEvalOutcome::declined("t9");
+        assert_eq!(declined.error.as_deref(), Some(ERROR_EVAL_DECLINED));
+        let note = declined.note.clone().unwrap();
+        assert!(note.contains("t9"));
+        assert!(note.contains("Do not send the same snippet again"));
+        assert!(declined.result.is_none());
+
+        // Unshared and read-only are the same words the other tools use, so
+        // the eval path cannot become a way to probe a tab's level.
+        assert_eq!(
+            BrowserEvalOutcome::grant_required("t9").note,
+            BrowserSnapshotOutcome::grant_required("t9").note
+        );
+        assert_eq!(
+            BrowserEvalOutcome::control_required("t9").note,
+            BrowserActOutcome::control_required("t9").note
+        );
+
+        let unavailable = NoBrowserTabs.eval("t9", EvalRequest::default()).await;
+        assert_eq!(unavailable.error.as_deref(), Some(ERROR_UNAVAILABLE));
+
+        let wire = serde_json::to_value(BrowserEvalOutcome::ran(
+            "t9",
+            EvalOutcome {
+                kind: "string".into(),
+                value: "hello".into(),
+                truncated: false,
+                url: "https://example.com/".into(),
+            },
+        ))
+        .unwrap();
+        assert_eq!(wire["tabId"], "t9");
+        assert_eq!(wire["result"]["value"], "hello");
+        assert!(wire.get("error").is_none());
+        // `truncated: false` is absent rather than present-and-false, like
+        // every other optional on this wire.
+        assert!(wire["result"].get("truncated").is_none());
     }
 }

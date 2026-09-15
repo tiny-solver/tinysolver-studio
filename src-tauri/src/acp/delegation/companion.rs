@@ -46,14 +46,15 @@ use crate::acp::chat_authoring::{
 };
 use crate::acp::delegation::transport::{
     client_ask_round_trip, client_browser_act_round_trip, client_browser_capture_round_trip,
-    client_browser_console_round_trip, client_browser_snapshot_round_trip,
-    client_browser_tabs_round_trip,
+    client_browser_console_round_trip, client_browser_eval_round_trip,
+    client_browser_snapshot_round_trip, client_browser_tabs_round_trip,
     client_cancel, client_cancel_task_round_trip, client_commit_feedback,
     client_create_automation_round_trip, client_create_work_task_round_trip,
     client_feedback_round_trip, client_resume_task_round_trip, client_round_trip,
     client_session_round_trip, client_status_round_trip, client_task_complete_round_trip,
     client_task_progress_round_trip, BrokerAskRequest, BrokerBrowserActRequest, BrokerBrowserCaptureRequest, BrokerBrowserConsoleRequest,
-    BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest, BrokerCancelRequest,
+    BrokerBrowserEvalRequest, BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest,
+    BrokerCancelRequest,
     BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerCreateAutomationRequest,
     BrokerCreateWorkTaskRequest, BrokerFeedbackRequest, BrokerRequest, BrokerResponse,
     BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest,
@@ -166,6 +167,12 @@ pub struct CompanionFeatures {
     /// window onto what they are looking at right now. Reading and acting are
     /// then each gated per tab by the person, behind this switch.
     pub browser: bool,
+    /// `browser_eval` — running the agent's own code on a shared page. Its own
+    /// token rather than part of `browser`, and off unless someone turned it
+    /// on: everything in the group above is a *named* act a person sharing a
+    /// tab can picture, and this is not one of them. Never on with `browser`
+    /// off; the parent will not emit it, and `allows_tool` requires both.
+    pub browser_eval: bool,
 }
 
 impl CompanionFeatures {
@@ -186,6 +193,7 @@ impl CompanionFeatures {
                 automations: false,
                 taskboard: false,
                 browser: false,
+                browser_eval: false,
             };
         };
         let mut f = Self {
@@ -197,6 +205,7 @@ impl CompanionFeatures {
             automations: false,
             taskboard: false,
             browser: false,
+            browser_eval: false,
         };
         for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match tok {
@@ -208,6 +217,7 @@ impl CompanionFeatures {
                 "automations" => f.automations = true,
                 "taskboard" => f.taskboard = true,
                 "browser" => f.browser = true,
+                "browser_eval" => f.browser_eval = true,
                 _ => {}
             }
         }
@@ -226,6 +236,10 @@ impl CompanionFeatures {
             "browser_list_tabs" | "browser_snapshot" | "browser_console_messages"
             | "browser_screenshot" | "browser_click" | "browser_hover" | "browser_type"
             | "browser_press_key" | "browser_select_option" => self.browser,
+            // Both, so a `--features browser_eval` with no `browser` — a
+            // parent bug, or someone editing the agent's MCP config by hand —
+            // cannot leave the strongest tool as the only one present.
+            "browser_eval" => self.browser && self.browser_eval,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -793,6 +807,24 @@ async fn build_tools_call_spawn(
             let round_trip =
                 Box::pin(async move { client_browser_capture_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_browser_capture_result).await
+        }
+        "browser_eval" => {
+            let (tab_id, request) = match browser_eval_request(&arguments) {
+                Ok(parsed) => parsed,
+                Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
+            };
+            let req = BrokerBrowserEvalRequest {
+                token: ctx.token.clone(),
+                tab_id,
+                request,
+            };
+            // No broker-side cancel, and this one matters: the round trip is
+            // parked on a dialog in front of a person. Cancelling it here
+            // would take the question away mid-read while the codeg side went
+            // on waiting for an answer that could no longer be delivered.
+            let round_trip =
+                Box::pin(async move { client_browser_eval_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_browser_eval_result).await
         }
         "task_progress" => {
             let message = arguments
@@ -1776,6 +1808,80 @@ pub fn browser_capture_request(
     ))
 }
 
+/// Build the `browser_eval` request from the tool's arguments.
+///
+/// The length check is here as well as on the codeg side, so an oversized
+/// snippet comes back as an argument error the model can act on rather than
+/// travelling the broker to be refused. Validating in both places is the point
+/// — the codeg-side one is the gate, this one is the message.
+pub fn browser_eval_request(
+    arguments: &Value,
+) -> Result<(String, crate::browser::eval::EvalRequest), String> {
+    use crate::browser::eval::{validate_code, EvalRequest};
+    let tab_id = arguments
+        .get("tabId")
+        .or_else(|| arguments.get("tab_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            "browser_eval requires a non-empty `tabId` string (from browser_list_tabs)".to_string()
+        })?;
+    // Not trimmed: indentation is part of what the person will read, and a
+    // snippet whose first line is indented reads as one that was pasted out of
+    // something larger, which is worth seeing.
+    let code = match arguments.get("code") {
+        Some(Value::String(s)) => s.clone(),
+        None | Some(Value::Null) => String::new(),
+        Some(other) => {
+            return Err(format!(
+                "browser_eval: `code` must be a string — the body of a function to run on the \
+                 page — not {other}"
+            ))
+        }
+    };
+    validate_code(&code).map_err(|bad| bad.message())?;
+    Ok((tab_id, EvalRequest { code }))
+}
+
+/// Map a `browser_eval` round-trip outcome (a serialized
+/// [`crate::acp::browser_tools::BrowserEvalOutcome`]) into an MCP `tools/call`
+/// result.
+pub fn render_browser_eval_result(outcome: &Value) -> Value {
+    let text = match outcome.get("result") {
+        Some(result) if result.is_object() => {
+            let s = |k: &str| result.get(k).and_then(Value::as_str).unwrap_or("");
+            let kind = s("kind");
+            let value = s("value");
+            let url = s("url");
+            let truncated = result
+                .get("truncated")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let mut out = if kind == "exception" {
+                format!("The code threw on {url}:\n{value}")
+            } else {
+                format!("Ran on {url}. The code returned ({kind}):\n{value}")
+            };
+            if truncated {
+                out.push_str("\n\n(The value was longer than this and was cut off.)");
+            }
+            out
+        }
+        _ => outcome
+            .get("note")
+            .and_then(Value::as_str)
+            .unwrap_or("The code was not run.")
+            .to_string(),
+    };
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "structuredContent": outcome,
+        "isError": false,
+    })
+}
+
 /// Map a `browser_console_messages` round-trip outcome (a serialized
 /// [`crate::acp::browser_tools::BrowserConsoleOutcome`]) into an MCP
 /// `tools/call` result: one line per entry, the way a console reads, with
@@ -2272,6 +2378,7 @@ mod tests {
             automations: false,
             taskboard: false,
             browser: false,
+            browser_eval: false,
         })
     }
 
@@ -2864,6 +2971,7 @@ mod tests {
         automations: false,
         taskboard: false,
         browser: false,
+    browser_eval: false,
     };
     const BOTH: CompanionFeatures = CompanionFeatures {
         delegation: true,
@@ -2874,6 +2982,7 @@ mod tests {
         automations: false,
         taskboard: false,
         browser: false,
+    browser_eval: false,
     };
     const ASK_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -2884,6 +2993,7 @@ mod tests {
         automations: false,
         taskboard: false,
         browser: false,
+    browser_eval: false,
     };
     const SESSIONS_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -2894,6 +3004,7 @@ mod tests {
         automations: false,
         taskboard: false,
         browser: false,
+    browser_eval: false,
     };
 
     fn list_tool_names(action: LineAction) -> Vec<String> {
@@ -3233,6 +3344,7 @@ mod tests {
         automations: true,
         taskboard: false,
         browser: false,
+    browser_eval: false,
     };
     const TASKBOARD_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -3243,6 +3355,7 @@ mod tests {
         automations: false,
         taskboard: true,
         browser: false,
+    browser_eval: false,
     };
 
     /// The two authoring groups gate independently: enabling one must not
@@ -3757,6 +3870,14 @@ mod tests {
         automations: false,
         taskboard: false,
         browser: true,
+        browser_eval: false,
+    };
+
+    /// The browser group with `browser_eval` on top, which is the only way
+    /// that tool is ever advertised.
+    const BROWSER_WITH_EVAL: CompanionFeatures = CompanionFeatures {
+        browser_eval: true,
+        ..BROWSER_ONLY
     };
 
     /// The browser group gates as its own thing, and is off unless asked for:
@@ -3787,6 +3908,110 @@ mod tests {
                 "browser_select_option".to_string(),
             ]
         );
+        // The strongest tool in the group is not in the group: sharing the
+        // browser with an agent does not advertise a way to run code in it.
+        assert!(!names.contains(&"browser_eval".to_string()));
+
+        let names = list_tool_names(dispatch_with_features(BROWSER_WITH_EVAL, list).await);
+        assert!(names.contains(&"browser_eval".to_string()));
+        assert!(names.contains(&"browser_snapshot".to_string()));
+    }
+
+    /// `browser_eval` needs BOTH tokens. A `--features browser_eval` that lost
+    /// its `browser` — a parent bug, or an agent's MCP config edited by hand —
+    /// must not leave the one tool that runs arbitrary code as the only one
+    /// present.
+    #[tokio::test]
+    async fn eval_alone_advertises_nothing() {
+        const EVAL_WITHOUT_GROUP: CompanionFeatures = CompanionFeatures {
+            browser: false,
+            browser_eval: true,
+            ..BROWSER_ONLY
+        };
+        let list = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+        let names = list_tool_names(dispatch_with_features(EVAL_WITHOUT_GROUP, list).await);
+        assert!(names.is_empty(), "advertised {names:?}");
+        assert!(!EVAL_WITHOUT_GROUP.allows_tool("browser_eval"));
+        assert!(BROWSER_WITH_EVAL.allows_tool("browser_eval"));
+        assert!(!BROWSER_ONLY.allows_tool("browser_eval"));
+    }
+
+    /// The snippet is checked before it goes anywhere: an empty one, one too
+    /// long for a person to read, and one that is not a string at all are all
+    /// argument errors rather than round trips.
+    #[test]
+    fn eval_arguments_are_checked_before_anyone_is_asked() {
+        use crate::browser::eval::MAX_EVAL_CODE_CHARS;
+        let (tab, req) =
+            browser_eval_request(&json!({ "tabId": "t1", "code": "  return 1  " })).unwrap();
+        assert_eq!(tab, "t1");
+        // Not trimmed: the indentation is part of what the person reads.
+        assert_eq!(req.code, "  return 1  ");
+
+        assert!(browser_eval_request(&json!({ "code": "return 1" }))
+            .unwrap_err()
+            .contains("tabId"));
+        assert!(browser_eval_request(&json!({ "tabId": "t1" }))
+            .unwrap_err()
+            .contains("`code`"));
+        assert!(browser_eval_request(&json!({ "tabId": "t1", "code": "   " }))
+            .unwrap_err()
+            .contains("`code`"));
+        assert!(
+            browser_eval_request(&json!({ "tabId": "t1", "code": 42 }))
+                .unwrap_err()
+                .contains("must be a string")
+        );
+        let long = "a".repeat(MAX_EVAL_CODE_CHARS + 1);
+        assert!(
+            browser_eval_request(&json!({ "tabId": "t1", "code": long }))
+                .unwrap_err()
+                .contains("at most")
+        );
+    }
+
+    /// A result reads as what happened, and a refusal reads as the note the
+    /// codeg side wrote — neither is an `isError`, because both are things to
+    /// tell the user rather than a broken call.
+    #[test]
+    fn an_eval_result_reads_as_what_happened() {
+        let ran = render_browser_eval_result(&json!({
+            "tabId": "t1",
+            "result": {
+                "kind": "string",
+                "value": "Example Domain",
+                "url": "https://example.com/",
+            },
+        }));
+        let text = ran["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("https://example.com/"));
+        assert!(text.contains("(string)"));
+        assert!(text.contains("Example Domain"));
+        assert_eq!(ran["isError"], false);
+
+        let threw = render_browser_eval_result(&json!({
+            "tabId": "t1",
+            "result": {
+                "kind": "exception",
+                "value": "TypeError: x is not a function",
+                "url": "https://example.com/",
+                "truncated": true,
+            },
+        }));
+        let text = threw["content"][0]["text"].as_str().unwrap();
+        assert!(text.starts_with("The code threw on https://example.com/"));
+        assert!(text.contains("cut off"));
+
+        let refused = render_browser_eval_result(&json!({
+            "tabId": "t1",
+            "error": "browser_eval_declined",
+            "note": "The user did not approve running that code.",
+        }));
+        assert_eq!(
+            refused["content"][0]["text"],
+            "The user did not approve running that code."
+        );
+        assert_eq!(refused["isError"], false);
     }
 
     /// The console query is strict about what it does not understand and

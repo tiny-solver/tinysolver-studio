@@ -4676,6 +4676,8 @@
     "sessionInfoHint": "允许智能体查询你在消息中提及的会话（会话徽章），读取其标题、智能体、状态、工作区、Token 用量和最近消息。",
     "browserToolsLabel": "读取内置浏览器",
     "browserToolsHint": "允许智能体看到内置浏览器里开着哪些页面，并读取你共享的那些。默认关闭。具体读哪一页仍然是你在那个标签页的工具栏上单独做的决定；关闭这个开关立即生效，正在运行的智能体也一样。",
+    "browserEvalLabel": "在内置浏览器中运行代码",
+    "browserEvalHint": "允许智能体在你共享的页面上运行它自己写的 JavaScript。默认关闭，并且需要先打开上面那个开关。每一段代码都会先拿给你看、由你逐次批准——没有办法让它自动通过。",
     "automationsLabel": "创建自动化",
     "automationsHint": "把对话保存为按计划运行的自动化。默认关闭——它之后会自行启动智能体。",
     "workTasksLabel": "创建待办任务",
@@ -6047,11 +6049,25 @@
           "done": "读取了控制台",
           "refused": "已拒绝读取控制台：此页面未共享",
           "failed": "读取控制台失败"
+        },
+        "eval": {
+          "done": "在页面上运行了代码",
+          "refused": "已拒绝在此页面运行代码",
+          "failed": "代码没能运行"
         }
       },
       "activityCount": "{count} 次",
       "expand": "还有 {count} 条",
-      "collapse": "收起"
+      "collapse": "收起",
+      "eval": {
+        "title": "在 {site} 上运行这段代码？",
+        "description": "有智能体想在这个页面上运行 JavaScript。你在 {site} 上能读取和改动的一切，它都能。",
+        "descriptionWithTitle": "有智能体想在「{title}」上运行 JavaScript。你在 {site} 上能读取和改动的一切，它都能。",
+        "codeLabel": "它要运行的代码",
+        "everyTime": "每一段代码都会再问你一次——批准这一段不等于批准下一段。",
+        "allow": "运行这一次",
+        "deny": "不要运行"
+      }
     },
     "handoff": {
       "send": "把这个页面发给对话",

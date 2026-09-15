@@ -17,13 +17,13 @@ use tokio::sync::RwLock;
 
 use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::browser_tools::{
-    BrowserActOutcome, BrowserCaptureOutcome, BrowserConsoleOutcome, BrowserSnapshotOutcome,
-    BrowserTabsOutcome, BrowserToolAccess,
+    BrowserActOutcome, BrowserCaptureOutcome, BrowserConsoleOutcome, BrowserEvalOutcome,
+    BrowserSnapshotOutcome, BrowserTabsOutcome, BrowserToolAccess,
     ERROR_NO_SUCH_TAB,
 };
 use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerBrowserActRequest,
-    BrokerBrowserCaptureRequest, BrokerBrowserConsoleRequest,
+    BrokerBrowserCaptureRequest, BrokerBrowserConsoleRequest, BrokerBrowserEvalRequest,
     BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
     BrokerCreateAutomationRequest, BrokerCreateWorkTaskRequest, BrokerResponse,
@@ -523,6 +523,15 @@ impl DelegationListener {
                 // codeg side whether or not the caller waits.
                 browser_capture_response(self.process_browser_capture(req).await)?
             }
+            BrokerMessage::BrowserEval(req) => {
+                // The one browser message that waits on a human, so it can sit
+                // here for a couple of minutes. Still no peer-close race: the
+                // question is in front of a person, and whipping it away
+                // because the agent's socket went quiet would train them to
+                // dismiss dialogs that vanish. It is bounded by the
+                // confirmation's own timeout either way.
+                browser_eval_response(self.process_browser_eval(req).await)?
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -831,6 +840,24 @@ impl DelegationListener {
         self.browser.capture(&req.tab_id, req.request).await
     }
 
+    /// Validate the token and run one snippet on one shared page; an invalid
+    /// token gets "no such tab", as everywhere here.
+    ///
+    /// Checking the token BEFORE the access impl matters more here than
+    /// anywhere else on this surface: the impl is what raises the dialog, and
+    /// a caller with no standing must not be able to put a question in front
+    /// of the user at all.
+    async fn process_browser_eval(&self, req: BrokerBrowserEvalRequest) -> BrowserEvalOutcome {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return BrowserEvalOutcome::refused(
+                &req.tab_id,
+                ERROR_NO_SUCH_TAB,
+                format!("No browser tab {} is open.", req.tab_id),
+            );
+        }
+        self.browser.eval(&req.tab_id, req.request).await
+    }
+
     /// Validate the token and hand the progress report to the task engine,
     /// which resolves the parent connection to its owning task + generation.
     async fn process_task_progress(&self, req: BrokerTaskProgressRequest) -> TaskReportAck {
@@ -1059,6 +1086,17 @@ fn browser_act_response(outcome: BrowserActOutcome) -> std::io::Result<BrokerRes
 
 /// Serialize a [`BrowserConsoleOutcome`] for the `BrowserConsole` arm.
 fn browser_console_response(outcome: BrowserConsoleOutcome) -> std::io::Result<BrokerResponse> {
+    Ok(BrokerResponse {
+        outcome: serde_json::to_value(&outcome).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
+        })?,
+    })
+}
+
+/// Serialize a [`BrowserEvalOutcome`] for the `BrowserEval` arm. No size guard
+/// like the capture's: what a snippet can send back is already bounded twice,
+/// in the page's renderer and again in `EvalOutcome::from_answer`.
+fn browser_eval_response(outcome: BrowserEvalOutcome) -> std::io::Result<BrokerResponse> {
     Ok(BrokerResponse {
         outcome: serde_json::to_value(&outcome).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
@@ -1375,6 +1413,17 @@ mod tests {
                 .await
                 .push(format!("snapshot {tab_id} {max_chars:?}"));
             BrowserSnapshotOutcome::grant_required(tab_id)
+        }
+        async fn eval(
+            &self,
+            tab_id: &str,
+            request: crate::browser::eval::EvalRequest,
+        ) -> BrowserEvalOutcome {
+            self.calls
+                .lock()
+                .await
+                .push(format!("eval {tab_id} {}", request.code));
+            BrowserEvalOutcome::grant_required(tab_id)
         }
         async fn console(
             &self,

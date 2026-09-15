@@ -4676,6 +4676,8 @@
     "sessionInfoHint": "Let agents look up a session you reference in your message (a session badge) to read its title, agent, status, workspace, token usage, and recent messages.",
     "browserToolsLabel": "Read the built-in browser",
     "browserToolsHint": "Let agents see which pages are open in the built-in browser, and read the ones you share. Off by default. Which page an agent may read stays a separate choice you make in that tab’s toolbar — and turning this off applies at once, including to agents already running.",
+    "browserEvalLabel": "Run code in the built-in browser",
+    "browserEvalHint": "Let agents run their own JavaScript on a page you’ve shared. Off by default, and needs the switch above. Every snippet is shown to you and approved one at a time — there is no way to make it automatic.",
     "automationsLabel": "Create automations",
     "automationsHint": "Save the conversation as an automation that runs on a schedule. Off by default — it goes on to start agents on its own.",
     "workTasksLabel": "Create to-do tasks",
@@ -6047,11 +6049,25 @@
           "done": "Read the console",
           "refused": "Refused to read the console: this page isn't shared",
           "failed": "Couldn't read the console"
+        },
+        "eval": {
+          "done": "Ran code on the page",
+          "refused": "Refused to run code on this page",
+          "failed": "Couldn’t run the code"
         }
       },
       "activityCount": "{count}×",
       "expand": "{count} more",
-      "collapse": "Less"
+      "collapse": "Less",
+      "eval": {
+        "title": "Run this code on {site}?",
+        "description": "An agent wants to run JavaScript on this page. It can read and change anything on {site} that you can.",
+        "descriptionWithTitle": "An agent wants to run JavaScript on “{title}”. It can read and change anything on {site} that you can.",
+        "codeLabel": "The code it will run",
+        "everyTime": "You’ll be asked again for every snippet — approving this one does not approve the next.",
+        "allow": "Run it once",
+        "deny": "Don’t run it"
+      }
     },
     "handoff": {
       "send": "Send this page to the chat",

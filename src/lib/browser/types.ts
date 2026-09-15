@@ -97,6 +97,8 @@ export type AgentAction =
   | "capture"
   /** Read the console. */
   | "console"
+  /** Ran its own code, with the person's say-so for that snippet. */
+  | "eval"
 
 export type PointerButton = "left" | "right"
 
@@ -440,6 +442,27 @@ export const BROWSER_DOC_STATE_EVENT = "browser://doc-state"
 export const BROWSER_AGENT_GRANT_EVENT = "browser://agent-grant"
 export const BROWSER_AGENT_ACTIVITY_EVENT = "browser://agent-activity"
 export const BROWSER_CONSOLE_ERRORS_EVENT = "browser://console-errors"
+export const BROWSER_EVAL_REQUEST_EVENT = "browser://eval-request"
+
+/** `browser://eval-request`: one `browser_eval` snippet, waiting on a person.
+ *
+ *  Broadcast to every window and shown by exactly one — the one that owns the
+ *  tab. Two windows raising the same question would be two chances to answer
+ *  it, and only the first answer would count. */
+export interface BrowserEvalRequestPayload {
+  /** Names this one question; goes back with the answer. */
+  requestId: string
+  tabId: string
+  ownerWindow: string
+  /** The origin the grant is bound to, which is where the code will run. */
+  origin: string
+  title: string
+  /** The snippet, verbatim. The backend has already refused anything longer
+   *  than a person could read. */
+  code: string
+  /** Unix milliseconds at which it lapses into a refusal. */
+  expiresAt: number
+}
 
 /** `browser://console-errors`: whether the document in a tab has printed an
  *  error. At most two per document — `false` when a new one commits and the

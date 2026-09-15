@@ -65,6 +65,7 @@ const LABELS = {
   question: "Ask user question",
   sessionInfo: "Get session info",
   browserTools: "Read the built-in browser",
+  browserEval: "Run code in the built-in browser",
   automations: "Create automations",
   workTasks: "Create to-do tasks",
 } as const
@@ -84,6 +85,7 @@ function primeBackend(
     question?: boolean
     sessionInfo?: boolean
     browserTools?: boolean
+    browserEval?: boolean
     automations?: boolean
     workTasks?: boolean
   } = {}
@@ -93,13 +95,17 @@ function primeBackend(
     question = true,
     sessionInfo = true,
     browserTools = false,
+    browserEval = false,
     automations = false,
     workTasks = false,
   } = overrides
   mockGetFeedback.mockResolvedValue({ enabled: feedback })
   mockGetQuestion.mockResolvedValue({ enabled: question })
   mockGetSessionInfo.mockResolvedValue({ enabled: sessionInfo })
-  mockGetBrowser.mockResolvedValue({ enabled: browserTools })
+  mockGetBrowser.mockResolvedValue({
+    enabled: browserTools,
+    eval: browserEval,
+  })
   mockGetChat.mockResolvedValue({
     automations_enabled: automations,
     work_tasks_enabled: workTasks,
@@ -177,10 +183,66 @@ describe("AgentToolsSettingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }))
 
     await waitFor(() =>
-      expect(mockSetBrowser).toHaveBeenCalledWith({ enabled: false })
+      expect(mockSetBrowser).toHaveBeenCalledWith({
+        enabled: false,
+        eval: false,
+      })
     )
     expect(mockSetSessionInfo).not.toHaveBeenCalled()
     expect(mockSetChat).not.toHaveBeenCalled()
+  })
+
+  /** Running code is the one switch on this panel that is not "may an agent
+   * see X", and it hangs off the browser switch above it: not touchable until
+   * that one is on, gone when it goes off again, and it rides the same
+   * endpoint. */
+  it("keeps the run-code switch behind the browser switch", async () => {
+    primeBackend()
+
+    renderWithIntl()
+
+    const evalSwitch = await screen.findByLabelText(LABELS.browserEval)
+    expect(evalSwitch).toBeDisabled()
+    expect(evalSwitch).toHaveAttribute("data-state", "unchecked")
+
+    fireEvent.click(screen.getByLabelText(LABELS.browserTools))
+    expect(screen.getByLabelText(LABELS.browserEval)).not.toBeDisabled()
+    fireEvent.click(screen.getByLabelText(LABELS.browserEval))
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() =>
+      expect(mockSetBrowser).toHaveBeenCalledWith({
+        enabled: true,
+        eval: true,
+      })
+    )
+  })
+
+  /** Turning the group off takes the run-code switch with it — shown off
+   * straight away, and sent off, so it cannot spring back the next time the
+   * group is turned on. */
+  it("drops the run-code switch when the browser switch goes off", async () => {
+    primeBackend({ browserTools: true, browserEval: true })
+
+    renderWithIntl()
+
+    expect(await screen.findByLabelText(LABELS.browserEval)).toHaveAttribute(
+      "data-state",
+      "checked"
+    )
+    fireEvent.click(screen.getByLabelText(LABELS.browserTools))
+    expect(screen.getByLabelText(LABELS.browserEval)).toHaveAttribute(
+      "data-state",
+      "unchecked"
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() =>
+      expect(mockSetBrowser).toHaveBeenCalledWith({
+        enabled: false,
+        eval: false,
+      })
+    )
   })
 
   it("writes both create-from-chat flags together and primes the feedback cache", async () => {

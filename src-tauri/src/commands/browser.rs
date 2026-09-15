@@ -13,7 +13,11 @@ use crate::app_error::AppCommandError;
 use crate::browser::agent::{self, GrantLevel};
 use crate::browser::capture::{self, CaptureOutcome, CaptureRegion, CaptureRequest};
 use crate::browser::console::{ConsoleLevel, ConsoleQuery, ConsoleReadout};
+use crate::browser::confirm::{
+    AskRefused, EvalConsent, EvalRequestPayload, EVAL_CONFIRM_TIMEOUT,
+};
 use crate::browser::doc_guest::{self, DocGuestState, DocGuests, DocMode};
+use crate::browser::eval::{self, EvalAnswer, EvalOutcome, EvalRequest};
 use crate::browser::handoff::{self, PageHandoff};
 use crate::browser::downloads::{BrowserDownload, BrowserDownloads};
 use crate::browser::policy::{BrowserPolicy, HostRule};
@@ -1988,6 +1992,345 @@ async fn capture_viewport(surface: &BrowserSurface) -> Result<Vec<u8>, AppComman
     }
 }
 
+// ---- running the agent's own code ----------------------------------------
+
+/// The person said no to this snippet, or said nothing.
+pub const BROWSER_I18N_KEY_EVAL_DECLINED: &str = "browser.agent.error.evalDeclined";
+
+/// Another snippet is in front of the person, or this tab is in the quiet
+/// period a refusal buys.
+pub const BROWSER_I18N_KEY_EVAL_BUSY: &str = "browser.agent.error.evalBusy";
+
+/// How long the engine gets to run a snippet and hand back its render.
+///
+/// A snippet that loops forever has hung the page's main thread, and no
+/// timeout here can un-hang it — what this bounds is how long the agent waits
+/// to be told so. Longer than a capture, because the person already spent
+/// their attention approving it and a slow answer is better than none.
+const EVAL_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Run an agent's own code on a shared page, once a person has said yes to
+/// that particular snippet.
+///
+/// The order of the gates is the whole design:
+///
+/// 1. the `browser_eval` switch, then the grant — both read from the registry,
+///    so a tab nobody shared never raises a dialog and an agent cannot use the
+///    confirmation itself as a way to get someone's attention;
+/// 2. where the page actually is, read in codeg's own world, held against the
+///    grant — so the origin named in the dialog is the live one, not the last
+///    one the host happened to hear about;
+/// 3. the person;
+/// 4. **the same checks again**, because a dialog can stand for two minutes
+///    and a grant can be taken back or a page navigate in far less;
+/// 5. the code, in the page's world;
+/// 6. where the page is now, again — the snippet may well have moved it, and
+///    what it produced is page content, so it is handed over only if the grant
+///    still covers where it came from.
+///
+/// Step 4 does not make step 5 atomic, and cannot: the registry lock is never
+/// held across a main-thread hop. What it does is make the window one hop
+/// long rather than as long as the person took to read — the same bound
+/// `still_actionable` settles for, and recorded here for the same reason.
+///
+/// Every attempt that reaches an existing tab leaves a line on that tab's
+/// activity strip, as every other agent touch does.
+pub async fn agent_eval_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    consent: &EvalConsent,
+    tab_id: &str,
+    request: &EvalRequest,
+) -> Result<EvalOutcome, AppCommandError> {
+    revoke_if_listener_replaced(app, registry, tab_id).await;
+    let (outcome, answer) = match eval_on_shared_page(app, registry, consent, tab_id, request).await
+    {
+        Ok(Evaluated { outcome, record }) => (record.then_some(agent::AgentOutcome::Done), Ok(outcome)),
+        Err((outcome, err)) => (outcome, Err(err)),
+    };
+    if let Some(outcome) = outcome {
+        events::emit_agent_activity(app, tab_id, agent::AgentAction::Eval, outcome, now_millis());
+    }
+    answer
+}
+
+/// A snippet that ran, and whether the tab it ran on is still the tab under
+/// that id.
+struct Evaluated {
+    outcome: EvalOutcome,
+    record: bool,
+}
+
+fn eval_declined(tab_id: &str) -> AppCommandError {
+    AppCommandError::permission_denied(format!(
+        "the user did not approve running that code on browser tab {tab_id}"
+    ))
+    .with_i18n(BROWSER_I18N_KEY_EVAL_DECLINED, std::collections::BTreeMap::new())
+}
+
+fn eval_busy(tab_id: &str, refused: AskRefused) -> AppCommandError {
+    let detail = match refused {
+        AskRefused::Busy => format!(
+            "another snippet is already waiting for the user's answer; try browser tab {tab_id} \
+             again in a moment"
+        ),
+        AskRefused::CoolingDown => format!(
+            "the user refused a snippet on browser tab {tab_id} a moment ago; that tab is not \
+             asking again just yet"
+        ),
+    };
+    AppCommandError::permission_denied(detail)
+        .with_i18n(BROWSER_I18N_KEY_EVAL_BUSY, std::collections::BTreeMap::new())
+}
+
+/// Where the page is, as codeg's own world reports it, held against the tab's
+/// grant and incarnation. Answers the page's address and **the origin of the
+/// grant that admitted it**.
+///
+/// The address has to come from here and not from the snippet's answer: the
+/// snippet is inlined source text and can return whatever object it likes,
+/// including one that claims to be at the origin the grant covers. This
+/// evaluation contains no agent text at all.
+///
+/// The grant's origin comes back with it, out of the same lock acquisition
+/// that admitted the address, because that pair is what the dialog puts in
+/// front of the person. Reading the grant separately would leave a window —
+/// narrow, but real — in which the page moves and the person is re-granted for
+/// where it went, and the dialog then names the site they left.
+///
+/// `required` is the level the caller needs *at this point*: `Control` for the
+/// two calls that stand between the agent and the page, `Read` for the one
+/// that decides whether a value already produced is handed over. The
+/// distinction matters because this is the LAST gate before the snippet runs,
+/// and a gate that only asked for `Read` would let a tab downgraded to
+/// read-only in the moment before execution still be executed on. Same rule
+/// as `still_actionable`, for the same reason.
+async fn eval_page_address(
+    registry: &BrowserRegistry,
+    surface: &BrowserSurface,
+    tab_id: &str,
+    generation: u64,
+    required: GrantLevel,
+) -> Result<(String, String), ReadFailure> {
+    let failed = |err: AppCommandError| (Some(agent::AgentOutcome::Failed), err);
+    let raw = eval_in_world_string(surface, agent::viewport_call())
+        .await
+        .map_err(failed)?;
+    let answer: agent::ViewportAnswer = serde_json::from_str(&raw).map_err(|e| {
+        failed(window_err(
+            "Failed to read the page",
+            format!("unreadable answer: {e}"),
+        ))
+    })?;
+    let walked_origin = Url::parse(&answer.url).ok().as_ref().and_then(hooks::origin_of);
+    // One lock acquisition for all of it — incarnation, level and origin — and
+    // it is the last thing that happens before the caller acts. Nothing may be
+    // awaited between here and the page.
+    let admitted = registry.read(tab_id, |tab| {
+        (tab.generation == generation).then(|| {
+            let level = agent::level_of(tab.state.agent_grant.as_ref());
+            if !level.allows(GrantLevel::Read) {
+                return Err(grant_required(tab_id));
+            }
+            if !level.allows(required) {
+                return Err(control_required(tab_id));
+            }
+            match tab.state.agent_grant.as_ref() {
+                Some(grant) if grant.covers(walked_origin.as_deref()) => Ok(grant.origin.clone()),
+                // The page is somewhere the grant does not reach. The same
+                // words an unshared tab gets: which of the two it was is not
+                // the agent's to know.
+                _ => Err(grant_required(tab_id)),
+            }
+        })
+    });
+    match admitted {
+        Some(Some(Ok(origin))) => Ok((answer.url, origin)),
+        Some(Some(Err(err))) => Err((Some(agent::AgentOutcome::Refused), err)),
+        Some(None) | None => Err((None, tab_replaced(tab_id))),
+    }
+}
+
+async fn eval_on_shared_page(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    consent: &EvalConsent,
+    tab_id: &str,
+    request: &EvalRequest,
+) -> Result<Evaluated, ReadFailure> {
+    let failed = |err: AppCommandError| (Some(agent::AgentOutcome::Failed), err);
+    if let Err(bad) = eval::validate_code(&request.code) {
+        return Err(failed(AppCommandError::invalid_input(bad.message())));
+    }
+    let Some((surface, generation, owner_window, level, title)) = registry.read(tab_id, |tab| {
+        (
+            tab.surface.clone(),
+            tab.generation,
+            tab.state.owner_window.clone(),
+            agent::level_of(tab.state.agent_grant.as_ref()),
+            tab.state.title.clone(),
+        )
+    }) else {
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    };
+    // Before anything is shown to anyone: an unshared tab, or one shared for
+    // reading only, is refused without a dialog. An agent must not be able to
+    // make a dialog appear on a page nobody gave it.
+    if !level.allows(GrantLevel::Read) {
+        return Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id)));
+    }
+    if !level.allows(GrantLevel::Control) {
+        return Err((Some(agent::AgentOutcome::Refused), control_required(tab_id)));
+    }
+
+    // Where the page is now, from codeg's world, held against the grant — and
+    // the origin of the grant that admitted it, which is what the dialog will
+    // name.
+    let (_, asked_origin) =
+        eval_page_address(registry, &surface, tab_id, generation, GrantLevel::Control).await?;
+
+    let request_id = uuid::Uuid::new_v4().to_string();
+    let rx = consent
+        .arm(tab_id, request_id.clone())
+        .map_err(|refused| (Some(agent::AgentOutcome::Refused), eval_busy(tab_id, refused)))?;
+    events::emit_eval_request(
+        app,
+        &EvalRequestPayload {
+            request_id: request_id.clone(),
+            tab_id: tab_id.to_string(),
+            owner_window,
+            origin: asked_origin,
+            title,
+            code: request.code.clone(),
+            expires_at: now_millis() + EVAL_CONFIRM_TIMEOUT.as_millis() as i64,
+        },
+    );
+    let allowed = match tokio::time::timeout(EVAL_CONFIRM_TIMEOUT, rx).await {
+        Ok(Ok(allowed)) => allowed,
+        // A dropped sender is the slot having been taken from under this
+        // question, and a timeout is nobody there. Both are "no".
+        Ok(Err(_)) => false,
+        Err(_) => {
+            consent.abandon(&request_id);
+            false
+        }
+    };
+    if !allowed {
+        return Err((Some(agent::AgentOutcome::Refused), eval_declined(tab_id)));
+    }
+
+    // The dialog stood for as long as a person took. Everything checked before
+    // it was shown is checked again, against the tab as it is now — including
+    // who is behind the address, which the other tools probe once and are done
+    // with in milliseconds. Here the gap is human-scale, and a program taking
+    // over a loopback port is itself a human-scale event: `localhost:3000`
+    // reads the same in the dialog whichever server is answering it, so the
+    // pin has to be re-checked on this side of the question.
+    revoke_if_listener_replaced(app, registry, tab_id).await;
+    // Asking for `Control` here, not `Read`, and asking for it LAST: this is
+    // the gate the snippet has to get past, and nothing is awaited between it
+    // and the page.
+    eval_page_address(registry, &surface, tab_id, generation, GrantLevel::Control).await?;
+
+    let raw = run_in_page(&surface, &eval::eval_call(&request.code))
+        .await
+        .map_err(failed)?;
+    let answer = read_eval_answer(&raw).map_err(failed)?;
+
+    // The code has run; what is still to be decided is whether its result is
+    // handed over. It is page content, so it follows the rules a read does —
+    // and a snippet that navigated the page away from the shared site has
+    // produced something from a page nobody shared.
+    // `Read` is enough now: the code has run, and what is left to decide is
+    // whether its answer — page content — may be handed over. A person who
+    // pulled the tab back to read-only while it ran has not said the page
+    // became unreadable.
+    let url = match eval_page_address(registry, &surface, tab_id, generation, GrantLevel::Read)
+        .await
+    {
+        Ok((url, _)) => url,
+        Err((outcome, err)) => {
+            tracing::warn!(
+                "[browser] tab {tab_id}: a snippet ran and its result was withheld: {}",
+                err.message
+            );
+            return Err((outcome, err));
+        }
+    };
+    let record = registry
+        .read(tab_id, |tab| tab.generation == generation)
+        .unwrap_or(false);
+    Ok(Evaluated {
+        outcome: EvalOutcome::from_answer(&answer, url),
+        record,
+    })
+}
+
+/// Parse what the page handed back through `eval_with_callback`.
+///
+/// Two layers, because the engines JSON-encode whatever the expression
+/// produced: the outer layer is that encoding (a JSON string, since the
+/// wrapper returns one), the inner layer is the envelope the renderer built.
+/// An empty answer is what all three engines give for an evaluation the engine
+/// itself refused — overwhelmingly a snippet that did not parse, since it is
+/// inlined into the source text rather than passed to `eval`, which a page's
+/// CSP may forbid.
+fn read_eval_answer(raw: &str) -> Result<EvalAnswer, AppCommandError> {
+    let eval_err = |detail: &str| window_err("Failed to run the code", detail);
+    if raw.trim().is_empty() || raw.trim() == "null" {
+        return Err(eval_err(
+            "the page's engine did not run it. The most likely reason is that the code does not \
+             parse — check for an unbalanced brace or an unterminated comment; the snippet is \
+             used as the body of a function.",
+        ));
+    }
+    if raw.len() > eval::MAX_EVAL_ANSWER_BYTES {
+        return Err(eval_err(
+            "the page answered with more than the host will read. The code ran; use `return` to \
+             hand back a summary rather than a whole document.",
+        ));
+    }
+    // The snippet can break out of the wrapper it was inlined into, in which
+    // case whatever it left behind is what arrives here. That is the caller's
+    // own doing and costs nothing but this message.
+    let inner: String = serde_json::from_str(raw).map_err(|_| {
+        eval_err(
+            "the code ran and did not answer with a value this can read. Make sure the snippet \
+             `return`s something and leaves the surrounding function intact.",
+        )
+    })?;
+    serde_json::from_str(&inner).map_err(|e| eval_err(&format!("unreadable answer: {e}")))
+}
+
+/// Evaluate an expression in the page's own world, within [`EVAL_TIMEOUT`].
+///
+/// Deliberately not `eval_in_world`: everything else in this module evaluates
+/// in codeg's isolated world, and an agent's own code is the one thing that
+/// must never run there — see `browser::eval`.
+async fn run_in_page(surface: &BrowserSurface, js: &str) -> Result<String, AppCommandError> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    surface
+        .eval_with_callback(js, move |value| {
+            if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+                let _ = tx.send(value);
+            }
+        })
+        .map_err(|e| window_err("Failed to run the code", e.to_string()))?;
+    match tokio::time::timeout(EVAL_TIMEOUT, rx).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(_)) => Err(window_err("Failed to run the code", "the request was dropped")),
+        Err(_) => Err(window_err(
+            "Failed to run the code",
+            "the page did not answer in time. It may still be running: code that loops holds the \
+             page's own main thread, which nothing here can take back.",
+        )),
+    }
+}
+
 // ---- page → conversation -------------------------------------------------
 //
 // The other direction from the `agent_*` reads above, and the reason none of
@@ -2429,6 +2772,60 @@ impl crate::acp::browser_tools::BrowserToolAccess for McpBrowserTools {
             },
         }
     }
+
+    async fn eval(
+        &self,
+        tab_id: &str,
+        request: EvalRequest,
+    ) -> crate::acp::browser_tools::BrowserEvalOutcome {
+        use crate::acp::browser_tools::{
+            BrowserEvalOutcome, ERROR_EVAL_BUSY, ERROR_EVAL_DISABLED, ERROR_NO_SUCH_TAB,
+            ERROR_READ_FAILED, ERROR_UNAVAILABLE, NO_BROWSER_NOTE,
+        };
+        let Some(registry) = self.registry().await else {
+            return BrowserEvalOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+        };
+        // Its own switch, re-read here rather than trusted from injection
+        // time. `tools/list` hides the tool when it is off, so an agent only
+        // reaches this line if the user turned it off mid-session — which is
+        // exactly the case the re-read is for.
+        if !self.config.is_eval_enabled().await {
+            return BrowserEvalOutcome::refused(
+                tab_id,
+                ERROR_EVAL_DISABLED,
+                "Running your own code on a page is switched off. The user can turn it on under \
+                 Settings → General → the tools an agent may use, next to the browser switch. It \
+                 is off by default and is theirs to turn on; the other browser tools still work.",
+            );
+        }
+        let Some(consent) = self.app.try_state::<EvalConsent>() else {
+            return BrowserEvalOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+        };
+        match agent_eval_core(&self.app, &registry, &consent, tab_id, &request).await {
+            Ok(result) => BrowserEvalOutcome::ran(tab_id, result),
+            Err(err) => match err.i18n_key.as_deref() {
+                Some(BROWSER_I18N_KEY_GRANT_REQUIRED) => BrowserEvalOutcome::grant_required(tab_id),
+                Some(BROWSER_I18N_KEY_CONTROL_REQUIRED) => {
+                    BrowserEvalOutcome::control_required(tab_id)
+                }
+                Some(BROWSER_I18N_KEY_EVAL_DECLINED) => BrowserEvalOutcome::declined(tab_id),
+                Some(BROWSER_I18N_KEY_EVAL_BUSY) => {
+                    BrowserEvalOutcome::refused(tab_id, ERROR_EVAL_BUSY, err.message)
+                }
+                _ if matches!(err.code, crate::app_error::AppErrorCode::NotFound) => {
+                    BrowserEvalOutcome::refused(
+                        tab_id,
+                        ERROR_NO_SUCH_TAB,
+                        format!(
+                            "No browser tab {tab_id} is open. Call browser_list_tabs for the ids \
+                             that are."
+                        ),
+                    )
+                }
+                _ => BrowserEvalOutcome::refused(tab_id, ERROR_READ_FAILED, err.message),
+            },
+        }
+    }
 }
 
 /// Evaluate an expression in a tab's isolated world and unwrap the shim's
@@ -2794,6 +3191,40 @@ pub async fn browser_agent_capture(
     request: Option<CaptureRequest>,
 ) -> Result<CaptureOutcome, AppCommandError> {
     agent_capture_core(&app, &registry, &tab_id, &request.unwrap_or_default()).await
+}
+
+/// Run an agent's own code on a shared page. Resolves only once the person has
+/// answered for that snippet — the grant, the level and the confirmation are
+/// all inside `agent_eval_core`, so every caller gets them.
+///
+/// The `browser_eval` settings switch is *not* checked here: it decides
+/// whether the MCP tool exists for an agent, and this command is the app's own
+/// path (the dev puppet, and whatever the app itself might one day run). The
+/// gates that protect the page — the share, the level, the person — are in the
+/// core and apply to both.
+#[tauri::command]
+pub async fn browser_agent_eval(
+    app: AppHandle,
+    registry: State<'_, BrowserRegistry>,
+    consent: State<'_, EvalConsent>,
+    tab_id: String,
+    request: EvalRequest,
+) -> Result<EvalOutcome, AppCommandError> {
+    agent_eval_core(&app, &registry, &consent, &tab_id, &request).await
+}
+
+/// The person's answer to one `browser://eval-request`.
+///
+/// `false` back means the question is no longer waiting — it lapsed, or
+/// another window answered first. The frontend uses that to stop showing a
+/// dialog nobody is listening to any more.
+#[tauri::command]
+pub async fn browser_eval_decide(
+    consent: State<'_, EvalConsent>,
+    request_id: String,
+    allow: bool,
+) -> Result<bool, AppCommandError> {
+    Ok(consent.decide(&request_id, allow))
 }
 
 /// Point at an element of a page and hand it to a conversation. Resolves when

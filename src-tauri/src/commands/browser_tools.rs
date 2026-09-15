@@ -24,26 +24,48 @@ use crate::web::event_bridge::{emit_event, EventEmitter, BROWSER_TOOLS_SETTINGS_
 
 pub const KEY_BROWSER_TOOLS_ENABLED: &str = "browser_tools.enabled";
 
+/// Whether `browser_eval` exists at all. Its own key, not a level of the one
+/// above: the switch above decides whether an agent may see and read the
+/// browser, and this one decides whether it may run its own code in it. The
+/// second is not more of the first, and a person who turned the first on has
+/// not said anything about the second.
+pub const KEY_BROWSER_TOOLS_EVAL_ENABLED: &str = "browser_tools.eval_enabled";
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BrowserToolsSettings {
     pub enabled: bool,
+    /// Off by default, and meaningless while `enabled` is off — the tool is
+    /// part of the browser group, so the group switch covers it too.
+    #[serde(default)]
+    pub eval: bool,
 }
 
 impl BrowserToolsSettings {
     fn into_runtime_config(self) -> BrowserToolsConfig {
         BrowserToolsConfig {
             enabled: self.enabled,
+            // Never on without the group: a stored `eval: true` left behind by
+            // someone who later switched the whole browser surface off must
+            // not be the one thing that survives it.
+            eval: self.enabled && self.eval,
         }
     }
 }
 
-/// Read the persisted key from `app_metadata`, falling back to the default
-/// (off) for a missing or malformed value. Never errors hard.
+/// Read the persisted keys from `app_metadata`, falling back to the defaults
+/// (both off) for a missing or malformed value. Never errors hard.
 pub async fn load_browser_tools_settings(conn: &DatabaseConnection) -> BrowserToolsSettings {
     let mut settings = BrowserToolsSettings::default();
     if let Ok(Some(raw)) = app_metadata_service::get_value(conn, KEY_BROWSER_TOOLS_ENABLED).await {
         if let Ok(v) = raw.parse::<bool>() {
             settings.enabled = v;
+        }
+    }
+    if let Ok(Some(raw)) =
+        app_metadata_service::get_value(conn, KEY_BROWSER_TOOLS_EVAL_ENABLED).await
+    {
+        if let Ok(v) = raw.parse::<bool>() {
+            settings.eval = v;
         }
     }
     settings
@@ -74,6 +96,13 @@ pub async fn set_browser_tools_settings_core(
         conn,
         KEY_BROWSER_TOOLS_ENABLED,
         &desired.enabled.to_string(),
+    )
+    .await
+    .map_err(AppCommandError::from)?;
+    app_metadata_service::upsert_value(
+        conn,
+        KEY_BROWSER_TOOLS_EVAL_ENABLED,
+        &desired.eval.to_string(),
     )
     .await
     .map_err(AppCommandError::from)?;
@@ -123,9 +152,41 @@ mod tests {
 
     /// The default is the one thing about this setting worth pinning: a user
     /// who never opens the switch has not handed anyone a list of the sites
-    /// they have open.
+    /// they have open, and certainly has not said an agent may run code in
+    /// them.
     #[test]
     fn agents_cannot_see_the_browser_until_someone_says_so() {
         assert!(!BrowserToolsSettings::default().enabled);
+        assert!(!BrowserToolsSettings::default().eval);
+    }
+
+    /// Turning the browser group off takes `browser_eval` with it, whatever
+    /// the stored value of the second key says. The two switches are separate
+    /// decisions in one direction only: eval is part of the browser surface,
+    /// so the surface being off settles it.
+    #[test]
+    fn eval_cannot_outlive_the_group_it_belongs_to() {
+        let orphan = BrowserToolsSettings {
+            enabled: false,
+            eval: true,
+        };
+        assert_eq!(
+            orphan.into_runtime_config(),
+            BrowserToolsConfig {
+                enabled: false,
+                eval: false,
+            }
+        );
+        let both = BrowserToolsSettings {
+            enabled: true,
+            eval: true,
+        };
+        assert_eq!(
+            both.into_runtime_config(),
+            BrowserToolsConfig {
+                enabled: true,
+                eval: true,
+            }
+        );
     }
 }

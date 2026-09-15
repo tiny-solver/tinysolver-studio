@@ -14,6 +14,8 @@
 //! - `types`      — wire types shared with `src/lib/browser/types.ts`
 //! - `policy`     — pure decisions (scheme allow-list, …)
 //! - `agent`      — what an agent may read of a page, and on whose say-so
+//! - `eval`       — the one thing an agent may do that is not a named act:
+//!   run its own code, which a person approves snippet by snippet
 //! - `listener`   — which program is serving a loopback address, for grants
 //!   made on one (`http://localhost:3000` names a port, not a site)
 //! - `doc_guest`  — the `codeg-doc:` guest that shows a local HTML file
@@ -23,6 +25,8 @@
 //! - `surface`    — the enum over the concrete surfaces and their common ops
 //! - `surface_child` / `surface_window` — the concrete builders
 //! - `channel`    — page → host messages from the isolated-world helper
+//! - `confirm`    — the one question `browser_eval` puts to a person, and the
+//!   quiet period a refusal buys
 //! - `handoff`    — the other direction from `agent`: what a PERSON hands to
 //!   a conversation (an element they picked, the console) and how it is
 //!   rendered as untrusted page content
@@ -46,10 +50,13 @@
 pub mod agent;
 pub mod capture;
 pub mod console;
+pub mod eval;
 pub mod types;
 
 #[cfg(feature = "tauri-runtime")]
 pub mod channel;
+#[cfg(feature = "tauri-runtime")]
+pub mod confirm;
 #[cfg(feature = "tauri-runtime")]
 pub mod doc_guest;
 #[cfg(feature = "tauri-runtime")]

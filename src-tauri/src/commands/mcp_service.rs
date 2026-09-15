@@ -282,7 +282,15 @@ pub async fn set_codeg_mcp_tool_group_core(
                 conn,
                 targets.browser,
                 emitter,
-                browser_tools::BrowserToolsSettings { enabled },
+                // The status-bar popover carries the group switch only.
+                // `browser_eval` is not something to turn on in passing from
+                // a status indicator, and turning the group off here takes it
+                // with it either way (`into_runtime_config`).
+                browser_tools::BrowserToolsSettings {
+                    enabled,
+                    eval: enabled
+                        && browser_tools::load_browser_tools_settings(conn).await.eval,
+                },
             )
             .await?;
         }

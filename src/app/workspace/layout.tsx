@@ -1,5 +1,6 @@
 "use client"
 
+import { BrowserEvalConfirm } from "@/components/browser/browser-eval-confirm"
 import { BrowserEventsBridge } from "@/components/browser/browser-events-bridge"
 import { BrowserTabsPersistence } from "@/components/browser/browser-tabs-persistence"
 import { BrowserTabsSuspender } from "@/components/browser/browser-tabs-suspender"
@@ -1283,6 +1284,10 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
                       <WorkspaceDocumentTitle />
                       <TabKeysSync />
                       <BrowserEventsBridge />
+                      {/* Mounted beside the bridge, not inside a tab: the tab
+                          an agent asks to run code on is usually not the one
+                          the person is looking at. */}
+                      <BrowserEvalConfirm />
                       <BrowserTabsPersistence />
                       <BrowserTabsSuspender />
                       <HeavyPluginsWarmup />

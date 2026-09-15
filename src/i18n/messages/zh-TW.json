@@ -4676,6 +4676,8 @@
     "sessionInfoHint": "允許智慧代理查詢你在訊息中提及的工作階段（工作階段徽章），讀取其標題、代理、狀態、工作區、Token 用量與最近訊息。",
     "browserToolsLabel": "讀取內建瀏覽器",
     "browserToolsHint": "允許智能體看到內建瀏覽器裡開著哪些頁面，並讀取你分享的那些。預設關閉。具體讀哪一頁仍然是你在那個分頁的工具列上另外做的決定；關掉這個開關會立即生效，正在執行的智能體也一樣。",
+    "browserEvalLabel": "在內建瀏覽器中執行程式碼",
+    "browserEvalHint": "允許智慧代理在你分享的頁面上執行它自己寫的 JavaScript。預設關閉，而且需要先開啟上面那個開關。每一段程式碼都會先拿給你看、由你逐次核准——沒有辦法讓它自動通過。",
     "automationsLabel": "建立自動化",
     "automationsHint": "把對話儲存為按排程執行的自動化。預設關閉——它之後會自行啟動代理。",
     "workTasksLabel": "建立待辦任務",
@@ -6047,11 +6049,25 @@
           "done": "讀取了主控台",
           "refused": "已拒絕讀取主控台：此頁面未分享",
           "failed": "讀取主控台失敗"
+        },
+        "eval": {
+          "done": "在頁面上執行了程式碼",
+          "refused": "已拒絕在此頁面執行程式碼",
+          "failed": "程式碼沒能執行"
         }
       },
       "activityCount": "{count} 次",
       "expand": "還有 {count} 筆",
-      "collapse": "收合"
+      "collapse": "收合",
+      "eval": {
+        "title": "在 {site} 上執行這段程式碼？",
+        "description": "有智慧代理想在這個頁面上執行 JavaScript。你在 {site} 上能讀取和變更的一切，它都能。",
+        "descriptionWithTitle": "有智慧代理想在「{title}」上執行 JavaScript。你在 {site} 上能讀取和變更的一切，它都能。",
+        "codeLabel": "它要執行的程式碼",
+        "everyTime": "每一段程式碼都會再問你一次——核准這一段不等於核准下一段。",
+        "allow": "執行這一次",
+        "deny": "不要執行"
+      }
     },
     "handoff": {
       "send": "把這個頁面傳給對話",

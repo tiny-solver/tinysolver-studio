@@ -4676,6 +4676,8 @@
     "sessionInfoHint": "Permite que os agentes consultem uma sessão mencionada na sua mensagem (um selo de sessão) para ler o título, agente, status, espaço de trabalho, uso de tokens e mensagens recentes.",
     "browserToolsLabel": "Ler o navegador integrado",
     "browserToolsHint": "Deixa os agentes verem quais páginas estão abertas no navegador integrado e lerem as que você compartilhar. Desativado por padrão. Qual página um agente pode ler continua sendo uma escolha à parte, feita na barra daquela aba; desativar isto vale na hora, inclusive para agentes já em execução.",
+    "browserEvalLabel": "Executar código no navegador integrado",
+    "browserEvalHint": "Permite que os agentes executem o próprio JavaScript numa página que você compartilhou. Desativado por padrão e depende do interruptor acima. Cada trecho é mostrado a você e aprovado um de cada vez — não há como torná-lo automático.",
     "automationsLabel": "Criar automações",
     "automationsHint": "Salva a conversa como uma automação que roda em um agendamento. Desativado por padrão — depois ela inicia agentes por conta própria.",
     "workTasksLabel": "Criar tarefas a fazer",
@@ -6047,11 +6049,25 @@
           "done": "Leu a consola",
           "refused": "Leitura da consola recusada: esta página não está partilhada",
           "failed": "Não foi possível ler a consola"
+        },
+        "eval": {
+          "done": "Executou código na página",
+          "refused": "Execução de código recusada nesta página",
+          "failed": "Não foi possível executar o código"
         }
       },
       "activityCount": "{count}×",
       "expand": "mais {count}",
-      "collapse": "Menos"
+      "collapse": "Menos",
+      "eval": {
+        "title": "Executar este código em {site}?",
+        "description": "Um agente quer executar JavaScript nesta página. Ele pode ler e alterar tudo o que você pode em {site}.",
+        "descriptionWithTitle": "Um agente quer executar JavaScript em “{title}”. Ele pode ler e alterar tudo o que você pode em {site}.",
+        "codeLabel": "O código que será executado",
+        "everyTime": "Você será perguntado de novo a cada trecho — aprovar este não aprova o próximo.",
+        "allow": "Executar uma vez",
+        "deny": "Não executar"
+      }
     },
     "handoff": {
       "send": "Enviar esta página para a conversa",

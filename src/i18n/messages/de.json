@@ -4676,6 +4676,8 @@
     "sessionInfoHint": "Erlaubt Agenten, eine in deiner Nachricht referenzierte Sitzung (ein Sitzungs-Badge) nachzuschlagen, um Titel, Agent, Status, Arbeitsbereich, Token-Verbrauch und letzte Nachrichten zu lesen.",
     "browserToolsLabel": "Integrierten Browser lesen",
     "browserToolsHint": "Lässt Agenten sehen, welche Seiten im integrierten Browser offen sind, und die freigegebenen lesen. Standardmäßig aus. Welche Seite ein Agent lesen darf, entscheiden Sie weiterhin einzeln in der Symbolleiste des jeweiligen Tabs; das Ausschalten wirkt sofort, auch für bereits laufende Agenten.",
+    "browserEvalLabel": "Code im integrierten Browser ausführen",
+    "browserEvalHint": "Erlaubt Agenten, eigenes JavaScript auf einer von dir geteilten Seite auszuführen. Standardmäßig aus und nur zusammen mit dem Schalter darüber. Jeder Codeausschnitt wird dir gezeigt und einzeln bestätigt – automatisch geht das nicht.",
     "automationsLabel": "Automatisierungen erstellen",
     "automationsHint": "Speichert die Unterhaltung als Automatisierung, die nach Zeitplan läuft. Standardmäßig aus – sie startet danach selbst Agenten.",
     "workTasksLabel": "To-do-Aufgaben erstellen",
@@ -6047,11 +6049,25 @@
           "done": "Konsole gelesen",
           "refused": "Lesen der Konsole abgelehnt: Diese Seite ist nicht freigegeben",
           "failed": "Konsole konnte nicht gelesen werden"
+        },
+        "eval": {
+          "done": "Code auf der Seite ausgeführt",
+          "refused": "Code-Ausführung auf dieser Seite abgelehnt",
+          "failed": "Code konnte nicht ausgeführt werden"
         }
       },
       "activityCount": "{count}×",
       "expand": "{count} weitere",
-      "collapse": "Weniger"
+      "collapse": "Weniger",
+      "eval": {
+        "title": "Diesen Code auf {site} ausführen?",
+        "description": "Ein Agent möchte JavaScript auf dieser Seite ausführen. Er kann alles lesen und ändern, was du auf {site} kannst.",
+        "descriptionWithTitle": "Ein Agent möchte JavaScript auf „{title}“ ausführen. Er kann alles lesen und ändern, was du auf {site} kannst.",
+        "codeLabel": "Der Code, der ausgeführt wird",
+        "everyTime": "Du wirst bei jedem Ausschnitt erneut gefragt – diese Freigabe gilt nicht für den nächsten.",
+        "allow": "Einmal ausführen",
+        "deny": "Nicht ausführen"
+      }
     },
     "handoff": {
       "send": "Diese Seite an den Chat senden",

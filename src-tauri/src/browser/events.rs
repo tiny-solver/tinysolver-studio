@@ -9,6 +9,7 @@ use super::agent::{
     AgentAction, AgentActivityPayload, AgentGrantPayload, AgentOutcome, GrantChange, GrantLevel,
     AGENT_ACTIVITY_EVENT, AGENT_GRANT_EVENT,
 };
+use super::confirm::{EvalRequestPayload, EVAL_REQUEST_EVENT};
 use super::doc_guest::DocGuestState;
 use super::downloads::{BrowserDownload, DOWNLOAD_EVENT};
 use super::types::{
@@ -103,6 +104,16 @@ pub fn emit_agent_activity(
             at,
         },
     );
+}
+
+/// Put one `browser_eval` snippet in front of the person who owns the tab.
+///
+/// Broadcast like everything else here, and filtered by `ownerWindow` on the
+/// way in: only the window the tab lives in raises the dialog. Two windows
+/// showing the same question would be two chances to answer it, and the second
+/// answer would arrive after the first had already decided.
+pub fn emit_eval_request(app: &AppHandle, payload: &EvalRequestPayload) {
+    emit_event(&EventEmitter::Tauri(app.clone()), EVAL_REQUEST_EVENT, payload);
 }
 
 /// Whether the document in a tab has printed an error — see

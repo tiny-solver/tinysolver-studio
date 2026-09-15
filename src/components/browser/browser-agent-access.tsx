@@ -316,6 +316,11 @@ const ACTIVITY_KEYS = {
     refused: "activity.console.refused",
     failed: "activity.console.failed",
   },
+  eval: {
+    done: "activity.eval.done",
+    refused: "activity.eval.refused",
+    failed: "activity.eval.failed",
+  },
 } as const satisfies Record<AgentAction, Record<AgentOutcome, string>>
 
 function activityLabel(

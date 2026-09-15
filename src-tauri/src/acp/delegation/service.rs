@@ -387,6 +387,18 @@ mod tests {
             )
         }
 
+        async fn eval(
+            &self,
+            tab_id: &str,
+            _request: crate::browser::eval::EvalRequest,
+        ) -> crate::acp::browser_tools::BrowserEvalOutcome {
+            crate::acp::browser_tools::BrowserEvalOutcome::refused(
+                tab_id,
+                crate::acp::browser_tools::ERROR_UNAVAILABLE,
+                "stub",
+            )
+        }
+
         async fn capture(
             &self,
             tab_id: &str,

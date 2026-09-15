@@ -4557,6 +4557,10 @@ struct CompanionFeatureFlags {
     /// setting AND by there being a built-in browser at all — the tabs are
     /// native webviews this process owns, which server mode has none of.
     browser: bool,
+    /// `browser_eval`, gated by a second setting on top of `browser`. Its own
+    /// flag so that turning it on or off does not disturb the rest of the
+    /// group, and so that the group being on never implies it.
+    browser_eval: bool,
 }
 
 /// The `--features` value for a companion launch, or `None` when no group is
@@ -4589,6 +4593,12 @@ fn companion_features_arg(flags: CompanionFeatureFlags) -> Option<String> {
     }
     if flags.browser {
         features.push("browser");
+    }
+    // Only ever alongside `browser`: the companion requires both, and a
+    // `--features browser_eval` on its own would be a line in an agent's MCP
+    // config that reads as if it granted something.
+    if flags.browser && flags.browser_eval {
+        features.push("browser_eval");
     }
     if features.is_empty() {
         return None;
@@ -4693,6 +4703,8 @@ where
         // tools there would promise a capability that cannot exist, and the
         // agent would find out by being told "no tabs" forever.
         browser: cfg!(feature = "tauri-runtime") && injection.browser.is_enabled().await,
+        browser_eval: cfg!(feature = "tauri-runtime")
+            && injection.browser.is_eval_enabled().await,
     };
     // `None` (no feature enabled) short-circuits BEFORE the binary lookup, the
     // token registration and the server append: there is no companion to launch,
@@ -21613,10 +21625,23 @@ mod tests {
                 automations: true,
                 taskboard: true,
                 browser: true,
+                browser_eval: true,
             }),
             Some(
-                "delegation,feedback,ask,sessions,tasks,automations,taskboard,browser".to_string()
+                "delegation,feedback,ask,sessions,tasks,automations,taskboard,browser,browser_eval"
+                    .to_string()
             )
+        );
+        // `browser_eval` never travels on its own: the companion requires both
+        // tokens, and a lone one in an agent's MCP config would read as if it
+        // granted something.
+        assert_eq!(only(|f| f.browser_eval = true), None);
+        assert_eq!(
+            only(|f| {
+                f.browser = true;
+                f.browser_eval = true;
+            }),
+            Some("browser,browser_eval".to_string())
         );
     }
 

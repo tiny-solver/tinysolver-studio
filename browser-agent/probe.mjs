@@ -40,6 +40,17 @@ const PICKER = readFileSync(
   resolve(root, "src/browser-injected/picker.js"),
   "utf8"
 )
+// What `browser_eval` wraps an agent's snippet in, and the one piece of this
+// subsystem's JS that runs in the PAGE's world rather than ours. The file is
+// the renderer; the six lines around it are built here the way
+// `browser::eval::eval_call` builds them, and a Rust unit test pins that
+// shape.
+const EVAL_RENDER = readFileSync(
+  resolve(root, "src/browser-injected/eval-render.js"),
+  "utf8"
+)
+const evalCall = (code) =>
+  `(function(){\n${EVAL_RENDER}\ntry {\nvar __codegEvalValue = (function () {\n${code}\n})();\nreturn __codegEvalRender(__codegEvalValue);\n} catch (e) {\nreturn __codegEvalError(e);\n}\n})()`
 
 const CHROME =
   process.env.CHROME_PATH ??
@@ -1889,6 +1900,163 @@ try {
     )
     await sleep(800)
   }
+
+  // ---- browser_eval's renderer, in the page's own world ------------------
+  //
+  // The one piece of this subsystem that does NOT run in the isolated world,
+  // and the reason is the whole design: a snippet is inlined as source text
+  // and can do anything, so it must not be anywhere near the intrinsics the
+  // other tools' answers are built out of. Everything below runs where a real
+  // `browser_eval` runs — `Runtime.evaluate` with no contextId — and reads
+  // back the envelope the host parses.
+  // NOT `run`: its `contextId` defaults to the isolated world, and passing
+  // `undefined` takes the default — which is how the first version of these
+  // checks ran the whole thing in codeg's world and still looked green until
+  // the two world checks below went red.
+  const inPage = async (expression) => {
+    const { result } = await send("Runtime.evaluate", {
+      expression,
+      returnByValue: true,
+    })
+    if (result.exceptionDetails)
+      throw new Error(JSON.stringify(result.exceptionDetails, null, 2))
+    return result.result.value
+  }
+  const evalIn = async (code) => {
+    // The host gets this as JSON of the expression's value: a JSON string
+    // holding the envelope. CDP with returnByValue hands the string straight
+    // over, so only the inner parse is here.
+    return JSON.parse(await inPage(evalCall(code)))
+  }
+
+  check(
+    "a returned string comes back as a string",
+    await evalIn("return document.title"),
+    { ok: true, kind: "string", value: "Probe", truncated: false }
+  )
+  check(
+    "a number keeps its type and reads as text",
+    await evalIn("return 6 * 7"),
+    { ok: true, kind: "number", value: "42", truncated: false }
+  )
+  check(
+    "a snippet that returns nothing says so rather than answering empty",
+    await evalIn("document.title"),
+    { ok: true, kind: "undefined", value: "undefined", truncated: false }
+  )
+  check(
+    "an object comes back as JSON, an array as an array",
+    [
+      await evalIn('return {a: 1, b: "x"}'),
+      (await evalIn("return [1, 2, 3]")).kind,
+    ],
+    [
+      { ok: true, kind: "object", value: '{"a":1,"b":"x"}', truncated: false },
+      "array",
+    ]
+  )
+  // A node is described, not serialised: `JSON.stringify(element)` is `{}`,
+  // which would tell an agent nothing at all.
+  check(
+    "an element is described by what it is",
+    (await evalIn('return document.getElementById("exp")')).value,
+    "<button#exp>"
+  )
+  // Nothing here waits, and a promise that came back as `{}` would look like
+  // an empty object rather than like the mistake it is.
+  check(
+    "a promise is named as one instead of being awaited",
+    [
+      (await evalIn("return Promise.resolve(1)")).kind,
+      (await evalIn("return Promise.resolve(1)")).value.includes(
+        "does not wait"
+      ),
+    ],
+    ["promise", true]
+  )
+  // The name and the message are the part of an exception anyone reads, and
+  // on the WebKit ports `error.stack` is frames only — so the renderer puts
+  // the head back. Chrome's stack already has it, which is exactly why this
+  // check cannot be what proves the rule; a real WKWebView is (see the
+  // package notes).
+  const threw = await evalIn("return nope.missing")
+  check(
+    "a throw is an answer, with the exception named in it",
+    [
+      threw.ok,
+      threw.error.startsWith("ReferenceError"),
+      threw.error.includes("\n"),
+    ],
+    [false, true, true]
+  )
+  // An exception with no stack at all still says what it was.
+  check(
+    "a throw with no stack still names itself",
+    (await evalIn('var e = new TypeError("bare"); delete e.stack; throw e'))
+      .error,
+    "TypeError: bare"
+  )
+  // And something that is not an Error at all is still described.
+  check(
+    "throwing a non-error still answers",
+    (await evalIn('throw "just a string"')).error,
+    "just a string"
+  )
+  // A page object that cannot be serialised must not take the whole call with
+  // it: the fallback is `String(v)`, and an answer beats an error.
+  check(
+    "a cyclic object still answers",
+    (await evalIn("var a = {}; a.self = a; return a")).ok,
+    true
+  )
+  const long = await evalIn('return "x".repeat(9000)')
+  check(
+    "a long value stops at the cap and says it was cut",
+    [long.value.length, long.truncated],
+    [4000, true]
+  )
+  // The payoff of the surrogate rule: cutting at 4000 lands exactly between
+  // the halves of an emoji here, and JSON.stringify would emit an escape for
+  // half a character that the host's parser refuses outright — losing the
+  // whole answer rather than one character of it.
+  check(
+    "a cut between the halves of a character does not cost the answer",
+    (await evalIn('return "a".repeat(3999) + "🙂".repeat(10)')).value.length,
+    3999
+  )
+  // A snippet is a function body, so a line comment at the end of it would
+  // swallow the wrapper if the newline after it were ever dropped.
+  check(
+    "a snippet ending in a comment still parses",
+    (await evalIn("return 1 // done")).value,
+    "1"
+  )
+  // The world choice, measured: the page's own globals ARE visible (which is
+  // what makes the tool useful) and the isolated world's are NOT (which is
+  // what keeps a snippet away from the machinery every other tool's answer is
+  // built from).
+  await send("Runtime.evaluate", {
+    expression: 'globalThis.__probePageGlobal = "from the page"',
+    returnByValue: true,
+  })
+  check(
+    "a snippet sees the page's own globals",
+    (await evalIn("return globalThis.__probePageGlobal")).value,
+    "from the page"
+  )
+  check(
+    "a snippet cannot see codeg's world",
+    (await evalIn("return typeof globalThis.__codegAgent")).value,
+    "undefined"
+  )
+  // And leaves nothing behind in the page that would tell it codeg had run.
+  check(
+    "an evaluation leaves no names on the page",
+    await inPage(
+      'typeof globalThis.__codegEvalRender + "," + typeof globalThis.__codegEvalClip'
+    ),
+    "undefined,undefined"
+  )
 
   // The premise the whole design rests on, measured instead of assumed: this
   // world cannot intercept the page's own history calls, which is why

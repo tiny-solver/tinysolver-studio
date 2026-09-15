@@ -302,6 +302,21 @@ pub struct BrokerBrowserCaptureRequest {
     pub request: crate::browser::capture::CaptureRequest,
 }
 
+/// Run the caller's own code on one shared page. Backs the `browser_eval` MCP
+/// tool; its own switch, the `control` check, the per-snippet confirmation and
+/// the audit line all happen behind it, in `agent_eval_core`.
+///
+/// The only browser round trip that waits on a person, so it can be in flight
+/// for as long as someone takes to read a screen of code — up to
+/// `browser::confirm::EVAL_CONFIRM_TIMEOUT`, which is what stops it waiting
+/// for one who never comes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerBrowserEvalRequest {
+    pub token: String,
+    pub tab_id: String,
+    pub request: crate::browser::eval::EvalRequest,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -326,6 +341,7 @@ pub enum BrokerMessage {
     BrowserAct(BrokerBrowserActRequest),
     BrowserConsole(BrokerBrowserConsoleRequest),
     BrowserCapture(BrokerBrowserCaptureRequest),
+    BrowserEval(BrokerBrowserEvalRequest),
     /// Liveness probe. Unlike every other variant this one is NOT sent by a
     /// companion — it comes from codeg's own service-status check
     /// (`acp::delegation::service`), which is why it carries no `token`: a
@@ -570,6 +586,15 @@ pub async fn client_browser_capture_round_trip(
     req: &BrokerBrowserCaptureRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::BrowserCapture(req.clone())).await
+}
+
+/// Dispatch a `browser_eval` request and read back the serialized
+/// [`crate::acp::browser_tools::BrowserEvalOutcome`].
+pub async fn client_browser_eval_round_trip(
+    socket_path: &str,
+    req: &BrokerBrowserEvalRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::BrowserEval(req.clone())).await
 }
 
 /// Probe the listener: write a [`BrokerMessage::Ping`] and read the

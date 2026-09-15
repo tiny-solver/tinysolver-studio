@@ -4676,6 +4676,8 @@
     "sessionInfoHint": "Permite que los agentes consulten una sesión que mencionas en tu mensaje (una insignia de sesión) para leer su título, agente, estado, espacio de trabajo, uso de tokens y mensajes recientes.",
     "browserToolsLabel": "Leer el navegador integrado",
     "browserToolsHint": "Permite que los agentes vean qué páginas hay abiertas en el navegador integrado y lean las que compartas. Desactivado por omisión. Qué página puede leer un agente sigue siendo una decisión aparte que tomas en la barra de esa pestaña, y desactivar esto surte efecto de inmediato, también para los agentes en marcha.",
+    "browserEvalLabel": "Ejecutar código en el navegador integrado",
+    "browserEvalHint": "Permite que los agentes ejecuten su propio JavaScript en una página que hayas compartido. Desactivado por defecto, y requiere el interruptor de arriba. Verás cada fragmento y lo aprobarás uno a uno: no hay forma de hacerlo automático.",
     "automationsLabel": "Crear automatizaciones",
     "automationsHint": "Guarda la conversación como una automatización que se ejecuta según un horario. Desactivado por defecto: luego inicia agentes por su cuenta.",
     "workTasksLabel": "Crear tareas pendientes",
@@ -6047,11 +6049,25 @@
           "done": "Leyó la consola",
           "refused": "Lectura de la consola rechazada: esta página no está compartida",
           "failed": "No se pudo leer la consola"
+        },
+        "eval": {
+          "done": "Ejecutó código en la página",
+          "refused": "Ejecución de código rechazada en esta página",
+          "failed": "No se pudo ejecutar el código"
         }
       },
       "activityCount": "{count}×",
       "expand": "{count} más",
-      "collapse": "Menos"
+      "collapse": "Menos",
+      "eval": {
+        "title": "¿Ejecutar este código en {site}?",
+        "description": "Un agente quiere ejecutar JavaScript en esta página. Puede leer y cambiar todo lo que tú puedes en {site}.",
+        "descriptionWithTitle": "Un agente quiere ejecutar JavaScript en «{title}». Puede leer y cambiar todo lo que tú puedes en {site}.",
+        "codeLabel": "El código que se ejecutará",
+        "everyTime": "Se te preguntará de nuevo por cada fragmento: aprobar este no aprueba el siguiente.",
+        "allow": "Ejecutar una vez",
+        "deny": "No ejecutar"
+      }
     },
     "handoff": {
       "send": "Enviar esta página al chat",

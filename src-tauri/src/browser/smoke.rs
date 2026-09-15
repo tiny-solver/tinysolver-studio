@@ -456,6 +456,41 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
             .map_err(err_string)?;
             Ok(json!(outcome))
         }
+        // Run an agent's own code on a shared page. Like the pick below, this
+        // does not return until a person answers — so a harness says up front
+        // what they will do (`answer: true` / `false`) and this drives the
+        // real dialog in the real main window to say it. Nothing here reaches
+        // past the UI: the button the task presses is the one a person would,
+        // and it goes back through `browser_eval_decide` like theirs. Omit
+        // `answer` to leave the dialog standing and drive it by hand.
+        "browser_agent_eval" => {
+            let request = crate::browser::eval::EvalRequest {
+                code: str_arg(cmd, "code")?,
+            };
+            if let Some(answer) = cmd.get("answer").and_then(Value::as_bool) {
+                let after =
+                    Duration::from_millis(cmd.get("after_ms").and_then(Value::as_u64).unwrap_or(600));
+                let window = main_window()?;
+                let slot = if answer { "action" } else { "cancel" };
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(after).await;
+                    let _ = window.eval(format!(
+                        "document.querySelector('[data-slot=\"alert-dialog-{slot}\"]')?.click()"
+                    ));
+                });
+            }
+            let consent = app.state::<crate::browser::confirm::EvalConsent>();
+            let outcome = browser_commands::agent_eval_core(
+                app,
+                &registry,
+                &consent,
+                &str_arg(cmd, "tab_id")?,
+                &request,
+            )
+            .await
+            .map_err(err_string)?;
+            Ok(json!(outcome))
+        }
         // Page → conversation. `browser_pick_element` waits for a person to
         // click something, so a harness drives it by starting it, clicking
         // through `browser_eval`, and reading the answer when it lands; the

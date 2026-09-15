@@ -319,6 +319,21 @@ export function browserAgentCapture(
   })
 }
 
+/** The person's answer to one `browser://eval-request`.
+ *
+ *  Resolves `false` when that question is no longer waiting — it lapsed, or
+ *  something else answered it first — which is the signal to stop showing a
+ *  dialog nobody is listening to. */
+export function browserEvalDecide(
+  requestId: string,
+  allow: boolean
+): Promise<boolean> {
+  return getTransport().call<boolean>("browser_eval_decide", {
+    requestId,
+    allow,
+  })
+}
+
 /** Let the person point at an element of the page and hand it to a
  *  conversation. Resolves when they pick one, or with `cancelled` when they
  *  press Escape, start another pick, navigate, or leave it armed too long —

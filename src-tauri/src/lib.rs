@@ -397,6 +397,7 @@ mod tauri_app {
             .manage(crate::browser::BrowserRegistry::default())
             .manage(crate::browser::BrowserDownloads::default())
             .manage(crate::browser::DocGuests::default())
+            .manage(crate::browser::confirm::EvalConsent::new())
             .manage(crate::browser::policy::BrowserPolicy::load())
             .manage(TerminalManager::new())
             .manage(ChatChannelManager::new())
@@ -1242,6 +1243,8 @@ mod tauri_app {
                 browser_commands::browser_agent_act,
                 browser_commands::browser_agent_console,
                 browser_commands::browser_agent_capture,
+                browser_commands::browser_agent_eval,
+                browser_commands::browser_eval_decide,
                 browser_commands::browser_pick_element,
                 browser_commands::browser_pick_cancel,
                 browser_commands::browser_page_capture,
