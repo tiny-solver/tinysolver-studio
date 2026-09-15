@@ -490,8 +490,11 @@ pub async fn resolve_close_request(
     db: State<'_, AppDatabase>,
     app: tauri::AppHandle,
 ) -> Result<(), AppCommandError> {
-    mark_close_prompt_listener_ready();
+    // Release first, as above: a press racing in between then falls back to the
+    // preference (readiness is still whatever it was) instead of being dropped
+    // as a duplicate of a claim nobody holds any more.
     release_close_prompt();
+    mark_close_prompt_listener_ready();
 
     let behavior = match action.as_str() {
         "minimize" => Some(CloseWindowBehavior::Minimize),

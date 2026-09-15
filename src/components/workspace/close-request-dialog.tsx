@@ -50,6 +50,18 @@ type CloseAction = "minimize" | "exit" | "cancel"
 /** The only window whose close button routes through this prompt. */
 const MAIN_WINDOW_LABEL = "main"
 
+// Retry backoff for the window-spin-up case, same shape `usePetSessions` uses
+// and for the same reason: `main` makes its first Tauri IPC calls while the
+// window is still coming up, where the first one can reject or stall once
+// before the bridge is ready. Both halves of the arming sequence retry, because
+// neither is re-attempted from anywhere else for the rest of the session —
+// losing the subscription loses every prompt, and losing the handshake leaves
+// the backend acting as if no dialog exists.
+const RETRY_BASE_MS = 150
+const RETRY_MAX_MS = 2000
+const backoffMs = (attempt: number) =>
+  Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS)
+
 export function CloseRequestDialog() {
   const t = useTranslations("CloseRequestDialog")
   const [request, setRequest] = useState<CloseRequestPayload | null>(null)
@@ -65,59 +77,88 @@ export function CloseRequestDialog() {
 
     let disposed = false
     let unsubscribe: (() => void) | null = null
+    let warnedSubscribe = false
+    let warnedHandshake = false
+    const timers = new Set<ReturnType<typeof setTimeout>>()
+
+    const retry = (fn: () => void, attempt: number) => {
+      if (disposed) return
+      const id = setTimeout(() => {
+        timers.delete(id)
+        fn()
+      }, backoffMs(attempt))
+      timers.add(id)
+    }
 
     // The prompt flag lives in the backend process, the dialog in this webview.
     // A reload (dev hot-reload, F5, a webview crash-restart) destroys the
     // dialog without resolving it, and the flag then suppresses every later
     // close press for the rest of the session. A freshly mounted listener means
     // no dialog is on screen, so any flag still set is stale: cancel it.
-    // Subscribe first, so a press landing in this window is still delivered.
     //
     // This is also how the backend learns a dialog exists at all: `main` is
     // visible from the first frame, long before React gets here, and an emit
     // into that gap would be reported as delivered while nothing was listening.
     // Until this call lands the close button keeps its pre-preference
     // behavior — so a failure here degrades to "hide to tray", never to a
-    // press that vanishes. It is also the ONLY call that raises that signal,
-    // and nothing else will try again for the rest of the session, so a
-    // transient IPC hiccup gets a few retries rather than silently costing the
-    // user their preference until the next launch.
-    const clearStalePrompt = async () => {
-      for (let attempt = 0; attempt < 3; attempt++) {
+    // press that vanishes.
+    const announceListening = (attempt = 0) => {
+      if (disposed) return
+      void resolveCloseRequest("cancel", false).catch((err) => {
         if (disposed) return
-        try {
-          await resolveCloseRequest("cancel", false)
-          return
-        } catch (err) {
-          console.error("[close] failed to clear stale close request:", err)
-          await new Promise((resolve) => setTimeout(resolve, 250))
+        if (!warnedHandshake) {
+          warnedHandshake = true
+          console.warn("[close] close-prompt handshake failed (retrying):", err)
         }
-      }
+        retry(() => announceListening(attempt + 1), attempt)
+      })
     }
 
-    void (async () => {
-      const win = await getCurrentWindow()
-      if (win?.label !== MAIN_WINDOW_LABEL) return
-
-      const fn = await listenCloseRequest((payload) => {
+    // Subscribe first, so a press landing in this window is still delivered,
+    // and announce only once the listener is armed.
+    const subscribe = (attempt = 0) => {
+      if (disposed) return
+      void listenCloseRequest((payload) => {
         // Fresh prompt, fresh checkbox: "remember" is a decision about this
         // press, not a sticky UI preference.
         setRemember(false)
         setBusy(false)
         setRequest(payload)
       })
-      if (disposed) {
-        fn()
-        return
-      }
-      unsubscribe = fn
-      await clearStalePrompt()
-    })().catch((err) => {
-      console.error("[close] failed to subscribe to close requests:", err)
-    })
+        .then((fn) => {
+          if (disposed) {
+            fn()
+            return
+          }
+          unsubscribe = fn
+          announceListening()
+        })
+        .catch((err) => {
+          if (disposed) return
+          if (!warnedSubscribe) {
+            warnedSubscribe = true
+            console.warn(
+              "[close] close-request subscription failed (retrying):",
+              err
+            )
+          }
+          retry(() => subscribe(attempt + 1), attempt)
+        })
+    }
+
+    void getCurrentWindow()
+      .then((win) => {
+        if (disposed || win?.label !== MAIN_WINDOW_LABEL) return
+        subscribe()
+      })
+      .catch((err) => {
+        console.error("[close] failed to resolve the current window:", err)
+      })
 
     return () => {
       disposed = true
+      for (const id of timers) clearTimeout(id)
+      timers.clear()
       unsubscribe?.()
     }
   }, [])

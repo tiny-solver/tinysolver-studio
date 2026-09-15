@@ -8,16 +8,16 @@ import type { CloseRequestPayload } from "@/lib/types"
 
 let emit: ((payload: CloseRequestPayload) => void) | null = null
 const unsubscribe = vi.fn()
+const listenCloseRequest =
+  vi.fn<(handler: (p: CloseRequestPayload) => void) => Promise<() => void>>()
 const resolveCloseRequest =
   vi.fn<(action: string, remember: boolean) => Promise<void>>()
 const toastError = vi.fn()
 
 vi.mock("@/lib/api", () => ({
   CLOSE_REQUEST_EVENT: "app://close-request",
-  listenCloseRequest: async (handler: (p: CloseRequestPayload) => void) => {
-    emit = handler
-    return unsubscribe
-  },
+  listenCloseRequest: (handler: (p: CloseRequestPayload) => void) =>
+    listenCloseRequest(handler),
   resolveCloseRequest: (action: string, remember: boolean) =>
     resolveCloseRequest(action, remember),
 }))
@@ -53,6 +53,11 @@ beforeEach(() => {
   emit = null
   unsubscribe.mockClear()
   toastError.mockClear()
+  listenCloseRequest.mockReset()
+  listenCloseRequest.mockImplementation(async (handler) => {
+    emit = handler
+    return unsubscribe
+  })
   resolveCloseRequest.mockReset()
   resolveCloseRequest.mockResolvedValue(undefined)
 })
@@ -187,6 +192,23 @@ describe("CloseRequestDialog", () => {
       timeout: 3000,
     })
     expect(resolveCloseRequest).toHaveBeenLastCalledWith("cancel", false)
+  })
+
+  // `main`'s first IPC calls happen while the window is still spinning up,
+  // where one can reject before the bridge is ready. Giving up there would cost
+  // every prompt for the session, with nothing to retry it.
+  it("retries the subscription when the first listen rejects", async () => {
+    listenCloseRequest.mockRejectedValueOnce(new Error("bridge not up"))
+    renderDialog()
+
+    await waitFor(() => expect(emit).toBeTruthy(), { timeout: 3000 })
+    // And the handshake still runs off the successful attempt.
+    await waitFor(
+      () => expect(resolveCloseRequest).toHaveBeenCalledWith("cancel", false),
+      { timeout: 3000 }
+    )
+    await fire(ASK)
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
   })
 
   // The component sits in the root layout, which the pet / settings / panel
