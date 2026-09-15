@@ -122,6 +122,13 @@
   // somewhere this world cannot see, and a picker that stays armed then is
   // lying about what the next press does.
   var lostCoverage = 0
+  // How many checks in a row found `inert` back on the host after the last one
+  // took it off. Taking it off is not enough on its own: the repair and the
+  // check happen in the same task, so the overlay always looks healthy by the
+  // time it is examined, while a page re-applying the attribute from a
+  // `MutationObserver` gets it back before the next press. Having to repair
+  // the same thing twice running is the only visible trace of that race.
+  var inertStrikes = 0
 
   function envelope(payload) {
     return stringify({ kind: "pick", payload: payload, top: true })
@@ -506,11 +513,25 @@
       // host is in the page's DOM and the page can strip them. Without
       // `popover` the overlay cannot join the top layer, and without
       // `tabindex` it cannot hold the keyboard.
+      //
+      // `inert` is the dangerous one, and it is ADDED rather than removed: an
+      // inert overlay is handed no press at all, while staying connected,
+      // styled, the right size, and — measured, not assumed — still the answer
+      // `elementFromPoint` gives for every point it covers. So the press
+      // reaches the page and `owns()` sees nothing wrong, which is the one
+      // combination that lets a pick look like it worked while the page's own
+      // button was pressed.
       try {
         if (host.getAttribute("popover") !== "manual")
           host.setAttribute("popover", "manual")
         if (host.getAttribute("tabindex") !== "-1")
           host.setAttribute("tabindex", "-1")
+        if (host.hasAttribute("inert")) {
+          host.removeAttribute("inert")
+          inertStrikes++
+        } else {
+          inertStrikes = 0
+        }
       } catch {
         /* nothing else to do */
       }
@@ -663,6 +684,20 @@
       }
       if (at !== host) return false
     }
+    // Last, the thing hit testing cannot answer: being inert. An inert overlay
+    // is handed no press at all, yet stays connected, styled, the right size
+    // and — measured, not assumed — still what `elementFromPoint` names at
+    // every point it covers. `:inert` would say so directly but is not in
+    // every engine (Chrome: `CSS.supports("selector(:inert)")` is false and
+    // `matches` throws), so ask the question inertness actually answers: an
+    // inert element cannot take focus. The picker wants the focus anyway while
+    // it is armed, so asking costs nothing it was not already doing.
+    try {
+      if (document.activeElement !== host) host.focus({ preventScroll: true })
+      if (document.activeElement !== host) return false
+    } catch {
+      /* an engine that refused the call has told us nothing either way */
+    }
     return true
   }
 
@@ -712,6 +747,23 @@
   function guardTick() {
     if (!active && !draining) return
     ensureOverlay()
+    // Re-enter the top layer every tick, whether or not anything looks wrong.
+    // Order in there is order of entry, and the only other defence — `owns()`
+    // — samples five points: a SMALL popover the page opens after us can sit
+    // above the overlay and miss every one of them, which is the same lesson
+    // as the frame walk, one layer up. Any bounded set of samples can be
+    // stepped between. Being the last to enter does not depend on where the
+    // other thing is.
+    enterTopLayer(true)
+    // Repairing `inert` twice running means the page is putting it back
+    // between ticks, so the press in between was handed to the page and not to
+    // the overlay. Nothing in this world can win that race — an inert element
+    // is given no events at all — so end the pick rather than keep drawing a
+    // highlight over a page that is quietly taking the clicks.
+    if (active && inertStrikes >= 2) {
+      finish({ id: token, cancelled: true })
+      return
+    }
     // The keyboard belongs to the picker while it is armed, and a key event
     // dispatched inside a child frame never reaches this window: if focus has
     // gone in there, Enter presses whatever that frame has focused, with no
@@ -1154,8 +1206,13 @@
     }
   }
 
-  function onPageHide() {
-    if (!active) return
+  function onPageHide(event) {
+    if (!active || !trusted(event)) return
+    // A page can dispatch its own `pagehide`, and this was the one handler
+    // here that took an event at its word. Ending the pick takes the overlay
+    // down, so the press the person was lining up lands on the page — the
+    // same outcome as every other way a page has tried to get the overlay out
+    // of the way, reached by simply asking for it.
     finish({ id: token, cancelled: true })
   }
 
@@ -1192,6 +1249,7 @@
     active = false
     current = null
     lostCoverage = 0
+    inertStrikes = 0
     if (frame) {
       try {
         cancelAnimationFrame(frame)
@@ -1238,6 +1296,7 @@
       token = String(id || "")
       active = true
       lostCoverage = 0
+      inertStrikes = 0
       ensureOverlay()
       // Take the keyboard. Focus may be sitting in a child frame — the page
       // can put it there — and key events raised in one never reach this

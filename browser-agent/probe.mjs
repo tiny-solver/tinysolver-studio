@@ -92,6 +92,11 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
     <div id="pop" popover="manual" style="padding:0;border:0;margin:0;inset:0;width:100vw;height:100vh">
       <iframe id="popframe" style="width:100%;height:100%;border:0" srcdoc="&lt;button id=popbtn style=width:100%;height:300px&gt;popover&lt;/button&gt;"></iframe>
     </div>
+    <!-- Small, and placed to sit between every point the overlay samples.
+         No backticks in here: this whole page is a template literal. -->
+    <div id="smallpop" popover="manual" style="padding:0;border:0;margin:0;left:200px;top:150px;right:auto;bottom:auto;width:140px;height:60px">
+      <iframe id="smallframe" style="width:140px;height:60px;border:0" srcdoc="&lt;body style=&quot;margin:0&quot;&gt;&lt;button id=smallbtn style=&quot;width:140px;height:60px&quot;&gt;small&lt;/button&gt;"></iframe>
+    </div>
   </section>
 <script>
   // Forty frames the picker must look past to reach the visible one, and
@@ -163,7 +168,7 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
   bottom.addEventListener("click", () => { bottom.textContent = "PRESSED" })
   rung.appendChild(bottom)
   // The buttons inside the top-layer frames, wired the same way as the others.
-  for (const id of ["modalframe", "popframe"]) {
+  for (const id of ["modalframe", "popframe", "smallframe"]) {
     const f = document.getElementById(id)
     f.addEventListener("load", () => {
       const b = f.contentDocument.querySelector("button")
@@ -984,8 +989,8 @@ try {
     check(
       "…and forty decoy frames in front of it change nothing, because nothing is enumerated",
       await run('document.querySelectorAll("iframe").length'),
-      // Forty decoys, the real one, and the two that live in the top layer.
-      43
+      // Forty decoys, the real one, and the three that live in the top layer.
+      44
     )
 
     // …and one inside an OPEN shadow root whose host carries more light
@@ -1550,10 +1555,91 @@ try {
     )
     await sleep(800)
 
+    // `inert` is the one attribute that takes a press away without changing
+    // anything the overlay can see about itself: it is still connected, still
+    // styled, still the right size, still the topmost thing at every point.
+    const beforeInert = JSON.parse(await run("JSON.stringify(__picks)"))
+    await run('__codegPicker.start("inert")')
+    await run(
+      'document.querySelector("[data-codeg-picker]").setAttribute("inert", "")'
+    )
+    await sleep(500)
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: movedBox.x,
+        y: movedBox.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+      if (type === "mouseMoved") await sleep(80)
+    }
+    await sleep(160)
+    const inerted = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "marking the overlay inert does not hand the page the press",
+      [
+        // Counted, not just read off the end: with no pick reported at all the
+        // last entry is the PREVIOUS check's, which happens to name the same
+        // frame — and the check would pass while nothing worked.
+        inerted.length - beforeInert.length,
+        inerted[inerted.length - 1]?.payload.label,
+        await run(
+          `(() => { const d = document.getElementById("frame").contentDocument;
+                    const b = d && d.getElementById("inner");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      [1, "iframe#frame", "inner"]
+    )
+    await sleep(800)
+
+    // …and a page that puts it back faster than the guard takes it off. The
+    // overlay cannot win that, so it must not pretend it did: `owns()` asks
+    // the engine whether it is inert, and the pick ends.
+    const beforeFight = JSON.parse(await run("JSON.stringify(__picks)"))
+    await run('__codegPicker.start("inertfight")')
+    await send("Runtime.evaluate", {
+      expression: `(() => {
+        const el = document.querySelector("[data-codeg-picker]")
+        globalThis.__fight = new MutationObserver(() => {
+          if (!el.hasAttribute("inert")) el.setAttribute("inert", "")
+        })
+        globalThis.__fight.observe(el, {attributes: true})
+        el.setAttribute("inert", "")
+        return true })()`,
+      returnByValue: true,
+    })
+    await sleep(1400)
+    const fought = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a page that keeps the overlay inert ends the pick instead of winning quietly",
+      [
+        fought.length - beforeFight.length,
+        fought[fought.length - 1]?.payload.cancelled,
+        fought[fought.length - 1]?.payload.id,
+      ],
+      [1, true, "inertfight"]
+    )
+    await send("Runtime.evaluate", {
+      expression:
+        '(() => { globalThis.__fight.disconnect(); document.querySelectorAll("[inert]").forEach((n) => n.removeAttribute("inert")); return true })()',
+      returnByValue: true,
+    })
+    await sleep(300)
+
     // The second half of a double-click over an IFRAME. The first press ends
     // the pick, and from that moment the only thing between the second press
     // and the frame is the overlay — a drain made of listeners on this window
     // never sees an event dispatched inside one.
+    // Counted from here, not from an older snapshot: a baseline taken before
+    // the checks in between silently turns "exactly one pick" into "three".
+    const beforeTwiceFrame = JSON.parse(await run("JSON.stringify(__picks)"))
     await run('__codegPicker.start("twiceframe")')
     await send("Input.dispatchMouseEvent", {
       type: "mouseMoved",
@@ -1583,7 +1669,7 @@ try {
     check(
       "the second half of a double-click over a frame does not reach into it",
       [
-        twiceFrame.length - moved.length,
+        twiceFrame.length - beforeTwiceFrame.length,
         twiceFrame[twiceFrame.length - 1]?.payload.label,
         await run(
           `(() => { const d = document.getElementById("frame").contentDocument;
@@ -1678,10 +1764,73 @@ try {
     await run('document.getElementById("pop").hidePopover()')
     await sleep(800)
 
+    // …and a SMALL one, placed between every point `owns()` samples. Sampling
+    // is a bounded check and a page can step between the samples, so what
+    // keeps the overlay in front cannot be the samples: it re-enters the top
+    // layer every tick, and order in there is order of entry.
+    const beforeSmall = JSON.parse(await run("JSON.stringify(__picks)"))
+    await run('__codegPicker.start("smallpop")')
+    await run('document.getElementById("smallpop").showPopover()')
+    await sleep(700)
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: 260,
+        y: 180,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+      if (type === "mouseMoved") await sleep(80)
+    }
+    await sleep(160)
+    const overSmall = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a small popover between the sampled points cannot take the press either",
+      [
+        overSmall.length - beforeSmall.length,
+        overSmall[overSmall.length - 1]?.payload.label,
+        await run(
+          `(() => { const d = document.getElementById("smallframe").contentDocument;
+                    const b = d && d.querySelector("button");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      [1, "iframe#smallframe", "small"]
+    )
+    await run('document.getElementById("smallpop").hidePopover()')
+    await sleep(800)
+
+    // Every other handler here refuses an event the page made up. This one
+    // took `pagehide` at its word, and ending a pick takes the overlay down.
+    const beforeFakeHide = JSON.parse(await run("JSON.stringify(__picks)"))
+    await run('__codegPicker.start("fakehide")')
+    await send("Runtime.evaluate", {
+      expression: 'window.dispatchEvent(new Event("pagehide")), true',
+      returnByValue: true,
+    })
+    await sleep(200)
+    check(
+      "a pagehide the page made up does not put the overlay away",
+      [
+        JSON.parse(await run("JSON.stringify(__picks)")).length -
+          beforeFakeHide.length,
+        await run('!!document.querySelector("[data-codeg-picker]")'),
+      ],
+      [0, true]
+    )
+    await run("__codegPicker.stop()")
+    await sleep(200)
+
     // A modal dialog is the one the overlay cannot win: it makes everything
     // outside it inert, popovers included, so nothing this world puts on the
     // screen is handed the press. The picker cannot stop that press — what it
     // must not do is stay armed and let a person believe it will.
+    const beforeModal = JSON.parse(await run("JSON.stringify(__picks)"))
     await run('document.getElementById("modal").showModal()')
     await run('__codegPicker.start("modal")')
     // Two guard ticks plus room: one failed check is not enough to act on.
@@ -1690,7 +1839,7 @@ try {
     check(
       "a modal dialog ends the pick instead of letting a press through unseen",
       [
-        blocked.length - overPop.length,
+        blocked.length - beforeModal.length,
         blocked[blocked.length - 1]?.payload.cancelled,
         blocked[blocked.length - 1]?.payload.id,
         await run('!!document.querySelector("[data-codeg-picker]")'),
