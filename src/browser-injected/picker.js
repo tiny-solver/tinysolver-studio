@@ -116,6 +116,12 @@
   var tagLabel = null
   var current = null
   var frame = 0
+  // How many consecutive checks have found the overlay is NOT what the
+  // viewport hands a press to. One is not enough to act on — a page mid-layout
+  // can lose a hit test for a frame — but a second means the press would go
+  // somewhere this world cannot see, and a picker that stays armed then is
+  // lying about what the next press does.
+  var lostCoverage = 0
 
   function envelope(payload) {
     return stringify({ kind: "pick", payload: payload, top: true })
@@ -496,13 +502,39 @@
     if (host && host.isConnected) {
       if (host.getAttribute("style") !== baseStyle)
         host.style.cssText = baseStyle
-      // Last among its siblings, always. The z-index is already the maximum,
-      // so what decides between two elements that both claim it is tree order
-      // — and a page that appends its own element after ours would paint over
-      // the overlay and take the press, which for an `<iframe>` means the
-      // press lands inside it.
-      var parent = host.parentNode
-      if (parent && parent.lastElementChild !== host) parent.appendChild(host)
+      // The attributes are re-asserted for the same reason the style is: the
+      // host is in the page's DOM and the page can strip them. Without
+      // `popover` the overlay cannot join the top layer, and without
+      // `tabindex` it cannot hold the keyboard.
+      try {
+        if (host.getAttribute("popover") !== "manual")
+          host.setAttribute("popover", "manual")
+        if (host.getAttribute("tabindex") !== "-1")
+          host.setAttribute("tabindex", "-1")
+      } catch {
+        /* nothing else to do */
+      }
+      // Where it lives, and last among its siblings. The z-index is already
+      // the maximum, so what decides between two elements that both claim it
+      // is tree order — a page that appends its own element after ours would
+      // paint over the overlay and take the press, which for an `<iframe>`
+      // means the press lands inside it.
+      //
+      // The parent is checked too, not just the position, because being
+      // connected says nothing about being visible: a page can MOVE the host
+      // into a `display: none` wrapper, or into a zero-sized
+      // `overflow: hidden` one, and it is then still connected and still the
+      // only child, so both of the old checks passed while the overlay
+      // covered nothing. `fitOverlay` cannot see that either — a rect
+      // describes layout, and clipping is not layout.
+      var anchor = document.documentElement || document.body
+      if (
+        anchor &&
+        (host.parentNode !== anchor || anchor.lastElementChild !== host)
+      ) {
+        anchor.appendChild(host)
+      }
+      enterTopLayer(false)
       fitOverlay()
       return true
     }
@@ -518,6 +550,16 @@
       // DOM either way, and what keeps it honest is the inline `!important`
       // above, not being hard to find.
       host.setAttribute("data-codeg-picker", "")
+      // A manual popover so the overlay can join the top layer, which is
+      // painted above every ordinary child of the document no matter what
+      // z-index they claim. Without it a page needs only to open a popover of
+      // its own to paint over the overlay. `manual` because an `auto` popover
+      // would close the page's. Engines without the top layer ignore the
+      // attribute and keep the ordinary overlay, which is what this was.
+      host.setAttribute("popover", "manual")
+      // Focusable, so `start` can take the keyboard off a child frame. Not
+      // reachable by Tab.
+      host.setAttribute("tabindex", "-1")
       host.style.cssText = baseStyle
       root = host.attachShadow({ mode: "closed" })
       var style = document.createElement("style")
@@ -537,12 +579,159 @@
       var anchor = document.documentElement || document.body
       if (!anchor) return false
       anchor.appendChild(host)
+      if (!active) hideHighlight()
+      enterTopLayer(false)
       return true
     } catch {
       host = null
       root = null
       return false
     }
+  }
+
+  /**
+   * Put the overlay in the top layer, which is painted above every ordinary
+   * child of the document — a modal `<dialog>` or an open popover is up there,
+   * and `z-index: 2147483647` does not reach it.
+   *
+   * `force` re-enters: within the top layer the order is the order elements
+   * joined it, so a page that opens a popover after us paints over us until we
+   * leave and come back.
+   *
+   * This does not beat `showModal()`. A modal dialog makes everything outside
+   * it inert, popovers included, and an inert overlay is handed nothing. That
+   * case is caught by `owns()` instead, and the pick ends rather than pretend.
+   */
+  function enterTopLayer(force) {
+    if (!host || typeof host.showPopover !== "function") return
+    try {
+      var open = false
+      try {
+        open = host.matches(":popover-open")
+      } catch {
+        open = false
+      }
+      if (open) {
+        if (!force) return
+        try {
+          host.hidePopover()
+        } catch {
+          return
+        }
+      }
+      host.showPopover()
+    } catch {
+      /* an engine without the top layer keeps the ordinary overlay */
+    }
+  }
+
+  /**
+   * Is the overlay what a press would actually land on?
+   *
+   * Everything else here reasons about the overlay — its style, its parent,
+   * its rect — and a page has repeatedly found a way to make all three look
+   * right while the press went somewhere else. This asks the question the
+   * press asks, at the corners and the middle of the viewport, and is the one
+   * check that does not have to anticipate the mechanism.
+   */
+  function owns() {
+    if (!host) return false
+    var width = 0
+    var height = 0
+    try {
+      var doc = document.documentElement
+      width = (doc && doc.clientWidth) || window.innerWidth || 0
+      height = (doc && doc.clientHeight) || window.innerHeight || 0
+    } catch {
+      return false
+    }
+    // Nothing worth covering, and nothing a press could reach either.
+    if (width < 8 || height < 8) return true
+    var points = [
+      [width / 2, height / 2],
+      [3, 3],
+      [width - 3, 3],
+      [3, height - 3],
+      [width - 3, height - 3],
+    ]
+    for (var i = 0; i < points.length; i++) {
+      var at = null
+      try {
+        at = document.elementFromPoint(points[i][0], points[i][1])
+      } catch {
+        return false
+      }
+      if (at !== host) return false
+    }
+    return true
+  }
+
+  /**
+   * Called when a check found the overlay is not what the viewport would hand
+   * a press to. Tries to take the top layer back, and gives up on the pick if
+   * that was not it — the press cannot be stopped from here, so the honest
+   * thing is to stop claiming a pick is armed.
+   */
+  function coverageLost() {
+    if (!active) return
+    enterTopLayer(true)
+    if (owns()) {
+      lostCoverage = 0
+      return
+    }
+    lostCoverage++
+    if (lostCoverage < 2) return
+    finish({ id: token, cancelled: true })
+  }
+
+  function hideHighlight() {
+    try {
+      if (box) box.style.display = "none"
+      if (tagLabel) tagLabel.style.display = "none"
+    } catch {
+      /* nothing else to do */
+    }
+  }
+
+  function stopGuard() {
+    if (guardTimer === null) return
+    try {
+      clearInterval(guardTimer)
+    } catch {
+      /* nothing else to do */
+    }
+    guardTimer = null
+  }
+
+  /**
+   * The dead-man switch. Runs whether or not the pointer moves, because the
+   * ways a page takes the overlay away — `pointer-events: none` on it, moving
+   * it, opening something in the top layer — also take away the events that
+   * would otherwise be the chance to notice.
+   */
+  function guardTick() {
+    if (!active && !draining) return
+    ensureOverlay()
+    // The keyboard belongs to the picker while it is armed, and a key event
+    // dispatched inside a child frame never reaches this window: if focus has
+    // gone in there, Enter presses whatever that frame has focused, with no
+    // event here to cancel.
+    if (active && host) {
+      try {
+        var at = document.activeElement
+        if (at && at !== host && at.tagName === "IFRAME") {
+          host.focus({ preventScroll: true })
+        }
+      } catch {
+        /* a page that refuses focus keeps it */
+      }
+    }
+    if (!active) return
+    if (owns()) {
+      lostCoverage = 0
+      return
+    }
+    coverageLost()
   }
 
   /**
@@ -562,7 +751,11 @@
       // host, so descend the same way an occlusion check does — otherwise a
       // page built out of web components reports one outer element for
       // everything in it.
-      for (var depth = 0; node && depth < 32; depth++) {
+      // Deep enough that no page nests this far by design. Stopping early is
+      // safe rather than wrong — the answer is then a host that really is
+      // above the pointer, just less specific than it could be — but 32 was
+      // shallow enough to reach by accident in a component tree.
+      for (var depth = 0; node && depth < 128; depth++) {
         var shadow = node.shadowRoot
         if (!shadow) break
         var inner = shadow.elementFromPoint(x, y)
@@ -631,6 +824,24 @@
     frame = 0
     if (!active) return
     if (!ensureOverlay()) return
+    // One hit test a frame, at the middle of the viewport: the full check
+    // belongs to the guard, but a pointer that is moving should not have to
+    // wait up to 400 ms to find out the press it is about to make would go to
+    // the page.
+    var covered = true
+    try {
+      covered =
+        document.elementFromPoint(
+          (document.documentElement.clientWidth || window.innerWidth) / 2,
+          (document.documentElement.clientHeight || window.innerHeight) / 2
+        ) === host
+    } catch {
+      covered = true
+    }
+    if (!covered) {
+      coverageLost()
+      if (!active) return
+    }
     if (!current) return
     var rect
     try {
@@ -639,6 +850,8 @@
       return
     }
     if (!rect) return
+    box.style.display = "block"
+    tagLabel.style.display = "block"
     box.style.left = rect.left + "px"
     box.style.top = rect.top + "px"
     box.style.width = Math.max(rect.width, 1) + "px"
@@ -837,7 +1050,7 @@
     // hit-testable could then have a press over one element report a
     // different one, which is the one thing a picker must never do.
     var element = targetOf(event)
-    finish(element ? describe(element) : { id: token, cancelled: true })
+    finish(element ? describe(element) : { id: token, cancelled: true }, true)
   }
 
   // Every key belongs to the picker while it is armed. Escape ends it; the
@@ -877,16 +1090,16 @@
       touch = null
     }
     if (!touch) {
-      finish({ id: token, cancelled: true })
+      finish({ id: token, cancelled: true }, true)
       return
     }
     var element = under(touch.clientX, touch.clientY)
     while (element && element.nodeType !== 1) element = element.parentNode
     if (!element || ours(element)) {
-      finish({ id: token, cancelled: true })
+      finish({ id: token, cancelled: true }, true)
       return
     }
-    finish(describe(element))
+    finish(describe(element), true)
   }
 
   var LISTENERS = [
@@ -946,8 +1159,13 @@
     finish({ id: token, cancelled: true })
   }
 
-  function finish(payload) {
-    teardown(true)
+  // `drain` says a gesture is still in flight and its remainder must not land
+  // on the page. True for a press or a tap — the second half of a double-click
+  // is already on its way. False for everything else: Escape, the page going
+  // away, or the overlay having lost the viewport. Nothing is coming after
+  // those, and an overlay that lingered would eat the person's next click.
+  function finish(payload, drain) {
+    teardown(drain === true)
     report(payload)
   }
 
@@ -965,20 +1183,15 @@
       // Not armed, but possibly still draining a gesture from the last pick.
       if (draining && !drain) {
         draining = false
+        stopGuard()
+        removeOverlay()
         bind(false)
       }
       return
     }
     active = false
     current = null
-    if (guardTimer !== null) {
-      try {
-        clearInterval(guardTimer)
-      } catch {
-        /* nothing else to do */
-      }
-      guardTimer = null
-    }
+    lostCoverage = 0
     if (frame) {
       try {
         cancelAnimationFrame(frame)
@@ -987,23 +1200,32 @@
       }
       frame = 0
     }
-    removeOverlay()
     if (!drain) {
+      stopGuard()
+      removeOverlay()
       draining = false
       bind(false)
       return
     }
+    // The overlay stays up for the drain, without its highlight. Listeners on
+    // this window are not enough to swallow the second half of a double-click:
+    // if the first press picked an `<iframe>`, the second one is dispatched
+    // inside that frame and is never seen here. The only thing that can be in
+    // its way is the overlay itself — so it stays, and the guard keeps
+    // re-asserting it, until the drain is over.
     draining = true
-    try {
-      drainTimer = setTimeout(function () {
-        drainTimer = null
-        draining = false
-        bind(false)
-      }, DRAIN_MS)
-    } catch {
+    hideHighlight()
+    var done = function () {
       drainTimer = null
       draining = false
+      stopGuard()
+      removeOverlay()
       bind(false)
+    }
+    try {
+      drainTimer = setTimeout(done, DRAIN_MS)
+    } catch {
+      done()
     }
   }
 
@@ -1015,13 +1237,29 @@
       teardown(false)
       token = String(id || "")
       active = true
+      lostCoverage = 0
       ensureOverlay()
+      // Take the keyboard. Focus may be sitting in a child frame — the page
+      // can put it there — and key events raised in one never reach this
+      // window, so Enter would press whatever that frame has focused with no
+      // event here to cancel.
+      if (host) {
+        try {
+          host.focus({ preventScroll: true })
+        } catch {
+          try {
+            host.focus()
+          } catch {
+            /* a page that refuses focus keeps it */
+          }
+        }
+      }
       // A dead-man switch for the overlay itself. The paint path re-asserts
       // its style on every pointer event — but a page that sets
       // `pointer-events: none` on it takes those events back, and with them
       // the chance to notice. This does not depend on the pointer.
       try {
-        guardTimer = setInterval(ensureOverlay, 400)
+        guardTimer = setInterval(guardTick, 400)
       } catch {
         guardTimer = null
       }

@@ -75,11 +75,22 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
     <div id="hiddenframes" style="position:fixed;left:0;top:0;visibility:hidden"></div>
     <div id="crowd" style="display:none"></div>
     <div id="shadowed"></div>
-    <iframe id="frame" style="width:200px;height:60px" srcdoc="&lt;button id=&quot;inner&quot; onclick=&quot;this.textContent='PRESSED'&quot;&gt;inner&lt;/button&gt;"></iframe>
+    <!-- The button FILLS the frame. A small one in the corner would leave the
+         middle of the frame bare, and a check that presses the middle and
+         finds the button unpressed would prove nothing at all. -->
+    <iframe id="frame" style="width:200px;height:60px" srcdoc="&lt;body style=&quot;margin:0&quot;&gt;&lt;button id=&quot;inner&quot; style=&quot;width:200px;height:60px&quot; onclick=&quot;this.textContent='PRESSED'&quot;&gt;inner&lt;/button&gt;"></iframe>
     <div id="fat">fat</div>
     <div id="emoji">emoji</div>
     <div id="panel" style="width:200px;height:80px;overflow:auto;border:1px solid #ccc">
       <div style="height:800px">tall</div>
+    </div>
+    <div id="trap" style="display:none"></div>
+    <div id="deepnest"></div>
+    <dialog id="modal" style="padding:0;border:0;margin:0;width:100vw;height:100vh;max-width:100vw;max-height:100vh">
+      <iframe id="modalframe" style="width:100%;height:100%;border:0" srcdoc="&lt;button id=modalbtn style=width:100%;height:300px&gt;modal&lt;/button&gt;"></iframe>
+    </dialog>
+    <div id="pop" popover="manual" style="padding:0;border:0;margin:0;inset:0;width:100vw;height:100vh">
+      <iframe id="popframe" style="width:100%;height:100%;border:0" srcdoc="&lt;button id=popbtn style=width:100%;height:300px&gt;popover&lt;/button&gt;"></iframe>
     </div>
   </section>
 <script>
@@ -136,6 +147,29 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
     if (b) b.addEventListener("click", () => { b.textContent = "PRESSED" })
   })
   innerRoot.appendChild(nestedFrame)
+  // Thirty-three open shadow roots, one inside the next, with a real button at
+  // the bottom. A descent that gives up before the end names a host instead of
+  // what the pointer is actually over.
+  let rung = document.getElementById("deepnest")
+  for (let i = 0; i < 33; i++) {
+    const next = document.createElement("div")
+    rung.attachShadow({ mode: "open" }).appendChild(next)
+    rung = next
+  }
+  const bottom = document.createElement("button")
+  bottom.id = "bottom"
+  bottom.style.cssText = "width:120px;height:24px"
+  bottom.textContent = "bottom"
+  bottom.addEventListener("click", () => { bottom.textContent = "PRESSED" })
+  rung.appendChild(bottom)
+  // The buttons inside the top-layer frames, wired the same way as the others.
+  for (const id of ["modalframe", "popframe"]) {
+    const f = document.getElementById(id)
+    f.addEventListener("load", () => {
+      const b = f.contentDocument.querySelector("button")
+      if (b) b.addEventListener("click", () => { b.textContent = "PRESSED" })
+    })
+  }
 </script>
 </main>
 <script>
@@ -875,10 +909,16 @@ try {
       await run('document.getElementById("count").dataset.n || "0"'),
       pressedBefore
     )
+    // The overlay outlives the pick by the length of the drain — it is the
+    // only thing that can swallow the second half of a double-click over a
+    // frame — and then it goes. The highlight itself is hidden immediately,
+    // inside a shadow root this side cannot look into.
+    const stillUp = await run('!!document.querySelector("[data-codeg-picker]")')
+    await sleep(800)
     check(
-      "the highlight is taken down once something is picked",
-      await run('!!document.querySelector("[data-codeg-picker]")'),
-      false
+      "the overlay stays for the drain once something is picked, then goes",
+      [stillUp, await run('!!document.querySelector("[data-codeg-picker]")')],
+      [true, false]
     )
 
     // The person armed the pick, so something IS going to be handed over —
@@ -944,7 +984,8 @@ try {
     check(
       "…and forty decoy frames in front of it change nothing, because nothing is enumerated",
       await run('document.querySelectorAll("iframe").length'),
-      41
+      // Forty decoys, the real one, and the two that live in the top layer.
+      43
     )
 
     // …and one inside an OPEN shadow root whose host carries more light
@@ -1457,6 +1498,247 @@ try {
       ],
       [true, "p2", false]
     )
+
+    // The page moves the host somewhere it cannot be seen. Connected, and the
+    // only child of its new parent, so every check the overlay makes about
+    // itself still passes — and a rect says nothing about being rendered.
+    await run('__codegPicker.start("moved")')
+    await run(
+      'document.getElementById("trap").appendChild(document.querySelector("[data-codeg-picker]"))'
+    )
+    // Two guard ticks: one to notice, and the overlay is back on the first.
+    await sleep(900)
+    const movedBox = JSON.parse(
+      await run(`(() => { const el = document.getElementById("frame");
+                          el.scrollIntoView({block: "center"});
+                          const r = el.getBoundingClientRect();
+                          return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2}) })()`)
+    )
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: movedBox.x,
+        y: movedBox.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+      if (type === "mouseMoved") await sleep(80)
+    }
+    await sleep(160)
+    const moved = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "moving the overlay into a hidden wrapper does not hand the page the press",
+      [
+        moved[moved.length - 1]?.payload.label,
+        await run(
+          `(() => { const d = document.getElementById("frame").contentDocument;
+                    const b = d && d.getElementById("inner");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+        await run(
+          '(document.querySelector("[data-codeg-picker]") || {}).parentElement?.tagName ?? "none"'
+        ),
+      ],
+      // Picked the frame, left its button alone, and the overlay is back on
+      // the root element rather than in the page's wrapper.
+      ["iframe#frame", "inner", "HTML"]
+    )
+    await sleep(800)
+
+    // The second half of a double-click over an IFRAME. The first press ends
+    // the pick, and from that moment the only thing between the second press
+    // and the frame is the overlay — a drain made of listeners on this window
+    // never sees an event dispatched inside one.
+    await run('__codegPicker.start("twiceframe")')
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: movedBox.x,
+      y: movedBox.y,
+      button: "none",
+      buttons: 0,
+    })
+    await sleep(80)
+    for (const count of [1, 2]) {
+      for (const [type, buttons] of [
+        ["mousePressed", 1],
+        ["mouseReleased", 0],
+      ]) {
+        await send("Input.dispatchMouseEvent", {
+          type,
+          x: movedBox.x,
+          y: movedBox.y,
+          button: "left",
+          buttons,
+          clickCount: count,
+        })
+      }
+    }
+    await sleep(160)
+    const twiceFrame = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "the second half of a double-click over a frame does not reach into it",
+      [
+        twiceFrame.length - moved.length,
+        twiceFrame[twiceFrame.length - 1]?.payload.label,
+        await run(
+          `(() => { const d = document.getElementById("frame").contentDocument;
+                    const b = d && d.getElementById("inner");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      [1, "iframe#frame", "inner"]
+    )
+    await sleep(800)
+
+    // Focus can be sitting inside a child frame when the pick starts — the
+    // page can put it there — and a key event raised in one never reaches this
+    // window. Enter would press whatever that frame has focused.
+    await run(
+      `(() => { const f = document.getElementById("frame");
+                f.contentWindow.focus();
+                f.contentDocument.getElementById("inner").focus();
+                return true })()`
+    )
+    await run('__codegPicker.start("framekeys")')
+    await sleep(80)
+    for (const type of ["keyDown", "char", "keyUp"]) {
+      await send("Input.dispatchKeyEvent", {
+        type,
+        key: "Enter",
+        code: "Enter",
+        text: "\r",
+        windowsVirtualKeyCode: 13,
+        nativeVirtualKeyCode: 13,
+      })
+    }
+    await sleep(120)
+    check(
+      "Enter cannot press a button a child frame had focused",
+      [
+        JSON.parse(await run("JSON.stringify(__picks)")).length -
+          twiceFrame.length,
+        await run(
+          `(() => { const d = document.getElementById("frame").contentDocument;
+                    const b = d && d.getElementById("inner");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      [0, "inner"]
+    )
+    await run("__codegPicker.stop()")
+
+    // The top layer is painted above every ordinary child of the document,
+    // whatever z-index they claim. A page that opens a popover of its own
+    // would otherwise paint over the overlay — so the overlay joins the top
+    // layer too, and being the later arrival puts it back on top.
+    const popped = JSON.parse(await run("JSON.stringify(__picks)"))
+    await run('__codegPicker.start("popover")')
+    // …and the page strips the attribute that lets the overlay in there at
+    // all. It is in the page's DOM, so the page can; the guard puts it back.
+    await run(
+      'document.querySelector("[data-codeg-picker]").removeAttribute("popover")'
+    )
+    await run('document.getElementById("pop").showPopover()')
+    await sleep(500)
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: 120,
+        y: 120,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+      if (type === "mouseMoved") await sleep(80)
+    }
+    await sleep(160)
+    const overPop = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a popover the page opens cannot take the press off the overlay",
+      [
+        overPop.length - popped.length,
+        overPop[overPop.length - 1]?.payload.label,
+        await run(
+          `(() => { const d = document.getElementById("popframe").contentDocument;
+                    const b = d && d.querySelector("button");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      [1, "iframe#popframe", "popover"]
+    )
+    await run('document.getElementById("pop").hidePopover()')
+    await sleep(800)
+
+    // A modal dialog is the one the overlay cannot win: it makes everything
+    // outside it inert, popovers included, so nothing this world puts on the
+    // screen is handed the press. The picker cannot stop that press — what it
+    // must not do is stay armed and let a person believe it will.
+    await run('document.getElementById("modal").showModal()')
+    await run('__codegPicker.start("modal")')
+    // Two guard ticks plus room: one failed check is not enough to act on.
+    await sleep(1400)
+    const blocked = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a modal dialog ends the pick instead of letting a press through unseen",
+      [
+        blocked.length - overPop.length,
+        blocked[blocked.length - 1]?.payload.cancelled,
+        blocked[blocked.length - 1]?.payload.id,
+        await run('!!document.querySelector("[data-codeg-picker]")'),
+      ],
+      [1, true, "modal", false]
+    )
+    await run('document.getElementById("modal").close()')
+
+    // Thirty-three shadow boundaries down. Giving up early is safe — the
+    // answer is a host that really is above the pointer — but it is not the
+    // element the person is pointing at.
+    await run('__codegPicker.start("deep33")')
+    const deepAt = JSON.parse(
+      await run(`(() => { let node = document.getElementById("deepnest");
+                          node.scrollIntoView({block: "center"});
+                          const r = node.getBoundingClientRect();
+                          return JSON.stringify({x: r.left + 8, y: r.top + 8}) })()`)
+    )
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: deepAt.x,
+        y: deepAt.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+      if (type === "mouseMoved") await sleep(80)
+    }
+    await sleep(160)
+    const deep33 = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a button thirty-three shadow roots down is named, not its outermost host",
+      [
+        deep33[deep33.length - 1]?.payload.label,
+        await run(
+          `(() => { let node = document.getElementById("deepnest");
+                    for (let i = 0; i < 33 && node; i++) node = node.shadowRoot?.firstElementChild;
+                    return node ? node.textContent : "not found" })()`
+        ),
+      ],
+      ["button#bottom", "bottom"]
+    )
+    await sleep(800)
   }
 
   // The premise the whole design rests on, measured instead of assumed: this
