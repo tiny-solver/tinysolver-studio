@@ -71,6 +71,36 @@ export function getPromptDraftDisplayText(
   return trimmed || attachedResourcesFallback
 }
 
+/**
+ * Encode a draft for the live-feedback (steering) wire — the SINGLE place
+ * this encoding lives, shared by the composer's mid-turn send and the queue
+ * row's click-to-insert so the two can never drift.
+ *
+ * Returns `null` when there is nothing to steer (no text at all). Otherwise:
+ * - `blocks` carries the FULL block list only when the draft holds more than
+ *   plain text (image attachments, file badges). Only the native
+ *   `_session/steering` wire takes blocks — the pull path rejects them as
+ *   `NoActiveTurn`, which callers handle as their turn-end fallback.
+ * - `text` is the recorded/display form: the draft's display text when
+ *   blocks ride along, else the joined text blocks, trimmed.
+ */
+export function buildSteerPayload(draft: PromptDraft): {
+  text: string
+  blocks?: PromptInputBlock[]
+} | null {
+  const blocks = draft.blocks.some((b) => b.type !== "text")
+    ? draft.blocks
+    : undefined
+  const text = blocks
+    ? draft.displayText
+    : draft.blocks
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("\n")
+        .trim()
+  if (!text) return null
+  return { text, ...(blocks ? { blocks } : {}) }
+}
+
 export function buildUserMessageTextPartsFromDraft(
   draft: PromptDraft,
   attachedResourcesFallback: string

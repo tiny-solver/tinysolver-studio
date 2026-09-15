@@ -101,6 +101,7 @@ import {
 import { useShallow } from "zustand/react/shallow"
 import { useConversationDetail } from "@/hooks/use-conversation-detail"
 import {
+  buildSteerPayload,
   extractUserImagesFromDraft,
   getPromptDraftDisplayText,
 } from "@/lib/prompt-draft"
@@ -2037,32 +2038,22 @@ const ConversationTabView = memo(function ConversationTabView({
 
   // Click-to-insert for a queued row: send THAT item into the running turn
   // over the same live-feedback channel the composer's mid-turn dropdown uses.
-  // The block/text encoding mirrors `handleSteerClick` in message-input (full
-  // blocks only when the draft holds more than text — the pull path rejects
-  // blocks as NoActiveTurn, which lands on the keep-queued fallback below).
-  // Success removes the row; the turn-end race leaves it queued so the
-  // auto-flush sends it with the next turn — never lost. Any other failure
-  // keeps the row untouched and surfaces the error.
+  // The block/text encoding is the shared `buildSteerPayload` — one call site,
+  // no policy here beyond the row's own lifecycle: success removes the row;
+  // the turn-end race leaves it queued so the auto-flush sends it with the
+  // next turn — never lost. Any other failure keeps the row untouched and
+  // surfaces the error.
   const handleQueueSteer = useCallback(
     async (id: string) => {
       const item = msgQueue.find((m) => m.id === id)
       if (!item) return
-      const draft = item.draft
-      const blocks = draft.blocks.some((b) => b.type !== "text")
-        ? draft.blocks
-        : undefined
-      const text = blocks
-        ? draft.displayText
-        : draft.blocks
-            .map((b) => (b.type === "text" ? b.text : ""))
-            .join("\n")
-            .trim()
-      if (!text) {
+      const payload = buildSteerPayload(item.draft)
+      if (!payload) {
         mqRemove(id)
         return
       }
       try {
-        await feedbackSteer(text, blocks)
+        await feedbackSteer(payload.text, payload.blocks)
         mqRemove(id)
       } catch (err: unknown) {
         if (isNoActiveTurnRejection(err)) {

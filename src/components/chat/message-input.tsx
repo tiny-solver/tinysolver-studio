@@ -47,6 +47,7 @@ import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import { imageFilesFromClipboardApi } from "@/lib/clipboard-images"
 import { toErrorMessage } from "@/lib/app-error"
 import { isNoActiveTurnRejection } from "@/lib/turn-busy"
+import { buildSteerPayload } from "@/lib/prompt-draft"
 import { ServerFileBrowserDialog } from "@/components/shared/server-file-browser-dialog"
 import { toast } from "sonner"
 import type {
@@ -1379,19 +1380,11 @@ export function MessageInput({
       resetComposer()
       toast.info(t("steerQueuedInstead"))
     }
-    const blocks = draft.blocks.some((b) => b.type !== "text")
-      ? draft.blocks
-      : undefined
-    const text = blocks
-      ? draft.displayText
-      : draft.blocks
-          .map((b) => (b.type === "text" ? b.text : ""))
-          .join("\n")
-          .trim()
-    if (!text) return
+    const payload = buildSteerPayload(draft)
+    if (!payload) return
     setSteering(true)
     try {
-      await onSteer(text, blocks)
+      await onSteer(payload.text, payload.blocks)
       resetComposer()
     } catch (err) {
       if (isNoActiveTurnRejection(err)) {
