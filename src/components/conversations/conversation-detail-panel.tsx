@@ -89,7 +89,8 @@ import {
   shouldQueueDirectSend,
   shouldRejectDuplicateCreate,
 } from "@/lib/queue-flush"
-import { TurnBusyError } from "@/lib/turn-busy"
+import { TurnBusyError, isNoActiveTurnRejection } from "@/lib/turn-busy"
+import { toErrorMessage } from "@/lib/app-error"
 import {
   getConversationIdByExternalIdFromStore,
   getRuntimeSession,
@@ -239,6 +240,9 @@ const ConversationTabView = memo(function ConversationTabView({
   groupId,
 }: ConversationTabViewProps) {
   const t = useTranslations("Folder.conversation")
+  // Composer-namespace copy for the queue row's click-to-insert outcomes
+  // (same keys the composer's own mid-turn send reports).
+  const tCmp = useTranslations("Folder.chat.messageInput")
   const tWelcome = useTranslations("Folder.chat.welcomeInputPanel")
   const tDiag = useTranslations("DiagnosticsSettings")
   const sharedT = useTranslations("Folder.chat.shared")
@@ -2031,6 +2035,50 @@ const ConversationTabView = memo(function ConversationTabView({
     [feedbackSteer]
   )
 
+  // Click-to-insert for a queued row: send THAT item into the running turn
+  // over the same live-feedback channel the composer's mid-turn dropdown uses.
+  // The block/text encoding mirrors `handleSteerClick` in message-input (full
+  // blocks only when the draft holds more than text — the pull path rejects
+  // blocks as NoActiveTurn, which lands on the keep-queued fallback below).
+  // Success removes the row; the turn-end race leaves it queued so the
+  // auto-flush sends it with the next turn — never lost. Any other failure
+  // keeps the row untouched and surfaces the error.
+  const handleQueueSteer = useCallback(
+    async (id: string) => {
+      const item = msgQueue.find((m) => m.id === id)
+      if (!item) return
+      const draft = item.draft
+      const blocks = draft.blocks.some((b) => b.type !== "text")
+        ? draft.blocks
+        : undefined
+      const text = blocks
+        ? draft.displayText
+        : draft.blocks
+            .map((b) => (b.type === "text" ? b.text : ""))
+            .join("\n")
+            .trim()
+      if (!text) {
+        mqRemove(id)
+        return
+      }
+      try {
+        await feedbackSteer(text, blocks)
+        mqRemove(id)
+      } catch (err: unknown) {
+        if (isNoActiveTurnRejection(err)) {
+          // The turn ended mid-click — the queue flush will deliver it.
+          toast.info(tCmp("steerQueuedInstead"))
+          return
+        }
+        toast.error(
+          tCmp(feedback.channel === "pull" ? "steerNoteFailed" : "steerFailed"),
+          { description: toErrorMessage(err) }
+        )
+      }
+    },
+    [msgQueue, feedbackSteer, mqRemove, feedback.channel, tCmp]
+  )
+
   return (
     <ConversationShell
       topBanner={
@@ -2115,6 +2163,16 @@ const ConversationTabView = memo(function ConversationTabView({
       onQueueReorder={mqReorder}
       onQueueEdit={handleQueueEdit}
       onQueueDelete={mqRemove}
+      onQueueSteer={
+        // Same gate as the composer's mid-turn send, plus a turn actually in
+        // flight: a queued row can only be inserted into a RUNNING turn —
+        // idle sessions have the queue's own auto-flush for that.
+        feedback.featureEnabled &&
+        feedback.steerAvailable &&
+        connStatus === "prompting"
+          ? handleQueueSteer
+          : undefined
+      }
       editingItemId={mqEditingItemId}
       editingDraftText={editingQueueDraftText}
       editingDraftBlocks={editingQueueDraftBlocks}

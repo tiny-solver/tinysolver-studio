@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, type PointerEvent } from "react"
+import { useCallback, useRef, useState, type PointerEvent } from "react"
 import { Reorder, useDragControls } from "motion/react"
-import { GripVertical, Pencil, X } from "lucide-react"
+import { Clock, GripVertical, Pencil, X, Zap } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { cn } from "@/lib/utils"
 import type { QueuedMessage } from "@/hooks/use-message-queue"
@@ -13,6 +13,18 @@ interface MessageQueueDisplayProps {
   onEdit: (id: string) => void
   onDelete: (id: string) => void
   editingItemId: string | null
+  /**
+   * Send one queued item straight into the RUNNING turn over the session's
+   * live-feedback channel (same delivery as the composer's mid-turn send).
+   * Present only while the session has a working channel AND a turn is in
+   * flight; the host decides whether the row is removed (it stays queued on
+   * the turn-end race). Resolves once delivery is settled.
+   */
+  onSteerItem?: (id: string) => Promise<void> | void
+  /** Which channel {@link onSteerItem} rides; picks the honest icon/copy,
+   *  mirroring the composer's split-button (`Zap` = instant insert,
+   *  `Clock` = note the agent reads on its next check). */
+  steerChannel?: "native" | "pull"
 }
 
 interface QueueItemProps {
@@ -21,6 +33,11 @@ interface QueueItemProps {
   isEditing: boolean
   onEdit: (id: string) => void
   onDelete: (id: string) => void
+  onSteerItem?: (id: string) => Promise<void> | void
+  steerChannel: "native" | "pull"
+  /** Whether an insert from THIS row is in flight (disables its button). */
+  steering: boolean
+  onSteerStart: (id: string) => Promise<void>
 }
 
 function QueueItem({
@@ -29,6 +46,10 @@ function QueueItem({
   isEditing,
   onEdit,
   onDelete,
+  onSteerItem,
+  steerChannel,
+  steering,
+  onSteerStart,
 }: QueueItemProps) {
   const t = useTranslations("Folder.chat.messageQueue")
   const dragControls = useDragControls()
@@ -67,6 +88,21 @@ function QueueItem({
       <span className="min-w-0 flex-1 truncate text-3xs text-foreground/80">
         {item.draft.displayText}
       </span>
+      {onSteerItem && (
+        <button
+          type="button"
+          onClick={() => void onSteerStart(item.id)}
+          disabled={steering}
+          className="shrink-0 rounded-sm p-0.5 hover:bg-muted-foreground/15 text-muted-foreground disabled:opacity-50"
+          title={t(steerChannel === "pull" ? "steerItemAsNote" : "steerItemNow")}
+        >
+          {steerChannel === "pull" ? (
+            <Clock className="h-2.5 w-2.5" />
+          ) : (
+            <Zap className="h-2.5 w-2.5" />
+          )}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onEdit(item.id)}
@@ -93,7 +129,32 @@ export function MessageQueueDisplay({
   onEdit,
   onDelete,
   editingItemId,
+  onSteerItem,
+  steerChannel = "pull",
 }: MessageQueueDisplayProps) {
+  // The id whose insert is in flight. A per-row `steering` would let a
+  // concurrent click on another row race the same channel; one shared id
+  // both disables the clicked row and (via `steeringId !== null`) the others
+  // — matching the composer's single-flight `steering` guard.
+  const [steeringId, setSteeringId] = useState<string | null>(null)
+  // Latest steeringId for the click handler's re-entrancy check without
+  // re-binding it on every state commit.
+  const steeringIdRef = useRef<string | null>(null)
+  steeringIdRef.current = steeringId
+
+  const handleSteerStart = useCallback(
+    async (id: string) => {
+      if (!onSteerItem || steeringIdRef.current !== null) return
+      setSteeringId(id)
+      try {
+        await onSteerItem(id)
+      } finally {
+        setSteeringId(null)
+      }
+    },
+    [onSteerItem]
+  )
+
   if (queue.length === 0) return null
 
   return (
@@ -113,6 +174,10 @@ export function MessageQueueDisplay({
             isEditing={editingItemId === item.id}
             onEdit={onEdit}
             onDelete={onDelete}
+            onSteerItem={onSteerItem}
+            steerChannel={steerChannel}
+            steering={steeringId !== null}
+            onSteerStart={handleSteerStart}
           />
         ))}
       </Reorder.Group>

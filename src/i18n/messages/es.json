@@ -3092,7 +3092,9 @@
         "saveEdit": "Guardar",
         "cancelEdit": "Cancelar edición",
         "editItem": "Editar",
-        "deleteItem": "Eliminar"
+        "deleteItem": "Eliminar",
+        "steerItemNow": "Insertar en el turno actual",
+        "steerItemAsNote": "Enviar como nota para la próxima comprobación"
       },
       "welcomeInputPanel": {
         "agentsSettingsPath": "Ajustes > Agentes",
