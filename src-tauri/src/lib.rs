@@ -88,6 +88,110 @@ mod tauri_app {
 
     static APP_QUITTING: AtomicBool = AtomicBool::new(false);
 
+    /// Routes one close-button press to hide, exit, or a prompt.
+    ///
+    /// Called with the close already prevented; every branch is responsible
+    /// for what happens instead. The prompt branches must never be able to
+    /// swallow the press: if no dialog can answer it, each falls back to
+    /// acting on its own.
+    ///
+    /// Two things stand behind that, because nothing here can observe whether a
+    /// dialog actually appeared. `main` is built visible and the dialog only
+    /// starts listening once React has mounted in it, so
+    /// [`system_settings::close_prompt_listener_ready`] holds the press back
+    /// until there is something to answer it; and
+    /// [`system_settings::ClosePromptClaim::Expired`] hands the press back if a
+    /// prompt that WAS sent goes unanswered, which is the only defence against
+    /// everything readiness cannot see.
+    fn handle_main_close_request(window: &tauri::Window, label: &str) {
+        use crate::commands::system_settings;
+        use crate::models::CloseWindowBehavior;
+        use tauri::Emitter;
+
+        let app = window.app_handle().clone();
+        let behavior = if windows::can_hide_to_tray() {
+            system_settings::cached_close_behavior()
+        } else {
+            CloseWindowBehavior::Exit
+        };
+
+        // Only asked for once a prompt is actually going to be shown — it
+        // reaps exited children, and the hide path has no business doing that.
+        let running_terminals = |app: &tauri::AppHandle| {
+            app.try_state::<TerminalManager>()
+                .map(|tm| {
+                    let emitter = web::event_bridge::EventEmitter::Tauri(app.clone());
+                    tm.count_live_by_owner_window(label, Some(&emitter))
+                })
+                .unwrap_or(0)
+        };
+
+        let prompt = |mode: &'static str, count: usize| -> bool {
+            if !system_settings::close_prompt_listener_ready() {
+                // Nothing in the main webview is listening yet — it is still
+                // booting, or its JS never came up at all. Emitting anyway
+                // would claim the prompt flag, show no dialog, and leave the
+                // press unanswered: the window would simply not react, and
+                // every later press would be suppressed as a duplicate until
+                // the dialog mounts and clears the flag. Report "could not
+                // prompt" so the caller acts on the preference instead.
+                return false;
+            }
+            match system_settings::try_open_close_prompt() {
+                // A dialog is already up; this press is a duplicate.
+                system_settings::ClosePromptClaim::AlreadyOpen => return true,
+                // The last prompt was never answered, so it never arrived —
+                // readiness said a listener existed and it turned out not to
+                // reach one. Act on the preference instead of sending a second
+                // prompt down the same silent path.
+                system_settings::ClosePromptClaim::Expired => return false,
+                system_settings::ClosePromptClaim::Granted => {}
+            }
+            let payload = system_settings::CloseRequestPayload {
+                mode,
+                running_terminals: count,
+            };
+            // Addressed to `main`, which is where the only listener lives.
+            // Note this is intent, not enforcement: `TauriTransport.subscribe`
+            // registers with `EventTarget::Any`, and Tauri delivers to those
+            // listeners whatever the emit targets. What actually keeps the
+            // prompt out of the pet / settings / pet-panel webviews — which
+            // share the root layout the dialog is mounted in — is the window
+            // label gate inside `CloseRequestDialog`.
+            match window.emit_to(label, system_settings::CLOSE_REQUEST_EVENT, payload) {
+                Ok(()) => true,
+                Err(err) => {
+                    tracing::warn!("[close] failed to deliver close prompt: {err}");
+                    system_settings::release_close_prompt();
+                    false
+                }
+            }
+        };
+
+        match behavior {
+            CloseWindowBehavior::Minimize => {
+                let _ = window.hide();
+            }
+            CloseWindowBehavior::Exit => {
+                let count = running_terminals(&app);
+                // Nothing to lose, or the confirmation could not be shown —
+                // either way the pinned choice stands.
+                if count == 0 || !prompt("confirm_terminals", count) {
+                    app.exit(0);
+                }
+            }
+            CloseWindowBehavior::Ask => {
+                let count = running_terminals(&app);
+                if !prompt("ask", count) {
+                    // Fall back to the behavior codeg has always had. Exiting
+                    // on a press the user never got to answer would discard
+                    // work; hiding discards nothing.
+                    let _ = window.hide();
+                }
+            }
+        }
+    }
+
     fn summarize_web_auto_start_error(err: &crate::app_error::AppCommandError) -> String {
         match err
             .detail
@@ -634,6 +738,21 @@ mod tauri_app {
                     });
                 }
 
+                // Seed the close-behavior atomic. `CloseRequested` is a
+                // synchronous callback that reads the cache, not the database,
+                // so an unseeded cache would serve "ask" to a user who pinned
+                // a choice months ago. Blocking here keeps that impossible
+                // even for a close in the first moments after launch.
+                {
+                    let db_for_close = app.state::<db::AppDatabase>().conn.clone();
+                    tauri::async_runtime::block_on(async move {
+                        crate::commands::system_settings::apply_persisted_close_behavior(
+                            &db_for_close,
+                        )
+                        .await;
+                    });
+                }
+
                 // Label worktree folders registered before aliases were seeded at
                 // creation with the branch they have checked out, so the sidebar
                 // names them by branch rather than by their (long, derived)
@@ -1147,31 +1266,28 @@ mod tauri_app {
 
                 if label == "main" {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        // The close button does one of two things, depending
-                        // on whether the platform can keep the workspace
-                        // recoverable while it's hidden:
+                        // What the close button does is the user's choice
+                        // (`ask` / `minimize` / `exit`), with one platform
+                        // override:
                         //
-                        //   * tray usable (macOS, Windows + tray): WeChat-style
-                        //     hide. App keeps running, tray brings it back.
                         //   * tray not usable (Linux, tray install failed):
-                        //     force a real app exit. Letting only `main`
+                        //     the preference cannot apply. Letting only `main`
                         //     close would orphan the desktop pet and other
                         //     aux windows in a process with no workspace and
                         //     no way to bring it back — `pet` runs with
                         //     `skip_taskbar(true)`, and the single-instance
                         //     callback's `show_main_window` is a no-op once
-                        //     main is destroyed.
+                        //     main is destroyed. So the choice folds to Exit,
+                        //     rather than exiting right here: folding keeps
+                        //     the running-terminal confirmation below on the
+                        //     path for this platform too.
                         //
                         // ExitRequested itself reaches this branch with
                         // APP_QUITTING already set — that's the only path
                         // that should fall through to the cleanup below.
                         if !APP_QUITTING.load(Ordering::Relaxed) {
                             api.prevent_close();
-                            if windows::can_hide_to_tray() {
-                                let _ = window.hide();
-                            } else {
-                                window.app_handle().exit(0);
-                            }
+                            handle_main_close_request(window, &label);
                             return;
                         }
                         let app = window.app_handle();
@@ -1404,6 +1520,9 @@ mod tauri_app {
                 system_settings::update_system_rendering_settings,
                 system_settings::get_system_autostart_settings,
                 system_settings::update_system_autostart_settings,
+                system_settings::get_system_close_behavior_settings,
+                system_settings::update_system_close_behavior_settings,
+                system_settings::resolve_close_request,
                 logging_commands::get_log_settings,
                 logging_commands::set_log_settings,
                 logging_commands::get_recent_logs,
