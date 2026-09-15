@@ -151,6 +151,12 @@ export function PetFocusBridge() {
   // to get it back. Queue them; the last one still ends up focused.
   const pendingRef = useRef<FocusRequest[]>([])
 
+  // Tail of the batches already running. Opening a tab can await a folder
+  // load, so without this a request that arrives during that await would be
+  // opened by its own batch first and leave the *earlier* conversation
+  // focused. Chaining keeps batches strictly first-in-first-out.
+  const runningRef = useRef<Promise<void>>(Promise.resolve())
+
   const attempt = useCallback(() => {
     if (pendingRef.current.length === 0) return
     if (
@@ -163,31 +169,36 @@ export function PetFocusBridge() {
     // so a later state change can't replay what is already being opened.
     const requests = pendingRef.current
     pendingRef.current = []
-    void (async () => {
-      for (const req of requests) {
-        // Ensure the folder is in the workspace so the tab has a home. Read
-        // the store per request: an earlier one may have just added it.
-        const workspace = useAppWorkspaceStore.getState()
-        if (!workspace.folders.some((f) => f.id === req.folderId)) {
-          try {
-            await workspace.addFolderToWorkspaceById(req.folderId)
-          } catch (err) {
-            console.error("[PetFocusBridge] open folder failed:", err)
-            continue
+    runningRef.current = runningRef.current
+      .then(async () => {
+        for (const req of requests) {
+          // Ensure the folder is in the workspace so the tab has a home. Read
+          // the store per request: an earlier one may have just added it.
+          const workspace = useAppWorkspaceStore.getState()
+          if (!workspace.folders.some((f) => f.id === req.folderId)) {
+            try {
+              await workspace.addFolderToWorkspaceById(req.folderId)
+            } catch (err) {
+              console.error("[PetFocusBridge] open folder failed:", err)
+              continue
+            }
           }
+          // Both producers name a live session, so the conversation exists;
+          // open the tab directly and let its title/content hydrate. We do NOT
+          // gate on the conversations list — it loads independently of folders,
+          // and waiting on it (without a ready flag) would drop the request.
+          stateRef.current.openTab(
+            req.folderId,
+            req.conversationId,
+            req.agent,
+            true
+          )
         }
-        // Both producers name a live session, so the conversation exists; open
-        // the tab directly and let its title/content hydrate. We do NOT gate on
-        // the conversations list — it loads independently of folders, and
-        // waiting on it (without a ready flag) would drop the request.
-        stateRef.current.openTab(
-          req.folderId,
-          req.conversationId,
-          req.agent,
-          true
-        )
-      }
-    })()
+      })
+      // Never leave the chain rejected: every later batch hangs off it.
+      .catch((err) => {
+        console.error("[PetFocusBridge] focus batch failed:", err)
+      })
   }, [])
 
   // Replay queued requests once hydration flips ready.

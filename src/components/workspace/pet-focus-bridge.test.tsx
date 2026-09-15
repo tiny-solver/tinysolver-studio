@@ -243,6 +243,51 @@ describe("PetFocusBridge", () => {
     }
   )
 
+  // Opening a tab can await a folder load. A request that arrives during that
+  // await gets its own batch, so batches have to be chained — otherwise the
+  // newcomer opens first and leaves the *earlier* conversation focused.
+  it("keeps request order when a later one arrives mid folder load", async () => {
+    let finishFolderOpen: () => void = () => {}
+    addFolderToWorkspaceById = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishFolderOpen = () => {
+            useAppWorkspaceStore.setState({
+              folders: [{ id: 8 }, { id: 9 }] as never,
+            })
+            resolve({ id: 9 } as never)
+          }
+        })
+    )
+    useAppWorkspaceStore.setState({
+      foldersHydrated: true,
+      folders: [{ id: 8 }] as never,
+      addFolderToWorkspaceById,
+    })
+    tabs = { ...tabs, tabsHydrated: true }
+    render(<PetFocusBridge />)
+    await waitFor(() => expect(handlers.has(FOCUS)).toBe(true))
+
+    // First request needs folder 9 opened; it parks on that promise.
+    handlers.get(FOCUS)!({ folderId: 9, conversationId: 1, agent: "grok" })
+    await waitFor(() => expect(addFolderToWorkspaceById).toHaveBeenCalledWith(9))
+    expect(tabs.openTab).not.toHaveBeenCalled()
+
+    // Second request arrives mid-await, into folder 8 — already open, so its
+    // own batch has nothing to wait for and would otherwise jump the queue.
+    handlers.get(FOCUS)!({ folderId: 8, conversationId: 2, agent: "grok" })
+    await act(async () => {})
+    expect(tabs.openTab).not.toHaveBeenCalled()
+
+    await act(async () => {
+      finishFolderOpen()
+    })
+    await waitFor(() => expect(tabs.openTab).toHaveBeenCalledTimes(2))
+    expect(tabs.openTab.mock.calls[0][1]).toBe(1)
+    expect(tabs.openTab.mock.calls[1][1]).toBe(2)
+    expect(addFolderToWorkspaceById).toHaveBeenCalledTimes(1)
+  })
+
   it("ignores malformed payloads", async () => {
     useAppWorkspaceStore.setState({ foldersHydrated: true })
     tabs = { ...tabs, tabsHydrated: true }
