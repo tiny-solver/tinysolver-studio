@@ -1310,17 +1310,36 @@ mod tests {
     /// be copying into it right now.
     #[test]
     fn dead_owners_staging_is_reclaimed_and_a_live_owner_is_not() {
+        // A pid the probe cannot answer `Dead` for, standing in for "a peer
+        // instance that is still working". Unix pid 1 is `init`/`launchd`.
+        // Windows has no pid 1 — `OpenProcess` fails it with
+        // ERROR_INVALID_PARAMETER, which the probe correctly reads as `Dead`,
+        // so pid 1 there is a stand-in for the opposite case. Pid 4 is the
+        // Windows System process: `Alive` when we may open it, `Unknown`
+        // (access-denied) when we may not, and both are non-`Dead` owners the
+        // gate must refuse to delete.
+        #[cfg(windows)]
+        const LIVE_PID: u32 = 4;
+        #[cfg(not(windows))]
+        const LIVE_PID: u32 = 1;
+
         let tmp = tempfile::tempdir().expect("tempdir");
         let staging_root = tmp.path().join(MIGRATION_STAGING);
-        // pid 1 is `init`/`launchd` — alive on every platform this runs on, so
-        // it stands in for "a peer instance that is still working".
-        let live = staging_root.join("1-0");
+        let live = staging_root.join(format!("{LIVE_PID}-0"));
         // No process can hold this: it is above every platform's pid ceiling.
         let dead = staging_root.join("4294967294-0");
         let foreign = staging_root.join("not-a-pid");
         for dir in [&live, &dead, &foreign] {
             std::fs::create_dir_all(dir).expect("mkdir");
         }
+        // Fail on the premise rather than the conclusion if some platform ever
+        // stops holding that pid: "the survivor was deleted" reads as a bug in
+        // the sweep, which would be the wrong place to look.
+        assert_ne!(
+            crate::acp::scratch_dir::probe_pid(LIVE_PID),
+            crate::acp::scratch_dir::PidState::Dead,
+            "pid {LIVE_PID} must not probe as dead, or this test proves nothing"
+        );
 
         sweep_dead_staging(&staging_root);
 
