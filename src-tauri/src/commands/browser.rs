@@ -12,11 +12,12 @@ use tauri::Url;
 use crate::app_error::AppCommandError;
 use crate::browser::agent::{self, GrantLevel};
 use crate::browser::capture::{self, CaptureOutcome, CaptureRegion, CaptureRequest};
-use crate::browser::console::{ConsoleQuery, ConsoleReadout};
+use crate::browser::console::{ConsoleLevel, ConsoleQuery, ConsoleReadout};
 use crate::browser::doc_guest::{self, DocGuestState, DocGuests, DocMode};
+use crate::browser::handoff::{self, PageHandoff};
 use crate::browser::downloads::{BrowserDownload, BrowserDownloads};
 use crate::browser::policy::{BrowserPolicy, HostRule};
-use crate::browser::registry::{BrowserRegistry, BrowserTab};
+use crate::browser::registry::{self, BrowserRegistry, BrowserTab};
 use crate::browser::surface::{BrowserSurface, PointerFailure, PointerGesture};
 use crate::browser::types::{
     Bounds, BrowserCapabilities, BrowserErrorInfo, BrowserErrorKind, BrowserTabState, ChannelKind,
@@ -1914,19 +1915,46 @@ async fn capture_shared_page(
     if scrolled {
         tokio::time::sleep(SCROLL_SETTLE).await;
     }
-    let encoded = capture_viewport(&surface).await.map_err(failed)?;
-    let max_width = capture::effective_max_width(request.max_width);
-    let format = request.format;
-    let css_width = viewport.width;
+    let capture = draw_capture(
+        &surface,
+        viewport.width,
+        region,
+        clipped,
+        capture::effective_max_width(request.max_width),
+        request.format,
+        url,
+    )
+    .await
+    .map_err(failed)?;
+    admit()?;
+    Ok(capture)
+}
+
+/// Ask the engine for the viewport, crop it to `region` and encode it.
+///
+/// `css_width` is the viewport's width in CSS pixels at that moment: the ratio
+/// of the image's width to it is how many pixels the engine drew per CSS
+/// pixel, which is what turns a clip into pixel coordinates without asking any
+/// platform about zoom or device scale.
+async fn draw_capture(
+    surface: &BrowserSurface,
+    css_width: f64,
+    region: CaptureRegion,
+    clipped: bool,
+    max_width: u32,
+    format: capture::CaptureFormat,
+    url: String,
+) -> Result<CaptureOutcome, AppCommandError> {
+    let capture_err = |detail: String| window_err("Failed to capture the page", detail);
+    let encoded = capture_viewport(surface).await?;
     let clip = clipped.then_some(region);
     // Decoding and re-encoding a screenshot is real work; off the runtime.
     let fitted = tokio::task::spawn_blocking(move || {
         capture::fit(&encoded, css_width, clip, max_width, format)
     })
     .await
-    .map_err(|e| failed(capture_err(e.to_string())))?
-    .map_err(|e| failed(capture_err(e)))?;
-    admit()?;
+    .map_err(|e| capture_err(e.to_string()))?
+    .map_err(capture_err)?;
     Ok(CaptureOutcome {
         mime: format.mime().to_string(),
         data: base64::engine::general_purpose::STANDARD.encode(fitted.bytes),
@@ -1958,6 +1986,257 @@ async fn capture_viewport(surface: &BrowserSurface) -> Result<Vec<u8>, AppComman
             "the engine did not draw the page in time",
         )),
     }
+}
+
+// ---- page → conversation -------------------------------------------------
+//
+// The other direction from the `agent_*` reads above, and the reason none of
+// this is gated: nothing here happens unless a person does it, and what comes
+// out lands in their composer, where they read it, edit it and decide whether
+// to send it. The activity strip is not written either — it records what an
+// agent did to a tab while nobody was looking, and this is the opposite of
+// that. What a person hands over is still page content, so `browser::handoff`
+// caps it and labels it as data rather than instruction.
+
+/// How long a pick stays armed with nobody choosing anything. Long enough to
+/// scroll a page and think; short enough that a forgotten pick does not keep a
+/// highlight on a page for the rest of the session.
+const PICK_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Let a person point at an element of a page and hand it to a conversation.
+///
+/// Arms the picker in the tab's isolated world and waits for one answer. It
+/// ends as "called off" — never as an error — when the person presses Escape,
+/// starts another pick, navigates, closes the tab, or simply walks away for
+/// [`PICK_TIMEOUT`]: none of those is a failure, and the caller's next move is
+/// the same for all of them.
+pub async fn pick_element_core(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<handoff::PageHandoff, AppCommandError> {
+    let Some((surface, generation)) =
+        registry.read(tab_id, |tab| (tab.surface.clone(), tab.generation))
+    else {
+        return Err(AppCommandError::not_found(format!(
+            "browser tab {tab_id} not found"
+        )));
+    };
+    // Which pick this is. The registry mints the token and parks the waiter
+    // under one lock, and refuses if the id now names a later incarnation of
+    // the tab than the surface taken above — otherwise the picker would go
+    // into the old page while the waiter sat on the new tab. A report quoting
+    // any other token is from a pick already abandoned and is dropped where
+    // it arrives.
+    let Some((token, wait)) = registry.arm_pick(tab_id, generation) else {
+        return Err(AppCommandError::not_found(format!(
+            "browser tab {tab_id} not found"
+        )));
+    };
+    // Armed before the page is told, so a very fast pick cannot arrive before
+    // there is anywhere to put it. The picker is already in the document on
+    // every pick after the first, so ask before shipping twenty kilobytes of
+    // it again — the same two-step the agent bundle uses. Those two steps can
+    // straddle a navigation, leaving a picker armed in a document nobody is
+    // waiting on; `stop_picking` puts an orphan like that away, which is what
+    // its `Empty` case is for.
+    if let Err(err) = arm_picker(&surface, &token).await {
+        stop_picking(registry, tab_id, Some(&token)).await;
+        return Err(err);
+    }
+    let picked = match tokio::time::timeout(PICK_TIMEOUT, wait).await {
+        Ok(Ok(handoff::PickReport::Picked(element))) => element,
+        // Cancelled by the person, or the slot went away under us: a new
+        // document, a second pick, the tab closing. Either way there is
+        // nothing to hand over. Only THIS pick is put away — a second pick
+        // wakes the first one here, and taking the page's picker down then
+        // would cancel the pick that replaced it.
+        Ok(Ok(handoff::PickReport::Cancelled { .. })) | Ok(Err(_)) | Err(_) => {
+            stop_picking(registry, tab_id, Some(&token)).await;
+            return Ok(handoff::PageHandoff::cancelled());
+        }
+    };
+    let text = handoff::render_element(&picked);
+    let (url, _) = handoff::redact_url(&picked.href);
+    // A picture of the element, when it has a box on screen and the page said
+    // how wide its viewport is. Best effort: an element worth describing is
+    // still worth handing over when the engine cannot draw it.
+    let image = match (picked.clip(), picked.viewport) {
+        (Some(clip), Some(viewport)) => draw_capture(
+            &surface,
+            viewport.width,
+            clip,
+            true,
+            capture::effective_max_width(None),
+            capture::CaptureFormat::Png,
+            url.clone(),
+        )
+        .await
+        .map_err(|err| {
+            tracing::warn!("[browser] tab {tab_id}: could not picture the picked element: {err:?}");
+        })
+        .ok(),
+        _ => None,
+    };
+    Ok(handoff::PageHandoff {
+        cancelled: false,
+        label: picked.label.clone(),
+        text,
+        url,
+        image,
+        count: 0,
+    })
+}
+
+/// Arm the picker in a page, putting it there first if it is not already.
+async fn arm_picker(surface: &BrowserSurface, token: &str) -> Result<(), AppCommandError> {
+    let answer = eval_in_world_string(surface, &handoff::probe_and_pick(token)).await?;
+    if answer == handoff::PICKER_ABSENT {
+        eval_in_world_string(surface, &handoff::install_and_pick(token)).await?;
+    }
+    Ok(())
+}
+
+/// Put the picker away. Called when the person presses the button a second
+/// time, and whenever a pick ends for any other reason.
+pub async fn cancel_pick_core(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<(), AppCommandError> {
+    if !registry.contains(tab_id) {
+        return Err(AppCommandError::not_found(format!(
+            "browser tab {tab_id} not found"
+        )));
+    }
+    stop_picking(registry, tab_id, None).await;
+    Ok(())
+}
+
+/// Stop waiting, and tell the page to take the highlight down.
+///
+/// `token` names the pick the caller may end; `None` ends whatever is armed
+/// (the person pressed the button again). Three outcomes, and each matters:
+///
+/// * the slot was this caller's — put the page's picker away, naming it, so
+///   that a pick armed while this call is in flight is not the one that
+///   stops;
+/// * someone else's pick is armed — leave both alone. A superseded pick wakes
+///   up here, and taking the page's picker down then would cancel the pick
+///   that replaced it;
+/// * nothing was armed — but this caller may still have installed a picker
+///   of its own, because the document can change between the probe and the
+///   install. That orphan is named by this caller's token and only it comes
+///   down. A caller with no token to name has nothing to clean up: whatever
+///   is in the page belongs to someone, and asking the page to stop
+///   "whatever is there" would take down a pick that armed in the meantime.
+///
+/// Every stop names the pick it means, for the same reason: telling the page
+/// is a second round trip, and by the time it lands the answer may have
+/// changed.
+///
+/// Best effort throughout: the world may already have gone with the document.
+async fn stop_picking(registry: &BrowserRegistry, tab_id: &str, token: Option<&str>) {
+    let stop = match registry.cancel_pick(tab_id, token) {
+        registry::PickSlot::Cleared(cleared) => cleared,
+        registry::PickSlot::Empty => match token {
+            Some(token) => token.to_string(),
+            None => return,
+        },
+        registry::PickSlot::Elsewhere => return,
+    };
+    let Some(surface) = registry.surface(tab_id) else {
+        return;
+    };
+    let call = handoff::stop_pick_call(&stop);
+    if let Err(err) = eval_in_world_string(&surface, &call).await {
+        tracing::debug!("[browser] tab {tab_id}: could not put the picker away: {err:?}");
+    }
+}
+
+/// A screenshot of the page as it is on screen, for a conversation.
+pub async fn capture_page_core(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<handoff::PageHandoff, AppCommandError> {
+    let Some((surface, title)) =
+        registry.read(tab_id, |tab| (tab.surface.clone(), tab.state.title.clone()))
+    else {
+        return Err(AppCommandError::not_found(format!(
+            "browser tab {tab_id} not found"
+        )));
+    };
+    let raw = eval_in_world_string(&surface, agent::viewport_call()).await?;
+    let answer: agent::ViewportAnswer = serde_json::from_str(&raw)
+        .map_err(|e| window_err("Failed to capture the page", format!("unreadable answer: {e}")))?;
+    let region = CaptureRegion {
+        x: 0.0,
+        y: 0.0,
+        width: answer.viewport.width,
+        height: answer.viewport.height,
+    };
+    let (url, _) = handoff::redact_url(&answer.url);
+    let image = draw_capture(
+        &surface,
+        answer.viewport.width,
+        region,
+        false,
+        capture::effective_max_width(None),
+        capture::CaptureFormat::Png,
+        url.clone(),
+    )
+    .await?;
+    Ok(handoff::PageHandoff {
+        cancelled: false,
+        label: String::new(),
+        text: handoff::render_screenshot(&answer.url, &title, region, &image),
+        url,
+        image: Some(image),
+        count: 0,
+    })
+}
+
+/// What the page has printed, for a conversation. `errors_only` is the
+/// everyday case — a person who noticed the red mark wants what broke, not
+/// four hundred lines of debug logging.
+pub fn page_console_core(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    errors_only: bool,
+) -> Result<handoff::PageHandoff, AppCommandError> {
+    let answer = registry.read(tab_id, |tab| {
+        // No grant, and no origin filter beyond the one the ring already
+        // applied on the way in (only the tab's own origin is ever kept):
+        // this is a person reading the console of the page in front of them.
+        let query = ConsoleQuery {
+            since: 0,
+            min_level: errors_only.then_some(ConsoleLevel::Error),
+            limit: Some(crate::browser::console::CONSOLE_RING_CAPACITY),
+        };
+        let readout = tab.console.read(&query, &tab.state.url, |_| true);
+        (tab.state.url.clone(), readout.entries, readout.dropped)
+    });
+    let Some((url, mut entries, dropped)) = answer else {
+        return Err(AppCommandError::not_found(format!(
+            "browser tab {tab_id} not found"
+        )));
+    };
+    // The newest lines, not the oldest: someone handing over a console wants
+    // what just happened. What that leaves out is counted with what the ring
+    // had already lost, so the block never reads as the whole story when it
+    // is not.
+    let omitted = entries.len().saturating_sub(handoff::HANDOFF_CONSOLE_LIMIT);
+    if omitted > 0 {
+        entries.drain(..omitted);
+    }
+    let text = handoff::render_console(&url, &entries, dropped + omitted as u64, errors_only);
+    let (url, _) = handoff::redact_url(&url);
+    Ok(handoff::PageHandoff {
+        cancelled: false,
+        label: String::new(),
+        text,
+        url,
+        image: None,
+        count: entries.len(),
+    })
 }
 
 /// The browser tools an agent gets, answered from this process's tab
@@ -2517,6 +2796,47 @@ pub async fn browser_agent_capture(
     agent_capture_core(&app, &registry, &tab_id, &request.unwrap_or_default()).await
 }
 
+/// Point at an element of a page and hand it to a conversation. Resolves when
+/// the person picks one — or reports the pick as called off; see
+/// `pick_element_core` for the several ways that happens.
+#[tauri::command]
+pub async fn browser_pick_element(
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+) -> Result<PageHandoff, AppCommandError> {
+    pick_element_core(&registry, &tab_id).await
+}
+
+/// Take the picker's highlight down without picking anything.
+#[tauri::command]
+pub async fn browser_pick_cancel(
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+) -> Result<(), AppCommandError> {
+    cancel_pick_core(&registry, &tab_id).await
+}
+
+/// A screenshot of the page as it is on screen, for a conversation.
+#[tauri::command]
+pub async fn browser_page_capture(
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+) -> Result<PageHandoff, AppCommandError> {
+    capture_page_core(&registry, &tab_id).await
+}
+
+/// What the page has printed, for a conversation. Not the agent's read: no
+/// grant, no activity line — a person is looking at the console of the page
+/// in front of them.
+#[tauri::command]
+pub async fn browser_page_console(
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+    errors_only: Option<bool>,
+) -> Result<PageHandoff, AppCommandError> {
+    page_console_core(&registry, &tab_id, errors_only.unwrap_or(true))
+}
+
 /// Downloads this run started, oldest first. The frontend hydrates from it on
 /// mount; afterwards `browser://download` keeps it current.
 #[tauri::command]
@@ -2619,6 +2939,22 @@ mod tests {
             .expect_err("no such tab");
         assert!(outcome.is_none());
         assert!(matches!(err.code, crate::app_error::AppErrorCode::NotFound));
+    }
+
+    /// Every page → conversation entry point answers "no such tab" rather
+    /// than hanging or handing back an empty block: a pick on a tab that is
+    /// gone would otherwise wait out its three minutes with a person watching
+    /// a highlight that does not exist.
+    #[tokio::test]
+    async fn handing_over_a_tab_that_is_not_there_says_so_at_once() {
+        let registry = BrowserRegistry::default();
+        let not_found = |err: AppCommandError| {
+            matches!(err.code, crate::app_error::AppErrorCode::NotFound)
+        };
+        assert!(not_found(pick_element_core(&registry, "ghost").await.unwrap_err()));
+        assert!(not_found(cancel_pick_core(&registry, "ghost").await.unwrap_err()));
+        assert!(not_found(capture_page_core(&registry, "ghost").await.unwrap_err()));
+        assert!(not_found(page_console_core(&registry, "ghost", true).unwrap_err()));
     }
 
     #[test]

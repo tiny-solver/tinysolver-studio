@@ -12,6 +12,7 @@ use serde_json::Value;
 use crate::app_error::AppCommandError;
 
 use super::console::{self, ConsoleRing, ReportedLine};
+use super::handoff::PickReport;
 use super::surface::BrowserSurface;
 use super::types::{Bounds, BrowserTabState};
 
@@ -73,6 +74,44 @@ pub struct BrowserTab {
     /// the tab is shared with. Cleared when a new document commits
     /// (`hooks::page_load`); see `console.rs` for what it holds and why.
     pub console: ConsoleRing,
+    /// The element pick a person started on this tab, while the host waits
+    /// for them to choose one. Dropped by a new document, by a second pick,
+    /// and with the tab — in each case the command awaiting it hears a closed
+    /// channel and reports the pick as called off.
+    pub pending_pick: Option<PendingPick>,
+}
+
+/// A pick in flight: the token the picker will echo, and where its report
+/// goes.
+pub struct PendingPick {
+    pub token: String,
+    pub answer: tokio::sync::oneshot::Sender<PickReport>,
+}
+
+/// What a caller asking to end a pick is entitled to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickSlot {
+    /// It was theirs; it is now theirs to put away, and this is its token.
+    Cleared(String),
+    /// Someone else's pick is armed. Leave both the slot and the page alone —
+    /// a superseded pick wakes up when its sender is dropped, and taking the
+    /// page's picker down then would cancel the pick that replaced it.
+    Elsewhere,
+    /// Nothing was armed. Nobody is waiting, so whatever the page still has
+    /// can be put away: it is an orphan — a document that changed under an
+    /// install, or a pick already answered.
+    Empty,
+}
+
+/// What `token` may do to the pick that is `armed`. `None` is the person
+/// pressing the button again, which ends whatever is there.
+pub fn slot_for(armed: Option<&str>, token: Option<&str>) -> PickSlot {
+    match (armed, token) {
+        (None, _) => PickSlot::Empty,
+        (Some(armed), None) => PickSlot::Cleared(armed.to_string()),
+        (Some(armed), Some(token)) if armed == token => PickSlot::Cleared(armed.to_string()),
+        (Some(_), Some(_)) => PickSlot::Elsewhere,
+    }
 }
 
 impl BrowserTab {
@@ -97,6 +136,7 @@ impl BrowserTab {
             provisional_url: None,
             gestures: VecDeque::with_capacity(GESTURE_RING_CAPACITY),
             console: ConsoleRing::new(),
+            pending_pick: None,
         }
     }
 }
@@ -130,6 +170,9 @@ pub struct BrowserRegistry {
     visibility: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// Source of `BrowserTab::generation`, never reused within a process.
     generations: AtomicU64,
+    /// Source of the token that names one element pick, never reused within a
+    /// process (see `arm_pick`).
+    picks: AtomicU64,
 }
 
 impl BrowserRegistry {
@@ -377,11 +420,90 @@ impl BrowserRegistry {
     /// from a frame on another origin could never be read (the grant covers
     /// one origin, the tab's) and is not kept. Nothing to do for a tab that
     /// is gone.
-    pub fn push_console(&self, tab_id: &str, line: ReportedLine) {
+    /// Record a line, and say whether it was the FIRST error this document
+    /// printed. That edge is all the frontend needs to mark the tab as having
+    /// broken something: within one document the answer only ever goes from
+    /// no to yes, so one event per document is enough and a page in a logging
+    /// loop cannot turn the strip into a stream.
+    pub fn push_console(&self, tab_id: &str, line: ReportedLine) -> bool {
         self.update(tab_id, |tab| {
             let admissible = console::admissible(tab.state.origin.as_deref(), line.origin.as_deref());
+            let before = tab.console.errors();
             tab.console.push(line, admissible);
+            before == 0 && tab.console.errors() > 0
+        })
+        .unwrap_or(false)
+    }
+
+    /// Wait for one element pick on this tab, and mint the token that names
+    /// it. Both under one lock, and refused unless the tab is still the
+    /// incarnation the caller measured (`generation`): the caller took the
+    /// tab's surface first, and if the id has been closed and reopened since,
+    /// the picker it is about to install would go into the OLD page while the
+    /// waiter sat on the new tab. A generation is never reused, so a match
+    /// means the surface in hand is this tab's.
+    ///
+    /// The token is a counter, never a clock: two picks started in the same
+    /// millisecond must not be able to answer for each other.
+    ///
+    /// Any pick already in flight is dropped — its waiter hears a closed
+    /// channel and reports it as called off, which is exactly what a second
+    /// press of the button means.
+    pub fn arm_pick(
+        &self,
+        tab_id: &str,
+        generation: u64,
+    ) -> Option<(String, tokio::sync::oneshot::Receiver<PickReport>)> {
+        let token = format!(
+            "{generation}.{}",
+            self.picks.fetch_add(1, Ordering::Relaxed) + 1
+        );
+        self.update(tab_id, |tab| {
+            if tab.generation != generation {
+                return None;
+            }
+            let (answer, wait) = tokio::sync::oneshot::channel();
+            tab.pending_pick = Some(PendingPick {
+                token: token.clone(),
+                answer,
+            });
+            Some((token, wait))
+        })
+        .flatten()
+    }
+
+    /// Hand a pick to whoever is waiting for it, if they are waiting for THIS
+    /// one: a report quoting a token the tab is no longer expecting is from a
+    /// pick already abandoned, and is dropped.
+    pub fn resolve_pick(&self, tab_id: &str, report: PickReport) {
+        let pending = self.update(tab_id, |tab| {
+            match tab.pending_pick.as_ref().is_some_and(|p| p.token == report.id()) {
+                true => tab.pending_pick.take(),
+                false => None,
+            }
         });
+        if let Some(Some(pending)) = pending {
+            let _ = pending.answer.send(report);
+        }
+    }
+
+    /// Stop waiting for a pick, and say what the caller found.
+    ///
+    /// `token` names the pick the caller is entitled to end; `None` ends
+    /// whatever is armed. The answer carries the token that was cleared,
+    /// because telling the page to put its picker away is a second, later
+    /// round trip: by the time it lands another pick may have armed one, and
+    /// only a stop that names the pick it meant can tell the two apart.
+    pub fn cancel_pick(&self, tab_id: &str, token: Option<&str>) -> PickSlot {
+        self.update(tab_id, |tab| {
+            let slot = slot_for(tab.pending_pick.as_ref().map(|p| p.token.as_str()), token);
+            if matches!(slot, PickSlot::Cleared(_)) {
+                tab.pending_pick = None;
+            }
+            slot
+        })
+        // No tab is no pick: nothing is waiting and there is nothing to stop.
+        .unwrap_or(PickSlot::Empty)
     }
 
     /// Lines a sender of the tab's own origin discarded before it could
@@ -494,6 +616,36 @@ mod tests {
         assert!(registry.reserve("t2").is_ok(), "another id is unaffected");
         drop(first);
         assert!(registry.reserve("t1").is_ok(), "released on drop");
+    }
+
+    /// There is no tab to arm a pick on until a surface exists, and a surface
+    /// needs a webview — so the slot's behaviour with a tab is covered on a
+    /// real machine. What is checkable here is that asking about a tab that is
+    /// not there answers "no" rather than creating anything.
+    /// The rule a superseded pick is held to. Only reachable as a unit here —
+    /// arming one needs a tab, and a tab needs a webview — but it is the whole
+    /// of the decision, and getting it wrong made two picks in a row both end
+    /// as called off.
+    #[test]
+    fn only_the_pick_that_owns_the_slot_may_end_it() {
+        // A pick that has been replaced names the old token and ends nothing.
+        assert_eq!(slot_for(Some("7.2"), Some("7.1")), PickSlot::Elsewhere);
+        // Its own is its own, and the answer names it so the page can be told
+        // WHICH picker to put away.
+        assert_eq!(slot_for(Some("7.1"), Some("7.1")), PickSlot::Cleared("7.1".into()));
+        // The person pressing the button again ends whatever is armed…
+        assert_eq!(slot_for(Some("7.2"), None), PickSlot::Cleared("7.2".into()));
+        // …and an empty slot is an orphan the page may still be showing.
+        assert_eq!(slot_for(None, None), PickSlot::Empty);
+        assert_eq!(slot_for(None, Some("7.1")), PickSlot::Empty);
+    }
+
+    #[test]
+    fn a_pick_on_a_tab_that_is_not_there_arms_nothing() {
+        let registry = BrowserRegistry::default();
+        assert!(registry.arm_pick("ghost", 1).is_none());
+        assert_eq!(registry.cancel_pick("ghost", None), PickSlot::Empty);
+        assert!(!registry.contains("ghost"));
     }
 
     #[test]

@@ -6052,6 +6052,26 @@
       "activityCount": "{count} 次",
       "expand": "還有 {count} 筆",
       "collapse": "收合"
+    },
+    "handoff": {
+      "send": "把這個頁面傳給對話",
+      "sendLabel": "傳給對話",
+      "noConversation": "先開啟一個對話，才能把頁面傳過去",
+      "pickElement": "選擇一個元素…",
+      "screenshot": "傳送一張截圖",
+      "consoleErrors": "傳送主控台錯誤",
+      "consoleClean": "這個頁面沒有出錯",
+      "picking": "選擇中…",
+      "pickingHint": "在頁面上點一個元素，或按 Esc 結束",
+      "pickingCancel": "結束選擇",
+      "sent": "已加入對話",
+      "failed": "這個頁面傳不過去",
+      "noConsoleErrors": "這個頁面沒有印出過錯誤",
+      "chipElement": "頁面元素",
+      "chipScreenshot": "頁面截圖",
+      "chipConsole": "{count, plural, other {# 條主控台錯誤}}",
+      "gone": "那個對話已經關掉了",
+      "consoleErrorsCount": "{count, plural, other {傳送 # 條主控台錯誤}}"
     }
   },
   "browser": {

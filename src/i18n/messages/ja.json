@@ -6052,6 +6052,26 @@
       "activityCount": "{count} 回",
       "expand": "他 {count} 件",
       "collapse": "折りたたむ"
+    },
+    "handoff": {
+      "send": "このページをチャットに送る",
+      "sendLabel": "チャットに送る",
+      "noConversation": "送り先の会話を開いてください",
+      "pickElement": "要素を選ぶ…",
+      "screenshot": "スクリーンショットを送る",
+      "consoleErrors": "コンソールのエラーを送る",
+      "consoleClean": "このページでエラーは起きていません",
+      "picking": "選択中…",
+      "pickingHint": "ページ上の要素をクリック、または Esc で終了",
+      "pickingCancel": "選択をやめる",
+      "sent": "チャットに追加しました",
+      "failed": "このページを送れませんでした",
+      "noConsoleErrors": "このページはエラーを出力していません",
+      "chipElement": "ページ要素",
+      "chipScreenshot": "ページのスクリーンショット",
+      "chipConsole": "{count, plural, other {コンソールエラー # 件}}",
+      "gone": "その会話はもう開いていません",
+      "consoleErrorsCount": "{count, plural, other {コンソールのエラー # 件を送る}}"
     }
   },
   "browser": {

@@ -23,6 +23,9 @@
 //! - `surface`    — the enum over the concrete surfaces and their common ops
 //! - `surface_child` / `surface_window` — the concrete builders
 //! - `channel`    — page → host messages from the isolated-world helper
+//! - `handoff`    — the other direction from `agent`: what a PERSON hands to
+//!   a conversation (an element they picked, the console) and how it is
+//!   rendered as untrusted page content
 //! - `shim`       — per-platform WebKit / WebView2 calls (worlds, eval, snapshot)
 //! - `hooks`      — webview callbacks (page load, title) → registry + events
 //! - `events`     — state fan-out to the frontend
@@ -53,6 +56,8 @@ pub mod doc_guest;
 pub mod downloads;
 #[cfg(feature = "tauri-runtime")]
 pub mod events;
+#[cfg(feature = "tauri-runtime")]
+pub mod handoff;
 #[cfg(feature = "tauri-runtime")]
 pub mod hooks;
 #[cfg(feature = "tauri-runtime")]

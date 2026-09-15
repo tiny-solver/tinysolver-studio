@@ -132,6 +132,15 @@ pub enum ConsoleSource {
 }
 
 impl ConsoleSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Console => "console",
+            Self::Exception => "exception",
+            Self::Rejection => "rejection",
+            Self::Resource => "resource",
+        }
+    }
+
     fn parse(raw: &str) -> Option<Self> {
         match raw {
             "console" => Some(Self::Console),
@@ -232,6 +241,12 @@ pub struct ConsoleRing {
     /// has admitted in it.
     window_start: i64,
     window_count: u32,
+    /// How many error lines this document has printed, counted whether or not
+    /// the line itself survived the budget or the ring. It answers "did
+    /// anything break on this page", which is a different question from
+    /// "which lines can still be read" and must not quietly become false
+    /// because a chatty page pushed the error out.
+    errors: u64,
 }
 
 impl Default for ConsoleRing {
@@ -250,6 +265,7 @@ impl ConsoleRing {
             dropped: 0,
             window_start: i64::MIN,
             window_count: 0,
+            errors: 0,
         }
     }
 
@@ -271,6 +287,9 @@ impl ConsoleRing {
         self.window_count = self.window_count.saturating_add(1);
         if !admissible {
             return None;
+        }
+        if line.level == ConsoleLevel::Error {
+            self.errors = self.errors.saturating_add(1);
         }
         self.dropped = self.dropped.saturating_add(line.dropped);
         if over_budget {
@@ -311,6 +330,12 @@ impl ConsoleRing {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.dropped = 0;
+        self.errors = 0;
+    }
+
+    /// How many error lines the current document has printed.
+    pub fn errors(&self) -> u64 {
+        self.errors
     }
 
     pub fn len(&self) -> usize {
@@ -782,6 +807,47 @@ mod tests {
     }
 
     const SITE: &str = "http://localhost:3000";
+
+    /// "Did anything break on this page" is not "which error lines can still
+    /// be read": a page that logs a thousand lines after its one error pushes
+    /// that error out of the ring and past the budget, and the answer must
+    /// still be yes until the document is replaced.
+    #[test]
+    fn an_error_pushed_out_of_the_ring_is_still_an_error_the_page_printed() {
+        let mut ring = ConsoleRing::new();
+        assert_eq!(ring.errors(), 0);
+        ring.push(line("boom", ConsoleLevel::Error, SITE), true);
+        assert_eq!(ring.errors(), 1);
+        for i in 0..CONSOLE_RING_CAPACITY {
+            ring.push(line(&format!("l{i}"), ConsoleLevel::Log, SITE), true);
+        }
+        assert!(ring.read(&ConsoleQuery::default(), SITE, |_| true).entries.iter().all(|e| e.text != "boom"));
+        assert_eq!(ring.errors(), 1);
+        // A line from another origin is not this page's error.
+        ring.push(line("elsewhere", ConsoleLevel::Error, "http://other"), false);
+        assert_eq!(ring.errors(), 1);
+        // A new document starts clean.
+        ring.clear();
+        assert_eq!(ring.errors(), 0);
+    }
+
+    /// The budget refuses a line before the ring ever sees it — and the very
+    /// first error of a page in a logging loop is exactly the line that gets
+    /// refused. Counting it is the difference between a red mark and a page
+    /// that looks fine.
+    #[test]
+    fn an_error_the_budget_refuses_is_counted_all_the_same() {
+        let mut ring = ConsoleRing::new();
+        // Spend the whole second on lines that are not errors.
+        for i in 0..CONSOLE_HOST_BUDGET_PER_SECOND {
+            ring.push(line(&format!("l{i}"), ConsoleLevel::Log, SITE), true);
+        }
+        assert_eq!(ring.errors(), 0);
+        // Now the page's first error, which is over budget and not kept.
+        assert!(ring.push(line("boom", ConsoleLevel::Error, SITE), true).is_none());
+        assert_eq!(ring.errors(), 1);
+        assert!(ring.read(&ConsoleQuery::default(), SITE, |_| true).entries.iter().all(|e| e.text != "boom"));
+    }
 
     /// Reads answer with the seq to continue from, and `since` excludes what
     /// was already seen — the two together are what makes polling the console

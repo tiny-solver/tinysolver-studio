@@ -22,10 +22,12 @@ import {
   releaseBrowserTab,
   recordBrowserAgentActivity,
   removeBrowserTabState,
+  setBrowserConsoleErrors,
   resetBrowserTabStoreForTests,
   setBrowserTabState,
   subscribeBrowserTabs,
   useBrowserAgentActivity,
+  useBrowserConsoleErrors,
   useBrowserTabState,
 } from "./browser-tab-store"
 import type { AgentActivityPayload, AgentGrant, BrowserTabState } from "./types"
@@ -286,6 +288,39 @@ describe("browser tab store", () => {
       expect(view.result.current).toHaveLength(1)
       act(() => removeBrowserTabState("browser:abc"))
       expect(view.result.current).toEqual([])
+      view.unmount()
+    })
+  })
+
+  // The mark says "something went wrong on the page in front of you". Both
+  // of its edges come from the backend, which raises it on the first error of
+  // a document and drops it when the next document clears the tab's console
+  // ring — the two moments that move the ring, so the mark cannot drift from
+  // what the tab actually holds. It is deliberately NOT derived from the tab
+  // state: `loading` is set by more than a commit (a title report mid-load
+  // emits state too), and inferring from it took the mark back off while the
+  // error was still there.
+  describe("the console-error mark", () => {
+    it("follows the backend, and no tab state moves it", () => {
+      const view = renderHook(() => useBrowserConsoleErrors("browser:abc"))
+      expect(view.result.current).toBe(false)
+      act(() => setBrowserConsoleErrors("browser:abc", true))
+      expect(view.result.current).toBe(true)
+      // Every kind of tab state, including the one a mid-load report carries.
+      act(() => setBrowserTabState(state({ title: "Orders" })))
+      act(() => setBrowserTabState(state({ loading: true })))
+      expect(view.result.current).toBe(true)
+      act(() => setBrowserConsoleErrors("browser:abc", false))
+      expect(view.result.current).toBe(false)
+      view.unmount()
+    })
+
+    it("goes away with the tab", () => {
+      const view = renderHook(() => useBrowserConsoleErrors("browser:abc"))
+      act(() => setBrowserConsoleErrors("browser:abc", true))
+      expect(view.result.current).toBe(true)
+      act(() => removeBrowserTabState("browser:abc"))
+      expect(view.result.current).toBe(false)
       view.unmount()
     })
   })

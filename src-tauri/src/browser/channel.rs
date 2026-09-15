@@ -1,9 +1,10 @@
 //! Page → host channel: the helper script (`src/browser-injected/helper.js`)
 //! runs in an isolated world and posts JSON envelopes through a native
-//! message handler; this module validates and routes them. Everything that
-//! arrives here is page-controlled input: sizes are capped, unknown kinds
-//! are dropped, and gestures are forwarded to the frontend flagged
-//! `untrusted`.
+//! message handler; this module validates and routes them. The element picker
+//! (`picker.js`), evaluated into the same world on demand, reports through the
+//! same channel. Everything that arrives here is page-controlled input: sizes
+//! are capped, unknown kinds are dropped, and gestures are forwarded to the
+//! frontend flagged `untrusted`.
 
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ use crate::web::event_bridge::{emit_event, EventEmitter};
 use super::agent;
 use super::console;
 use super::events;
+use super::handoff;
 use super::hooks;
 use super::registry::BrowserRegistry;
 use super::types::ChannelKind;
@@ -218,7 +220,16 @@ pub fn handle_message(app: &AppHandle, tab_id: &str, raw: String, main_frame: bo
                 .unwrap_or_default();
             match console::parse_reported(&envelope.payload, main_frame && envelope.top, at, origin.clone())
             {
-                Some(line) => registry.push_console(tab_id, line),
+                Some(line) => {
+                    if registry.push_console(tab_id, line) {
+                        // The first error of this document. Said once, so the
+                        // control that offers to hand the console to a
+                        // conversation can mark the tab without polling a page
+                        // nobody is looking at. The matching `false` comes from
+                        // `hooks::page_load`, where the ring is cleared.
+                        events::emit_console_errors(app, tab_id, true);
+                    }
+                }
                 // No line, only a count: the helper flushing what it dropped
                 // after a burst that ended in silence.
                 None => {
@@ -227,6 +238,20 @@ pub fn handle_message(app: &AppHandle, tab_id: &str, raw: String, main_frame: bo
                         registry.note_console_dropped(tab_id, origin.as_deref(), count);
                     }
                 }
+            }
+        }
+        // The element a person pointed at, from the picker the host armed on
+        // this tab (`handoff::install_and_pick`). Only the top frame's, and
+        // only for the pick the tab is still waiting on: the picker is
+        // evaluated into the main frame's isolated world, so a report from
+        // anywhere else is not one of ours, and a token the tab no longer
+        // expects belongs to a pick already abandoned.
+        "pick" => {
+            if !(main_frame && envelope.top) {
+                return;
+            }
+            if let Some(report) = handoff::parse_pick(&envelope.payload) {
+                registry.resolve_pick(tab_id, report);
             }
         }
         other => {

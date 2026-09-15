@@ -147,6 +147,46 @@ export function setBrowserTabState(state: BrowserTabState): void {
   notify()
 }
 
+// Tabs whose CURRENT document has printed at least one error. Written only
+// from `browser://console-errors`, which the backend emits from the two places
+// that move a tab's console ring — the new document that clears it, and the
+// first error that lands in it. Deliberately NOT derived from the tab state:
+// `loading` is set by more than a commit, and a second one arriving after the
+// page's first error would take the mark off while the error was still there.
+//
+// A set rather than a count: the backend says "the first one happened" once,
+// which is all the mark needs, and the exact number is read from the tab when
+// the person asks for the lines.
+const consoleErrors = new Set<string>()
+
+export function setBrowserConsoleErrors(
+  workspaceTabId: string,
+  errors: boolean
+): void {
+  if (errors) {
+    if (consoleErrors.has(workspaceTabId)) return
+    consoleErrors.add(workspaceTabId)
+  } else if (!consoleErrors.delete(workspaceTabId)) {
+    return
+  }
+  notify()
+}
+
+/** Whether this tab's document has printed an error. */
+export function useBrowserConsoleErrors(
+  workspaceTabId: string | null
+): boolean {
+  return useSyncExternalStore(
+    subscribeBrowserTabs,
+    () => (workspaceTabId ? consoleErrors.has(workspaceTabId) : false),
+    getServerFalse
+  )
+}
+
+function getServerFalse(): boolean {
+  return false
+}
+
 export function removeBrowserTabState(workspaceTabId: string): void {
   const hadNotice = notices.delete(workspaceTabId)
   const hadDoc = docStates.delete(workspaceTabId)
@@ -157,7 +197,14 @@ export function removeBrowserTabState(workspaceTabId: string): void {
   // the page that left. `hiddenAt` and `findRequests` are not — nothing
   // renders them on their own.
   const hadActivity = agentActivity.delete(workspaceTabId)
-  if (states.delete(workspaceTabId) || hadNotice || hadDoc || hadActivity) {
+  const hadErrors = consoleErrors.delete(workspaceTabId)
+  if (
+    states.delete(workspaceTabId) ||
+    hadNotice ||
+    hadDoc ||
+    hadActivity ||
+    hadErrors
+  ) {
     notify()
   }
 }
@@ -372,6 +419,7 @@ export function resetBrowserTabStoreForTests(): void {
   hiddenAt.clear()
   findRequests.clear()
   agentActivity.clear()
+  consoleErrors.clear()
 }
 
 function shallowEqualState(a: BrowserTabState, b: BrowserTabState): boolean {

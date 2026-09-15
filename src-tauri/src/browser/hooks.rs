@@ -94,6 +94,10 @@ pub fn page_load(app: &AppHandle, tab_id: &str, url: &Url, started: bool) {
             // not a fact about the page that is on screen now, and a read of
             // this tab from here on is a read of the new one.
             tab.console.clear();
+            // The picker went with the world the old document had. Nobody is
+            // going to answer the pick, so end it here rather than leaving a
+            // person watching a highlight that is not there any more.
+            tab.pending_pick = None;
         }
         let state = &mut tab.state;
         state.url = url.to_string();
@@ -131,6 +135,14 @@ pub fn page_load(app: &AppHandle, tab_id: &str, url: &Url, started: bool) {
         return;
     };
     events::emit_state(app, &state);
+    if started {
+        // The ring was cleared above, so nothing has gone wrong on the page
+        // that is arriving — yet. Said from here rather than left for the
+        // frontend to infer from the tab state: `loading` is set by more than
+        // a commit, and a second one arriving after the page's first error
+        // would take the mark back off while the error was still there.
+        events::emit_console_errors(app, tab_id, false);
+    }
     if let Some(lost) = lost {
         events::emit_agent_grant(
             app,

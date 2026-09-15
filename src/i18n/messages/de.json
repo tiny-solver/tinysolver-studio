@@ -6052,6 +6052,26 @@
       "activityCount": "{count}×",
       "expand": "{count} weitere",
       "collapse": "Weniger"
+    },
+    "handoff": {
+      "send": "Diese Seite an den Chat senden",
+      "sendLabel": "An den Chat senden",
+      "noConversation": "Öffne eine Unterhaltung, an die die Seite gehen soll",
+      "pickElement": "Ein Element auswählen…",
+      "screenshot": "Einen Screenshot senden",
+      "consoleErrors": "Die Konsolenfehler senden",
+      "consoleClean": "Auf dieser Seite ist nichts schiefgegangen",
+      "picking": "Auswahl läuft…",
+      "pickingHint": "Klicke etwas auf der Seite an, oder beende mit Esc",
+      "pickingCancel": "Auswahl beenden",
+      "sent": "Zum Chat hinzugefügt",
+      "failed": "Diese Seite konnte nicht an den Chat gesendet werden",
+      "noConsoleErrors": "Diese Seite hat keine Fehler ausgegeben",
+      "chipElement": "Seitenelement",
+      "chipScreenshot": "Screenshot der Seite",
+      "chipConsole": "{count, plural, one {# Konsolenfehler} other {# Konsolenfehler}}",
+      "gone": "Diese Unterhaltung ist nicht mehr offen",
+      "consoleErrorsCount": "{count, plural, one {# Konsolenfehler senden} other {# Konsolenfehler senden}}"
     }
   },
   "browser": {

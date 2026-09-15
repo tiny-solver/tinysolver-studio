@@ -288,9 +288,15 @@
   var consoleDropped = 0
   var consoleFlushTimer = null
   function clip(value, limit) {
-    return typeof value === "string" && value.length > limit
-      ? value.slice(0, limit) + "…"
-      : value
+    if (typeof value !== "string" || value.length <= limit) return value
+    var end = limit
+    // Never cut between the halves of a surrogate pair: `JSON.stringify`
+    // would emit an escape for half a character and the host's parser
+    // refuses the whole message, so one emoji in the wrong place would cost
+    // the line rather than one character of it.
+    var last = value.charCodeAt(end - 1)
+    if (last >= 0xd800 && last <= 0xdbff) end -= 1
+    return value.slice(0, end) + "…"
   }
   function hereHref() {
     // Long enough to keep scheme, host and port whole for the origin the

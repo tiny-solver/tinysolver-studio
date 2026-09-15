@@ -43,6 +43,7 @@ import { openUrl } from "@/lib/platform"
 import { cn, copyTextToClipboard } from "@/lib/utils"
 
 import { BrowserAgentShareControl } from "./browser-agent-access"
+import { BrowserSendToChatControl } from "./browser-page-handoff"
 
 const ICON_BTN =
   "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
@@ -262,6 +263,7 @@ export function BrowserToolbar({
           "focus:border-ring/50 focus:ring-2 focus:ring-ring/20"
         )}
       />
+      <BrowserSendToChatControl tab={tab} state={state} />
       <BrowserAgentShareControl tab={tab} state={state} />
       <ProfileMenu tab={tab} currentUrl={currentUrl} />
       <button

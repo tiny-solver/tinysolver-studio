@@ -6052,6 +6052,26 @@
       "activityCount": "{count}×",
       "expand": "{count} de plus",
       "collapse": "Moins"
+    },
+    "handoff": {
+      "send": "Envoyer cette page à la conversation",
+      "sendLabel": "Envoyer à la conversation",
+      "noConversation": "Ouvre une conversation à laquelle envoyer cette page",
+      "pickElement": "Choisir un élément…",
+      "screenshot": "Envoyer une capture",
+      "consoleErrors": "Envoyer les erreurs de la console",
+      "consoleClean": "Rien n'a échoué sur cette page",
+      "picking": "Sélection…",
+      "pickingHint": "Clique sur un élément de la page, ou appuie sur Échap pour arrêter",
+      "pickingCancel": "Arrêter la sélection",
+      "sent": "Ajouté à la conversation",
+      "failed": "Cette page n'a pas pu être envoyée à la conversation",
+      "noConsoleErrors": "Cette page n'a affiché aucune erreur",
+      "chipElement": "Élément de la page",
+      "chipScreenshot": "Capture de la page",
+      "chipConsole": "{count, plural, one {# erreur de console} other {# erreurs de console}}",
+      "gone": "Cette conversation n'est plus ouverte",
+      "consoleErrorsCount": "{count, plural, one {Envoyer la # erreur de console} other {Envoyer les # erreurs de console}}"
     }
   },
   "browser": {

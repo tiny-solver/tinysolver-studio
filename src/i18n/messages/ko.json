@@ -6052,6 +6052,26 @@
       "activityCount": "{count}회",
       "expand": "{count}개 더",
       "collapse": "접기"
+    },
+    "handoff": {
+      "send": "이 페이지를 대화로 보내기",
+      "sendLabel": "대화로 보내기",
+      "noConversation": "보낼 대화를 먼저 열어 주세요",
+      "pickElement": "요소 선택…",
+      "screenshot": "스크린샷 보내기",
+      "consoleErrors": "콘솔 오류 보내기",
+      "consoleClean": "이 페이지에서 문제가 없었습니다",
+      "picking": "선택 중…",
+      "pickingHint": "페이지에서 요소를 클릭하거나 Esc를 누르세요",
+      "pickingCancel": "선택 그만두기",
+      "sent": "대화에 추가했습니다",
+      "failed": "이 페이지를 보내지 못했습니다",
+      "noConsoleErrors": "이 페이지는 오류를 출력하지 않았습니다",
+      "chipElement": "페이지 요소",
+      "chipScreenshot": "페이지 스크린샷",
+      "chipConsole": "{count, plural, other {콘솔 오류 #건}}",
+      "gone": "그 대화는 이미 닫혔습니다",
+      "consoleErrorsCount": "{count, plural, other {콘솔 오류 #건 보내기}}"
     }
   },
   "browser": {

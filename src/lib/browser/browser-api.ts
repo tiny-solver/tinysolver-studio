@@ -21,6 +21,7 @@ import type {
   DocMode,
   FrozenFrame,
   GrantLevel,
+  PageHandoff,
   PageSnapshot,
   SurfaceChoice,
 } from "./types"
@@ -315,6 +316,36 @@ export function browserAgentCapture(
   return getTransport().call<CaptureOutcome>("browser_agent_capture", {
     tabId,
     request,
+  })
+}
+
+/** Let the person point at an element of the page and hand it to a
+ *  conversation. Resolves when they pick one, or with `cancelled` when they
+ *  press Escape, start another pick, navigate, or leave it armed too long —
+ *  none of which is an error. */
+export function browserPickElement(tabId: string): Promise<PageHandoff> {
+  return getTransport().call<PageHandoff>("browser_pick_element", { tabId })
+}
+
+/** Take the picker's highlight down without picking anything. */
+export function browserPickCancel(tabId: string): Promise<void> {
+  return getTransport().call<void>("browser_pick_cancel", { tabId })
+}
+
+/** A screenshot of the page as it is on screen, for a conversation. */
+export function browserPageCapture(tabId: string): Promise<PageHandoff> {
+  return getTransport().call<PageHandoff>("browser_page_capture", { tabId })
+}
+
+/** What the page has printed, for a conversation. Not the agent's read: no
+ *  grant is involved and nothing is written to the activity strip. */
+export function browserPageConsole(
+  tabId: string,
+  errorsOnly = true
+): Promise<PageHandoff> {
+  return getTransport().call<PageHandoff>("browser_page_console", {
+    tabId,
+    errorsOnly,
   })
 }
 

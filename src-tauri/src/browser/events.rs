@@ -12,10 +12,10 @@ use super::agent::{
 use super::doc_guest::DocGuestState;
 use super::downloads::{BrowserDownload, DOWNLOAD_EVENT};
 use super::types::{
-    BrowserClosedPayload, BrowserNavigationBlockedPayload, BrowserOpenRequestPayload,
-    BrowserPopupPayload, BrowserShortcutPayload, BrowserTabState, NavigationBlockReason,
-    CLOSED_EVENT, DOC_STATE_EVENT, NAVIGATION_BLOCKED_EVENT, OPEN_REQUEST_EVENT, POPUP_EVENT,
-    SHORTCUT_EVENT, STATE_EVENT,
+    BrowserClosedPayload, BrowserConsoleErrorsPayload, BrowserNavigationBlockedPayload,
+    BrowserOpenRequestPayload, BrowserPopupPayload, BrowserShortcutPayload, BrowserTabState,
+    NavigationBlockReason, CLOSED_EVENT, CONSOLE_ERRORS_EVENT, DOC_STATE_EVENT,
+    NAVIGATION_BLOCKED_EVENT, OPEN_REQUEST_EVENT, POPUP_EVENT, SHORTCUT_EVENT, STATE_EVENT,
 };
 
 pub fn emit_state(app: &AppHandle, state: &BrowserTabState) {
@@ -101,6 +101,21 @@ pub fn emit_agent_activity(
             action,
             outcome,
             at,
+        },
+    );
+}
+
+/// Whether the document in a tab has printed an error — see
+/// `CONSOLE_ERRORS_EVENT`. Emitted from the two places that move the tab's
+/// console ring: the new document that clears it, and the first error that
+/// lands in it.
+pub fn emit_console_errors(app: &AppHandle, tab_id: &str, errors: bool) {
+    emit_event(
+        &EventEmitter::Tauri(app.clone()),
+        CONSOLE_ERRORS_EVENT,
+        BrowserConsoleErrorsPayload {
+            tab_id: tab_id.to_string(),
+            errors,
         },
     );
 }

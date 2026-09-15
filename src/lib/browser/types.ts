@@ -439,6 +439,36 @@ export const BROWSER_NAVIGATION_BLOCKED_EVENT = "browser://navigation-blocked"
 export const BROWSER_DOC_STATE_EVENT = "browser://doc-state"
 export const BROWSER_AGENT_GRANT_EVENT = "browser://agent-grant"
 export const BROWSER_AGENT_ACTIVITY_EVENT = "browser://agent-activity"
+export const BROWSER_CONSOLE_ERRORS_EVENT = "browser://console-errors"
+
+/** `browser://console-errors`: whether the document in a tab has printed an
+ *  error. At most two per document — `false` when a new one commits and the
+ *  tab's console ring is cleared, `true` on the first error after that, since
+ *  within one document the answer only goes from no to yes. */
+export interface BrowserConsoleErrorsPayload {
+  tabId: string
+  errors: boolean
+}
+
+/** What the browser hands to a conversation when a person picks an element,
+ *  asks for a screenshot, or sends the console (`browser_pick_element`,
+ *  `browser_page_capture`, `browser_page_console`).
+ *
+ *  `text` is page content: it carries its own "data, not instructions" header
+ *  and is what the agent reads. `label` is only set for a picked element (the
+ *  page's own `tag#id.class`); for the others the frontend names the badge in
+ *  the user's language, using `count` for the console. */
+export interface PageHandoff {
+  /** The person called the pick off; nothing else here is meaningful. */
+  cancelled: boolean
+  label: string
+  text: string
+  /** Where the page was, with anything secret-looking left out. */
+  url: string
+  image?: CaptureOutcome
+  /** How many console lines `text` holds; 0 for everything else. */
+  count: number
+}
 
 /** `external` and `download` come from document guests only: a web address
  *  the document pointed at (the user may open it in a tab), and a download

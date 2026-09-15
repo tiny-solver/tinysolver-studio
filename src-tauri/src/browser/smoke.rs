@@ -456,6 +456,76 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
             .map_err(err_string)?;
             Ok(json!(outcome))
         }
+        // Page → conversation. `browser_pick_element` waits for a person to
+        // click something, so a harness drives it by starting it, clicking
+        // through `browser_eval`, and reading the answer when it lands; the
+        // other two answer at once.
+        "browser_pick_element" => {
+            let tab_id = str_arg(cmd, "tab_id")?;
+            // A harness has no pointer to move, so it says which element to
+            // choose (`click`, a JS expression for it) or that it wants the
+            // pick called off (`escape`), and this arms a driver in the
+            // isolated world FIRST — the pick below does not return until
+            // someone answers it, so there is no later turn to drive it from.
+            // The driver waits for the picker to appear, then dispatches an
+            // untrusted event, which the picker takes only because
+            // `__codegAcceptUntrusted` is set here, in a world no page script
+            // can reach.
+            let driver = match (
+                cmd.get("click").and_then(Value::as_str),
+                cmd.get("escape").and_then(Value::as_bool).unwrap_or(false),
+            ) {
+                (Some(expr), _) => Some(format!(
+                    "(function(el){{ el.dispatchEvent(new MouseEvent('pointermove', \
+                     {{bubbles: true, composed: true}})); el.click() }})({expr})"
+                )),
+                (None, true) => Some(
+                    "window.dispatchEvent(new KeyboardEvent('keydown', \
+                     {key: 'Escape', bubbles: true}))"
+                        .to_string(),
+                ),
+                (None, false) => None,
+            };
+            if let Some(driver) = driver {
+                let surface = registry.surface(&tab_id).ok_or("no such tab")?;
+                let arm = format!(
+                    "(function(){{ globalThis.__codegAcceptUntrusted = true; var n = 0; \
+                     var t = setInterval(function(){{ n += 1; \
+                       if (n > 100) {{ clearInterval(t); return }} \
+                       if (!globalThis.__codegPicker) return; \
+                       clearInterval(t); try {{ {driver} }} catch (e) {{ void e }} }}, 50); \
+                     return 'armed' }})()"
+                );
+                surface.eval_in_world(&arm, |_| {}).map_err(err_string)?;
+            }
+            let handoff = browser_commands::pick_element_core(&registry, &tab_id)
+                .await
+                .map_err(err_string)?;
+            Ok(json!(handoff))
+        }
+        "browser_pick_cancel" => {
+            browser_commands::cancel_pick_core(&registry, &str_arg(cmd, "tab_id")?)
+                .await
+                .map_err(err_string)?;
+            Ok(json!(true))
+        }
+        "browser_page_capture" => {
+            let handoff =
+                browser_commands::capture_page_core(&registry, &str_arg(cmd, "tab_id")?)
+                    .await
+                    .map_err(err_string)?;
+            Ok(json!(handoff))
+        }
+        "browser_page_console" => {
+            let errors_only = cmd.get("errors_only").and_then(Value::as_bool).unwrap_or(true);
+            let handoff = browser_commands::page_console_core(
+                &registry,
+                &str_arg(cmd, "tab_id")?,
+                errors_only,
+            )
+            .map_err(err_string)?;
+            Ok(json!(handoff))
+        }
         "browser_url" => {
             let surface = registry
                 .surface(&str_arg(cmd, "tab_id")?)

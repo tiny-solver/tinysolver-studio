@@ -196,6 +196,13 @@ pub const NAVIGATION_BLOCKED_EVENT: &str = "browser://navigation-blocked";
 /// The mode and status of a document guest changed (`DocGuestState`): the
 /// user switched it, or the guest fell back to safe mode on its own.
 pub const DOC_STATE_EVENT: &str = "browser://doc-state";
+/// Whether the document in a tab has printed an error. At most two per
+/// document: `false` when a new one commits and the tab's console ring is
+/// cleared, `true` on the first error after that — within one document the
+/// answer only goes from no to yes, so a page in a logging loop cannot turn
+/// this into a stream. Both edges come from the ring itself, so the mark on
+/// the "send to chat" control cannot drift from what the tab actually holds.
+pub const CONSOLE_ERRORS_EVENT: &str = "browser://console-errors";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -223,6 +230,13 @@ pub struct BrowserShortcutPayload {
     pub tab_id: String,
     /// One of a closed set the host recognises (`find` today).
     pub shortcut: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserConsoleErrorsPayload {
+    pub tab_id: String,
+    pub errors: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -33,6 +33,13 @@ const CONSOLE_SHIM = readFileSync(
   resolve(root, "src/browser-injected/console.js"),
   "utf8"
 )
+// The element picker, which the host evaluates into the isolated world on
+// demand when a person asks to hand an element to a conversation. Also not
+// part of the bundle.
+const PICKER = readFileSync(
+  resolve(root, "src/browser-injected/picker.js"),
+  "utf8"
+)
 
 const CHROME =
   process.env.CHROME_PATH ??
@@ -64,6 +71,72 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
     </div>
     <a id="anchor" href="#went">Anchor</a>
   </section>
+  <section id="picking">
+    <div id="hiddenframes" style="position:fixed;left:0;top:0;visibility:hidden"></div>
+    <div id="crowd" style="display:none"></div>
+    <div id="shadowed"></div>
+    <iframe id="frame" style="width:200px;height:60px" srcdoc="&lt;button id=&quot;inner&quot; onclick=&quot;this.textContent='PRESSED'&quot;&gt;inner&lt;/button&gt;"></iframe>
+    <div id="fat">fat</div>
+    <div id="emoji">emoji</div>
+    <div id="panel" style="width:200px;height:80px;overflow:auto;border:1px solid #ccc">
+      <div style="height:800px">tall</div>
+    </div>
+  </section>
+<script>
+  // Forty frames the picker must look past to reach the visible one, and
+  // twenty thousand elements in front of a frame that lives in an open shadow
+  // root — the walk's budget has to reach the shadow root all the same.
+  const pen = document.getElementById("hiddenframes")
+  for (let i = 0; i < 40; i++) {
+    // Laid out and inside the viewport, but invisible: a box alone must not
+    // be enough to spend a patch.
+    const ghost = document.createElement("iframe")
+    ghost.style.cssText = "width:10px;height:10px;border:0"
+    pen.appendChild(ghost)
+  }
+  const crowd = document.getElementById("crowd")
+  for (let i = 0; i < 20000; i++) crowd.appendChild(document.createElement("span"))
+  // …and the shadow host carries a light subtree of its own, larger than the
+  // walk's queue, so it buries its own shadow root unless shadow content is
+  // queued before light content.
+  // Direct children: a wrapper would be one entry in the queue, and the walk
+  // would reach the shadow root long before it descended into it.
+  const buryer = document.getElementById("shadowed")
+  for (let i = 0; i < 60000; i++) buryer.appendChild(document.createElement("span"))
+  const shadowed = buryer.attachShadow({ mode: "open" })
+  // Not the shadow root's first child, and behind a wrapper: a walk that only
+  // has room for one more node would queue these and drop the frame.
+  shadowed.appendChild(document.createElement("style"))
+  const wrapper = document.createElement("div")
+  shadowed.appendChild(wrapper)
+  const deepFrame = document.createElement("iframe")
+  deepFrame.id = "deep"
+  deepFrame.style.cssText = "width:160px;height:40px;border:0"
+  // Unquoted attributes, and the handler wired from here: this whole page is
+  // a template literal inside a JS file, and a nested quote is one escape
+  // away from a syntax error that silently skips the script.
+  deepFrame.srcdoc = "<button id=buried style=width:160px;height:40px>buried</button>"
+  deepFrame.addEventListener("load", () => {
+    const buried = deepFrame.contentDocument.getElementById("buried")
+    if (buried) buried.addEventListener("click", () => { buried.textContent = "PRESSED" })
+  })
+  wrapper.appendChild(deepFrame)
+  // A NESTED shadow host, whose own light subtree is large enough to spend a
+  // whole allowance: the inner root has to get one of its own.
+  const inner = document.createElement("div")
+  shadowed.appendChild(inner)
+  for (let i = 0; i < 20000; i++) inner.appendChild(document.createElement("span"))
+  const innerRoot = inner.attachShadow({ mode: "open" })
+  const nestedFrame = document.createElement("iframe")
+  nestedFrame.id = "nested"
+  nestedFrame.style.cssText = "width:120px;height:30px;border:0"
+  nestedFrame.srcdoc = "<button id=nestedbtn style=width:120px;height:30px>nested</button>"
+  nestedFrame.addEventListener("load", () => {
+    const b = nestedFrame.contentDocument.getElementById("nestedbtn")
+    if (b) b.addEventListener("click", () => { b.textContent = "PRESSED" })
+  })
+  innerRoot.appendChild(nestedFrame)
+</script>
 </main>
 <script>
   // What a React-style page does to a field: track the value on the instance
@@ -696,6 +769,693 @@ try {
       "the wrapped method keeps its name, and the page sees neither world global",
       JSON.parse(pageView.result.result.value),
       ["log", "undefined", "undefined"]
+    )
+  }
+
+  // ── element picker ─────────────────────────────────────────────────────
+  // The other direction: a person pointing at something on the page. Measured
+  // with REAL input (CDP's input domain, so the events are trusted and travel
+  // the engine's own path), because the two claims that matter are both about
+  // the event path — the press that chooses an element must not also reach the
+  // page, and the highlight must stay unreadable from it.
+  {
+    await run(
+      `globalThis.__picks = []; globalThis.__sent = [];
+       globalThis.__codegSend = (m) => { __sent.push(m); __picks.push(JSON.parse(m)) }; true`
+    )
+    await run(PICKER)
+    const seenByPage = await send("Runtime.evaluate", {
+      expression:
+        "JSON.stringify([typeof globalThis.__codegPicker, typeof globalThis.__codegSend])",
+      returnByValue: true,
+    })
+    check(
+      "the page sees neither the picker nor its channel",
+      JSON.parse(seenByPage.result.result.value),
+      ["undefined", "undefined"]
+    )
+
+    await run('__codegPicker.start("p1")')
+    const overlay = await send("Runtime.evaluate", {
+      expression: `(() => { const el = document.querySelector("[data-codeg-picker]");
+                            return JSON.stringify([!!el, el ? el.shadowRoot : null]) })()`,
+      returnByValue: true,
+    })
+    check(
+      "the highlight is on the page and its shadow root is closed to it",
+      JSON.parse(overlay.result.result.value),
+      [true, null]
+    )
+
+    const at = JSON.parse(
+      await run(`(() => { const r = document.getElementById("count").getBoundingClientRect();
+                          return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2,
+                                                 w: r.width, h: r.height, left: r.left, top: r.top}) })()`)
+    )
+    const pressedBefore = await run(
+      'document.getElementById("count").dataset.n || "0"'
+    )
+    const mouse = (type, button, buttons) =>
+      send("Input.dispatchMouseEvent", {
+        type,
+        x: at.x,
+        y: at.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+    await mouse("mouseMoved", "none", 0)
+    await mouse("mousePressed", "left", 1)
+    await mouse("mouseReleased", "left", 0)
+    await sleep(120)
+    const picks = JSON.parse(await run("JSON.stringify(__picks)"))
+    const picked = picks[0]?.payload
+    check(
+      "a pick reports the element the pointer was on",
+      [
+        picks.length,
+        picks[0]?.kind,
+        picks[0]?.top,
+        picked?.id,
+        picked?.tag,
+        picked?.label,
+        picked?.selector,
+        picked?.text,
+        picked?.html?.startsWith('<button id="count"'),
+        picked?.path?.slice(-2).join(" > "),
+      ],
+      [
+        1,
+        "pick",
+        true,
+        "p1",
+        "button",
+        "button#count",
+        "#count",
+        "Count",
+        true,
+        "section#act > button#count",
+      ]
+    )
+    check(
+      "the pick carries the box a screenshot would be cropped to",
+      [
+        Math.abs(picked.rect.width - at.w) < 1,
+        Math.abs(picked.rect.x - at.left) < 1,
+        picked.viewport.width > 0,
+        picked.styles.length,
+        picked.styles[0].name,
+      ],
+      [true, true, true, 16, "display"]
+    )
+    // The whole point of swallowing the press: the page's own handlers for
+    // the element being chosen must not run.
+    check(
+      "choosing an element does not press it",
+      await run('document.getElementById("count").dataset.n || "0"'),
+      pressedBefore
+    )
+    check(
+      "the highlight is taken down once something is picked",
+      await run('!!document.querySelector("[data-codeg-picker]")'),
+      false
+    )
+
+    // The person armed the pick, so something IS going to be handed over —
+    // which is exactly why the page must not be the one choosing what. A
+    // click the page dispatches itself decides nothing.
+    await run('__codegPicker.start("forged")')
+    await send("Runtime.evaluate", {
+      expression: 'document.getElementById("exp").click()',
+      returnByValue: true,
+    })
+    await sleep(80)
+    check(
+      "a click the page dispatched itself does not choose",
+      [
+        JSON.parse(await run("JSON.stringify(__picks)")).length - 1,
+        await run('!!document.querySelector("[data-codeg-picker]")'),
+      ],
+      [0, true]
+    )
+    await run("__codegPicker.stop()")
+
+    // A frame's events are dispatched in ITS window and never reach a listener
+    // here, so the picker covers every visible frame with a patch of overlay.
+    // Without it, choosing something over an iframe presses whatever is under
+    // the pointer inside it.
+    await run('__codegPicker.start("frame")')
+    const frameBox = JSON.parse(
+      await run(`(() => { const el = document.getElementById("frame");
+                          el.scrollIntoView({block: "center"});
+                          const r = el.getBoundingClientRect();
+                          return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2}) })()`)
+    )
+    const frameMouse = (type, button, buttons) =>
+      send("Input.dispatchMouseEvent", {
+        type,
+        x: frameBox.x,
+        y: frameBox.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+    // The patch over a frame is placed on the next paint, which the move
+    // schedules; the press has to come after that frame.
+    await frameMouse("mouseMoved", "none", 0)
+    await sleep(80)
+    await frameMouse("mousePressed", "left", 1)
+    await frameMouse("mouseReleased", "left", 0)
+    await sleep(120)
+    const overFrame = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a press over a frame picks the frame, and does not reach into it",
+      [
+        overFrame[overFrame.length - 1]?.payload.tag,
+        overFrame[overFrame.length - 1]?.payload.label,
+        await run(
+          `(() => { const d = document.getElementById("frame").contentDocument;
+                    const b = d && d.getElementById("inner");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      ["iframe", "iframe#frame", "inner"]
+    )
+    check(
+      "…and forty decoy frames in front of it change nothing, because nothing is enumerated",
+      await run('document.querySelectorAll("iframe").length'),
+      41
+    )
+
+    // …and one inside an OPEN shadow root whose host carries more light
+    // children than the walk's queue holds. Any order that takes light
+    // content first never reaches the shadow root, and the frame inside it
+    // goes uncovered — measured: inverting the two pushes makes this check
+    // report the wrong frame AND press the button inside the buried one.
+    await run('__codegPicker.start("deep")')
+    const deepBox = JSON.parse(
+      await run(`(() => { const host = document.getElementById("shadowed");
+                          host.scrollIntoView({block: "center"});
+                          const r = host.shadowRoot.querySelector("#deep").getBoundingClientRect();
+                          return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2}) })()`)
+    )
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: deepBox.x,
+      y: deepBox.y,
+      button: "none",
+      buttons: 0,
+    })
+    await sleep(140)
+    for (const [type, button, buttons] of [
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: deepBox.x,
+        y: deepBox.y,
+        button,
+        buttons,
+        clickCount: 1,
+      })
+    }
+    await sleep(140)
+    const deep = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a frame inside an open shadow root its host tried to bury is covered too",
+      [
+        deep[deep.length - 1]?.payload.label,
+        await run(
+          `(() => { const f = document.getElementById("shadowed").shadowRoot.querySelector("#deep");
+                    const b = f.contentDocument && f.contentDocument.getElementById("buried");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      ["iframe#deep", "buried"]
+    )
+
+    // …and one more boundary down, behind a light subtree of its own. Every
+    // scope needs an allowance of its own or this is the one that starves.
+    await run('__codegPicker.start("nested")')
+    const nestedBox = JSON.parse(
+      await run(`(() => { const outer = document.getElementById("shadowed").shadowRoot;
+                          const host = outer.querySelector("div:last-of-type");
+                          host.scrollIntoView({block: "center"});
+                          const r = host.shadowRoot.querySelector("#nested").getBoundingClientRect();
+                          return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2}) })()`)
+    )
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: nestedBox.x,
+      y: nestedBox.y,
+      button: "none",
+      buttons: 0,
+    })
+    await sleep(140)
+    for (const [type, button, buttons] of [
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: nestedBox.x,
+        y: nestedBox.y,
+        button,
+        buttons,
+        clickCount: 1,
+      })
+    }
+    await sleep(140)
+    const nested = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a frame two shadow boundaries down is covered as well",
+      [
+        nested[nested.length - 1]?.payload.label,
+        await run(
+          `(() => { const outer = document.getElementById("shadowed").shadowRoot;
+                    const f = outer.querySelector("div:last-of-type").shadowRoot.querySelector("#nested");
+                    const b = f.contentDocument && f.contentDocument.getElementById("nestedbtn");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      ["iframe#nested", "nested"]
+    )
+
+    // The overlay takes the pointer events, so the page can only scroll if the
+    // picker hands the scroll on. A person who cannot scroll to the thing they
+    // want to pick cannot pick it.
+    await run("window.scrollTo(0, 0)")
+    await run('__codegPicker.start("wheel")')
+    const scrolledFrom = await run("window.scrollY")
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: 40,
+      y: 120,
+      deltaX: 0,
+      deltaY: 300,
+      button: "none",
+      buttons: 0,
+    })
+    await sleep(160)
+    // A scroller UNDER the pointer is the case that needs the forwarding: the
+    // overlay is not inside it, so without a hand-off the engine would scroll
+    // the page instead of the panel the person is pointing at.
+    const panelAt = JSON.parse(
+      await run(`(() => { const el = document.getElementById("panel");
+                          el.scrollIntoView({block: "center"});
+                          const r = el.getBoundingClientRect();
+                          return JSON.stringify({x: r.left + 20, y: r.top + 20}) })()`)
+    )
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: panelAt.x,
+      y: panelAt.y,
+      deltaX: 0,
+      deltaY: 200,
+      button: "none",
+      buttons: 0,
+    })
+    await sleep(160)
+    check(
+      "scrolling still works while a pick is armed — the page, and the panel under the pointer",
+      [
+        (await run("window.scrollY")) > scrolledFrom,
+        (await run('document.getElementById("panel").scrollTop')) > 0,
+        JSON.parse(await run("JSON.stringify(__picks)")).length - nested.length,
+      ],
+      [true, true, 0]
+    )
+    await run("__codegPicker.stop()")
+
+    // `position: fixed` stops meaning "the viewport" the moment an ancestor
+    // has a transform. A page that slides its root element would slide the
+    // overlay off with it and leave a strip where a press reaches the page.
+    await run("window.scrollTo(0, 0)")
+    await send("Runtime.evaluate", {
+      expression:
+        'document.documentElement.style.transform = "translate(200px, 100px)"',
+      returnByValue: true,
+    })
+    await run('__codegPicker.start("moved")')
+    await sleep(120)
+    const covered = JSON.parse(
+      await run(`JSON.stringify((() => {
+        const h = document.querySelector("[data-codeg-picker]");
+        const r = h.getBoundingClientRect();
+        return [Math.round(r.left), Math.round(r.top),
+                Math.abs(r.width - window.innerWidth) < 2,
+                Math.abs(r.height - window.innerHeight) < 2]
+      })())`)
+    )
+    check(
+      "a transform on the root element cannot slide the overlay off the viewport",
+      covered,
+      [0, 0, true, true]
+    )
+    await run("__codegPicker.stop()")
+    await send("Runtime.evaluate", {
+      expression: 'document.documentElement.style.transform = ""',
+      returnByValue: true,
+    })
+
+    // A page that took pointer capture before the pick started makes every
+    // pointer event name the element it captured to, wherever the pointer
+    // really is. Asking the document instead of the event is what keeps the
+    // pick honest.
+    await run("window.scrollTo(0, 0)")
+    const captureAt = JSON.parse(
+      await run(`(() => { const el = document.getElementById("exp");
+                          el.scrollIntoView({block: "center"});
+                          const r = el.getBoundingClientRect();
+                          const c = document.getElementById("count").getBoundingClientRect();
+                          return JSON.stringify({x: r.left + 4, y: r.top + 4,
+                                                 cx: c.left + 4, cy: c.top + 4}) })()`)
+    )
+    await run('__codegPicker.start("captured")')
+    // The page grabs the pointer for #count while the pointer is over #exp.
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: captureAt.cx,
+      y: captureAt.cy,
+      button: "none",
+      buttons: 0,
+    })
+    await send("Runtime.evaluate", {
+      expression: `(() => { const el = document.getElementById("count");
+                            window.addEventListener("pointerdown", (e) => {
+                              try { el.setPointerCapture(e.pointerId) } catch { void 0 }
+                            }, true); return true })()`,
+      returnByValue: true,
+    })
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: captureAt.x,
+        y: captureAt.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+    }
+    await sleep(140)
+    const captured = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "pointer capture cannot make a press report the captured element",
+      captured[captured.length - 1]?.payload.label,
+      "button#exp"
+    )
+
+    // The overlay claims the maximum z-index, so what decides between it and
+    // a page element that claims the same is tree order. A page that appends
+    // its own frame after ours would otherwise paint over the overlay and
+    // take the press into itself.
+    await run("window.scrollTo(0, 0)")
+    await run('__codegPicker.start("cover")')
+    await send("Runtime.evaluate", {
+      expression: `(() => {
+        const cover = document.createElement("iframe")
+        cover.id = "cover"
+        cover.style.cssText = "position:fixed;left:0;top:0;width:200px;height:80px;border:0;z-index:2147483647"
+        cover.srcdoc = "<button id=coverbtn style=width:200px;height:80px>cover</button>"
+        cover.addEventListener("load", () => {
+          const b = cover.contentDocument.getElementById("coverbtn")
+          if (b) b.addEventListener("click", () => { b.textContent = "PRESSED" })
+        })
+        document.documentElement.appendChild(cover)
+        return true })()`,
+      returnByValue: true,
+    })
+    await sleep(200)
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: 100,
+        y: 40,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+    }
+    await sleep(160)
+    const covering = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "a frame the page appends after the overlay cannot take the press",
+      [
+        covering[covering.length - 1]?.payload.label,
+        await run(
+          `(() => { const f = document.getElementById("cover");
+                    const b = f.contentDocument && f.contentDocument.getElementById("coverbtn");
+                    return b ? b.textContent : "no frame document" })()`
+        ),
+      ],
+      ["iframe#cover", "cover"]
+    )
+    await run('document.getElementById("cover").remove()')
+
+    // A pick ends on the first click, and someone who double-clicks has
+    // already sent the second one. It must not land on the page.
+    await run(
+      'document.getElementById("count").scrollIntoView({block: "center"})'
+    )
+    const twiceAt = JSON.parse(
+      await run(`(() => { const r = document.getElementById("count").getBoundingClientRect();
+                          return JSON.stringify({x: r.left + 4, y: r.top + 4}) })()`)
+    )
+    const pressedTwiceBefore = await run(
+      'document.getElementById("count").dataset.n || "0"'
+    )
+    await run('__codegPicker.start("twice")')
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: twiceAt.x,
+      y: twiceAt.y,
+      button: "none",
+      buttons: 0,
+    })
+    for (const count of [1, 2]) {
+      for (const [type, buttons] of [
+        ["mousePressed", 1],
+        ["mouseReleased", 0],
+      ]) {
+        await send("Input.dispatchMouseEvent", {
+          type,
+          x: twiceAt.x,
+          y: twiceAt.y,
+          button: "left",
+          buttons,
+          clickCount: count,
+        })
+      }
+    }
+    await sleep(160)
+    const twice = JSON.parse(await run("JSON.stringify(__picks)"))
+    check(
+      "the second half of a double-click neither picks again nor presses",
+      [
+        twice[twice.length - 1]?.payload.label,
+        await run('document.getElementById("count").dataset.n || "0"'),
+      ],
+      ["button#count", pressedTwiceBefore]
+    )
+    // Let the drain window close before the next section.
+    await sleep(800)
+
+    // Keys belong to the picker while it is armed. Enter in a text field
+    // submits its form with no click for the picker to cancel, so the key
+    // itself has to be eaten.
+    await run('__codegPicker.start("keys")')
+    await run('document.getElementById("name").focus()')
+    for (const type of ["keyDown", "char", "keyUp"]) {
+      await send("Input.dispatchKeyEvent", {
+        type,
+        key: "Enter",
+        code: "Enter",
+        text: "\r",
+        windowsVirtualKeyCode: 13,
+        nativeVirtualKeyCode: 13,
+      })
+    }
+    await sleep(100)
+    check(
+      "Enter while armed neither submits the form nor picks anything",
+      [
+        JSON.parse(await run("JSON.stringify(__picks)")).length - twice.length,
+        await run('document.getElementById("f").dataset.submitted ?? "none"'),
+      ],
+      // Nothing new reported, and the form still shows the submission an
+      // EARLIER section made — this one did not add to it.
+      [0, "Grace"]
+    )
+    await run("__codegPicker.stop()")
+
+    // The page can reach the host node (it is in its DOM) and try to make it
+    // hit-testable, so that every press lands on the overlay. What it must
+    // not be able to do is make a press over one element report another: the
+    // element under the pointer is looked up, never carried over from the
+    // last thing hovered.
+    await run('__codegPicker.start("meddled")')
+    const hoverAt = JSON.parse(
+      await run(`(() => { const el = document.getElementById("count");
+                          el.scrollIntoView({block: "center"});
+                          const r = el.getBoundingClientRect();
+                          const e = document.getElementById("exp").getBoundingClientRect();
+                          return JSON.stringify({ax: r.left + 4, ay: r.top + 4, bx: e.left + 4, by: e.top + 4}) })()`)
+    )
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: hoverAt.ax,
+      y: hoverAt.ay,
+      button: "none",
+      buttons: 0,
+    })
+    await sleep(60)
+    await send("Runtime.evaluate", {
+      // The page's own world, reaching for our node.
+      expression: `(() => { const h = document.querySelector("[data-codeg-picker]");
+                            h.style.cssText = "position:fixed;inset:0;pointer-events:auto;z-index:2147483647";
+                            return true })()`,
+      returnByValue: true,
+    })
+    for (const [type, button, buttons] of [
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: hoverAt.bx,
+        y: hoverAt.by,
+        button,
+        buttons,
+        clickCount: 1,
+      })
+    }
+    await sleep(120)
+    const meddled = JSON.parse(await run("JSON.stringify(__picks)"))
+    const meddledPick = meddled[meddled.length - 1]?.payload
+    check(
+      "a page that makes the overlay hit-testable cannot make a press report another element",
+      [
+        meddledPick?.cancelled === true || meddledPick?.label === "button#exp",
+        meddledPick?.label !== "button#count",
+      ],
+      [true, true]
+    )
+    await run("__codegPicker.stop()")
+
+    // A field cut between the halves of a surrogate pair would put a lone
+    // surrogate escape in the JSON, which the host's parser refuses outright
+    // — the whole report, lost to one emoji.
+    await run(`(() => { const el = document.getElementById("emoji");
+                        el.setAttribute("role", "a".repeat(63) + "\u{1F600}b");
+                        el.scrollIntoView({block: "center"}); return true })()`)
+    await run('__codegPicker.start("emoji")')
+    const emojiAt = JSON.parse(
+      await run(`(() => { const r = document.getElementById("emoji").getBoundingClientRect();
+                          return JSON.stringify({x: r.left + 2, y: r.top + 2}) })()`)
+    )
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: emojiAt.x,
+        y: emojiAt.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+    }
+    await sleep(120)
+    check(
+      "a field cut mid-emoji still parses as JSON on the other side",
+      JSON.parse(
+        await run(`JSON.stringify((() => {
+          const m = __sent[__sent.length - 1] || "";
+          const p = __picks[__picks.length - 1]?.payload || {};
+          let ok = true; try { JSON.parse(m) } catch { ok = false }
+          const role = String(p.role || "");
+          const tail = role.charCodeAt(role.length - 2);
+          return [ok, p.label, role.length, tail >= 0xd800 && tail <= 0xdbff]
+        })())`)
+      ),
+      // Parses, names the element, cut to 63 + the ellipsis rather than 64,
+      // and does not end on half a character.
+      [true, "div#emoji", 64, false]
+    )
+
+    const before = JSON.parse(await run("JSON.stringify(__picks)")).length
+    // A page can make the report enormous — every field is capped in
+    // CHARACTERS, and one character can cost six bytes once JSON escapes it.
+    // The channel drops an oversized message, which would leave the person
+    // waiting on a pick they made, so the picker sheds and says that it did.
+    await run(`(() => { const el = document.getElementById("fat");
+                        for (let i = 0; i < 30; i++) el.setAttribute("data-a" + i, "\u0001".repeat(400));
+                        el.textContent = "\u0001".repeat(6000); return true })()`)
+    await run('__codegPicker.start("fat")')
+    const fatBox = JSON.parse(
+      await run(`(() => { const el = document.getElementById("fat");
+                          el.scrollIntoView({block: "center"});
+                          const r = el.getBoundingClientRect();
+                          return JSON.stringify({x: r.left + 2, y: r.top + 2}) })()`)
+    )
+    for (const [type, button, buttons] of [
+      ["mouseMoved", "none", 0],
+      ["mousePressed", "left", 1],
+      ["mouseReleased", "left", 0],
+    ]) {
+      await send("Input.dispatchMouseEvent", {
+        type,
+        x: fatBox.x,
+        y: fatBox.y,
+        button,
+        buttons,
+        clickCount: type === "mouseMoved" ? 0 : 1,
+      })
+    }
+    await sleep(150)
+    check(
+      "a report the page made enormous still fits the channel, once, and says it was cut",
+      JSON.parse(
+        await run(`JSON.stringify((() => {
+          const m = __sent[__sent.length - 1] || "";
+          const p = __picks[__picks.length - 1]?.payload || {};
+          return [__picks.length - ${before}, new TextEncoder().encode(m).length <= 65536,
+                  p.tag, p.label, p.trimmed === true]
+        })())`)
+      ),
+      [1, true, "div", "div#fat", true]
+    )
+
+    await run('__codegPicker.start("p2")')
+    await send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Escape",
+      code: "Escape",
+      windowsVirtualKeyCode: 27,
+      nativeVirtualKeyCode: 27,
+    })
+    await sleep(80)
+    const after = JSON.parse(await run("JSON.stringify(__picks)"))
+    const last = after[after.length - 1]?.payload
+    check(
+      "Escape calls the pick off, and says which one",
+      [
+        last?.cancelled,
+        last?.id,
+        await run('!!document.querySelector("[data-codeg-picker]")'),
+      ],
+      [true, "p2", false]
     )
   }
 

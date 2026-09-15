@@ -6052,6 +6052,26 @@
       "activityCount": "{count} 次",
       "expand": "还有 {count} 条",
       "collapse": "收起"
+    },
+    "handoff": {
+      "send": "把这个页面发给对话",
+      "sendLabel": "发给对话",
+      "noConversation": "先打开一个对话，才能把页面发过去",
+      "pickElement": "选择一个元素…",
+      "screenshot": "发送一张截图",
+      "consoleErrors": "发送控制台报错",
+      "consoleClean": "这个页面没有出错",
+      "picking": "选择中…",
+      "pickingHint": "在页面上点一个元素，或按 Esc 结束",
+      "pickingCancel": "结束选择",
+      "sent": "已加入对话",
+      "failed": "这个页面发不过去",
+      "noConsoleErrors": "这个页面没有打印过报错",
+      "chipElement": "页面元素",
+      "chipScreenshot": "页面截图",
+      "chipConsole": "{count, plural, other {# 条控制台报错}}",
+      "gone": "那个对话已经关掉了",
+      "consoleErrorsCount": "{count, plural, other {发送 # 条控制台报错}}"
     }
   },
   "browser": {

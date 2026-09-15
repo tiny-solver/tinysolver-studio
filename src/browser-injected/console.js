@@ -170,7 +170,15 @@
     }
   }
   function capString(text, limit) {
-    return text.length > limit ? text.slice(0, limit) + "…" : text
+    return text.length > limit ? text.slice(0, cutAt(text, limit)) + "…" : text
+  }
+  // Never cut between the halves of a surrogate pair: `JSON.stringify` would
+  // emit an escape for half a character and the host's parser refuses the
+  // whole message, so one emoji in the wrong place would cost the line rather
+  // than one character of it.
+  function cutAt(text, limit) {
+    var last = text.charCodeAt(limit - 1)
+    return last >= 0xd800 && last <= 0xdbff ? limit - 1 : limit
   }
   function isNode(value) {
     return (
@@ -371,7 +379,9 @@
     return out.join(" ")
   }
   function cap(text) {
-    return text.length > MAX_TEXT ? text.slice(0, MAX_TEXT) + "…" : text
+    return text.length > MAX_TEXT
+      ? text.slice(0, cutAt(text, MAX_TEXT)) + "…"
+      : text
   }
 
   // ---- forwarding -------------------------------------------------------

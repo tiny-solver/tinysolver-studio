@@ -24,6 +24,7 @@ import {
   recordBrowserAgentActivity,
   removeBrowserTabState,
   requestBrowserFind,
+  setBrowserConsoleErrors,
   setBrowserTabNotice,
   setBrowserTabState,
   setDocGuestState,
@@ -32,6 +33,7 @@ import {
   BROWSER_AGENT_ACTIVITY_EVENT,
   BROWSER_AGENT_GRANT_EVENT,
   BROWSER_CLOSED_EVENT,
+  BROWSER_CONSOLE_ERRORS_EVENT,
   BROWSER_DOC_STATE_EVENT,
   BROWSER_DOWNLOAD_EVENT,
   BROWSER_NAVIGATION_BLOCKED_EVENT,
@@ -42,6 +44,7 @@ import {
   type AgentActivityPayload,
   type AgentGrantPayload,
   type BrowserClosedPayload,
+  type BrowserConsoleErrorsPayload,
   type BrowserDownload,
   type BrowserNavigationBlockedPayload,
   type BrowserOpenRequestPayload,
@@ -75,6 +78,9 @@ import { getCurrentWindowLabel } from "@/lib/browser/window-label"
  *   own sharing with it
  * - `browser://agent-activity` → the activity strip of the tab an agent
  *   reached for
+ * - `browser://console-errors` → the mark on the "send to chat" control of a
+ *   tab whose page has printed an error, and its removal when a new document
+ *   commits
  *
  * It also carries two preferences the other way: the user's site rules (the
  * backend enforces `block` on every navigation a tab attempts) and the
@@ -242,6 +248,15 @@ export function BrowserEventsBridge() {
           BROWSER_AGENT_ACTIVITY_EVENT,
           (activity) => {
             recordBrowserAgentActivity(activity)
+          }
+        ),
+        transport.subscribe<BrowserConsoleErrorsPayload>(
+          BROWSER_CONSOLE_ERRORS_EVENT,
+          (payload) => {
+            setBrowserConsoleErrors(
+              browserWorkspaceTabId(payload.tabId),
+              payload.errors
+            )
           }
         ),
         transport.subscribe<BrowserOpenRequestPayload>(
