@@ -3054,6 +3054,7 @@
         "searchModel": "搜索模型...",
         "searchModelAria": "搜索模型",
         "modelListLabel": "模型",
+        "recommendedBadge": "推荐",
         "noModels": "未找到模型",
         "cancel": "取消",
         "send": "发送",

@@ -4023,6 +4023,7 @@ mod tests {
                     options: vec![],
                     groups: vec![],
                 }),
+                recommended_value: None,
             }],
         });
         s.apply_event(&AcpEvent::UsageUpdate {

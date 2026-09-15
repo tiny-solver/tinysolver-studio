@@ -787,10 +787,12 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // adapter goes 2.1.257 → 2.1.270 (`manifest.json` `version`).
             //
             // (k) `recommendedValue` (upstream #1111), the release's headline
-            // and a NEW AIR capability codeg now advertises — for claude ALONE,
-            // because codex-acp 1.10.0's bundle contains zero occurrences of the
-            // string. It is opt-in in both directions: the adapter transforms
-            // nothing unless the client names it in
+            // and a NEW AIR capability codeg now advertises — to claude here,
+            // and to codex from 1.11.0, which shipped its own half of the same
+            // capability (see the codex entry (a)); 1.10.0's bundle contained
+            // zero occurrences of the string, so this was claude-only for
+            // exactly one pin. It is opt-in in both directions: the adapter
+            // transforms nothing unless the client names it in
             // `clientCapabilities._meta.jetbrains.air.capabilities`, and it
             // re-advertises the same name in its own initialize `_meta`.
             //
@@ -1198,9 +1200,76 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // are still not adopted, and there is still no `engines.node`, so
             // the 20.0.0 floor is retained. `@openai/codex` moves ^0.152 →
             // ^0.153.3 (one minor plus patches).
+            //
+            // 1.11.0 is a SMALL bump — the whole bundle diff is +148/-63 lines,
+            // and the literal-set delta is six strings in (`recommendedValue`,
+            // `thread/turns/list`, `paginated`, `legacy`, `desc`, the version)
+            // against three out (`GPT`, `Mini`, the version). Four changes reach
+            // codeg:
+            //
+            // (a) AIR **`recommendedValue`** — the reason for the bump, and the
+            // only new client-facing surface. `createSessionConfigOptions` now
+            // attaches `_meta.jetbrains.air = {version: 1, recommendedValue}` to
+            // the `model` option (the model codex marks `isDefault`) and to
+            // `reasoning_effort` (the CURRENT model's `defaultReasoningEffort`).
+            // The effort one therefore re-derives on a model switch, and it
+            // arrives on the `session/set_config_option` RESPONSE rather than as
+            // a separate `config_option_update` — measured live: switching
+            // `gpt-6-astra` → `gpt-5.6-luna` moved the effort recommendation
+            // `low` → `medium` while the model one stayed `gpt-6-astra`.
+            // Both paths land in `map_session_config_option`. Bilaterally gated:
+            // nothing is attached unless the client lists the string, which
+            // `build_client_capabilities` does for BOTH AIR speakers —
+            // claude-agent-acp implements the same capability from 0.76.0 (see
+            // the claude entry (k), where it also retires the `default` row).
+            // See `build_client_capabilities` for the live three-run trace and
+            // why it is safe.
+            //
+            // (b) Model display names are REFORMATTED, and codeg shows them
+            // verbatim. `MODEL_NAME_TOKEN_OVERRIDES` (gpt→GPT, mini→Mini,
+            // codex→Codex, dashes kept) is replaced by `formatModelDisplayName`,
+            // which STRIPS a leading `gpt-`, splits on `[-/]+` and title-cases
+            // the rest. Measured on the same account: `GPT-6-Astra` /
+            // `GPT-5.6-Sol` / `GPT-5.5` became `6 Astra` / `5.6 Sol` / `5.5`.
+            // Non-`gpt-` names are untouched. This is display-only: the option
+            // VALUES (`gpt-6-astra`, …) are unchanged, and the model picker
+            // groups by value prefix (`lib/model-config-groups.ts`), so nothing
+            // regroups — but the composer chip now reads `5.5` rather than
+            // `GPT-5.5`, which is a deliberate upstream change, not a codeg bug.
+            //
+            // (c) `session/load` history now pages through `thread/turns/list`
+            // (50/page, `sortDirection: "desc"`, `itemsView: "full"`, with a
+            // repeated-cursor guard) whenever the thread reports
+            // `historyMode: "paginated"`, instead of one `thread/read
+            // {includeTurns: true}`. `session/resume`, `session/fork` and the
+            // audit fork additionally pass `excludeTurns: true`, so the turns no
+            // longer ride the resume response at all. codeg's codex sessions
+            // take the resume path and do not drain a replay (see the "No drain"
+            // note in connection.rs), so this is invisible to the timeline and
+            // strictly cheaper on long threads.
+            //
+            // (d) A standalone MCP-elicitation tool call is now FINALIZED. When
+            // codex falls back to `session/request_permission` for an
+            // elicitation — a message-only form, or a `url` elicitation, both of
+            // which codeg hits because it advertises `elicitation.form` but
+            // deliberately not `elicitation.url` — 1.10.0 posted a `pending`
+            // tool call and never updated it, leaving it pending for the life of
+            // the connection. 1.11.0 answers with a `tool_call_update`
+            // (`completed`, `rawOutput: {action}`) and the request now carries a
+            // `title` ("MCP tool call approval" / "Question from MCP server" /
+            // "MCP server requests to open a URL") plus `rawInput.description`.
+            // Pure gain for codeg's permission card and tool-call row; no client
+            // change needed.
+            //
+            // Everything else holds: no literal was removed except the two
+            // model-name tokens, steering still ships no `promptRequired`
+            // (tarball grep: zero hits), `agentFileChangeReport` and native
+            // subagent sessions are still not adopted, there is still no
+            // `engines.node` (so the 20.0.0 floor stays), and `@openai/codex`
+            // moves ^0.153.3 → ^0.153.4 (a patch).
             distribution: AgentDistribution::Npx {
-                version: "1.10.0",
-                package: "@agentclientprotocol/codex-acp@1.10.0",
+                version: "1.11.0",
+                package: "@agentclientprotocol/codex-acp@1.11.0",
                 cmd: "codex-acp",
                 args: &[],
                 env: &[],
@@ -2253,8 +2322,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Codex,
-            "1.10.0",
-            "@agentclientprotocol/codex-acp@1.10.0",
+            "1.11.0",
+            "@agentclientprotocol/codex-acp@1.11.0",
             Some("20.0.0"),
         );
         assert_npx_version(AgentType::Pi, "0.0.33", "pi-acp@0.0.33", Some("22.0.0"));

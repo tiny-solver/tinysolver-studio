@@ -3052,6 +3052,7 @@
         "searchModel": "搜尋模型...",
         "searchModelAria": "搜尋模型",
         "modelListLabel": "模型",
+        "recommendedBadge": "推薦",
         "noModels": "找不到模型",
         "cancel": "取消",
         "send": "傳送",
