@@ -37,10 +37,11 @@ pub enum DeepLink {
     },
 }
 
-/// Resolved target for [`crate::commands::windows::emit_focus_conversation`].
+/// A `codeg://` link resolved to a conversation the workspace can open.
 ///
-/// Also the payload of [`take_pending_deep_link`], so it serializes in the
-/// same camelCase shape as the `workspace://focus-conversation` event.
+/// Serializes as the payload of [`take_pending_deep_link`], in the same
+/// camelCase shape as the `workspace://focus-conversation` event so both
+/// arrive at `PetFocusBridge` looking alike.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FocusTarget {
@@ -201,16 +202,30 @@ pub async fn resolve_deep_link(
     }
 }
 
-/// A resolved target that has been emitted but may not have been received.
+/// Nudge telling the workspace that a resolved deep link is waiting in
+/// [`PENDING_FOCUS`]. Deliberately carries no payload — see that doc.
+#[cfg(feature = "tauri-runtime")]
+pub const PENDING_EVENT: &str = "workspace://deep-link-pending";
+
+/// The one channel a resolved `codeg://` target travels on.
 ///
-/// `workspace://focus-conversation` is delivered only to webviews that have
-/// *already* registered a JS listener (Tauri drops the emit otherwise), so a
-/// link resolved while the workspace is still booting would vanish. That is the
-/// normal case on macOS: the launch URL arrives as `RunEvent::Opened` after the
-/// setup hook has run, i.e. after the main window was created but long before
-/// React mounts `PetFocusBridge`. Park the target here and let the frontend
-/// drain it once it is listening; the same drain discards the slot after a
-/// warm-start link so it can never re-fire on a later reload.
+/// The obvious design — emit the target like the pet panel does — cannot work
+/// here, in both directions. An emit reaches only webviews that *already*
+/// registered a JS listener (Tauri's `emit_js_filter` skips the rest and
+/// queues nothing), so a cold-start link is dropped: on macOS the launch URL
+/// arrives as `RunEvent::Opened` after the setup hook, long before React
+/// mounts `PetFocusBridge`. And an emitted target that is *also* parked can be
+/// consumed twice — once from the payload, once from the slot — or linger and
+/// re-open on a later mount.
+///
+/// So the target is only ever handed over by [`take_pending_deep_link`], which
+/// is an atomic take: the mount-time drain and every nudge-driven drain
+/// compete for one slot and exactly one of them wins. [`PENDING_EVENT`] is a
+/// bare "come and get it" — dropping it during boot costs nothing because the
+/// mount drain follows.
+///
+/// A single slot means a launch carrying several URLs focuses the last one
+/// the frontend gets to, which is all a focus operation can mean anyway.
 static PENDING_FOCUS: std::sync::Mutex<Option<FocusTarget>> = std::sync::Mutex::new(None);
 
 /// Only the desktop URL handler parks targets; `codeg-server` compiles the
@@ -222,9 +237,8 @@ fn set_pending_focus(target: FocusTarget) {
     }
 }
 
-/// Hand the workspace the deep link that was resolved before it was listening,
-/// clearing the slot. Returns `None` when the app was not opened by a link (or
-/// the live event already delivered it).
+/// Take the deep link the app was opened (or re-activated) with. Returns
+/// `None` when there was none, or when another drain already claimed it.
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub fn take_pending_deep_link() -> Option<FocusTarget> {
     PENDING_FOCUS.lock().ok().and_then(|mut slot| slot.take())
@@ -241,7 +255,7 @@ pub fn urls_from_argv(argv: &[impl AsRef<str>]) -> Vec<String> {
 #[cfg(feature = "tauri-runtime")]
 pub fn handle_raw_urls(app: &tauri::AppHandle, urls: &[String]) {
     use crate::commands::windows;
-    use tauri::Manager;
+    use tauri::{Emitter, Manager};
 
     if urls.is_empty() {
         windows::show_main_window(app);
@@ -269,16 +283,12 @@ pub fn handle_raw_urls(app: &tauri::AppHandle, urls: &[String]) {
             };
             match resolve_deep_link(&db, &link).await {
                 Ok(Some(target)) => {
-                    // Park it first: the emit below is a no-op when the
-                    // workspace webview has not subscribed yet (macOS cold
-                    // start), and `PetFocusBridge` drains the slot on mount.
-                    set_pending_focus(target.clone());
-                    if let Err(err) = windows::emit_focus_conversation(
-                        &app,
-                        target.folder_id,
-                        target.conversation_id,
-                        &target.agent,
-                    ) {
+                    // Park, then nudge. The nudge never carries the target —
+                    // see `PENDING_FOCUS` for why the slot has to be the only
+                    // channel.
+                    set_pending_focus(target);
+                    windows::show_main_window(&app);
+                    if let Err(err) = app.emit_to("main", PENDING_EVENT, ()) {
                         tracing::warn!("[deep-link] failed to signal main window: {err}");
                     }
                     focused = true;

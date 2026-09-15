@@ -35,6 +35,14 @@
       "nsis": {
         "installerHooks": "./windows/installer-hooks.nsh"
       }
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "./linux/main.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "./linux/main.desktop"
+      }
     }
   },
   "plugins": {

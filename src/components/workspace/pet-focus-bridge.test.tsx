@@ -11,8 +11,11 @@ import {
 // reassigning + rerendering simulates the provider state changing.
 let tabs: { tabsHydrated: boolean; openTab: ReturnType<typeof vi.fn> }
 let addFolderToWorkspaceById: ReturnType<typeof vi.fn>
-let capturedHandler: ((p: unknown) => void) | null = null
+let handlers: Map<string, (p: unknown) => void>
 let takePendingDeepLink: ReturnType<typeof vi.fn>
+
+const FOCUS = "workspace://focus-conversation"
+const PENDING = "workspace://deep-link-pending"
 
 vi.mock("@/contexts/tab-context", () => ({
   useTabStore: (selector: (s: typeof tabs) => unknown) => selector(tabs),
@@ -20,9 +23,9 @@ vi.mock("@/contexts/tab-context", () => ({
 }))
 vi.mock("@/lib/transport", () => ({
   getTransport: () => ({
-    subscribe: async (_event: string, cb: (p: unknown) => void) => {
-      capturedHandler = cb
-      return () => {}
+    subscribe: async (event: string, cb: (p: unknown) => void) => {
+      handlers.set(event, cb)
+      return () => handlers.delete(event)
     },
   }),
 }))
@@ -32,9 +35,19 @@ vi.mock("@/lib/deep-link", () => ({
 
 import { PetFocusBridge } from "./deep-link-bootstrap"
 
+/** One-shot backend slot, mirroring `PENDING_FOCUS`'s atomic take. */
+function parkOne(target: unknown) {
+  let slot: unknown = target
+  return vi.fn(async () => {
+    const taken = slot
+    slot = null
+    return taken
+  })
+}
+
 describe("PetFocusBridge", () => {
   beforeEach(() => {
-    capturedHandler = null
+    handlers = new Map()
     takePendingDeepLink = vi.fn(async () => null)
     addFolderToWorkspaceById = vi.fn()
     resetAppWorkspaceStore()
@@ -49,11 +62,15 @@ describe("PetFocusBridge", () => {
 
   it("queues a request that arrives before hydration and replays it", async () => {
     const { rerender } = render(<PetFocusBridge />)
-    await waitFor(() => expect(capturedHandler).toBeTruthy())
+    await waitFor(() => expect(handlers.has(FOCUS)).toBe(true))
 
     // Arrives before folders/tabs (and the independently-loading conversations
     // snapshot) are ready — must not be dropped.
-    capturedHandler!({ folderId: 7, conversationId: 42, agent: "claude_code" })
+    handlers.get(FOCUS)!({
+      folderId: 7,
+      conversationId: 42,
+      agent: "claude_code",
+    })
     expect(tabs.openTab).not.toHaveBeenCalled()
 
     // Hydration completes → queued request replays.
@@ -72,9 +89,9 @@ describe("PetFocusBridge", () => {
     useAppWorkspaceStore.setState({ foldersHydrated: true })
     tabs = { ...tabs, tabsHydrated: true }
     render(<PetFocusBridge />)
-    await waitFor(() => expect(capturedHandler).toBeTruthy())
+    await waitFor(() => expect(handlers.has(FOCUS)).toBe(true))
 
-    capturedHandler!({ folderId: 7, conversationId: 9, agent: "codex" })
+    handlers.get(FOCUS)!({ folderId: 7, conversationId: 9, agent: "codex" })
     await waitFor(() =>
       expect(tabs.openTab).toHaveBeenCalledWith(7, 9, "codex", true)
     )
@@ -82,14 +99,14 @@ describe("PetFocusBridge", () => {
   })
 
   // A `codeg://session/<id>` that reaches the backend before this component
-  // subscribes (macOS cold start) is parked there, not emitted: Tauri drops an
-  // event that has no registered listener yet.
+  // subscribes (macOS cold start) is parked there, and the nudge that went with
+  // it was dropped — the mount drain is what finds it.
   it("opens the tab for a deep link parked before it subscribed", async () => {
-    takePendingDeepLink = vi.fn(async () => ({
+    takePendingDeepLink = parkOne({
       folderId: 7,
       conversationId: 314,
       agent: "grok",
-    }))
+    })
     const { rerender } = render(<PetFocusBridge />)
 
     // Still queued while hydrating, exactly like a live request.
@@ -106,40 +123,74 @@ describe("PetFocusBridge", () => {
     )
   })
 
-  // The drain runs on every mount so a warm-start link can't leave a target
-  // behind — but the event it was emitted alongside wins if it got here first.
-  it("drains without clobbering a request the live event already queued", async () => {
-    let release: (v: null) => void = () => {}
-    takePendingDeepLink = vi.fn(
-      () =>
-        new Promise<null>((resolve) => {
-          release = resolve
-        })
-    )
+  it("opens the tab when a warm link nudges after it subscribed", async () => {
     useAppWorkspaceStore.setState({ foldersHydrated: true })
     tabs = { ...tabs, tabsHydrated: true }
     render(<PetFocusBridge />)
-    await waitFor(() => expect(capturedHandler).toBeTruthy())
+    await waitFor(() => expect(handlers.has(PENDING)).toBe(true))
 
-    capturedHandler!({ folderId: 7, conversationId: 42, agent: "codex" })
+    takePendingDeepLink = parkOne({
+      folderId: 7,
+      conversationId: 55,
+      agent: "codex",
+    })
+    handlers.get(PENDING)!(null)
+    await waitFor(() =>
+      expect(tabs.openTab).toHaveBeenCalledWith(7, 55, "codex", true)
+    )
+  })
+
+  // The slot is the only channel and the take is atomic, so a nudge racing the
+  // mount drain cannot open the same conversation twice…
+  it("opens a parked target exactly once when the nudge races the mount drain", async () => {
+    useAppWorkspaceStore.setState({ foldersHydrated: true })
+    tabs = { ...tabs, tabsHydrated: true }
+    takePendingDeepLink = parkOne({
+      folderId: 7,
+      conversationId: 77,
+      agent: "grok",
+    })
+    render(<PetFocusBridge />)
+    await waitFor(() => expect(handlers.has(PENDING)).toBe(true))
+
     await act(async () => {
-      release(null)
+      handlers.get(PENDING)!(null)
     })
 
-    await waitFor(() =>
-      expect(tabs.openTab).toHaveBeenCalledWith(7, 42, "codex", true)
-    )
-    expect(tabs.openTab).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(tabs.openTab).toHaveBeenCalledTimes(1))
+    expect(tabs.openTab).toHaveBeenCalledWith(7, 77, "grok", true)
+    // Two drains ran (mount + nudge) but only one target came back.
+    expect(takePendingDeepLink.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  // …and a link consumed on one mount cannot reappear on the next.
+  it("does not replay a consumed deep link on a later mount", async () => {
+    useAppWorkspaceStore.setState({ foldersHydrated: true })
+    tabs = { ...tabs, tabsHydrated: true }
+    takePendingDeepLink = parkOne({
+      folderId: 7,
+      conversationId: 88,
+      agent: "grok",
+    })
+    const first = render(<PetFocusBridge />)
+    await waitFor(() => expect(tabs.openTab).toHaveBeenCalledTimes(1))
+    first.unmount()
+
+    tabs = { ...tabs, openTab: vi.fn() }
+    render(<PetFocusBridge />)
+    await waitFor(() => expect(handlers.has(PENDING)).toBe(true))
+    await act(async () => {})
+    expect(tabs.openTab).not.toHaveBeenCalled()
   })
 
   it("ignores malformed payloads", async () => {
     useAppWorkspaceStore.setState({ foldersHydrated: true })
     tabs = { ...tabs, tabsHydrated: true }
     render(<PetFocusBridge />)
-    await waitFor(() => expect(capturedHandler).toBeTruthy())
+    await waitFor(() => expect(handlers.has(FOCUS)).toBe(true))
 
-    capturedHandler!({ folderId: "x", conversationId: 1, agent: "codex" })
-    capturedHandler!({ folderId: 7, conversationId: 1 }) // missing agent
+    handlers.get(FOCUS)!({ folderId: "x", conversationId: 1, agent: "codex" })
+    handlers.get(FOCUS)!({ folderId: 7, conversationId: 1 }) // missing agent
     await Promise.resolve()
     expect(tabs.openTab).not.toHaveBeenCalled()
   })

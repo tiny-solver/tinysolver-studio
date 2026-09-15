@@ -39,34 +39,51 @@ window.location.href = "codeg://session/214"
 
 ## Cold start vs already running
 
-- **Already running:** the deep link is delivered to the live process (macOS
-  Apple Event, or Windows/Linux argv through the single-instance plugin). The
-  main window is shown and `workspace://focus-conversation` opens the tab
-  without reloading.
-- **Cold start:** the URL is resolved against the database before the tab can
-  exist, so it cannot simply be emitted — Tauri delivers an event only to
-  webviews that already registered a listener, and the workspace has not
-  mounted yet. Two paths cover this, by platform:
-  - **Windows / Linux** hand the URL over as argv, which the deep-link plugin
-    parses during its own setup. It is already available when the main window
-    is created, so the window loads
-    `/workspace?folderId=…&conversationId=…&agent=…` and `DeepLinkBootstrap`
-    opens the tab after folders and tabs hydrate.
-  - **macOS** delivers the URL as an Apple Event *after* the setup hook has
-    run, so there is nothing to bake into the window path. The resolved target
-    is parked in the backend instead and `PetFocusBridge` drains it with
-    `take_pending_deep_link` as soon as it is listening.
+A resolved link cannot simply be emitted to the workspace: Tauri delivers an
+event only to webviews that have **already** registered a JS listener, and
+queues nothing for the rest. During boot that is every window. So the backend
+parks the resolved target in a single slot and sends a payload-less
+`workspace://deep-link-pending` nudge; the frontend takes the slot (an atomic
+take, so exactly one caller can ever get a given target) both on the nudge and
+once on mount, right after subscribing.
 
-The scheme is registered by the desktop installer (`CFBundleURLTypes` on
-macOS, protocol handler on Windows, `x-scheme-handler/codeg` on Linux). On
-Windows and Linux release builds the app additionally calls the plugin's
-`register_all()` at startup: Tauri's Linux bundler writes a `.desktop` whose
-`Exec` line has no `%u` field code ([tauri#16014]), so the installed package
-is advertised as the scheme owner but is launched without the URL — the
-plugin's own handler entry passes it. On Windows this also covers a
-portable/zip copy that never ran the installer.
+- **Already running:** the link reaches the live process (macOS Apple Event, or
+  Windows/Linux argv through the single-instance plugin). The nudge arrives at
+  a listening workspace, which drains the slot and opens the tab without
+  reloading.
+- **Cold start:** the nudge is dropped — nobody is listening yet — and the
+  mount drain picks the target up instead.
+- **Windows / Linux cold start** additionally has the URL available in argv
+  before the main window is even created (the deep-link plugin parses it during
+  its own setup), so the window is pointed straight at
+  `/workspace?folderId=…&conversationId=…&agent=…` and `DeepLinkBootstrap`
+  opens the tab once folders, tabs **and** the conversation list have loaded.
+  The two never both fire: whichever delivery reached the plugin before the
+  `on_open_url` listener existed is the one that wins.
 
-It is not available in `codeg-server` / browser-only mode — use the
+## Scheme registration
+
+The desktop installer registers the scheme — `CFBundleURLTypes` on macOS,
+protocol handler on Windows, `x-scheme-handler/codeg` on Linux — but the Linux
+half needs two extra pieces, because Tauri's bundler renders the `.desktop`
+`Exec` line with no field code ([tauri#15928], [tauri#16014]). Without one, the
+freedesktop spec says the launcher passes no URL, so the app is advertised as
+the scheme owner and then started empty.
+
+- `src-tauri/linux/main.desktop` is a copy of the bundler's template with
+  `Exec={{exec}} %u`, wired in through `bundle.linux.deb.desktopTemplate` and
+  `bundle.linux.rpm.desktopTemplate` (AppImage reuses the deb entry). Keep it
+  in sync with the bundler's `main.desktop` when Tauri is upgraded.
+- Windows and Linux **release** builds also call the plugin's `register_all()`
+  at startup. On Linux that writes a `NoDisplay=true` handler entry that passes
+  `%u` — a second chance for an AppImage that was never registered, though some
+  portals skip `NoDisplay` entries, which is why the packaged entry above still
+  has to be right. On Windows it adds the `HKCU` class key a portable/zip copy
+  never gets from the installer. Debug builds are skipped so a dev run cannot
+  take the scheme away from an installed Codeg.
+
+Not available in `codeg-server` / browser-only mode — use the
 `/workspace?folderId=&conversationId=&agent=` query string there.
 
+[tauri#15928]: https://github.com/tauri-apps/tauri/issues/15928
 [tauri#16014]: https://github.com/tauri-apps/tauri/issues/16014

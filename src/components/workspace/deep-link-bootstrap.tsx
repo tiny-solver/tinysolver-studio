@@ -8,21 +8,34 @@ import { takePendingDeepLink } from "@/lib/deep-link"
 import type { AgentType } from "@/lib/types"
 
 /**
- * Handles `/workspace?folderId=X&conversationId=Y&agent=Z` URLs.
- * Runs once after both folders and tabs have hydrated. The desktop app
- * also registers the `codeg://` OS scheme; a cold-start `codeg://session/<id>`
- * is resolved in Rust and lands here as this query string so the tab opens
- * after hydration instead of racing the webview subscription.
+ * Handles `/workspace?folderId=X&conversationId=Y&agent=Z` URLs. Runs once,
+ * after the workspace has loaded everything the link is checked against.
+ *
+ * On Windows and Linux this is also where a cold-start `codeg://session/<id>`
+ * arrives: the URL comes in on argv, so the backend can resolve it and point
+ * the window straight at this query string before the webview exists. (macOS
+ * learns about the link too late for that and uses {@link PetFocusBridge}'s
+ * parked-target drain instead.)
  */
 export function DeepLinkBootstrap() {
   const foldersHydrated = useAppWorkspaceStore((s) => s.foldersHydrated)
   const tabsHydrated = useTabStore((s) => s.tabsHydrated)
+  // The conversation check below is the only thing that can reject a link, and
+  // `conversations` loads on its own request, fired in parallel with the folder
+  // one (see `AppWorkspaceProvider`). Waiting for folders and tabs alone would
+  // let that request lose the race and turn a perfectly good link into a
+  // permanent "not found" — the URL is cleared on the way out, so there is no
+  // second chance. `conversationsLoading` starts true, so this also covers the
+  // very first load, not just refreshes.
+  const conversationsLoading = useAppWorkspaceStore(
+    (s) => s.conversationsLoading
+  )
   const { openTab } = useTabActions()
   const ranRef = useRef(false)
 
   useEffect(() => {
     if (ranRef.current) return
-    if (!foldersHydrated || !tabsHydrated) return
+    if (!foldersHydrated || !tabsHydrated || conversationsLoading) return
     ranRef.current = true
 
     if (typeof window === "undefined") return
@@ -55,7 +68,7 @@ export function DeepLinkBootstrap() {
 
         // Read at run time: this effect fires once when hydration completes,
         // and getState() sees exactly the lists as of that moment.
-        const { folders, addFolderToWorkspaceById, conversations } =
+        const { folders, addFolderToWorkspaceById } =
           useAppWorkspaceStore.getState()
 
         let folder = folders.find((f) => f.id === folderId)
@@ -69,12 +82,16 @@ export function DeepLinkBootstrap() {
           }
         }
 
-        const hasConv = conversations.some(
-          (c) =>
-            c.id === conversationId &&
-            c.folder_id === folderId &&
-            c.agent_type === rawAgent
-        )
+        // Re-read after the await: opening a folder refreshes the workspace,
+        // and a snapshot taken before it is stale by definition.
+        const hasConv = useAppWorkspaceStore
+          .getState()
+          .conversations.some(
+            (c) =>
+              c.id === conversationId &&
+              c.folder_id === folderId &&
+              c.agent_type === rawAgent
+          )
         if (!hasConv) {
           toast.error("Linked conversation not found")
           return
@@ -85,7 +102,7 @@ export function DeepLinkBootstrap() {
         clearUrl()
       }
     })()
-  }, [foldersHydrated, tabsHydrated, openTab])
+  }, [foldersHydrated, tabsHydrated, conversationsLoading, openTab])
 
   return null
 }
@@ -102,12 +119,14 @@ type FocusRequest = {
  * command after bringing the main window forward) and opens the conversation
  * via `openTab` — no URL reload, so in-memory tab/session state survives.
  *
- * Also the landing point for an OS `codeg://session/<id>` deep link that the
- * backend resolved before this subscription existed. Tauri delivers an event
- * only to webviews that already registered a listener, so the emit for a
- * cold-start link is dropped on the floor; the backend parks the target and
- * this drains it right after subscribing. The drain also runs on every mount,
- * which is what clears a target left behind by a warm-start link.
+ * Also where an OS `codeg://session/<id>` deep link lands. That one does NOT
+ * travel in an event payload: Tauri delivers an event only to webviews that
+ * already registered a listener, so the emit for a cold-start link is dropped
+ * on the floor. The backend parks the resolved target and sends a payload-less
+ * `workspace://deep-link-pending` nudge instead; `takePendingDeepLink` is an
+ * atomic take, so the mount drain and every nudge-driven drain compete for one
+ * slot and exactly one of them opens the tab. Nothing can be replayed onto a
+ * later mount, and nothing opens twice.
  *
  * Latest workspace state is held in a ref so the single subscription always
  * sees fresh state without re-subscribing on every change. A request that
@@ -167,13 +186,25 @@ export function PetFocusBridge() {
   }, [foldersHydrated, tabsHydrated, attempt])
 
   useEffect(() => {
-    let dispose: (() => void) | null = null
+    const disposers: Array<() => void> = []
     let cancelled = false
+
+    // Claim the parked deep link, if this call is the one that gets it.
+    const drainDeepLink = async () => {
+      const parked = await takePendingDeepLink()
+      // Nothing to re-park on unmount: the workspace is tearing down, so
+      // there is no tab left to open. Dropping it beats resurrecting it.
+      if (cancelled || !parked) return
+      pendingRef.current = parked
+      attempt()
+    }
 
     void (async () => {
       try {
         const { getTransport } = await import("@/lib/transport")
-        const off = await getTransport().subscribe<{
+        const transport = getTransport()
+
+        const offFocus = await transport.subscribe<{
           folderId?: number
           conversationId?: number
           agent?: string
@@ -191,26 +222,30 @@ export function PetFocusBridge() {
           pendingRef.current = { folderId, conversationId, agent }
           attempt()
         })
-        if (cancelled) off()
-        else dispose = off
+        if (cancelled) offFocus()
+        else disposers.push(offFocus)
+
+        const offPending = await transport.subscribe(
+          "workspace://deep-link-pending",
+          () => {
+            void drainDeepLink()
+          }
+        )
+        if (cancelled) offPending()
+        else disposers.push(offPending)
       } catch (err) {
         console.warn("[PetFocusBridge] subscription failed:", err)
       }
 
-      // Only now that the listener is live (or has failed) is it safe to drain
-      // the parked target: draining first would leave a window in which the
-      // backend resolves a link, finds no subscriber, and parks it into a slot
-      // nobody reads again. A live event that beat us here already filled
-      // `pendingRef`, so don't clobber it — the drain still runs, to discard.
-      const parked = await takePendingDeepLink()
-      if (cancelled || !parked || pendingRef.current) return
-      pendingRef.current = parked
-      attempt()
+      // Last, so a link resolved while the subscriptions were still being set
+      // up cannot fall between the two: whatever the dropped nudge parked is
+      // still sitting in the slot for this call to claim.
+      await drainDeepLink()
     })()
 
     return () => {
       cancelled = true
-      if (dispose) dispose()
+      for (const off of disposers) off()
     }
   }, [attempt])
 
