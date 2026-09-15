@@ -2989,7 +2989,38 @@ fn map_session_config_select_group(
     }
 }
 
+/// The `recommendedValue` an agent attached to ONE config option, out of its
+/// `_meta.jetbrains.air` envelope.
+///
+/// Envelope validation mirrors [`air_session_failure`] (integer `version >= 1`,
+/// the same check the adapters run on codeg's own advertisement), so a
+/// future-incompatible envelope yields `None` rather than a half-understood
+/// hint. The payload must be a non-blank string: codex-acp only ever writes a
+/// model id or a reasoning-effort id there, and anything else is not something
+/// a select's values could match.
+///
+/// Deliberately NOT validated against the option's own value list. The frontend
+/// marks the recommendation by equality, so a stale or unknown value marks
+/// nothing — re-deriving the membership rule here would only duplicate the
+/// adapter's own filter and could reject a shape (e.g. a grouped select) it
+/// grows later.
+fn air_recommended_value(
+    meta: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> Option<String> {
+    let air = meta?.get("jetbrains")?.get("air")?;
+    let version = air.get("version").and_then(serde_json::Value::as_i64)?;
+    if version < 1 {
+        return None;
+    }
+    let value = air
+        .get("recommendedValue")
+        .and_then(serde_json::Value::as_str)?
+        .trim();
+    (!value.is_empty()).then(|| value.to_string())
+}
+
 fn map_session_config_option(option: &SessionConfigOption) -> Option<SessionConfigOptionInfo> {
+    let recommended_value = air_recommended_value(option.meta.as_ref());
     match &option.kind {
         SessionConfigKind::Select(select) => {
             let (flat_options, groups) = match &select.options {
@@ -3025,8 +3056,12 @@ fn map_session_config_option(option: &SessionConfigOption) -> Option<SessionConf
                     options: flat_options,
                     groups,
                 }),
+                recommended_value,
             })
         }
+        // A toggle has no value list to recommend INTO — its two states are
+        // already spelled out by `current_value` — so the hint is dropped here
+        // rather than carried to a frontend with nowhere to put it.
         SessionConfigKind::Boolean(toggle) => Some(SessionConfigOptionInfo {
             id: option.id.to_string(),
             name: option.name.clone(),
@@ -3035,6 +3070,7 @@ fn map_session_config_option(option: &SessionConfigOption) -> Option<SessionConf
             kind: SessionConfigKindInfo::Boolean(SessionConfigBooleanInfo {
                 current_value: toggle.current_value,
             }),
+            recommended_value: None,
         }),
         _ => None,
     }
@@ -3306,6 +3342,9 @@ fn build_grok_effort_option(
             options,
             groups: Vec::new(),
         }),
+        // Grok's per-model default IS `current_value` here, so a recommendation
+        // would only repeat the checkmark.
+        recommended_value: None,
     })
 }
 
@@ -3402,6 +3441,8 @@ fn synthesize_grok_config_options(
                 options: model_opts,
                 groups: Vec::new(),
             }),
+            // `x.ai/sessionConfig` names no default beyond `selected`.
+            recommended_value: None,
         });
     }
     // Effort selector. With per-model `specs` (parsed from the response's
@@ -3429,6 +3470,7 @@ fn synthesize_grok_config_options(
                 options: effort_opts,
                 groups: Vec::new(),
             }),
+            recommended_value: None,
         });
     }
     if result.is_empty() {
@@ -4225,13 +4267,36 @@ fn build_client_capabilities(
     // ships". Revisit when the draft lands and the announcement carries enough
     // to rebuild the capsule — a parent tool-use id, or the child tool calls
     // arriving with one codeg has seen.
+    //
+    // codex-acp 1.11.0 adds a FOURTH, "recommendedValue", and codeg takes it —
+    // for Codex alone, because claude-agent-acp 0.75.1 does not know the string
+    // (`dist/air-extension.d.ts` exports exactly the three names above) and the
+    // convention here is to advertise nothing an agent hasn't implemented.
+    // With it, `session/new`'s `model` and `reasoning_effort` options each gain
+    // `_meta.jetbrains.air = {version: 1, recommendedValue: <value id>}` — the
+    // model codex marks `isDefault`, and the CURRENT model's
+    // `defaultReasoningEffort`. Read by [`air_recommended_value`] and rendered
+    // as a "recommended" marker beside the matching row.
+    //
+    // It is inert without the advertisement (three live runs against 1.11.0 and
+    // 1.10.0 over stdio: WITH it both options carry the block; WITHOUT it every
+    // option's `_meta` is `null`, byte-identical to 1.10.0), and purely additive
+    // with it — `currentValue` is untouched, so nothing about what is SELECTED
+    // changes. That matters most where codeg's own persisted per-agent
+    // preference pins an option: a user who once pinned `reasoning_effort: max`
+    // otherwise has no signal that the model they just switched to defaults
+    // somewhere else.
     if matches!(agent_type, AgentType::ClaudeCode | AgentType::Codex) {
+        let mut capabilities = vec!["sessionFailure", "asyncTasks"];
+        if agent_type == AgentType::Codex {
+            capabilities.push("recommendedValue");
+        }
         meta.insert(
             "jetbrains".to_string(),
             serde_json::json!({
                 "air": {
                     "version": 1,
-                    "capabilities": ["sessionFailure", "asyncTasks"],
+                    "capabilities": capabilities,
                 }
             }),
         );
@@ -15051,6 +15116,12 @@ mod tests {
             // agent's background work is still alive, and the only one that can
             // stop it.
             //
+            // "recommendedValue" (codex-acp 1.11.0) is wanted too, but ONLY
+            // from codex: claude-agent-acp 0.75.1 does not know the string
+            // (`dist/air-extension.d.ts` exports exactly the three names this
+            // test talks about), and advertising a capability an agent has not
+            // implemented is how a future meaning gets claimed by accident.
+            //
             // The other two stay out. "agentFileChangeReport"
             // (claude-agent-acp 0.69.0 / codex-acp 1.4.0) buys an extra model
             // round-trip per turn for a clamped, self-reported subset of what
@@ -15060,8 +15131,11 @@ mod tests {
             // rendering around, replacing it with an announcement that carries
             // no parent tool-use id to rebuild it from. See the reasoning at
             // the advertisement site before relaxing this.
-            let expected: Vec<serde_json::Value> =
+            let mut expected: Vec<serde_json::Value> =
                 vec!["sessionFailure".into(), "asyncTasks".into()];
+            if agent == AgentType::Codex {
+                expected.push("recommendedValue".into());
+            }
             assert_eq!(
                 capabilities, &expected,
                 "{agent:?} advertises an unexpected AIR capability set"
@@ -18383,6 +18457,7 @@ mod tests {
                 options: Vec::new(),
                 groups: Vec::new(),
             }),
+            recommended_value: None,
         };
 
         // The model comes from the `model` selector, not from whichever
@@ -18423,6 +18498,7 @@ mod tests {
                     options: Vec::new(),
                     groups: Vec::new(),
                 }),
+                recommended_value: None,
             },
             SessionConfigOptionInfo {
                 id: "auto_approve".to_string(),
@@ -18432,6 +18508,7 @@ mod tests {
                 kind: SessionConfigKindInfo::Boolean(SessionConfigBooleanInfo {
                     current_value: true,
                 }),
+                recommended_value: None,
             },
         ];
 
@@ -18466,6 +18543,97 @@ mod tests {
         }
 
         assert!(current_config_option_values(&[]).is_empty());
+    }
+
+    /// codex-acp 1.11.0's `recommendedValue` has to survive the trip from the
+    /// wire to `SessionConfigOptionInfo`, and a malformed envelope has to be
+    /// dropped rather than half-read. The JSON below is the SHAPE captured off a
+    /// live 1.11.0 `session/new` with the capability advertised — verbatim
+    /// `_meta`, one option trimmed to two values.
+    #[test]
+    fn a_select_carries_the_agents_recommended_value_only_from_a_valid_air_envelope() {
+        let option = |meta: Option<serde_json::Value>| -> SessionConfigOption {
+            let mut raw = serde_json::json!({
+                "id": "model",
+                "name": "Model",
+                "category": "model",
+                "type": "select",
+                "currentValue": "gpt-5.5",
+                "options": [
+                    {"value": "gpt-6-astra", "name": "6 Astra"},
+                    {"value": "gpt-5.5", "name": "5.5"},
+                ],
+            });
+            if let Some(meta) = meta {
+                raw["_meta"] = meta;
+            }
+            serde_json::from_value(raw).expect("config option fixture")
+        };
+        let recommended = |meta: Option<serde_json::Value>| -> Option<String> {
+            map_session_config_option(&option(meta))
+                .expect("a select always maps")
+                .recommended_value
+        };
+
+        // The real envelope. Note it names a value OTHER than `currentValue` —
+        // that is the whole point: "recommended" and "selected" are different
+        // claims, and the hint must not be collapsed into the selection.
+        assert_eq!(
+            recommended(Some(serde_json::json!({
+                "jetbrains": {"air": {"version": 1, "recommendedValue": "gpt-6-astra"}}
+            }))),
+            Some("gpt-6-astra".to_string())
+        );
+
+        // Everything malformed reads as "no recommendation", never as a
+        // half-understood one.
+        for bad in [
+            // No `_meta` at all — every agent but codex 1.11.0+, and codex
+            // itself without the advertisement.
+            None,
+            // Version missing / below the floor / not an integer: the same
+            // gate `air_session_failure` applies, mirroring what the adapters
+            // run on codeg's own advertisement.
+            Some(serde_json::json!({
+                "jetbrains": {"air": {"recommendedValue": "gpt-6-astra"}}
+            })),
+            Some(serde_json::json!({
+                "jetbrains": {"air": {"version": 0, "recommendedValue": "gpt-6-astra"}}
+            })),
+            Some(serde_json::json!({
+                "jetbrains": {"air": {"version": "1", "recommendedValue": "gpt-6-astra"}}
+            })),
+            // Right key, wrong envelope (no `air` wrapper).
+            Some(serde_json::json!({
+                "jetbrains": {"recommendedValue": "gpt-6-astra"}
+            })),
+            // Non-string and blank payloads: nothing a select's values match.
+            Some(serde_json::json!({
+                "jetbrains": {"air": {"version": 1, "recommendedValue": ["gpt-6-astra"]}}
+            })),
+            Some(serde_json::json!({
+                "jetbrains": {"air": {"version": 1, "recommendedValue": "   "}}
+            })),
+        ] {
+            assert_eq!(recommended(bad.clone()), None, "unexpected read from {bad:?}");
+        }
+
+        // A toggle has no value list to recommend into, so the hint is dropped
+        // even when the envelope is valid.
+        let toggle: SessionConfigOption = serde_json::from_value(serde_json::json!({
+            "id": "auto_approve",
+            "name": "Auto-approve",
+            "type": "boolean",
+            "currentValue": true,
+            "_meta": {"jetbrains": {"air": {"version": 1, "recommendedValue": "true"}}},
+        }))
+        .expect("boolean option fixture");
+        assert_eq!(
+            map_session_config_option(&toggle)
+                .expect("a boolean always maps")
+                .recommended_value,
+            None
+        );
     }
 
     #[test]
@@ -18839,6 +19007,7 @@ mod tests {
                 ],
                 groups: vec![],
             }),
+            recommended_value: None,
         }]
     }
 
@@ -18904,6 +19073,7 @@ mod tests {
             kind: SessionConfigKindInfo::Boolean(SessionConfigBooleanInfo {
                 current_value: false,
             }),
+            recommended_value: None,
         }];
         assert!(config_option_rejection(&toggle, "auto_approve", "true").is_none());
     }
@@ -19135,6 +19305,7 @@ mod tests {
                 ],
                 groups: Vec::new(),
             }),
+            recommended_value: None,
         }]
     }
 

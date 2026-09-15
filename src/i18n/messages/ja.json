@@ -3052,6 +3052,7 @@
         "searchModel": "モデルを検索...",
         "searchModelAria": "モデルを検索",
         "modelListLabel": "モデル",
+        "recommendedBadge": "推奨",
         "noModels": "モデルが見つかりません",
         "cancel": "キャンセル",
         "send": "送信",

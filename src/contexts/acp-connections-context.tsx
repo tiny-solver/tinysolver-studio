@@ -1101,7 +1101,12 @@ function sameConfigOptions(
       left.id !== right.id ||
       left.name !== right.name ||
       left.description !== right.description ||
-      left.category !== right.category
+      left.category !== right.category ||
+      // Rendered (the "recommended" badge), so it has to be compared or a
+      // push that changes ONLY the recommendation is swallowed and the badge
+      // goes stale. codex publishes `reasoning_effort`'s recommendation as the
+      // CURRENT model's default, so it moves on its own schedule.
+      (left.recommended_value ?? null) !== (right.recommended_value ?? null)
     ) {
       return false
     }

@@ -3052,6 +3052,7 @@
         "searchModel": "Buscar modelos...",
         "searchModelAria": "Buscar modelos",
         "modelListLabel": "Modelos",
+        "recommendedBadge": "Recomendado",
         "noModels": "No se encontraron modelos",
         "cancel": "Cancelar",
         "send": "Enviar",
