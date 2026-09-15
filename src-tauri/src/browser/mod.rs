@@ -41,6 +41,8 @@
 // renders a "browser tab" as an iframe in the user's own browser, which this
 // process has no handle on at all.
 pub mod agent;
+pub mod capture;
+pub mod console;
 pub mod types;
 
 #[cfg(feature = "tauri-runtime")]

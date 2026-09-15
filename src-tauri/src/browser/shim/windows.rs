@@ -64,6 +64,7 @@ use windows::Win32::UI::Shell::SHCreateMemStream;
 
 use super::super::agent::PointerButton;
 use super::super::channel::MessageSink;
+use super::super::console;
 use super::super::hooks::LoadFailure;
 use super::super::profile;
 use super::super::surface::{PointerFailure, PointerGesture};
@@ -89,6 +90,14 @@ pub type FrameNavigationSink = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync
 /// invisible to codeg — out of an embedded tab.
 pub type DownloadPermissionSink =
     std::sync::Arc<dyn Fn(&str, bool) -> bool + Send + Sync>;
+
+/// A page-world execution context: the frame it belongs to and the origin
+/// the engine reported for it (`None` when opaque).
+#[derive(Clone)]
+struct PageContext {
+    frame: String,
+    origin: Option<String>,
+}
 
 #[derive(Default)]
 struct SurfaceState {
@@ -123,6 +132,12 @@ struct SurfaceState {
     /// — and this map is what decides whether a message came from the main
     /// frame. The page's own session is the empty string.
     contexts: RefCell<HashMap<(String, i64), String>>,
+    /// Every OTHER execution context — the page's own world in each frame,
+    /// by the same key — with its frame and origin, so that a console line
+    /// the engine reports from one can be placed and held against the grant.
+    /// A line from a context not in here (this shim's own world, or one never
+    /// announced) is not the page's and is dropped.
+    page_contexts: RefCell<HashMap<(String, i64), PageContext>>,
     /// A world is being built by hand right now (`recover_world`), so a second
     /// look at the same document must not start building another — and if that
     /// look was turned away, `recheck` remembers to take it once the attempt is
@@ -300,13 +315,19 @@ pub fn install_world(
         "Runtime.executionContextsCleared",
         "Runtime.bindingCalled",
         "Page.frameNavigated",
+        // The page's console, from the engine itself: WebView2 is the one
+        // platform that reports it, so the page-world shim the WebKit ports
+        // inject is not needed here and would double every line.
+        "Runtime.consoleAPICalled",
+        "Runtime.exceptionThrown",
     ] {
         subscribe(&webview2, key, event)?;
     }
-    call_and_wait(&webview2, "Runtime.enable", "{}")?;
-    call_and_wait(&webview2, "Page.enable", "{}")?;
-    // The top-level frame id, the yardstick every `bindingCalled` is measured
-    // against. `Page.frameNavigated` keeps it current afterwards.
+    // The top-level frame id, the yardstick every `bindingCalled` and every
+    // console line is measured against. Taken BEFORE `Runtime.enable`: that
+    // call replays the contexts and console of a document that is already
+    // here, and a line replayed while the yardstick is still unset would be
+    // filed as a frame's. `Page.frameNavigated` keeps it current afterwards.
     let tree = call_and_wait(&webview2, "Page.getFrameTree", "{}")?;
     if let Some(id) = serde_json::from_str::<Value>(&tree)
         .ok()
@@ -314,6 +335,8 @@ pub fn install_world(
     {
         *state.main_frame.borrow_mut() = Some(id);
     }
+    call_and_wait(&webview2, "Runtime.enable", "{}")?;
+    call_and_wait(&webview2, "Page.enable", "{}")?;
     // The binding goes in first. It is registered by world NAME and needs no
     // world to exist yet, while the injection below starts building that world
     // for every document that commits from here on — including one that commits
@@ -451,6 +474,15 @@ fn on_event(key: usize, event: &str, session: &str, raw: &str) {
     let Some(state) = state(key) else {
         return;
     };
+    // A console line the size of a novel is cut to a few kilobytes further
+    // on; the one cost it could still impose is parsing it here, on the
+    // main thread, so it is not parsed.
+    if matches!(event, "Runtime.consoleAPICalled" | "Runtime.exceptionThrown")
+        && raw.len() > console::CDP_MAX_EVENT_BYTES
+    {
+        tracing::debug!("[browser] dropped a {} byte console event", raw.len());
+        return;
+    }
     let Ok(value) = serde_json::from_str::<Value>(raw) else {
         return;
     };
@@ -458,6 +490,25 @@ fn on_event(key: usize, event: &str, session: &str, raw: &str) {
         "Runtime.executionContextCreated" => {
             let context = &value["context"];
             if context["name"].as_str() != Some(WORLD_NAME) {
+                // Not this shim's. The page's own world in some frame is
+                // remembered so that what it prints can be attributed (see
+                // `page_contexts`); any other isolated world is nobody's
+                // console an agent should read.
+                if context["auxData"]["isDefault"].as_bool() == Some(false) {
+                    return;
+                }
+                if let (Some(id), Some(frame)) = (
+                    context["id"].as_i64(),
+                    context["auxData"]["frameId"].as_str(),
+                ) {
+                    state.page_contexts.borrow_mut().insert(
+                        (session.to_string(), id),
+                        PageContext {
+                            frame: frame.to_string(),
+                            origin: console::cdp_context_origin(context["origin"].as_str()),
+                        },
+                    );
+                }
                 return;
             }
             let (Some(id), Some(frame)) = (
@@ -481,18 +532,81 @@ fn on_event(key: usize, event: &str, session: &str, raw: &str) {
         }
         "Runtime.executionContextDestroyed" => {
             if let Some(id) = value["executionContextId"].as_i64() {
-                state
-                    .contexts
-                    .borrow_mut()
-                    .remove(&(session.to_string(), id));
+                let key = (session.to_string(), id);
+                state.contexts.borrow_mut().remove(&key);
+                state.page_contexts.borrow_mut().remove(&key);
             }
         }
         // Every context of the session that said so — and only that session's:
         // another target's contexts are still live.
-        "Runtime.executionContextsCleared" => state
-            .contexts
-            .borrow_mut()
-            .retain(|(held, _), _| held != session),
+        "Runtime.executionContextsCleared" => {
+            state
+                .contexts
+                .borrow_mut()
+                .retain(|(held, _), _| held != session);
+            state
+                .page_contexts
+                .borrow_mut()
+                .retain(|(held, _), _| held != session);
+        }
+        // What the page printed, from the engine. Placed by the execution
+        // context the event names — the page's world in some frame — and
+        // dropped when that context is unknown: this shim's own world (which
+        // prints nothing an agent should read) or one never announced. The
+        // line then travels through the same sink and envelope as the
+        // helper's lines on the other platforms, so `channel.rs` owns one
+        // arm and one ring for both.
+        "Runtime.consoleAPICalled" | "Runtime.exceptionThrown" => {
+            let context_id = if event == "Runtime.consoleAPICalled" {
+                value["executionContextId"].as_i64()
+            } else {
+                value["exceptionDetails"]["executionContextId"].as_i64()
+            };
+            let Some(context_id) = context_id else {
+                return;
+            };
+            let located = state
+                .page_contexts
+                .borrow()
+                .get(&(session.to_string(), context_id))
+                .cloned();
+            let Some(PageContext { frame, origin }) = located else {
+                return;
+            };
+            let main_frame = session.is_empty()
+                && state.main_frame.borrow().as_deref() == Some(frame.as_str());
+            let at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or_default();
+            let line = if event == "Runtime.consoleAPICalled" {
+                console::cdp_console_line(&value, at, main_frame, origin.clone())
+            } else {
+                console::cdp_exception_line(&value, at, main_frame, origin.clone())
+            };
+            let Some(line) = line else {
+                return;
+            };
+            let envelope = json!({
+                "kind": "console",
+                "top": main_frame,
+                "payload": {
+                    "level": line.level.as_str(),
+                    "source": serde_json::to_value(line.source).unwrap_or(Value::Null),
+                    "text": line.text,
+                    "url": line.url,
+                    "line": line.line,
+                    "column": line.column,
+                    // The origin as an address: `channel.rs` derives the
+                    // origin from `href` the way it does for the helper.
+                    "href": origin,
+                },
+            });
+            let sink = state.sink.borrow().clone();
+            if let Some(sink) = sink {
+                sink(envelope.to_string(), main_frame, key);
+            }
+        }
         "Page.frameNavigated" => {
             let frame = &value["frame"];
             // No parent = the top-level frame. Its id survives ordinary

@@ -97,11 +97,13 @@ pub fn supports_content_world(controller: &WKUserContentController) -> bool {
 }
 
 /// Register the message handler and inject `scripts` at document start in
-/// every frame. Returns `true` when an isolated world was used. Idempotent per
-/// user-content controller.
+/// every frame — in the isolated world where the engine has one — and
+/// `page_scripts` in the page's own world, whichever the case. Returns `true`
+/// when an isolated world was used. Idempotent per user-content controller.
 pub fn install_world(
     webview: &wry::WebView,
     scripts: &[&str],
+    page_scripts: &[&str],
     sink: MessageSink,
 ) -> Result<bool, String> {
     let mtm = mtm()?;
@@ -134,6 +136,7 @@ pub fn install_world(
                 );
                 controller.addUserScript(&script);
             }
+            add_page_scripts(&controller, page_scripts, mtm);
             Ok(true)
         } else {
             controller.addScriptMessageHandler_name(proto, ns_string!("codegBrowser"));
@@ -146,8 +149,32 @@ pub fn install_world(
                 );
                 controller.addUserScript(&script);
             }
+            add_page_scripts(&controller, page_scripts, mtm);
             Ok(false)
         }
+    }
+}
+
+/// Inject scripts into the PAGE world at document start, every frame: no
+/// content world, which is the page's own. Only the console shim goes this
+/// way; everything that must stay out of the page's reach uses the world
+/// above.
+///
+/// # Safety
+/// Main thread, live controller.
+unsafe fn add_page_scripts(
+    controller: &WKUserContentController,
+    page_scripts: &[&str],
+    mtm: MainThreadMarker,
+) {
+    for source in page_scripts {
+        let script = WKUserScript::initWithSource_injectionTime_forMainFrameOnly(
+            mtm.alloc(),
+            &NSString::from_str(source),
+            WKUserScriptInjectionTime::AtDocumentStart,
+            false,
+        );
+        controller.addUserScript(&script);
     }
 }
 

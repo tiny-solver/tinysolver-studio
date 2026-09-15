@@ -6,7 +6,7 @@
 // JavaScript globals, so `JSON`, `addEventListener` and friends here are
 // pristine even when the page overrides its own copies.
 //
-// It does exactly two things:
+// It does three things:
 //   1. Reports navigation state the host cannot observe natively (SPA
 //      `pushState` / `replaceState` / hash changes, document title changes)
 //      as `nav-state` messages.
@@ -17,6 +17,10 @@
 //      plain anchor into a background tab from `on_navigation`. It never
 //      cancels, rewrites or re-dispatches anything: the engine navigates, the
 //      host only decides presentation.
+//   3. Forwards what the page prints — console lines relayed by the
+//      page-world shim (`console.js`), uncaught exceptions, unhandled
+//      rejections, failed resource loads — as `console` messages, on the
+//      engines that report none of it to the host themselves.
 //
 // The host defines `__codegSend(string)` before this script runs. Messages
 // are `{ kind, payload }` JSON strings; the host treats every field as
@@ -252,6 +256,233 @@
     },
     true
   )
+
+  // ---- console -----------------------------------------------------------
+  // What the page prints, for an agent that has been given the page. WebKit
+  // reports a page's console to nobody, so a shim in the PAGE world
+  // (`console.js`) wraps `console.*` and dispatches each line on the document
+  // as a `codeg:console` event whose detail is one JSON string — the one kind
+  // of value that crosses a world boundary unchanged. This side reads the
+  // string with this world's own JSON, adds the address it came from (which
+  // the page cannot forge here) and forwards it. Uncaught exceptions,
+  // unhandled rejections and failed resource loads are heard directly: those
+  // events reach a listener in this world like `popstate` does.
+  //
+  // Where the engine does report the console to the host (WebView2, over
+  // CDP), the host sets `__codegEngineConsole` before this script runs and
+  // none of this is wired — or every line would arrive twice, once from the
+  // engine and once from here.
+  //
+  // Everything below is page-controlled: the page can dispatch the event
+  // itself, and a page in a logging loop could flood the channel, so lines
+  // are budgeted per second and the overflow is counted rather than sent.
+  var engineConsole = globalThis.__codegEngineConsole === true
+  var parse = JSON.parse
+  var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
+  var CONSOLE_BUDGET_PER_SECOND = 200
+  var CONSOLE_MAX_TEXT = 4096
+  var CONSOLE_MAX_URL = 1024
+  var CONSOLE_MAX_HREF = 2048
+  var consoleWindowStart = 0
+  var consoleSent = 0
+  var consoleDropped = 0
+  var consoleFlushTimer = null
+  function clip(value, limit) {
+    return typeof value === "string" && value.length > limit
+      ? value.slice(0, limit) + "…"
+      : value
+  }
+  function hereHref() {
+    // Long enough to keep scheme, host and port whole for the origin the
+    // host derives from it, short enough that a `data:` document's address
+    // cannot carry the message past the channel's size cap.
+    return clip(String(location.href), CONSOLE_MAX_HREF)
+  }
+  // Lines dropped over the budget are reported on the next line that goes
+  // through — or, when nothing follows, by a flush a second later, so a
+  // burst that ends in silence is not counted as a quiet page.
+  function noteDropped() {
+    consoleDropped += 1
+    if (consoleFlushTimer === null)
+      consoleFlushTimer = setTimeout(flushDropped, 1100)
+  }
+  function flushDropped() {
+    consoleFlushTimer = null
+    if (consoleDropped <= 0) return
+    var n = consoleDropped
+    consoleDropped = 0
+    post("console", { dropped: n, href: hereHref() })
+  }
+  function forwardConsole(entry) {
+    var t = now()
+    if (t - consoleWindowStart >= 1000) {
+      consoleWindowStart = t
+      consoleSent = 0
+    }
+    if (consoleSent >= CONSOLE_BUDGET_PER_SECOND) {
+      noteDropped()
+      return
+    }
+    consoleSent += 1
+    if (consoleDropped > 0) {
+      entry.dropped = consoleDropped
+      consoleDropped = 0
+    }
+    entry.href = hereHref()
+    entry.text = clip(entry.text, CONSOLE_MAX_TEXT)
+    if (entry.url !== undefined) entry.url = clip(entry.url, CONSOLE_MAX_URL)
+    post("console", entry)
+  }
+  window.addEventListener("pagehide", flushDropped, true)
+  // A property of a value from the page's world, read without running any
+  // page code: a data property's value, or nothing. An accessor the page
+  // installed is not invoked.
+  function ownData(value, name) {
+    if (
+      value === null ||
+      (typeof value !== "object" && typeof value !== "function")
+    )
+      return undefined
+    try {
+      var d = getOwnPropertyDescriptor(value, name)
+      return d && "value" in d ? d.value : undefined
+    } catch {
+      return undefined
+    }
+  }
+  function describeThrown(value) {
+    var t = typeof value
+    if (t === "string") return value
+    if (
+      value === null ||
+      t === "undefined" ||
+      t === "number" ||
+      t === "boolean"
+    )
+      return String(value)
+    var message = ownData(value, "message")
+    var name = ownData(value, "name")
+    var head =
+      typeof message === "string"
+        ? (typeof name === "string" && name ? name : "Error") + ": " + message
+        : ""
+    var stack = ownData(value, "stack")
+    if (typeof stack === "string" && stack) {
+      // V8 begins a stack with the message line; JavaScriptCore's is frames
+      // only, so the message goes in front of it.
+      var lines = clip(stack, 8192).split("\n").slice(0, 8).join("\n")
+      return head && lines.indexOf(head) !== 0 ? head + "\n" + lines : lines
+    }
+    return head || "[object]"
+  }
+  // Where the engine reports the console itself (WebView2), only the relay
+  // and the two listeners it duplicates are left out. A resource that failed
+  // to load is reported by no CDP console event, so that listener stays.
+  if (!engineConsole) {
+    document.addEventListener(
+      "codeg:console",
+      function (event) {
+        var detail = event && event.detail
+        if (typeof detail !== "string" || detail.length > 16384) return
+        var parsed
+        try {
+          parsed = parse(detail)
+        } catch {
+          return
+        }
+        if (!parsed || typeof parsed !== "object") return
+        var level = parsed.level
+        if (
+          level !== "log" &&
+          level !== "info" &&
+          level !== "warn" &&
+          level !== "error" &&
+          level !== "debug"
+        )
+          return
+        forwardConsole({
+          source: "console",
+          level: level,
+          text: typeof parsed.text === "string" ? parsed.text : "",
+          ts: typeof parsed.ts === "number" ? parsed.ts : now(),
+        })
+      },
+      true
+    )
+  }
+  window.addEventListener(
+    "error",
+    function (event) {
+      if (!event) return
+      var target = event.target
+      if (target && target !== window && typeof event.message !== "string") {
+        // A resource that failed to load fires `error` on its element and
+        // does not bubble, but the capture phase passes through here.
+        var el = target
+        var tag = String(el.tagName || el.nodeName || "").toLowerCase()
+        if (!tag) return
+        var src = ""
+        try {
+          src = String(el.currentSrc || el.src || el.href || "")
+        } catch {
+          src = ""
+        }
+        forwardConsole({
+          source: "resource",
+          level: "error",
+          text:
+            "Failed to load <" +
+            tag +
+            ">" +
+            (src ? " " + clip(src, CONSOLE_MAX_URL) : ""),
+          url: src || undefined,
+          ts: now(),
+        })
+        return
+      }
+      // An uncaught exception: the engine reports these itself where it
+      // reports the console at all.
+      if (engineConsole) return
+      if (typeof event.message !== "string") return
+      var text = event.message
+      var stack = ownData(event.error, "stack")
+      if (typeof stack === "string" && stack) {
+        var lines = clip(stack, 8192).split("\n").slice(0, 8).join("\n")
+        if (lines.indexOf(text) < 0) text = text + "\n" + lines
+        else text = lines
+      }
+      forwardConsole({
+        source: "exception",
+        level: "error",
+        text: text,
+        url: typeof event.filename === "string" ? event.filename : undefined,
+        line: typeof event.lineno === "number" ? event.lineno : undefined,
+        column: typeof event.colno === "number" ? event.colno : undefined,
+        ts: now(),
+      })
+    },
+    true
+  )
+  if (!engineConsole) {
+    window.addEventListener(
+      "unhandledrejection",
+      function (event) {
+        var reason
+        try {
+          reason = event ? event.reason : undefined
+        } catch {
+          reason = undefined
+        }
+        forwardConsole({
+          source: "rejection",
+          level: "error",
+          text: "Unhandled promise rejection: " + describeThrown(reason),
+          ts: now(),
+        })
+      },
+      true
+    )
+  }
 
   post("hello", {
     href: String(location.href),

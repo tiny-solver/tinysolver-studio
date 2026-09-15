@@ -380,11 +380,19 @@ describe("the activity strip", () => {
     read({ at: 2, action: "type" })
     read({ at: 3, action: "select", outcome: "failed" })
     read({ at: 4, action: "press", outcome: "refused" })
+    read({ at: 5, action: "capture" })
+    read({ at: 6, action: "console", outcome: "refused" })
     wrap(<BrowserAgentStrip tab={tab} />)
+    // The two reads that are not a snapshot say what was read — a refused
+    // console read is not the same sentence as a refused page read.
+    expect(
+      screen.getByText(/Refused to read the console: this page isn't shared/)
+    ).toBeVisible()
+    fireEvent.click(screen.getByRole("button", { name: /5 more/ }))
+    expect(screen.getByText(/Took a screenshot/)).toBeVisible()
     expect(
       screen.getByText(/Refused to press a key: actions aren't allowed/)
     ).toBeVisible()
-    fireEvent.click(screen.getByRole("button", { name: /3 more/ }))
     expect(screen.getByText(/Couldn't choose the option/)).toBeVisible()
     expect(screen.getByText(/Typed into a field/)).toBeVisible()
     expect(screen.getByText(/^Clicked/)).toBeVisible()

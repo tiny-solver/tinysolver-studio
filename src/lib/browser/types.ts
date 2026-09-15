@@ -93,6 +93,10 @@ export type AgentAction =
   | "type"
   | "press"
   | "select"
+  /** Took a screenshot. */
+  | "capture"
+  /** Read the console. */
+  | "console"
 
 export type PointerButton = "left" | "right"
 
@@ -151,6 +155,89 @@ export interface PageSnapshot {
   refsCount: number
   /** The tree stops at `maxChars` rather than at the end of the page. */
   truncated: boolean
+}
+
+/** Severity of a console line, lowest first. */
+export type ConsoleLevel = "debug" | "log" | "info" | "warn" | "error"
+
+/** Where a console line came from: a `console.*` call, an exception nothing
+ *  caught, a promise rejection nothing handled, a resource that failed to
+ *  load. */
+export type ConsoleSource = "console" | "exception" | "rejection" | "resource"
+
+/** One line a shared page printed (`browser_agent_console`). What the page
+ *  chose to print: data about the page, never more. */
+export interface ConsoleEntry {
+  /** Position in the tab's stream; `since` on the next query continues
+   *  after it. */
+  seq: number
+  /** Unix milliseconds. */
+  at: number
+  level: ConsoleLevel
+  source: ConsoleSource
+  text: string
+  url?: string
+  line?: number
+  column?: number
+  /** Printed by the top-level document rather than a frame in it. */
+  top: boolean
+}
+
+export interface ConsoleQuery {
+  /** Only lines after this seq; 0 or absent is everything kept. */
+  since?: number
+  /** Only lines at this level or above. */
+  minLevel?: ConsoleLevel
+  /** At most this many, oldest first. Defaults to 100. */
+  limit?: number
+}
+
+export interface ConsoleReadout {
+  /** Where the tab was when the lines were read. */
+  url: string
+  /** Oldest first. */
+  entries: ConsoleEntry[]
+  /** Lines this document printed that are no longer kept, or never were. */
+  dropped: number
+  /** The `since` to pass next time. */
+  nextSince: number
+  /** Whether matching lines remain beyond `limit`. */
+  more: boolean
+}
+
+export type CaptureFormat = "png" | "jpeg"
+
+/** What a screenshot is asked for (`browser_agent_capture`). `generation`
+ *  and `ref` together name an element to crop to; neither for the whole
+ *  viewport. */
+export interface CaptureRequest {
+  generation?: string
+  ref?: string
+  /** Widest the image should be, in pixels. Defaults to 1568. */
+  maxWidth?: number
+  format?: CaptureFormat
+}
+
+/** A rectangle of the page in viewport CSS pixels. */
+export interface CaptureRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface CaptureOutcome {
+  mime: string
+  /** The image, base64. */
+  data: string
+  width: number
+  height: number
+  /** Where the page was when the pixels were taken. */
+  url: string
+  /** The part of the viewport the image shows. */
+  region: CaptureRegion
+  /** Whether `region` is an element rather than the viewport. */
+  clipped: boolean
 }
 
 /** Full per-tab state; every `browser://state` event carries one. */

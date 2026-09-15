@@ -6037,6 +6037,16 @@
           "done": "Eine Option gewählt",
           "refused": "Auswahl abgelehnt: Aktionen sind auf dieser Seite nicht erlaubt",
           "failed": "Auswahl nicht möglich"
+        },
+        "capture": {
+          "done": "Bildschirmfoto aufgenommen",
+          "refused": "Bildschirmfoto abgelehnt: Diese Seite ist nicht freigegeben",
+          "failed": "Bildschirmfoto nicht möglich"
+        },
+        "console": {
+          "done": "Konsole gelesen",
+          "refused": "Lesen der Konsole abgelehnt: Diese Seite ist nicht freigegeben",
+          "failed": "Konsole konnte nicht gelesen werden"
         }
       },
       "activityCount": "{count}×",

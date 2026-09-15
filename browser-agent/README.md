@@ -106,6 +106,14 @@ uncaught; it changes nothing observable.
 CDP `Input.*`): it scrolls the element into view, checks nothing covers it, and
 answers with the viewport point for the host to deliver a real pointer to.
 
+`rectOf(generation, ref)` is for a host cropping a screenshot to an element: it
+brings the element into view under the same rules and answers with its visible
+box in viewport CSS pixels plus the viewport's size, which is what the host
+needs to turn the engine's pixels into that box. The console is not this
+bundle's business — the page-world shim (`src/browser-injected/console.js`) and
+the helper carry it — but the probe measures the channel between them here,
+where there is an engine with real world isolation to measure it in.
+
 ## What is not here
 
 Authorization. The Rust seam decides whether an agent may read or act on a tab

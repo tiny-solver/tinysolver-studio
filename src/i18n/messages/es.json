@@ -6037,6 +6037,16 @@
           "done": "Eligió una opción",
           "refused": "Selección rechazada: no se permiten acciones en esta página",
           "failed": "No se pudo elegir la opción"
+        },
+        "capture": {
+          "done": "Tomó una captura de pantalla",
+          "refused": "Captura rechazada: esta página no está compartida",
+          "failed": "No se pudo tomar la captura de pantalla"
+        },
+        "console": {
+          "done": "Leyó la consola",
+          "refused": "Lectura de la consola rechazada: esta página no está compartida",
+          "failed": "No se pudo leer la consola"
         }
       },
       "activityCount": "{count}×",

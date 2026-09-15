@@ -1,6 +1,7 @@
 //! Listener-facing access for the built-in browser's agent tools
-//! (`browser_list_tabs` / `browser_snapshot`, and the five action tools
-//! `browser_click` / `browser_hover` / `browser_type` / `browser_press_key` /
+//! (`browser_list_tabs` / `browser_snapshot` / `browser_console_messages` /
+//! `browser_screenshot`, and the five action tools `browser_click` /
+//! `browser_hover` / `browser_type` / `browser_press_key` /
 //! `browser_select_option`) carried by codeg-mcp.
 //!
 //! Nothing here decides whether a page may be read or acted on. That decision
@@ -30,6 +31,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::browser::agent::{ActionOutcome, ActionRequest, AgentTabSummary, PageSnapshot};
+use crate::browser::capture::{CaptureOutcome, CaptureRequest};
+use crate::browser::console::{ConsoleQuery, ConsoleReadout};
 
 /// The tab exists, and this agent may not read it: nobody shared it, or the
 /// page left the origin it was shared for.
@@ -221,6 +224,95 @@ impl BrowserActOutcome {
     }
 }
 
+/// What `browser_console_messages` answers: the lines, or why not.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserConsoleOutcome {
+    pub tab_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub console: Option<ConsoleReadout>,
+    /// One of the `browser_*` slugs above. `None` exactly when `console` is
+    /// `Some`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl BrowserConsoleOutcome {
+    pub fn lines(tab_id: &str, readout: ConsoleReadout) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            console: Some(readout),
+            error: None,
+            note: None,
+        }
+    }
+
+    pub fn refused(tab_id: &str, error: &str, note: impl Into<String>) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            console: None,
+            error: Some(error.to_string()),
+            note: Some(note.into()),
+        }
+    }
+
+    /// The same words as a refused snapshot: the console is part of the page.
+    pub fn grant_required(tab_id: &str) -> Self {
+        let read = BrowserSnapshotOutcome::grant_required(tab_id);
+        Self::refused(tab_id, ERROR_GRANT_REQUIRED, read.note.unwrap_or_default())
+    }
+}
+
+/// What `browser_screenshot` answers: the image, or why not.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserCaptureOutcome {
+    pub tab_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture: Option<CaptureOutcome>,
+    /// One of the `browser_*` slugs above. `None` exactly when `capture` is
+    /// `Some`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl BrowserCaptureOutcome {
+    pub fn image(tab_id: &str, capture: CaptureOutcome) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            capture: Some(capture),
+            error: None,
+            note: None,
+        }
+    }
+
+    pub fn refused(tab_id: &str, error: &str, note: impl Into<String>) -> Self {
+        Self {
+            tab_id: tab_id.to_string(),
+            capture: None,
+            error: Some(error.to_string()),
+            note: Some(note.into()),
+        }
+    }
+
+    /// The same words as a refused snapshot: pixels are the page too.
+    pub fn grant_required(tab_id: &str) -> Self {
+        let read = BrowserSnapshotOutcome::grant_required(tab_id);
+        Self::refused(tab_id, ERROR_GRANT_REQUIRED, read.note.unwrap_or_default())
+    }
+
+    /// The element named for the crop is from a snapshot the page has moved
+    /// past — the same instruction an action gives.
+    pub fn stale_ref(tab_id: &str, detail: &str) -> Self {
+        let act = BrowserActOutcome::stale_ref(tab_id, detail);
+        Self::refused(tab_id, ERROR_STALE_REF, act.note.unwrap_or_default())
+    }
+}
+
 /// Listener-facing access to the built-in browser's agent surface. The
 /// production impl (`crate::commands::browser::McpBrowserTools`) exists only in
 /// the desktop build; server mode and tests use [`NoBrowserTabs`]. Mirrors
@@ -238,6 +330,13 @@ pub trait BrowserToolAccess: Send + Sync {
     /// Act on one shared page, by a ref from a snapshot of it. Needs the tab
     /// shared at `control`.
     async fn act(&self, tab_id: &str, request: ActionRequest) -> BrowserActOutcome;
+
+    /// What one shared page printed to its console. A read, like a snapshot.
+    async fn console(&self, tab_id: &str, query: ConsoleQuery) -> BrowserConsoleOutcome;
+
+    /// A screenshot of one shared page, or of one element of it. A read,
+    /// like a snapshot.
+    async fn capture(&self, tab_id: &str, request: CaptureRequest) -> BrowserCaptureOutcome;
 }
 
 /// The answer where there is no built-in browser: server mode, and the stub in
@@ -262,6 +361,14 @@ impl BrowserToolAccess for NoBrowserTabs {
 
     async fn act(&self, tab_id: &str, _request: ActionRequest) -> BrowserActOutcome {
         BrowserActOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
+    }
+
+    async fn console(&self, tab_id: &str, _query: ConsoleQuery) -> BrowserConsoleOutcome {
+        BrowserConsoleOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
+    }
+
+    async fn capture(&self, tab_id: &str, _request: CaptureRequest) -> BrowserCaptureOutcome {
+        BrowserCaptureOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
     }
 }
 
@@ -402,6 +509,34 @@ mod tests {
         assert_eq!(done["action"]["fidelity"], "synthetic");
         assert_eq!(done["tabId"], "t3");
         assert!(done.get("error").is_none());
+    }
+
+    /// The console and screenshot refusals borrow the read's words — the
+    /// console and the pixels are the page — and each carries exactly one of
+    /// its payload and its error.
+    #[tokio::test]
+    async fn console_and_capture_refusals_read_like_a_refused_read() {
+        let console = BrowserConsoleOutcome::grant_required("t4");
+        assert_eq!(console.error.as_deref(), Some(ERROR_GRANT_REQUIRED));
+        assert_eq!(console.note, BrowserSnapshotOutcome::grant_required("t4").note);
+        assert!(console.console.is_none());
+
+        let capture = BrowserCaptureOutcome::stale_ref("t4", "e2 is gone");
+        assert_eq!(capture.error.as_deref(), Some(ERROR_STALE_REF));
+        assert!(capture.note.as_deref().unwrap().contains("browser_snapshot"));
+        let wire = serde_json::to_value(&capture).unwrap();
+        assert_eq!(wire["tabId"], "t4");
+        assert!(wire.get("capture").is_none());
+
+        let none = NoBrowserTabs;
+        assert_eq!(
+            none.console("t1", ConsoleQuery::default()).await.error.as_deref(),
+            Some(ERROR_UNAVAILABLE)
+        );
+        assert_eq!(
+            none.capture("t1", CaptureRequest::default()).await.error.as_deref(),
+            Some(ERROR_UNAVAILABLE)
+        );
     }
 
     #[tokio::test]

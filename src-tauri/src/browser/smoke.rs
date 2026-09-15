@@ -422,6 +422,40 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
             .map_err(err_string)?;
             Ok(json!(outcome))
         }
+        // The console half: `query` is the wire `ConsoleQuery`
+        // (`{since?, minLevel?, limit?}`), as the MCP tool builds it.
+        "browser_agent_console" => {
+            let query: crate::browser::console::ConsoleQuery = match cmd.get("query") {
+                Some(v) => serde_json::from_value(v.clone()).map_err(err_string)?,
+                None => Default::default(),
+            };
+            let readout = browser_commands::agent_console_core(
+                app,
+                &registry,
+                &str_arg(cmd, "tab_id")?,
+                &query,
+            )
+            .await
+            .map_err(err_string)?;
+            Ok(json!(readout))
+        }
+        // The screenshot half: `request` is the wire `CaptureRequest`
+        // (`{generation?, ref?, maxWidth?, format?}`).
+        "browser_agent_capture" => {
+            let request: crate::browser::capture::CaptureRequest = match cmd.get("request") {
+                Some(v) => serde_json::from_value(v.clone()).map_err(err_string)?,
+                None => Default::default(),
+            };
+            let outcome = browser_commands::agent_capture_core(
+                app,
+                &registry,
+                &str_arg(cmd, "tab_id")?,
+                &request,
+            )
+            .await
+            .map_err(err_string)?;
+            Ok(json!(outcome))
+        }
         "browser_url" => {
             let surface = registry
                 .surface(&str_arg(cmd, "tab_id")?)

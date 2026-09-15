@@ -190,6 +190,7 @@ pub fn install_world(
     webview: &WebView,
     top_scripts: &[&str],
     frame_scripts: &[&str],
+    page_scripts: &[&str],
     sink: MessageSink,
 ) -> Result<bool, String> {
     let key = webview_pointer(webview);
@@ -232,6 +233,16 @@ pub fn install_world(
                 &[],
             ));
         }
+    }
+    // The page's own world, every frame: only the console shim goes this way.
+    for source in page_scripts {
+        manager.add_script(&UserScript::new(
+            source,
+            UserContentInjectedFrames::AllFrames,
+            UserScriptInjectionTime::Start,
+            &[],
+            &[],
+        ));
     }
     state.channel_installed.set(true);
     Ok(true)

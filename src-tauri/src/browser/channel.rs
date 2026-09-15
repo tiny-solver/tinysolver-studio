@@ -14,12 +14,31 @@ use tauri::{AppHandle, Manager, Url};
 use crate::web::event_bridge::{emit_event, EventEmitter};
 
 use super::agent;
+use super::console;
 use super::events;
 use super::hooks;
 use super::registry::BrowserRegistry;
 use super::types::ChannelKind;
 
 pub const HELPER_JS: &str = include_str!("../../../src/browser-injected/helper.js");
+
+/// The page-world console shim (`src/browser-injected/console.js`), for the
+/// engines that report a page's console to nobody. Injected into the PAGE
+/// world — the one script here that is — at document start in every frame;
+/// the file's header says why that is safe and what it makes the lines worth
+/// (data the page chose to print, never more).
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub const CONSOLE_JS: &str = include_str!("../../../src/browser-injected/console.js");
+
+/// The helper for an engine that reports the console to the host itself
+/// (WebView2, over CDP): told so before it runs, in its own world, so it does
+/// not also relay the page's lines and listen for its errors — the same line
+/// would otherwise arrive twice, once from the engine and once from here.
+#[cfg(target_os = "windows")]
+pub const HELPER_JS_ENGINE_CONSOLE: &str = concat!(
+    "globalThis.__codegEngineConsole = true;\n",
+    include_str!("../../../src/browser-injected/helper.js")
+);
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 pub const TELEMETRY_EVENT: &str = "browser://telemetry";
 
@@ -177,6 +196,38 @@ pub fn handle_message(app: &AppHandle, tab_id: &str, raw: String, main_frame: bo
                     "payload": envelope.payload,
                 }),
             );
+        }
+        // What the page printed: relayed by the helper on WebKit, translated
+        // from the engine's own report on WebView2 (the shim builds the same
+        // envelope). Taken from any frame — an iframe's errors are part of
+        // the page — with the origin it came from derived here, from the
+        // address the helper read in its own world, so that a read can hold
+        // each line against the grant. `top` needs the engine's word AND the
+        // helper's, like `nav-state`: a subframe cannot claim the top by
+        // saying so.
+        "console" => {
+            let origin = envelope
+                .payload
+                .get("href")
+                .and_then(Value::as_str)
+                .and_then(|h| Url::parse(h).ok())
+                .and_then(|u| hooks::origin_of(&u));
+            let at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or_default();
+            match console::parse_reported(&envelope.payload, main_frame && envelope.top, at, origin.clone())
+            {
+                Some(line) => registry.push_console(tab_id, line),
+                // No line, only a count: the helper flushing what it dropped
+                // after a burst that ended in silence.
+                None => {
+                    let count = console::reported_drop(&envelope.payload);
+                    if count > 0 {
+                        registry.note_console_dropped(tab_id, origin.as_deref(), count);
+                    }
+                }
+            }
         }
         other => {
             tracing::debug!("[browser] tab {tab_id}: ignored channel message kind {other:?}");

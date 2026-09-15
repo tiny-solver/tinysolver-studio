@@ -375,6 +375,30 @@ mod tests {
         }
     
 
+        async fn console(
+            &self,
+            tab_id: &str,
+            _query: crate::browser::console::ConsoleQuery,
+        ) -> crate::acp::browser_tools::BrowserConsoleOutcome {
+            crate::acp::browser_tools::BrowserConsoleOutcome::refused(
+                tab_id,
+                crate::acp::browser_tools::ERROR_UNAVAILABLE,
+                "stub",
+            )
+        }
+
+        async fn capture(
+            &self,
+            tab_id: &str,
+            _request: crate::browser::capture::CaptureRequest,
+        ) -> crate::acp::browser_tools::BrowserCaptureOutcome {
+            crate::acp::browser_tools::BrowserCaptureOutcome::refused(
+                tab_id,
+                crate::acp::browser_tools::ERROR_UNAVAILABLE,
+                "stub",
+            )
+        }
+
         async fn act(
             &self,
             tab_id: &str,

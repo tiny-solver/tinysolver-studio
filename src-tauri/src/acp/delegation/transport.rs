@@ -280,6 +280,28 @@ pub struct BrokerBrowserActRequest {
     pub request: crate::browser::agent::ActionRequest,
 }
 
+/// What one shared page printed to its console. Backs the
+/// `browser_console_messages` MCP tool; the grant check and the audit line
+/// happen behind it, in `agent_console_core`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerBrowserConsoleRequest {
+    pub token: String,
+    pub tab_id: String,
+    #[serde(default)]
+    pub query: crate::browser::console::ConsoleQuery,
+}
+
+/// A screenshot of one shared page. Backs the `browser_screenshot` MCP tool;
+/// the grant check, the ref check for a crop and the audit line happen
+/// behind it, in `agent_capture_core`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerBrowserCaptureRequest {
+    pub token: String,
+    pub tab_id: String,
+    #[serde(default)]
+    pub request: crate::browser::capture::CaptureRequest,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -302,6 +324,8 @@ pub enum BrokerMessage {
     BrowserTabs(BrokerBrowserTabsRequest),
     BrowserSnapshot(BrokerBrowserSnapshotRequest),
     BrowserAct(BrokerBrowserActRequest),
+    BrowserConsole(BrokerBrowserConsoleRequest),
+    BrowserCapture(BrokerBrowserCaptureRequest),
     /// Liveness probe. Unlike every other variant this one is NOT sent by a
     /// companion — it comes from codeg's own service-status check
     /// (`acp::delegation::service`), which is why it carries no `token`: a
@@ -528,6 +552,24 @@ pub async fn client_browser_act_round_trip(
     req: &BrokerBrowserActRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::BrowserAct(req.clone())).await
+}
+
+/// Dispatch a `browser_console_messages` request and read back the serialized
+/// [`crate::acp::browser_tools::BrowserConsoleOutcome`].
+pub async fn client_browser_console_round_trip(
+    socket_path: &str,
+    req: &BrokerBrowserConsoleRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::BrowserConsole(req.clone())).await
+}
+
+/// Dispatch a `browser_screenshot` request and read back the serialized
+/// [`crate::acp::browser_tools::BrowserCaptureOutcome`].
+pub async fn client_browser_capture_round_trip(
+    socket_path: &str,
+    req: &BrokerBrowserCaptureRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::BrowserCapture(req.clone())).await
 }
 
 /// Probe the listener: write a [`BrokerMessage::Ping`] and read the

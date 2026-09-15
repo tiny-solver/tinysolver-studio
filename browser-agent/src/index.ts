@@ -8,8 +8,9 @@
  *
  * Two halves: reading the page into a tree of refs (`snapshot`), and acting on
  * an element by ref (`act`, and `locate` for a host that delivers its own
- * pointer). The rules for when a ref stops meaning anything live here with
- * the snapshot that issued it; `act.ts` only ever receives an element.
+ * pointer; `rectOf` for a host cropping a screenshot to one). The rules for
+ * when a ref stops meaning anything live here with the snapshot that issued
+ * it; `act.ts` only ever receives an element.
  *
  * The tree itself is Playwright's, vendored under `../vendor/playwright`
  * (see VENDOR.md). We call it in `ai` mode, which is the mode Playwright MCP
@@ -326,6 +327,22 @@ export type LocateResult =
   | { ok: true; url: string; x: number; y: number }
   | ({ ok: false; url: string } & ActionFailure)
 
+export type RectResult =
+  | {
+      ok: true
+      url: string
+      /** The element's visible box, viewport CSS pixels. */
+      x: number
+      y: number
+      width: number
+      height: number
+      /** Whether bringing it into view moved the page, and so a frame is
+       *  owed before the pixels match. */
+      scrolled: boolean
+      viewport: { width: number; height: number; dpr: number }
+    }
+  | ({ ok: false; url: string } & ActionFailure)
+
 function stale(ref: string | null): ActionFailure {
   return {
     error: "stale",
@@ -476,6 +493,64 @@ export function locate(generation: string, ref: string): LocateResult {
 }
 
 /**
+ * The visible box of the element `ref` names, for a host cropping a
+ * screenshot to it. Brings it into view first, the way `locate` does, and
+ * refuses on the same grounds: a stale ref, or nothing of it on screen. An
+ * element half under the fold is reported as the half that shows, since that
+ * is what the pixels will hold.
+ */
+export function rectOf(generation: string, ref: string): RectResult {
+  const url = location.href
+  const element = elementForRef(generation, ref)
+  if (!element) return { ok: false, url, ...stale(ref) }
+  // Whether bringing it into view moved anything is read off the element's
+  // own box, not the window's scroll offsets: an `overflow: auto` ancestor
+  // scrolls without moving the window at all.
+  const before = element.getBoundingClientRect()
+  const point = pointAt(element)
+  if ("error" in point) return { ok: false, url, ...point }
+  const box = visibleBoxOf(element)
+  if (!box)
+    return {
+      ok: false,
+      url,
+      error: "not-visible",
+      detail: `${describe(element)} has no visible box on screen`,
+    }
+  const after = element.getBoundingClientRect()
+  return {
+    ok: true,
+    url: location.href,
+    x: box.left,
+    y: box.top,
+    width: box.width,
+    height: box.height,
+    scrolled:
+      Math.abs(after.top - before.top) > 0.5 ||
+      Math.abs(after.left - before.left) > 0.5,
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      dpr: window.devicePixelRatio,
+    },
+  }
+}
+
+/** The element's bounding box clipped to the viewport, or `null` when none
+ *  of it is on screen. The bounding box rather than the largest fragment,
+ *  unlike a pointer's target: a screenshot of a wrapped link wants both of
+ *  its lines. */
+function visibleBoxOf(el: Element): DOMRect | null {
+  const box = el.getBoundingClientRect()
+  const left = Math.max(box.left, 0)
+  const top = Math.max(box.top, 0)
+  const right = Math.min(box.right, window.innerWidth)
+  const bottom = Math.min(box.bottom, window.innerHeight)
+  if (right - left < 1 || bottom - top < 1) return null
+  return new DOMRect(left, top, right - left, bottom - top)
+}
+
+/**
  * Cuts the tree to `maxChars` on a line boundary.
  *
  * Mid-line would hand the agent a half-written node — a ref with no role, or a
@@ -506,7 +581,8 @@ declare global {
     elementForRef: typeof elementForRef
     act: typeof act
     locate: typeof locate
+    rectOf: typeof rectOf
   }
 }
 
-globalThis.__codegAgent = { snapshot, elementForRef, act, locate }
+globalThis.__codegAgent = { snapshot, elementForRef, act, locate, rectOf }

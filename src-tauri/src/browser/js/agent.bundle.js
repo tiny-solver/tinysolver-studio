@@ -3578,6 +3578,46 @@
       };
     return { ok: true, url: location.href, x: point.x, y: point.y };
   }
+  function rectOf(generation, ref) {
+    const url = location.href;
+    const element = elementForRef(generation, ref);
+    if (!element) return { ok: false, url, ...stale(ref) };
+    const before = element.getBoundingClientRect();
+    const point = pointAt(element);
+    if ("error" in point) return { ok: false, url, ...point };
+    const box = visibleBoxOf(element);
+    if (!box)
+      return {
+        ok: false,
+        url,
+        error: "not-visible",
+        detail: `${describe(element)} has no visible box on screen`
+      };
+    const after = element.getBoundingClientRect();
+    return {
+      ok: true,
+      url: location.href,
+      x: box.left,
+      y: box.top,
+      width: box.width,
+      height: box.height,
+      scrolled: Math.abs(after.top - before.top) > 0.5 || Math.abs(after.left - before.left) > 0.5,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        dpr: window.devicePixelRatio
+      }
+    };
+  }
+  function visibleBoxOf(el) {
+    const box = el.getBoundingClientRect();
+    const left = Math.max(box.left, 0);
+    const top = Math.max(box.top, 0);
+    const right = Math.min(box.right, window.innerWidth);
+    const bottom = Math.min(box.bottom, window.innerHeight);
+    if (right - left < 1 || bottom - top < 1) return null;
+    return new DOMRect(left, top, right - left, bottom - top);
+  }
   function truncate(text, maxChars) {
     if (!maxChars || maxChars <= 0 || text.length <= maxChars)
       return { text, truncated: false };
@@ -3587,5 +3627,5 @@
       truncated: true
     };
   }
-  globalThis.__codegAgent = { snapshot, elementForRef, act, locate };
+  globalThis.__codegAgent = { snapshot, elementForRef, act, locate, rectOf };
 })();

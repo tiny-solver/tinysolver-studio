@@ -6037,6 +6037,16 @@
           "done": "A choisi une option",
           "refused": "Sélection refusée : les actions ne sont pas autorisées sur cette page",
           "failed": "Impossible de choisir l'option"
+        },
+        "capture": {
+          "done": "A pris une capture d'écran",
+          "refused": "Capture d'écran refusée : cette page n'est pas partagée",
+          "failed": "Impossible de prendre une capture d'écran"
+        },
+        "console": {
+          "done": "A lu la console",
+          "refused": "Lecture de la console refusée : cette page n'est pas partagée",
+          "failed": "Impossible de lire la console"
         }
       },
       "activityCount": "{count}×",

@@ -17,11 +17,13 @@ use tokio::sync::RwLock;
 
 use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::browser_tools::{
-    BrowserActOutcome, BrowserSnapshotOutcome, BrowserTabsOutcome, BrowserToolAccess,
+    BrowserActOutcome, BrowserCaptureOutcome, BrowserConsoleOutcome, BrowserSnapshotOutcome,
+    BrowserTabsOutcome, BrowserToolAccess,
     ERROR_NO_SUCH_TAB,
 };
 use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerBrowserActRequest,
+    BrokerBrowserCaptureRequest, BrokerBrowserConsoleRequest,
     BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
     BrokerCreateAutomationRequest, BrokerCreateWorkTaskRequest, BrokerResponse,
@@ -511,6 +513,16 @@ impl DelegationListener {
                 // line on the strip whether or not the caller is still there.
                 browser_act_response(self.process_browser_act(req).await)?
             }
+            BrokerMessage::BrowserConsole(req) => {
+                // A registry read, like the listing; nothing to block on.
+                browser_console_response(self.process_browser_console(req).await)?
+            }
+            BrokerMessage::BrowserCapture(req) => {
+                // Bounded by the capture's own engine timeout, as the read
+                // is; the line it leaves on the strip is written on the
+                // codeg side whether or not the caller waits.
+                browser_capture_response(self.process_browser_capture(req).await)?
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -787,6 +799,38 @@ impl DelegationListener {
         self.browser.act(&req.tab_id, req.request).await
     }
 
+    /// Validate the token and read one shared page's console; an invalid
+    /// token gets "no such tab", as everywhere here.
+    async fn process_browser_console(
+        &self,
+        req: BrokerBrowserConsoleRequest,
+    ) -> BrowserConsoleOutcome {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return BrowserConsoleOutcome::refused(
+                &req.tab_id,
+                ERROR_NO_SUCH_TAB,
+                format!("No browser tab {} is open.", req.tab_id),
+            );
+        }
+        self.browser.console(&req.tab_id, req.query).await
+    }
+
+    /// Validate the token and capture one shared page; an invalid token gets
+    /// "no such tab", as everywhere here.
+    async fn process_browser_capture(
+        &self,
+        req: BrokerBrowserCaptureRequest,
+    ) -> BrowserCaptureOutcome {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return BrowserCaptureOutcome::refused(
+                &req.tab_id,
+                ERROR_NO_SUCH_TAB,
+                format!("No browser tab {} is open.", req.tab_id),
+            );
+        }
+        self.browser.capture(&req.tab_id, req.request).await
+    }
+
     /// Validate the token and hand the progress report to the task engine,
     /// which resolves the parent connection to its owning task + generation.
     async fn process_task_progress(&self, req: BrokerTaskProgressRequest) -> TaskReportAck {
@@ -1012,6 +1056,50 @@ fn browser_act_response(outcome: BrowserActOutcome) -> std::io::Result<BrokerRes
         })?,
     })
 }
+
+/// Serialize a [`BrowserConsoleOutcome`] for the `BrowserConsole` arm.
+fn browser_console_response(outcome: BrowserConsoleOutcome) -> std::io::Result<BrokerResponse> {
+    Ok(BrokerResponse {
+        outcome: serde_json::to_value(&outcome).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
+        })?,
+    })
+}
+
+/// Serialize a [`BrowserCaptureOutcome`] for the `BrowserCapture` arm. The
+/// image rides inside as base64. The capture pipeline keeps it far under the
+/// frame cap, but this is the last place before the frame is written, so it
+/// is measured here too: a capture the companion would refuse to read is
+/// answered with a refusal it can, rather than with a broken round trip.
+fn browser_capture_response(outcome: BrowserCaptureOutcome) -> std::io::Result<BrokerResponse> {
+    let encode = |outcome: &BrowserCaptureOutcome| {
+        serde_json::to_vec(outcome).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
+        })
+    };
+    let mut bytes = encode(&outcome)?;
+    if bytes.len() > CAPTURE_RESPONSE_MAX_BYTES {
+        let refused = BrowserCaptureOutcome::refused(
+            &outcome.tab_id,
+            crate::acp::browser_tools::ERROR_READ_FAILED,
+            format!(
+                "The screenshot came out too large to deliver ({} bytes). Ask for a smaller \
+                 `maxWidth`, or `format: \"jpeg\"`.",
+                bytes.len()
+            ),
+        );
+        bytes = encode(&refused)?;
+    }
+    Ok(BrokerResponse {
+        outcome: serde_json::from_slice(&bytes).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
+        })?,
+    })
+}
+
+/// What a serialized capture outcome may weigh: the frame cap less room for
+/// the envelope around it.
+const CAPTURE_RESPONSE_MAX_BYTES: usize = super::transport::MAX_FRAME_BYTES - 64 * 1024;
 
 /// Serialize a [`TaskReportAck`] into a [`BrokerResponse`] for the
 /// `TaskProgress` / `TaskComplete` arms — the companion renders it into the
@@ -1287,6 +1375,30 @@ mod tests {
                 .await
                 .push(format!("snapshot {tab_id} {max_chars:?}"));
             BrowserSnapshotOutcome::grant_required(tab_id)
+        }
+        async fn console(
+            &self,
+            tab_id: &str,
+            query: crate::browser::console::ConsoleQuery,
+        ) -> BrowserConsoleOutcome {
+            self.calls.lock().await.push(format!(
+                "console {tab_id} since={} min={:?} limit={:?}",
+                query.since, query.min_level, query.limit
+            ));
+            BrowserConsoleOutcome::grant_required(tab_id)
+        }
+        async fn capture(
+            &self,
+            tab_id: &str,
+            request: crate::browser::capture::CaptureRequest,
+        ) -> BrowserCaptureOutcome {
+            self.calls.lock().await.push(format!(
+                "capture {tab_id} {:?} {:?} {:?}",
+                request.clip_target(),
+                request.max_width,
+                request.format
+            ));
+            BrowserCaptureOutcome::grant_required(tab_id)
         }
         async fn act(
             &self,
@@ -2908,6 +3020,122 @@ mod tests {
             &[r#"act t1 g.4.2 Object {"kind": String("type"), "submit": Bool(true), "text": String("Ada")}"#
                 .to_string()]
         );
+    }
+
+    /// The console and screenshot arms carry their whole request through and
+    /// bring a refusal back as a value; an invalid token is turned away before
+    /// the browser hears of it, like every other browser arm.
+    #[tokio::test]
+    async fn console_and_capture_reach_the_browser_and_refuse_a_bad_token() {
+        use crate::browser::capture::{CaptureFormat, CaptureRequest};
+        use crate::browser::console::{ConsoleLevel, ConsoleQuery};
+        let browser = Arc::new(StubBrowser::default());
+        let listener = make_browser_listener(browser_tokens().await, browser.clone());
+
+        let console = browser_round_trip(
+            listener.clone(),
+            BrokerMessage::BrowserConsole(BrokerBrowserConsoleRequest {
+                token: "tok".into(),
+                tab_id: "t2".into(),
+                query: ConsoleQuery {
+                    since: 7,
+                    min_level: Some(ConsoleLevel::Warn),
+                    limit: Some(20),
+                },
+            }),
+        )
+        .await;
+        assert_eq!(console.outcome["error"], ERROR_GRANT_REQUIRED);
+        assert_eq!(console.outcome["tabId"], "t2");
+
+        let capture = browser_round_trip(
+            listener.clone(),
+            BrokerMessage::BrowserCapture(BrokerBrowserCaptureRequest {
+                token: "tok".into(),
+                tab_id: "t2".into(),
+                request: CaptureRequest {
+                    generation: Some("g.1.1".into()),
+                    target: Some("e4".into()),
+                    max_width: Some(800),
+                    format: CaptureFormat::Jpeg,
+                },
+            }),
+        )
+        .await;
+        assert_eq!(capture.outcome["error"], ERROR_GRANT_REQUIRED);
+        assert_eq!(
+            browser.calls.lock().await.as_slice(),
+            &[
+                "console t2 since=7 min=Some(Warn) limit=Some(20)".to_string(),
+                "capture t2 Some((\"g.1.1\", \"e4\")) Some(800) Jpeg".to_string(),
+            ]
+        );
+
+        browser.calls.lock().await.clear();
+        for message in [
+            BrokerMessage::BrowserConsole(BrokerBrowserConsoleRequest {
+                token: "not-a-token".into(),
+                tab_id: "t1".into(),
+                query: ConsoleQuery::default(),
+            }),
+            BrokerMessage::BrowserCapture(BrokerBrowserCaptureRequest {
+                token: "not-a-token".into(),
+                tab_id: "t1".into(),
+                request: CaptureRequest::default(),
+            }),
+        ] {
+            let out = browser_round_trip(listener.clone(), message).await;
+            assert_eq!(out.outcome["error"], ERROR_NO_SUCH_TAB);
+        }
+        assert!(browser.calls.lock().await.is_empty());
+    }
+
+    /// A capture the companion could not read back — over the frame cap —
+    /// is turned into a refusal it can, at the last step before the frame.
+    #[test]
+    fn a_capture_over_the_frame_cap_becomes_a_refusal() {
+        use crate::browser::capture::{CaptureOutcome, CaptureRegion};
+        let huge = BrowserCaptureOutcome::image(
+            "t1",
+            CaptureOutcome {
+                mime: "image/png".into(),
+                data: "A".repeat(CAPTURE_RESPONSE_MAX_BYTES + 1),
+                width: 1,
+                height: 1,
+                url: "http://x/".into(),
+                region: CaptureRegion {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 1.0,
+                    height: 1.0,
+                },
+                clipped: false,
+            },
+        );
+        let response = browser_capture_response(huge).unwrap();
+        assert_eq!(response.outcome["error"], crate::acp::browser_tools::ERROR_READ_FAILED);
+        assert_eq!(response.outcome["tabId"], "t1");
+        assert!(response.outcome.get("capture").is_none());
+        assert!(serde_json::to_vec(&response.outcome).unwrap().len() < 4096);
+
+        let small = BrowserCaptureOutcome::image(
+            "t1",
+            CaptureOutcome {
+                mime: "image/png".into(),
+                data: "AAAA".into(),
+                width: 1,
+                height: 1,
+                url: "http://x/".into(),
+                region: CaptureRegion {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 1.0,
+                    height: 1.0,
+                },
+                clipped: false,
+            },
+        );
+        assert_eq!(browser_capture_response(small).unwrap().outcome["capture"]["data"], "AAAA");
     }
 
     /// A caller who cannot prove it is a companion is told the same thing a

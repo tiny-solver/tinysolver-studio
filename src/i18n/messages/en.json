@@ -6037,6 +6037,16 @@
           "done": "Chose an option",
           "refused": "Refused to choose an option: actions aren't allowed on this page",
           "failed": "Couldn't choose the option"
+        },
+        "capture": {
+          "done": "Took a screenshot",
+          "refused": "Refused a screenshot: this page isn't shared",
+          "failed": "Couldn't take a screenshot"
+        },
+        "console": {
+          "done": "Read the console",
+          "refused": "Refused to read the console: this page isn't shared",
+          "failed": "Couldn't read the console"
         }
       },
       "activityCount": "{count}×",

@@ -9,6 +9,10 @@ import type { HostRule } from "./host-rules"
 import type {
   ActionOutcome,
   ActionRequest,
+  CaptureOutcome,
+  CaptureRequest,
+  ConsoleQuery,
+  ConsoleReadout,
   Bounds,
   BrowserCapabilities,
   BrowserDownload,
@@ -284,6 +288,31 @@ export function browserAgentAct(
   request: ActionRequest
 ): Promise<ActionOutcome> {
   return getTransport().call<ActionOutcome>("browser_agent_act", {
+    tabId,
+    request,
+  })
+}
+
+/** What a shared page has printed to its console. A read: needs the tab
+ *  shared, and rejects with a permission error otherwise. */
+export function browserAgentConsole(
+  tabId: string,
+  query: ConsoleQuery = {}
+): Promise<ConsoleReadout> {
+  return getTransport().call<ConsoleReadout>("browser_agent_console", {
+    tabId,
+    query,
+  })
+}
+
+/** A screenshot of a shared page, or of one element of it by ref. A read:
+ *  needs the tab shared; a ref from a page that has moved on rejects with
+ *  `browser.agent.error.staleRef`. */
+export function browserAgentCapture(
+  tabId: string,
+  request: CaptureRequest = {}
+): Promise<CaptureOutcome> {
+  return getTransport().call<CaptureOutcome>("browser_agent_capture", {
     tabId,
     request,
   })

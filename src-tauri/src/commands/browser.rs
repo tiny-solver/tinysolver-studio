@@ -11,6 +11,8 @@ use tauri::Url;
 
 use crate::app_error::AppCommandError;
 use crate::browser::agent::{self, GrantLevel};
+use crate::browser::capture::{self, CaptureOutcome, CaptureRegion, CaptureRequest};
+use crate::browser::console::{ConsoleQuery, ConsoleReadout};
 use crate::browser::doc_guest::{self, DocGuestState, DocGuests, DocMode};
 use crate::browser::downloads::{BrowserDownload, BrowserDownloads};
 use crate::browser::policy::{BrowserPolicy, HostRule};
@@ -1114,6 +1116,37 @@ fn control_required(tab_id: &str) -> AppCommandError {
     .with_i18n(BROWSER_I18N_KEY_CONTROL_REQUIRED, std::collections::BTreeMap::new())
 }
 
+/// The tab was closed — or closed and reopened under the same id — while a
+/// read of it was in flight. Not the tab the read was about, so nothing is
+/// handed out and no line is written to the strip of whatever holds the id
+/// now; the agent is told to list the tabs again.
+fn tab_replaced(tab_id: &str) -> AppCommandError {
+    AppCommandError::not_found(format!(
+        "browser tab {tab_id} was closed while it was being read"
+    ))
+}
+
+/// After a read that spanned an `await`: whether the tab is still the one it
+/// started on and its grant still covers the page the world reported.
+/// Outer `None` — the tab is gone or is another incarnation now; inner
+/// `false` — same tab, grant withdrawn or page elsewhere.
+fn still_readable(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    generation: u64,
+    walked_origin: Option<&str>,
+) -> Option<bool> {
+    registry
+        .read(tab_id, |tab| {
+            (tab.generation == generation).then(|| {
+                tab.state.agent_grant.as_ref().is_some_and(|grant| {
+                    grant.level.allows(GrantLevel::Read) && grant.covers(walked_origin)
+                })
+            })
+        })
+        .flatten()
+}
+
 fn stale_ref(detail: &str) -> AppCommandError {
     AppCommandError::invalid_input(detail)
         .with_i18n(BROWSER_I18N_KEY_STALE_REF, std::collections::BTreeMap::new())
@@ -1366,19 +1399,11 @@ async fn read_shared_page(
 
     let walked = Url::parse(&snapshot.url).ok();
     let walked_origin = walked.as_ref().and_then(hooks::origin_of);
-    let allowed = registry
-        .read(tab_id, |tab| {
-            tab.generation == generation
-                && tab.state.agent_grant.as_ref().is_some_and(|grant| {
-                    grant.level.allows(GrantLevel::Read)
-                        && grant.covers(walked_origin.as_deref())
-                })
-        })
-        .unwrap_or(false);
-    if !allowed {
-        return Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id)));
+    match still_readable(registry, tab_id, generation, walked_origin.as_deref()) {
+        Some(true) => Ok(snapshot),
+        Some(false) => Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id))),
+        None => Err((None, tab_replaced(tab_id))),
     }
-    Ok(snapshot)
 }
 
 /// Act on a shared page — click, hover, type, press, select — by the ref a
@@ -1701,7 +1726,241 @@ fn settle(
     })
 }
 
-/// The two browser tools an agent gets, answered from this process's tab
+/// Read what a shared page has printed to its console.
+///
+/// A read, gated like a snapshot (`GrantLevel::Read`) and leaving the same
+/// kind of line on the strip. The lines come from the ring the tab keeps
+/// (`browser::console`), filtered to those whose origin the grant covers — so
+/// a line from an embedded frame on another site, or one that arrived around
+/// a navigation, is never handed out — and only while the page on screen is
+/// itself one the grant covers, the same condition a snapshot is held to.
+pub async fn agent_console_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    query: &ConsoleQuery,
+) -> Result<ConsoleReadout, AppCommandError> {
+    revoke_if_listener_replaced(app, registry, tab_id).await;
+    let (outcome, answer) = match read_console(registry, tab_id, query) {
+        Ok(readout) => (Some(agent::AgentOutcome::Done), Ok(readout)),
+        Err((outcome, err)) => (outcome, Err(err)),
+    };
+    if let Some(outcome) = outcome {
+        events::emit_agent_activity(app, tab_id, agent::AgentAction::Console, outcome, now_millis());
+    }
+    answer
+}
+
+fn read_console(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    query: &ConsoleQuery,
+) -> Result<ConsoleReadout, ReadFailure> {
+    let answer = registry.read(tab_id, |tab| {
+        let grant = tab
+            .state
+            .agent_grant
+            .as_ref()
+            .filter(|grant| grant.level.allows(GrantLevel::Read))?;
+        // The page on screen has to be the one shared, as for a snapshot;
+        // then each line is held to the same origin on its own.
+        if !grant.covers(tab.state.origin.as_deref()) {
+            return None;
+        }
+        Some(
+            tab.console
+                .read(query, &tab.state.url, |origin| grant.covers(origin)),
+        )
+    });
+    match answer {
+        None => Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        )),
+        Some(None) => Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id))),
+        Some(Some(readout)) => Ok(readout),
+    }
+}
+
+/// Take a screenshot of a shared page, or of one element of it.
+///
+/// A read: gated on `GrantLevel::Read` like a snapshot, checked before the
+/// engine draws a pixel and again once the pixels are in hand — a grant
+/// taken back while the engine was drawing withholds the image, as the
+/// snapshot path withholds the tree. An element's box comes from the world
+/// under the same ref rules as an action (`browser_stale_ref` when the page
+/// has moved past the snapshot); the capture itself is the platform's
+/// viewport image, cropped and scaled here (`browser::capture`).
+pub async fn agent_capture_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    request: &CaptureRequest,
+) -> Result<CaptureOutcome, AppCommandError> {
+    revoke_if_listener_replaced(app, registry, tab_id).await;
+    let (outcome, answer) = match capture_shared_page(registry, tab_id, request).await {
+        Ok(capture) => (Some(agent::AgentOutcome::Done), Ok(capture)),
+        Err((outcome, err)) => (outcome, Err(err)),
+    };
+    if let Some(outcome) = outcome {
+        events::emit_agent_activity(app, tab_id, agent::AgentAction::Capture, outcome, now_millis());
+    }
+    answer
+}
+
+/// How long the engine gets to draw the page for a capture. Longer than the
+/// freeze frame's budget, which had an animation to keep up with; a tool call
+/// can wait for a heavy page.
+const CAPTURE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// A frame's worth of waiting after the world scrolled an element into view,
+/// so the pixels the engine hands over are of the page as it is now.
+const SCROLL_SETTLE: Duration = Duration::from_millis(60);
+
+async fn capture_shared_page(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    request: &CaptureRequest,
+) -> Result<CaptureOutcome, ReadFailure> {
+    let Some((surface, generation, epoch, level)) = registry.read(tab_id, |tab| {
+        (
+            tab.surface.clone(),
+            tab.generation,
+            agent::epoch(tab.generation, tab.nav_epoch),
+            agent::level_of(tab.state.agent_grant.as_ref()),
+        )
+    }) else {
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    };
+    let failed = |err: AppCommandError| (Some(agent::AgentOutcome::Failed), err);
+    let capture_err = |detail: String| window_err("Failed to capture the page", detail);
+    // Before the page is touched: an unshared tab is not even measured.
+    if !level.allows(GrantLevel::Read) {
+        return Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id)));
+    }
+
+    // What to capture: the element's visible box, or the whole viewport.
+    // Either way the world says where the page is, in its own `location`.
+    let (url, viewport, region, clipped, scrolled) = match request.clip_target() {
+        Some((quoted, target)) => {
+            if !agent::ref_is_current(quoted, &epoch) {
+                return Err(failed(stale_ref(
+                    "the page has navigated since that snapshot; take a new one",
+                )));
+            }
+            let raw = eval_in_world_string(&surface, &agent::rect_call(quoted, target))
+                .await
+                .map_err(failed)?;
+            if raw == agent::ENGINE_ABSENT {
+                return Err(failed(stale_ref(
+                    "no snapshot has been taken of this page; take one first",
+                )));
+            }
+            let answer: agent::RectAnswer = serde_json::from_str(&raw)
+                .map_err(|e| failed(capture_err(format!("unreadable answer: {e}"))))?;
+            if !answer.ok {
+                let detail = answer
+                    .detail
+                    .unwrap_or_else(|| "the element could not be captured".to_string());
+                return Err(failed(match answer.error {
+                    Some(agent::ActionError::Stale) | None => stale_ref(&detail),
+                    Some(error) => action_failed(error, &detail),
+                }));
+            }
+            let (Some(x), Some(y), Some(width), Some(height), Some(viewport)) =
+                (answer.x, answer.y, answer.width, answer.height, answer.viewport)
+            else {
+                return Err(failed(capture_err("the page answered with no box".to_string())));
+            };
+            (
+                answer.url,
+                viewport,
+                CaptureRegion { x, y, width, height },
+                true,
+                answer.scrolled,
+            )
+        }
+        None => {
+            let raw = eval_in_world_string(&surface, agent::viewport_call())
+                .await
+                .map_err(failed)?;
+            let answer: agent::ViewportAnswer = serde_json::from_str(&raw)
+                .map_err(|e| failed(capture_err(format!("unreadable answer: {e}"))))?;
+            let region = CaptureRegion {
+                x: 0.0,
+                y: 0.0,
+                width: answer.viewport.width,
+                height: answer.viewport.height,
+            };
+            (answer.url, answer.viewport, region, false, false)
+        }
+    };
+
+    // The page the world reports is one the grant covers, on the same tab —
+    // checked before the engine draws a pixel, so a page nobody shared is
+    // never rendered for an agent, and again below with the pixels in hand.
+    // A tab that is another incarnation by then is not the one this was
+    // about: nothing is handed out, and nothing is written to its strip.
+    let walked_origin = Url::parse(&url).ok().as_ref().and_then(hooks::origin_of);
+    let admit = || match still_readable(registry, tab_id, generation, walked_origin.as_deref()) {
+        Some(true) => Ok(()),
+        Some(false) => Err((Some(agent::AgentOutcome::Refused), grant_required(tab_id))),
+        None => Err((None, tab_replaced(tab_id))),
+    };
+    admit()?;
+    if scrolled {
+        tokio::time::sleep(SCROLL_SETTLE).await;
+    }
+    let encoded = capture_viewport(&surface).await.map_err(failed)?;
+    let max_width = capture::effective_max_width(request.max_width);
+    let format = request.format;
+    let css_width = viewport.width;
+    let clip = clipped.then_some(region);
+    // Decoding and re-encoding a screenshot is real work; off the runtime.
+    let fitted = tokio::task::spawn_blocking(move || {
+        capture::fit(&encoded, css_width, clip, max_width, format)
+    })
+    .await
+    .map_err(|e| failed(capture_err(e.to_string())))?
+    .map_err(|e| failed(capture_err(e)))?;
+    admit()?;
+    Ok(CaptureOutcome {
+        mime: format.mime().to_string(),
+        data: base64::engine::general_purpose::STANDARD.encode(fitted.bytes),
+        width: fitted.width,
+        height: fitted.height,
+        url,
+        region,
+        clipped,
+    })
+}
+
+/// The viewport as the engine encodes it, within [`CAPTURE_TIMEOUT`].
+async fn capture_viewport(surface: &BrowserSurface) -> Result<Vec<u8>, AppCommandError> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<Vec<u8>, String>>();
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    surface
+        .snapshot_png(move |result| {
+            if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+                let _ = tx.send(result);
+            }
+        })
+        .map_err(|e| window_err("Failed to capture the page", e))?;
+    match tokio::time::timeout(CAPTURE_TIMEOUT, rx).await {
+        Ok(Ok(Ok(bytes))) => Ok(bytes),
+        Ok(Ok(Err(err))) => Err(window_err("Failed to capture the page", err)),
+        Ok(Err(_)) => Err(window_err("Failed to capture the page", "the request was dropped")),
+        Err(_) => Err(window_err(
+            "Failed to capture the page",
+            "the engine did not draw the page in time",
+        )),
+    }
+}
+
+/// The browser tools an agent gets, answered from this process's tab
 /// registry.
 ///
 /// Holds an `AppHandle` rather than the registry itself: the registry is Tauri
@@ -1821,6 +2080,73 @@ impl crate::acp::browser_tools::BrowserToolAccess for McpBrowserTools {
                     )
                 }
                 _ => BrowserActOutcome::refused(tab_id, ERROR_ACTION_FAILED, err.message),
+            },
+        }
+    }
+
+    async fn console(
+        &self,
+        tab_id: &str,
+        query: ConsoleQuery,
+    ) -> crate::acp::browser_tools::BrowserConsoleOutcome {
+        use crate::acp::browser_tools::{
+            BrowserConsoleOutcome, ERROR_NO_SUCH_TAB, ERROR_READ_FAILED, ERROR_UNAVAILABLE,
+            NO_BROWSER_NOTE,
+        };
+        let Some(registry) = self.registry().await else {
+            return BrowserConsoleOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+        };
+        match agent_console_core(&self.app, &registry, tab_id, &query).await {
+            Ok(readout) => BrowserConsoleOutcome::lines(tab_id, readout),
+            Err(err) if err.i18n_key.as_deref() == Some(BROWSER_I18N_KEY_GRANT_REQUIRED) => {
+                BrowserConsoleOutcome::grant_required(tab_id)
+            }
+            Err(err) if matches!(err.code, crate::app_error::AppErrorCode::NotFound) => {
+                BrowserConsoleOutcome::refused(
+                    tab_id,
+                    ERROR_NO_SUCH_TAB,
+                    format!(
+                        "No browser tab {tab_id} is open. Call browser_list_tabs for the ids \
+                         that are."
+                    ),
+                )
+            }
+            Err(err) => BrowserConsoleOutcome::refused(tab_id, ERROR_READ_FAILED, err.message),
+        }
+    }
+
+    async fn capture(
+        &self,
+        tab_id: &str,
+        request: CaptureRequest,
+    ) -> crate::acp::browser_tools::BrowserCaptureOutcome {
+        use crate::acp::browser_tools::{
+            BrowserCaptureOutcome, ERROR_NO_SUCH_TAB, ERROR_READ_FAILED, ERROR_UNAVAILABLE,
+            NO_BROWSER_NOTE,
+        };
+        let Some(registry) = self.registry().await else {
+            return BrowserCaptureOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+        };
+        match agent_capture_core(&self.app, &registry, tab_id, &request).await {
+            Ok(capture) => BrowserCaptureOutcome::image(tab_id, capture),
+            Err(err) => match err.i18n_key.as_deref() {
+                Some(BROWSER_I18N_KEY_GRANT_REQUIRED) => {
+                    BrowserCaptureOutcome::grant_required(tab_id)
+                }
+                Some(BROWSER_I18N_KEY_STALE_REF) => {
+                    BrowserCaptureOutcome::stale_ref(tab_id, &err.message)
+                }
+                _ if matches!(err.code, crate::app_error::AppErrorCode::NotFound) => {
+                    BrowserCaptureOutcome::refused(
+                        tab_id,
+                        ERROR_NO_SUCH_TAB,
+                        format!(
+                            "No browser tab {tab_id} is open. Call browser_list_tabs for the ids \
+                             that are."
+                        ),
+                    )
+                }
+                _ => BrowserCaptureOutcome::refused(tab_id, ERROR_READ_FAILED, err.message),
             },
         }
     }
@@ -2165,6 +2491,30 @@ pub async fn browser_agent_act(
     request: agent::ActionRequest,
 ) -> Result<agent::ActionOutcome, AppCommandError> {
     agent_act_core(&app, &registry, &tab_id, &request).await
+}
+
+/// What a shared page printed to its console. Gated inside
+/// `agent_console_core`, so every caller gets the check.
+#[tauri::command]
+pub async fn browser_agent_console(
+    app: AppHandle,
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+    query: Option<ConsoleQuery>,
+) -> Result<ConsoleReadout, AppCommandError> {
+    agent_console_core(&app, &registry, &tab_id, &query.unwrap_or_default()).await
+}
+
+/// A screenshot of a shared page, or of one element of it. Gated inside
+/// `agent_capture_core`, so every caller gets the check.
+#[tauri::command]
+pub async fn browser_agent_capture(
+    app: AppHandle,
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+    request: Option<CaptureRequest>,
+) -> Result<CaptureOutcome, AppCommandError> {
+    agent_capture_core(&app, &registry, &tab_id, &request.unwrap_or_default()).await
 }
 
 /// Downloads this run started, oldest first. The frontend hydrates from it on

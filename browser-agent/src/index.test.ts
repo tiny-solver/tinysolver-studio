@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { shownRefs, truncate } from "./index"
+import { rectOf, shownRefs, truncate } from "./index"
 
 /**
  * The tree itself is Playwright's and is exercised against a real engine by
@@ -85,5 +85,20 @@ describe("shownRefs", () => {
   it("hands out nothing for a cut inside the first line, and everything for no cut", () => {
     expect(shownRefs(lineToNode, rendered, rendered.slice(0, 5)).size).toBe(0)
     expect(shownRefs(lineToNode, rendered, rendered).size).toBe(3)
+  })
+})
+
+describe("rectOf", () => {
+  // The one part of it that is decidable without a real engine: a ref from
+  // no snapshot of this document is stale, and the answer says so in the
+  // same words `act` uses — before the element is looked for at all.
+  it("refuses a ref that no snapshot of this document handed out", () => {
+    const result = rectOf("not-a-token", "e1")
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe("stale")
+      expect(result.detail).toContain("e1")
+      expect(result.url).toBe(location.href)
+    }
   })
 })

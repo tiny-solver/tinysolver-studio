@@ -6037,6 +6037,16 @@
           "done": "选择了一个选项",
           "refused": "已拒绝选择：此页面不允许操作",
           "failed": "无法选择选项"
+        },
+        "capture": {
+          "done": "截了一张图",
+          "refused": "已拒绝截图：此页面未共享",
+          "failed": "截图失败"
+        },
+        "console": {
+          "done": "读取了控制台",
+          "refused": "已拒绝读取控制台：此页面未共享",
+          "failed": "读取控制台失败"
         }
       },
       "activityCount": "{count} 次",

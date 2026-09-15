@@ -26,6 +26,13 @@ const BUNDLE = readFileSync(
   resolve(root, "src-tauri/src/browser/js/agent.bundle.js"),
   "utf8"
 )
+// The page-world console shim, injected by the host into the PAGE world on
+// the WebKit ports. Not part of the bundle; the probe measures the channel
+// between it and this world.
+const CONSOLE_SHIM = readFileSync(
+  resolve(root, "src/browser-injected/console.js"),
+  "utf8"
+)
 
 const CHROME =
   process.env.CHROME_PATH ??
@@ -579,6 +586,118 @@ try {
     ),
     null
   )
+
+  // ── capturing ──────────────────────────────────────────────────────────
+  {
+    const { gen, ref } = await fresh()
+    const count = ref(/button "Count" \[ref=(e\d+)\]/)
+    const rect = JSON.parse(
+      await run(
+        `JSON.stringify(__codegAgent.rectOf(${gen}, ${JSON.stringify(count)}))`
+      )
+    )
+    check(
+      "rectOf answers with the element's box and the viewport",
+      rect.ok &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.viewport.width > 0 &&
+        (await run(
+          `(() => { const r = document.getElementById("count").getBoundingClientRect();
+                  return Math.abs(r.left - ${rect.x}) < 1 && Math.abs(r.top - ${rect.y}) < 1 })()`
+        )),
+      true
+    )
+    const stale = JSON.parse(
+      await run(
+        `JSON.stringify(__codegAgent.rectOf("other", ${JSON.stringify(count)}))`
+      )
+    )
+    check("rectOf refuses a ref from another snapshot", stale.error, "stale")
+  }
+
+  // ── console ────────────────────────────────────────────────────────────
+  // The page-world shim's lines have to reach this world. The channel is a
+  // DOM event whose detail is one string — the kind of value that crosses a
+  // world boundary unchanged — and here that claim is measured in an engine
+  // with real world isolation, with the shim in the page's world where the
+  // host puts it and the listener in this one where the helper has it.
+  {
+    await run(
+      `globalThis.__lines = [];
+       document.addEventListener("codeg:console", (e) => {
+         __lines.push(typeof e.detail === "string" ? JSON.parse(e.detail) : { bad: typeof e.detail })
+       }, true); true`
+    )
+    await send("Runtime.evaluate", {
+      expression: CONSOLE_SHIM,
+      returnByValue: true,
+    })
+    await send("Runtime.evaluate", {
+      expression: `console.log("hello", {a: 1, b: [1, 2]});
+                   console.error("%s has %d items", "cart", 3);
+                   console.warn(new Error("careful"));
+                   console.debug(document.body);
+                   console.assert(1 === 2, "math");
+                   console.assert(true, "not printed")`,
+      returnByValue: true,
+    })
+    const lines = JSON.parse(await run("JSON.stringify(__lines)"))
+    check(
+      "console lines cross from the page world as strings, formatted",
+      [
+        lines.length,
+        lines[0]?.level,
+        lines[0]?.text,
+        lines[1]?.text,
+        lines[2]?.level,
+        lines[2]?.text.startsWith("Error: careful"),
+        lines[3]?.text,
+        lines[4]?.level,
+        lines[4]?.text,
+      ],
+      [
+        5,
+        "log",
+        "hello {a: 1, b: [1, 2]}",
+        "cart has 3 items",
+        "warn",
+        true,
+        "<body>",
+        "error",
+        "Assertion failed: math",
+      ]
+    )
+    // Formatting runs no page code: an accessor is shown, not invoked, and
+    // the page's own call has already happened when the copy is taken.
+    await send("Runtime.evaluate", {
+      expression: `globalThis.__got = 0;
+                   console.log({ get secret() { globalThis.__got++; return 1 }, plain: 2 })`,
+      returnByValue: true,
+    })
+    const quiet = JSON.parse(
+      await run("JSON.stringify(__lines[__lines.length - 1])")
+    )
+    const got = await send("Runtime.evaluate", {
+      expression: "globalThis.__got",
+      returnByValue: true,
+    })
+    check(
+      "a getter on a logged object is shown, not run",
+      [quiet.text, got.result.result.value],
+      ["{secret: (…), plain: 2}", 0]
+    )
+    const pageView = await send("Runtime.evaluate", {
+      expression:
+        "JSON.stringify([console.log.name, typeof globalThis.__lines, typeof __codegAgent])",
+      returnByValue: true,
+    })
+    check(
+      "the wrapped method keeps its name, and the page sees neither world global",
+      JSON.parse(pageView.result.result.value),
+      ["log", "undefined", "undefined"]
+    )
+  }
 
   // The premise the whole design rests on, measured instead of assumed: this
   // world cannot intercept the page's own history calls, which is why

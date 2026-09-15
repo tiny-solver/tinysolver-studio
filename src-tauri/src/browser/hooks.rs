@@ -90,6 +90,10 @@ pub fn page_load(app: &AppHandle, tab_id: &str, url: &Url, started: bool) {
             // the host counts too: `nav_epoch` is also what distinguishes two
             // route changes inside one document, where the world cannot tell.
             tab.nav_epoch += 1;
+            // The console is the document's: what the old one printed is
+            // not a fact about the page that is on screen now, and a read of
+            // this tab from here on is a read of the new one.
+            tab.console.clear();
         }
         let state = &mut tab.state;
         state.url = url.to_string();

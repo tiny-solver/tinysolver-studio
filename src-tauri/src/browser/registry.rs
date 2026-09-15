@@ -11,6 +11,7 @@ use serde_json::Value;
 
 use crate::app_error::AppCommandError;
 
+use super::console::{self, ConsoleRing, ReportedLine};
 use super::surface::BrowserSurface;
 use super::types::{Bounds, BrowserTabState};
 
@@ -68,6 +69,10 @@ pub struct BrowserTab {
     /// recognised for what it is: a load the engine refused silently.
     pub provisional_url: Option<String>,
     pub gestures: VecDeque<GestureRecord>,
+    /// What the current document has printed to the console, for an agent
+    /// the tab is shared with. Cleared when a new document commits
+    /// (`hooks::page_load`); see `console.rs` for what it holds and why.
+    pub console: ConsoleRing,
 }
 
 impl BrowserTab {
@@ -91,6 +96,7 @@ impl BrowserTab {
             nav_epoch: 0,
             provisional_url: None,
             gestures: VecDeque::with_capacity(GESTURE_RING_CAPACITY),
+            console: ConsoleRing::new(),
         }
     }
 }
@@ -367,6 +373,27 @@ impl BrowserRegistry {
     }
 
     /// Newest first.
+    /// Record a line the page printed — when it is the page's own: a line
+    /// from a frame on another origin could never be read (the grant covers
+    /// one origin, the tab's) and is not kept. Nothing to do for a tab that
+    /// is gone.
+    pub fn push_console(&self, tab_id: &str, line: ReportedLine) {
+        self.update(tab_id, |tab| {
+            let admissible = console::admissible(tab.state.origin.as_deref(), line.origin.as_deref());
+            tab.console.push(line, admissible);
+        });
+    }
+
+    /// Lines a sender of the tab's own origin discarded before it could
+    /// report them on a line of their own.
+    pub fn note_console_dropped(&self, tab_id: &str, origin: Option<&str>, count: u64) {
+        self.update(tab_id, |tab| {
+            if console::admissible(tab.state.origin.as_deref(), origin) {
+                tab.console.note_dropped(count);
+            }
+        });
+    }
+
     pub fn recent_gestures(&self, tab_id: &str) -> Vec<GestureRecord> {
         self.lock()
             .get(tab_id)

@@ -260,6 +260,10 @@ pub enum AgentAction {
     Press,
     /// Chose an option.
     Select,
+    /// Took a screenshot.
+    Capture,
+    /// Read the console.
+    Console,
 }
 
 impl From<&ActionKind> for AgentAction {
@@ -782,6 +786,70 @@ pub fn locate_call(generation: &str, target: &str) -> String {
         generation = serde_json::Value::from(generation),
         target = serde_json::Value::from(target),
     )
+}
+
+// ---------------------------------------------------------------------------
+// Capturing
+// ---------------------------------------------------------------------------
+
+/// What the world answers to `rectOf`: the element's visible box in viewport
+/// CSS pixels, or the refusal, in the same words `act` uses. `viewport`
+/// rides along so the host can turn CSS pixels into the capture's own.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RectAnswer {
+    pub ok: bool,
+    pub url: String,
+    #[serde(default)]
+    pub error: Option<ActionError>,
+    #[serde(default)]
+    pub detail: Option<String>,
+    #[serde(default)]
+    pub x: Option<f64>,
+    #[serde(default)]
+    pub y: Option<f64>,
+    #[serde(default)]
+    pub width: Option<f64>,
+    #[serde(default)]
+    pub height: Option<f64>,
+    /// Bringing the element into view moved the page, so the engine owes a
+    /// frame before its pixels match the box.
+    #[serde(default)]
+    pub scrolled: bool,
+    #[serde(default)]
+    pub viewport: Option<SnapshotViewport>,
+}
+
+/// What the world answers to [`viewport_call`]: where the page is and how
+/// large the viewport is, for a capture of the whole of it.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewportAnswer {
+    pub url: String,
+    pub viewport: SnapshotViewport,
+}
+
+/// `JSON.stringify(__codegAgent.rectOf(generation, ref))`: the element's
+/// visible box, for a capture cropped to it. [`ENGINE_ABSENT`] when no
+/// snapshot was ever taken in this document, which makes the ref stale.
+pub fn rect_call(generation: &str, target: &str) -> String {
+    format!(
+        "typeof globalThis.{AGENT_GLOBAL} === 'undefined' ? {absent} : \
+         JSON.stringify(globalThis.{AGENT_GLOBAL}.rectOf({generation}, {target}))",
+        absent = serde_json::Value::from(ENGINE_ABSENT),
+        generation = serde_json::Value::from(generation),
+        target = serde_json::Value::from(target),
+    )
+}
+
+/// `JSON.stringify({url, viewport})` from the world's own `location` and
+/// `window`. Needs no bundle, so a capture of the whole viewport installs
+/// nothing in a page that was only ever screenshotted; the address is the
+/// world's, which the page cannot forge, and is what the host holds against
+/// the grant.
+pub fn viewport_call() -> &'static str {
+    "JSON.stringify({url: String(location.href), viewport: {width: window.innerWidth, \
+     height: window.innerHeight, dpr: window.devicePixelRatio}})"
 }
 
 #[cfg(test)]

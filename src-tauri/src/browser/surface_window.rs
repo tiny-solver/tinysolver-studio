@@ -553,6 +553,7 @@ mod platform {
                     &live.webview,
                     &[channel::PREFIX_SCRIPT, channel::HELPER_JS],
                     &[channel::FRAME_PREFIX_SCRIPT, channel::HELPER_JS],
+                    &[channel::CONSOLE_JS],
                     sink,
                 )
                 .map_err(SurfaceError)

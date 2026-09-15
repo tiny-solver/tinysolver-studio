@@ -6037,6 +6037,16 @@
           "done": "選擇了一個選項",
           "refused": "已拒絕選擇：此頁面不允許操作",
           "failed": "無法選擇選項"
+        },
+        "capture": {
+          "done": "擷取了一張截圖",
+          "refused": "已拒絕截圖：此頁面未分享",
+          "failed": "截圖失敗"
+        },
+        "console": {
+          "done": "讀取了主控台",
+          "refused": "已拒絕讀取主控台：此頁面未分享",
+          "failed": "讀取主控台失敗"
         }
       },
       "activityCount": "{count} 次",

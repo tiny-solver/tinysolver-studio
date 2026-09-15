@@ -379,7 +379,12 @@ impl ChildHandle {
         #[cfg(target_os = "macos")]
         {
             self.with(move |wv| {
-                shim::install_world(wv, &[channel::PREFIX_SCRIPT, channel::HELPER_JS], sink)
+                shim::install_world(
+                    wv,
+                    &[channel::PREFIX_SCRIPT, channel::HELPER_JS],
+                    &[channel::CONSOLE_JS],
+                    sink,
+                )
             })?
             .map_err(ChildError::Op)
         }
@@ -387,14 +392,17 @@ impl ChildHandle {
         // primitive the helper looks for. The install waits for the engine's
         // completions by pumping the message loop, so the engine object is
         // taken out of the surface map first — anything that pump dispatches
-        // (a tab closing, another opening) needs the map free.
+        // (a tab closing, another opening) needs the map free. The engine
+        // reports the page's console itself, and the helper is told so.
         #[cfg(target_os = "windows")]
         {
             let id = self.tab_id.clone();
             run_on_main(&self.app, move || {
                 SURFACES
                     .with(|s| s.borrow().get(&id).map(shim::engine_webview))
-                    .map(|wv| shim::install_world(wv, channel::HELPER_JS, sink, adopted))
+                    .map(|wv| {
+                        shim::install_world(wv, channel::HELPER_JS_ENGINE_CONSOLE, sink, adopted)
+                    })
             })?
             .ok_or_else(|| ChildError::Gone(self.tab_id.clone()))?
             .map_err(ChildError::Op)
