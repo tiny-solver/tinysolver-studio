@@ -270,7 +270,9 @@ describe("PetFocusBridge", () => {
 
     // First request needs folder 9 opened; it parks on that promise.
     handlers.get(FOCUS)!({ folderId: 9, conversationId: 1, agent: "grok" })
-    await waitFor(() => expect(addFolderToWorkspaceById).toHaveBeenCalledWith(9))
+    await waitFor(() =>
+      expect(addFolderToWorkspaceById).toHaveBeenCalledWith(9)
+    )
     expect(tabs.openTab).not.toHaveBeenCalled()
 
     // Second request arrives mid-await, into folder 8 — already open, so its
