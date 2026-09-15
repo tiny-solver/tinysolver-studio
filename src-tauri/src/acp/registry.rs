@@ -652,10 +652,11 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // the schema's `unstable_message_id` feature).
             //
             // (d) The AIR capability array grew to `["sessionFailure",
-            // "agentFileChangeReport", "nativeSubagentSessions", "asyncTasks"]`.
-            // codeg adopted `asyncTasks` and deliberately leaves the other two
-            // out, so `native-subagents.js` and `file-change-audit.js` stay
-            // dark. See `build_client_capabilities` for why each is in or out.
+            // "agentFileChangeReport", "nativeSubagentSessions", "asyncTasks"]`
+            // (0.76.0 appends a fifth, "recommendedValue" — see (k)). codeg
+            // adopted `asyncTasks` and deliberately leaves the other two out, so
+            // `native-subagents.js` and `file-change-audit.js` stay dark. See
+            // `build_client_capabilities` for why each is in or out.
             //
             // Also new and reachable through existing generic paths:
             // `exit-plan.js` + `clear-context-coordinator.js` give ExitPlanMode
@@ -780,9 +781,125 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // land mid-turn). 0.75.1 additionally drops the automatic
             // `getContextUsage` control requests, and `/usage` output now comes
             // back as Markdown, which the transcript renderer already handles.
+            //
+            // 0.76.0 + 0.77.0 are sixteen commits, and the bundled SDK moves
+            // 0.3.257 → 0.3.270 with it — i.e. the Claude Code CLI behind the
+            // adapter goes 2.1.257 → 2.1.270 (`manifest.json` `version`).
+            //
+            // (k) `recommendedValue` (upstream #1111), the release's headline
+            // and a NEW AIR capability codeg now advertises — for claude ALONE,
+            // because codex-acp 1.10.0's bundle contains zero occurrences of the
+            // string. It is opt-in in both directions: the adapter transforms
+            // nothing unless the client names it in
+            // `clientCapabilities._meta.jetbrains.air.capabilities`, and it
+            // re-advertises the same name in its own initialize `_meta`.
+            //
+            // Captured off a live 0.77.0 over stdio — identical `session/new`,
+            // the capability withheld and then sent:
+            //
+            //   WITHOUT: model  options ["default", "opus[1m]", "sonnet", …]
+            //            effort options ["default", "low", "medium", …]
+            //            …and `set_config_option(model, "default")` → Ok.
+            //   WITH:    model  options ["opus[1m]", "sonnet", …]
+            //                   + _meta.jetbrains.air.recommendedValue "opus[1m]"
+            //            effort options ["low", "medium", …]
+            //                   + _meta.jetbrains.air.recommendedValue "medium"
+            //            …and the same set → `Invalid value for config option
+            //            model: default`.
+            //
+            // The ambiguous row is the point. `current_model_id_from_opts` reads
+            // the model selector's `current_value`, and that is the model id
+            // `record_turn_end` stamps onto every turn codeg journals — on the
+            // `default` row it is the literal string `"default"`, which no
+            // consumer can resolve to a model. With the capability on, a session
+            // still riding the SDK default reports the concrete model instead.
+            //
+            // The cost, stated: a user with NO effort setting anywhere now gets
+            // the recommendation (`medium`) applied to the SDK at session
+            // creation and on every model switch, where a legacy client let the
+            // SDK resolve automatic effort. Everybody else is unaffected — the
+            // adapter's `settingsEffortForModel` reads per-model
+            // `modelSettings.effortLevel` first, then the legacy top-level one,
+            // and only falls through to the recommendation when both are absent.
+            //
+            // Stale `"default"` picks in `codeg:selector-prefs` are the
+            // migration hazard: the connect-time replay would re-send a value
+            // the agent now rejects, on every connect, forever, and the row the
+            // user would have to re-pick to overwrite it is the one that went
+            // away. `config_option_rejects_value` handles it off the agent's
+            // OWN advertised value list rather than off this pin — which
+            // matters, because the pin only governs what codeg installs, while
+            // `resolve_npx_command` launches whatever `claude-agent-acp` is on
+            // PATH.
+            //
+            // Label normalization needs no opt-in and lands for legacy clients
+            // too (same capture): `opus[1m]` renders "Opus 5" instead of "Opus
+            // (1M context)" (the context stays in the description), and a custom
+            // `haiku` alias pointing at `claude-sonnet-5` renders "Sonnet 5"
+            // with "Custom Haiku model (claude-sonnet-5)" beneath it, where
+            // 0.75.1 put the raw model id in the NAME.
+            //
+            // (l) BREAKING (upstream #1112): the main-thread `agent` config
+            // option is gone, along with custom-agent discovery. This one is NOT
+            // gated on the capability — 0.77.0 answers `set_config_option(agent,
+            // …)` with `Unknown config option: agent` no matter what the client
+            // advertised (verified on the same live build). codeg never built a
+            // picker for it, but the option WAS advertised (and rendered by the
+            // generic selector path) whenever the cwd had a custom agent
+            // configured, so a user who picked a persona has it saved in
+            // `codeg:selector-prefs`.
+            //
+            // That preference is deliberately left alone. The option is no
+            // longer advertised at all, so `config_option_rejects_value` cannot
+            // and must not judge it — the generic rule there is that an
+            // unadvertised id belongs to the agent — and pruning it on the
+            // agent id instead would silently discard a still-working persona
+            // for anyone whose PATH still holds a ≤0.76 adapter. The cost of
+            // leaving it is one `set_config_option` error log per connect on
+            // 0.77.0. ACP subagent sessions and the `Agent`/`Task` tool are
+            // untouched — only the main-thread selector went away.
+            //
+            // (m) `_meta.permission.defaultToNo` (SDK 0.3.268+, forwarded by
+            // `presentation.js`): "the ask must not be approvable by a stray
+            // keystroke". The adapter already lists the reject options FIRST for
+            // such an ask, and codeg renders options in wire order and
+            // pre-selects nothing, so the hard half was free. What codeg adds is
+            // the emphasis: `PermissionDialog` paints the decline as the primary
+            // button and demotes every approve option to an outline, so the one
+            // accent-coloured control on a dangerous card is not "Allow". Read
+            // under the same `version: 1` gate as the sibling `description`.
+            //
+            // Its companion `suppressAlwaysAllowRule` needs nothing: it is
+            // consumed inside `buildClaudePermissionOptions`, so the
+            // always-allow button simply is not offered.
+            //
+            // (n) `<system-reminder>` blocks are stripped from replayed prompts
+            // (upstream #1040) — a codeg-visible fix that arrives for free. The
+            // CLI appends them to a user turn to steer the model; live they
+            // never reach a client, but `session/load` replayed them verbatim
+            // INSIDE the user's own bubble. `parsers::claude` has stripped them
+            // from the history path all along (see `STRIP_PATTERNS`), so 0.75.1
+            // drew the same turn two different ways depending on which path fed
+            // it. Nothing to do here beyond the bump.
+            //
+            // (o) Inert. Tool calls now carry the standard ACP `name` field
+            // (#1128, the tool-call-name RFD) — but the value is the same SDK
+            // tool name `_meta.claudeCode.toolName` already carries, which
+            // `inferLiveToolName` reads, and upstream explicitly keeps that key
+            // populated "for clients that key off it"; codeg's pinned
+            // `agent-client-protocol-schema` 0.11 has no `name` on `ToolCall`
+            // and drops it as an unknown field, so reading it would mean a raw
+            // pre-dispatch reader for information codeg already has. The
+            // multi-select custom-answer fix (#1031) lands in `elicitation.ts`,
+            // which claude never reaches: codeg advertises
+            // `elicitation.form` for Codex and DeepSeek only. The `TaskList`
+            // ReDoS fix (#1006) and the `allowDangerouslySkipPermissions: false`
+            // host opt-out (#1129) are adapter-internal — codeg WANTS the
+            // `bypassPermissions` mode in the catalog, so it deliberately does
+            // not send the opt-out.
             distribution: AgentDistribution::Npx {
-                version: "0.75.1",
-                package: "@agentclientprotocol/claude-agent-acp@0.75.1",
+                version: "0.77.0",
+                package: "@agentclientprotocol/claude-agent-acp@0.77.0",
                 cmd: "claude-agent-acp",
                 args: &[],
                 env: &[],
@@ -2095,8 +2212,8 @@ mod tests {
     fn registry_pins_current_acp_agent_versions() {
         assert_npx_version(
             AgentType::ClaudeCode,
-            "0.75.1",
-            "@agentclientprotocol/claude-agent-acp@0.75.1",
+            "0.77.0",
+            "@agentclientprotocol/claude-agent-acp@0.77.0",
             Some("22.0.0"),
         );
         assert_npx_version(

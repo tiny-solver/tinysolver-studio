@@ -4225,13 +4225,31 @@ fn build_client_capabilities(
     // ships". Revisit when the draft lands and the announcement carries enough
     // to rebuild the capsule — a parent tool-use id, or the child tool calls
     // arriving with one codeg has seen.
+    //
+    // "recommendedValue" (claude-agent-acp 0.76.0) is the one AIR capability
+    // that is NOT shared: codex-acp 1.10.0's bundle does not contain the
+    // string, so only claude gets it. With it on, claude's `model` and `effort`
+    // selectors drop their ambiguous `default` row and each names its
+    // recommendation in `_meta.jetbrains.air.recommendedValue`. codeg wants the
+    // ROW gone more than it wants the marker: `current_model_id_from_opts`
+    // reads the model selector's `current_value`, and that string is what
+    // `record_turn_end` stamps on every journaled turn — on the `default` row
+    // it is the literal `"default"`, a model id no consumer can resolve. See
+    // the claude entry in `registry.rs` (k) for the live capture of both
+    // shapes, the effort trade this accepts, and why the stale-`"default"`
+    // preference is healed on the frontend rather than here.
     if matches!(agent_type, AgentType::ClaudeCode | AgentType::Codex) {
+        let capabilities: &[&str] = if agent_type == AgentType::ClaudeCode {
+            &["sessionFailure", "asyncTasks", "recommendedValue"]
+        } else {
+            &["sessionFailure", "asyncTasks"]
+        };
         meta.insert(
             "jetbrains".to_string(),
             serde_json::json!({
                 "air": {
                     "version": 1,
-                    "capabilities": ["sessionFailure", "asyncTasks"],
+                    "capabilities": capabilities,
                 }
             }),
         );
@@ -7136,6 +7154,58 @@ fn config_option_already_holds(option: &SessionConfigOption, value: &str) -> boo
     }
 }
 
+/// Whether the option's OWN advertisement proves `value` is not selectable, so
+/// replaying a saved preference for it at connect is a guaranteed error.
+///
+/// This exists because a saved preference outlives the value it names.
+/// claude-agent-acp 0.76.0 is the case that forced it: once codeg advertises
+/// the AIR `recommendedValue` capability, the adapter REMOVES the `default` row
+/// from the model and effort selectors, and a user who had picked it keeps
+/// re-sending `"default"` on every connect forever — the option they would have
+/// to re-pick to overwrite it no longer exists. Nothing tells the user, so the
+/// preference cannot heal itself.
+///
+/// Decided from the agent's own answer, never from an agent id or a pinned
+/// version. That distinction is load-bearing: the registry pin only governs
+/// what codeg INSTALLS, while `resolve_npx_command` launches whatever
+/// `claude-agent-acp` is on PATH — so "this is the built-in Claude Code agent"
+/// says nothing about which release is actually running, and pruning on that
+/// assumption would silently discard a still-valid pick on an older adapter.
+///
+/// Deliberately narrow, in three ways:
+///
+/// * Only a `select`. A boolean takes both values by construction.
+/// * Only a NON-EMPTY value list. Some agents announce an empty
+///   `SessionConfigOptions` first and push the real one later (see
+///   `AcpManager::probe_agent_options`), and an option kind this build cannot
+///   decode also flattens to nothing — neither proves anything.
+/// * Only an option the agent ADVERTISED. An id that never appeared is left to
+///   the agent, exactly as before: codex answers `set_config_option` for ids it
+///   does not advertise (see the call site in
+///   [`apply_preferred_session_options`]).
+fn config_option_rejects_value(option: &SessionConfigOption, value: &str) -> bool {
+    let SessionConfigKind::Select(select) = &option.kind else {
+        return false;
+    };
+    // Grouped and ungrouped are one flat namespace here, the same way
+    // `config_option_rejection` reads them.
+    let mut advertised = match &select.options {
+        SessionConfigSelectOptions::Ungrouped(options) => {
+            options.iter().map(|o| o.value.to_string()).collect::<Vec<_>>()
+        }
+        SessionConfigSelectOptions::Grouped(groups) => groups
+            .iter()
+            .flat_map(|group| group.options.iter().map(|o| o.value.to_string()))
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    if advertised.is_empty() {
+        return false;
+    }
+    advertised.sort_unstable();
+    advertised.binary_search(&value.to_string()).is_err()
+}
+
 /// Whether an advertised option IS the agent's model selector. ACP reserves no
 /// id for it, so match either signal — the `category` every agent that has a
 /// model publishes it under (see [`current_model_id_from_opts`]) or the
@@ -7307,6 +7377,18 @@ async fn apply_preferred_session_options(
         let already_matches =
             advertised.is_some_and(|o| config_option_already_holds(o, value_id.as_str()));
         if already_matches {
+            continue;
+        }
+        // …and skip a value the option's own advertisement rules out. Sending
+        // it can only fail, and a saved preference for a value an agent
+        // retired would otherwise fail on EVERY connect for good — see
+        // `config_option_rejects_value` for why this is decided here, off the
+        // agent's answer, rather than from the agent id or the registry pin.
+        if advertised.is_some_and(|o| config_option_rejects_value(o, value_id.as_str())) {
+            tracing::info!(
+                "[ACP] skipping preferred config '{config_id}'='{value_id}' on connect: \
+                 the agent no longer offers that value"
+            );
             continue;
         }
         // Encode against what the agent advertised for this id. An id the agent
@@ -15051,6 +15133,12 @@ mod tests {
             // agent's background work is still alive, and the only one that can
             // stop it.
             //
+            // "recommendedValue" is CLAUDE-ONLY (claude-agent-acp 0.76.0):
+            // codex-acp 1.10.0 does not implement it, and the convention here
+            // is to advertise nothing an agent hasn't built. It retires the
+            // ambiguous `default` row on claude's model/effort selectors so the
+            // value codeg journals per turn is a real model id.
+            //
             // The other two stay out. "agentFileChangeReport"
             // (claude-agent-acp 0.69.0 / codex-acp 1.4.0) buys an extra model
             // round-trip per turn for a clamped, self-reported subset of what
@@ -15060,8 +15148,11 @@ mod tests {
             // rendering around, replacing it with an announcement that carries
             // no parent tool-use id to rebuild it from. See the reasoning at
             // the advertisement site before relaxing this.
-            let expected: Vec<serde_json::Value> =
+            let mut expected: Vec<serde_json::Value> =
                 vec!["sessionFailure".into(), "asyncTasks".into()];
+            if agent == AgentType::ClaudeCode {
+                expected.push("recommendedValue".into());
+            }
             assert_eq!(
                 capabilities, &expected,
                 "{agent:?} advertises an unexpected AIR capability set"
@@ -18940,6 +19031,97 @@ mod tests {
             }
             other => panic!("expected ConfigOptionRejected, got {other:?}"),
         }
+    }
+
+    /// The claude model selector, as a live adapter advertises it with and
+    /// without codeg's AIR `recommendedValue` opt-in: 0.76.0+ removes the
+    /// `default` row for a client that asks, every older build keeps it.
+    fn claude_model_option(offers_default: bool) -> SessionConfigOption {
+        let mut options = vec![serde_json::json!({"value": "opus[1m]", "name": "Opus 5"})];
+        if offers_default {
+            options.insert(
+                0,
+                serde_json::json!({"value": "default", "name": "Default (recommended)"}),
+            );
+        }
+        serde_json::from_value(serde_json::json!({
+            "id": "model",
+            "name": "Model",
+            "type": "select",
+            "currentValue": "opus[1m]",
+            "options": options,
+        }))
+        .expect("parses")
+    }
+
+    #[test]
+    fn config_option_rejects_a_value_the_select_no_longer_offers() {
+        // The `default` pick a user saved before codeg advertised
+        // `recommendedValue`. Replaying it can only error, and it would do so
+        // on every connect for good: the row that would let the user overwrite
+        // the preference is exactly the one that went away.
+        let retired = claude_model_option(false);
+        assert!(config_option_rejects_value(&retired, "default"));
+        assert!(!config_option_rejects_value(&retired, "opus[1m]"));
+    }
+
+    #[test]
+    fn config_option_keeps_a_value_an_older_adapter_still_offers() {
+        // The registry pin only governs what codeg INSTALLS —
+        // `resolve_npx_command` launches whatever `claude-agent-acp` is on
+        // PATH. So the same built-in agent id may be speaking to a pre-0.76
+        // adapter, where `default` is still a real row and dropping the
+        // preference would silently change the user's model.
+        assert!(!config_option_rejects_value(
+            &claude_model_option(true),
+            "default"
+        ));
+    }
+
+    #[test]
+    fn config_option_rejects_nothing_without_a_value_list_to_judge_by() {
+        // An agent that announces an empty `SessionConfigOptions` first and
+        // pushes the real one later (see `AcpManager::probe_agent_options`)
+        // has proven nothing, and a boolean takes both values by construction.
+        // Both must fall through to "send it and let the agent decide".
+        let empty: SessionConfigOption = serde_json::from_value(serde_json::json!({
+            "id": "model",
+            "name": "Model",
+            "type": "select",
+            "currentValue": "",
+            "options": [],
+        }))
+        .expect("parses");
+        assert!(!config_option_rejects_value(&empty, "opus[1m]"));
+
+        let toggle: SessionConfigOption = serde_json::from_value(serde_json::json!({
+            "id": "auto_approve",
+            "name": "Auto-approve tools",
+            "type": "boolean",
+            "currentValue": false,
+        }))
+        .expect("parses");
+        assert!(!config_option_rejects_value(&toggle, "true"));
+    }
+
+    #[test]
+    fn config_option_rejects_value_reads_a_grouped_select() {
+        // Groups are one flat value namespace, the same way
+        // `config_option_rejection` reads them.
+        let grouped: SessionConfigOption = serde_json::from_value(serde_json::json!({
+            "id": "model",
+            "name": "Model",
+            "type": "select",
+            "currentValue": "openai/gpt-5",
+            "options": [{
+                "group": "openai",
+                "name": "OpenAI",
+                "options": [{"value": "openai/gpt-5", "name": "GPT-5"}]
+            }],
+        }))
+        .expect("parses");
+        assert!(!config_option_rejects_value(&grouped, "openai/gpt-5"));
+        assert!(config_option_rejects_value(&grouped, "openai/gpt-5-mini"));
     }
 
     #[test]
