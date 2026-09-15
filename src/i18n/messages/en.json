@@ -968,7 +968,21 @@
         "action": "Sign out",
         "done": "Signed out. Sign in again to pick a different account.",
         "failed": "Could not sign out"
-      }
+      },
+      "tempReclaimTitle": "Leftover temp space",
+      "tempReclaimHint": "Older versions of codeg could not clean up the temporary directory this agent unpacks on every launch. This scans the system temp folder for those leftovers. That folder is shared with other applications, so nothing is deleted until you confirm, and anything still in use is skipped.",
+      "tempReclaimScan": "Scan",
+      "tempReclaimDelete": "Delete leftovers",
+      "tempReclaimNone": "Nothing to reclaim.",
+      "tempReclaimFound": "{count} leftover item(s), {size} reclaimable.",
+      "tempReclaimSkipped": "{count} skipped (still in use or too recent).",
+      "tempReclaimed": "Reclaimed {size} from {count} item(s).",
+      "tempReclaimSelectAll": "Select all",
+      "tempReclaimAgeHours": "{hours}h",
+      "tempReclaimConfirmTitle": "Delete {count} item(s)?",
+      "tempReclaimConfirmBody": "This permanently deletes {size}. The system temp folder is shared with other applications, so check each path before confirming — anything still in use is skipped.",
+      "tempReclaimConfirmAction": "Delete",
+      "tempReclaimCancel": "Cancel"
     },
     "deepseek": {
       "configManagement": "DeepSeek Harness Configuration",
@@ -1455,6 +1469,7 @@
       "noPlugins": "No plugins declared.",
       "status": {
         "installed": "Installed",
+        "needs_migration": "Needs migration",
         "missing": "Missing"
       },
       "installAll": "Install All Missing",

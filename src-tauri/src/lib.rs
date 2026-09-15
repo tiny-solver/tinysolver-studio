@@ -12,6 +12,7 @@ pub mod acp_transcript;
 pub use acp::{
     idle_sweep_task, idle_timeout_from_env, lifecycle_subscriber_task, SWEEP_INTERVAL_SECS,
 };
+pub use acp::scratch_dir::scratch_sweep_task;
 pub use network::proxy::init_proxy_from_db;
 mod app_error;
 pub mod app_state;
@@ -53,6 +54,20 @@ pub mod workspace_transfer;
 /// not panic, errors are silently dropped.
 pub fn sweep_acp_binary_trash() {
     crate::acp::binary_cache::sweep_trash();
+}
+
+/// Reclaim per-launch ACP scratch directories left by a previous run — the
+/// crash/force-quit backstop for the in-session sweep. Same contract as
+/// [`sweep_acp_binary_trash`]: safe any time, intended for a detached startup
+/// thread, never panics.
+///
+/// Deletes only directories whose recorded owner is positively confirmed dead
+/// (or is this process and not live — see `acp::scratch_dir`), and never leaves
+/// codeg's own `codeg-acp/` subtree, so a peer codeg instance's work and any
+/// other application's temp files are both out of reach by construction.
+pub fn sweep_acp_scratch_dirs() {
+    crate::acp::scratch_dir::sweep_foreign_orphans();
+    crate::acp::scratch_dir::sweep_own_orphans();
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -542,9 +557,18 @@ mod tauri_app {
                 // spawned. Anything still locked is left for next startup.
                 std::thread::spawn(|| {
                     let _ = std::panic::catch_unwind(|| {
+                        crate::acp::binary_cache::migrate_legacy_root();
                         crate::sweep_acp_binary_trash();
+                        crate::sweep_acp_scratch_dirs();
                     });
                 });
+
+                // Reclaim scratch directories this process loses track of
+                // mid-session. Its own timer on purpose: the ACP idle sweep is
+                // not spawned at all when `CODEG_ACP_IDLE_TIMEOUT_SECS=0`, and
+                // turning off idle disconnects must not also turn off disk
+                // reclamation on a machine leaking gigabytes per launch.
+                tauri::async_runtime::spawn(crate::scratch_sweep_task());
 
                 // Install bundled expert skills into the central store
                 // (`~/.codeg/skills/`). Runs in the background and does
@@ -1461,6 +1485,8 @@ mod tauri_app {
                 acp_commands::acp_get_agent_status,
                 acp_commands::acp_env_diagnostics,
                 acp_commands::acp_clear_binary_cache,
+                acp_commands::acp_scan_leaked_temp,
+                acp_commands::acp_reclaim_leaked_temp,
                 acp_commands::acp_download_agent_binary,
                 acp_commands::acp_install_uv_tool,
                 acp_commands::acp_detect_agent_local_version,

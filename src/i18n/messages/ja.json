@@ -968,7 +968,21 @@
         "action": "サインアウト",
         "done": "サインアウトしました。サインインし直すと別のアカウントを選べます。",
         "failed": "サインアウトできませんでした"
-      }
+      },
+      "tempReclaimTitle": "残存した一時領域",
+      "tempReclaimHint": "以前のバージョンの codeg は、このエージェントが起動のたびに展開する一時ディレクトリを削除できませんでした。システムの一時フォルダーからその残存物を検索します。このフォルダーは他のアプリケーションと共有されているため、確認するまで何も削除されず、使用中の項目はスキップされます。",
+      "tempReclaimScan": "スキャン",
+      "tempReclaimDelete": "残存物を削除",
+      "tempReclaimNone": "回収できるものはありません。",
+      "tempReclaimFound": "残存物 {count} 件、{size} を回収できます。",
+      "tempReclaimSkipped": "{count} 件をスキップしました（使用中または新しすぎます）。",
+      "tempReclaimed": "{count} 件から {size} を回収しました。",
+      "tempReclaimSelectAll": "すべて選択",
+      "tempReclaimAgeHours": "{hours} 時間",
+      "tempReclaimConfirmTitle": "選択した {count} 件を削除しますか？",
+      "tempReclaimConfirmBody": "{size} を完全に削除します。システムの一時フォルダーは他のアプリと共有されるため、確認する前に各パスをご確認ください。使用中のものはスキップされます。",
+      "tempReclaimConfirmAction": "削除",
+      "tempReclaimCancel": "キャンセル"
     },
     "deepseek": {
       "configManagement": "DeepSeek Harness の設定",
@@ -1455,6 +1469,7 @@
       "noPlugins": "opencode.json にプラグインが宣言されていません",
       "status": {
         "installed": "インストール済み",
+        "needs_migration": "移行が必要",
         "missing": "未インストール"
       },
       "installAll": "不足プラグインをすべてインストール",

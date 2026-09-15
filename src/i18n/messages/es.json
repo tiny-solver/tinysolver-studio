@@ -968,7 +968,21 @@
         "action": "Cerrar sesión",
         "done": "Sesión cerrada. Vuelve a iniciar sesión para elegir otra cuenta.",
         "failed": "No se pudo cerrar la sesión"
-      }
+      },
+      "tempReclaimTitle": "Espacio temporal sobrante",
+      "tempReclaimHint": "Las versiones anteriores de codeg no podían limpiar el directorio temporal que este agente descomprime en cada inicio. Esto analiza la carpeta temporal del sistema en busca de esos restos. Esa carpeta se comparte con otras aplicaciones, por lo que no se elimina nada hasta que confirmes, y se omite todo lo que siga en uso.",
+      "tempReclaimScan": "Analizar",
+      "tempReclaimDelete": "Eliminar restos",
+      "tempReclaimNone": "No hay nada que recuperar.",
+      "tempReclaimFound": "{count} elemento(s) sobrante(s), {size} recuperable(s).",
+      "tempReclaimSkipped": "{count} omitido(s) (en uso o demasiado reciente).",
+      "tempReclaimed": "Se recuperaron {size} de {count} elemento(s).",
+      "tempReclaimSelectAll": "Seleccionar todo",
+      "tempReclaimAgeHours": "{hours} h",
+      "tempReclaimConfirmTitle": "¿Eliminar {count} elemento(s)?",
+      "tempReclaimConfirmBody": "Esto elimina permanentemente {size}. La carpeta temporal del sistema se comparte con otras aplicaciones, así que revisa cada ruta antes de confirmar; lo que siga en uso se omite.",
+      "tempReclaimConfirmAction": "Eliminar",
+      "tempReclaimCancel": "Cancelar"
     },
     "deepseek": {
       "configManagement": "Configuración de DeepSeek Harness",
@@ -1455,6 +1469,7 @@
       "noPlugins": "No hay plugins declarados en opencode.json",
       "status": {
         "installed": "Instalado",
+        "needs_migration": "Requiere migración",
         "missing": "No instalado"
       },
       "installAll": "Instalar todos los faltantes",

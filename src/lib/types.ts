@@ -4392,7 +4392,33 @@ export interface PreflightResult {
 
 // ─── OpenCode Plugins ───
 
-export type PluginStatus = "installed" | "missing"
+// ─── Leaked temp reclamation ───
+
+/** One reclaimable artifact left by an agent launch from before temp isolation. */
+export interface LeakedTempEntry {
+  path: string
+  bytes: number
+  age_hours: number
+  is_dir: boolean
+}
+
+export interface LeakedTempScan {
+  root: string
+  entries: LeakedTempEntry[]
+  total_bytes: number
+  /** Matched the leak shape but is still in use, or too recent to touch. */
+  skipped: number
+}
+
+export interface LeakedTempReclaim {
+  removed: number
+  freed_bytes: number
+  failed: string[]
+}
+
+/// `needs_migration` = present only under the pre-1.18 flat `node_modules/`,
+/// which current opencode never reads. Not installed, from opencode's side.
+export type PluginStatus = "installed" | "needs_migration" | "missing"
 
 export interface PluginInfo {
   name: string

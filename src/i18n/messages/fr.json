@@ -968,7 +968,21 @@
         "action": "Se déconnecter",
         "done": "Déconnecté. Reconnectez-vous pour choisir un autre compte.",
         "failed": "Impossible de se déconnecter"
-      }
+      },
+      "tempReclaimTitle": "Espace temporaire résiduel",
+      "tempReclaimHint": "Les anciennes versions de codeg ne pouvaient pas nettoyer le répertoire temporaire que cet agent décompresse à chaque lancement. Ceci analyse le dossier temporaire du système à la recherche de ces résidus. Ce dossier est partagé avec d'autres applications : rien n'est supprimé avant votre confirmation, et tout élément encore utilisé est ignoré.",
+      "tempReclaimScan": "Analyser",
+      "tempReclaimDelete": "Supprimer les résidus",
+      "tempReclaimNone": "Rien à récupérer.",
+      "tempReclaimFound": "{count} élément(s) résiduel(s), {size} récupérable(s).",
+      "tempReclaimSkipped": "{count} ignoré(s) (encore utilisé(s) ou trop récent(s)).",
+      "tempReclaimed": "{size} récupéré(s) sur {count} élément(s).",
+      "tempReclaimSelectAll": "Tout sélectionner",
+      "tempReclaimAgeHours": "{hours} h",
+      "tempReclaimConfirmTitle": "Supprimer {count} élément(s) ?",
+      "tempReclaimConfirmBody": "Cette action supprime définitivement {size}. Le dossier temporaire du système est partagé avec d'autres applications : vérifiez chaque chemin avant de confirmer. Les éléments encore utilisés sont ignorés.",
+      "tempReclaimConfirmAction": "Supprimer",
+      "tempReclaimCancel": "Annuler"
     },
     "deepseek": {
       "configManagement": "Configuration de DeepSeek Harness",
@@ -1455,6 +1469,7 @@
       "noPlugins": "Aucun plugin déclaré dans opencode.json",
       "status": {
         "installed": "Installé",
+        "needs_migration": "Migration requise",
         "missing": "Non installé"
       },
       "installAll": "Installer tous les manquants",

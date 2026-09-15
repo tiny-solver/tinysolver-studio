@@ -968,7 +968,21 @@
         "action": "Sair",
         "done": "Sessão encerrada. Entre novamente para escolher outra conta.",
         "failed": "Não foi possível sair"
-      }
+      },
+      "tempReclaimTitle": "Espaço temporário remanescente",
+      "tempReclaimHint": "Versões anteriores do codeg não conseguiam limpar o diretório temporário que este agente descompacta a cada inicialização. Isto verifica a pasta temporária do sistema em busca desses resíduos. Essa pasta é compartilhada com outros aplicativos, portanto nada é excluído até você confirmar, e tudo o que ainda estiver em uso é ignorado.",
+      "tempReclaimScan": "Verificar",
+      "tempReclaimDelete": "Excluir resíduos",
+      "tempReclaimNone": "Nada a recuperar.",
+      "tempReclaimFound": "{count} item(ns) remanescente(s), {size} recuperável(is).",
+      "tempReclaimSkipped": "{count} ignorado(s) (ainda em uso ou muito recente).",
+      "tempReclaimed": "Recuperado(s) {size} de {count} item(ns).",
+      "tempReclaimSelectAll": "Selecionar tudo",
+      "tempReclaimAgeHours": "{hours} h",
+      "tempReclaimConfirmTitle": "Excluir {count} item(ns)?",
+      "tempReclaimConfirmBody": "Isto exclui permanentemente {size}. A pasta temporária do sistema é compartilhada com outros aplicativos, então confira cada caminho antes de confirmar; o que ainda estiver em uso é ignorado.",
+      "tempReclaimConfirmAction": "Excluir",
+      "tempReclaimCancel": "Cancelar"
     },
     "deepseek": {
       "configManagement": "Configuração do DeepSeek Harness",
@@ -1455,6 +1469,7 @@
       "noPlugins": "Nenhum plugin declarado em opencode.json",
       "status": {
         "installed": "Instalado",
+        "needs_migration": "Requer migração",
         "missing": "Não instalado"
       },
       "installAll": "Instalar todos os ausentes",
