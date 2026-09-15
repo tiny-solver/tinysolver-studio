@@ -3323,6 +3323,7 @@
       "messageList": {
         "attachedResources": "Attached resources",
         "loading": "Loading...",
+        "loadBackgroundActivity": "Load background activity",
         "loadEarlier": "Load earlier messages",
         "loadingEarlier": "Loading earlier messages…",
         "error": "Error: {message}",
