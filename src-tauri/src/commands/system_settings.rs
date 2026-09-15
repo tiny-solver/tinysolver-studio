@@ -309,6 +309,28 @@ static CLOSE_BEHAVIOR_CACHE: std::sync::atomic::AtomicU8 =
 static CLOSE_PROMPT_OPEN: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// When the outstanding claim was taken, so an unanswered one can expire.
+#[cfg(feature = "tauri-runtime")]
+static CLOSE_PROMPT_CLAIMED_AT: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// How long an unanswered claim keeps suppressing the close button.
+///
+/// Nothing in the protocol can prove a dialog actually appeared. `Emitter::emit*`
+/// answers for the bus, not for a listener, and wry runs an eval inline when it
+/// is issued from the main thread — which is where the close handler lives — so
+/// an emit can even overtake a listener registration that is still queued on the
+/// event-loop proxy. [`CLOSE_PROMPT_LISTENER_READY`] makes that rare; this makes
+/// it recoverable, and covers the cases readiness cannot see at all: JS that died
+/// after mounting, a dialog wedged mid-render, an emit dropped in flight.
+///
+/// Ten seconds is chosen against the two ways a second press reads: a
+/// double-click or a moment's hesitation still means "the dialog is up, ignore
+/// me", while a press this long after nothing visibly happened means the user is
+/// asking again and deserves an answer.
+#[cfg(feature = "tauri-runtime")]
+const CLOSE_PROMPT_GRACE: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Whether the main webview has a close-prompt listener up.
 ///
 /// `main` is built visible, so the close button is clickable from the first
@@ -409,6 +431,7 @@ pub async fn apply_persisted_close_behavior(conn: &DatabaseConnection) {
 /// failed emit would leave the flag set and the close button permanently dead.
 #[cfg(feature = "tauri-runtime")]
 pub(crate) fn release_close_prompt() {
+    *CLOSE_PROMPT_CLAIMED_AT.lock().unwrap() = None;
     CLOSE_PROMPT_OPEN.store(false, std::sync::atomic::Ordering::Release);
 }
 
@@ -429,10 +452,31 @@ pub(crate) fn mark_close_prompt_listener_ready() {
     CLOSE_PROMPT_LISTENER_READY.store(true, std::sync::atomic::Ordering::Release);
 }
 
-/// Claims the right to show one close prompt. `false` means one is already up.
+/// What one close press found when it went to open a prompt.
 #[cfg(feature = "tauri-runtime")]
-pub(crate) fn try_open_close_prompt() -> bool {
-    CLOSE_PROMPT_OPEN
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ClosePromptClaim {
+    /// Nothing was outstanding; this press owns the prompt.
+    Granted,
+    /// A prompt is up and the user has not answered yet. This press is the
+    /// second click on a button whose dialog is already on screen.
+    AlreadyOpen,
+    /// The outstanding claim went unanswered past [`CLOSE_PROMPT_GRACE`], so the
+    /// prompt it belonged to never reached anyone. The claim has been dropped;
+    /// the caller should act on the preference rather than wait for a dialog
+    /// that is not coming.
+    Expired,
+}
+
+/// Claims the right to show one close prompt.
+///
+/// The expiry is what makes the close button impossible to wedge: whatever goes
+/// wrong between the emit and the dialog, the press after the grace acts.
+#[cfg(feature = "tauri-runtime")]
+pub(crate) fn try_open_close_prompt() -> ClosePromptClaim {
+    let mut claimed_at = CLOSE_PROMPT_CLAIMED_AT.lock().unwrap();
+
+    if CLOSE_PROMPT_OPEN
         .compare_exchange(
             false,
             true,
@@ -440,6 +484,27 @@ pub(crate) fn try_open_close_prompt() -> bool {
             std::sync::atomic::Ordering::Acquire,
         )
         .is_ok()
+    {
+        *claimed_at = Some(std::time::Instant::now());
+        return ClosePromptClaim::Granted;
+    }
+
+    // A claim with no timestamp is one already being torn down by
+    // `release_close_prompt`; treat it as live rather than racing it.
+    let expired = claimed_at
+        .map(|at| at.elapsed() >= CLOSE_PROMPT_GRACE)
+        .unwrap_or(false);
+    if !expired {
+        return ClosePromptClaim::AlreadyOpen;
+    }
+
+    tracing::warn!(
+        "[close] close prompt went unanswered for {}s; treating it as undelivered",
+        CLOSE_PROMPT_GRACE.as_secs()
+    );
+    *claimed_at = None;
+    CLOSE_PROMPT_OPEN.store(false, std::sync::atomic::Ordering::Release);
+    ClosePromptClaim::Expired
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -1352,6 +1417,7 @@ mod close_behavior_tests {
 
     impl Drop for RestoreClosePromptFlags {
         fn drop(&mut self) {
+            *CLOSE_PROMPT_CLAIMED_AT.lock().unwrap() = None;
             CLOSE_PROMPT_OPEN.store(self.open, std::sync::atomic::Ordering::Release);
             CLOSE_PROMPT_LISTENER_READY.store(self.ready, std::sync::atomic::Ordering::Release);
         }
@@ -1366,18 +1432,70 @@ mod close_behavior_tests {
         let _restore = RestoreClosePromptFlags::capture();
         release_close_prompt();
 
-        assert!(try_open_close_prompt(), "first press claims the prompt");
-        assert!(
-            !try_open_close_prompt(),
+        assert_eq!(
+            try_open_close_prompt(),
+            ClosePromptClaim::Granted,
+            "first press claims the prompt"
+        );
+        assert_eq!(
+            try_open_close_prompt(),
+            ClosePromptClaim::AlreadyOpen,
             "a press while the dialog is up is a duplicate"
         );
 
         release_close_prompt();
 
-        assert!(
+        assert_eq!(
             try_open_close_prompt(),
+            ClosePromptClaim::Granted,
             "the next press claims it again once the dialog has answered"
         );
+    }
+
+    /// The backstop for every way a prompt can fail to reach a dialog that the
+    /// readiness flag cannot see — including the one it provably cannot rule
+    /// out, where wry runs the close handler's emit inline on the main thread
+    /// ahead of a listener registration still queued on the event-loop proxy.
+    /// Whatever the cause, the press after the grace has to act.
+    #[tokio::test]
+    async fn an_unanswered_close_prompt_expires_and_hands_the_press_back() {
+        let _serial = CLOSE_BEHAVIOR_SERIAL.lock().await;
+        let _restore = RestoreClosePromptFlags::capture();
+        release_close_prompt();
+
+        assert_eq!(try_open_close_prompt(), ClosePromptClaim::Granted);
+        // Age the claim past the grace rather than sleeping through it.
+        *CLOSE_PROMPT_CLAIMED_AT.lock().unwrap() =
+            Some(std::time::Instant::now() - CLOSE_PROMPT_GRACE);
+
+        assert_eq!(
+            try_open_close_prompt(),
+            ClosePromptClaim::Expired,
+            "a prompt nobody answered within the grace never arrived"
+        );
+        // And the expiry hands the claim back rather than eating it, so the
+        // press after that one is an ordinary first press again.
+        assert_eq!(
+            try_open_close_prompt(),
+            ClosePromptClaim::Granted,
+            "expiring releases the claim instead of wedging on it"
+        );
+    }
+
+    /// A claim younger than the grace is a dialog the user is still reading.
+    /// Expiring it would exit (or hide) out from under them.
+    #[tokio::test]
+    async fn a_fresh_close_prompt_is_never_expired() {
+        let _serial = CLOSE_BEHAVIOR_SERIAL.lock().await;
+        let _restore = RestoreClosePromptFlags::capture();
+        release_close_prompt();
+
+        assert_eq!(try_open_close_prompt(), ClosePromptClaim::Granted);
+        *CLOSE_PROMPT_CLAIMED_AT.lock().unwrap() = Some(
+            std::time::Instant::now() - (CLOSE_PROMPT_GRACE - std::time::Duration::from_secs(1)),
+        );
+
+        assert_eq!(try_open_close_prompt(), ClosePromptClaim::AlreadyOpen);
     }
 
     /// `main` is visible before its webview has a listener, and an emit into

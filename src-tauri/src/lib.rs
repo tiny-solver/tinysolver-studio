@@ -93,10 +93,16 @@ mod tauri_app {
     /// Called with the close already prevented; every branch is responsible
     /// for what happens instead. The prompt branches must never be able to
     /// swallow the press: if no dialog can answer it, each falls back to
-    /// acting on its own. `main` is built visible and the dialog only starts
-    /// listening once React has mounted in it, so "no dialog can answer it"
-    /// is the normal state for the first seconds of every launch — see
-    /// [`system_settings::close_prompt_listener_ready`].
+    /// acting on its own.
+    ///
+    /// Two things stand behind that, because nothing here can observe whether a
+    /// dialog actually appeared. `main` is built visible and the dialog only
+    /// starts listening once React has mounted in it, so
+    /// [`system_settings::close_prompt_listener_ready`] holds the press back
+    /// until there is something to answer it; and
+    /// [`system_settings::ClosePromptClaim::Expired`] hands the press back if a
+    /// prompt that WAS sent goes unanswered, which is the only defence against
+    /// everything readiness cannot see.
     fn handle_main_close_request(window: &tauri::Window, label: &str) {
         use crate::commands::system_settings;
         use crate::models::CloseWindowBehavior;
@@ -131,9 +137,15 @@ mod tauri_app {
                 // prompt" so the caller acts on the preference instead.
                 return false;
             }
-            if !system_settings::try_open_close_prompt() {
+            match system_settings::try_open_close_prompt() {
                 // A dialog is already up; this press is a duplicate.
-                return true;
+                system_settings::ClosePromptClaim::AlreadyOpen => return true,
+                // The last prompt was never answered, so it never arrived —
+                // readiness said a listener existed and it turned out not to
+                // reach one. Act on the preference instead of sending a second
+                // prompt down the same silent path.
+                system_settings::ClosePromptClaim::Expired => return false,
+                system_settings::ClosePromptClaim::Granted => {}
             }
             let payload = system_settings::CloseRequestPayload {
                 mode,
