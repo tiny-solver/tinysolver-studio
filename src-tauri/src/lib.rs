@@ -20,6 +20,7 @@ pub mod backgrounds;
 pub mod chat_channel;
 pub mod commands;
 pub mod db;
+pub mod deep_link;
 pub mod folder_links;
 pub mod forge;
 pub mod git_credential;
@@ -435,8 +436,10 @@ mod tauri_app {
         // development. Debug desktop builds use an isolated SQLite file, but
         // they still share other `app.codeg` data-dir artifacts with release.
         #[cfg(not(debug_assertions))]
-        let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            windows::show_main_window(app);
+        let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // Second launches on Windows/Linux carry `codeg://…` on argv.
+            // macOS delivers the same URL via the deep-link plugin instead.
+            crate::deep_link::handle_argv(app, &argv);
         }));
 
         builder
@@ -455,6 +458,7 @@ mod tauri_app {
                     )
                     .build(),
             )
+            .plugin(tauri_plugin_deep_link::init())
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1094,12 +1098,63 @@ mod tauri_app {
                     tauri::async_runtime::spawn(crate::work_task::run_task_engine(engine));
                 }
 
+                // OS `codeg://` URLs. Register the listener after the DB is
+                // live so a warm-start click can look the conversation up.
+                // Cold-start URLs are also read here and baked into the main
+                // window path — an event emitted before the webview subscribes
+                // would be dropped, but `DeepLinkBootstrap` reads the query.
+                // macOS delivers its launch URL only after this hook returns,
+                // so that path lands on the listener below and is parked for
+                // `take_pending_deep_link` instead.
+                {
+                    use tauri_plugin_deep_link::DeepLinkExt;
+                    let handle = app.handle().clone();
+                    let _ = app.deep_link().on_open_url(move |event| {
+                        let urls: Vec<String> =
+                            event.urls().iter().map(|url| url.to_string()).collect();
+                        crate::deep_link::handle_raw_urls(&handle, &urls);
+                    });
+                    // The Linux bundler writes a `.desktop` whose `Exec` has no
+                    // `%u` field code (tauri#16014), so an installed deb/rpm/
+                    // AppImage is advertised as the `x-scheme-handler/codeg`
+                    // owner but is launched with no argument at all. The
+                    // plugin's own registration writes a handler entry that
+                    // does pass `%u`; on Windows it adds the HKCU class key a
+                    // portable/zip copy never gets from the installer. Debug
+                    // builds are skipped so a dev run cannot steal the scheme
+                    // from the installed app (same reason single-instance is
+                    // release-only above).
+                    #[cfg(all(not(debug_assertions), any(windows, target_os = "linux")))]
+                    if let Err(e) = app.deep_link().register_all() {
+                        tracing::warn!("[deep-link] scheme registration failed: {e}");
+                    }
+                }
+                let startup_urls: Vec<String> = {
+                    use tauri_plugin_deep_link::DeepLinkExt;
+                    app.deep_link()
+                        .get_current()
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|url| url.to_string())
+                        .collect()
+                };
+                let workspace_path = tauri::async_runtime::block_on(
+                    crate::deep_link::startup_workspace_path(
+                        &db::AppDatabase {
+                            conn: app.state::<db::AppDatabase>().conn.clone(),
+                        },
+                        &startup_urls,
+                    ),
+                );
+
                 // Single-window workspace: ensure the main window exists.
                 // Workspace state (open folders, opened tabs, active tab) is
                 // restored by the frontend via `list_open_folder_details` /
                 // `list_opened_tabs` inside the main window.
                 if app.get_webview_window("main").is_none() {
-                    let url = tauri::WebviewUrl::App("workspace".into());
+                    let url = tauri::WebviewUrl::App(workspace_path.into());
                     let builder = tauri::WebviewWindowBuilder::new(app, "main", url)
                         .title("Codeg")
                         .inner_size(1260.0, 860.0)
@@ -1472,6 +1527,7 @@ mod tauri_app {
                 windows::close_pet_panel,
                 windows::resize_pet_panel,
                 windows::focus_conversation,
+                crate::deep_link::take_pending_deep_link,
                 windows::update_traffic_light_position,
                 windows::update_appearance_mode,
                 windows::set_tray_locale,
