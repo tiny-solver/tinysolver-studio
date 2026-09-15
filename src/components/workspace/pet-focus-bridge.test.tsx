@@ -183,6 +183,66 @@ describe("PetFocusBridge", () => {
     expect(tabs.openTab).not.toHaveBeenCalled()
   })
 
+  // Both producers are one-shot — the pet event has no replay and the drained
+  // deep link is already out of the backend slot — so neither may overwrite
+  // the other while the workspace is still hydrating.
+  it.each([
+    ["deep link first", true],
+    ["pet click first", false],
+  ])(
+    "keeps both requests queued before hydration (%s)",
+    async (_, deepLinkFirst) => {
+      // Hold the drain open so the two producers can be interleaved exactly,
+      // rather than racing the mount effect's own scheduling.
+      let release: () => void = () => {}
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const take = parkOne({ folderId: 7, conversationId: 101, agent: "grok" })
+      takePendingDeepLink = vi.fn(async () => {
+        await gate
+        return take()
+      })
+
+      const { rerender } = render(<PetFocusBridge />)
+      // The drain has started and is now parked on the gate.
+      await waitFor(() => expect(takePendingDeepLink).toHaveBeenCalled())
+
+      const petClick = () =>
+        handlers.get(FOCUS)!({
+          folderId: 7,
+          conversationId: 202,
+          agent: "codex",
+        })
+      const deepLink = async () => {
+        await act(async () => {
+          release()
+        })
+      }
+      if (deepLinkFirst) {
+        await deepLink()
+        petClick()
+      } else {
+        petClick()
+        await deepLink()
+      }
+      expect(tabs.openTab).not.toHaveBeenCalled()
+
+      tabs = { ...tabs, tabsHydrated: true }
+      rerender(<PetFocusBridge />)
+      act(() => {
+        useAppWorkspaceStore.setState({ foldersHydrated: true })
+      })
+
+      await waitFor(() => expect(tabs.openTab).toHaveBeenCalledTimes(2))
+      expect(tabs.openTab).toHaveBeenCalledWith(7, 101, "grok", true)
+      expect(tabs.openTab).toHaveBeenCalledWith(7, 202, "codex", true)
+      // The later request is opened last, so it is the one left focused.
+      const calls = tabs.openTab.mock.calls
+      expect(calls[calls.length - 1][1]).toBe(deepLinkFirst ? 202 : 101)
+    }
+  )
+
   it("ignores malformed payloads", async () => {
     useAppWorkspaceStore.setState({ foldersHydrated: true })
     tabs = { ...tabs, tabsHydrated: true }

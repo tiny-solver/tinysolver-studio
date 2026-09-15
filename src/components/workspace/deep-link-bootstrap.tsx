@@ -144,43 +144,53 @@ export function PetFocusBridge() {
     stateRef.current = { tabsHydrated, openTab }
   }, [tabsHydrated, openTab])
 
-  // Holds the latest focus request until the workspace has hydrated. The event
-  // is one-shot, so a pet-panel click during startup/reload (before folders &
-  // tabs hydrate) must not be dropped — replay it once hydration completes.
-  const pendingRef = useRef<FocusRequest | null>(null)
+  // Focus requests waiting for the workspace to hydrate. Both producers are
+  // one-shot — a pet-panel click is an event with no replay, and a drained
+  // deep link has already been taken out of the backend slot — so a single
+  // slot here would let whichever arrives second erase the first with no way
+  // to get it back. Queue them; the last one still ends up focused.
+  const pendingRef = useRef<FocusRequest[]>([])
 
   const attempt = useCallback(() => {
-    const req = pendingRef.current
-    if (!req) return
-    const workspace = useAppWorkspaceStore.getState()
-    if (!workspace.foldersHydrated || !stateRef.current.tabsHydrated) return // wait for hydration
-    // One-shot after hydration (mirrors DeepLinkBootstrap): clear before the
-    // async work so a later state change can't double-open.
-    pendingRef.current = null
+    if (pendingRef.current.length === 0) return
+    if (
+      !useAppWorkspaceStore.getState().foldersHydrated ||
+      !stateRef.current.tabsHydrated
+    ) {
+      return // wait for hydration
+    }
+    // Take the whole queue before the async work (mirrors DeepLinkBootstrap)
+    // so a later state change can't replay what is already being opened.
+    const requests = pendingRef.current
+    pendingRef.current = []
     void (async () => {
-      // Ensure the folder is in the workspace so the tab has a home.
-      if (!workspace.folders.some((f) => f.id === req.folderId)) {
-        try {
-          await workspace.addFolderToWorkspaceById(req.folderId)
-        } catch (err) {
-          console.error("[PetFocusBridge] open folder failed:", err)
-          return
+      for (const req of requests) {
+        // Ensure the folder is in the workspace so the tab has a home. Read
+        // the store per request: an earlier one may have just added it.
+        const workspace = useAppWorkspaceStore.getState()
+        if (!workspace.folders.some((f) => f.id === req.folderId)) {
+          try {
+            await workspace.addFolderToWorkspaceById(req.folderId)
+          } catch (err) {
+            console.error("[PetFocusBridge] open folder failed:", err)
+            continue
+          }
         }
+        // Both producers name a live session, so the conversation exists; open
+        // the tab directly and let its title/content hydrate. We do NOT gate on
+        // the conversations list — it loads independently of folders, and
+        // waiting on it (without a ready flag) would drop the request.
+        stateRef.current.openTab(
+          req.folderId,
+          req.conversationId,
+          req.agent,
+          true
+        )
       }
-      // The event is backend-originated for a live session, so the conversation
-      // exists; open the tab directly and let its title/content hydrate. We do
-      // NOT gate on the conversations list — it loads independently of folders,
-      // and waiting on it (without a ready flag) would drop the request.
-      stateRef.current.openTab(
-        req.folderId,
-        req.conversationId,
-        req.agent,
-        true
-      )
     })()
   }, [])
 
-  // Replay a queued request once hydration flips ready.
+  // Replay queued requests once hydration flips ready.
   useEffect(() => {
     attempt()
   }, [foldersHydrated, tabsHydrated, attempt])
@@ -195,7 +205,7 @@ export function PetFocusBridge() {
       // Nothing to re-park on unmount: the workspace is tearing down, so
       // there is no tab left to open. Dropping it beats resurrecting it.
       if (cancelled || !parked) return
-      pendingRef.current = parked
+      pendingRef.current.push(parked)
       attempt()
     }
 
@@ -219,7 +229,7 @@ export function PetFocusBridge() {
           ) {
             return
           }
-          pendingRef.current = { folderId, conversationId, agent }
+          pendingRef.current.push({ folderId, conversationId, agent })
           attempt()
         })
         if (cancelled) offFocus()
