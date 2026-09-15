@@ -3323,6 +3323,7 @@
       "messageList": {
         "attachedResources": "الموارد المرفقة",
         "loading": "جارٍ التحميل...",
+        "loadBackgroundActivity": "تحميل نشاط الخلفية",
         "loadEarlier": "تحميل الرسائل السابقة",
         "loadingEarlier": "جارٍ تحميل الرسائل السابقة…",
         "error": "خطأ: {message}",

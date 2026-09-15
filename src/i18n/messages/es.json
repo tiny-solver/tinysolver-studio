@@ -3323,6 +3323,7 @@
       "messageList": {
         "attachedResources": "Recursos adjuntos",
         "loading": "Cargando...",
+        "loadBackgroundActivity": "Cargar actividad en segundo plano",
         "loadEarlier": "Cargar mensajes anteriores",
         "loadingEarlier": "Cargando mensajes anteriores…",
         "error": "Error del chat: {message}",
