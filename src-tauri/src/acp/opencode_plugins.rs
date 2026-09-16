@@ -189,12 +189,23 @@ fn lexical_join(base: &Path, relative: &str) -> PathBuf {
 
 /// `fileURLToPath` for the host-less URLs opencode users actually write.
 fn file_url_body_to_path(body: &str) -> Option<PathBuf> {
-    // `localhost` is the only host Node accepts; anything else names a machine,
-    // and no local file answers for it.
-    let path_part = match body.strip_prefix("localhost/") {
-        Some(rest) => format!("/{rest}"),
-        None if body.starts_with('/') => body.to_string(),
-        None => return None,
+    // WHATWG's Windows drive-letter quirk: in file host state a `C:` buffer is
+    // NOT parsed as a host — it is handed to the path state instead, so
+    // `file://C:/dir/p.js` and `file://C:\dir\p.js` both normalize to
+    // `file:///C:/dir/p.js` with an EMPTY host, and `fileURLToPath` resolves
+    // them rather than throwing `ERR_INVALID_FILE_URL_HOST`. opencode hands the
+    // raw spec straight to `fileURLToPath`, so refusing the two-slash forms here
+    // would report a plugin opencode loads fine as one codeg cannot name.
+    let path_part = if has_windows_drive_prefix(body) {
+        body.to_string()
+    } else {
+        // `localhost` is the only host Node accepts; anything else names a
+        // machine, and no local file answers for it.
+        match body.strip_prefix("localhost/") {
+            Some(rest) => format!("/{rest}"),
+            None if body.starts_with('/') => body.to_string(),
+            None => return None,
+        }
     };
     let decoded = urlencoding::decode(&path_part).ok()?.into_owned();
     // `file:///C:/x` decodes to `/C:/x`; Node drops that leading slash for the
@@ -1134,6 +1145,11 @@ mod layout_tests {
     /// The reported bug: a `file://` plugin that exists on disk was reported as
     /// missing, which put an install button on it — and `bun add file:///…`
     /// fails with ENOTDIR every time.
+    ///
+    /// Interpolating the path yields the three-slash form on POSIX and the
+    /// two-slash drive form on Windows. Both are URLs Node resolves, so both
+    /// have to survive this round trip — the Windows shape is what caught the
+    /// drive-letter hole in `file_url_body_to_path`.
     #[test]
     fn existing_file_url_plugin_is_a_path_plugin_not_missing() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -1224,6 +1240,19 @@ mod layout_tests {
         assert_eq!(
             resolve_path_plugin_target("file:///C:/plugins/p.js", None),
             Some(PathBuf::from("C:/plugins/p.js"))
+        );
+        // A drive letter in the host slot is the one host-shaped body Node does
+        // NOT reject: the URL parser pushes it into the path, so both two-slash
+        // forms normalize to `file:///C:/plugins/p.js`. Reading them as a host
+        // and answering `None` would report a plugin opencode loads as one
+        // codeg cannot name.
+        assert_eq!(
+            resolve_path_plugin_target("file://C:/plugins/p.js", None),
+            Some(PathBuf::from("C:/plugins/p.js"))
+        );
+        assert_eq!(
+            resolve_path_plugin_target(r"file://C:\plugins\p.js", None),
+            Some(PathBuf::from(r"C:\plugins\p.js"))
         );
     }
 
