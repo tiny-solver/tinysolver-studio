@@ -792,6 +792,15 @@ const ConversationTabView = memo(function ConversationTabView({
   // another turn while this client believes it is idle) don't spin one failed
   // send per round-trip.
   const lastFlushBounceAtRef = useRef(0)
+  // Whether a queued row's click-to-insert (`handleQueueSteer`) is mid-flight.
+  // The row STAYS in the queue for the whole round-trip — it only leaves once
+  // the backend confirms delivery — so without this the turn-end edge would
+  // hand the same row to the flush below while the insert is still settling:
+  // admitted against the ending turn AND re-sent as the next turn's prompt,
+  // i.e. the agent reads the same instruction twice. Holding the flush for one
+  // round-trip is enough, and cannot strand the queue: `handleQueueSteer`
+  // always clears this in a `finally`, which re-runs the flush effect.
+  const [queueSteerInFlight, setQueueSteerInFlight] = useState(false)
 
   // Flush queued messages whenever the agent is idle. This is the queue's send
   // engine, covering BOTH:
@@ -816,6 +825,9 @@ const ConversationTabView = memo(function ConversationTabView({
     // lifecycle reconnects — which, for a not-installed target, never happens.
     if (!connectionReady) return
     if (runtimeSyncState === "awaiting_persist") return
+    // A row being inserted into the (just-ended) turn is still queued; sending
+    // it now would deliver it twice. See `queueSteerInFlight`.
+    if (queueSteerInFlight) return
     if (msgQueue.length === 0) return
     // setTimeout (not microtask) so a COMPLETE_TURN commit settles first AND so
     // a just-bounced retry waits out the backoff window before re-sending.
@@ -842,7 +854,7 @@ const ConversationTabView = memo(function ConversationTabView({
     return () => clearTimeout(timer)
     // `connectionReady` subsumes connStatus, the connection's cwd and its agent,
     // so it is the only connection dependency this effect needs.
-  }, [connectionReady, runtimeSyncState, msgQueue.length])
+  }, [connectionReady, runtimeSyncState, msgQueue.length, queueSteerInFlight])
 
   // Mirror the connection's liveMessage into the runtime session OUTSIDE React.
   // The connection dispatch invokes this sink synchronously whenever liveMessage
@@ -2048,10 +2060,14 @@ const ConversationTabView = memo(function ConversationTabView({
       const item = msgQueue.find((m) => m.id === id)
       if (!item) return
       const payload = buildSteerPayload(item.draft)
-      if (!payload) {
-        mqRemove(id)
-        return
-      }
+      // Nothing sendable in this row (no text, and no display text standing in
+      // for its attachments). Leave it alone: removing it would delete queued
+      // content — including whatever blocks it carries — on a button that
+      // promises to SEND it.
+      if (!payload) return
+      // Set before the first await so the flush effect above is already held
+      // when the turn-end edge lands mid-round-trip.
+      setQueueSteerInFlight(true)
       try {
         await feedbackSteer(payload.text, payload.blocks)
         mqRemove(id)
@@ -2065,6 +2081,8 @@ const ConversationTabView = memo(function ConversationTabView({
           tCmp(feedback.channel === "pull" ? "steerNoteFailed" : "steerFailed"),
           { description: toErrorMessage(err) }
         )
+      } finally {
+        setQueueSteerInFlight(false)
       }
     },
     [msgQueue, feedbackSteer, mqRemove, feedback.channel, tCmp]

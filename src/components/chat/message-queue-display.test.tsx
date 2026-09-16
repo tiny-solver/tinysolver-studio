@@ -18,6 +18,27 @@ function item(id: string, text: string): QueuedMessage {
   }
 }
 
+/** A queued draft that carries an attachment — only the native wire takes it. */
+function itemWithAttachment(id: string, text: string): QueuedMessage {
+  return {
+    id,
+    draft: {
+      blocks: [
+        { type: "text", text },
+        {
+          type: "resource",
+          uri: "clipboard://shot.png-1",
+          mime_type: "image/png",
+          text: null,
+          blob: "QUJD",
+        },
+      ],
+      displayText: text,
+    },
+    modeId: null,
+  }
+}
+
 function renderDisplay(
   props: Partial<React.ComponentProps<typeof MessageQueueDisplay>> = {}
 ) {
@@ -87,5 +108,38 @@ describe("MessageQueueDisplay click-to-insert", () => {
 
     release()
     await waitFor(() => expect(buttons[1].disabled).toBe(false))
+  })
+
+  it("hides the note button on a pull row the channel cannot carry", () => {
+    // The pull tool delivers text only, so the backend rejects a draft with
+    // attachments there — the click could never insert anything. The row is
+    // still sent whole (attachment included) by the queue's own flush.
+    renderDisplay({
+      queue: [item("q1", "use pnpm"), itemWithAttachment("q2", "look at this")],
+      onSteerItem: vi.fn(async () => {}),
+      steerChannel: "pull",
+    })
+    expect(screen.getAllByTitle(TQ.steerItemAsNote)).toHaveLength(1)
+  })
+
+  it("keeps the attachment row insertable on the native wire", () => {
+    renderDisplay({
+      queue: [item("q1", "use pnpm"), itemWithAttachment("q2", "look at this")],
+      onSteerItem: vi.fn(async () => {}),
+      steerChannel: "native",
+    })
+    expect(screen.getAllByTitle(TQ.steerItemNow)).toHaveLength(2)
+  })
+
+  it("hides the insert on the row being edited (the composer owns its text)", () => {
+    // While a row is under edit its real content lives in the composer;
+    // inserting would send the stale pre-edit draft and drop the row the save
+    // was headed for.
+    renderDisplay({
+      onSteerItem: vi.fn(async () => {}),
+      steerChannel: "native",
+      editingItemId: "q1",
+    })
+    expect(screen.getAllByTitle(TQ.steerItemNow)).toHaveLength(1)
   })
 })

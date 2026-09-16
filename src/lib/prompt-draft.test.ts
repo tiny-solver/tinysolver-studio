@@ -4,6 +4,7 @@ import type { PromptDraft, PromptInputBlock } from "@/lib/types"
 
 import {
   buildSteerPayload,
+  draftRidesBlocks,
   extractUserImagesFromDraft,
   extractUserResourcesFromDraft,
 } from "./prompt-draft"
@@ -59,6 +60,21 @@ describe("buildSteerPayload", () => {
     const blocks = [text("note"), textResource]
     const d: PromptDraft = { blocks, displayText: "note chip" }
     expect(buildSteerPayload(d)?.blocks).toBe(blocks)
+  })
+
+  // The affordance gate (a pull-channel session can't carry blocks) reads the
+  // same predicate the encoder does, so the two can't disagree about which
+  // drafts need the native wire.
+  it("agrees with draftRidesBlocks about what needs the block wire", () => {
+    const plain: PromptDraft = { blocks: [text("go")], displayText: "go" }
+    const attached: PromptDraft = {
+      blocks: [text("look"), grokImageResource],
+      displayText: "look",
+    }
+    expect(draftRidesBlocks(plain)).toBe(false)
+    expect(buildSteerPayload(plain)?.blocks).toBeUndefined()
+    expect(draftRidesBlocks(attached)).toBe(true)
+    expect(buildSteerPayload(attached)?.blocks).toBe(attached.blocks)
   })
 })
 

@@ -5,6 +5,7 @@ import { Reorder, useDragControls } from "motion/react"
 import { Clock, GripVertical, Pencil, X, Zap } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { cn } from "@/lib/utils"
+import { draftRidesBlocks } from "@/lib/prompt-draft"
 import type { QueuedMessage } from "@/hooks/use-message-queue"
 
 interface MessageQueueDisplayProps {
@@ -35,7 +36,8 @@ interface QueueItemProps {
   onDelete: (id: string) => void
   onSteerItem?: (id: string) => Promise<void> | void
   steerChannel: "native" | "pull"
-  /** Whether an insert from THIS row is in flight (disables its button). */
+  /** Whether an insert from ANY row is in flight — every row's button is
+   *  disabled for the duration, so two rows can't race the one channel. */
   steering: boolean
   onSteerStart: (id: string) => Promise<void>
 }
@@ -53,6 +55,21 @@ function QueueItem({
 }: QueueItemProps) {
   const t = useTranslations("Folder.chat.messageQueue")
   const dragControls = useDragControls()
+
+  // Which rows may offer the insert at all. Two rows can't, and offering a
+  // click that provably does nothing is worse than offering none:
+  // * The row under edit. Its authoritative text is in the composer now, so
+  //   inserting would send the PRE-edit draft and then drop the row the edit
+  //   was going to save into. (The composer hides its own mid-turn send while
+  //   editing for the same reason.)
+  // * A draft carrying attachments on a pull-tool session. The pull channel
+  //   delivers text, so the backend rejects blocks there — every click would
+  //   land on the turn-end fallback, which for an already-queued row is a
+  //   no-op. It still goes out whole with the next turn, via the queue.
+  const canSteer =
+    Boolean(onSteerItem) &&
+    !isEditing &&
+    (steerChannel === "native" || !draftRidesBlocks(item.draft))
 
   const startDrag = useCallback(
     (event: PointerEvent<HTMLButtonElement>) => {
@@ -88,7 +105,7 @@ function QueueItem({
       <span className="min-w-0 flex-1 truncate text-3xs text-foreground/80">
         {item.draft.displayText}
       </span>
-      {onSteerItem && (
+      {canSteer && (
         <button
           type="button"
           onClick={() => void onSteerStart(item.id)}

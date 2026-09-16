@@ -72,6 +72,21 @@ export function getPromptDraftDisplayText(
 }
 
 /**
+ * Whether a draft carries more than plain text (image attachments, file
+ * badges) and therefore has to ride the wire as a full block list.
+ *
+ * Exported because it is also an ELIGIBILITY fact, not just an encoding one:
+ * only the native `_session/steering` wire takes blocks, so a surface that
+ * offers a mid-turn send on a pull-tool session must not offer it for a draft
+ * this returns true for (the backend rejects it with `NoActiveTurn`). Shared
+ * with {@link buildSteerPayload} so the affordance and the encoding can never
+ * disagree about what "more than text" means.
+ */
+export function draftRidesBlocks(draft: PromptDraft): boolean {
+  return draft.blocks.some((b) => b.type !== "text")
+}
+
+/**
  * Encode a draft for the live-feedback (steering) wire — the SINGLE place
  * this encoding lives, shared by the composer's mid-turn send and the queue
  * row's click-to-insert so the two can never drift.
@@ -88,9 +103,7 @@ export function buildSteerPayload(draft: PromptDraft): {
   text: string
   blocks?: PromptInputBlock[]
 } | null {
-  const blocks = draft.blocks.some((b) => b.type !== "text")
-    ? draft.blocks
-    : undefined
+  const blocks = draftRidesBlocks(draft) ? draft.blocks : undefined
   const text = blocks
     ? draft.displayText
     : draft.blocks
