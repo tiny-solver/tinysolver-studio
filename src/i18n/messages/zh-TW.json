@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "已安裝",
         "needs_migration": "需要遷移",
-        "missing": "未安裝"
+        "missing": "未安裝",
+        "path": "路徑外掛",
+        "path_missing": "路徑不存在"
       },
       "installAll": "安裝全部缺失外掛",
       "pinVersions": "固定 @latest 版本",

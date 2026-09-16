@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "已安装",
         "needs_migration": "需要迁移",
-        "missing": "未安装"
+        "missing": "未安装",
+        "path": "路径插件",
+        "path_missing": "路径不存在"
       },
       "installAll": "安装全部缺失插件",
       "pinVersions": "固定 @latest 版本",

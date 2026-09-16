@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "설치됨",
         "needs_migration": "마이그레이션 필요",
-        "missing": "미설치"
+        "missing": "미설치",
+        "path": "경로 플러그인",
+        "path_missing": "경로를 찾을 수 없음"
       },
       "installAll": "누락된 플러그인 모두 설치",
       "pinVersions": "@latest 버전 고정",

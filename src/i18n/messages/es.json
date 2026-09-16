@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "Instalado",
         "needs_migration": "Requiere migración",
-        "missing": "No instalado"
+        "missing": "No instalado",
+        "path": "Complemento de ruta",
+        "path_missing": "Ruta no encontrada"
       },
       "installAll": "Instalar todos los faltantes",
       "pinVersions": "Fijar versiones @latest",

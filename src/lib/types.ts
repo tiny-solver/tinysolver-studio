@@ -4462,13 +4462,22 @@ export interface LeakedTempReclaim {
 
 /// `needs_migration` = present only under the pre-1.18 flat `node_modules/`,
 /// which current opencode never reads. Not installed, from opencode's side.
-export type PluginStatus = "installed" | "needs_migration" | "missing"
+export type PluginStatus =
+  | "installed"
+  | "needs_migration"
+  | "missing"
+  /** Loaded off disk by opencode itself — nothing to install. */
+  | "path"
+  /** Declared as a path plugin, but nothing exists at the resolved path. */
+  | "path_missing"
 
 export interface PluginInfo {
   name: string
   declared_spec: string
   installed_version: string | null
   status: PluginStatus
+  /** Where opencode will look for a path plugin; null for package plugins. */
+  resolved_path: string | null
 }
 
 export interface PluginCheckSummary {

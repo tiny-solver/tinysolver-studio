@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "Instalado",
         "needs_migration": "Requer migração",
-        "missing": "Não instalado"
+        "missing": "Não instalado",
+        "path": "Plugin por caminho",
+        "path_missing": "Caminho não encontrado"
       },
       "installAll": "Instalar todos os ausentes",
       "pinVersions": "Fixar versões @latest",

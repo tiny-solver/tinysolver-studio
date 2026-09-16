@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "مثبّت",
         "needs_migration": "يتطلب الترحيل",
-        "missing": "غير مثبّت"
+        "missing": "غير مثبّت",
+        "path": "إضافة من مسار",
+        "path_missing": "المسار غير موجود"
       },
       "installAll": "تثبيت جميع الإضافات المفقودة",
       "pinVersions": "تثبيت إصدارات @latest",

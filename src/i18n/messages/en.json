@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "Installed",
         "needs_migration": "Needs migration",
-        "missing": "Missing"
+        "missing": "Missing",
+        "path": "Path plugin",
+        "path_missing": "Path not found"
       },
       "installAll": "Install All Missing",
       "pinVersions": "Pin @latest Versions",

@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "インストール済み",
         "needs_migration": "移行が必要",
-        "missing": "未インストール"
+        "missing": "未インストール",
+        "path": "パスプラグイン",
+        "path_missing": "パスが見つかりません"
       },
       "installAll": "不足プラグインをすべてインストール",
       "pinVersions": "@latest バージョンを固定",

@@ -1514,7 +1514,9 @@
       "status": {
         "installed": "Installiert",
         "needs_migration": "Migration erforderlich",
-        "missing": "Nicht installiert"
+        "missing": "Nicht installiert",
+        "path": "Pfad-Plugin",
+        "path_missing": "Pfad nicht gefunden"
       },
       "installAll": "Alle fehlenden installieren",
       "pinVersions": "@latest-Versionen fixieren",
