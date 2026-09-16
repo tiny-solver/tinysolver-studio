@@ -4216,22 +4216,48 @@ fn build_client_capabilities(
     // claude-agent-acp 0.69.0 and codex-acp 1.4.0 added
     // "agentFileChangeReport": advertise it and every prompt may
     // carry `_meta.jetbrains.air.agentFileChangeReportRequest = {version: 1,
-    // requestId}`, after which the agent runs an EXTRA model round-trip at the
-    // end of the turn (claude: a Stop hook plus a hidden continuation calling
-    // `mcp__claude_agent_acp__report_changed_files`; codex: an ephemeral
-    // read-only `thread/fork`) and answers on
+    // requestId}`, which the agent answers at the end of the turn on
     // `session_info_update._meta.jetbrains.air.agentFileChangeReport`.
     //
-    // codeg does not ask for it, and the reason is not cost alone: both
-    // adapters CLAMP the reported paths to `cwd` + `additionalDirectories`
+    // The COST half of that decision has now expired on BOTH sides, and the
+    // record should say so. 1.4.0–1.11.0 / 0.69.0–0.77.0 answered by running an
+    // extra model round-trip (claude: a Stop hook plus a hidden continuation
+    // calling `mcp__claude_agent_acp__report_changed_files`; codex: an ephemeral
+    // read-only `thread/fork` with a 30s budget). codex-acp 1.12.0 deleted its
+    // half — it now buffers the `turn/diff/updated` unified diff for the turn
+    // and parses the paths out of it — and claude-agent-acp 0.78.0 deleted the
+    // whole audit (server, tool, both hooks) for a checkpoint read,
+    // `query.rewindFiles(promptUuid, { dryRun: true })` under a 2s budget. So
+    // neither adapter spends a model turn on it any more.
+    //
+    // It stays out anyway, because the reason that mattered was never cost.
+    // Both adapters CLAMP the reported paths to `cwd` + `additionalDirectories`
     // (anything outside a root is dropped as truncated), which is exactly the
     // tree `workspace_state` already watches recursively via `notify`. So the
-    // report can only ever name a SUBSET of what the watcher sees, less
-    // reliably — it is a model self-report that declares `complete: false`
-    // when unsure and truncates at 1024 paths / 256KB. It exists for clients
-    // with no filesystem watcher; codeg is not one. Nothing else in either
-    // release depends on it, and both adapters no-op without the
-    // advertisement, so staying out costs us nothing.
+    // report can only ever name a SUBSET of what the watcher sees, and it
+    // truncates at 1024 paths / 256KB. Both deterministic rewrites made that gap
+    // WIDER, not narrower, and each says so in its own words: codex 1.12.0
+    // hard-codes its `uncertainty` to "Codex turn diffs may omit same-content
+    // renames and changes made outside apply_patch, including shell commands,
+    // version-control commands, generators, and child processes", and claude
+    // 0.78.0 hard-codes `declaredComplete: false` because checkpoints "cover
+    // Claude file tools, but not every mutation source (notably Bash and most
+    // subagents)" — precisely the changes the model audit they replaced was
+    // instructed to go find.
+    //
+    // Claude's rewrite also introduced two costs the audit never had, both paid
+    // by any client that negotiates the report. The adapter flips
+    // `enableFileCheckpointing: true` on the SDK for the whole session, so every
+    // turn pays snapshot I/O whether or not a report was asked for. And its
+    // `settleActive` became async purely to await that bounded preview BEFORE
+    // settling the prompt response: on every prompt the client stamps with an
+    // `agentFileChangeReportRequest` — which is the point of advertising, so in
+    // practice every prompt — the turn's completion now waits on the checkpoint
+    // read, up to 2s, including on turns that changed no file at all.
+    //
+    // The report exists for clients with no filesystem watcher; codeg is not
+    // one. Nothing else in either release depends on it, and both adapters no-op
+    // without the advertisement, so staying out costs us nothing.
     //
     // codex-acp 1.7.0 and claude-agent-acp 0.73.0 have a third,
     // "nativeSubagentSessions" (the draft ACP subagent RFD; the canonical gate
@@ -5527,6 +5553,11 @@ async fn run_connection(
                 init_resp.meta.as_ref(),
                 init_resp.agent_info.as_ref(),
             );
+            // Same `agent_info.version` proof, for a different shape decision:
+            // which generation of codex's `request_user_input` form this
+            // connection will receive.
+            let codex_user_input_shape =
+                codex_user_input_shape(agent_type, init_resp.agent_info.as_ref());
             tracing::info!(
                 "[ACP][{}] steering: advertised={}, agent_version={:?}, native={}",
                 agent_type,
@@ -5642,6 +5673,7 @@ async fn run_connection(
                 // that needs no tool; OpenClaw-style `supports_mcp: false`
                 // agents could ship it someday).
                 s.native_steering_available = native_steering_available;
+                s.codex_user_input_shape = codex_user_input_shape;
                 s.neutral_goal_channel = neutral_goal_channel;
                 // The vocabulary is decided HERE for every adapter, advertising
                 // or not — this assignment is what flips it from "unknown" to
@@ -6756,10 +6788,28 @@ async fn handle_elicitation_request(
             .unwrap_or_default()
     }
     let raw = req.0;
+    // Who is on the other end, from the CONNECTION rather than from the frame.
+    // This handler is registered for every agent and codeg advertises
+    // `elicitation.form` to DeepSeek as well as Codex, so the parser must be
+    // told the peer's identity instead of inferring it from `_meta.codex` —
+    // `_meta` is an open namespace and another speaker (or an MCP server behind
+    // it) may use the same keys for something else entirely. For a codex peer
+    // this also carries the running adapter's `request_user_input` generation,
+    // pinned at initialize: it settles which of a codex question's
+    // `title`/`description` holds the question, which 1.12.0 swapped and the
+    // wire cannot disambiguate.
+    let peer = {
+        let s = state.read().await;
+        if s.agent_type == AgentType::Codex {
+            crate::acp::question::ElicitationPeer::Codex(s.codex_user_input_shape)
+        } else {
+            crate::acp::question::ElicitationPeer::Other
+        }
+    };
     // Everything codex-acp can send once `elicitation.form` is advertised
     // resolves to a plan here — an unhandled shape would silently reject the
     // agent's blocked request (an MCP tool-call approval, most damagingly).
-    let plan = match crate::acp::question::classify_elicitation(&raw) {
+    let plan = match crate::acp::question::classify_elicitation(&raw, peer) {
         Ok(plan) => plan,
         Err(e) => {
             tracing::warn!("[codex elicitation] declining unrenderable request: {e}");
@@ -11975,6 +12025,40 @@ fn synthesize_native_steering(
             .is_some_and(|min| steering_version_ok(agent_info, min))
 }
 
+/// codex-acp 1.12.0 swapped the question and the short tab header between a
+/// `request_user_input` property's `title` and `description`. Both generations
+/// emit both strings, so the FORM cannot be dated — but the adapter that built
+/// it can, from the `agentInfo.version` it reports at `initialize`.
+///
+/// Pinned once into `SessionState::codex_user_input_shape` because the running
+/// adapter is not necessarily the pinned one: launch prefers a PATH-resolved
+/// install, and a custom pinned version is a supported configuration
+/// (`registry::supports_custom_version`). `None` for every other agent, and for
+/// a codex adapter that reports no parseable version — the elicitation parser
+/// then falls back to the form's own markers (see
+/// [`crate::acp::question::CodexUserInputShape`]).
+fn codex_user_input_shape(
+    agent_type: AgentType,
+    agent_info: Option<&sacp::schema::Implementation>,
+) -> Option<crate::acp::question::CodexUserInputShape> {
+    use crate::acp::question::CodexUserInputShape;
+    if agent_type != AgentType::Codex {
+        return None;
+    }
+    let version = agent_info.map(|info| info.version.trim())?;
+    // Fail closed on an unparseable version rather than guessing a generation:
+    // `None` lets the parser use the form's markers, which is strictly better
+    // information than a coin flip.
+    if semver::Version::parse(version).is_err() {
+        return None;
+    }
+    Some(if version_at_least(version, "1.12.0") {
+        CodexUserInputShape::QuestionInTitle
+    } else {
+        CodexUserInputShape::QuestionInDescription
+    })
+}
+
 /// Extract a retryable-turn-error indicator from a Codex `session_info_update`'s
 /// `_meta` (codex-acp #289, v1.1.3+). codex ships a transient, auto-retried
 /// error as `_meta.codex.error = {message, codexErrorInfo, additionalDetails,
@@ -15204,9 +15288,12 @@ mod tests {
             // moves backwards.
             //
             // The other two stay out. "agentFileChangeReport"
-            // (claude-agent-acp 0.69.0 / codex-acp 1.4.0) buys an extra model
-            // round-trip per turn for a clamped, self-reported subset of what
-            // the `workspace_state` watcher already sees, and
+            // (claude-agent-acp 0.69.0 / codex-acp 1.4.0) buys a clamped,
+            // truncating subset of what the `workspace_state` watcher already
+            // sees — on claude still for an extra model round-trip per turn, on
+            // codex since 1.12.0 for free, by parsing the turn diff, which is
+            // explicitly narrower still (it omits anything not done through
+            // `apply_patch`). And
             // "nativeSubagentSessions" would make both adapters SUPPRESS the
             // `Agent`/`Task` tool call that codeg builds its whole subagent
             // rendering around, replacing it with an announcement that carries
@@ -15420,6 +15507,40 @@ mod tests {
         assert!(!version_at_least("0.64", "0.64.0"));
         assert!(!version_at_least("0..1", "0.64.0"));
         assert!(!version_at_least("0.64.1abc", "0.64.0"));
+    }
+
+    #[test]
+    fn codex_user_input_shape_reads_the_running_adapter_version() {
+        use crate::acp::question::CodexUserInputShape::{QuestionInDescription, QuestionInTitle};
+        use sacp::schema::Implementation;
+        let at = |v: &str| {
+            codex_user_input_shape(AgentType::Codex, Some(&Implementation::new("codex-acp", v)))
+        };
+
+        // The 1.12.0 floor, and SemVer precedence around it — a `1.11.1`
+        // prerelease is still the old shape, and 1.12.0 itself is the new one.
+        assert_eq!(at("1.12.0"), Some(QuestionInTitle));
+        assert_eq!(at("1.13.2"), Some(QuestionInTitle));
+        assert_eq!(at("1.11.0"), Some(QuestionInDescription));
+        assert_eq!(at("1.11.1-preview.6"), Some(QuestionInDescription));
+        assert_eq!(at("1.12.0-preview.1"), Some(QuestionInDescription));
+
+        // No `agentInfo`, or one codeg cannot parse: report nothing rather than
+        // guess a generation. The elicitation parser then dates the form from
+        // its own markers.
+        assert_eq!(codex_user_input_shape(AgentType::Codex, None), None);
+        assert_eq!(at("v1.12.0"), None);
+        assert_eq!(at(""), None);
+
+        // Nothing but codex speaks this form; DeepSeek gets the same
+        // `elicitation.form` capability and must stay on the generic reading.
+        assert_eq!(
+            codex_user_input_shape(
+                AgentType::DeepSeek,
+                Some(&Implementation::new("deepseek-acp", "1.12.0"))
+            ),
+            None
+        );
     }
 
     #[test]
