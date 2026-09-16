@@ -1191,6 +1191,46 @@
           "question": "Vous poser une question",
           "doom_loop": "Se déclenche quand le même appel se répète trois fois avec la même entrée"
         }
+      },
+      "behavior": {
+        "title": "Comportement et compactage",
+        "description": "Valeurs par défaut de session, compactage du contexte et limites de sortie des outils. Écrit dans opencode.json et appliqué après enregistrement ci-dessous.",
+        "docsLink": "Docs de configuration",
+        "unset": "Non configuré",
+        "defaultAgent": "Agent par défaut",
+        "defaultAgentHint": "Agent principal utilisé par une nouvelle session. Vide ou inconnu retombe sur build.",
+        "share": "Partage",
+        "shareHint": "Si une session peut être publiée sous forme de lien partagé.",
+        "shareManual": "Manuel (à la demande)",
+        "shareAuto": "Automatique (chaque nouvelle session)",
+        "shareDisabled": "Désactivé",
+        "autoUpdate": "Mise à jour automatique",
+        "autoUpdateHint": "Si OpenCode se met à jour tout seul vers la dernière version.",
+        "autoUpdateOn": "Mettre à jour automatiquement",
+        "autoUpdateNotify": "Notifier seulement",
+        "autoUpdateOff": "Jamais",
+        "snapshot": "Instantanés du système de fichiers",
+        "snapshotHint": "Enregistre un instantané avant chaque étape. Désactivé, annuler et revenir en arrière ne restaurent plus les fichiers.",
+        "compactionAuto": "Compactage automatique",
+        "compactionAutoHint": "Résume automatiquement la conversation quand la fenêtre de contexte se remplit.",
+        "compactionPrune": "Élaguer les anciennes sorties d'outils",
+        "compactionPruneHint": "Supprime la sortie des anciens appels d'outils lors du compactage au lieu de la résumer.",
+        "fields": {
+          "subagentDepth": "Profondeur des sous-agents",
+          "tailTurns": "Tours conservés tels quels",
+          "preserveRecentTokens": "Tokens conservés tels quels",
+          "reserved": "Tokens réservés",
+          "maxLines": "Limite de lignes de sortie",
+          "maxBytes": "Limite d'octets de sortie"
+        },
+        "hints": {
+          "subagentDepth": "Profondeur d'imbrication des sous-agents. À 1, un sous-agent ne peut pas en lancer un autre.",
+          "tailTurns": "Nombre de tours utilisateur récents laissés hors compactage. Non défini, seul le budget de tokens ci-dessous les limite.",
+          "preserveRecentTokens": "Budget de tokens des tours récents conservés tels quels après un compactage.",
+          "reserved": "Fenêtre laissée libre pour que le compactage lui-même ne fasse pas déborder le contexte.",
+          "maxLines": "Une sortie plus longue est écrite sur disque et remplacée par un aperçu. Par défaut 2000.",
+          "maxBytes": "Une sortie plus grosse est écrite sur disque et remplacée par un aperçu. Par défaut 51200."
+        }
       }
     },
     "openClaw": {

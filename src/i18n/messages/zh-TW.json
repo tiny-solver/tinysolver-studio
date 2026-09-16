@@ -1191,6 +1191,46 @@
           "question": "向你提問",
           "doom_loop": "同一呼叫以相同輸入重複 3 次時觸發"
         }
+      },
+      "behavior": {
+        "title": "行為與壓縮",
+        "description": "工作階段預設值、上下文壓縮與工具輸出上限。寫入 opencode.json，按下方儲存後生效。",
+        "docsLink": "設定文件",
+        "unset": "未設定",
+        "defaultAgent": "預設智慧體",
+        "defaultAgentHint": "新工作階段使用哪個主要智慧體。留空或名稱無效時回落到 build。",
+        "share": "工作階段分享",
+        "shareHint": "工作階段是否可以發佈成分享連結。",
+        "shareManual": "手動（需要時才分享）",
+        "shareAuto": "自動（每個新工作階段都分享）",
+        "shareDisabled": "停用",
+        "autoUpdate": "自動更新",
+        "autoUpdateHint": "OpenCode 是否自行升級到最新版本。",
+        "autoUpdateOn": "自動更新",
+        "autoUpdateNotify": "僅提示",
+        "autoUpdateOff": "永不",
+        "snapshot": "檔案系統快照",
+        "snapshotHint": "每一步之前記錄一次快照。關閉後復原與還原將無法回復檔案。",
+        "compactionAuto": "自動壓縮",
+        "compactionAutoHint": "上下文視窗快滿時自動總結對話。",
+        "compactionPrune": "裁剪舊工具輸出",
+        "compactionPruneHint": "壓縮時直接丟棄較早工具呼叫的輸出，而不是總結進去。",
+        "fields": {
+          "subagentDepth": "子智慧體層數",
+          "tailTurns": "保留原文的輪數",
+          "preserveRecentTokens": "保留原文的 token 數",
+          "reserved": "預留 token",
+          "maxLines": "工具輸出行數上限",
+          "maxBytes": "工具輸出位元組上限"
+        },
+        "hints": {
+          "subagentDepth": "子智慧體最多可以巢狀幾層。填 1 表示子智慧體不能再啟動子智慧體。",
+          "tailTurns": "最近多少輪使用者對話不參與壓縮。留空表示只受下方的 token 預算約束。",
+          "preserveRecentTokens": "壓縮後仍按原文保留的最近對話 token 預算。",
+          "reserved": "為壓縮本身預留的視窗，避免壓縮過程反而撐爆上下文。",
+          "maxLines": "超過該行數的輸出會落檔，只在對話裡留一段預覽。預設 2000。",
+          "maxBytes": "超過該位元組數的輸出會落檔，只在對話裡留一段預覽。預設 51200。"
+        }
       }
     },
     "openClaw": {

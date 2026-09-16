@@ -10655,6 +10655,15 @@ fn resolve_live_tool_input(text: &str, cwd: Option<&str>) -> String {
 
 /// Try to inject `_start_line` into a JSON object with `file_path` + `old_string`.
 /// Returns true if injected.
+///
+/// The camelCase spellings are OpenCode's: its ACP adapter forwards the tool's
+/// own arguments verbatim (`{filePath, oldString, newString}`), and the rename
+/// to the canonical keys happens in the FRONTEND (`aliasToolInputKeys`) — so
+/// reading only the snake_case names meant no live OpenCode edit ever got a
+/// start line, and its hunks restarted at 1 until the conversation was reloaded
+/// and the history parser recovered the real number from `metadata.diff`.
+/// Resolution happens on the `in_progress` frame, before the edit is applied, so
+/// `old_string` is still findable on disk.
 fn inject_start_line(value: &mut serde_json::Value, cwd: Option<&str>) -> bool {
     let obj = match value.as_object_mut() {
         Some(o) => o,
@@ -10662,11 +10671,13 @@ fn inject_start_line(value: &mut serde_json::Value, cwd: Option<&str>) -> bool {
     };
     let fp = obj
         .get("file_path")
+        .or_else(|| obj.get("filePath"))
         .or_else(|| obj.get("path"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     let old_str = obj
         .get("old_string")
+        .or_else(|| obj.get("oldString"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     if let (Some(fp), Some(old_str)) = (fp, old_str) {
@@ -10849,6 +10860,74 @@ fn pi_result_content_is_stringify_noise(
             .is_some_and(pi_result_is_empty_announcement)
 }
 
+/// `_meta` key carrying OpenCode's authoritative tool name (see
+/// [`stamp_opencode_tool_name`]). Namespaced like every other agent's marker
+/// (`claudeCode`, `qoder`, `x.ai/tool`) so it cannot collide with a payload the
+/// adapter itself publishes.
+const OPENCODE_META_KEY: &str = "opencode";
+
+/// Record the raw tool name from an OpenCode `tool_call`'s opening frame as
+/// `_meta.opencode.toolName`, so the frontend classifier has the same identity
+/// the history parser reads out of `part.tool`.
+///
+/// OpenCode's ACP adapter states the tool's name EXACTLY ONCE, and only on this
+/// frame: `pendingToolCall` titles a not-yet-running call with the bare tool id
+/// (`toolTitle` falls through to `toolName` because `ToolStatePending` carries
+/// no title), the `in_progress` update repeats it, and then the COMPLETION frame
+/// replaces `title` with a display label and drops `kind`, `locations` and
+/// `rawInput` entirely — verified against opencode 1.18.30 driven over real ACP:
+///   tool_call        title="glob"  kind="search" rawInput={}
+///   tool_call_update title="glob"  kind="search" rawInput={"pattern":"*.txt"}
+///   tool_call_update (no title, no kind, no rawInput) content=[…]
+/// (`read`→"notes.txt", `todowrite`→"3 todos", `grep`→"third", `bash` keeps the
+/// command.) So from the second frame on, the only signal left is the input
+/// shape — and OpenCode has several tools that are indistinguishable that way:
+/// `glob` (`{pattern, path}`) classified as **grep**, `lsp_*` (`{path}`) as
+/// **read**, and an MCP tool taking `{query}` as **websearch**, each of which the
+/// history parser names correctly. This closes that live/history split at the
+/// source instead of adding more input-shape heuristics.
+///
+/// Gated on `pending` + an empty `rawInput` because `loadSession`/`forkSession`
+/// REPLAY finished tool parts through the same `pendingToolCall` builder: a
+/// replayed frame is also `status: "pending"`, but it is built from the
+/// COMPLETED state, so its title is the display label and its input is fully
+/// populated. Requiring the empty input keeps the marker off those. (codeg
+/// prefers `session/resume`, which replays nothing, so this is belt-and-braces.)
+/// A `pending` frame that did arrive with partial input simply goes unstamped —
+/// today's behavior, never a wrong name.
+///
+/// Merges into whatever `_meta` the adapter sent and never overwrites an
+/// existing `opencode` key.
+fn stamp_opencode_tool_name(
+    agent_type: AgentType,
+    status: &str,
+    raw_input: &Option<serde_json::Value>,
+    title: &str,
+    meta: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+    if agent_type != AgentType::OpenCode || status != "pending" {
+        return meta;
+    }
+    let input_is_empty = match raw_input {
+        None | Some(serde_json::Value::Null) => true,
+        Some(serde_json::Value::Object(map)) => map.is_empty(),
+        _ => false,
+    };
+    let name = title.trim();
+    if !input_is_empty || name.is_empty() {
+        return meta;
+    }
+    let mut meta = meta.unwrap_or_default();
+    if meta.contains_key(OPENCODE_META_KEY) {
+        return Some(meta);
+    }
+    meta.insert(
+        OPENCODE_META_KEY.to_string(),
+        serde_json::json!({ "toolName": name }),
+    );
+    Some(meta)
+}
+
 /// Resolve the live `raw_output` string for an OpenCode tool call.
 ///
 /// OpenCode's ACP adapter reports a finished tool on BOTH channels: the clean
@@ -10881,6 +10960,19 @@ fn opencode_live_tool_output(
     content: &Option<String>,
     raw_output: &Option<serde_json::Value>,
 ) -> Option<String> {
+    // `read` is the one tool whose `content` is LOSSY rather than merely
+    // redundant: OpenCode hands the client the file body with the line numbers
+    // stripped, while `metadata.display` still carries `lineStart`. The history
+    // parser rebuilds `{start_line, content}` from it, so without this the same
+    // finished `read` renders numbered after a reload and unnumbered while
+    // live. `metadata.display` is unique to `read`, so every other tool keeps
+    // the parity rule below.
+    if let Some(structured) = raw_output
+        .as_ref()
+        .and_then(|raw| crate::parsers::opencode::structure_read_output(raw.get("metadata")))
+    {
+        return Some(structured);
+    }
     if content.as_deref().is_some_and(|c| !c.trim().is_empty()) {
         return None;
     }
@@ -13607,8 +13699,17 @@ async fn emit_conversation_update(
                 || codex_subagent_launch;
             let meta_marks_background = codebuddy_meta_marks_background(agent_type, tc.meta.as_ref());
             let grok_spawn = grok_meta_marks_spawn_subagent(agent_type, tc.meta.as_ref());
-            let meta = tc.meta.map(serde_json::Value::Object);
             let status = format!("{:?}", tc.status).to_lowercase();
+            // OpenCode's only authoritative statement of WHICH tool this is
+            // arrives on this opening frame's title (see fn doc).
+            let meta = stamp_opencode_tool_name(
+                agent_type,
+                &status,
+                &tc.raw_input,
+                &tc.title,
+                tc.meta,
+            )
+            .map(serde_json::Value::Object);
             raw_output_cache.remove_if_final(&tool_call_id, Some(status.as_str()));
             // Track Grok's spawn_subagent lifecycle for the subagent-notification
             // pairing (progress meta + finished settle). No-op for other agents.
@@ -19803,6 +19904,161 @@ mod tests {
             Some(r#"{"weird":{"shape":1}}"#)
         );
         assert_eq!(opencode_live_tool_output(&None, &None), None);
+    }
+
+    /// The `read` exception to the "let `content` render" parity rule: OpenCode
+    /// hands the client the file body with its line numbers stripped, so only
+    /// `metadata.display` still knows where the excerpt starts. Frame captured
+    /// from opencode 1.18.30 driven over real ACP.
+    #[test]
+    fn opencode_live_read_output_keeps_the_line_numbers_history_shows() {
+        let raw = Some(serde_json::json!({
+            "output": "<path>/w/notes.txt</path>\n<type>file</type>\n<content>\n1: hello world\n2: second line\n</content>",
+            "metadata": {
+                "preview": "hello world\nsecond line",
+                "truncated": false,
+                "display": {
+                    "type": "file",
+                    "path": "/w/notes.txt",
+                    "text": "hello world\nsecond line",
+                    "lineStart": 1,
+                    "lineEnd": 2,
+                    "totalLines": 2
+                }
+            }
+        }));
+        // Wins over the clean `content` block, which carries the same text
+        // WITHOUT `start_line` — the reason a finished read rendered one way
+        // live and another after a reload.
+        let content = Some("hello world\nsecond line".to_string());
+        assert_eq!(
+            opencode_live_tool_output(&content, &raw).as_deref(),
+            Some(r#"{"content":"hello world\nsecond line","start_line":1}"#)
+        );
+    }
+
+    /// OpenCode spells its edit arguments in camelCase on the wire, so the
+    /// canonical-key lookup found nothing and a live edit's hunks restarted at
+    /// line 1 — while the same call, reloaded from history, was labelled with
+    /// the real line (`parsers::opencode` reads it out of `metadata.diff`).
+    #[test]
+    fn live_start_line_resolves_opencodes_camel_case_edit_input() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("app.ts");
+        std::fs::write(&file, "one\ntwo\nthree\nneedle\nfive\n").expect("write");
+
+        let mut camel = serde_json::json!({
+            "filePath": file.to_string_lossy(),
+            "oldString": "needle",
+            "newString": "haystack",
+        });
+        assert!(inject_start_line(&mut camel, None));
+        assert_eq!(camel["_start_line"], serde_json::json!(4));
+
+        // The canonical spelling every other agent uses is untouched.
+        let mut snake = serde_json::json!({
+            "file_path": file.to_string_lossy(),
+            "old_string": "three",
+        });
+        assert!(inject_start_line(&mut snake, None));
+        assert_eq!(snake["_start_line"], serde_json::json!(3));
+
+        // A string that is not in the file leaves the input alone rather than
+        // stamping a wrong number.
+        let mut absent = serde_json::json!({
+            "filePath": file.to_string_lossy(),
+            "oldString": "not-in-the-file",
+        });
+        assert!(!inject_start_line(&mut absent, None));
+        assert!(absent.get("_start_line").is_none());
+    }
+
+    #[test]
+    fn opencode_tool_name_is_stamped_only_on_the_arg_less_opening_frame() {
+        let stamped = |status: &str, raw_input: serde_json::Value, title: &str| {
+            stamp_opencode_tool_name(
+                AgentType::OpenCode,
+                status,
+                &Some(raw_input),
+                title,
+                None,
+            )
+        };
+        // The real opening frame: `pending`, `rawInput: {}`, title = tool id.
+        assert_eq!(
+            stamped("pending", serde_json::json!({}), "glob"),
+            Some(
+                serde_json::json!({ "opencode": { "toolName": "glob" } })
+                    .as_object()
+                    .unwrap()
+                    .clone()
+            )
+        );
+        // A replayed (loadSession) frame is also `pending`, but it is built from
+        // the COMPLETED state — display title, populated input — so the empty
+        // -input gate is what keeps the marker off it.
+        assert_eq!(
+            stamped("pending", serde_json::json!({"pattern": "*.txt"}), "notes.txt"),
+            None
+        );
+        // Later frames in the lifecycle: nothing to record, the reducer keeps
+        // the opening frame's meta.
+        assert_eq!(
+            stamped("in_progress", serde_json::json!({}), "glob"),
+            None
+        );
+        assert_eq!(stamped("pending", serde_json::json!({}), "   "), None);
+    }
+
+    #[test]
+    fn opencode_tool_name_stamp_leaves_other_agents_and_existing_meta_alone() {
+        for agent in [AgentType::ClaudeCode, AgentType::Codex, AgentType::Grok] {
+            assert_eq!(
+                stamp_opencode_tool_name(
+                    agent,
+                    "pending",
+                    &Some(serde_json::json!({})),
+                    "glob",
+                    None
+                ),
+                None
+            );
+        }
+        // Merges into whatever the adapter already sent, and never overwrites an
+        // `opencode` key the adapter published itself.
+        let with_sibling = stamp_opencode_tool_name(
+            AgentType::OpenCode,
+            "pending",
+            &None,
+            "read",
+            Some(
+                serde_json::json!({ "vendor": { "x": 1 } })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .expect("meta");
+        assert_eq!(with_sibling["vendor"], serde_json::json!({ "x": 1 }));
+        assert_eq!(with_sibling["opencode"], serde_json::json!({ "toolName": "read" }));
+
+        let preexisting = stamp_opencode_tool_name(
+            AgentType::OpenCode,
+            "pending",
+            &None,
+            "read",
+            Some(
+                serde_json::json!({ "opencode": { "toolName": "theirs" } })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .expect("meta");
+        assert_eq!(
+            preexisting["opencode"],
+            serde_json::json!({ "toolName": "theirs" })
+        );
     }
 
     /// End-to-end over the frames opencode 1.18.23 actually put on the wire for a

@@ -1191,6 +1191,46 @@
           "question": "Fazer uma pergunta a você",
           "doom_loop": "Dispara quando a mesma chamada se repete três vezes com a mesma entrada"
         }
+      },
+      "behavior": {
+        "title": "Comportamento e compactação",
+        "description": "Padrões da sessão, compactação de contexto e limites de saída das ferramentas. Gravado em opencode.json e aplicado ao salvar abaixo.",
+        "docsLink": "Documentação de configuração",
+        "unset": "Não configurado",
+        "defaultAgent": "Agente padrão",
+        "defaultAgentHint": "Com qual agente principal uma nova sessão abre. Vazio ou desconhecido volta para build.",
+        "share": "Compartilhamento",
+        "shareHint": "Se uma sessão pode ser publicada como link compartilhado.",
+        "shareManual": "Manual (somente quando pedido)",
+        "shareAuto": "Automático (toda sessão nova)",
+        "shareDisabled": "Desativado",
+        "autoUpdate": "Atualização automática",
+        "autoUpdateHint": "Se o OpenCode se atualiza sozinho para a versão mais recente.",
+        "autoUpdateOn": "Atualizar automaticamente",
+        "autoUpdateNotify": "Apenas avisar",
+        "autoUpdateOff": "Nunca",
+        "snapshot": "Snapshots do sistema de arquivos",
+        "snapshotHint": "Registra um snapshot antes de cada passo. Desligado, desfazer e reverter não restauram mais arquivos.",
+        "compactionAuto": "Compactação automática",
+        "compactionAutoHint": "Resume a conversa automaticamente quando a janela de contexto enche.",
+        "compactionPrune": "Podar saída antiga de ferramentas",
+        "compactionPruneHint": "Descarta a saída de chamadas antigas durante a compactação em vez de resumi-la.",
+        "fields": {
+          "subagentDepth": "Profundidade de subagentes",
+          "tailTurns": "Turnos mantidos na íntegra",
+          "preserveRecentTokens": "Tokens mantidos na íntegra",
+          "reserved": "Tokens reservados",
+          "maxLines": "Limite de linhas da saída",
+          "maxBytes": "Limite de bytes da saída"
+        },
+        "hints": {
+          "subagentDepth": "Quantos níveis os subagentes podem aninhar. Com 1, um subagente não pode lançar outro.",
+          "tailTurns": "Quantos turnos recentes do usuário ficam fora da compactação. Sem valor, apenas o orçamento de tokens abaixo os limita.",
+          "preserveRecentTokens": "Orçamento de tokens dos turnos recentes mantidos na íntegra após uma compactação.",
+          "reserved": "Janela deixada livre para que a própria compactação não estoure o contexto.",
+          "maxLines": "Saída maior que isso vai para o disco e é substituída por uma prévia. Padrão 2000.",
+          "maxBytes": "Saída maior que isso vai para o disco e é substituída por uma prévia. Padrão 51200."
+        }
       }
     },
     "openClaw": {

@@ -1191,6 +1191,46 @@
           "question": "Ask you a question",
           "doom_loop": "Trips when the same call repeats three times with identical input"
         }
+      },
+      "behavior": {
+        "title": "Behavior & compaction",
+        "description": "Session defaults, context compaction and tool-output limits. Written to opencode.json and applied once you save below.",
+        "docsLink": "Config docs",
+        "unset": "Not configured",
+        "defaultAgent": "Default agent",
+        "defaultAgentHint": "Which primary agent a new session opens in. Falls back to build when empty or unknown.",
+        "share": "Sharing",
+        "shareHint": "How a session may be published to a share link.",
+        "shareManual": "Manual (on request)",
+        "shareAuto": "Automatic (every new session)",
+        "shareDisabled": "Disabled",
+        "autoUpdate": "Auto-update",
+        "autoUpdateHint": "Whether OpenCode updates itself to the latest release.",
+        "autoUpdateOn": "Update automatically",
+        "autoUpdateNotify": "Notify only",
+        "autoUpdateOff": "Never",
+        "snapshot": "Filesystem snapshots",
+        "snapshotHint": "Records a snapshot before each step. Turning it off means undo and revert can no longer restore files.",
+        "compactionAuto": "Auto-compaction",
+        "compactionAutoHint": "Summarize the conversation automatically when the context window fills up.",
+        "compactionPrune": "Prune old tool output",
+        "compactionPruneHint": "Drop the output of older tool calls during compaction instead of summarizing it.",
+        "fields": {
+          "subagentDepth": "Sub-agent depth",
+          "tailTurns": "Turns kept verbatim",
+          "preserveRecentTokens": "Tokens kept verbatim",
+          "reserved": "Reserved tokens",
+          "maxLines": "Tool output line limit",
+          "maxBytes": "Tool output byte limit"
+        },
+        "hints": {
+          "subagentDepth": "How deep sub-agents may nest. 1 stops a sub-agent from launching another.",
+          "tailTurns": "Most recent user turns kept uncompacted. Unset means only the token budget below limits them.",
+          "preserveRecentTokens": "Token budget of recent turns kept uncompacted after a compaction.",
+          "reserved": "Window left free so a compaction itself never overflows the context.",
+          "maxLines": "Output longer than this is written to disk and replaced with a preview. Default 2000.",
+          "maxBytes": "Output larger than this is written to disk and replaced with a preview. Default 51200."
+        }
       }
     },
     "openClaw": {
