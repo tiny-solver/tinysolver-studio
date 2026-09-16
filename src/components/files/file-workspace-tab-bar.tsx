@@ -8,6 +8,7 @@ import {
   GitCompare,
   Maximize2,
   Minimize2,
+  Plus,
   X,
   Globe,
 } from "lucide-react"
@@ -19,9 +20,18 @@ import {
 } from "@/contexts/workspace-context"
 import { AGENT_MARK } from "@/components/browser/browser-agent-access"
 import { useBrowserTabState } from "@/lib/browser/browser-tab-store"
+import {
+  BLANK_PAGE_URL,
+  hostnameOf,
+  isBlankPageUrl,
+} from "@/lib/browser/browser-url"
+import { useBrowserCapabilities } from "@/lib/browser/use-browser-capabilities"
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { useLongPressDrag } from "@/hooks/use-long-press-drag"
+import { normalizeAbsPath } from "@/lib/file-open-target"
+import { openFileDialog } from "@/lib/platform"
+import { isDesktop, isRemoteDesktopMode } from "@/lib/transport"
 import { cn, handleMiddleClickClose } from "@/lib/utils"
 import {
   ContextMenu,
@@ -30,6 +40,29 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
+/**
+ * The strip's own icon buttons ("+" and maximize/restore), copied from the
+ * conversation strip's new-conversation button (`tabs/tab-bar.tsx`) so the two
+ * strips read as one piece of chrome: a circular ghost button evenly inset
+ * from the strip's edges, with the adaptive `bg-foreground/10` hover tint and
+ * `backdrop-blur-sm` so the fill reads as frosted glass over a workspace
+ * background image rather than a muddy patch.
+ *
+ * `self-start` — NOT `self-center` — is what centers these. The trailing box
+ * they sit in is shortened by the group's `pt-1.5`, so `self-center` centers
+ * an `h-7` button in 34px and lands it 3px BELOW the strip midline (the tab
+ * labels' line); seating it against the top instead yields an equal 6px above
+ * and below, putting its centre back on that midline.
+ */
+const STRIP_ICON_BTN =
+  "flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-muted-foreground backdrop-blur-sm transition-colors hover:bg-foreground/10 hover:text-foreground"
 
 // Rendered only inside the desktop file-column title strip (embedded). The old
 // standalone mobile variant is gone — mobile shows the FileWorkspaceHeader
@@ -157,6 +190,9 @@ export function FileWorkspaceTabBar() {
         data-adjacent-active={lastTabActive ? "after" : undefined}
         className="relative flex h-full flex-1 items-stretch ws-strip-line"
       >
+        {/* "+" sits flush against the last tab (before the drag spacer), the
+            way the conversation strip's new-tab button follows its tabs. */}
+        <FileTabAddMenu />
         {/* Drag spacer, floored at `min-w-10` (40px): even when many tabs overflow
             and squeeze this region, a grabbable window-drag gap always remains
             between the last tab and the maximize button. */}
@@ -166,10 +202,8 @@ export function FileWorkspaceTabBar() {
             type="button"
             onClick={toggleFilesMaximized}
             className={cn(
-              // Ghost-style icon button following the file tabs (mirrors the
-              // conversation new-tab button): `h-7 self-center` centers it on the
-              // h-10 strip midline; hover darkens past the `bg-muted` strip.
-              "mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground",
+              STRIP_ICON_BTN,
+              "mr-1.5",
               filesMaximized && "text-primary"
             )}
             aria-label={filesMaximized ? t("restore") : t("maximize")}
@@ -177,14 +211,94 @@ export function FileWorkspaceTabBar() {
             title={filesMaximized ? t("restore") : t("maximize")}
           >
             {filesMaximized ? (
-              <Minimize2 className="h-4 w-4" />
+              <Minimize2 className="h-3.5 w-3.5" />
             ) : (
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="h-3.5 w-3.5" />
             )}
           </button>
         )}
       </div>
     </Reorder.Group>
+  )
+}
+
+/**
+ * The "+" at the end of the file tab strip: the two tabs a person can add to
+ * this strip by hand.
+ *
+ * Both already exist elsewhere, but neither is reachable *from here*. A file
+ * otherwise arrives from the aux-panel file tree or a transcript badge — both
+ * of which can be closed or absent — and a browser tab has had no manual
+ * entry point at all: every one of them so far arrived by following a link,
+ * so there was no way to simply open a page. The blank page is exactly that
+ * (see `BLANK_PAGE_URL`): an empty tab with a focused address bar.
+ *
+ * Renders nothing when neither row is possible rather than an empty menu —
+ * off the desktop there is no built-in browser, and a native picker is no use
+ * to a window driving a remote backend.
+ */
+function FileTabAddMenu() {
+  const t = useTranslations("Folder.fileWorkspace")
+  const { openFilePreview, openBrowserTab } = useWorkspaceActions()
+  const capabilities = useBrowserCapabilities()
+
+  // A native dialog picks a path on THIS machine; a desktop window driving a
+  // remote backend would hand the server a path it cannot read, and the web
+  // fallback only ever learns a bare file name (same test as add-node-menu).
+  const canOpenFile = isDesktop() && !isRemoteDesktopMode()
+  // Web mode answers "unavailable" without a round trip, so this is false
+  // there from the first render rather than after a flash.
+  const canOpenBrowser = capabilities?.available ?? false
+
+  const handleOpenFile = useCallback(async () => {
+    const picked = await openFileDialog({ title: t("openFileTitle") }).catch(
+      () => null
+    )
+    const path = Array.isArray(picked) ? picked[0] : picked
+    // `openFilePreview` reports a failed read on the tab itself, so a
+    // rejection here is only ever the dialog being dismissed.
+    if (path) void openFilePreview(normalizeAbsPath(path))
+  }, [openFilePreview, t])
+
+  if (!canOpenFile && !canOpenBrowser) return null
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          // `ml-1.5 mr-0.5` are the conversation new-tab button's own gaps: a
+          // 6px gutter from the last tab's edge so the round hover fill never
+          // touches it. `shrink-0` (in STRIP_ICON_BTN) keeps this button, with
+          // the drag spacer's `min-w-10`, part of the trailing wrapper's
+          // min-content floor, so overflowing tabs shrink to reserve it
+          // instead of it being squeezed away.
+          className={cn(STRIP_ICON_BTN, "ml-1.5 mr-0.5")}
+          aria-label={t("newTab")}
+          title={t("newTab")}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto min-w-44">
+        {canOpenBrowser && (
+          <DropdownMenuItem
+            onSelect={() => {
+              openBrowserTab(BLANK_PAGE_URL)
+            }}
+          >
+            <Globe />
+            {t("newBrowserTab")}
+          </DropdownMenuItem>
+        )}
+        {canOpenFile && (
+          <DropdownMenuItem onSelect={() => void handleOpenFile()}>
+            <FileText />
+            {t("openFile")}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -229,6 +343,7 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
   onTouchSortingEnd,
 }: FileWorkspaceTabItemProps) {
   const tAgent = useTranslations("Browser.agent")
+  const tBrowserTab = useTranslations("Browser.tab")
   const isDiff = tab.kind === "diff" || tab.kind === "rich-diff"
   const isBrowser = tab.kind === "browser"
   const isDirty = tab.kind === "file" && Boolean(tab.isDirty)
@@ -239,15 +354,40 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
   // or unloaded in the background; it loads when switched to. Drawn faded,
   // the way browsers draw a discarded tab.
   const unloaded = isBrowser && !browserState
-  const displayTitle = isBrowser ? browserState?.title || tab.title : tab.title
+  const browserUrl = isBrowser
+    ? browserState?.url || tab.browser.initialUrl
+    : null
+  // An empty tab names itself ("New tab") and has no address worth showing:
+  // `about:blank` is the absence of a page, not one the user navigated to.
+  const blankPage = browserUrl !== null && isBlankPageUrl(browserUrl)
+  // What to call it, most specific first: the live page's own title, then the
+  // record's. Except that a tab opened empty took `about:blank` for its
+  // record title — a record is named once, and `hostnameOf` had nothing to
+  // offer for the blank page — so the moment it goes somewhere, that title
+  // names the wrong page. The host stands in until the page says its own,
+  // which also covers the stretch of every navigation where the backend has
+  // cleared the live title and `title_changed` has not fired yet.
+  const recordTitle = isBlankPageUrl(tab.title) ? null : tab.title
+  const browserHost = browserUrl ? hostnameOf(browserUrl) : null
+  const displayTitle = isBrowser
+    ? browserState?.title ||
+      (blankPage
+        ? tBrowserTab("untitled")
+        : (recordTitle ?? browserHost ?? tab.title))
+    : tab.title
   const sharedWith = browserState?.agentGrant?.origin ?? null
+  // A browser tab is the one kind whose label is always truncated (a page
+  // title is a sentence, not a filename) AND whose address is not shown
+  // anywhere in the strip, so hovering gives both — title first, then the
+  // address it is on, one per line.
   const displayHint = isBrowser
     ? [
-        browserState?.url || tab.browser.initialUrl,
+        displayTitle,
+        blankPage ? null : browserUrl,
         sharedWith && tAgent("shared"),
       ]
         .filter(Boolean)
-        .join(" · ")
+        .join("\n")
     : (tab.description ?? tab.title)
 
   const handleLongPressStart = useCallback(

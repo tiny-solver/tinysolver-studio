@@ -2161,6 +2161,7 @@
           "navigation": "選單導覽",
           "more": "更多"
         },
+        "browserTab": "開啟瀏覽器",
         "showPet": "顯示寵物"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "檔案",
+      "newTab": "新增分頁",
+      "newBrowserTab": "瀏覽器分頁",
+      "openFile": "開啟檔案…",
+      "openFileTitle": "開啟檔案",
       "closeFileTab": "關閉檔案分頁",
       "close": "關閉",
       "closeOthers": "關閉其它",
@@ -6047,6 +6052,7 @@
       "reload": "重新整理",
       "stop": "停止",
       "openInSystem": "在系統瀏覽器中開啟",
+      "more": "更多",
       "copyUrl": "複製連結",
       "copied": "已複製連結",
       "addressPlaceholder": "輸入網址",

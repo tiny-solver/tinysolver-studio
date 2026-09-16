@@ -2161,6 +2161,7 @@
           "navigation": "Navegação",
           "more": "Mais"
         },
+        "browserTab": "Abrir aba do navegador",
         "showPet": "Mostrar pet"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "Arquivos",
+      "newTab": "Nova aba",
+      "newBrowserTab": "Aba do navegador",
+      "openFile": "Abrir arquivo…",
+      "openFileTitle": "Abrir arquivo",
       "closeFileTab": "Fechar aba de arquivo",
       "close": "Fechar",
       "closeOthers": "Fechar outros",
@@ -6047,6 +6052,7 @@
       "reload": "Recarregar",
       "stop": "Parar",
       "openInSystem": "Abrir no navegador do sistema",
+      "more": "Mais",
       "copyUrl": "Copiar link",
       "copied": "Link copiado",
       "addressPlaceholder": "Digite um endereço",

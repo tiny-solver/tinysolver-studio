@@ -2161,6 +2161,7 @@
           "navigation": "ナビゲーション",
           "more": "その他"
         },
+        "browserTab": "ブラウザータブを開く",
         "showPet": "ペットを表示"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "ファイル",
+      "newTab": "新しいタブ",
+      "newBrowserTab": "ブラウザータブ",
+      "openFile": "ファイルを開く…",
+      "openFileTitle": "ファイルを開く",
       "closeFileTab": "ファイルタブを閉じる",
       "close": "閉じる",
       "closeOthers": "他を閉じる",
@@ -6047,6 +6052,7 @@
       "reload": "再読み込み",
       "stop": "停止",
       "openInSystem": "システムのブラウザで開く",
+      "more": "その他",
       "copyUrl": "リンクをコピー",
       "copied": "リンクをコピーしました",
       "addressPlaceholder": "アドレスを入力",

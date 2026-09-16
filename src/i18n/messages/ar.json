@@ -2161,6 +2161,7 @@
           "navigation": "التنقل",
           "more": "المزيد"
         },
+        "browserTab": "فتح علامة تبويب المتصفح",
         "showPet": "إظهار الحيوان الأليف"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "الملفات",
+      "newTab": "علامة تبويب جديدة",
+      "newBrowserTab": "علامة تبويب المتصفح",
+      "openFile": "فتح ملف…",
+      "openFileTitle": "فتح ملف",
       "closeFileTab": "إغلاق تبويب الملف",
       "close": "إغلاق",
       "closeOthers": "إغلاق البقية",
@@ -6047,6 +6052,7 @@
       "reload": "إعادة تحميل",
       "stop": "إيقاف",
       "openInSystem": "فتح في متصفح النظام",
+      "more": "المزيد",
       "copyUrl": "نسخ الرابط",
       "copied": "تم نسخ الرابط",
       "addressPlaceholder": "أدخل عنوانًا",

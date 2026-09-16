@@ -16,6 +16,9 @@ const api = vi.hoisted(() => ({
       freeze?: boolean
     ) => Promise<FrozenFrame | null>
   >(() => Promise.resolve(null)),
+  browserFreezeFrame: vi.fn<(id: string) => Promise<FrozenFrame | null>>(() =>
+    Promise.resolve(null)
+  ),
 }))
 vi.mock("@/lib/browser/browser-api", () => api)
 // `releaseBrowserTab` only talks to the backend on the desktop.
@@ -99,11 +102,22 @@ async function flush() {
   })
 }
 
+/** Long enough for the two animation frames a freeze-then-hide waits on
+ *  before it lets the native view go — and, on a loaded machine where those
+ *  frames do not arrive, for the 100ms bound that backs them up. */
+async function flushPaint() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  })
+}
+
 describe("BrowserSurfaceHost", () => {
   beforeEach(() => {
     api.browserOpenTab.mockReset()
     api.browserSetBounds.mockClear()
     api.browserSetVisible.mockClear()
+    api.browserFreezeFrame.mockReset()
+    api.browserFreezeFrame.mockImplementation(() => Promise.resolve(null))
     resetBrowserTabStoreForTests()
     resetNativeSurfaceOcclusionForTests()
     // jsdom has no layout: give the host a rect.
@@ -139,13 +153,14 @@ describe("BrowserSurfaceHost", () => {
       release = acquireNativeSurfaceOcclusion("dialog")
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    // Hidden with focus handoff, and a freeze frame requested: the
+    // Hidden with focus handoff, after its own frame was asked for: the
     // placeholder stays on screen under the overlay.
+    expect(api.browserFreezeFrame).toHaveBeenCalledWith("host1")
     expect(api.browserSetVisible).toHaveBeenLastCalledWith(
       "host1",
       false,
       true,
-      true
+      false
     )
 
     await act(async () => {
@@ -240,23 +255,116 @@ describe("BrowserSurfaceHost", () => {
     expect(api.browserSetVisible).toHaveBeenLastCalledWith("host2", true, false)
   })
 
-  // Under an overlay the placeholder stays on screen, so the hide asks for
-  // the page's last frame and paints it until the surface shows again.
+  // The whole point of the order: the still goes up while the native view is
+  // still covering it, and only then does the view go. Hide first and the
+  // placeholder is blank for the length of a round trip — the flash.
+  it("paints the freeze frame before the native view goes", async () => {
+    api.browserOpenTab.mockImplementation(() => Promise.resolve(state("host8")))
+    api.browserFreezeFrame.mockImplementation(() =>
+      Promise.resolve({
+        mime: "image/jpeg",
+        data: "QUJD",
+        width: 1600,
+        height: 1200,
+      })
+    )
+    const { container } = render(<BrowserSurfaceHost tab={tab("host8")} />)
+    await flush()
+    api.browserSetVisible.mockClear()
+
+    await act(async () => {
+      acquireNativeSurfaceOcclusion("dialog")
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(api.browserFreezeFrame).toHaveBeenCalledWith("host8")
+    expect(
+      container
+        .querySelector("img[data-browser-frozen-frame]")
+        ?.getAttribute("src")
+    ).toBe("data:image/jpeg;base64,QUJD")
+    // Painted, and the page is still up behind it.
+    expect(api.browserSetVisible).not.toHaveBeenCalled()
+
+    await flushPaint()
+    // Now it goes — and asks for no frame of its own, having one already.
+    expect(api.browserSetVisible).toHaveBeenLastCalledWith(
+      "host8",
+      false,
+      true,
+      false
+    )
+  })
+
+  // Waiting for a frame before hiding puts a window between the decision to
+  // hide and the hide. An overlay that closes inside it has already shown the
+  // surface, and the hide must be abandoned — landing late would take the
+  // page away with nothing left on top of it.
+  // Both answers are abandoned, and by different guards: with a frame the
+  // paint has to be skipped as well as the hide, with none the hide would
+  // otherwise fall straight through to the fallback.
+  it.each([
+    ["host9a", { mime: "image/jpeg", data: "QUJD", width: 10, height: 10 }],
+    ["host9b", null],
+  ] as const)(
+    "abandons a hide whose overlay closed while the frame was in flight (%s)",
+    async (id, late: FrozenFrame | null) => {
+      api.browserOpenTab.mockImplementation(() => Promise.resolve(state(id)))
+      let handOverFrame: () => void = () => {}
+      api.browserFreezeFrame.mockImplementation(
+        () =>
+          new Promise<FrozenFrame | null>((resolve) => {
+            handOverFrame = () => resolve(late)
+          })
+      )
+      const { container } = render(<BrowserSurfaceHost tab={tab(id)} />)
+      await flush()
+      api.browserSetVisible.mockClear()
+
+      let release: () => void = () => {}
+      await act(async () => {
+        release = acquireNativeSurfaceOcclusion("dialog")
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      await act(async () => {
+        release()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(api.browserSetVisible).toHaveBeenLastCalledWith(id, true, false)
+
+      await act(async () => {
+        handOverFrame()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      await flushPaint()
+      expect(api.browserSetVisible).toHaveBeenLastCalledWith(id, true, false)
+      // And no stale still left painted over a page that is showing.
+      expect(
+        container.querySelector("img[data-browser-frozen-frame]")
+      ).toBeNull()
+    }
+  )
+
+  // The still stays up for the whole life of the overlay, and goes only once
+  // the native view is actually back.
   it("paints the freeze frame while hidden under an overlay and drops it once shown", async () => {
     api.browserOpenTab.mockImplementation(() => Promise.resolve(state("host4")))
+    api.browserFreezeFrame.mockImplementation(() =>
+      Promise.resolve({
+        mime: "image/jpeg",
+        data: "QUJD",
+        width: 1600,
+        height: 1200,
+      })
+    )
     let resolveShow: () => void = () => {}
     api.browserSetVisible.mockImplementation(
-      (_id: string, visible: boolean, _handoff: boolean, freeze?: boolean) => {
+      (_id: string, visible: boolean) => {
         if (visible) {
           return new Promise<null>((resolve) => {
             resolveShow = () => resolve(null)
           })
         }
-        return Promise.resolve(
-          freeze
-            ? { mime: "image/jpeg", data: "QUJD", width: 1600, height: 1200 }
-            : null
-        )
+        return Promise.resolve(null)
       }
     )
     const { container } = render(<BrowserSurfaceHost tab={tab("host4")} />)
@@ -267,15 +375,11 @@ describe("BrowserSurfaceHost", () => {
       release = acquireNativeSurfaceOcclusion("dialog")
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    expect(api.browserSetVisible).toHaveBeenLastCalledWith(
-      "host4",
-      false,
-      true,
-      true
-    )
+    expect(api.browserFreezeFrame).toHaveBeenCalledWith("host4")
     const frame = container.querySelector("img[data-browser-frozen-frame]")
     expect(frame).not.toBeNull()
     expect(frame?.getAttribute("src")).toBe("data:image/jpeg;base64,QUJD")
+    await flushPaint()
 
     await act(async () => {
       release()
@@ -300,19 +404,23 @@ describe("BrowserSurfaceHost", () => {
     api.browserOpenTab.mockImplementation(() => Promise.resolve(state("host6")))
     let resolveShow: () => void = () => {}
     let frames = 0
+    api.browserFreezeFrame.mockImplementation(() => {
+      frames += 1
+      return Promise.resolve({
+        mime: "image/jpeg",
+        data: `F${frames}`,
+        width: 10,
+        height: 10,
+      })
+    })
     api.browserSetVisible.mockImplementation(
-      (_id: string, visible: boolean, _handoff: boolean, freeze?: boolean) => {
+      (_id: string, visible: boolean) => {
         if (visible) {
           return new Promise<null>((resolve) => {
             resolveShow = () => resolve(null)
           })
         }
-        frames += 1
-        return Promise.resolve(
-          freeze
-            ? { mime: "image/jpeg", data: `F${frames}`, width: 10, height: 10 }
-            : null
-        )
+        return Promise.resolve(null)
       }
     )
     const { container } = render(<BrowserSurfaceHost tab={tab("host6")} />)
@@ -362,13 +470,13 @@ describe("BrowserSurfaceHost", () => {
 
   it("drops the frame when the error page takes the surface's place", async () => {
     api.browserOpenTab.mockImplementation(() => Promise.resolve(state("host7")))
-    api.browserSetVisible.mockImplementation(
-      (_id: string, visible: boolean, _handoff: boolean, freeze?: boolean) =>
-        Promise.resolve(
-          !visible && freeze
-            ? { mime: "image/jpeg", data: "QUJD", width: 10, height: 10 }
-            : null
-        )
+    api.browserFreezeFrame.mockImplementation(() =>
+      Promise.resolve({
+        mime: "image/jpeg",
+        data: "QUJD",
+        width: 10,
+        height: 10,
+      })
     )
     const { container, rerender } = render(
       <BrowserSurfaceHost tab={tab("host7")} />

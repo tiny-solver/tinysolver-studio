@@ -1431,6 +1431,7 @@ mod tauri_app {
                 browser_commands::browser_close,
                 browser_commands::browser_set_bounds,
                 browser_commands::browser_set_visible,
+                browser_commands::browser_freeze_frame,
                 browser_commands::browser_navigate,
                 browser_commands::browser_reload,
                 browser_commands::browser_go_back,

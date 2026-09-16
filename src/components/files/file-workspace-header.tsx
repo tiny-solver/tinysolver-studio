@@ -9,36 +9,39 @@ import {
   useWorkspaceFileTabs,
 } from "@/contexts/workspace-context"
 import { FilePathBreadcrumb } from "@/components/files/file-path-breadcrumb"
-import { useBrowserTabState } from "@/lib/browser/browser-tab-store"
 import { cn } from "@/lib/utils"
 
 /**
  * Desktop file-detail header: the active file's name on the left, its file-type
  * actions on the right — the markdown/html preview⇄source toggle and
- * open-in-browser (html). Maximize/restore lives in the file tab strip
- * (`FileWorkspaceTabBar`, embedded) instead, flush right of the tabs. Rendered
- * only on desktop (`WorkspaceContent`); the mobile panel row keeps these
- * buttons in its own tab bar. Sits above every `FileWorkspacePanel` render
- * branch (editor / preview / diff / image / office), so it wraps them all
- * uniformly.
+ * open-in-browser (html). Self-hides for a browser tab, whose toolbar is its
+ * own header (see below). Maximize/restore lives in the file tab strip
+ * (`FileWorkspaceTabBar`, embedded) instead, flush right of the tabs.
+ *
+ * Rendered in two places (`app/workspace/layout.tsx`): under the desktop file
+ * column's tab strip, and as the mobile file view's ONLY header — there is no
+ * tab strip there, so a mobile browser tab ends up with no header at all. That
+ * is intended: on mobile a browser tab is a `BrowserBridgeView`, which carries
+ * the address and its own buttons in a row of the same shape.
+ *
+ * Sits above every `FileWorkspacePanel` render branch (editor / preview /
+ * diff / image / office), so it wraps them all uniformly.
  */
 export function FileWorkspaceHeader() {
   const t = useTranslations("Folder.fileWorkspace")
   const { activeFileTab, activeFileTabId, previewFileTabIds } =
     useWorkspaceFileTabs()
   const { toggleFileTabPreview } = useWorkspaceActions()
-  // A browser tab's title follows the page (document.title); its record only
-  // ever knew the host it was opened with.
-  const browserState = useBrowserTabState(
-    activeFileTab?.kind === "browser" ? activeFileTab.id : null
-  )
 
-  if (!activeFileTab) return null
+  // A browser tab has no title row: its own toolbar (address bar and page
+  // controls) becomes the top row of the column instead. Two rows of chrome
+  // above a web page is one too many, and neither said anything the other
+  // did not — the page title is already on the tab (in full on hover), and
+  // the address bar names the page better than a repeated title. None of the
+  // actions below apply to a browser tab either; they are all `kind: "file"`.
+  if (!activeFileTab || activeFileTab.kind === "browser") return null
 
-  const displayTitle =
-    activeFileTab.kind === "browser"
-      ? browserState?.title || activeFileTab.title
-      : activeFileTab.title
+  const displayTitle = activeFileTab.title
 
   const isDiff =
     activeFileTab.kind === "diff" || activeFileTab.kind === "rich-diff"

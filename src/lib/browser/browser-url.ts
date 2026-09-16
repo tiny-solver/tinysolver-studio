@@ -121,6 +121,19 @@ export function normalizeUrlForDedupe(url: string): string | null {
   }
 }
 
+/**
+ * The empty page an explicitly opened tab starts on. The backend accepts it
+ * by name (`browser::policy::open_url_allowed`), and it is deliberately not a
+ * site: it has no origin, it is never persisted across a restart, and two of
+ * them are two empty tabs rather than one page opened twice.
+ */
+export const BLANK_PAGE_URL = "about:blank"
+
+/** True for the blank page, fragment and all (`about:blank#x` is still it). */
+export function isBlankPageUrl(url: string): boolean {
+  return normalizeUrlForDedupe(url) === BLANK_PAGE_URL
+}
+
 /** `host:port` as a user would type it — for the "this address lives on the
  *  remote host" hint; the default port is omitted. */
 export function displayHostPort(url: string): string | null {

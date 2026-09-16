@@ -1,0 +1,269 @@
+import { act, fireEvent, render, screen } from "@testing-library/react"
+import { NextIntlClientProvider } from "next-intl"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { ReactNode } from "react"
+
+import enMessages from "@/i18n/messages/en.json"
+import type { FileWorkspaceTab } from "@/contexts/workspace-context"
+
+const mocks = vi.hoisted(() => ({
+  openBrowserTab: vi.fn(() => "browser:new"),
+  openFilePreview: vi.fn(() => Promise.resolve("/abs/path")),
+  openFileDialog: vi.fn(() => Promise.resolve<string | string[] | null>(null)),
+  fileTabs: [] as FileWorkspaceTab[],
+  browserState: null as { url: string; title: string } | null,
+}))
+
+let desktop = true
+let remoteDesktop = false
+let browserAvailable = true
+
+// The strip is a Reorder.Group; the drag machinery is motion's, not ours, and
+// none of it is what these tests are about. Strip the motion-only props so the
+// rest (role, className, data-*, handlers) still reaches the DOM.
+vi.mock("motion/react", () => {
+  const MOTION_ONLY = new Set([
+    "as",
+    "values",
+    "onReorder",
+    "axis",
+    "drag",
+    "dragControls",
+    "dragListener",
+    "whileDrag",
+    "value",
+  ])
+  const passthrough = ({
+    children,
+    ...rest
+  }: Record<string, unknown> & { children?: ReactNode }) => (
+    <div
+      {...Object.fromEntries(
+        Object.entries(rest).filter(([key]) => !MOTION_ONLY.has(key))
+      )}
+    >
+      {children}
+    </div>
+  )
+  return {
+    Reorder: { Group: passthrough, Item: passthrough },
+    useDragControls: () => ({ start: vi.fn() }),
+  }
+})
+
+vi.mock("@/lib/transport", () => ({
+  isDesktop: () => desktop,
+  isRemoteDesktopMode: () => remoteDesktop,
+}))
+vi.mock("@/lib/platform", () => ({ openFileDialog: mocks.openFileDialog }))
+vi.mock("@/lib/browser/use-browser-capabilities", () => ({
+  useBrowserCapabilities: () => ({ available: browserAvailable }),
+}))
+// Null by default: a record-only tab is the state a restored or not-yet-shown
+// tab is in, and it is what the "+" produces. Set `mocks.browserState` for the
+// cases that need a live page behind the record.
+vi.mock("@/lib/browser/browser-tab-store", () => ({
+  useBrowserTabState: () => mocks.browserState,
+}))
+vi.mock("@/components/browser/browser-agent-access", () => ({
+  AGENT_MARK: "agent-mark",
+}))
+vi.mock("@/hooks/use-is-coarse-pointer", () => ({
+  useIsCoarsePointer: () => false,
+}))
+vi.mock("@/contexts/workspace-context", () => ({
+  useWorkspaceActions: () => ({
+    switchFileTab: vi.fn(),
+    closeFileTab: vi.fn(),
+    closeOtherFileTabs: vi.fn(),
+    closeAllFileTabs: vi.fn(),
+    reorderFileTabs: vi.fn(),
+    toggleFilesMaximized: vi.fn(),
+    openFilePreview: mocks.openFilePreview,
+    openBrowserTab: mocks.openBrowserTab,
+  }),
+  useWorkspaceFileTabs: () => ({
+    fileTabs: mocks.fileTabs,
+    activeFileTabId: mocks.fileTabs[0]?.id ?? null,
+  }),
+  useWorkspaceView: () => ({ mode: "fusion", filesMaximized: false }),
+}))
+
+import { FileWorkspaceTabBar } from "./file-workspace-tab-bar"
+
+function fileTab(path: string): FileWorkspaceTab {
+  return {
+    id: `file:${path}`,
+    kind: "file",
+    folderId: null,
+    title: path.split("/").pop() ?? path,
+    description: path,
+    path,
+    language: "typescript",
+    content: "",
+    loading: false,
+  } as FileWorkspaceTab
+}
+
+function browserTab(url: string, title = url): FileWorkspaceTab {
+  return {
+    id: "browser:abc",
+    kind: "browser",
+    folderId: null,
+    title,
+    description: null,
+    path: null,
+    language: "browser",
+    content: "",
+    loading: false,
+    readonly: true,
+    browser: { initialUrl: url, openerTabId: null, profile: "default" },
+  } as FileWorkspaceTab
+}
+
+function renderStrip() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <FileWorkspaceTabBar />
+    </NextIntlClientProvider>
+  )
+}
+
+// jsdom has no `PointerEvent`; Radix reads `button` off the event, so a real
+// `MouseEvent` under the pointer-event name is what opens the menu.
+async function openAddMenu() {
+  const trigger = screen.getByRole("button", { name: "New tab" })
+  await act(async () => {
+    for (const type of ["pointerdown", "pointerup", "click"]) {
+      fireEvent(
+        trigger,
+        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 })
+      )
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
+beforeEach(() => {
+  desktop = true
+  remoteDesktop = false
+  browserAvailable = true
+  mocks.fileTabs = [fileTab("/repo/a.ts")]
+  mocks.browserState = null
+  vi.clearAllMocks()
+  mocks.openFileDialog.mockResolvedValue(null)
+})
+
+describe("FileWorkspaceTabBar — the add-tab '+'", () => {
+  it("opens an empty browser tab", async () => {
+    renderStrip()
+    await openAddMenu()
+    await act(async () => {
+      screen.getByRole("menuitem", { name: "Browser tab" }).click()
+    })
+    // The blank page, not a home page: an empty tab with a focused address bar.
+    expect(mocks.openBrowserTab).toHaveBeenCalledWith("about:blank")
+  })
+
+  it("opens the file the native picker returned, as an absolute path", async () => {
+    mocks.openFileDialog.mockResolvedValue("/repo/src/../src/notes.md")
+    renderStrip()
+    await openAddMenu()
+    await act(async () => {
+      screen.getByRole("menuitem", { name: "Open file…" }).click()
+    })
+    expect(mocks.openFileDialog).toHaveBeenCalledWith({ title: "Open file" })
+    expect(mocks.openFilePreview).toHaveBeenCalledWith("/repo/src/notes.md")
+  })
+
+  it("does nothing when the picker is dismissed", async () => {
+    renderStrip()
+    await openAddMenu()
+    await act(async () => {
+      screen.getByRole("menuitem", { name: "Open file…" }).click()
+    })
+    expect(mocks.openFilePreview).not.toHaveBeenCalled()
+  })
+
+  it("drops the browser row when there is no built-in browser", async () => {
+    browserAvailable = false
+    renderStrip()
+    await openAddMenu()
+    expect(screen.queryByRole("menuitem", { name: "Browser tab" })).toBeNull()
+    expect(
+      screen.getByRole("menuitem", { name: "Open file…" })
+    ).toBeInTheDocument()
+  })
+
+  it("drops the picker row where a native dialog would pick the wrong machine", async () => {
+    remoteDesktop = true
+    renderStrip()
+    await openAddMenu()
+    expect(screen.queryByRole("menuitem", { name: "Open file…" })).toBeNull()
+    expect(
+      screen.getByRole("menuitem", { name: "Browser tab" })
+    ).toBeInTheDocument()
+  })
+
+  it("hides itself entirely rather than opening an empty menu", () => {
+    desktop = false
+    browserAvailable = false
+    renderStrip()
+    expect(screen.queryByRole("button", { name: "New tab" })).toBeNull()
+    // The strip itself still renders — this is the button's own gate.
+    expect(screen.getByRole("tablist")).toBeInTheDocument()
+  })
+})
+
+describe("FileWorkspaceTabBar — an empty browser tab", () => {
+  it("names itself instead of showing 'about:blank'", () => {
+    mocks.fileTabs = [browserTab("about:blank")]
+    renderStrip()
+    expect(screen.getByRole("tab")).toHaveTextContent("New tab")
+    expect(screen.getByRole("tab")).not.toHaveTextContent("about:blank")
+  })
+
+  it("carries no address in its tooltip — there is none to show", () => {
+    mocks.fileTabs = [browserTab("about:blank")]
+    renderStrip()
+    expect(screen.getByRole("tab").title).not.toContain("about:blank")
+  })
+
+  // A tab opened empty keeps `about:blank` as its record title for life — the
+  // record is stamped once, and there was no host to name it after. So once
+  // it has gone somewhere, the record title is the one thing that must NOT be
+  // shown: the page it names is not the page it is on.
+  it("names the host, not 'about:blank', once it has navigated", () => {
+    mocks.fileTabs = [browserTab("about:blank")]
+    // A page that never says its title — a JSON endpoint, a directory index —
+    // and every page for as long as a navigation is in flight.
+    mocks.browserState = {
+      url: "https://example.com/api/items.json",
+      title: "",
+    }
+    renderStrip()
+    const tab = screen.getByRole("tab")
+    expect(tab).not.toHaveTextContent("about:blank")
+    expect(tab).not.toHaveTextContent("New tab")
+    expect(tab).toHaveTextContent("example.com")
+    expect(tab.title).toBe("example.com\nhttps://example.com/api/items.json")
+  })
+})
+
+describe("FileWorkspaceTabBar — browser tab hover", () => {
+  it("gives the full title and the address, one per line", () => {
+    mocks.fileTabs = [
+      browserTab(
+        "https://example.com/docs",
+        "A page title far too long for the tab"
+      ),
+    ]
+    renderStrip()
+    // The label in the strip is always cut short (a page title is a sentence)
+    // and the address appears nowhere in the strip, so hovering has to supply
+    // both — that is the whole point of the tooltip on this tab kind.
+    expect(screen.getByRole("tab").title).toBe(
+      "A page title far too long for the tab\nhttps://example.com/docs"
+    )
+  })
+})

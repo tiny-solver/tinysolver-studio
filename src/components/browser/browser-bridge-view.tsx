@@ -19,8 +19,10 @@ import { browserTabBackendId } from "@/lib/file-tab-id"
 import { openExternalTab } from "@/lib/link-open"
 import { copyTextToClipboard, randomUUID } from "@/lib/utils"
 
+// Same shape as the desktop toolbar's buttons (`browser-toolbar.tsx`): this
+// row stands in the same place, under the same tab strip.
 const ICON_BTN =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
 
 /** The frame keeps its origin (its own bridge port, shared with nothing) and
  *  never navigates the workbench. */
@@ -119,7 +121,10 @@ export function BrowserBridgeView({ tab }: { tab: BrowserWorkspaceTab }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border/60 px-2 text-xs">
+      {/* Same shape as the desktop toolbar's row, and for the same reason:
+          a browser tab has no title header above it, so this is the file
+          column's top row (see `file-workspace-header.tsx`). */}
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border/50 px-2 text-xs">
         <span
           className="min-w-0 flex-1 truncate px-1 text-muted-foreground"
           title={url}

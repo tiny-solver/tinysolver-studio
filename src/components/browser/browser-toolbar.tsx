@@ -1,11 +1,12 @@
 "use client"
 
-import { useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import {
   ArrowLeft,
   ArrowRight,
   Copy,
   ExternalLink,
+  MoreVertical,
   RotateCw,
   UserRound,
   X,
@@ -20,6 +21,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -37,6 +39,7 @@ import {
   DEFAULT_BROWSER_PROFILE_ID,
   useBrowserPrefs,
 } from "@/lib/browser/browser-prefs"
+import { isBlankPageUrl } from "@/lib/browser/browser-url"
 import type { BrowserTabState } from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
 import { openUrl } from "@/lib/platform"
@@ -45,8 +48,18 @@ import { cn, copyTextToClipboard } from "@/lib/utils"
 import { BrowserAgentShareControl } from "./browser-agent-access"
 import { BrowserSendToChatControl } from "./browser-page-handoff"
 
+// Circular, like the tab strip's buttons directly above this row
+// (`STRIP_ICON_BTN` in `file-workspace-tab-bar.tsx`). Now that the toolbar is
+// the file column's top row, the two are stacked with nothing between them,
+// and a row of 4px-cornered squares under a row of circles reads as two
+// unrelated toolbars. The width override on the profile chip below turns the
+// same class into a pill, which is the shape's other half.
 const ICON_BTN =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+
+/** How far the pointer may travel between press and release and still count
+ *  as a click rather than a drag. The usual few pixels of hand tremor. */
+const DRAG_SLOP_PX = 3
 
 /**
  * Turn what a user typed into something the tab can load: a full URL as is,
@@ -166,7 +179,13 @@ export function BrowserToolbar({
   const t = useTranslations("Browser.toolbar")
   const backendId = browserTabBackendId(tab.id)
   const currentUrl = state?.url || state?.requestedUrl || tab.browser.initialUrl
-  const [draft, setDraft] = useState(currentUrl)
+  // The blank page is the absence of an address, so the bar shows its
+  // placeholder rather than the literal `about:blank` — which nobody types,
+  // and which would be selected-and-overtyped on every visit anyway. The
+  // buttons that act on an address go quiet for the same reason.
+  const blank = isBlankPageUrl(currentUrl)
+  const address = blank ? "" : currentUrl
+  const [draft, setDraft] = useState(address)
   const [editing, setEditing] = useState(false)
   const [mirroredUrl, setMirroredUrl] = useState(currentUrl)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -176,13 +195,43 @@ export function BrowserToolbar({
   // the address bar never paints a stale URL for a frame.
   if (mirroredUrl !== currentUrl) {
     setMirroredUrl(currentUrl)
-    if (!editing) setDraft(currentUrl)
+    if (!editing) setDraft(address)
   }
+
+  // An empty tab is opened in order to type an address, so the caret starts
+  // in the bar. Captured at mount: once the tab has a page, focus is the
+  // page's — and a tab that was blank when it was switched to is still empty
+  // when it comes back, so re-focusing on remount is the same answer.
+  const [openedBlank] = useState(blank)
+  useEffect(() => {
+    if (openedBlank) inputRef.current?.focus()
+  }, [openedBlank])
+
+  // Focusing the bar hands over the whole address, so it can be overtyped in
+  // one go — what every browser's address bar does, and the only reason to
+  // click into this one (it is not a text box anyone edits a fragment of).
+  //
+  // `select()` from `onFocus` alone does not survive a click. The engine
+  // focuses on mousedown — the selection appears, which is why it is visible
+  // for as long as the button is held — and then runs its own selection
+  // default on mouseup, collapsing everything to where the pointer landed.
+  // That default runs AFTER the event reaches us, so re-selecting in the
+  // handler is not enough either; the release has to be cancelled outright.
+  //
+  // Which is only right when the release ends a click. Drag out a range and
+  // the engine's selection IS the answer, so nothing is cancelled and it
+  // stands. How far the pointer travelled decides between the two, rather
+  // than what the selection holds at release: that depends on when the engine
+  // clobbers (some do it on the press instead), and so reads differently for
+  // the same click from one engine to the next. The distance does not.
+  const pressRef = useRef<{ x: number; y: number } | null>(null)
 
   const loading = state?.loading ?? true
 
   const submit = () => {
     if (!backendId) return
+    // Enter on an empty bar (a fresh tab) is not a mistake worth a toast.
+    if (!draft.trim()) return
     const url = normalizeTypedAddress(draft)
     if (!url) {
       toast.error(t("invalidUrl"))
@@ -201,14 +250,19 @@ export function BrowserToolbar({
       submit()
     } else if (event.key === "Escape") {
       event.preventDefault()
-      setDraft(currentUrl)
+      setDraft(address)
       setEditing(false)
       inputRef.current?.blur()
     }
   }
 
   return (
-    <div className="relative flex h-9 shrink-0 items-center gap-1 border-b border-border/60 bg-muted/40 px-1.5">
+    // This IS the file column's top row — a browser tab has no title header
+    // above it (see `file-workspace-header.tsx`). So it takes that row's
+    // shape: `h-10` and the same hairline, and NO fill of its own, so the
+    // active tab's fill above flows into it and a workspace background image
+    // shows through exactly as it does on a file tab's header.
+    <div className="relative flex h-10 shrink-0 items-center gap-1 border-b border-border/50 px-1.5">
       <button
         type="button"
         className={ICON_BTN}
@@ -250,6 +304,30 @@ export function BrowserToolbar({
           setEditing(true)
           event.currentTarget.select()
         }}
+        onMouseDown={(event) => {
+          // Only a PRIMARY click that brings focus in selects everything.
+          // Once the bar has focus a click means "put the caret here and
+          // edit"; and a right or middle press is not a click at all —
+          // cancelling its release would take the context menu with it on the
+          // platforms that raise one from the release.
+          pressRef.current =
+            event.button === 0 && document.activeElement !== event.currentTarget
+              ? { x: event.clientX, y: event.clientY }
+              : null
+        }}
+        onMouseUp={(event) => {
+          const press = pressRef.current
+          pressRef.current = null
+          if (!press) return
+          if (
+            Math.abs(event.clientX - press.x) > DRAG_SLOP_PX ||
+            Math.abs(event.clientY - press.y) > DRAG_SLOP_PX
+          ) {
+            return
+          }
+          event.preventDefault()
+          event.currentTarget.select()
+        }}
         onBlur={() => setEditing(false)}
         onKeyDown={onKeyDown}
         spellCheck={false}
@@ -259,35 +337,54 @@ export function BrowserToolbar({
         placeholder={t("addressPlaceholder")}
         aria-label={t("addressPlaceholder")}
         className={cn(
-          "mx-1 h-7 min-w-0 flex-1 rounded-md border border-transparent bg-background px-2.5 text-xs text-foreground outline-none",
+          // Inverted from the old placement: the row used to be a `bg-muted`
+          // band with a `bg-background` field cut into it, but the row is now
+          // the canvas itself, so the field is the tinted one. Translucent +
+          // `backdrop-blur-sm` for the same reason the strip's buttons are —
+          // over a workspace background image a flat tint reads as a muddy
+          // patch, a blurred one as frosted glass.
+          "mx-1 h-7 min-w-0 flex-1 rounded-md border border-border/60 bg-muted/50 px-2.5 text-xs text-foreground outline-none backdrop-blur-sm",
           "focus:border-ring/50 focus:ring-2 focus:ring-ring/20"
         )}
       />
       <BrowserSendToChatControl tab={tab} state={state} />
       <BrowserAgentShareControl tab={tab} state={state} />
       <ProfileMenu tab={tab} currentUrl={currentUrl} />
-      <button
-        type="button"
-        className={ICON_BTN}
-        title={t("copyUrl")}
-        aria-label={t("copyUrl")}
-        onClick={() => {
-          void copyTextToClipboard(currentUrl).then(() =>
-            toast.success(t("copied"))
-          )
-        }}
-      >
-        <Copy className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        className={ICON_BTN}
-        title={t("openInSystem")}
-        aria-label={t("openInSystem")}
-        onClick={() => void openUrl(currentUrl)}
-      >
-        <ExternalLink className="h-3.5 w-3.5" />
-      </button>
+      {/* The address's own actions, folded into one control. They act on the
+          page rather than on the browsing — nobody reaches for them mid-scroll
+          — so they cost a click here and give the row back to the address bar
+          and to the controls that do belong in reach. Disabled whole on an
+          empty tab: there is no address to copy or hand to another browser,
+          which is every item it holds. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={ICON_BTN}
+            title={t("more")}
+            aria-label={t("more")}
+            disabled={blank}
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
+          <DropdownMenuItem
+            onSelect={() => {
+              void copyTextToClipboard(currentUrl).then(() =>
+                toast.success(t("copied"))
+              )
+            }}
+          >
+            <Copy />
+            {t("copyUrl")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void openUrl(currentUrl)}>
+            <ExternalLink />
+            {t("openInSystem")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {loading ? (
         <div
           aria-hidden

@@ -73,7 +73,11 @@ import {
   hasSurfaceClaim,
   releaseBrowserTab,
 } from "@/lib/browser/browser-tab-store"
-import { hostnameOf, normalizeUrlForDedupe } from "@/lib/browser/browser-url"
+import {
+  BLANK_PAGE_URL,
+  hostnameOf,
+  normalizeUrlForDedupe,
+} from "@/lib/browser/browser-url"
 import {
   DEFAULT_BROWSER_PROFILE_ID,
   browserProfileExists,
@@ -289,8 +293,9 @@ interface WorkspaceActionsValue {
   // `index` is the strip slot for a tab that is not open yet, clamped to the
   // strip; omitted = append, and an `openerTabId` wins over it. Reopening a
   // closed tab passes the slot it was closed from. A tab already on this URL
-  // in the same profile is activated where it is. `profile` defaults to the
-  // opener's, else to the preference for new tabs.
+  // in the same profile is activated where it is — except for the blank page
+  // (`BLANK_PAGE_URL`), which always opens a fresh empty tab. `profile`
+  // defaults to the opener's, else to the preference for new tabs.
   openBrowserTab: (
     url: string,
     options?: {
@@ -829,12 +834,21 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         : DEFAULT_BROWSER_PROFILE_ID
       // One tab per page AND profile: the same page in two profiles is two
       // different sessions, and both are worth a tab.
-      const existing = fileTabsRef.current.find(
-        (tab) =>
-          tab.kind === "browser" &&
-          tab.browser.profile === profile &&
-          normalizeUrlForDedupe(tab.browser.initialUrl) === normalized
-      )
+      //
+      // The blank page is exempt: it is an empty tab, not a page, so two of
+      // them are two tabs. Dedupe would also misfire once one is used — a
+      // record keeps the URL it was OPENED with, so a blank tab the user has
+      // since navigated somewhere would be handed back (and its page brought
+      // to the front) in place of the new empty tab they just asked for.
+      const existing =
+        normalized === BLANK_PAGE_URL
+          ? undefined
+          : fileTabsRef.current.find(
+              (tab) =>
+                tab.kind === "browser" &&
+                tab.browser.profile === profile &&
+                normalizeUrlForDedupe(tab.browser.initialUrl) === normalized
+            )
       if (existing) {
         if (options?.activate !== false) activateTab(existing.id)
         return existing.id

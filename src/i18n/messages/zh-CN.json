@@ -2161,6 +2161,7 @@
           "navigation": "菜单导航",
           "more": "更多"
         },
+        "browserTab": "打开浏览器",
         "showPet": "显示宠物"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "文件",
+      "newTab": "新建标签页",
+      "newBrowserTab": "浏览器标签页",
+      "openFile": "打开文件…",
+      "openFileTitle": "打开文件",
       "closeFileTab": "关闭文件标签",
       "close": "关闭",
       "closeOthers": "关闭其它",
@@ -6047,6 +6052,7 @@
       "reload": "刷新",
       "stop": "停止",
       "openInSystem": "在系统浏览器中打开",
+      "more": "更多",
       "copyUrl": "复制链接",
       "copied": "链接已复制",
       "addressPlaceholder": "输入地址",

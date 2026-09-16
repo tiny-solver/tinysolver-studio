@@ -7,6 +7,7 @@ import { useWorkspaceView } from "@/contexts/workspace-context"
 import { useOptionalWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useOverlayHostHidden } from "@/components/ui/overlay-host-hidden"
 import {
+  browserFreezeFrame,
   browserOpenTab,
   browserSetBounds,
   browserSetVisible,
@@ -42,6 +43,62 @@ import { cn } from "@/lib/utils"
  *  (a `visibility: hidden` ancestor toggled by the layout). One
  *  `checkVisibility()` call per tick. */
 const VISIBILITY_POLL_MS = 500
+
+/** Longest a hide waits on any one step of getting its freeze frame onto the
+ *  screen. Both waits below are bounded by it because NOTHING may leave the
+ *  hide unissued: frames do not arrive at all in a minimised window, and a
+ *  hide that never happens leaves the page sitting over the overlay that
+ *  asked for it, with keyboard focus never handed back. */
+const FREEZE_PAINT_TIMEOUT_MS = 100
+
+/** Resolve `work`, or give up after `FREEZE_PAINT_TIMEOUT_MS`. */
+function bounded(work: Promise<unknown>): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, FREEZE_PAINT_TIMEOUT_MS)
+    const done = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    work.then(done, done)
+  })
+}
+
+/**
+ * Warm `url` up off screen, so the `<img>` that follows paints in the commit
+ * it is added in rather than a few frames later. Best effort throughout — it
+ * only makes the paint sooner, so an engine without `decode()`, a decode that
+ * fails, and a decode that never settles are all simply "not warmed", never a
+ * reason to skip the frame or to hold the hide up.
+ */
+async function decodeOffscreen(url: string): Promise<void> {
+  if (typeof Image === "undefined") return
+  try {
+    const image = new Image()
+    image.src = url
+    if (typeof image.decode === "function") await bounded(image.decode())
+  } catch {
+    /* paint it cold */
+  }
+}
+
+/** Resolve after the next paint — the second frame, since the first callback
+ *  still runs before it. Bounded, so a window that paints nothing cannot
+ *  strand the caller. */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame !== "function") {
+      resolve()
+      return
+    }
+    const timer = setTimeout(resolve, FREEZE_PAINT_TIMEOUT_MS)
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        clearTimeout(timer)
+        resolve()
+      })
+    )
+  })
+}
 
 function measure(el: HTMLElement): Bounds {
   const rect = el.getBoundingClientRect()
@@ -177,19 +234,44 @@ export function NativeSurfaceHost({
           .finally(() => {
             if (hideSeqRef.current === seq) setFrozen(null)
           })
+      } else if (
+        !overlayHide ||
+        bounds.width <= 0 ||
+        bounds.height <= 0 ||
+        !elementVisible(el)
+      ) {
+        // Nothing worth a still: the placeholder is going off screen too.
+        void browserSetVisible(backendId, false, true, false).catch(() => {})
       } else {
-        const freeze =
-          overlayHide &&
-          bounds.width > 0 &&
-          bounds.height > 0 &&
-          elementVisible(el)
-        void browserSetVisible(backendId, false, true, freeze)
-          .then((frame) => {
-            if (frame && hideSeqRef.current === seq) {
-              setFrozen(`data:${frame.mime};base64,${frame.data}`)
-            }
-          })
-          .catch(() => {})
+        void (async () => {
+          // Paint the still UNDER the live native view, then hide. The view
+          // covers the placeholder, so the frame costs nothing on screen
+          // until the moment it is needed — and at that moment it is already
+          // there. Hiding first and painting whatever the hide hands back
+          // leaves the placeholder blank for a round trip, which is the
+          // flash this whole mechanism exists to prevent.
+          //
+          // Every step re-checks the sequence: an overlay closed while this
+          // was in flight has already shown the surface, and finishing the
+          // hide would take the page away with nothing left over it.
+          const frame = await browserFreezeFrame(backendId).catch(() => null)
+          if (hideSeqRef.current !== seq) return
+          if (frame) {
+            const url = `data:${frame.mime};base64,${frame.data}`
+            await decodeOffscreen(url)
+            if (hideSeqRef.current !== seq) return
+            setFrozen(url)
+            await nextPaint()
+            if (hideSeqRef.current !== seq) return
+          }
+          // The hide itself, asking for no frame of its own even when the one
+          // above came back empty. `freeze_frame_core` captures under the
+          // same conditions this would, so a second attempt answers the same
+          // — except that if the first one came back empty by TIMING OUT, the
+          // retry spends that budget again, and the page sits over the
+          // just-opened overlay for twice as long as it ever did before.
+          void browserSetVisible(backendId, false, true, false).catch(() => {})
+        })()
       }
     }
   }, [backendId, overlayHide, shouldShow, storeKey])

@@ -844,11 +844,35 @@ async fn capture_freeze_frame(surface: &BrowserSurface) -> Option<FrozenFrame> {
     }
 }
 
+/// The frame the surface shows right now, leaving its visibility alone.
+///
+/// Capturing and hiding in one call (`set_visible_core` below, which still
+/// does) means the placeholder has nothing to paint until the answer gets
+/// back — a blank gap as wide as an IPC round trip, seen as a flash when a
+/// menu opens over a page. Taking the frame first lets the caller paint it
+/// UNDER the still-visible native view, where it shows nothing, and hide only
+/// once it is on screen: the view goes and the still is already there.
+pub async fn freeze_frame_core(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<Option<FrozenFrame>, AppCommandError> {
+    let surface = surface_of(registry, tab_id)?;
+    // An owned window is not painted into a placeholder, so no still of it
+    // would ever be shown. A hidden surface has nothing on screen to capture
+    // and answers with a blank or a stale frame on some platforms, which is
+    // worse than the caller's own fallback.
+    if !surface.is_embedded() || registry.update(tab_id, |tab| tab.visible) != Some(true) {
+        return Ok(None);
+    }
+    Ok(capture_freeze_frame(&surface).await)
+}
+
 /// Show or hide a surface. Hiding with `freeze` first captures the frame the
 /// surface shows and hands it back, so the placeholder can keep showing the
 /// page while an overlay is open over it; the capture is asynchronous, and a
 /// request that a newer one overtook meanwhile is dropped rather than
-/// applied late.
+/// applied late. Kept as the fallback for callers that could not take a frame
+/// up front (`freeze_frame_core`) — a late still beats none.
 pub async fn set_visible_core(
     owner: &WebviewWindow,
     registry: &BrowserRegistry,
@@ -3058,6 +3082,14 @@ pub async fn browser_set_visible(
         freeze.unwrap_or(false),
     )
     .await
+}
+
+#[tauri::command]
+pub async fn browser_freeze_frame(
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+) -> Result<Option<FrozenFrame>, AppCommandError> {
+    freeze_frame_core(&registry, &tab_id).await
 }
 
 #[tauri::command]

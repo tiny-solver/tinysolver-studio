@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  BLANK_PAGE_URL,
   displayHostPort,
   hostnameOf,
+  isBlankPageUrl,
   isLoopbackHost,
   isLoopbackOrPrivateUrl,
   isPrivateNetworkHost,
@@ -109,6 +111,19 @@ describe("URL helpers", () => {
       "http://example.com/"
     )
     expect(normalizeUrlForDedupe("nope")).toBeNull()
+  })
+
+  it("isBlankPageUrl recognizes the empty page and nothing that merely looks like it", () => {
+    expect(isBlankPageUrl(BLANK_PAGE_URL)).toBe(true)
+    expect(isBlankPageUrl("about:blank#anything")).toBe(true)
+    // A site is never the empty page, however it is spelled.
+    expect(isBlankPageUrl("about:srcdoc")).toBe(false)
+    expect(isBlankPageUrl("https://about.blank/")).toBe(false)
+    expect(isBlankPageUrl("https://example.com/about:blank")).toBe(false)
+    // A query turns it into a different document (`about:blank?x` carries
+    // data), so it is not the empty tab either.
+    expect(isBlankPageUrl("about:blank?x=1")).toBe(false)
+    expect(isBlankPageUrl("")).toBe(false)
   })
 
   it("displayHostPort keeps an explicit port and omits the default", () => {

@@ -49,6 +49,8 @@ import {
   setBrowserProfiles,
 } from "@/lib/browser/browser-prefs"
 
+import { openUrl } from "@/lib/platform"
+
 import { BrowserToolbar } from "./browser-toolbar"
 
 const toolbarMocks = vi.hoisted(() => ({
@@ -72,7 +74,10 @@ vi.mock("@/lib/browser/browser-api", () => ({
 }))
 vi.mock("@/lib/platform", () => ({ openUrl: vi.fn() }))
 
-function tabIn(profile: string): BrowserWorkspaceTab {
+function tabIn(
+  profile: string,
+  initialUrl = "https://example.com/"
+): BrowserWorkspaceTab {
   return {
     id: "browser:abc",
     kind: "browser",
@@ -84,18 +89,14 @@ function tabIn(profile: string): BrowserWorkspaceTab {
     content: "",
     loading: false,
     readonly: true,
-    browser: {
-      initialUrl: "https://example.com/",
-      openerTabId: null,
-      profile,
-    },
+    browser: { initialUrl, openerTabId: null, profile },
   } as BrowserWorkspaceTab
 }
 
-function renderToolbar(profile: string) {
+function renderToolbar(profile: string, initialUrl?: string) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <BrowserToolbar tab={tabIn(profile)} state={null} />
+      <BrowserToolbar tab={tabIn(profile, initialUrl)} state={null} />
     </NextIntlClientProvider>
   )
 }
@@ -153,6 +154,46 @@ describe("BrowserToolbar profile chip", () => {
     )
   })
 
+  it("leaves an empty tab's address bar blank, focused, and its address actions off", () => {
+    renderToolbar("default", "about:blank")
+    const bar = screen.getByRole("textbox", { name: "Enter an address" })
+    // `about:blank` is the absence of a page, not an address anyone typed —
+    // showing it would mean selecting-and-overtyping it on every visit.
+    expect(bar).toHaveValue("")
+    expect(bar).toHaveFocus()
+    // Every item behind "More" acts on the address, and there is none.
+    expect(screen.getByRole("button", { name: "More" })).toBeDisabled()
+  })
+
+  it("leaves a real address in the bar and does not steal focus", () => {
+    renderToolbar("default")
+    const bar = screen.getByRole("textbox", { name: "Enter an address" })
+    expect(bar).toHaveValue("https://example.com/")
+    expect(bar).not.toHaveFocus()
+    expect(screen.getByRole("button", { name: "More" })).toBeEnabled()
+  })
+
+  it("keeps copy and open-in-system behind the More menu, not on the row", async () => {
+    renderToolbar("default")
+    // The row itself is down to the controls used while browsing; these two
+    // act on the address and cost a click.
+    expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Open in system browser" })
+    ).toBeNull()
+
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    expect(
+      await screen.findByRole("menuitem", { name: "Copy link" })
+    ).toBeVisible()
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Open in system browser" })
+      )
+    })
+    expect(vi.mocked(openUrl)).toHaveBeenCalledWith("https://example.com/")
+  })
+
   it("shows the chip for a tab whose profile is gone, and cannot open elsewhere without a workspace", async () => {
     toolbarMocks.workspaceActions = null
     renderToolbar("p-gone")
@@ -166,5 +207,101 @@ describe("BrowserToolbar profile chip", () => {
       fireEvent.click(items[0])
     })
     expect(toolbarMocks.openBrowserTab).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Selecting the address
+// ---------------------------------------------------------------------------
+
+describe("BrowserToolbar address selection", () => {
+  const ADDRESS = "https://example.com/"
+
+  beforeEach(() => {
+    resetBrowserPrefsForTests()
+    toolbarMocks.workspaceActions = {
+      openBrowserTab: toolbarMocks.openBrowserTab,
+    }
+  })
+
+  function addressBar(): HTMLInputElement {
+    return screen.getByRole("textbox", {
+      name: "Enter an address",
+    }) as HTMLInputElement
+  }
+
+  function selection(input: HTMLInputElement) {
+    return [input.selectionStart, input.selectionEnd]
+  }
+
+  it("selects the whole address whenever the bar takes focus", () => {
+    renderToolbar("default")
+    const bar = addressBar()
+    act(() => bar.focus())
+    expect(selection(bar)).toEqual([0, ADDRESS.length])
+  })
+
+  it("keeps the address selected through the click that focused it", () => {
+    renderToolbar("default")
+    const bar = addressBar()
+    fireEvent.mouseDown(bar, { clientX: 120, clientY: 20 })
+    act(() => bar.focus())
+    // jsdom runs no selection default of its own. Stand in for the engine's:
+    // it collapses to where the pointer landed, and it runs on the release
+    // AFTER this handler, so cancelling the release is the only thing that
+    // stops it — hence the `false` below.
+    bar.setSelectionRange(8, 8)
+    const delivered = fireEvent.mouseUp(bar, { clientX: 121, clientY: 20 })
+    expect(delivered).toBe(false)
+    expect(selection(bar)).toEqual([0, ADDRESS.length])
+  })
+
+  it("keeps its hands off a non-primary press", () => {
+    renderToolbar("default")
+    const bar = addressBar()
+    // A right press is not a click. Cancelling its release would take the
+    // context menu with it wherever one is raised from the release (and the
+    // X11 middle-click paste, for button 1).
+    fireEvent.mouseDown(bar, { clientX: 60, clientY: 20, button: 2 })
+    act(() => bar.focus())
+    bar.setSelectionRange(8, 8)
+    expect(
+      fireEvent.mouseUp(bar, { clientX: 60, clientY: 20, button: 2 })
+    ).toBe(true)
+    expect(selection(bar)).toEqual([8, 8])
+  })
+
+  it("does not let a press outlive its own gesture", () => {
+    renderToolbar("default")
+    const bar = addressBar()
+    // Press inside, drag out, release outside: the input never sees a
+    // mouseup, so the armed press has to be cleared by the NEXT press rather
+    // than survive to cancel someone else's release.
+    fireEvent.mouseDown(bar, { clientX: 60, clientY: 20 })
+    act(() => bar.focus())
+    bar.setSelectionRange(2, 9)
+    fireEvent.mouseDown(bar, { clientX: 60, clientY: 20, button: 2 })
+    expect(
+      fireEvent.mouseUp(bar, { clientX: 60, clientY: 20, button: 2 })
+    ).toBe(true)
+    expect(selection(bar)).toEqual([2, 9])
+  })
+
+  it("leaves a dragged-out range, and a caret click once it has focus, alone", () => {
+    renderToolbar("default")
+    const bar = addressBar()
+    // Dragging picks a range deliberately — that is the user's answer, and
+    // the engine's own selection has to reach it.
+    fireEvent.mouseDown(bar, { clientX: 60, clientY: 20 })
+    act(() => bar.focus())
+    bar.setSelectionRange(8, 19)
+    expect(fireEvent.mouseUp(bar, { clientX: 140, clientY: 20 })).toBe(true)
+    expect(selection(bar)).toEqual([8, 19])
+
+    // And a click inside a bar that already has focus means "edit here".
+    bar.setSelectionRange(8, 8)
+    fireEvent.mouseDown(bar, { clientX: 60, clientY: 20 })
+    expect(fireEvent.mouseUp(bar, { clientX: 60, clientY: 20 })).toBe(true)
+    expect(selection(bar)).toEqual([8, 8])
   })
 })

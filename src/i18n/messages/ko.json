@@ -2161,6 +2161,7 @@
           "navigation": "탐색",
           "more": "기타"
         },
+        "browserTab": "브라우저 탭 열기",
         "showPet": "펫 표시"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "파일",
+      "newTab": "새 탭",
+      "newBrowserTab": "브라우저 탭",
+      "openFile": "파일 열기…",
+      "openFileTitle": "파일 열기",
       "closeFileTab": "파일 탭 닫기",
       "close": "닫기",
       "closeOthers": "다른 항목 닫기",
@@ -6047,6 +6052,7 @@
       "reload": "새로 고침",
       "stop": "중지",
       "openInSystem": "시스템 브라우저에서 열기",
+      "more": "더 보기",
       "copyUrl": "링크 복사",
       "copied": "링크를 복사했습니다",
       "addressPlaceholder": "주소 입력",

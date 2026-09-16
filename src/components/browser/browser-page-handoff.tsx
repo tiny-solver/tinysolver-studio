@@ -218,7 +218,9 @@ export function BrowserSendToChatControl({
       <button
         type="button"
         className={cn(
-          "flex h-7 shrink-0 items-center gap-1 rounded px-1.5 text-xs font-medium",
+          // Pill, like everything else on the toolbar row it sits in
+          // (`ICON_BTN` in `browser-toolbar.tsx`).
+          "flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium",
           "bg-violet-500/12 text-violet-600 transition-colors hover:bg-violet-500/20",
           "dark:text-violet-400"
         )}
@@ -238,7 +240,7 @@ export function BrowserSendToChatControl({
         <button
           type="button"
           className={cn(
-            "relative flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground",
+            "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground",
             "transition-colors hover:bg-primary/8 hover:text-foreground",
             "disabled:pointer-events-none disabled:opacity-40"
           )}

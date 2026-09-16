@@ -207,6 +207,21 @@ export function browserSetVisible(
     .then((frame) => frame ?? null)
 }
 
+/**
+ * The frame a tab's surface shows right now, without touching its visibility.
+ *
+ * Taken BEFORE an overlay hide so the placeholder can paint the still while
+ * the native view is still up and hiding it: hide first and the placeholder
+ * is blank for the length of a round trip, which is seen as a flash. `null`
+ * when there is no frame to be had — a hidden or windowed surface, or a
+ * capture that did not come back in time.
+ */
+export function browserFreezeFrame(tabId: string): Promise<FrozenFrame | null> {
+  return getTransport()
+    .call<FrozenFrame | null | undefined>("browser_freeze_frame", { tabId })
+    .then((frame) => frame ?? null)
+}
+
 /** The user's site rules, for the backend to enforce `block` on navigations. */
 export function browserSetHostRules(rules: readonly HostRule[]): Promise<void> {
   return getTransport().call<void>("browser_set_host_rules", {

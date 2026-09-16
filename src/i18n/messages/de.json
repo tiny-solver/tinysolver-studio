@@ -2161,6 +2161,7 @@
           "navigation": "Navigation",
           "more": "Mehr"
         },
+        "browserTab": "Browser-Tab öffnen",
         "showPet": "Pet anzeigen"
       },
       "mcp": {
@@ -2248,6 +2249,10 @@
     },
     "fileWorkspace": {
       "files": "Dateien",
+      "newTab": "Neuer Tab",
+      "newBrowserTab": "Browser-Tab",
+      "openFile": "Datei öffnen…",
+      "openFileTitle": "Datei öffnen",
       "closeFileTab": "Dateitab schließen",
       "close": "Schließen",
       "closeOthers": "Andere schließen",
@@ -6047,6 +6052,7 @@
       "reload": "Neu laden",
       "stop": "Stopp",
       "openInSystem": "Im Systembrowser öffnen",
+      "more": "Mehr",
       "copyUrl": "Link kopieren",
       "copied": "Link kopiert",
       "addressPlaceholder": "Adresse eingeben",

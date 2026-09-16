@@ -3310,6 +3310,9 @@ describe("browser tabs", () => {
           open-bg
         </button>
         <button onClick={() => openBrowserTab("not a url")}>open-bad</button>
+        <button onClick={() => openBrowserTab("about:blank")}>
+          open-blank
+        </button>
         <button
           onClick={() =>
             openBrowserTab("https://example.com/docs#top", {
@@ -3516,6 +3519,30 @@ describe("browser tabs", () => {
     expect(tabs).toHaveLength(2)
     // Background open must not steal the active tab.
     expect(screen.getByTestId("active").textContent).toBe(tabs[0].id)
+  })
+
+  it("gives every request for the blank page its own empty tab", () => {
+    render(
+      <WorkspaceProvider>
+        <BrowserProbe />
+      </WorkspaceProvider>
+    )
+    act(() => screen.getByText("open-blank").click())
+    act(() => screen.getByText("open-blank").click())
+    const tabs = readTabs()
+    // Two empty tabs, not one page opened twice. Dedupe by opening URL would
+    // also hand back a blank tab the user had since navigated somewhere —
+    // the record keeps `about:blank` for the tab's whole life.
+    expect(tabs.map((t) => t.url)).toEqual(["about:blank", "about:blank"])
+    expect(tabs[0].id).not.toBe(tabs[1].id)
+    // The second click is a request for a NEW empty tab, so that is the one
+    // brought to the front.
+    expect(screen.getByTestId("active").textContent).toBe(tabs[1].id)
+
+    // A real page still de-dupes.
+    act(() => screen.getByText("open").click())
+    act(() => screen.getByText("open-same").click())
+    expect(readTabs()).toHaveLength(3)
   })
 
   it("inserts an adopted popup right after its opener and activates it", () => {
