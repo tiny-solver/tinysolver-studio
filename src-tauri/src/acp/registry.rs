@@ -1281,9 +1281,41 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
+            // 0.59.0 → 0.60.0 is a sandbox / path-security release and touches
+            // nothing codeg reads. Verified by slicing both bundles on their
+            // `// packages/<pkg>/src/<file>.ts` source markers and diffing per
+            // source file, after normalising two esbuild artefacts that make an
+            // unnormalised diff useless here: identifier renumbering (`fs30` →
+            // `fs32`) and inconsistent const-enum inlining (`"proceed_once" /*
+            // ProceedOnce */` on one side, `ToolConfirmationOutcome.ProceedOnce`
+            // on the other — the dispatcher shows BOTH directions at once, which
+            // is what proves it is bundling noise and not a rename). That takes
+            // 425 changed files down to 41 real ones.
+            //
+            // What survives is all sandbox managers (new, per-OS), the
+            // extensions registry, MCP OAuth, the policy engine and path
+            // security. Of the surfaces codeg depends on:
+            //
+            // - `loadConversationRecord` (the parser's contract — the four
+            //   record kinds) is byte-identical modulo the renumbering.
+            // - All four `packages/cli/src/acp/*` files normalise to identical:
+            //   the permission option IDs, `toAcpToolKind` and the auth methods
+            //   are unchanged.
+            // - `tokenLimits.ts` does not appear in the diff at all, so the
+            //   1 << 20 window still holds.
+            // - `--acp` and `--skip-trust` are both still registered, and the
+            //   sandbox is opt-in (`argv.sandbox ?? settings.tools?.sandbox`,
+            //   undefined by default), so the launch line is unaffected.
+            //
+            // One change is worth naming because it is adjacent to us:
+            // `mcp-client.ts` now drops MCP-server env entries whose key is in
+            // `BLOCKED_EXECUTION_ENVS`. That list is loader/interpreter hijacks
+            // (`NODE_OPTIONS`, `LD_PRELOAD`, `DYLD_*`, `PYTHONPATH`, `BASH_ENV`,
+            // …); codeg injects `codeg-mcp` with `CODEG_*`, so nothing we send
+            // is dropped. `engines.node` stays `>=20`.
             distribution: AgentDistribution::Npx {
-                version: "0.59.0",
-                package: "@google/gemini-cli@0.59.0",
+                version: "0.60.0",
+                package: "@google/gemini-cli@0.60.0",
                 cmd: "gemini",
                 args: &["--acp", "--skip-trust"],
                 env: &[],
@@ -2307,8 +2339,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Gemini,
-            "0.59.0",
-            "@google/gemini-cli@0.59.0",
+            "0.60.0",
+            "@google/gemini-cli@0.60.0",
             Some("20.0.0"),
         );
         // OpenClaw's floor is a RUNTIME gate (`node-version.mjs`), not just

@@ -448,6 +448,30 @@ describe("inferLiveToolName query-bearing MCP calls", () => {
     ).toBe("websearch")
   })
 
+  it("recognizes Gemini web-search frames by their title", () => {
+    // gemini's `google_web_search` reports `kind: "search"` — the same kind as
+    // its glob and grep — so the title is the only "web" signal. The backend
+    // synthesizes `{query}` from that title because gemini sends no rawInput
+    // at all (`gemini_synthesize_tool_input`).
+    expect(
+      inferLiveToolName({
+        title: 'Searching the web for: "ACP protocol"',
+        kind: "search",
+        rawInput: JSON.stringify({ query: "ACP protocol" }),
+      })
+    ).toBe("websearch")
+
+    // Still not enough on its own: the phrase has to START the title, so a
+    // tool merely mentioning it stays unclassified.
+    expect(
+      inferLiveToolName({
+        title: 'Explain searching the web for: "x"',
+        kind: "search",
+        rawInput: JSON.stringify({ query: "x" }),
+      })
+    ).not.toBe("websearch")
+  })
+
   it("does not infer websearch from a query field alone", () => {
     expect(
       inferLiveToolName({

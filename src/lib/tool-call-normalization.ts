@@ -271,6 +271,22 @@ function isCodexWebSearchTitle(input: string | null | undefined): boolean {
   )
 }
 
+/**
+ * Gemini's web-search title, for the same reason Codex needs one above: its
+ * `google_web_search` tool reports `kind: "search"` — the kind it also uses for
+ * glob and grep — so the title is the only thing that says "web". The format is
+ * `Searching the web for: "<query>"`, straight from the tool's own
+ * `getDescription()` (packages/core/src/tools/web-search.ts, gemini-cli 0.60.0).
+ *
+ * Anchored at the start so an assistant or MCP tool that merely mentions the
+ * phrase mid-title is not swept in.
+ */
+function isGeminiWebSearchTitle(input: string | null | undefined): boolean {
+  const title = input?.trim()
+  if (!title) return false
+  return /^searching\s+the\s+web\s+for\s*:/i.test(title)
+}
+
 /** Codex's raw-input marker is camelCase on the ACP wire (`webSearch`). */
 function isCodexWebSearchType(input: unknown): boolean {
   if (typeof input !== "string") return false
@@ -423,6 +439,7 @@ function inferFromInput(
       normalizedKind === "websearch" ||
       normalizedKind === "web_search" ||
       isCodexWebSearchTitle(title) ||
+      isGeminiWebSearchTitle(title) ||
       isCodexWebSearchType(parsed.type))
   )
     return "websearch"
