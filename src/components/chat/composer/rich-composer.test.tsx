@@ -467,3 +467,119 @@ describe("RichComposer text paste (plain-text schema)", () => {
     expect(ref.current?.getText()).toBe("")
   })
 })
+
+describe("RichComposer prompt-history Arrow routing", () => {
+  it("routes ArrowUp to onHistoryKeyDown at the document start and consumes it", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("hello"))
+    act(() => ref.current?.getEditor()?.commands.focus("start"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    const event = pressKey(dom, { key: "ArrowUp" })
+
+    expect(onHistoryKeyDown).toHaveBeenCalledWith("older", expect.anything())
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it("routes ArrowDown to onHistoryKeyDown at the document end", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("hello"))
+    act(() => ref.current?.getEditor()?.commands.focus("end"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    const event = pressKey(dom, { key: "ArrowDown" })
+
+    expect(onHistoryKeyDown).toHaveBeenCalledWith("newer", expect.anything())
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it("leaves the Arrow keys to the caret away from the edge", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("hello"))
+    // Caret at the END: ArrowUp is not "older" here, so it stays a caret move
+    // and the host is never asked.
+    act(() => ref.current?.getEditor()?.commands.focus("end"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    const event = pressKey(dom, { key: "ArrowUp" })
+
+    expect(onHistoryKeyDown).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it("keeps Arrow keys for the IME while a composition is in flight", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("ni"))
+    act(() => ref.current?.getEditor()?.commands.focus("start"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    const event = pressKey(dom, { key: "ArrowUp", isComposing: true })
+
+    expect(onHistoryKeyDown).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it("defers to an open menu before history", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const onExternalMenuKeyDown = vi.fn(() => true)
+    const { ref } = await mount({
+      onHistoryKeyDown,
+      onExternalMenuKeyDown,
+      isExternalMenuOpen: true,
+    })
+    act(() => ref.current?.setText("hello"))
+    act(() => ref.current?.getEditor()?.commands.focus("start"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    pressKey(dom, { key: "ArrowUp" })
+
+    expect(onExternalMenuKeyDown).toHaveBeenCalled()
+    expect(onHistoryKeyDown).not.toHaveBeenCalled()
+  })
+
+  it("does not consume the key when the host declines", async () => {
+    const onHistoryKeyDown = vi.fn(() => false)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("hello"))
+    act(() => ref.current?.getEditor()?.commands.focus("start"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    const event = pressKey(dom, { key: "ArrowUp" })
+
+    expect(onHistoryKeyDown).toHaveBeenCalledWith("older", expect.anything())
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it("keeps Shift+Arrow for selection instead of history", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("hello"))
+    act(() => ref.current?.getEditor()?.commands.focus("start"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    const event = pressKey(dom, { key: "ArrowUp", shiftKey: true })
+
+    expect(onHistoryKeyDown).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it("keeps Ctrl/Alt+Arrow for word and line jumps", async () => {
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() => ref.current?.setText("hello"))
+    act(() => ref.current?.getEditor()?.commands.focus("start"))
+    const dom = ref.current?.getEditor()?.view.dom as HTMLElement
+
+    expect(
+      pressKey(dom, { key: "ArrowUp", ctrlKey: true }).defaultPrevented
+    ).toBe(false)
+    expect(
+      pressKey(dom, { key: "ArrowUp", altKey: true }).defaultPrevented
+    ).toBe(false)
+    expect(onHistoryKeyDown).not.toHaveBeenCalled()
+  })
+})

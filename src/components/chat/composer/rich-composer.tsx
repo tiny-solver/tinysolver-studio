@@ -15,6 +15,7 @@ import { type Editor, type JSONContent } from "@tiptap/core"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { exitSuggestion } from "@tiptap/suggestion"
 
+import type { HistoryDirection } from "@/lib/composer-history"
 import { isImeCompositionKey } from "@/lib/ime-composition"
 import {
   NO_KNOWN_INVOCATIONS,
@@ -193,6 +194,21 @@ export interface RichComposerProps {
    */
   onExternalMenuKeyDown?: (event: KeyboardEvent) => boolean
   /**
+   * Arrow-key prompt history (the chat composer's Up/Down recall). Called for a
+   * bare ArrowUp/ArrowDown BEFORE the caret moves, but ONLY when the collapsed
+   * selection already sits at the document's first (`"older"`) or last
+   * (`"newer"`) position — so the caret keeps moving line by line inside a
+   * multi-line entry, and only a press at an edge switches prompts. Return true
+   * to consume the key.
+   *
+   * Optional on purpose: the task and automation composers pass no handler and
+   * keep the editor's default Arrow behaviour.
+   */
+  onHistoryKeyDown?: (
+    direction: HistoryDirection,
+    event: KeyboardEvent
+  ) => boolean
+  /**
    * Called on paste before the editor handles it. Return true when the paste was
    * consumed out-of-band (e.g. an image/file became an attachment) so the editor
    * does not also insert it as text.
@@ -247,6 +263,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       newlineShortcut,
       isExternalMenuOpen,
       onExternalMenuKeyDown,
+      onHistoryKeyDown,
       onPasteFiles,
       onDropFiles,
       onPlainPaste,
@@ -272,6 +289,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
     const newlineShortcutRef = useRef(newlineShortcut)
     const isExternalMenuOpenRef = useRef(isExternalMenuOpen)
     const onExternalMenuKeyDownRef = useRef(onExternalMenuKeyDown)
+    const onHistoryKeyDownRef = useRef(onHistoryKeyDown)
     const onPasteFilesRef = useRef(onPasteFiles)
     const onDropFilesRef = useRef(onDropFiles)
     const onPlainPasteRef = useRef(onPlainPaste)
@@ -292,6 +310,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       newlineShortcutRef.current = newlineShortcut
       isExternalMenuOpenRef.current = isExternalMenuOpen
       onExternalMenuKeyDownRef.current = onExternalMenuKeyDown
+      onHistoryKeyDownRef.current = onHistoryKeyDown
       onPasteFilesRef.current = onPasteFiles
       onDropFilesRef.current = onDropFiles
       onPlainPasteRef.current = onPlainPaste
@@ -384,6 +403,41 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
           // list) to let the inline token keep growing.
           if (isExternalMenuOpenRef.current) {
             return onExternalMenuKeyDownRef.current?.(event) ?? false
+          }
+          // Prompt history (chat composer only): a bare Up/Down at the
+          // document's first/last position steps through sent prompts; anywhere
+          // else the editor keeps the caret movement, which is what makes a
+          // multi-line recalled message navigable line by line. Placed after
+          // the menus so an open panel always wins, and after the IME guard
+          // above so a CJK candidate list keeps its own Arrow keys.
+          //
+          // A modifier keeps the native meaning: Shift+Arrow extends the
+          // selection (empty until it spans), and Ctrl/Alt+Arrow is a
+          // word/line jump — none of them is "recall a prompt".
+          if (
+            onHistoryKeyDownRef.current &&
+            (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+            !event.shiftKey &&
+            !event.altKey &&
+            !event.ctrlKey &&
+            !event.metaKey
+          ) {
+            const { selection } = view.state
+            const older = event.key === "ArrowUp"
+            const atBoundary =
+              selection.empty &&
+              (older
+                ? selection.$from.depth === 1 &&
+                  selection.$from.parentOffset === 0
+                : selection.$to.depth === 1 &&
+                  selection.$to.parentOffset ===
+                    selection.$to.parent.content.size)
+            if (atBoundary) {
+              return onHistoryKeyDownRef.current(
+                older ? "older" : "newer",
+                event
+              )
+            }
           }
           // Paste without formatting: Ctrl/⌘+Shift+V routes to the host, which
           // owns the clipboard read. Consume the key (suppressing the browser's
