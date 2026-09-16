@@ -427,7 +427,7 @@
       },
       "open_folder": {
         "title": "فتح مجلد",
-        "description": "فتح منتقي المجلدات وفتح المجلد في نافذة جديدة"
+        "description": "فتح منتقي المجلدات وفتح المجلد في مساحة العمل"
       },
       "open_settings": {
         "title": "فتح الإعدادات",
@@ -970,7 +970,21 @@
         "action": "تسجيل الخروج",
         "done": "تم تسجيل الخروج. سجّل الدخول مرة أخرى لاختيار حساب آخر.",
         "failed": "تعذّر تسجيل الخروج"
-      }
+      },
+      "tempReclaimTitle": "مساحة مؤقتة متبقية",
+      "tempReclaimHint": "لم تكن الإصدارات القديمة من codeg قادرة على تنظيف الدليل المؤقت الذي يفكه هذا الوكيل عند كل تشغيل. يفحص هذا الإجراء مجلد النظام المؤقت بحثًا عن تلك البقايا. هذا المجلد مشترك مع تطبيقات أخرى، لذا لا يُحذف أي شيء قبل تأكيدك، ويتم تخطي أي عنصر لا يزال قيد الاستخدام.",
+      "tempReclaimScan": "فحص",
+      "tempReclaimDelete": "حذف البقايا",
+      "tempReclaimNone": "لا يوجد ما يمكن استرجاعه.",
+      "tempReclaimFound": "{count} عنصرًا متبقيًا، يمكن استرجاع {size}.",
+      "tempReclaimSkipped": "تم تخطي {count} (لا يزال قيد الاستخدام أو حديث جدًا).",
+      "tempReclaimed": "تم استرجاع {size} من {count} عنصرًا.",
+      "tempReclaimSelectAll": "تحديد الكل",
+      "tempReclaimAgeHours": "{hours} ساعة",
+      "tempReclaimConfirmTitle": "حذف {count} عنصر؟",
+      "tempReclaimConfirmBody": "سيؤدي هذا إلى حذف {size} نهائيًا. مجلد النظام المؤقت مشترك مع تطبيقات أخرى، لذا تحقّق من كل مسار قبل التأكيد؛ وسيتم تخطّي أي عنصر قيد الاستخدام.",
+      "tempReclaimConfirmAction": "حذف",
+      "tempReclaimCancel": "إلغاء"
     },
     "deepseek": {
       "configManagement": "إعدادات DeepSeek Harness",
@@ -1178,6 +1192,46 @@
           "todowrite": "كتابة قائمة المهام",
           "question": "طرح سؤال عليك",
           "doom_loop": "يُفعَّل عند تكرار الاستدعاء نفسه ثلاث مرات بالمدخلات نفسها"
+        }
+      },
+      "behavior": {
+        "title": "السلوك والضغط",
+        "description": "الإعدادات الافتراضية للجلسة وضغط السياق وحدود مخرجات الأدوات. تُكتب في opencode.json وتُطبَّق بعد الحفظ أدناه.",
+        "docsLink": "توثيق الإعدادات",
+        "unset": "غير مضبوط",
+        "defaultAgent": "الوكيل الافتراضي",
+        "defaultAgentHint": "الوكيل الأساسي الذي تبدأ به الجلسة الجديدة. عند تركه فارغًا أو غير معروف يعود إلى build.",
+        "share": "المشاركة",
+        "shareHint": "هل يمكن نشر الجلسة كرابط مشاركة.",
+        "shareManual": "يدوي (عند الطلب فقط)",
+        "shareAuto": "تلقائي (كل جلسة جديدة)",
+        "shareDisabled": "معطَّل",
+        "autoUpdate": "التحديث التلقائي",
+        "autoUpdateHint": "هل يحدّث OpenCode نفسه إلى أحدث إصدار.",
+        "autoUpdateOn": "تحديث تلقائي",
+        "autoUpdateNotify": "إشعار فقط",
+        "autoUpdateOff": "أبدًا",
+        "snapshot": "لقطات نظام الملفات",
+        "snapshotHint": "يسجّل لقطة قبل كل خطوة. عند الإيقاف لن يتمكن التراجع والاستعادة من إرجاع الملفات.",
+        "compactionAuto": "الضغط التلقائي",
+        "compactionAutoHint": "يلخّص المحادثة تلقائيًا عند امتلاء نافذة السياق.",
+        "compactionPrune": "تقليم مخرجات الأدوات القديمة",
+        "compactionPruneHint": "يتخلص من مخرجات استدعاءات الأدوات القديمة أثناء الضغط بدل تلخيصها.",
+        "fields": {
+          "subagentDepth": "عمق الوكلاء الفرعيين",
+          "tailTurns": "الأدوار المحفوظة حرفيًا",
+          "preserveRecentTokens": "الرموز المحفوظة حرفيًا",
+          "reserved": "رموز محجوزة",
+          "maxLines": "حد أسطر مخرجات الأدوات",
+          "maxBytes": "حد بايتات مخرجات الأدوات"
+        },
+        "hints": {
+          "subagentDepth": "كم مستوى يمكن أن يتداخل فيه الوكلاء الفرعيون. القيمة 1 تمنع الوكيل الفرعي من إطلاق وكيل آخر.",
+          "tailTurns": "عدد أدوار المستخدم الأخيرة التي تبقى بلا ضغط. عند تركه فارغًا تحدّها ميزانية الرموز أدناه فقط.",
+          "preserveRecentTokens": "ميزانية رموز الأدوار الأخيرة التي تبقى حرفية بعد الضغط.",
+          "reserved": "نافذة تُترك خالية كي لا تتسبب عملية الضغط نفسها في تجاوز السياق.",
+          "maxLines": "المخرجات الأطول من ذلك تُكتب إلى القرص ويُستبدل بها معاينة. الافتراضي 2000.",
+          "maxBytes": "المخرجات الأكبر من ذلك تُكتب إلى القرص ويُستبدل بها معاينة. الافتراضي 51200."
         }
       }
     },
@@ -1449,7 +1503,11 @@
       "ready": "المحوّل {adapterCmd} مثبّت — وهو ما يشغّله Codeg. يأتي ببيئة تشغيل خاصة به، لذا لا حاجة إلى {nativeLabel}؛ وإن ثبّتها لاحقاً فالاثنان يتعايشان ويتشاركان {configDir}."
     },
     "cline": {
-      "configDescription": "تكوين مزود واجهة برمجة التطبيقات وبيانات اعتماد Cline. يتم حفظ الإعدادات في ~/.cline/data/."
+      "configDescription": "تكوين مزود واجهة برمجة التطبيقات وبيانات اعتماد Cline. يتم حفظ الإعدادات في ~/.cline/data/.",
+      "signInGroup": "تسجيل الدخول باستخدام Cline",
+      "byoGroup": "استخدم مزوّدك الخاص",
+      "externalGroup": "مُهيّأ خارج codeg",
+      "signInHint": "يحتفظ Cline بهذه البيانات بنفسه. شغّل الأمر أدناه في الطرفية لتسجيل الدخول — سيعرض رمزًا ويفتح صفحة في المتصفح لتأكيده."
     },
     "opencodePlugins": {
       "title": "إضافات OpenCode",
@@ -1457,7 +1515,10 @@
       "noPlugins": "لا توجد إضافات معلنة في opencode.json",
       "status": {
         "installed": "مثبّت",
-        "missing": "غير مثبّت"
+        "needs_migration": "يتطلب الترحيل",
+        "missing": "غير مثبّت",
+        "path": "إضافة من مسار",
+        "path_missing": "المسار غير موجود"
       },
       "installAll": "تثبيت جميع الإضافات المفقودة",
       "pinVersions": "تثبيت إصدارات @latest",
@@ -1518,6 +1579,7 @@
       "installing": "جارٍ التثبيت…",
       "recheck": "إعادة التحقق",
       "configDirSkillsNote": "عند تحديد دليل إعدادات مخصص، لن تنطبق المهارات والخبراء وأدوات المكتب المُدارة في الإعدادات على pi هذا — أدِر مهاراته مباشرةً في ذلك المجلد.",
+      "dirHistoryNote": "هذان الدليلان يصلان إلى عملية pi فقط. يقرأ سجل محادثات codeg الموقع الافتراضي لـ pi، لذا لن تظهر الجلسات المكتوبة في دليل مخصص ضمن القائمة.",
       "projectTrustTitle": "ثقة المشروع",
       "projectTrustDescription": "المجلدات التي سمحت لـ pi بتحميل ملفات المشروع منها. المجلد الموثوق يتيح لملفات ‎.pi/extensions في ذلك المستودع تنفيذ التعليمات البرمجية عند بدء pi، ويسري على كل المجلدات داخله، ويُستخدم أيضًا عند تشغيل pi في الطرفية.",
       "projectTrustLoading": "جارٍ التحميل…",
@@ -1587,9 +1649,57 @@
     "customAgentBadge": "مخصص",
     "customAgentNotLaunchable": "لا يمكن تشغيل هذا الوكيل هنا: {reason}"
   },
+  "AgentVocabulary": {
+    "deepseekModeDefault": "عادي",
+    "deepseekModeDefaultDescription": "يقرأ الملفات ويعدّلها وينفّذ الأوامر مباشرة لإنجاز المهمة",
+    "deepseekModePlan": "خطة",
+    "deepseekModePlanDescription": "يبحث أولاً ثم يقدّم خطة كاملة لتؤكّدها قبل أي تعديل. هذا توجيه للنموذج فقط؛ الحدّ الفعلي يبقى وفق الوصول إلى الملفات.",
+    "deepseekOptionModel": "النموذج",
+    "deepseekOptionReasoning": "مستوى الاستدلال",
+    "deepseekOptionReasoningDescription": "كلما ارتفع كان أبطأ وأكثر استهلاكاً للرموز، لكنه أثبت في المسائل الصعبة",
+    "deepseekOptionSandbox": "الوصول إلى الملفات",
+    "deepseekOptionSandboxDescription": "تتشارك الأوامر وأدوات الملفات هذا الحدّ نفسه",
+    "deepseekReasoningOff": "إيقاف",
+    "deepseekReasoningOffDescription": "يجيب مباشرة دون استدلال؛ الأسرع",
+    "deepseekReasoningLow": "منخفض",
+    "deepseekReasoningLowDescription": "يستدل قليلاً؛ أثبت من الإيقاف وأسرع من المرتفع",
+    "deepseekReasoningHigh": "مرتفع",
+    "deepseekReasoningHighDescription": "يستدل ثم يجيب؛ الخيار الافتراضي للبرمجة اليومية",
+    "deepseekReasoningMax": "الأقصى",
+    "deepseekReasoningMaxDescription": "يستدل لفترة أطول؛ أثبت في المسائل الصعبة لكنه أبطأ وأكثر استهلاكاً للرموز",
+    "deepseekSandboxReadOnly": "قراءة فقط",
+    "deepseekSandboxReadOnlyDescription": "ينفّذ وفق سياسة القراءة فقط؛ بدّل الصلاحية عند الحاجة إلى الكتابة. التطبيق جزئي على بعض المنصات.",
+    "deepseekSandboxWorkspaceWrite": "الكتابة في مساحة العمل",
+    "deepseekSandboxWorkspaceWriteDescription": "يُفترض أن تبقى عمليات الكتابة داخل مساحة عمل الجلسة والمجلدات المؤقتة للنظام؛ وأي استدعاء خارجها يطلب إذناً لمرة واحدة. التطبيق جزئي على بعض المنصات.",
+    "deepseekSandboxFullAccess": "وصول كامل (بدون عزل)",
+    "deepseekSandboxFullAccessDescription": "لا يطبّق أي قيود على الملفات. اخترْه فقط إذا كنت تدرك العواقب.",
+    "deepseekPermissionAllowOnce": "السماح مرة واحدة",
+    "deepseekPermissionRejectOnce": "رفض"
+  },
   "SettingsPages": {
     "agentsLoading": "جارٍ تحميل إعدادات الوكلاء...",
     "skillPacksLoading": "جارٍ تحميل حزم المهارات…"
+  },
+  "CloseBehaviorSettings": {
+    "title": "سلوك زر الإغلاق",
+    "description": "اختر ما يفعله زر إغلاق النافذة الرئيسية.",
+    "trayUnavailable": "لا تتوفر منطقة إشعارات في هذا النظام، لذا يؤدي زر الإغلاق دائمًا إلى إنهاء codeg.",
+    "behaviorAsk": "السؤال في كل مرة",
+    "behaviorMinimize": "التصغير إلى منطقة الإشعارات",
+    "behaviorExit": "إنهاء codeg",
+    "saveFailed": "تعذر حفظ سلوك الإغلاق: {message}"
+  },
+  "CloseRequestDialog": {
+    "askTitle": "إغلاق codeg؟",
+    "askDescription": "يمكن أن يستمر codeg في العمل ضمن منطقة الإشعارات لإبقاء الوكلاء والطرفيات نشطة، أو أن يُنهى تمامًا.",
+    "confirmExitTitle": "إنهاء codeg؟",
+    "confirmExitDescription": "الإعداد الحالي يجعل إغلاق النافذة ينهي codeg.",
+    "runningTerminals": "لا تزال {count} من الطرفيات قيد التشغيل وسيتم إنهاؤها عند الخروج.",
+    "remember": "تذكّر اختياري",
+    "cancel": "إلغاء",
+    "minimize": "التصغير إلى منطقة الإشعارات",
+    "exit": "إنهاء codeg",
+    "actionFailed": "فشل تنفيذ الإجراء: {message}"
   },
   "GeneralSettings": {
     "loading": "جارٍ التحميل...",
@@ -2992,6 +3102,7 @@
         "searchModel": "البحث عن النماذج...",
         "searchModelAria": "البحث عن النماذج",
         "modelListLabel": "النماذج",
+        "recommendedBadge": "موصى به",
         "noModels": "لم يتم العثور على نماذج",
         "cancel": "إلغاء",
         "send": "إرسال",
@@ -3262,6 +3373,7 @@
       "messageList": {
         "attachedResources": "الموارد المرفقة",
         "loading": "جارٍ التحميل...",
+        "loadBackgroundActivity": "تحميل نشاط الخلفية",
         "loadEarlier": "تحميل الرسائل السابقة",
         "loadingEarlier": "جارٍ تحميل الرسائل السابقة…",
         "error": "خطأ: {message}",
@@ -3427,7 +3539,10 @@
         "agentSessionLoading": "جارٍ تحميل سجل الوكيل الفرعي…",
         "agentSessionEmpty": "لم يكتب الوكيل الفرعي أي شيء بعد.",
         "agentFallbackTitle": "جارٍ تشغيل الوكيل الفرعي…",
-        "agentCodexLaunchOnly": "تم التشغيل. لا يبلّغ Codex عن أي تقدّم إضافي لهذا الوكيل الفرعي — وستصل نتيجته كرسالة في هذه المحادثة.",
+        "agentCodexLaunchOnly": "تم التشغيل. لم يبلّغ Codex بعد عن نتيجة هذا الوكيل الفرعي — افتح جلسته لمتابعة العمل.",
+        "agentSubagentDone": "انتهى",
+        "agentSubagentInterrupted": "تمت مقاطعته",
+        "agentSubagentUnknown": "النتيجة غير معروفة",
         "agentStatsBash": "الأوامر",
         "agentStatsRead": "الملفات المقروءة",
         "agentStatsSearch": "عمليات البحث",
@@ -3693,7 +3808,8 @@
         "opSpawn": "بدء تشغيل الوكيل الفرعي",
         "opWait": "جلب نتيجة الوكيل الفرعي",
         "opClose": "إغلاق الوكيل الفرعي",
-        "opResume": "استئناف الوكيل الفرعي"
+        "opResume": "استئناف الوكيل الفرعي",
+        "opList": "سرد الوكلاء الفرعيين"
       },
       "contextCompaction": {
         "compacting": "جارٍ ضغط السياق…",
@@ -5430,6 +5546,47 @@
     "groupInstructions": "الوصف وموجّه النظام",
     "fieldDescription": "الوصف",
     "baseInstructions": "موجّه النظام (base_instructions)"
+  },
+  "DeepSeekModelEditor": {
+    "title": "قائمة النماذج",
+    "description": "النماذج التي يمكن لجلسة DeepSeek التبديل بينها. تُحفظ في مستند إعدادات الـ harness الذي يقرأه الوكيل عند الإقلاع — ويسري الحفظ على الجلسات التي تبدأ بعده.",
+    "inheritedBadge": "افتراضيات الوكيل",
+    "inheritedHint": "لا توجد قائمة محفوظة بعد، لذا هذه هي نماذج الوكيل المدمجة. الحفظ يثبّتها، ولن تغيّرها إصدارات الوكيل اللاحقة من تلقاء نفسها. الملف:",
+    "storedHint": "محفوظة في مستند إعدادات الـ harness. تبقى المفاتيح خارج هذه القائمة — والتعليقات المحيطة بها — كما هي. الملف:",
+    "unreadable": "لا يمكن تحرير مستند الإعدادات هذا من هنا دون المخاطرة بما يحتويه. حرّره يدويًا.",
+    "invalidStored": "يرفض الوكيل هذه القائمة المحفوظة، لذا تعمل الجلسات بنماذجه المدمجة إلى أن تُصلَح:",
+    "loading": "جارٍ قراءة مستند الإعدادات…",
+    "loadFailed": "تعذّرت قراءة مستند الإعدادات.",
+    "empty": "لا توجد نماذج. أضف واحدًا، أو احفظ للعودة إلى قائمة الوكيل المدمجة.",
+    "addModel": "إضافة نموذج",
+    "remove": "إزالة النموذج",
+    "advanced": "المزيد",
+    "save": "حفظ قائمة النماذج",
+    "saving": "جارٍ الحفظ…",
+    "restoreDefaults": "استخدام افتراضيات الوكيل",
+    "fieldId": "معرّف النموذج",
+    "fieldName": "الاسم المعروض",
+    "fieldContextWindow": "نافذة السياق",
+    "fieldDescription": "الوصف",
+    "fieldMaxTokens": "أقصى رموز للمخرجات",
+    "fieldAcceptsImages": "يقبل الصور",
+    "fieldImagePixelBudget": "حد وحدات البكسل",
+    "imageBudgetPixels": "عدد البكسل",
+    "imageBudgetLow": "تفاصيل منخفضة (512×512)",
+    "fieldImageMaxBytes": "حد البايتات",
+    "placeholderId": "deepseek-flash",
+    "placeholderName": "يظهر في المُحدِّد",
+    "placeholderInherit": "افتراضي الوكيل",
+    "errorMissingId": "كل نموذج يحتاج إلى معرّف.",
+    "errorDuplicateId": "نموذجان يحملان المعرّف “{id}”.",
+    "errorBadContextWindow": "يجب أن تكون نافذة سياق “{id}” عددًا صحيحًا أكبر من صفر.",
+    "errorBadMaxTokens": "يجب أن يكون أقصى رموز مخرجات “{id}” عددًا صحيحًا أكبر من صفر.",
+    "errorBadImageLimit": "يجب أن تكون حدود صور “{id}” أعدادًا صحيحة أكبر من صفر.",
+    "warnSingleModel": "مع نموذج واحد فقط، يتوقف الوكيل عن عرض مُحدِّد النماذج أصلًا.",
+    "warnLaunchModelMissing": "تبدأ الجلسات الجديدة على “{model}” وهو غير موجود في هذه القائمة. أضِفه، أو اضبط {variable} في متغيّرات البيئة أعلاه.",
+    "toastSaved": "تم حفظ قائمة النماذج",
+    "toastRestored": "يجري استخدام قائمة نماذج الوكيل المدمجة",
+    "toastSaveFailed": "تعذّر حفظ قائمة النماذج"
   },
   "DiagnosticsSettings": {
     "title": "تشخيص البيئة",

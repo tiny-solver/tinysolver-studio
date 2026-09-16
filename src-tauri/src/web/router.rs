@@ -814,6 +814,14 @@ pub fn build_router(
             post(handlers::acp::acp_clear_binary_cache),
         )
         .route(
+            "/acp_scan_leaked_temp",
+            post(handlers::acp::acp_scan_leaked_temp),
+        )
+        .route(
+            "/acp_reclaim_leaked_temp",
+            post(handlers::acp::acp_reclaim_leaked_temp),
+        )
+        .route(
             "/acp_update_agent_preferences",
             post(handlers::acp::acp_update_agent_preferences),
         )
@@ -856,6 +864,14 @@ pub fn build_router(
         .route(
             "/acp_load_pi_config",
             post(handlers::acp::acp_load_pi_config),
+        )
+        .route(
+            "/acp_load_deepseek_model_catalog",
+            post(handlers::acp::acp_load_deepseek_model_catalog),
+        )
+        .route(
+            "/acp_update_deepseek_model_catalog",
+            post(handlers::acp::acp_update_deepseek_model_catalog),
         )
         .route(
             "/acp_validate_pi_command",
