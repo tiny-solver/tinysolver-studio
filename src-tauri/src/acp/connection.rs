@@ -2205,6 +2205,11 @@ pub async fn spawn_agent_connection(
     // installer. The receiver is returned to `spawn_agent`, which holds the
     // per-session dedup lock until this rx fires (or times out / aborts).
     let session_started_rx = initial_state.install_session_started_signal();
+    // Record what this launch's environment freezes before the state is shared:
+    // the emit path and the preference replay both read it, and both run after
+    // this point.
+    initial_state.env_pinned_config_option_ids =
+        env_pinned_config_option_ids(agent_type, &runtime_env);
 
     let session_state = Arc::new(RwLock::new(initial_state));
 
@@ -3131,16 +3136,70 @@ fn map_session_config_options(
         .collect()
 }
 
+/// Config-option ids a launch carrying `runtime_env` has pinned, so the agent
+/// will reject any attempt to change them (see
+/// [`SessionState::env_pinned_config_option_ids`]).
+///
+/// Only cline has one today: its `provider` selector is hard-refused whenever
+/// `CLINE_PROVIDER` is exported, which codeg does for every bring-your-own
+/// provider. The check is on the variable codeg actually ships, not on the
+/// configured provider id, because the pin is what the agent tests.
+fn env_pinned_config_option_ids(
+    agent_type: AgentType,
+    runtime_env: &BTreeMap<String, String>,
+) -> Vec<String> {
+    if agent_type != AgentType::Cline {
+        return Vec::new();
+    }
+    // Emptiness is judged the way the agent judges it. cline's guard is a bare
+    // `if (process.env.CLINE_PROVIDER)`, so only the empty string is falsy —
+    // whitespace is a pin, and `buildConfig`'s `?? ` would go on to use it
+    // verbatim as the provider id. Trimming first would leave the selector on
+    // screen for a session that refuses every choice in it.
+    let pinned = runtime_env
+        .get("CLINE_PROVIDER")
+        .is_some_and(|value| !value.is_empty());
+    if pinned {
+        vec![CLINE_PROVIDER_CONFIG_OPTION_ID.to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
+/// Cline's provider selector id — the one `CLINE_PROVIDER` freezes.
+const CLINE_PROVIDER_CONFIG_OPTION_ID: &str = "provider";
+
+/// The advertised options minus the ones this launch pinned through the
+/// environment. Applied on the way out so all three producers of a
+/// `SessionConfigOptions` event share one rule.
+fn visible_config_options(
+    pinned: &[String],
+    config_options: Vec<SessionConfigOption>,
+) -> Vec<SessionConfigOption> {
+    if pinned.is_empty() {
+        return config_options;
+    }
+    config_options
+        .into_iter()
+        .filter(|option| !pinned.iter().any(|id| *id == option.id.to_string()))
+        .collect()
+}
+
 async fn emit_session_config_options_values(
     state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
     config_options: Vec<SessionConfigOption>,
 ) {
+    // Drop what this launch froze BEFORE mapping, so every producer of this
+    // event — establishment, the answer to a set, and the agent's own
+    // `config_option_update` push — is filtered by one rule.
+    let pinned = state.read().await.env_pinned_config_option_ids.clone();
+    let visible = visible_config_options(&pinned, config_options);
     emit_with_state(
         state,
         emitter,
         AcpEvent::SessionConfigOptions {
-            config_options: map_session_config_options(&config_options),
+            config_options: map_session_config_options(&visible),
         },
     )
     .await;
@@ -7470,11 +7529,42 @@ async fn apply_preferred_session_options(
 
     let session_id = session.session_id().clone();
     let mut options = initial_config_options;
+    // Ids this launch must not replay a saved preference for. Two rules:
+    //
+    //   * what this launch's environment froze — a set can only fail, and it is
+    //     reachable, because the composer saves the pick BEFORE the set is
+    //     awaited, so anyone who clicked cline's provider dropdown while it was
+    //     still offered has one stored;
+    //   * cline's `provider` unconditionally, because the settings panel owns
+    //     it (it writes providers.json and decides the launch env). Pinning
+    //     alone is not enough: the preference saved during a BYO launch is
+    //     merely SKIPPED there, and would then be replayed on the next sign-in
+    //     launch — which is not pinned — switching the user's billing account
+    //     away from the one the panel shows. Switching accounts mid-session is
+    //     still allowed; it just does not outlive the session.
+    let (pinned, agent_type) = {
+        let guard = state.read().await;
+        (
+            guard.env_pinned_config_option_ids.clone(),
+            guard.agent_type,
+        )
+    };
+    let never_replayed = |config_id: &str| {
+        pinned.iter().any(|id| id == config_id)
+            || (agent_type == AgentType::Cline && config_id == CLINE_PROVIDER_CONFIG_OPTION_ID)
+    };
     // Model first — see `order_preferred_config_values`. Ordered once against
     // the INITIAL list: every later list is the same agent's answer to a set,
     // so the model selector cannot move between ids mid-replay.
     let ordered = order_preferred_config_values(&options, preferred_config_values);
     for (config_id, value_id) in ordered {
+        if never_replayed(config_id) {
+            tracing::info!(
+                "[ACP] skipping preferred config '{config_id}'='{value_id}' on connect: \
+                 codeg owns this option rather than the composer"
+            );
+            continue;
+        }
         // Skip the round-trip when the agent's current value already matches.
         // Note: codex-acp advertises "mode" as a config option (so the match
         // check below normally fires), but we still do NOT skip when a
@@ -22298,6 +22388,82 @@ mod tests {
             AgentType::OpenCode,
             bg.as_object()
         ));
+    }
+
+    #[test]
+    fn a_pinned_cline_provider_is_read_off_the_variable_that_pins_it() {
+        let env = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        };
+
+        // The BYO case: codeg exports the provider, so cline refuses every
+        // choice the selector offers.
+        assert_eq!(
+            env_pinned_config_option_ids(
+                AgentType::Cline,
+                &env(&[("CLINE_PROVIDER", "openai-compatible")])
+            ),
+            vec!["provider".to_string()]
+        );
+        // Sign-in: nothing is exported, the selector works, keep it.
+        assert!(
+            env_pinned_config_option_ids(AgentType::Cline, &env(&[("CLINE_MODEL", "gpt-4o")]))
+                .is_empty()
+        );
+        // Emptiness follows the agent's own test, a bare `if (env.CLINE_PROVIDER)`:
+        // the empty string is falsy and leaves the selector usable…
+        assert!(
+            env_pinned_config_option_ids(AgentType::Cline, &env(&[("CLINE_PROVIDER", "")]))
+                .is_empty()
+        );
+        // …but whitespace is TRUTHY in JS, so cline refuses every choice and
+        // `buildConfig` uses "  " verbatim as the provider id. Trimming here
+        // would leave a dead dropdown on screen.
+        assert_eq!(
+            env_pinned_config_option_ids(AgentType::Cline, &env(&[("CLINE_PROVIDER", "  ")])),
+            vec!["provider".to_string()]
+        );
+        // No other agent freezes a selector this way.
+        assert!(env_pinned_config_option_ids(
+            AgentType::Codex,
+            &env(&[("CLINE_PROVIDER", "openai-compatible")])
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn a_pinned_option_is_withheld_from_the_composer() {
+        let options = || {
+            vec![
+                SessionConfigOption::boolean(
+                    SessionConfigId::new("auto_approve"),
+                    "Auto-approve tools",
+                    false,
+                ),
+                SessionConfigOption::boolean(SessionConfigId::new("provider"), "Provider", false),
+            ]
+        };
+        let ids = |opts: Vec<SessionConfigOption>| -> Vec<String> {
+            opts.iter().map(|o| o.id.to_string()).collect()
+        };
+
+        assert_eq!(
+            ids(visible_config_options(
+                &["provider".to_string()],
+                options()
+            )),
+            vec!["auto_approve".to_string()],
+            "a dropdown whose every choice errors must not reach the composer"
+        );
+        // Nothing pinned → the agent's list travels untouched, which is every
+        // agent but cline-with-a-BYO-provider.
+        assert_eq!(
+            ids(visible_config_options(&[], options())),
+            vec!["auto_approve".to_string(), "provider".to_string()]
+        );
     }
 
     struct TestConversationDepthLookup;

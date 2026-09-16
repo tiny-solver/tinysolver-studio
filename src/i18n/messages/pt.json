@@ -1461,7 +1461,11 @@
       "ready": "O adaptador {adapterCmd} está instalado — é ele que o Codeg inicia. Ele traz o próprio runtime, então a {nativeLabel} não é necessária; se instalá-la depois, as duas coexistem e compartilham {configDir}."
     },
     "cline": {
-      "configDescription": "Configure o provedor de API e as credenciais do Cline. As configurações são salvas em ~/.cline/data/."
+      "configDescription": "Configure o provedor de API e as credenciais do Cline. As configurações são salvas em ~/.cline/data/.",
+      "signInGroup": "Entrar com o Cline",
+      "byoGroup": "Use seu próprio provedor",
+      "externalGroup": "Configurado fora do codeg",
+      "signInHint": "O Cline guarda esta credencial por conta própria. Execute o comando abaixo em um terminal para entrar: ele mostra um código e abre uma página do navegador para confirmá-lo."
     },
     "opencodePlugins": {
       "title": "Plugins do OpenCode",

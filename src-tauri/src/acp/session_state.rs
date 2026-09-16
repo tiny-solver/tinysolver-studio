@@ -363,6 +363,24 @@ pub struct SessionState {
     ///
     /// Backend-internal — not serialized, not carried on `to_snapshot()`.
     pub asserted_config_values: BTreeMap<String, String>,
+    /// Config-option ids this launch pinned through the environment, which the
+    /// agent will therefore refuse to change for as long as the process lives.
+    ///
+    /// Cline forced this. codeg pins the provider with `CLINE_PROVIDER` — the
+    /// only way a bring-your-own provider clears cline's ACP auth gate — and
+    /// cline then answers `set_config_option("provider", …)` with `Invalid
+    /// params: Cannot change provider: CLINE_PROVIDER environment variable is
+    /// set`. It keeps advertising the selector regardless, so without this the
+    /// composer offers a dropdown whose every choice is an error, and a
+    /// preference saved from one of those clicks is replayed — and fails —
+    /// on every later connect.
+    ///
+    /// codeg is what disabled the control, so codeg is what withholds it: these
+    /// ids are dropped from what the frontend is told about and skipped when
+    /// saved preferences are replayed.
+    ///
+    /// Backend-internal — not serialized, not carried on `to_snapshot()`.
+    pub env_pinned_config_option_ids: Vec<String>,
     pub prompt_capabilities: Option<PromptCapabilitiesInfo>,
     pub fork_supported: bool,
     pub available_commands: Vec<AvailableCommandInfo>,
@@ -661,6 +679,7 @@ impl SessionState {
             grok_model_specs: None,
             pi_startup_banner: None,
             asserted_config_values: BTreeMap::new(),
+            env_pinned_config_option_ids: Vec::new(),
             prompt_capabilities: None,
             fork_supported: false,
             available_commands: Vec::new(),

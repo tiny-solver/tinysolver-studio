@@ -2910,6 +2910,22 @@ fn cline_provider_is_keyless(provider: &str) -> bool {
     matches!(provider, "ollama" | "lmstudio")
 }
 
+/// Cline's own sign-in providers — the three `authMethods` its ACP `initialize`
+/// advertises, and the only three its auth gate inspects.
+///
+/// Their credential is an OAuth token cline obtains through a device-code flow
+/// (`cline auth <id>`, or the ACP `authenticate` request, which prints a code
+/// and a `authkit.cline.bot/device` URL and blocks until the browser half
+/// finishes) and stores itself. codeg neither holds nor refreshes it, which has
+/// two consequences it must respect: never write over these entries' secrets,
+/// and never export `CLINE_PROVIDER`/`CLINE_API_KEY` for them — the env would
+/// shadow the very credential `tryRestoreAuth` is meant to find, and would
+/// additionally freeze the provider selector (see
+/// `env_pinned_config_option_ids`).
+fn cline_provider_is_agent_managed(provider: &str) -> bool {
+    matches!(provider, "cline" | "cline-pass" | "openai-codex")
+}
+
 /// `providers.json` rejects a `settings.baseUrl` that is not a `z.string().url()`,
 /// and a rejected file reads back EMPTY — so a typo in this field would silently
 /// cost the user every provider they had configured. Fail the save instead.
@@ -3206,16 +3222,30 @@ fn persist_cline_provider_settings_at(
         "provider".to_string(),
         serde_json::Value::String(provider.to_string()),
     );
+    // Credentials for a sign-in provider belong to `cline auth`, not to codeg:
+    // the panel offers no key or endpoint field for them, so there is no user
+    // intent to write — and clearing what is not shown would log the user out.
+    // `tokenSource: "oauth"` is the same statement made by an entry codeg does
+    // not otherwise recognize, and is honoured for the same reason.
+    let agent_managed_credential =
+        cline_provider_is_agent_managed(provider) || token_source == "oauth";
     for (key, value) in [
         ("apiKey", api_key),
         ("model", model),
         ("baseUrl", base_url),
     ] {
+        let credential = key != "model";
         match value {
             Some(value) => {
+                if credential && agent_managed_credential {
+                    continue;
+                }
                 settings.insert(key.to_string(), serde_json::Value::String(value.to_string()));
             }
             None => {
+                if credential && agent_managed_credential {
+                    continue;
+                }
                 settings.remove(key);
             }
         }
@@ -9686,6 +9716,32 @@ fn apply_cline_launch_env(config_json: Option<&str>, merged: &mut BTreeMap<Strin
             .unwrap_or_default(),
     );
 
+    // A sign-in provider must be left to `tryRestoreAuth`, and either half of
+    // the pair in the way breaks it:
+    //
+    //   * a non-empty `CLINE_API_KEY` SHORT-CIRCUITS the gate without
+    //     populating `authResult`, so `newSession` resolves
+    //     `CLINE_PROVIDER ?? authResult?.providerId ?? "cline"` and a ClinePass
+    //     or ChatGPT account silently runs as plain Cline billing;
+    //   * a stale `CLINE_PROVIDER` — an `env_json` row, or one exported in the
+    //     shell codeg was launched from — overrides the account entirely and
+    //     freezes a selector these three are entitled to use.
+    //
+    // Both are cleared by writing an EMPTY value, which the spawn layer turns
+    // into `env_remove` (see the codeg convention in vendor/sacp-tokio) — so
+    // this strips an inherited value rather than merely declining to add one.
+    // Removal, not `""`, is what the agent needs: `??` does not fall through on
+    // an empty string, so an actually-empty `CLINE_PROVIDER` would become the
+    // provider id. Mirrors Cursor/Grok subscription mode.
+    //
+    // Re-applied after every later env overlay (see `build_session_runtime_env`),
+    // because a model-provider binding writes the same two keys.
+    if cline_provider_is_agent_managed(&provider) {
+        merged.insert("CLINE_API_KEY".to_string(), String::new());
+        merged.insert("CLINE_PROVIDER".to_string(), String::new());
+        return;
+    }
+
     if !merged.contains_key("CLINE_API_KEY") {
         // Local providers authenticate with no key at all, but the gate only
         // tests `CLINE_API_KEY` for emptiness — it never validates it, and
@@ -10288,6 +10344,15 @@ pub(crate) async fn build_session_runtime_env(
     let mut runtime_env =
         build_runtime_env_from_setting(agent_type, setting.as_ref(), local_config_json.as_deref());
     apply_model_provider_env(agent_type, setting.as_ref(), &mut runtime_env, &db.conn).await;
+    // `apply_model_provider_env` writes this agent's generic credential trio —
+    // for cline that is `CLINE_BASE_URL`/`CLINE_API_KEY`/`CLINE_MODEL` — so a
+    // model-provider binding left over from a BYO setup would put a key back
+    // after the sign-in scrub already cleared it, silently rerouting a ClinePass
+    // or ChatGPT session onto Cline's own billing. Run cline's policy last; it
+    // is idempotent, so the BYO path is unchanged.
+    if agent_type == AgentType::Cline {
+        apply_cline_launch_env(local_config_json.as_deref(), &mut runtime_env);
+    }
 
     // codex resume no longer needs a `MODEL_PROVIDER` pin: codex-acp 1.0.1
     // (#224) resolves the resumed provider from `~/.codex/config.toml` via
@@ -19165,11 +19230,134 @@ model = "gpt"
         assert_eq!(loaded["apiProvider"], "cline");
         assert!(loaded.get("apiKey").is_none());
 
-        // …and the launch env stays empty, so `tryRestoreAuth` finds the login
-        // instead of codeg forcing a half-filled BYO provider over it.
+        // …and the launch carries no credential of its own, so `tryRestoreAuth`
+        // finds the login instead of codeg forcing a half-filled BYO provider
+        // over it. Both keys are blanked rather than merely omitted: the spawn
+        // layer reads an empty value as `env_remove`, which is the only way to
+        // strip one the child would otherwise inherit.
         let env = cline_launch_env(serde_json::Value::Object(loaded));
-        assert!(!env.contains_key("CLINE_API_KEY"));
-        assert!(!env.contains_key("CLINE_PROVIDER"));
+        assert_eq!(env.get("CLINE_API_KEY").map(String::as_str), Some(""));
+        assert_eq!(env.get("CLINE_PROVIDER").map(String::as_str), Some(""));
+    }
+
+    #[test]
+    fn the_sign_in_scrub_survives_a_leftover_model_provider_binding() {
+        // `apply_model_provider_env` writes the agent's generic credential trio
+        // for ANY agent with a `model_provider_id`, so a binding left from a BYO
+        // setup used to put `CLINE_API_KEY` back after the scrub — short-circuiting
+        // the gate and billing a ClinePass account as plain Cline. Running cline's
+        // policy last has to win, and has to stay idempotent for BYO.
+        let signed_in = serde_json::json!({ "apiProvider": "cline-pass" }).to_string();
+        let mut env: BTreeMap<String, String> = BTreeMap::new();
+        apply_cline_launch_env(Some(&signed_in), &mut env);
+        // The binding lands after the first pass…
+        env.insert("CLINE_API_KEY".to_string(), "sk-from-provider".to_string());
+        env.insert(
+            "CLINE_BASE_URL".to_string(),
+            "https://proxy.example/v1".to_string(),
+        );
+        // …and the re-application scrubs it again.
+        apply_cline_launch_env(Some(&signed_in), &mut env);
+        assert_eq!(env.get("CLINE_API_KEY").map(String::as_str), Some(""));
+        assert_eq!(env.get("CLINE_PROVIDER").map(String::as_str), Some(""));
+
+        // Idempotent for BYO: running it twice changes nothing.
+        let byo = serde_json::json!({
+            "apiProvider": "openai-compatible",
+            "apiKey": "sk-byo",
+        })
+        .to_string();
+        let mut byo_env: BTreeMap<String, String> = BTreeMap::new();
+        apply_cline_launch_env(Some(&byo), &mut byo_env);
+        let once = byo_env.clone();
+        apply_cline_launch_env(Some(&byo), &mut byo_env);
+        assert_eq!(byo_env, once);
+    }
+
+    #[test]
+    fn a_stray_key_cannot_hijack_a_cline_sign_in() {
+        // The failure this prevents is silent and expensive: a non-empty
+        // `CLINE_API_KEY` opens the gate WITHOUT setting `authResult`, so
+        // `newSession` falls back to `"cline"` and a ClinePass or ChatGPT
+        // subscription quietly bills as plain Cline.
+        for provider in ["cline", "cline-pass", "openai-codex"] {
+            let env = cline_launch_env(serde_json::json!({
+                "apiProvider": provider,
+                // Left over from a BYO provider the user configured earlier.
+                "apiKey": "sk-stale",
+                "model": "claude-sonnet-5",
+            }));
+            assert_eq!(
+                env.get("CLINE_API_KEY").map(String::as_str),
+                Some(""),
+                "{provider}: a stale key must not short-circuit the gate"
+            );
+            assert_eq!(
+                env.get("CLINE_PROVIDER").map(String::as_str),
+                Some(""),
+                "{provider}: an empty value is the spawn layer's `env_remove`, which is what \
+                 strips a stale row or one exported in the launching shell"
+            );
+            // The model still travels — `newSession` reads CLINE_MODEL for
+            // every provider, sign-in included.
+            assert_eq!(
+                env.get("CLINE_MODEL").map(String::as_str),
+                Some("claude-sonnet-5")
+            );
+        }
+    }
+
+    #[test]
+    fn saving_a_sign_in_provider_leaves_its_credential_alone() {
+        // The panel shows no key or endpoint field for these, so an empty draft
+        // is the absence of an opinion — not an instruction to log the user out.
+        let store = ClineStore::new();
+        std::fs::create_dir_all(store.providers.parent().expect("parent")).expect("mkdir");
+        std::fs::write(
+            &store.providers,
+            serde_json::json!({
+                "version": 1,
+                "lastUsedProvider": "openai-compatible",
+                "modes": {},
+                "providers": {
+                    "cline": {
+                        "settings": {
+                            "provider": "cline",
+                            "apiKey": "account-key",
+                            "auth": { "accessToken": "oauth-token" },
+                        },
+                        "updatedAt": "2026-01-01T00:00:00.000Z",
+                        "tokenSource": "oauth",
+                    },
+                },
+            })
+            .to_string(),
+        )
+        .expect("seed");
+
+        persist_cline_provider_settings_at(
+            &store.providers,
+            &store.models,
+            "cline",
+            None,
+            Some("claude-sonnet-5"),
+            None,
+        )
+        .expect("save");
+
+        let root = read_json_object(&store.providers).expect("read back");
+        assert_valid_cline_provider_store(&root);
+        let entry = &root["providers"]["cline"];
+        assert_eq!(entry["tokenSource"], "oauth");
+        assert_eq!(
+            entry["settings"]["apiKey"], "account-key",
+            "clearing a field the panel never showed would end the session"
+        );
+        assert_eq!(entry["settings"]["auth"]["accessToken"], "oauth-token");
+        // The model IS the panel's to set, and switching providers is the point
+        // of the save.
+        assert_eq!(entry["settings"]["model"], "claude-sonnet-5");
+        assert_eq!(root["lastUsedProvider"], "cline");
     }
 
     #[test]
