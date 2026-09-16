@@ -3049,6 +3049,8 @@
         "tasks": {
           "connectingTitle": "جارٍ الاتصال بـ {agent}",
           "connectingDescription": "جارٍ إنشاء الاتصال",
+          "preparingTitle": "جارٍ تحضير جلسة {agent}",
+          "preparingDescription": "جارٍ قراءة سجل المحادثة",
           "loadingSelectorsTitle": "جارٍ تحميل محددات {agent}",
           "loadingSelectorsDescription": "جارٍ جلب خيارات الوضع وإعدادات الجلسة",
           "initSessionTitle": "جارٍ تهيئة جلسة {agent}",

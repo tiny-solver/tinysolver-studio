@@ -607,6 +607,11 @@ const ConversationTabView = memo(function ConversationTabView({
     // Drives cross-client viewer discovery: when another client is already
     // live on this conversation, attach to its connection instead of spawning.
     conversationId: dbConversationId ?? undefined,
+    // The auto-connect gate above is a WAIT, not an idle state: report it so the
+    // composer and the status bar can show the conversation is opening instead
+    // of an empty, connection-less composer. Scoped to the active tab — the
+    // status bar is global.
+    preparing: isActive && awaitingHistoricalSessionId,
     // A cross-group move / unsplit reparents this view (React remounts it)
     // while the tab stays open — that unmount must not tear the connection
     // down. See `isReparentUnmount` for why "still open" alone is too broad.

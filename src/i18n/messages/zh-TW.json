@@ -3049,6 +3049,8 @@
         "tasks": {
           "connectingTitle": "正在連線 {agent}",
           "connectingDescription": "正在建立連線",
+          "preparingTitle": "正在準備 {agent} 會話",
+          "preparingDescription": "正在讀取歷史會話記錄",
           "loadingSelectorsTitle": "正在載入 {agent} 選擇項",
           "loadingSelectorsDescription": "正在取得模式與會話設定選項",
           "initSessionTitle": "正在初始化 {agent} 會話",
