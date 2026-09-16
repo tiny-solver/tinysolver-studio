@@ -528,6 +528,19 @@ export function MessageInput({
   // Markdown) ~300ms after the last change so inline reference badges survive a
   // reload — a Markdown round-trip would downgrade them to plain links.
   const draftSaveTimerRef = useRef<number | null>(null)
+  /** Persist (or clear) the draft from the document as it stands right now. */
+  const writeDraftNow = useCallback(() => {
+    const ed = editorRef.current
+    if (!ed || !effectiveDraftStorageKey) return
+    if (ed.isEmpty()) {
+      clearMessageInputDraftV2(effectiveDraftStorageKey)
+    } else {
+      saveMessageInputDraftV2(
+        effectiveDraftStorageKey,
+        stripEmbeddedReferences(ed.getJSON())
+      )
+    }
+  }, [effectiveDraftStorageKey])
   const scheduleDraftSave = useCallback(() => {
     if (typeof window === "undefined") return
     if (!effectiveDraftStorageKey || isEditingQueueItem) return
@@ -536,18 +549,22 @@ export function MessageInput({
     }
     draftSaveTimerRef.current = window.setTimeout(() => {
       draftSaveTimerRef.current = null
-      const ed = editorRef.current
-      if (!ed || !effectiveDraftStorageKey) return
-      if (ed.isEmpty()) {
-        clearMessageInputDraftV2(effectiveDraftStorageKey)
-      } else {
-        saveMessageInputDraftV2(
-          effectiveDraftStorageKey,
-          stripEmbeddedReferences(ed.getJSON())
-        )
-      }
+      writeDraftNow()
     }, 300)
-  }, [effectiveDraftStorageKey, isEditingQueueItem])
+  }, [effectiveDraftStorageKey, isEditingQueueItem, writeDraftNow])
+  /**
+   * Land a *pending* debounced save immediately, before something other than
+   * the user replaces the document. A save scheduled by the keystrokes that
+   * preceded a prompt recall would otherwise fire ~300ms later — after the
+   * recall — and store the recalled prompt in place of the draft it replaced.
+   */
+  const flushDraftSave = useCallback(() => {
+    if (typeof window === "undefined") return
+    if (draftSaveTimerRef.current == null) return
+    window.clearTimeout(draftSaveTimerRef.current)
+    draftSaveTimerRef.current = null
+    writeDraftNow()
+  }, [writeDraftNow])
 
   useEffect(() => {
     return () => {
@@ -797,6 +814,12 @@ export function MessageInput({
           json: editorRef.current?.getJSON() ?? null,
           text: editorRef.current?.getText() ?? "",
         }
+        // A save the typing just before this keypress scheduled would fire
+        // ~300ms from now, AFTER the recall, and persist the recalled prompt
+        // as the draft. Land it on the document it was scheduled for instead —
+        // the stash above only lives in memory, so storage is what survives a
+        // tab switch made while a recalled prompt is on screen.
+        flushDraftSave()
       }
       applyingHistoryRef.current = true
       if (step.action === "show") {
@@ -815,7 +838,7 @@ export function MessageInput({
       historyIndexRef.current = step.index
       return true
     },
-    [getSentHistory, isEditingQueueItem]
+    [flushDraftSave, getSentHistory, isEditingQueueItem]
   )
 
   const handleComposerReady = useCallback(() => {
