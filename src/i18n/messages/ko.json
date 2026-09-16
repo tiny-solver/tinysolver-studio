@@ -3045,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "{agent}에 연결 중",
           "connectingDescription": "연결을 설정하는 중",
+          "preparingTitle": "{agent} 세션 준비 중",
+          "preparingDescription": "대화 기록을 읽는 중",
           "loadingSelectorsTitle": "{agent} 선택자 불러오는 중",
           "loadingSelectorsDescription": "모드 및 세션 구성 옵션을 가져오는 중",
           "initSessionTitle": "{agent} 세션 초기화 중",

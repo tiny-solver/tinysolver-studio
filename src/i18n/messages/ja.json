@@ -3045,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "{agent} に接続中",
           "connectingDescription": "接続を確立しています",
+          "preparingTitle": "{agent} セッションを準備中",
+          "preparingDescription": "会話履歴を読み込んでいます",
           "loadingSelectorsTitle": "{agent} のセレクターを読み込み中",
           "loadingSelectorsDescription": "モードとセッション設定オプションを取得しています",
           "initSessionTitle": "{agent} セッションを初期化中",

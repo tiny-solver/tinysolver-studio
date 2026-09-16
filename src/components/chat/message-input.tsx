@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import { isImeCompositionKey } from "@/lib/ime-composition"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   BookOpenText,
   Check,
@@ -288,6 +289,30 @@ function SelectorLoadingChip({ label }: { label: string }) {
     <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
       <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
       <span>{label}</span>
+    </div>
+  )
+}
+
+/**
+ * Stand-in for the model / mode / config chips while the session is still being
+ * established. It holds the row open at the real chips' height (`h-6`, matching
+ * `Button size="xs"`) so nothing jumps when they arrive, and — unlike the
+ * loading row inside the collapsed cog popover, which only a user who opens the
+ * popover ever sees — it is visible where the chips themselves will be. Opening
+ * a historical conversation spends seconds in exactly this state, and showing
+ * nothing there made a live, still-connecting composer look like a dead one.
+ */
+function SelectorLoadingPlaceholder({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+      title={label}
+      className="flex h-6 shrink-0 items-center gap-1.5 px-1"
+    >
+      <Skeleton className="h-3 w-16 rounded-sm" />
+      <Skeleton className="h-3 w-10 rounded-sm" />
     </div>
   )
 }
@@ -757,9 +782,14 @@ export function MessageInput({
     hasModes && Boolean(effectiveModeId) && !hasConfigOptions
   const showModeLoading = modeLoading && !hasConfigOptions && !showModeSelector
   const showConfigLoading = configOptionsLoading && !hasConfigOptions
+  const showSelectorsLoading = showConfigLoading || showModeLoading
   const hasAnySelector =
-    showConfigLoading || hasConfigOptions || showModeLoading || showModeSelector
-  const hasInlineSelectors = hasConfigOptions || showModeSelector
+    hasConfigOptions || showModeSelector || showSelectorsLoading
+  // The loading placeholder takes the inline slot too, not just the collapsed
+  // popover's row: at composer widths the chips would occupy, "still loading"
+  // has to be visible without opening anything.
+  const hasInlineSelectors =
+    hasConfigOptions || showModeSelector || showSelectorsLoading
   const hasFolderBranchPicker = useConversationFolderBranchPickerVisible(
     attachmentTabId,
     folderPickerOverride
@@ -1523,6 +1553,11 @@ export function MessageInput({
 
   const inlineSelectorItems = (
     <>
+      {showSelectorsLoading && (
+        <SelectorLoadingPlaceholder
+          label={showConfigLoading ? t("loadingSettings") : t("loadingMode")}
+        />
+      )}
       {hasConfigOptions &&
         availableConfigOptions.map((option) => {
           // On/off options flip in place — a dropdown for a binary choice is a

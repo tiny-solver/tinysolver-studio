@@ -3045,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "Connecting to {agent}",
           "connectingDescription": "Establishing connection",
+          "preparingTitle": "Preparing {agent} session",
+          "preparingDescription": "Reading the conversation history",
           "loadingSelectorsTitle": "Loading {agent} selectors",
           "loadingSelectorsDescription": "Fetching mode and session config options",
           "initSessionTitle": "Initializing {agent} session",
