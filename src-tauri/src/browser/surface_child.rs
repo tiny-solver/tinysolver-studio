@@ -163,14 +163,20 @@ fn frame_navigation_sink(
 ) -> shim::FrameNavigationSink {
     let app = app.clone();
     let tab_id = tab_id.to_string();
-    let document = matches!(kind, ChildKind::Document(_));
+    // The host of the document this guest shows, if it is one: a frame may
+    // go to its own document's addresses and nowhere else — another guest's
+    // host included.
+    let document = match kind {
+        ChildKind::Document(grant) => Some(grant.host().to_string()),
+        ChildKind::Page => None,
+    };
     Arc::new(move |url: &str| {
         let Ok(parsed) = Url::parse(url) else {
             return false;
         };
-        if document {
+        if let Some(host) = &document {
             return matches!(
-                doc_guest::guest_navigation(&parsed, false),
+                doc_guest::guest_navigation(&parsed, host, false),
                 GuestNavigation::Allow
             );
         }
@@ -743,8 +749,8 @@ fn configure_child<'a>(
             // A document guest: its own documents and nothing with a scheme
             // of its own. A web address is reported so the user can open it
             // in a tab; the guest itself never leaves its root.
-            if let ChildKind::Document(_) = &nav_kind {
-                return match doc_guest::guest_navigation(&parsed, main_frame) {
+            if let ChildKind::Document(grant) = &nav_kind {
+                return match doc_guest::guest_navigation(&parsed, grant.host(), main_frame) {
                     GuestNavigation::Allow => true,
                     GuestNavigation::External => {
                         if main_frame {
@@ -903,8 +909,10 @@ fn configure_child<'a>(
             builder = builder.with_environment(environment);
         }
         // A document guest keeps nothing: an in-private profile of the same
-        // environment. (Not exercised yet — `doc_guest::supported()` is false
-        // here until it is.)
+        // environment — which is ONE partition for every guest of the
+        // process, unlike macOS where each gets its own data store. What
+        // keeps two documents' storage apart on this platform is that they
+        // are two origins (`doc_guest::mint_host`), not the partition.
         if let ChildKind::Document(_) = kind {
             builder = builder.with_incognito(true);
         }

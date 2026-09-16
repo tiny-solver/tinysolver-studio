@@ -325,11 +325,12 @@ pub enum NotGrantable {
     /// be revoked for leaving.
     NoOrigin,
     /// A document guest (`codeg-doc:`). It shows a local file — usually one
-    /// the agent wrote — through a scheme spelled differently on every
-    /// platform (`codeg-doc://…` under WebKit, `https://codeg-doc.localhost/…`
-    /// under WebView2), so there is no stable origin to bind to. There is
-    /// also no need: the file is on disk, where the agent reads it directly
-    /// and without a browser in between.
+    /// the agent wrote — under an origin that is minted per document and
+    /// spelled differently on every platform (`codeg-doc://doc-<token>/…`
+    /// under WebKit, `http://codeg-doc.doc-<token>/…` under WebView2), so
+    /// there is no stable origin to bind to. There is also no need: the file
+    /// is on disk, where the agent reads it directly and without a browser
+    /// in between.
     DocumentGuest,
 }
 

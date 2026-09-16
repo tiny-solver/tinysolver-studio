@@ -30,8 +30,15 @@
 //!   underneath the approval.
 //! - **A guest goes nowhere else.** Top-level navigation to a web address is
 //!   refused and reported so the user can open it in a browser tab;
-//!   `window.open` and downloads are refused; the data store is
-//!   non-persistent and dies with the guest.
+//!   `window.open` and downloads are refused; nothing a guest stores
+//!   outlives the run.
+//! - **One document, one origin.** Every grant mints a host of its own, so
+//!   two documents are two origins and the engine keeps what they store
+//!   apart. The data store alone does not do this: macOS hands each guest a
+//!   non-persistent `WKWebsiteDataStore`, but on Windows every in-private
+//!   webview of the process shares one partition, and a shared partition
+//!   under a shared origin is one `localStorage` for every document the user
+//!   opens.
 //!
 //! A grant lives for the session: switching files and coming back keeps the
 //! mode the user chose (and the approval time it was chosen at).
@@ -54,10 +61,35 @@ use tauri::Url;
 /// never appear in a capability (`mod.rs` has the test).
 pub const DOC_LABEL_PREFIX: &str = "codeg-doc-";
 pub const DOC_SCHEME: &str = "codeg-doc";
-/// The host part of every document URL. Constant on purpose: the grant is
-/// bound to the webview, not carried in the URL, and a constant origin keeps
-/// `'self'` in the CSP meaning "this guest's root" on every platform.
-pub const DOC_HOST: &str = "doc";
+
+/// The host part of one grant's document URLs, minted when the grant is.
+///
+/// This was a constant, and a constant host is one origin for every document
+/// the user opens. macOS hid that: each guest gets its own non-persistent
+/// data store, so there was nothing behind the origin to share. Windows does
+/// not — WebView2 gives an environment a single in-private partition, and
+/// every guest of the process lands in it, so one report could read what a
+/// report from another folder had written. The roots are fenced apart; the
+/// storage has to be too, and separating the origins is what makes the engine
+/// do it.
+///
+/// Per **grant**, not per guest, because the grant is the principal here: it
+/// is keyed by (root, entry), it holds the approval, and two guests of one
+/// grant already reload together when it resets. Two tabs on one document are
+/// one document.
+///
+/// Minted rather than derived from the path. A hash would have to encode two
+/// `OsString`s injectively — `to_string_lossy` is not — and buys only
+/// stability across runs, which storage that dies with the run cannot use.
+fn mint_host() -> String {
+    format!("doc-{}", uuid::Uuid::new_v4().simple())
+}
+
+/// The host wry serves a custom scheme from where the engine has no custom
+/// schemes (Windows): `<scheme>.<host>`.
+fn mapped_host(host: &str) -> String {
+    format!("{DOC_SCHEME}.{host}")
+}
 
 /// Largest file the guest serves. A document preview that needs more than
 /// this in one response is not a document; the body is held in memory.
@@ -104,18 +136,41 @@ pub fn engine_url(url: &Url) -> Url {
     url.clone()
 }
 
-/// A URL that addresses this guest's own root. wry maps a custom scheme to
-/// `http(s)://<scheme>.<host>` on Windows, so both spellings count — but only
-/// that one host: `codeg-doc.` as a PREFIX would make every registrable
-/// domain someone owns a guest address (`https://codeg-doc.example.com/`),
-/// and a guest is allowed to navigate to its own addresses, which is how a
-/// document with scripts would send what it read to its author.
-pub fn is_document_url(url: &Url) -> bool {
-    url.scheme() == DOC_SCHEME
-        || (matches!(url.scheme(), "http" | "https")
-            && url
-                .host_str()
-                .is_some_and(|host| host == format!("{DOC_SCHEME}.{DOC_HOST}")))
+/// A URL that addresses the guest whose host is `own`. wry maps a custom
+/// scheme to `http(s)://<scheme>.<host>` on Windows, so both spellings count
+/// — but only that one host, in either spelling:
+///
+/// - `codeg-doc.` as a PREFIX would make every registrable domain someone
+///   owns a guest address (`https://codeg-doc.example.com/`), and a guest is
+///   allowed to navigate to its own addresses, which is how a document with
+///   scripts would send what it read to its author.
+/// - any host under the scheme would let one guest address ANOTHER guest's
+///   origin. Its own handler would answer — from its own root, which is no
+///   leak of files — under the other document's origin, which hands it the
+///   other document's storage. Hosts are per grant now, so the host is the
+///   thing being checked, not a formality around the scheme.
+///
+/// Exact, and so case-sensitive for the custom spelling: the `url` crate
+/// lowercases a host only for the special schemes. Every URL a guest is given
+/// is minted here in lowercase, so the only thing an exact match can refuse
+/// is a document that went looking for a different casing — and refusing is
+/// the safe side of every one of these comparisons. A URL we turn away cannot
+/// leak anything; the only cost of being strict is breaking a guest loudly,
+/// and the only URLs a guest legitimately has are the ones minted here.
+pub fn is_document_url(url: &Url, own: &str) -> bool {
+    // A port is part of an origin and `host_str` does not carry one, so it
+    // has to be looked at separately or `<own>:8080` would pass for `<own>`
+    // — a second origin, with a second `localStorage`, for the asking. The
+    // `url` crate normalises a scheme's default port away, so this refuses
+    // exactly the ports that mean a different origin.
+    if url.port().is_some() {
+        return false;
+    }
+    match url.scheme() {
+        DOC_SCHEME => url.host_str() == Some(own),
+        "http" | "https" => url.host_str() == Some(mapped_host(own).as_str()),
+        _ => false,
+    }
 }
 
 /// What a guest may navigate to.
@@ -132,8 +187,11 @@ pub enum GuestNavigation {
 /// inside its own frames only — the opaque-origin content a page composes
 /// itself. Everything with a scheme of its own stays out; web addresses are
 /// reported as such so the user can follow them elsewhere.
-pub fn guest_navigation(url: &Url, main_frame: bool) -> GuestNavigation {
-    if is_document_url(url) {
+///
+/// `own` is the host of the grant this guest is showing: another guest's
+/// document is not this guest's own, and is refused like any other scheme.
+pub fn guest_navigation(url: &Url, own: &str, main_frame: bool) -> GuestNavigation {
+    if is_document_url(url, own) {
         return GuestNavigation::Allow;
     }
     match url.scheme() {
@@ -210,8 +268,12 @@ struct GrantInner {
     reset: Option<DocReset>,
 }
 
-/// One document: its root, its entry file, and the mode the user chose.
+/// One document: its root, its entry file, the origin it is served under and
+/// the mode the user chose.
 pub struct DocGrant {
+    /// This document's own host — see [`mint_host`]. Fixed for the grant's
+    /// life: it is in every URL the guests showing it are navigated to.
+    host: String,
     root: PathBuf,
     entry: PathBuf,
     entry_rel: PathBuf,
@@ -253,6 +315,7 @@ impl DocGrant {
             .map_err(|_| format!("{} is not under {}", entry.display(), root.display()))?
             .to_path_buf();
         Ok(Self {
+            host: mint_host(),
             root,
             entry,
             entry_rel,
@@ -265,6 +328,11 @@ impl DocGrant {
 
     fn lock(&self) -> MutexGuard<'_, GrantInner> {
         self.inner.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// The host this document is served under, and no other document is.
+    pub fn host(&self) -> &str {
+        &self.host
     }
 
     pub fn root(&self) -> &Path {
@@ -299,7 +367,26 @@ impl DocGrant {
 
     /// The entry document's URL inside the guest.
     pub fn document_url(&self) -> String {
-        document_url(&self.entry_rel)
+        document_url(&self.host, &self.entry_rel)
+    }
+
+    /// Whether a request is addressed to THIS document's origin.
+    ///
+    /// The handler is registered per webview and checks the webview it is
+    /// called for, but that only says which guest is asking — not what it
+    /// asked for. A guest can address any host under the scheme (wry's
+    /// Windows filter is `http://codeg-doc.*`, and the macOS handler takes
+    /// the scheme whatever the host), so a request for another guest's
+    /// origin arrives right here. Answering it would serve this root's files
+    /// — no leak in itself — under the other document's origin, which is the
+    /// other document's `localStorage`. Per-grant hosts do nothing without
+    /// this check; this check is the half that holds.
+    fn owns_request(&self, uri: &Uri) -> bool {
+        // Both spellings, as everywhere else: wry reverts the Windows
+        // mapping before the handler sees a request, and a guest that is
+        // handed the mapped one anyway is still asking for its own origin.
+        uri.host()
+            .is_some_and(|host| host == self.host || host == mapped_host(&self.host))
     }
 
     pub fn state(&self, tab_id: &str) -> DocGuestState {
@@ -322,6 +409,13 @@ impl DocGrant {
     /// response, and `reset` says when this request ended dynamic mode.
     pub fn serve(&self, request: &Request<Vec<u8>>) -> Served {
         let mode = self.mode();
+        if !self.owns_request(request.uri()) {
+            return Served::error(
+                StatusCode::FORBIDDEN,
+                "not this document's origin",
+                DocMode::Safe,
+            );
+        }
         let Some(rel) = request_rel_path(request.uri()) else {
             return Served::error(StatusCode::BAD_REQUEST, "not a document path", mode);
         };
@@ -680,10 +774,10 @@ pub fn forbidden() -> Response<Vec<u8>> {
 // Requests and responses
 // ---------------------------------------------------------------------------
 
-/// The document URL for a path relative to the root; each segment
-/// percent-encoded by the URL parser.
-pub fn document_url(rel: &Path) -> String {
-    let mut url = Url::parse(&format!("{DOC_SCHEME}://{DOC_HOST}/")).expect("static url");
+/// The document URL for a path relative to the root, under one grant's host;
+/// each segment percent-encoded by the URL parser.
+fn document_url(host: &str, rel: &Path) -> String {
+    let mut url = Url::parse(&format!("{DOC_SCHEME}://{host}/")).expect("minted host");
     {
         let mut segments = url.path_segments_mut().expect("url has a host");
         for component in rel.components() {
@@ -695,8 +789,9 @@ pub fn document_url(rel: &Path) -> String {
 
 /// The path a request asks for, relative to the root, or `None` for a path
 /// no document can have: a `.`/`..` segment, a separator inside a segment,
-/// a NUL, or bytes that are not UTF-8. The host part is ignored (a Windows
-/// guest sees a mapped host).
+/// a NUL, or bytes that are not UTF-8. The host is not this function's
+/// business — [`DocGrant::owns_request`] has already refused anything that
+/// is not this document's own.
 fn request_rel_path(uri: &Uri) -> Option<PathBuf> {
     let mut rel = PathBuf::new();
     for segment in uri.path().split('/') {
@@ -890,9 +985,11 @@ mod tests {
         path
     }
 
+    /// A request the way a guest makes it: to its OWN host, which is the
+    /// only one its grant answers.
     fn get(grant: &DocGrant, path: &str) -> Served {
         let request = Request::builder()
-            .uri(format!("{DOC_SCHEME}://{DOC_HOST}{path}"))
+            .uri(format!("{DOC_SCHEME}://{}{path}", grant.host()))
             .body(Vec::new())
             .unwrap();
         grant.serve(&request)
@@ -1167,7 +1264,7 @@ mod tests {
         let grant = grant_in(dir.path());
         write(dir.path(), "site/clip.mp4", &[0u8; 100]);
         let request = Request::builder()
-            .uri(format!("{DOC_SCHEME}://{DOC_HOST}/clip.mp4"))
+            .uri(format!("{DOC_SCHEME}://{}/clip.mp4", grant.host()))
             .header(header::RANGE, "bytes=10-19")
             .body(Vec::new())
             .unwrap();
@@ -1184,69 +1281,180 @@ mod tests {
         assert_eq!(parse_range("items=0-1", 100), None);
     }
 
+    /// The half of per-document origins that actually holds.
+    ///
+    /// A guest can ask for any host under the scheme — its own handler is
+    /// the one that answers, and the webview check passes because it really
+    /// is that guest asking. Serving it would hand out this root's files,
+    /// which is no leak, under the OTHER document's origin, which is that
+    /// document's storage. Distinct hosts without this are decoration.
+    #[test]
+    fn a_request_for_another_documents_origin_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let mine = grant_in(dir.path());
+        let theirs = grant_in(&dir.path().join("other"));
+        assert_ne!(mine.host(), theirs.host());
+        // The file exists and is served to its own origin.
+        let own = get(&mine, "/index.html");
+        assert_eq!(own.response.status(), StatusCode::OK);
+        assert!(!own.response.body().is_empty());
+        for host in [
+            theirs.host().to_string(),
+            mapped_host(theirs.host()),
+            // Having this guest's host as a PREFIX is not being it.
+            format!("{}x", mine.host()),
+            "doc".to_string(),
+        ] {
+            let request = Request::builder()
+                .uri(format!("{DOC_SCHEME}://{host}/index.html"))
+                .body(Vec::new())
+                .unwrap();
+            let served = mine.serve(&request);
+            assert_eq!(served.response.status(), StatusCode::FORBIDDEN, "{host}");
+            assert!(csp(&served).contains("script-src 'none'"), "{host}");
+        }
+        // A URI with no authority at all names no origin, so it names no
+        // document either. Neither engine sends one — both hand the handler
+        // an absolute URL — and refusing would break a guest loudly rather
+        // than serve it under a host nobody checked.
+        let rootless = Request::builder()
+            .uri("/index.html")
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(
+            mine.serve(&rootless).response.status(),
+            StatusCode::FORBIDDEN
+        );
+        // The mapped spelling of its OWN host is its own: wry reverts it
+        // before the handler sees it, and a guest handed the mapped one is
+        // still asking for itself.
+        let mapped = Request::builder()
+            .uri(format!("{DOC_SCHEME}://{}/index.html", mapped_host(mine.host())))
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(mine.serve(&mapped).response.status(), StatusCode::OK);
+    }
+
     #[test]
     fn document_urls_and_navigation_policy() {
-        assert_eq!(document_url(Path::new("a b/c#d.html")), "codeg-doc://doc/a%20b/c%23d.html");
-        assert_eq!(document_url(Path::new("index.html")), "codeg-doc://doc/index.html");
-        let doc = Url::parse("codeg-doc://doc/other.html").unwrap();
-        assert!(is_document_url(&doc));
-        assert!(is_document_url(&Url::parse("https://codeg-doc.doc/x").unwrap()));
-        assert!(!is_document_url(&Url::parse("https://example.com/").unwrap()));
+        let own = "doc-1111";
+        assert_eq!(
+            document_url(own, Path::new("a b/c#d.html")),
+            "codeg-doc://doc-1111/a%20b/c%23d.html"
+        );
+        assert_eq!(
+            document_url(own, Path::new("index.html")),
+            "codeg-doc://doc-1111/index.html"
+        );
+        let doc = Url::parse("codeg-doc://doc-1111/other.html").unwrap();
+        assert!(is_document_url(&doc, own));
+        assert!(is_document_url(&Url::parse("https://codeg-doc.doc-1111/x").unwrap(), own));
+        assert!(!is_document_url(&Url::parse("https://example.com/").unwrap(), own));
         // Not every host that merely begins with the mapped prefix: that one
         // is registrable by anyone, and a guest may navigate to its own.
         assert!(!is_document_url(
-            &Url::parse("https://codeg-doc.example.com/steal").unwrap()
+            &Url::parse("https://codeg-doc.example.com/steal").unwrap(),
+            own
         ));
         assert_eq!(
             guest_navigation(
                 &Url::parse("https://codeg-doc.example.com/steal").unwrap(),
+                own,
                 true
             ),
             GuestNavigation::External
         );
+        // Another guest's document, in either spelling. Its files would be
+        // no leak — the handler that answers is this guest's — but the origin
+        // would be the other document's, and so would the storage.
+        for other in [
+            "codeg-doc://doc-2222/other.html",
+            "https://codeg-doc.doc-2222/other.html",
+        ] {
+            let other = Url::parse(other).unwrap();
+            assert!(!is_document_url(&other, own), "{other}");
+        }
+        assert_eq!(
+            guest_navigation(&Url::parse("codeg-doc://doc-2222/x").unwrap(), own, true),
+            GuestNavigation::Scheme
+        );
+        // A host that differs only in case is not this one: the `url` crate
+        // leaves an opaque host as written, so an exact match is the rule
+        // and refusing is the safe side of it.
+        assert!(!is_document_url(
+            &Url::parse("codeg-doc://DOC-1111/x").unwrap(),
+            own
+        ));
+        // A port is a different origin even with the right host — a guest
+        // could otherwise give itself a second `localStorage` by asking for
+        // one. The default port of a special scheme is not a port.
+        assert!(!is_document_url(
+            &Url::parse("codeg-doc://doc-1111:8080/x").unwrap(),
+            own
+        ));
+        assert!(!is_document_url(
+            &Url::parse("codeg-doc://doc-1111:80/x").unwrap(),
+            own
+        ));
+        assert!(!is_document_url(
+            &Url::parse("http://codeg-doc.doc-1111:8080/x").unwrap(),
+            own
+        ));
+        assert!(is_document_url(
+            &Url::parse("http://codeg-doc.doc-1111:80/x").unwrap(),
+            own
+        ));
+        assert_eq!(
+            guest_navigation(
+                &Url::parse("codeg-doc://doc-1111:8080/x").unwrap(),
+                own,
+                true
+            ),
+            GuestNavigation::Scheme
+        );
         // The spelling the engine is given: rewritten where the engine has no
         // custom schemes, and still a document URL either way.
         let engine = engine_url(&doc);
-        assert!(is_document_url(&engine));
+        assert!(is_document_url(&engine, own));
         if cfg!(target_os = "windows") {
-            assert_eq!(engine.as_str(), "http://codeg-doc.doc/other.html");
+            assert_eq!(engine.as_str(), "http://codeg-doc.doc-1111/other.html");
         } else {
             assert_eq!(engine, doc);
         }
         let web = Url::parse("https://example.com/x").unwrap();
         assert_eq!(engine_url(&web), web);
-        assert_eq!(guest_navigation(&doc, true), GuestNavigation::Allow);
+        assert_eq!(guest_navigation(&doc, own, true), GuestNavigation::Allow);
         assert_eq!(
-            guest_navigation(&Url::parse("https://example.com/").unwrap(), true),
+            guest_navigation(&Url::parse("https://example.com/").unwrap(), own, true),
             GuestNavigation::External
         );
         assert_eq!(
-            guest_navigation(&Url::parse("mailto:a@b.c").unwrap(), true),
+            guest_navigation(&Url::parse("mailto:a@b.c").unwrap(), own, true),
             GuestNavigation::Scheme
         );
         assert_eq!(
-            guest_navigation(&Url::parse("file:///etc/hosts").unwrap(), true),
+            guest_navigation(&Url::parse("file:///etc/hosts").unwrap(), own, true),
             GuestNavigation::Scheme
         );
         assert_eq!(
-            guest_navigation(&Url::parse("about:blank").unwrap(), true),
+            guest_navigation(&Url::parse("about:blank").unwrap(), own, true),
             GuestNavigation::Allow
         );
         // Opaque-origin content in the document's own frames only.
         assert_eq!(
-            guest_navigation(&Url::parse("about:srcdoc").unwrap(), false),
+            guest_navigation(&Url::parse("about:srcdoc").unwrap(), own, false),
             GuestNavigation::Allow
         );
         assert_eq!(
-            guest_navigation(&Url::parse("about:srcdoc").unwrap(), true),
+            guest_navigation(&Url::parse("about:srcdoc").unwrap(), own, true),
             GuestNavigation::Scheme
         );
         assert_eq!(
-            guest_navigation(&Url::parse("data:text/html,hi").unwrap(), false),
+            guest_navigation(&Url::parse("data:text/html,hi").unwrap(), own, false),
             GuestNavigation::Allow
         );
         assert_eq!(
-            guest_navigation(&Url::parse("data:text/html,hi").unwrap(), true),
+            guest_navigation(&Url::parse("data:text/html,hi").unwrap(), own, true),
             GuestNavigation::Scheme
         );
     }
@@ -1272,7 +1480,10 @@ mod tests {
         assert!(resolve_document("relative/path.html", None).is_err());
         assert!(resolve_document(ws.to_str().unwrap(), None).is_err());
         let grant = DocGrant::new(ws.clone(), entry_c).unwrap();
-        assert_eq!(grant.document_url(), "codeg-doc://doc/docs/report.html");
+        assert_eq!(
+            grant.document_url(),
+            format!("codeg-doc://{}/docs/report.html", grant.host())
+        );
         let state = grant.state("t1");
         assert_eq!(state.mode, DocMode::Safe);
         assert_eq!(state.root, ws.to_string_lossy());
@@ -1302,6 +1513,13 @@ mod tests {
                 std::fs::canonicalize(other).unwrap(),
             )
             .unwrap();
+        // One document, one origin: the two tabs of `first` share a host
+        // because they share the grant — same root, same approval, same
+        // document. The second document does not, which is what keeps the
+        // engine from handing it the first one's storage.
+        assert_eq!(first.host(), second.host());
+        assert_ne!(first.host(), other.host());
+        assert!(first.host().starts_with("doc-"), "{}", first.host());
         guests.bind("t3", other);
         let mut tabs = guests.tabs_of(&first);
         tabs.sort();
