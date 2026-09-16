@@ -1461,7 +1461,11 @@
       "ready": "アダプター {adapterCmd} はインストール済みで、Codeg が起動するのはこれです。独自のランタイムを同梱しているため {nativeLabel} は不要です。後から入れても両者は共存し、{configDir} を共有します。"
     },
     "cline": {
-      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。"
+      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。",
+      "signInGroup": "Cline アカウントでサインイン",
+      "byoGroup": "自分のプロバイダーを使う",
+      "externalGroup": "codeg の外で設定済み",
+      "signInHint": "この資格情報は cline 自身が保持します。ターミナルで下のコマンドを実行してサインインしてください。コードが表示され、ブラウザで確認するページが開きます。"
     },
     "opencodePlugins": {
       "title": "OpenCode プラグイン",

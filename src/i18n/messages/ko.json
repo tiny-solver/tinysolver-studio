@@ -1461,7 +1461,11 @@
       "ready": "어댑터 {adapterCmd}가 설치되어 있으며 Codeg가 실행하는 것이 바로 이것입니다. 자체 런타임을 포함하므로 {nativeLabel}은 필요하지 않습니다. 나중에 설치해도 둘은 공존하며 {configDir}를 공유합니다."
     },
     "cline": {
-      "configDescription": "Cline API 제공자와 자격 증명을 구성합니다. 설정은 ~/.cline/data/에 저장됩니다."
+      "configDescription": "Cline API 제공자와 자격 증명을 구성합니다. 설정은 ~/.cline/data/에 저장됩니다.",
+      "signInGroup": "Cline 계정으로 로그인",
+      "byoGroup": "직접 공급자 사용",
+      "externalGroup": "codeg 외부에서 설정됨",
+      "signInHint": "이 자격 증명은 cline이 직접 보관합니다. 터미널에서 아래 명령을 실행해 로그인하세요. 코드가 출력되고 확인용 브라우저 페이지가 열립니다."
     },
     "opencodePlugins": {
       "title": "OpenCode 플러그인",
