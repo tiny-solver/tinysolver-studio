@@ -510,6 +510,50 @@ describe("RichComposer prompt-history Arrow routing", () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
+  it("keeps the Arrow keys to the caret between paragraphs of one document", async () => {
+    // A native paste can leave the box holding SEVERAL paragraphs. The start of
+    // the second one is the start of its block but not of the document, so it
+    // is a plain "move up a line" — recalling there would swap the whole draft
+    // out from under the caret.
+    const onHistoryKeyDown = vi.fn(() => true)
+    const { ref } = await mount({ onHistoryKeyDown })
+    act(() =>
+      ref.current?.setDoc({
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "one" }] },
+          { type: "paragraph", content: [{ type: "text", text: "two" }] },
+        ],
+      })
+    )
+    const editor = ref.current?.getEditor()
+    const dom = editor?.view.dom as HTMLElement
+
+    // Start of paragraph two.
+    act(() => editor?.commands.setTextSelection(6))
+    expect(pressKey(dom, { key: "ArrowUp" }).defaultPrevented).toBe(false)
+    // End of paragraph one.
+    act(() => editor?.commands.setTextSelection(4))
+    expect(pressKey(dom, { key: "ArrowDown" }).defaultPrevented).toBe(false)
+
+    expect(onHistoryKeyDown).not.toHaveBeenCalled()
+
+    // The document's own edges still route: start of the first paragraph,
+    // end of the last.
+    act(() => editor?.commands.setTextSelection(1))
+    pressKey(dom, { key: "ArrowUp" })
+    expect(onHistoryKeyDown).toHaveBeenLastCalledWith(
+      "older",
+      expect.anything()
+    )
+    act(() => editor?.commands.setTextSelection(9))
+    pressKey(dom, { key: "ArrowDown" })
+    expect(onHistoryKeyDown).toHaveBeenLastCalledWith(
+      "newer",
+      expect.anything()
+    )
+  })
+
   it("keeps Arrow keys for the IME while a composition is in flight", async () => {
     const onHistoryKeyDown = vi.fn(() => true)
     const { ref } = await mount({ onHistoryKeyDown })

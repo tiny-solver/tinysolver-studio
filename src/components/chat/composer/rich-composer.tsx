@@ -12,6 +12,7 @@ import {
   type RefObject,
 } from "react"
 import { type Editor, type JSONContent } from "@tiptap/core"
+import { Selection } from "@tiptap/pm/state"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { exitSuggestion } from "@tiptap/suggestion"
 
@@ -422,16 +423,18 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
             !event.ctrlKey &&
             !event.metaKey
           ) {
-            const { selection } = view.state
+            const { selection, doc } = view.state
             const older = event.key === "ArrowUp"
+            // The edge that counts is the DOCUMENT's, not the current block's.
+            // The box is normally one paragraph of hard breaks, but a native
+            // paste can leave several paragraphs in it (see the quote
+            // decoration's scan) — and in one of those, the start of paragraph
+            // two is an ordinary "move up a line", not a recall.
             const atBoundary =
               selection.empty &&
               (older
-                ? selection.$from.depth === 1 &&
-                  selection.$from.parentOffset === 0
-                : selection.$to.depth === 1 &&
-                  selection.$to.parentOffset ===
-                    selection.$to.parent.content.size)
+                ? selection.from === Selection.atStart(doc).from
+                : selection.to === Selection.atEnd(doc).to)
             if (atBoundary) {
               return onHistoryKeyDownRef.current(
                 older ? "older" : "newer",
