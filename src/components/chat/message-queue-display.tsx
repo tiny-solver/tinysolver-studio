@@ -94,7 +94,9 @@ function QueueItem({
           onClick={() => void onSteerStart(item.id)}
           disabled={steering}
           className="shrink-0 rounded-sm p-0.5 hover:bg-muted-foreground/15 text-muted-foreground disabled:opacity-50"
-          title={t(steerChannel === "pull" ? "steerItemAsNote" : "steerItemNow")}
+          title={t(
+            steerChannel === "pull" ? "steerItemAsNote" : "steerItemNow"
+          )}
         >
           {steerChannel === "pull" ? (
             <Clock className="h-2.5 w-2.5" />
