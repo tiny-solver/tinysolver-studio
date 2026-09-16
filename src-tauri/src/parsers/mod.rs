@@ -863,8 +863,15 @@ pub fn infer_context_window_max_tokens(model: Option<&str>) -> Option<u64> {
         }
         return Some(200_000);
     }
+    // gemini-cli's own `tokenLimit()` (packages/core/src/core/tokenLimits.ts,
+    // 0.60.0): 1 << 20 for every Gemini model, a separate 256K bucket for the
+    // Gemma family. The round 1_000_000 that used to sit here reported the
+    // gauge ~4.9% high.
     if normalized.starts_with("gemini") {
-        return Some(1_000_000);
+        return Some(1_048_576);
+    }
+    if normalized.starts_with("gemma") {
+        return Some(256_000);
     }
     if normalized.starts_with("kimi") {
         return Some(262_144);
@@ -2078,9 +2085,14 @@ mod tests {
             infer_context_window_max_tokens(Some("claude-sonnet-4-6")),
             Some(200_000)
         );
+        // gemini-cli's `tokenLimit()` is 1 << 20, not a round million.
         assert_eq!(
             infer_context_window_max_tokens(Some("gemini-2.5-pro")),
-            Some(1_000_000)
+            Some(1_048_576)
+        );
+        assert_eq!(
+            infer_context_window_max_tokens(Some("gemma-4-31b-it")),
+            Some(256_000)
         );
         assert_eq!(
             infer_context_window_max_tokens(Some("claude-sonnet-4-6 [1.5M]")),

@@ -136,6 +136,7 @@ import {
   OpenCodeConnectDialog,
   OpenCodeCustomProviderDialog,
 } from "@/components/settings/opencode-connect-dialog"
+import { OpenCodeBehaviorSection } from "@/components/settings/opencode-behavior-section"
 import { OpenCodePermissionsSection } from "@/components/settings/opencode-permissions-section"
 import { AgentDiagnosticsDialog } from "@/components/settings/agent-diagnostics-dialog"
 import {
@@ -9942,6 +9943,17 @@ supports_websockets = true`}
                       the write to opencode.json.
                     */}
                     <OpenCodePermissionsSection
+                      configText={selectedDraft.configText}
+                      onChange={handleConfigTextChange}
+                      disabled={selectedIsSavingConfig}
+                    />
+
+                    {/*
+                      Same contract as the permissions editor above: it owns a
+                      disjoint set of top-level keys, rewrites the whole
+                      document, and leaves the write to this card's Save button.
+                    */}
+                    <OpenCodeBehaviorSection
                       configText={selectedDraft.configText}
                       onChange={handleConfigTextChange}
                       disabled={selectedIsSavingConfig}

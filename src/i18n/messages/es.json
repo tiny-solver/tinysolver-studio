@@ -1191,6 +1191,46 @@
           "question": "Hacerte una pregunta",
           "doom_loop": "Se activa cuando la misma llamada se repite tres veces con la misma entrada"
         }
+      },
+      "behavior": {
+        "title": "Comportamiento y compactación",
+        "description": "Valores por defecto de la sesión, compactación del contexto y límites de salida de herramientas. Se escribe en opencode.json y se aplica al guardar abajo.",
+        "docsLink": "Documentación de configuración",
+        "unset": "Sin configurar",
+        "defaultAgent": "Agente por defecto",
+        "defaultAgentHint": "Con qué agente principal se abre una sesión nueva. Si está vacío o no existe, se usa build.",
+        "share": "Compartir",
+        "shareHint": "Si una sesión puede publicarse como enlace compartido.",
+        "shareManual": "Manual (solo a petición)",
+        "shareAuto": "Automático (cada sesión nueva)",
+        "shareDisabled": "Desactivado",
+        "autoUpdate": "Actualización automática",
+        "autoUpdateHint": "Si OpenCode se actualiza solo a la última versión.",
+        "autoUpdateOn": "Actualizar automáticamente",
+        "autoUpdateNotify": "Solo avisar",
+        "autoUpdateOff": "Nunca",
+        "snapshot": "Instantáneas del sistema de archivos",
+        "snapshotHint": "Registra una instantánea antes de cada paso. Al desactivarlo, deshacer y revertir ya no restauran archivos.",
+        "compactionAuto": "Compactación automática",
+        "compactionAutoHint": "Resume la conversación automáticamente cuando se llena la ventana de contexto.",
+        "compactionPrune": "Podar salida antigua de herramientas",
+        "compactionPruneHint": "Descarta la salida de llamadas antiguas al compactar en lugar de resumirla.",
+        "fields": {
+          "subagentDepth": "Profundidad de subagentes",
+          "tailTurns": "Turnos conservados literales",
+          "preserveRecentTokens": "Tokens conservados literales",
+          "reserved": "Tokens reservados",
+          "maxLines": "Límite de líneas de salida",
+          "maxBytes": "Límite de bytes de salida"
+        },
+        "hints": {
+          "subagentDepth": "Cuántos niveles pueden anidar los subagentes. Con 1, un subagente no puede lanzar otro.",
+          "tailTurns": "Turnos de usuario recientes que no se compactan. Sin valor, solo los limita el presupuesto de tokens de abajo.",
+          "preserveRecentTokens": "Presupuesto de tokens de los turnos recientes que se conservan literales tras compactar.",
+          "reserved": "Ventana que se deja libre para que la propia compactación no desborde el contexto.",
+          "maxLines": "La salida más larga se escribe en disco y se sustituye por una vista previa. Por defecto 2000.",
+          "maxBytes": "La salida más grande se escribe en disco y se sustituye por una vista previa. Por defecto 51200."
+        }
       }
     },
     "openClaw": {
@@ -1474,7 +1514,9 @@
       "status": {
         "installed": "Instalado",
         "needs_migration": "Requiere migración",
-        "missing": "No instalado"
+        "missing": "No instalado",
+        "path": "Complemento de ruta",
+        "path_missing": "Ruta no encontrada"
       },
       "installAll": "Instalar todos los faltantes",
       "pinVersions": "Fijar versiones @latest",
