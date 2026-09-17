@@ -4763,7 +4763,7 @@
     "plaintextWarning": "スナップショットは暗号化せずに送信され、API キーも含まれます。自分だけがアクセスできる WebDAV サーバーを使ってください。同期用の認証情報自体は含まれません。",
     "importConfirmTitle": "設定を読み込みますか？",
     "importConfirmBody": "ファイルの項目がこのマシンに追加・更新されます。ファイルにない既存項目はそのまま残ります。",
-    "importBlocked": "このファイルは読み込めません。",
+    "restartHint": "外観・言語・プロバイダー一覧などの一部の変更は、codeg を再起動すると反映されます。",
     "importConfirmAction": "読み込む",
     "restoreConfirmTitle": "リモートから復元しますか？",
     "restoreConfirmBody": "{device} が {time} に作成したスナップショットをこのマシンに適用します。スナップショットにない既存項目は残ります。",

@@ -260,18 +260,66 @@ fn reject_newer_schema(schema_version: u32) -> Result<(), AppCommandError> {
     Ok(())
 }
 
-/// Best-effort machine name. Deliberately env-only: a hostname lookup would
-/// mean a new dependency for a label that is purely informational.
+/// Best-effort machine name, for the "restore the snapshot from {device}?"
+/// confirmation.
+///
+/// `COMPUTERNAME` is genuinely set for every Windows process, but its unix
+/// counterpart `HOSTNAME` is a shell variable that is never exported, so an
+/// env-only lookup answers "unknown" on every macOS and Linux desktop — i.e.
+/// exactly where the label is supposed to earn its keep. `gethostname(2)` is
+/// one already-vendored `libc` call away (`libc` is a unix-only dependency of
+/// this crate) and needs no new crate.
 fn source_device() -> String {
+    resolve_device_name(env_device_name(), host_name())
+}
+
+/// Pure, so the precedence and the fallback are testable without touching the
+/// process environment (which other tests in this crate mutate).
+fn resolve_device_name(from_env: Option<String>, from_host: Option<String>) -> String {
+    from_env
+        .or(from_host)
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+#[cfg(unix)]
+fn host_name() -> Option<String> {
+    unix_hostname()
+}
+
+/// Windows has no `gethostname` in the crate's dependency set and does not
+/// need one: `COMPUTERNAME` is set for every process there.
+#[cfg(not(unix))]
+fn host_name() -> Option<String> {
+    None
+}
+
+fn env_device_name() -> Option<String> {
     for key in ["COMPUTERNAME", "HOSTNAME"] {
         if let Ok(value) = std::env::var(key) {
             let value = value.trim().to_string();
             if !value.is_empty() {
-                return value;
+                return Some(value);
             }
         }
     }
-    "unknown".to_string()
+    None
+}
+
+/// `gethostname` truncates silently and is not required to NUL-terminate when
+/// it does, so the buffer is over-sized (POSIX caps `HOST_NAME_MAX` far below
+/// this) and the result is read up to the first NUL rather than assuming one.
+#[cfg(unix)]
+fn unix_hostname() -> Option<String> {
+    let mut buffer = vec![0u8; 256];
+    // SAFETY: `gethostname` writes at most `len` bytes into `buffer`, which
+    // owns that many.
+    let rc = unsafe { libc::gethostname(buffer.as_mut_ptr() as *mut libc::c_char, buffer.len()) };
+    if rc != 0 {
+        return None;
+    }
+    let end = buffer.iter().position(|b| *b == 0).unwrap_or(buffer.len());
+    let name = String::from_utf8_lossy(&buffer[..end]).trim().to_string();
+    (!name.is_empty()).then_some(name)
 }
 
 /// Where pre-apply rollback snapshots live.
@@ -646,6 +694,58 @@ mod tests {
         assert_eq!(
             err.i18n_key.as_deref(),
             Some(CONFIG_SYNC_I18N_KEY_NEWER_SCHEMA)
+        );
+    }
+
+    #[test]
+    fn the_source_device_label_is_never_empty_or_ragged() {
+        let device = source_device();
+        assert!(!device.is_empty());
+        assert!(!device.contains('\0'), "raw buffer leaked: {device:?}");
+        assert_eq!(device.trim(), device);
+    }
+
+    /// Regression: the label was read from `COMPUTERNAME`/`HOSTNAME` only.
+    /// `HOSTNAME` is a shell variable that is never exported, so on every
+    /// macOS and Linux desktop the lookup fell through and each snapshot was
+    /// signed "unknown" — the one fact the restore confirmation exists to
+    /// tell the user.
+    #[test]
+    fn the_host_name_is_used_when_the_environment_is_silent() {
+        assert_eq!(
+            resolve_device_name(None, Some("work-laptop".to_string())),
+            "work-laptop"
+        );
+        // Env still wins where it is actually populated (Windows).
+        assert_eq!(
+            resolve_device_name(Some("DESKTOP-42".to_string()), Some("other".to_string())),
+            "DESKTOP-42"
+        );
+        assert_eq!(resolve_device_name(None, None), "unknown");
+    }
+
+    /// The wiring half of the same regression: the pure resolver above proves
+    /// the precedence, this proves `source_device` is actually plugged into a
+    /// host-name source. No env is mutated — the assertion simply stands down
+    /// on the (rare) shell that does export `HOSTNAME`, where the env branch
+    /// is the one under test anyway.
+    #[cfg(unix)]
+    #[test]
+    fn a_unix_desktop_is_not_signed_unknown() {
+        if env_device_name().is_some() {
+            return;
+        }
+        assert_ne!(source_device(), "unknown");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn gethostname_answers_and_is_cut_at_the_nul() {
+        let name = unix_hostname().expect("gethostname must answer on a unix host");
+        assert!(!name.is_empty());
+        assert!(
+            !name.contains('\0'),
+            "buffer was not cut at the NUL: {name:?}"
         );
     }
 

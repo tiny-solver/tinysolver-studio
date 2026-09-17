@@ -4763,7 +4763,7 @@
     "plaintextWarning": "快照以明文上传且包含 API 密钥，请只使用只有你能访问的 WebDAV 服务器。同步凭据本身不会写入快照。",
     "importConfirmTitle": "导入配置？",
     "importConfirmBody": "文件中的条目将在本机新增或更新，文件未涉及的本地条目会保留。",
-    "importBlocked": "这个文件无法导入。",
+    "restartHint": "部分改动（外观、语言、服务商列表）需要重启 codeg 后才会生效。",
     "importConfirmAction": "导入",
     "restoreConfirmTitle": "从远程恢复？",
     "restoreConfirmBody": "将把 {device} 在 {time} 上传的快照应用到本机，快照未涉及的本地条目会保留。",

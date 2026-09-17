@@ -4763,7 +4763,7 @@
     "plaintextWarning": "L’instantané est envoyé sans chiffrement et contient des clés d’API : utilisez un serveur WebDAV auquel vous seul avez accès. Les identifiants de synchronisation, eux, n’y figurent jamais.",
     "importConfirmTitle": "Importer la configuration ?",
     "importConfirmBody": "Les entrées du fichier seront ajoutées ou mises à jour sur cette machine. Les entrées existantes absentes du fichier sont conservées.",
-    "importBlocked": "Ce fichier ne peut pas être importé.",
+    "restartHint": "Certains changements (apparence, langue et liste des fournisseurs) prennent effet après le redémarrage de codeg.",
     "importConfirmAction": "Importer",
     "restoreConfirmTitle": "Restaurer depuis le serveur ?",
     "restoreConfirmBody": "L’instantané de {device} pris le {time} sera appliqué à cette machine. Les entrées existantes absentes de l’instantané sont conservées.",

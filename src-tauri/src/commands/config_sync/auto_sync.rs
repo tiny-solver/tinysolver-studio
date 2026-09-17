@@ -93,8 +93,15 @@ pub fn next_delay(interval_minutes: u32, consecutive_failures: u32) -> Duration 
 
 /// Whether this tick should attempt an upload at all. Split out from the loop
 /// so the skip rules are testable.
-pub fn should_attempt(enabled: bool, auto_sync: bool, suppressed: bool) -> bool {
-    enabled && auto_sync && !suppressed
+///
+/// `configured` is separate from `enabled` because the two are set at
+/// different moments: the switch is flipped on to reveal the credential form,
+/// so "enabled with no server URL" is a state every user passes through.
+/// Attempting it would fail on the empty URL, and the failure would be written
+/// to `last_error` and shown in the panel as if the user's server had rejected
+/// something.
+pub fn should_attempt(enabled: bool, auto_sync: bool, configured: bool, suppressed: bool) -> bool {
+    enabled && auto_sync && configured && !suppressed
 }
 
 /// Runs until the process exits. Reads settings every tick on purpose: turning
@@ -114,6 +121,7 @@ pub async fn run_auto_sync_loop(
         if !should_attempt(
             settings.enabled,
             settings.auto_sync,
+            settings.is_configured(),
             is_auto_sync_suppressed(),
         ) {
             // Still honour the configured interval so a user who re-enables
@@ -202,9 +210,34 @@ mod tests {
 
     #[test]
     fn every_reason_to_skip_a_tick_is_honoured() {
-        assert!(should_attempt(true, true, false));
-        assert!(!should_attempt(false, true, false));
-        assert!(!should_attempt(true, false, false));
-        assert!(!should_attempt(true, true, true));
+        assert!(should_attempt(true, true, true, false));
+        assert!(!should_attempt(false, true, true, false));
+        assert!(!should_attempt(true, false, true, false));
+        assert!(!should_attempt(true, true, true, true));
+        // Switched on but never filled in: the state between flipping the
+        // toggle and saving credentials must stay silent, not fail every
+        // interval against an empty URL.
+        assert!(!should_attempt(true, true, false, false));
+    }
+
+    #[test]
+    fn a_settings_row_without_a_server_is_not_configured() {
+        use super::super::webdav_sync::ConfigSyncSettings;
+
+        let blank = ConfigSyncSettings {
+            enabled: true,
+            ..Default::default()
+        };
+        assert!(!blank.is_configured());
+        assert!(!ConfigSyncSettings {
+            server_url: "   ".to_string(),
+            ..blank.clone()
+        }
+        .is_configured());
+        assert!(ConfigSyncSettings {
+            server_url: "https://dav.example.com/dav/".to_string(),
+            ..blank
+        }
+        .is_configured());
     }
 }

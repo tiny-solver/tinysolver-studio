@@ -4763,7 +4763,7 @@
     "plaintextWarning": "快照以明文上傳且包含 API 金鑰，請只使用只有你能存取的 WebDAV 伺服器。同步憑證本身不會寫入快照。",
     "importConfirmTitle": "匯入設定？",
     "importConfirmBody": "檔案中的項目將在本機新增或更新，檔案未涉及的本機項目會保留。",
-    "importBlocked": "這個檔案無法匯入。",
+    "restartHint": "部分變更（外觀、語言、服務商列表）需要重新啟動 codeg 後才會生效。",
     "importConfirmAction": "匯入",
     "restoreConfirmTitle": "從遠端還原？",
     "restoreConfirmBody": "將把 {device} 於 {time} 上傳的快照套用到本機，快照未涉及的本機項目會保留。",

@@ -4763,7 +4763,7 @@
     "plaintextWarning": "The snapshot is uploaded unencrypted and includes API keys, so use a WebDAV server only you can reach. The sync credentials themselves are never part of the snapshot.",
     "importConfirmTitle": "Import configuration?",
     "importConfirmBody": "Entries from this file will be added or updated on this machine. Existing entries that the file does not mention are kept.",
-    "importBlocked": "This file cannot be imported.",
+    "restartHint": "Some changes — appearance, language, and the provider list — take effect after restarting codeg.",
     "importConfirmAction": "Import",
     "restoreConfirmTitle": "Restore from remote?",
     "restoreConfirmBody": "The snapshot from {device}, taken {time}, will be applied to this machine. Existing entries that the snapshot does not mention are kept.",

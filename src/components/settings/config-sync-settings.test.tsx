@@ -179,6 +179,48 @@ describe("ConfigSyncSettings — credentials", () => {
     await waitFor(() => expect(password.value).toBe(""))
   })
 
+  /// Regression: every control including Save lives inside the block the
+  /// switch hides, so a toggle that only moved local state could be turned on
+  /// but never off — the uploader kept running against settings the panel
+  /// showed as disabled.
+  it("persists the master switch on click, so sync can be turned off", async () => {
+    vi.mocked(updateConfigSyncSettings).mockResolvedValue({
+      ...SAVED,
+      enabled: false,
+    })
+    await renderLoaded()
+    // The master switch is the first one; the second is "upload automatically".
+    fireEvent.click(screen.getAllByRole("switch")[0])
+    await waitFor(() => expect(updateConfigSyncSettings).toHaveBeenCalled())
+    expect(vi.mocked(updateConfigSyncSettings).mock.calls[0][0]).toMatchObject({
+      enabled: false,
+    })
+    // The credential form (and with it the Save button) is gone; the change
+    // must already be stored.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: t.saveButton })
+      ).not.toBeInTheDocument()
+    )
+  })
+
+  /// The backend refuses to send a saved password to an account it was not
+  /// typed for, so the field must stop offering to reuse it.
+  it("asks for the password again once the account is edited", async () => {
+    const { container } = await renderLoaded()
+    const password = container.querySelector(
+      "#config-sync-password"
+    ) as HTMLInputElement
+    expect(password.placeholder).toBe(t.passwordKeep)
+
+    fireEvent.change(container.querySelector("#config-sync-url")!, {
+      target: { value: "https://dav.other.example/dav/" },
+    })
+    await waitFor(() =>
+      expect(password.placeholder).toBe(t.passwordPlaceholder)
+    )
+  })
+
   it("disables the remote actions until a server and user are filled in", async () => {
     vi.mocked(getConfigSyncSettings).mockResolvedValue({
       ...SAVED,
@@ -227,10 +269,9 @@ describe("ConfigSyncSettings — file import", () => {
   it("previews the file and applies it only after confirmation", async () => {
     vi.mocked(pickConfigFileToImport).mockResolvedValue({
       path: "/tmp/config.json",
-      preview: { manifest: manifest(), importable: true, blockedReason: null },
+      preview: { manifest: manifest(), counts: { modelProviders: 3 } },
     })
     vi.mocked(importConfigFromFile).mockResolvedValue({
-      manifest: manifest(),
       applied: { domains: { modelProviders: 3 }, total: 3 },
       rollbackPath: null,
     })
@@ -239,27 +280,43 @@ describe("ConfigSyncSettings — file import", () => {
     await screen.findByText(t.importConfirmTitle)
     expect(importConfigFromFile).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole("button", { name: t.importConfirmAction }))
+    // Regression: the confirm button used to be gated on a `preview.importable`
+    // field the backend never sends, so it was `undefined` on every real file
+    // and importing was impossible.
+    const confirm = screen.getByRole("button", {
+      name: t.importConfirmAction,
+    })
+    expect(confirm).toBeEnabled()
+    fireEvent.click(confirm)
     await waitFor(() =>
       expect(importConfigFromFile).toHaveBeenCalledWith("/tmp/config.json")
     )
   })
 
-  it("blocks importing a snapshot the backend rejected", async () => {
+  /// `peek` recounts the payload; the file's own manifest is just a claim.
+  it("counts what will be applied, not what the file says about itself", async () => {
     vi.mocked(pickConfigFileToImport).mockResolvedValue({
-      path: "/tmp/future.json",
+      path: "/tmp/config.json",
       preview: {
-        manifest: manifest({ schemaVersion: 99 }),
-        importable: false,
-        blockedReason: "newer schema",
+        manifest: manifest({ counts: { modelProviders: 99 } }),
+        counts: { modelProviders: 2 },
       },
     })
     await renderLoaded()
     fireEvent.click(screen.getByRole("button", { name: t.importButton }))
-    await screen.findByText(t.importBlocked)
-    expect(
-      screen.getByRole("button", { name: t.importConfirmAction })
-    ).toBeDisabled()
+    await screen.findByText(t.importConfirmTitle)
+    expect(screen.getByText("2 model providers")).toBeInTheDocument()
+    expect(screen.queryByText("99 model providers")).not.toBeInTheDocument()
+  })
+
+  it("reports a file the backend refused instead of opening a dialog", async () => {
+    vi.mocked(pickConfigFileToImport).mockRejectedValue(
+      new Error("Not a codeg config snapshot")
+    )
+    await renderLoaded()
+    fireEvent.click(screen.getByRole("button", { name: t.importButton }))
+    await waitFor(() => expect(toastError).toHaveBeenCalled())
+    expect(screen.queryByText(t.importConfirmTitle)).not.toBeInTheDocument()
   })
 
   it("stays quiet when the file dialog is dismissed", async () => {

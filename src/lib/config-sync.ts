@@ -57,19 +57,27 @@ export interface ApplyReport {
 
 export interface ConfigExportSummary {
   path: string
-  manifest: ConfigManifest
+  counts: DomainCounts
 }
 
+/**
+ * What `config_sync_peek_file` answers for a file the user picked.
+ *
+ * There is no "previewed but not importable" state: the peek runs the same
+ * parser and schema check the import does, so an unreadable file — malformed
+ * JSON, a newer schema — comes back as a rejected promise carrying a
+ * `configSync.error.*` key, and the caller shows that instead of a dialog.
+ * Reaching a preview at all means the file can be applied.
+ */
 export interface ConfigImportPreview {
   manifest: ConfigManifest
-  /** False when the file is from a newer schema or fails its checksum; the
-   *  import button stays disabled and `blockedReason` explains why. */
-  importable: boolean
-  blockedReason: string | null
+  /** Recomputed from the payload, NOT read back from `manifest.counts`: a
+   *  hand-edited file can claim anything there, and the confirmation has to
+   *  state what will actually be written. */
+  counts: DomainCounts
 }
 
 export interface ConfigImportResult {
-  manifest: ConfigManifest
   applied: ApplyReport
   rollbackPath: string | null
 }

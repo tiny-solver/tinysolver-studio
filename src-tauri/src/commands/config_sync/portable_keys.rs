@@ -10,15 +10,6 @@
 //! [`FORBIDDEN_PREFERENCE_KEYS`] names the keys that must NEVER travel, with
 //! `allowlist_and_credential_keys_are_disjoint` guarding the intersection.
 
-/// Where the WebDAV sync configuration (including the password) is stored.
-/// Deliberately NOT portable: shipping it inside a snapshot would let machine
-/// A overwrite machine B's credentials and turn the two into a sync loop.
-pub const CONFIG_SYNC_SETTINGS_KEY: &str = "config_sync_settings";
-
-/// sha256 of the last snapshot successfully uploaded, persisted so a restart
-/// does not re-upload an unchanged configuration.
-pub const CONFIG_SYNC_LAST_UPLOAD_KEY: &str = "config_sync_last_upload";
-
 /// `app_metadata` keys that are genuinely user preferences rather than
 /// device-local state, and carry no credential.
 pub const PORTABLE_PREFERENCE_KEYS: &[&str] = &[
@@ -52,10 +43,15 @@ pub const PORTABLE_PREFERENCE_KEYS: &[&str] = &[
 /// device-local state. Not consulted at runtime — [`is_portable_key`] already
 /// answers from the allowlist — but asserted against it in tests so a careless
 /// addition to [`PORTABLE_PREFERENCE_KEYS`] fails loudly.
+///
+/// The sync's own two keys come from `webdav_sync` rather than being spelled
+/// again here: a second copy of the literal would let the guard keep passing
+/// against a key nothing writes (which is exactly what it did while a stale
+/// `config_sync_last_upload` stood in for the real `config_sync_state`).
 #[cfg(test)]
 pub const FORBIDDEN_PREFERENCE_KEYS: &[&str] = &[
-    CONFIG_SYNC_SETTINGS_KEY,
-    CONFIG_SYNC_LAST_UPLOAD_KEY,
+    super::webdav_sync::CONFIG_SYNC_SETTINGS_KEY,
+    super::webdav_sync::CONFIG_SYNC_STATE_KEY,
     "system_proxy_settings",
     "system_terminal_settings",
     "web_service_port",

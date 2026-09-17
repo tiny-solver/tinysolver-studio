@@ -64,6 +64,29 @@ pub struct ConfigSyncSettings {
     pub interval_minutes: u32,
 }
 
+impl ConfigSyncSettings {
+    /// Whether there is an endpoint to talk to at all. The `enabled` switch on
+    /// its own is not enough: it is flipped on to REVEAL the form, so between
+    /// that click and the first save there is a persisted `enabled: true` with
+    /// no server URL, and a background tick that honoured only `enabled` would
+    /// spend every interval failing on an empty URL and overwriting
+    /// `last_error` with it.
+    pub fn is_configured(&self) -> bool {
+        !self.server_url.trim().is_empty()
+    }
+
+    /// The remote location this configuration points at. Two settings that
+    /// agree here write the same two files; a change to any part of it means
+    /// the previously uploaded snapshot says nothing about the new location.
+    fn remote_identity(&self) -> (&str, &str, &str) {
+        (
+            self.server_url.as_str(),
+            self.remote_dir.as_str(),
+            self.profile.as_str(),
+        )
+    }
+}
+
 impl Default for ConfigSyncSettings {
     fn default() -> Self {
         Self {
@@ -209,6 +232,20 @@ pub async fn save_settings_core(
         .await
         .map_err(AppCommandError::db)?;
 
+    // Pointing at a different server, folder, or profile invalidates the
+    // "already uploaded this" baseline: the hash describes local
+    // configuration, not where a copy of it landed, so keeping it would let
+    // the timer decide the NEW location is already up to date and leave it
+    // empty until some unrelated setting changes.
+    if existing.remote_identity() != merged.remote_identity() {
+        let mut state = load_state(conn).await;
+        if state.last_uploaded_sha256.is_some() || state.last_error.is_some() {
+            state.last_uploaded_sha256 = None;
+            state.last_error = None;
+            save_state(conn, &state).await;
+        }
+    }
+
     Ok(ConfigSyncSettingsView::from(&merged))
 }
 
@@ -218,12 +255,22 @@ pub fn merge_settings(
     existing: &ConfigSyncSettings,
     input: ConfigSyncSettingsInput,
 ) -> Result<ConfigSyncSettings, AppCommandError> {
+    let server_url = input.server_url.trim().to_string();
+    let username = input.username.trim().to_string();
+    // The stored password belongs to the account it was typed for. Carrying
+    // it over to a different host or user would mean an edit to the URL field
+    // alone is enough to make the next request hand that password to another
+    // server — by accident (repointing Jianguoyun at Nextcloud) or on purpose.
+    // Changing the folder or profile is not a change of credential, so those
+    // are deliberately not part of the comparison.
+    let same_account = server_url == existing.server_url && username == existing.username;
     let password = match input.password {
         Some(value) if !value.is_empty() => value,
         // Both `None` and `Some("")` keep the stored password. An empty field
         // means "I did not retype it", which is what an empty password field
         // means to every user who has ever seen one.
-        _ => existing.password.clone(),
+        _ if same_account => existing.password.clone(),
+        _ => String::new(),
     };
 
     let remote_dir = normalize_segment(input.remote_dir, &existing.remote_dir, DEFAULT_REMOTE_DIR)?;
@@ -231,8 +278,8 @@ pub fn merge_settings(
 
     Ok(ConfigSyncSettings {
         enabled: input.enabled,
-        server_url: input.server_url.trim().to_string(),
-        username: input.username.trim().to_string(),
+        server_url,
+        username,
         password,
         remote_dir,
         profile,
@@ -465,12 +512,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn an_empty_password_field_keeps_the_stored_one() {
-        let existing = ConfigSyncSettings {
+    /// Same account as `input()`, with a password already on file.
+    fn stored() -> ConfigSyncSettings {
+        ConfigSyncSettings {
+            server_url: "https://dav.example.com/dav".to_string(),
+            username: "alice".to_string(),
             password: "stored".to_string(),
             ..Default::default()
-        };
+        }
+    }
+
+    #[test]
+    fn an_empty_password_field_keeps_the_stored_one() {
+        let existing = stored();
 
         for submitted in [None, Some(String::new())] {
             let merged = merge_settings(
@@ -489,6 +543,58 @@ mod tests {
 
         let merged = merge_settings(&existing, input()).expect("merge");
         assert_eq!(merged.password, "app-password");
+
+        // Moving the same account to another folder/profile is not a change
+        // of credential.
+        let merged = merge_settings(
+            &existing,
+            ConfigSyncSettingsInput {
+                password: None,
+                profile: Some("personal".to_string()),
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_eq!(merged.password, "stored");
+    }
+
+    /// A password is bound to the account it was typed for. Repointing the URL
+    /// (or the user) while leaving the field blank must NOT quietly hand the
+    /// saved credential to the new server — that turns one edited text field
+    /// into credential exfiltration, and gets the "I switched providers"
+    /// mistake wrong the same way.
+    #[test]
+    fn a_stored_password_does_not_follow_a_changed_account() {
+        for changed in [
+            ConfigSyncSettingsInput {
+                password: None,
+                server_url: "https://dav.attacker.example/dav".to_string(),
+                ..input()
+            },
+            ConfigSyncSettingsInput {
+                password: None,
+                username: "mallory".to_string(),
+                ..input()
+            },
+        ] {
+            let merged = merge_settings(&stored(), changed).expect("merge");
+            assert_eq!(
+                merged.password, "",
+                "the saved password must not travel to another account"
+            );
+        }
+
+        // Retyping it is all it takes to point the sync somewhere new.
+        let merged = merge_settings(
+            &stored(),
+            ConfigSyncSettingsInput {
+                password: Some("new-app-password".to_string()),
+                server_url: "https://dav.other.example/dav".to_string(),
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_eq!(merged.password, "new-app-password");
     }
 
     #[test]
@@ -575,6 +681,55 @@ mod tests {
         let stored = load_settings(&db.conn).await;
         assert_eq!(stored.password, "app-password");
         assert_eq!(stored.profile, "work");
+    }
+
+    /// Retargeting the sync must not leave the new location empty. The hash
+    /// says "this configuration was uploaded", not "uploaded HERE", so it
+    /// stops meaning anything the moment the destination changes.
+    #[tokio::test]
+    async fn changing_the_remote_target_clears_the_upload_baseline() {
+        let db = fresh_in_memory_db().await;
+        save_settings_core(&db.conn, input()).await.expect("save");
+        save_state(
+            &db.conn,
+            &ConfigSyncState {
+                last_uploaded_sha256: Some("previous".to_string()),
+                last_sync_at: Some("2026-01-01T00:00:00Z".to_string()),
+                last_error: Some("stale failure".to_string()),
+            },
+        )
+        .await;
+
+        // Same target, unrelated field: the baseline is still valid.
+        save_settings_core(
+            &db.conn,
+            ConfigSyncSettingsInput {
+                interval_minutes: 30,
+                ..input()
+            },
+        )
+        .await
+        .expect("save");
+        assert_eq!(
+            load_state(&db.conn).await.last_uploaded_sha256.as_deref(),
+            Some("previous")
+        );
+
+        save_settings_core(
+            &db.conn,
+            ConfigSyncSettingsInput {
+                profile: Some("personal".to_string()),
+                ..input()
+            },
+        )
+        .await
+        .expect("save");
+        let state = load_state(&db.conn).await;
+        assert_eq!(state.last_uploaded_sha256, None);
+        assert_eq!(state.last_error, None);
+        // "When we last uploaded" is history, not a decision input — it stays
+        // so the panel does not claim the machine has never synced.
+        assert_eq!(state.last_sync_at.as_deref(), Some("2026-01-01T00:00:00Z"));
     }
 
     #[tokio::test]

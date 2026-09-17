@@ -136,6 +136,14 @@ export function ConfigSyncSettings() {
   // password"; rendering a mask here would risk saving the mask itself.
   const [password, setPassword] = useState("")
   const [hasPassword, setHasPassword] = useState(false)
+  // The account the stored password belongs to. The backend drops that
+  // password rather than sending it to a host or user it was not typed for,
+  // so the "leave empty to keep it" hint has to stop claiming otherwise the
+  // moment either field is edited.
+  const [savedAccount, setSavedAccount] = useState({
+    serverUrl: "",
+    username: "",
+  })
   const [remoteDir, setRemoteDir] = useState("codeg")
   const [profile, setProfile] = useState("default")
   const [autoSync, setAutoSync] = useState(true)
@@ -178,6 +186,10 @@ export function ConfigSyncSettings() {
         setPreset(presetFromUrl(settings.serverUrl))
         setUsername(settings.username)
         setHasPassword(settings.hasPassword)
+        setSavedAccount({
+          serverUrl: settings.serverUrl,
+          username: settings.username,
+        })
         setRemoteDir(settings.remoteDir)
         setProfile(settings.profile)
         setAutoSync(settings.autoSync)
@@ -215,7 +227,9 @@ export function ConfigSyncSettings() {
   }, [desktop])
 
   const currentInput = useCallback(
-    (): ConfigSyncSettingsInput => ({
+    (
+      overrides?: Partial<ConfigSyncSettingsInput>
+    ): ConfigSyncSettingsInput => ({
       enabled,
       serverUrl: serverUrl.trim(),
       username: username.trim(),
@@ -224,6 +238,7 @@ export function ConfigSyncSettings() {
       profile: profile.trim(),
       autoSync,
       intervalMinutes,
+      ...overrides,
     }),
     [
       enabled,
@@ -243,6 +258,10 @@ export function ConfigSyncSettings() {
       const saved = await updateConfigSyncSettings(currentInput())
       if (!mounted.current) return
       setHasPassword(saved.hasPassword)
+      setSavedAccount({
+        serverUrl: saved.serverUrl,
+        username: saved.username,
+      })
       setRemoteDir(saved.remoteDir)
       setProfile(saved.profile)
       setIntervalMinutes(saved.intervalMinutes)
@@ -256,6 +275,39 @@ export function ConfigSyncSettings() {
       if (mounted.current) setBusy(null)
     }
   }, [currentInput, localize, t])
+
+  /**
+   * The master switch saves on click, like the proxy and launch-at-login
+   * switches in the sections above. It has to: every other control — Save
+   * included — lives inside the block this flag hides, so a toggle that only
+   * moved local state could be flipped ON but never OFF, and the background
+   * uploader would keep running against settings the panel says are off.
+   */
+  const handleToggleEnabled = useCallback(
+    async (next: boolean) => {
+      const previous = enabled
+      setEnabled(next)
+      setBusy("save")
+      try {
+        const saved = await updateConfigSyncSettings(
+          currentInput({ enabled: next })
+        )
+        if (!mounted.current) return
+        setHasPassword(saved.hasPassword)
+        setSavedAccount({
+          serverUrl: saved.serverUrl,
+          username: saved.username,
+        })
+        setPassword("")
+      } catch (err) {
+        if (mounted.current) setEnabled(previous)
+        toast.error(localize(err))
+      } finally {
+        if (mounted.current) setBusy(null)
+      }
+    },
+    [currentInput, enabled, localize]
+  )
 
   const handleTest = useCallback(async () => {
     setBusy("test")
@@ -312,7 +364,12 @@ export function ConfigSyncSettings() {
     try {
       const outcome = await downloadAndApplyConfig()
       if (!mounted.current) return
-      toast.success(t("restored", { count: outcome.applied.total }))
+      // Providers, appearance, and language are read once at launch, so the
+      // window the user is looking at keeps showing the old values. Saying so
+      // is the difference between "it worked" and "it did nothing".
+      toast.success(t("restored", { count: outcome.applied.total }), {
+        description: t("restartHint"),
+      })
     } catch (err) {
       toast.error(localize(err))
     } finally {
@@ -353,7 +410,9 @@ export function ConfigSyncSettings() {
     try {
       const result = await importConfigFromFile(path)
       if (mounted.current) {
-        toast.success(t("imported", { count: result.applied.total }))
+        toast.success(t("imported", { count: result.applied.total }), {
+          description: t("restartHint"),
+        })
       }
     } catch (err) {
       toast.error(localize(err))
@@ -370,6 +429,13 @@ export function ConfigSyncSettings() {
   const remoteBusy = busy === "upload" || busy === "download"
   const credentialsIncomplete =
     serverUrl.trim().length === 0 || username.trim().length === 0
+  // Editing either half of the account orphans the stored password: saving
+  // from here stores an empty one, so the field must ask for a real value
+  // instead of offering to keep something that will be dropped.
+  const keepsStoredPassword =
+    hasPassword &&
+    serverUrl.trim() === savedAccount.serverUrl &&
+    username.trim() === savedAccount.username
 
   return (
     <section className="rounded-xl border bg-card p-4 space-y-4">
@@ -459,7 +525,7 @@ export function ConfigSyncSettings() {
           </div>
           <Switch
             checked={enabled}
-            onCheckedChange={setEnabled}
+            onCheckedChange={(next) => void handleToggleEnabled(next)}
             disabled={!loaded || busy !== null}
           />
         </div>
@@ -542,7 +608,9 @@ export function ConfigSyncSettings() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={
-                    hasPassword ? t("passwordKeep") : t("passwordPlaceholder")
+                    keepsStoredPassword
+                      ? t("passwordKeep")
+                      : t("passwordPlaceholder")
                   }
                   autoComplete="new-password"
                 />
@@ -704,16 +772,14 @@ export function ConfigSyncSettings() {
             <AlertDialogTitle>{t("importConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
-                <p>
-                  {pendingImport?.preview.blockedReason
-                    ? t("importBlocked")
-                    : t("importConfirmBody")}
-                </p>
+                <p>{t("importConfirmBody")}</p>
+                {/* The backend's recount, not the file's own `manifest.counts`
+                    — a hand-edited export can disagree with its payload, and
+                    the confirmation has to name what will really be written. */}
                 {pendingImport ? (
-                  <CountsSummary
-                    counts={pendingImport.preview.manifest.counts}
-                  />
+                  <CountsSummary counts={pendingImport.preview.counts} />
                 ) : null}
+                <p>{t("restartHint")}</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -724,7 +790,6 @@ export function ConfigSyncSettings() {
                 e.preventDefault()
                 void handleConfirmImport()
               }}
-              disabled={!pendingImport?.preview.importable}
             >
               {t("importConfirmAction")}
             </AlertDialogAction>
@@ -748,6 +813,7 @@ export function ConfigSyncSettings() {
                 {remoteManifest ? (
                   <CountsSummary counts={remoteManifest.counts} />
                 ) : null}
+                <p>{t("restartHint")}</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

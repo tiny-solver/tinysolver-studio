@@ -4763,7 +4763,7 @@
     "plaintextWarning": "La instantánea se sube sin cifrar e incluye claves de API, así que usa un servidor WebDAV al que solo tú tengas acceso. Las credenciales de sincronización nunca forman parte de la instantánea.",
     "importConfirmTitle": "¿Importar la configuración?",
     "importConfirmBody": "Las entradas del archivo se añadirán o actualizarán en este equipo. Las entradas existentes que el archivo no menciona se conservan.",
-    "importBlocked": "Este archivo no se puede importar.",
+    "restartHint": "Algunos cambios (apariencia, idioma y la lista de proveedores) se aplican al reiniciar codeg.",
     "importConfirmAction": "Importar",
     "restoreConfirmTitle": "¿Restaurar desde el servidor?",
     "restoreConfirmBody": "Se aplicará en este equipo la instantánea de {device} creada el {time}. Las entradas existentes que la instantánea no menciona se conservan.",
