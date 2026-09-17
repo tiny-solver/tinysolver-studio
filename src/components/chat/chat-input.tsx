@@ -43,6 +43,8 @@ interface ChatInputProps {
   /** Pass-through: see `MessageInput`. */
   folderPickerOverride?: ConversationFolderPickerOverride
   draftStorageKey?: string | null
+  /** Pass-through: see `MessageInput.getSentHistory`. */
+  getSentHistory?: () => string[]
   isActive?: boolean
   /** Show the composer's flowing active-session border. Set only for the active
    *  tab when tiled across multiple sessions; passed through to MessageInput. */
@@ -119,6 +121,7 @@ export const ChatInput = memo(function ChatInput({
   attachmentTabId,
   folderPickerOverride,
   draftStorageKey,
+  getSentHistory,
   isActive,
   showActiveFlow,
   queue,
@@ -222,6 +225,7 @@ export const ChatInput = memo(function ChatInput({
         attachmentTabId={attachmentTabId}
         folderPickerOverride={folderPickerOverride}
         draftStorageKey={draftStorageKey}
+        getSentHistory={getSentHistory}
         isActive={isActive}
         showActiveFlow={showActiveFlow}
         onEnqueue={onEnqueue}

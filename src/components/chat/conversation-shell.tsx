@@ -94,6 +94,8 @@ interface ConversationShellProps {
   /** Pass-through: see `MessageInput`. */
   folderPickerOverride?: ConversationFolderPickerOverride
   draftStorageKey?: string | null
+  /** Pass-through: see `MessageInput.getSentHistory`. */
+  getSentHistory?: () => string[]
   hideInput?: boolean
   /** Optional banner rendered in the composer dock, where the input sits.
    *  Used with `hideInput` to explain WHY the composer is unavailable (e.g.
@@ -188,6 +190,7 @@ export function ConversationShell({
   attachmentTabId,
   folderPickerOverride,
   draftStorageKey,
+  getSentHistory,
   hideInput = false,
   composerBanner,
   feedbackList,
@@ -366,6 +369,7 @@ export function ConversationShell({
               attachmentTabId={attachmentTabId}
               folderPickerOverride={folderPickerOverride}
               draftStorageKey={draftStorageKey}
+              getSentHistory={getSentHistory}
               isActive={isActive}
               showActiveFlow={showActiveFlow}
               queue={queue}

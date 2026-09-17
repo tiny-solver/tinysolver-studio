@@ -127,6 +127,7 @@ import {
   lastUserPromptText,
   type SessionFailureAction,
 } from "@/lib/session-failures"
+import { userPromptHistory } from "@/lib/composer-history"
 import { contentBlocksFromUserMessage } from "@/lib/user-message-blocks"
 import { getAgentLabel } from "@/lib/custom-agents"
 import {
@@ -2020,6 +2021,16 @@ const ConversationTabView = memo(function ConversationTabView({
   // and the action would silently do nothing.
   const composerAvailable = !isWelcomeMode && !acpLoadError
 
+  // Arrow-key history source: read lazily when the user actually steps into
+  // history, so streaming tokens neither recompute it nor re-render the panel.
+  const getSentHistory = useCallback(
+    () =>
+      userPromptHistory(
+        getTimelineTurns(effectiveConversationId).map((entry) => entry.turn)
+      ),
+    [effectiveConversationId]
+  )
+
   const messageListNode = (
     <GoalControlProvider value={goalControlValue}>
       <MessageListView
@@ -2147,6 +2158,7 @@ const ConversationTabView = memo(function ConversationTabView({
 
   return (
     <ConversationShell
+      getSentHistory={getSentHistory}
       topBanner={
         <>
           <SessionConfigStaleBanner contextKey={tabId} />
