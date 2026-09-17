@@ -52,6 +52,11 @@ interface ChatInputProps {
   onQueueReorder?: (items: QueuedMessage[]) => void
   onQueueEdit?: (id: string) => void
   onQueueDelete?: (id: string) => void
+  /** Insert one queued item into the RUNNING turn over the session's
+   *  live-feedback channel (see `MessageQueueDisplayProps.onSteerItem`).
+   *  Threaded straight through; present only while a turn is in flight and
+   *  the session has a working channel. */
+  onQueueSteer?: (id: string) => Promise<void> | void
   editingItemId?: string | null
   editingDraftText?: string | null
   editingDraftBlocks?: PromptInputBlock[] | null
@@ -121,6 +126,7 @@ export const ChatInput = memo(function ChatInput({
   onQueueReorder,
   onQueueEdit,
   onQueueDelete,
+  onQueueSteer,
   editingItemId,
   editingDraftText,
   editingDraftBlocks,
@@ -187,6 +193,8 @@ export const ChatInput = memo(function ChatInput({
             onEdit={onQueueEdit}
             onDelete={onQueueDelete}
             editingItemId={editingItemId ?? null}
+            onSteerItem={onQueueSteer}
+            steerChannel={steerChannel}
           />
         )}
       <MessageInput

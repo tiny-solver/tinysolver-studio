@@ -118,6 +118,10 @@ interface ConversationShellProps {
   onQueueReorder?: (items: QueuedMessage[]) => void
   onQueueEdit?: (id: string) => void
   onQueueDelete?: (id: string) => void
+  /** Insert one queued item into the RUNNING turn over the session's
+   *  live-feedback channel; threaded straight through to the composer's
+   *  queue list. See `ChatInputProps.onQueueSteer`. */
+  onQueueSteer?: (id: string) => Promise<void> | void
   editingItemId?: string | null
   editingDraftText?: string | null
   editingDraftBlocks?: PromptInputBlock[] | null
@@ -196,6 +200,7 @@ export function ConversationShell({
   onQueueReorder,
   onQueueEdit,
   onQueueDelete,
+  onQueueSteer,
   editingItemId,
   editingDraftText,
   editingDraftBlocks,
@@ -368,6 +373,7 @@ export function ConversationShell({
               onQueueReorder={onQueueReorder}
               onQueueEdit={onQueueEdit}
               onQueueDelete={onQueueDelete}
+              onQueueSteer={onQueueSteer}
               editingItemId={editingItemId}
               editingDraftText={editingDraftText}
               editingDraftBlocks={editingDraftBlocks}
