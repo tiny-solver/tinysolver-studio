@@ -2278,6 +2278,71 @@ describe("streaming flush window widens with the run it re-renders", () => {
       vi.useRealTimers()
     }
   })
+
+  // An event that flushes the queue mid-window must CANCEL that window, not
+  // just forget it. A forgotten timer still fires, releases whatever the next
+  // window had queued, and takes the ref down with it — so the window after it
+  // is forgotten too. One such event per turn is enough to halve the cadence,
+  // and a long turn has many (`usage_update`, `tool_call_update`, …), so the
+  // widening decays back to a flat 16 ms over exactly the turns it is for.
+  it("cancels the pending window when an event flushes the queue early", async () => {
+    const handlers = await mountStreamingOwner()
+    vi.useFakeTimers()
+    try {
+      const head = "a".repeat(9000)
+      emitAcpEvent(handlers, {
+        seq: 2,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: head,
+      })
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveText()).toBe(head)
+
+      // Arms a two-frame window against the 9 KB run.
+      emitAcpEvent(handlers, {
+        seq: 3,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "b",
+      })
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveText()).toBe(head)
+
+      // One frame in, a non-streaming event flushes the queue itself.
+      emitAcpEvent(handlers, {
+        seq: 4,
+        connection_id: "spawned-conn",
+        type: "usage_update",
+        used: 1_000,
+        size: 200_000,
+      })
+      expect(liveText()).toBe(`${head}b`)
+
+      // The next delta arms its own two-frame window from here. The window the
+      // flush pre-empted must not fire inside it and cut it short.
+      emitAcpEvent(handlers, {
+        seq: 5,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "c",
+      })
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveText()).toBe(`${head}b`)
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveText()).toBe(`${head}bc`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe("AcpConnectionsProvider Grok cross-agent-type model switch", () => {

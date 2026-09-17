@@ -3470,7 +3470,18 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   )
 
   const flushStreamingQueue = useCallback(() => {
-    flushTimerRef.current = null
+    // CANCEL the pending window, don't just forget it. Most callers are event
+    // handlers flushing out of turn (a tool card, a permission prompt, a usage
+    // update), and a timer that is only detached from the ref still fires:
+    // it releases whatever the NEXT window had queued, early, and nulls the
+    // ref out from under that window so the delta after it arms a third timer.
+    // One stray timer per out-of-turn flush, each halving the cadence — which
+    // is how a widened window (`streamFlushDelayMs`) decays back to a flat
+    // frame over exactly the long turns it exists for.
+    if (flushTimerRef.current !== null) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
+    }
     const queued = streamingQueueRef.current
     if (queued.length === 0) return
     streamingQueueRef.current = []
@@ -3508,10 +3519,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     (action: StreamingAction) => {
       streamingQueueRef.current.push(action)
       if (streamingQueueRef.current.length >= 256) {
-        if (flushTimerRef.current !== null) {
-          clearTimeout(flushTimerRef.current)
-          flushTimerRef.current = null
-        }
+        // Cap reached — `flushStreamingQueue` clears the pending window itself.
         flushStreamingQueue()
         return
       }
