@@ -4057,6 +4057,13 @@
     "errorLoadingDir": "加载目录失败",
     "selectedCount": "已选 {count} 项"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "搜索分支…",
+    "none": "无分支",
+    "local": "本地",
+    "remote": "远程",
+    "useCustom": "使用 “{query}”"
+  },
   "ChatChannelSettings": {
     "loading": "加载中...",
     "sectionTitle": "消息渠道",
@@ -5038,12 +5045,7 @@
     "cronApply": "应用",
     "cronPreviewLabel": "预览",
     "cronOpenBuilder": "打开计划生成器",
-    "branchDefault": "默认分支",
-    "branchUseCustom": "使用 “{query}”",
-    "branchLocal": "本地",
-    "branchRemote": "远程",
-    "branchSearchPlaceholder": "搜索分支…",
-    "branchNone": "无分支"
+    "branchDefault": "默认分支"
   },
   "Tasks": {
     "title": "待办任务",
@@ -5174,6 +5176,10 @@
     "promptLabel": "任务描述",
     "promptPlaceholder": "向 agent 描述任务——输入 @ 可引用文件，/ 可唤起命令",
     "folderPlaceholder": "选择文件夹",
+    "baseBranch": "基准分支",
+    "baseBranchPlaceholder": "当前分支",
+    "baseBranchDefault": "任务开始时的当前分支",
+    "baseBranchHint": "任务从该分支拉出工作树，合并时也落回该分支。",
     "agentInheritedHint": "继承自任务设置，修改后仅对本任务生效",
     "agentOverrideReset": "恢复继承",
     "sectionTarget": "目标",

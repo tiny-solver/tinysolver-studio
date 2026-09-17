@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "디렉토리 로드 실패",
     "selectedCount": "{count}개 선택됨"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "브랜치 검색…",
+    "none": "브랜치 없음",
+    "local": "로컬",
+    "remote": "원격",
+    "useCustom": "\"{query}\" 사용"
+  },
   "BackupSettings": {
     "title": "백업 및 복원",
     "description": "codeg 데이터의 이동 가능한 백업을 내보내거나 백업에서 복원합니다.",
@@ -5038,12 +5045,7 @@
     "cronApply": "적용",
     "cronPreviewLabel": "미리 보기",
     "cronOpenBuilder": "일정 빌더 열기",
-    "branchDefault": "기본 브랜치",
-    "branchUseCustom": "\"{query}\" 사용",
-    "branchLocal": "로컬",
-    "branchRemote": "원격",
-    "branchSearchPlaceholder": "브랜치 검색…",
-    "branchNone": "브랜치 없음"
+    "branchDefault": "기본 브랜치"
   },
   "Tasks": {
     "title": "할 일",
@@ -5174,6 +5176,10 @@
     "promptLabel": "작업 설명",
     "promptPlaceholder": "에이전트에게 작업을 설명하세요 — @로 파일 참조, /로 명령",
     "folderPlaceholder": "폴더 선택",
+    "baseBranch": "기준 브랜치",
+    "baseBranchPlaceholder": "현재 브랜치",
+    "baseBranchDefault": "작업이 시작될 때의 현재 브랜치",
+    "baseBranchHint": "작업은 이 브랜치에서 갈라져 나오고, 병합도 이 브랜치로 돌아갑니다.",
     "agentInheritedHint": "작업 설정에서 상속됨 — 변경하면 이 작업에만 적용됩니다",
     "agentOverrideReset": "상속으로 되돌리기",
     "sectionTarget": "대상",

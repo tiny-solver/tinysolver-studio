@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "Error al cargar el directorio",
     "selectedCount": "{count} seleccionado(s)"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "Buscar ramas…",
+    "none": "Sin ramas",
+    "local": "Local",
+    "remote": "Remota",
+    "useCustom": "Usar «{query}»"
+  },
   "BackupSettings": {
     "title": "Copia de seguridad y restauración",
     "description": "Exporta una copia de seguridad portátil de tus datos de codeg, o restaura desde una.",
@@ -5038,12 +5045,7 @@
     "cronApply": "Aplicar",
     "cronPreviewLabel": "Vista previa",
     "cronOpenBuilder": "Abrir el generador de programación",
-    "branchDefault": "Rama predeterminada",
-    "branchUseCustom": "Usar «{query}»",
-    "branchLocal": "Local",
-    "branchRemote": "Remota",
-    "branchSearchPlaceholder": "Buscar ramas…",
-    "branchNone": "Sin ramas"
+    "branchDefault": "Rama predeterminada"
   },
   "Tasks": {
     "title": "Tareas pendientes",
@@ -5174,6 +5176,10 @@
     "promptLabel": "Descripción de la tarea",
     "promptPlaceholder": "Describe la tarea para el agente — @ para referenciar archivos, / para comandos",
     "folderPlaceholder": "Selecciona una carpeta",
+    "baseBranch": "Rama base",
+    "baseBranchPlaceholder": "Rama actual",
+    "baseBranchDefault": "Rama actual al iniciar la tarea",
+    "baseBranchHint": "La tarea parte de esta rama y la fusión la devuelve a ella.",
     "agentInheritedHint": "Heredado de la configuración de tareas; cámbialo para personalizar esta tarea",
     "agentOverrideReset": "Volver a heredar",
     "sectionTarget": "Destino",

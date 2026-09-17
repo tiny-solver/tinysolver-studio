@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "載入目錄失敗",
     "selectedCount": "已選 {count} 項"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "搜尋分支…",
+    "none": "無分支",
+    "local": "本機",
+    "remote": "遠端",
+    "useCustom": "使用「{query}」"
+  },
   "BackupSettings": {
     "title": "備份與還原",
     "description": "匯出一份可攜的 codeg 資料備份，或從備份還原。",
@@ -5038,12 +5045,7 @@
     "cronApply": "套用",
     "cronPreviewLabel": "預覽",
     "cronOpenBuilder": "開啟排程產生器",
-    "branchDefault": "預設分支",
-    "branchUseCustom": "使用「{query}」",
-    "branchLocal": "本機",
-    "branchRemote": "遠端",
-    "branchSearchPlaceholder": "搜尋分支…",
-    "branchNone": "無分支"
+    "branchDefault": "預設分支"
   },
   "Tasks": {
     "title": "待辦任務",
@@ -5174,6 +5176,10 @@
     "promptLabel": "任務描述",
     "promptPlaceholder": "向 agent 描述任務——輸入 @ 可引用檔案，/ 可喚起指令",
     "folderPlaceholder": "選擇資料夾",
+    "baseBranch": "基準分支",
+    "baseBranchPlaceholder": "目前分支",
+    "baseBranchDefault": "任務開始時的目前分支",
+    "baseBranchHint": "任務從該分支拉出工作樹，合併時也會落回該分支。",
     "agentInheritedHint": "繼承自任務設定，修改後僅對本任務生效",
     "agentOverrideReset": "恢復繼承",
     "sectionTarget": "目標",

@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "ディレクトリの読み込みに失敗しました",
     "selectedCount": "{count} 件選択中"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "ブランチを検索…",
+    "none": "ブランチがありません",
+    "local": "ローカル",
+    "remote": "リモート",
+    "useCustom": "「{query}」を使用"
+  },
   "BackupSettings": {
     "title": "バックアップと復元",
     "description": "codeg データのポータブルなバックアップを書き出すか、バックアップから復元します。",
@@ -5038,12 +5045,7 @@
     "cronApply": "適用",
     "cronPreviewLabel": "プレビュー",
     "cronOpenBuilder": "スケジュールビルダーを開く",
-    "branchDefault": "デフォルトブランチ",
-    "branchUseCustom": "「{query}」を使用",
-    "branchLocal": "ローカル",
-    "branchRemote": "リモート",
-    "branchSearchPlaceholder": "ブランチを検索…",
-    "branchNone": "ブランチがありません"
+    "branchDefault": "デフォルトブランチ"
   },
   "Tasks": {
     "title": "ToDo タスク",
@@ -5174,6 +5176,10 @@
     "promptLabel": "タスクの説明",
     "promptPlaceholder": "エージェントへの指示を記述 — @ でファイル参照、/ でコマンド",
     "folderPlaceholder": "フォルダを選択",
+    "baseBranch": "ベースブランチ",
+    "baseBranchPlaceholder": "現在のブランチ",
+    "baseBranchDefault": "タスク開始時の現在のブランチ",
+    "baseBranchHint": "タスクはこのブランチから分岐し、マージもこのブランチに戻ります。",
     "agentInheritedHint": "タスク設定から継承 — 変更するとこのタスク専用になります",
     "agentOverrideReset": "継承に戻す",
     "sectionTarget": "ターゲット",

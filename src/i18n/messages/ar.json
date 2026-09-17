@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "فشل تحميل المجلد",
     "selectedCount": "{count} محدد"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "بحث في الفروع…",
+    "none": "لا توجد فروع",
+    "local": "محلي",
+    "remote": "بعيد",
+    "useCustom": "استخدام \"{query}\""
+  },
   "BackupSettings": {
     "title": "النسخ الاحتياطي والاستعادة",
     "description": "صدّر نسخة احتياطية محمولة من بيانات codeg، أو استعد من نسخة.",
@@ -5038,12 +5045,7 @@
     "cronApply": "تطبيق",
     "cronPreviewLabel": "معاينة",
     "cronOpenBuilder": "فتح منشئ الجدولة",
-    "branchDefault": "الفرع الافتراضي",
-    "branchUseCustom": "استخدام \"{query}\"",
-    "branchLocal": "محلي",
-    "branchRemote": "بعيد",
-    "branchSearchPlaceholder": "بحث في الفروع…",
-    "branchNone": "لا توجد فروع"
+    "branchDefault": "الفرع الافتراضي"
   },
   "Tasks": {
     "title": "المهام قيد الانتظار",
@@ -5174,6 +5176,10 @@
     "promptLabel": "وصف المهمة",
     "promptPlaceholder": "صف المهمة للوكيل — استخدم @ للإشارة إلى الملفات و / للأوامر",
     "folderPlaceholder": "اختر مجلدًا",
+    "baseBranch": "الفرع الأساسي",
+    "baseBranchPlaceholder": "الفرع الحالي",
+    "baseBranchDefault": "الفرع الحالي عند بدء المهمة",
+    "baseBranchHint": "تتفرّع المهمة من هذا الفرع، ويعيدها الدمج إليه.",
     "agentInheritedHint": "موروث من إعدادات المهام — عدِّله ليصبح خاصًا بهذه المهمة",
     "agentOverrideReset": "العودة إلى الوراثة",
     "sectionTarget": "الهدف",

@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "Échec du chargement du dossier",
     "selectedCount": "{count} sélectionné(s)"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "Rechercher des branches…",
+    "none": "Aucune branche",
+    "local": "Locale",
+    "remote": "Distante",
+    "useCustom": "Utiliser « {query} »"
+  },
   "BackupSettings": {
     "title": "Sauvegarde et restauration",
     "description": "Exportez une sauvegarde portable de vos données codeg, ou restaurez à partir d'une sauvegarde.",
@@ -5038,12 +5045,7 @@
     "cronApply": "Appliquer",
     "cronPreviewLabel": "Aperçu",
     "cronOpenBuilder": "Ouvrir le générateur de planification",
-    "branchDefault": "Branche par défaut",
-    "branchUseCustom": "Utiliser « {query} »",
-    "branchLocal": "Locale",
-    "branchRemote": "Distante",
-    "branchSearchPlaceholder": "Rechercher des branches…",
-    "branchNone": "Aucune branche"
+    "branchDefault": "Branche par défaut"
   },
   "Tasks": {
     "title": "Tâches à faire",
@@ -5174,6 +5176,10 @@
     "promptLabel": "Description de la tâche",
     "promptPlaceholder": "Décrivez la tâche pour l’agent — @ pour référencer des fichiers, / pour les commandes",
     "folderPlaceholder": "Choisir un dossier",
+    "baseBranch": "Branche de base",
+    "baseBranchPlaceholder": "Branche actuelle",
+    "baseBranchDefault": "Branche actuelle au démarrage de la tâche",
+    "baseBranchHint": "La tâche part de cette branche, et la fusion l’y ramène.",
     "agentInheritedHint": "Hérité des réglages des tâches — modifiez-le pour personnaliser cette tâche",
     "agentOverrideReset": "Revenir à l'héritage",
     "sectionTarget": "Cible",

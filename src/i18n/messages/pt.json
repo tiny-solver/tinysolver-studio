@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "Falha ao carregar o diretório",
     "selectedCount": "{count} selecionado(s)"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "Pesquisar branches…",
+    "none": "Sem branches",
+    "local": "Local",
+    "remote": "Remoto",
+    "useCustom": "Usar \"{query}\""
+  },
   "BackupSettings": {
     "title": "Backup e restauração",
     "description": "Exporte um backup portátil dos seus dados do codeg ou restaure a partir de um.",
@@ -5038,12 +5045,7 @@
     "cronApply": "Aplicar",
     "cronPreviewLabel": "Pré-visualização",
     "cronOpenBuilder": "Abrir o gerador de agendamento",
-    "branchDefault": "Branch padrão",
-    "branchUseCustom": "Usar \"{query}\"",
-    "branchLocal": "Local",
-    "branchRemote": "Remoto",
-    "branchSearchPlaceholder": "Pesquisar branches…",
-    "branchNone": "Sem branches"
+    "branchDefault": "Branch padrão"
   },
   "Tasks": {
     "title": "Tarefas a fazer",
@@ -5174,6 +5176,10 @@
     "promptLabel": "Descrição da tarefa",
     "promptPlaceholder": "Descreva a tarefa para o agente — @ para referenciar arquivos, / para comandos",
     "folderPlaceholder": "Selecione uma pasta",
+    "baseBranch": "Branch base",
+    "baseBranchPlaceholder": "Branch atual",
+    "baseBranchDefault": "Branch atual quando a tarefa iniciar",
+    "baseBranchHint": "A tarefa parte deste branch e o merge a devolve para ele.",
     "agentInheritedHint": "Herdado das configurações de tarefas; altere para personalizar esta tarefa",
     "agentOverrideReset": "Voltar a herdar",
     "sectionTarget": "Destino",

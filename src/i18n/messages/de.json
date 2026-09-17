@@ -4644,6 +4644,13 @@
     "errorLoadingDir": "Verzeichnis konnte nicht geladen werden",
     "selectedCount": "{count} ausgewählt"
   },
+  "BranchPicker": {
+    "searchPlaceholder": "Branches suchen…",
+    "none": "Keine Branches",
+    "local": "Lokal",
+    "remote": "Remote",
+    "useCustom": "„{query}“ verwenden"
+  },
   "BackupSettings": {
     "title": "Sicherung & Wiederherstellung",
     "description": "Exportiere eine portable Sicherung deiner codeg-Daten oder stelle aus einer Sicherung wieder her.",
@@ -5038,12 +5045,7 @@
     "cronApply": "Anwenden",
     "cronPreviewLabel": "Vorschau",
     "cronOpenBuilder": "Zeitplan-Generator öffnen",
-    "branchDefault": "Standard-Branch",
-    "branchUseCustom": "„{query}“ verwenden",
-    "branchLocal": "Lokal",
-    "branchRemote": "Remote",
-    "branchSearchPlaceholder": "Branches suchen…",
-    "branchNone": "Keine Branches"
+    "branchDefault": "Standard-Branch"
   },
   "Tasks": {
     "title": "To-dos",
@@ -5174,6 +5176,10 @@
     "promptLabel": "Aufgabenbeschreibung",
     "promptPlaceholder": "Beschreibe die Aufgabe für den Agenten — @ für Dateiverweise, / für Befehle",
     "folderPlaceholder": "Ordner wählen",
+    "baseBranch": "Basis-Branch",
+    "baseBranchPlaceholder": "Aktueller Branch",
+    "baseBranchDefault": "Aktueller Branch beim Start der Aufgabe",
+    "baseBranchHint": "Die Aufgabe zweigt von diesem Branch ab und wird beim Mergen wieder dorthin übernommen.",
     "agentInheritedHint": "Aus den Aufgaben-Einstellungen geerbt — Änderungen gelten nur für diese Aufgabe",
     "agentOverrideReset": "Wieder erben",
     "sectionTarget": "Ziel",
