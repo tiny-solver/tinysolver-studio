@@ -3446,26 +3446,31 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       //
       // Read off the reducer's OWN result rather than from a list of removal
       // actions, so the rule is exactly "the entry is gone" and cannot drift
-      // from what the reducer decided. Four actions drop entries today
-      // (`CONNECTION_REMOVED`, `REMOVE_ALL`, `REKEY_CONNECTION`,
-      // `DELEGATION_CHILD_DETACH`), three of them conditionally — a rekey onto
-      // an occupied key is declined, and discarding for a connection that is
-      // still there and still talking would lose its trailing prose. A fifth
-      // added later is covered without touching this.
+      // from what the reducer decided. It also declines where the reducer
+      // declines — a rekey onto an occupied key is rejected, and discarding
+      // for a connection that is still there and still talking would lose its
+      // trailing prose.
       //
-      // The gate is two property reads on the hot `STREAM_BATCH` path: only a
-      // removal shrinks the map, and a rekey is the one removal that doesn't
-      // (it swaps one key for another).
-      if (next.size < prev.size || action.type === "REKEY_CONNECTION") {
-        for (const key of prev.keys()) {
-          if (!next.has(key)) discardStreamingKey(key)
-        }
-      }
-
+      // What IS enumerated is the two hot paths, so that the list fails safe:
+      // forget to add a case here and the cost is a walk over the open
+      // connections, not a stray window. Listing the removals instead reads
+      // cheaper and fails the other way — that is how `DELEGATION_CHILD_DETACH`
+      // went uncovered, and a size check alone would miss the next action
+      // shaped like `REKEY_CONNECTION`, which removes a key and adds another.
+      //
       // Discard rather than flush: a flush would re-enter `dispatch`, and
       // there is no one left to render the result. Callers that DO want the
       // deltas landed first call `flushStreamingQueue(key)` before removing —
       // `connect()`'s orphan rescue is the one that does, ahead of its rekey.
+      if (
+        next !== prev &&
+        action.type !== "STREAM_BATCH" &&
+        action.type !== "BATCH_TOOL_CALL_UPDATES"
+      ) {
+        for (const key of prev.keys()) {
+          if (!next.has(key)) discardStreamingKey(key)
+        }
+      }
 
       if (next === prev) return // no change
 
