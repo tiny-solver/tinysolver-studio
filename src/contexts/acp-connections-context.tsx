@@ -3434,34 +3434,39 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
   const dispatch = useCallback(
     (action: Action) => {
-      // A removed key must not leave deltas armed behind it. They would land
-      // up to `STREAM_FLUSH_MAX_MS` later, and context keys are REUSED — the
-      // same `conv-<id>-<agent>-<folder>` string is handed to the next
-      // connection that opens on that tab — so a late batch does not merely
-      // waste a dispatch, it appends a dead turn's prose to a live one.
+      const prev = storeRef.current.connections
+      const next = connectionsReducer(prev, action)
+
+      // "No entry, no queue." A removed key must not leave deltas armed behind
+      // it: they land up to `STREAM_FLUSH_MAX_MS` later, and context keys are
+      // REUSED — the same `conv-<id>-<agent>-<folder>` string is handed to the
+      // next connection that opens on that tab — so a late batch does not
+      // merely waste a dispatch, it can append a dead turn's prose to a live
+      // one.
       //
-      // Done here, at the one place every removal funnels through, rather than
-      // at the six-plus sites that dispatch these: this is the invariant
-      // ("no entry, no queue"), and it holds for removals added later too.
+      // Read off the reducer's OWN result rather than from a list of removal
+      // actions, so the rule is exactly "the entry is gone" and cannot drift
+      // from what the reducer decided. Four actions drop entries today
+      // (`CONNECTION_REMOVED`, `REMOVE_ALL`, `REKEY_CONNECTION`,
+      // `DELEGATION_CHILD_DETACH`), three of them conditionally — a rekey onto
+      // an occupied key is declined, and discarding for a connection that is
+      // still there and still talking would lose its trailing prose. A fifth
+      // added later is covered without touching this.
       //
+      // The gate is two property reads on the hot `STREAM_BATCH` path: only a
+      // removal shrinks the map, and a rekey is the one removal that doesn't
+      // (it swaps one key for another).
+      if (next.size < prev.size || action.type === "REKEY_CONNECTION") {
+        for (const key of prev.keys()) {
+          if (!next.has(key)) discardStreamingKey(key)
+        }
+      }
+
       // Discard rather than flush: a flush would re-enter `dispatch`, and
       // there is no one left to render the result. Callers that DO want the
       // deltas landed first call `flushStreamingQueue(key)` before removing —
       // `connect()`'s orphan rescue is the one that does, ahead of its rekey.
-      //
-      // Ahead of the reducer, because a no-op removal (the entry is already
-      // gone) returns early below and would skip the cleanup — and "the entry
-      // is gone" is exactly when a stray queue must not survive.
-      if (action.type === "CONNECTION_REMOVED") {
-        discardStreamingKey(action.contextKey)
-      } else if (action.type === "REKEY_CONNECTION") {
-        discardStreamingKey(action.fromKey)
-      } else if (action.type === "REMOVE_ALL") {
-        discardStreamingQueues()
-      }
 
-      const prev = storeRef.current.connections
-      const next = connectionsReducer(prev, action)
       if (next === prev) return // no change
 
       storeRef.current.connections = next
@@ -3514,12 +3519,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [
-      discardStreamingKey,
-      discardStreamingQueues,
-      notifyKeyListeners,
-      notifyAllKeyListeners,
-    ]
+    [discardStreamingKey, notifyKeyListeners, notifyAllKeyListeners]
   )
 
   // ── setActiveKey ──
@@ -5114,7 +5114,9 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       resolveListenerReadyWaiters()
       unlisten?.()
     }
-    // Every dep here is a `useCallback(..., [])` — the subscription is
+    // Every dep here is stable for the component's life — each is either a
+    // `useCallback(..., [])` or, in `dispatch`'s case, a `useCallback` whose
+    // own deps are all `useCallback(..., [])` — so the subscription is
     // registered once per mount and torn down only on unmount. The event
     // handler deliberately isn't a dep; it's reached through
     // `handleMappedEventRef` so a changing closure can't churn the listener.
@@ -5171,10 +5173,24 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       releaseConnectionRoute(connectionId, contextKey)
       teardownAttachSubscription(contextKey)
       pendingUnmappedEventsRef.current.delete(connectionId)
+      // Land what is still coalescing while the turn is still `prompting`.
+      // The status change below is dispatched directly rather than through the
+      // event handler, so nothing else drains the queue — and once the entry
+      // reads `disconnected` the out-of-turn guard drops the batch, taking the
+      // last words this connection managed to say with it. Worth a line
+      // because the window is no longer a frame: `streamFlushDelayMs` can be
+      // holding up to STREAM_FLUSH_MAX_MS of a live reply when the liveness
+      // probe settles a connection out from under it.
+      flushStreamingQueue(contextKey)
       dispatch({ type: "STATUS_CHANGED", contextKey, status: "disconnected" })
       return true
     },
-    [dispatch, releaseConnectionRoute, teardownAttachSubscription]
+    [
+      dispatch,
+      flushStreamingQueue,
+      releaseConnectionRoute,
+      teardownAttachSubscription,
+    ]
   )
 
   // ── Backend keepalive + liveness reconciliation timer ──

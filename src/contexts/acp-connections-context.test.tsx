@@ -2535,6 +2535,67 @@ describe("streaming flush window widens with the run it re-renders", () => {
     }
   })
 
+  // …and FLUSH is why that is a flush and not a discard. A snapshot behind
+  // our cursor takes the stale branch, which merges selector fields and
+  // leaves `liveMessage` alone — so it never redelivers the queued prose, and
+  // dropping the queue there would lose it outright. Which branch a snapshot
+  // takes isn't knowable at the call site, so the safe move is the one that
+  // is correct on both.
+  it("keeps coalesced deltas a stale snapshot will not redeliver", async () => {
+    const handlers = await mountStreamingOwner()
+    vi.useFakeTimers()
+    try {
+      emitAcpEvent(handlers, {
+        seq: 4,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "hello ",
+      })
+      expect(liveText()).toBe("")
+
+      // eventSeq 2 is behind the cursor the delta above advanced to 4, so
+      // this hydrate takes the stale branch. Note it carries no live message
+      // of its own — the stale branch would ignore one anyway.
+      h.denormalizeSnapshot.mockReturnValue({
+        connectionId: "spawned-conn",
+        status: "connected",
+        sessionId: null,
+        modes: null,
+        configOptions: null,
+        availableCommands: null,
+        usage: null,
+        liveMessage: null,
+        pendingPermission: null,
+        pendingAskQuestion: null,
+        pendingUserMessage: null,
+        promptCapabilities: null,
+        selectorsReady: true,
+        supportsFork: false,
+        configStale: false,
+        configStaleKind: null,
+        lastError: null,
+        eventSeq: 2,
+        activeDelegations: [],
+      })
+      hydrateSnapshot(handlers, {
+        event_seq: 2,
+      } as unknown as LiveSessionSnapshot)
+
+      // The stale branch merged its latched field and left the turn alone…
+      expect(h.store!.getConnection(TAB)?.selectorsReady).toBe(true)
+      expect(h.store!.getConnection(TAB)?.status).toBe("prompting")
+      // …and the prose that was mid-window is on screen, not dropped.
+      expect(liveText()).toBe("hello ")
+
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_MAX_MS)
+      })
+      expect(liveText()).toBe("hello ")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // Removing the entry disarms its window: "no connection, no queue".
   //
   // Asserted on the timer rather than on rendered text, because the text is
@@ -2571,6 +2632,52 @@ describe("streaming flush window widens with the run it re-renders", () => {
     }
   })
 
+  // The same rule on a different removal. `DELEGATION_CHILD_DETACH` drops an
+  // entry too, and it is why the discard is derived from the reducer's result
+  // rather than from a list of action types: closing the work-task transcript
+  // dialog on a streaming sub-agent must not leave a window armed either, and
+  // nobody should have to remember to extend a list to get that.
+  it("disarms a detached delegation child's flush window", async () => {
+    const CHILD = "task-conn-1"
+    await mountProvider()
+    act(() => {
+      h.actions!.attachDelegationChild({
+        connectionId: CHILD,
+        parentConnectionId: CHILD,
+        parentToolUseId: "work-task-9",
+        agentType: "claude_code",
+        hydrate: false,
+      })
+    })
+    const child = latestAttachHandlers()
+    emitAcpEvent(child, {
+      seq: 1,
+      connection_id: CHILD,
+      type: "status_changed",
+      status: "prompting",
+    })
+
+    vi.useFakeTimers()
+    try {
+      const idle = vi.getTimerCount()
+      emitAcpEvent(child, {
+        seq: 2,
+        connection_id: CHILD,
+        type: "content_delta",
+        text: "sub-agent, mid-sentence",
+      })
+      expect(vi.getTimerCount()).toBe(idle + 1)
+
+      act(() => {
+        h.actions!.detachDelegationChild(CHILD)
+      })
+      expect(h.store!.getConnection(CHILD)).toBeUndefined()
+      expect(vi.getTimerCount()).toBe(idle)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // …and the same on unmount. This suite runs the attach transport, which is
   // the one whose windows used to survive: the legacy `acp://event` listener
   // effect owned the cleanup, and it returns early — before registering any —
@@ -2588,10 +2695,10 @@ describe("streaming flush window widens with the run it re-renders", () => {
       })
       expect(vi.getTimerCount()).toBe(idle + 1)
 
-      act(() => {
-        cleanup()
-      })
-      expect(vi.getTimerCount()).toBeLessThan(idle + 1)
+      // RTL's `cleanup` unmounts inside its own `act`, and clears its
+      // registry afterwards — so the suite's auto-cleanup is a no-op here.
+      cleanup()
+      expect(vi.getTimerCount()).toBe(idle)
     } finally {
       vi.useRealTimers()
     }
