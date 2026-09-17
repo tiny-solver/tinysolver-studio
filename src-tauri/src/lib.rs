@@ -112,6 +112,11 @@ mod tauri_app {
     /// swallow the press: if no dialog can answer it, each falls back to
     /// acting on its own.
     ///
+    /// On macOS, a window that still occupies a native-fullscreen Space
+    /// (or is animating out of one) is drained first: hiding or exiting
+    /// while that Space is up leaves a black blank plus leftover toolbar
+    /// chrome (issue #507).
+    ///
     /// Two things stand behind that, because nothing here can observe whether a
     /// dialog actually appeared. `main` is built visible and the dialog only
     /// starts listening once React has mounted in it, so
@@ -121,9 +126,34 @@ mod tauri_app {
     /// prompt that WAS sent goes unanswered, which is the only defence against
     /// everything readiness cannot see.
     fn handle_main_close_request(window: &tauri::Window, label: &str) {
+        handle_main_close_request_inner(window, label, true);
+    }
+
+    /// `drain_fullscreen` is true for a fresh close press and false after
+    /// the macOS Space drain has already run — otherwise a timeout that
+    /// left `is_fullscreen` stuck would loop forever instead of applying
+    /// the user's close preference.
+    fn handle_main_close_request_inner(
+        window: &tauri::Window,
+        label: &str,
+        drain_fullscreen: bool,
+    ) {
         use crate::commands::system_settings;
         use crate::models::CloseWindowBehavior;
         use tauri::Emitter;
+
+        #[cfg(target_os = "macos")]
+        if drain_fullscreen && windows::macos_fullscreen_should_drain(window) {
+            let window = window.clone();
+            let label = label.to_string();
+            windows::drain_macos_fullscreen_then(window, move |window| {
+                handle_main_close_request_inner(&window, &label, false);
+            });
+            return;
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        let _ = drain_fullscreen;
 
         let app = window.app_handle().clone();
         let behavior = if windows::can_hide_to_tray() {
@@ -1365,6 +1395,7 @@ mod tauri_app {
                 }
 
                 if label == "main" {
+                    windows::observe_macos_fullscreen_state(window);
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         // What the close button does is the user's choice
                         // (`ask` / `minimize` / `exit`), with one platform

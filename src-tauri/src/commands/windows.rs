@@ -2032,6 +2032,239 @@ pub fn can_hide_to_tray() -> bool {
     TRAY_AVAILABLE.load(AtomicOrdering::Relaxed)
 }
 
+// ─── macOS native-fullscreen drain on close (issue #507) ───────────────
+//
+// Native fullscreen on macOS is a separate Space. Intercepting
+// `CloseRequested` and then hiding / prompting / exiting while that Space
+// is still up — or still animating out — leaves the Space behind as a
+// black blank with leftover toolbar chrome.
+//
+// tao reports `is_fullscreen() == false` from `windowWillExitFullScreen`,
+// which is the *start* of AppKit's animation, not the end. Occupancy
+// therefore has three states, and close must wait until Windowed.
+
+/// Occupancy of the macOS fullscreen Space for the main window.
+///
+/// Not the same as `Window::is_fullscreen`: that flag drops at the start
+/// of the exit animation, while the Space is still on screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MacosFullscreenOccupancy {
+    Windowed,
+    Fullscreen,
+    Transitioning,
+}
+
+impl MacosFullscreenOccupancy {
+    const WINDOWED: u8 = 0;
+    const FULLSCREEN: u8 = 1;
+    const TRANSITIONING: u8 = 2;
+
+    fn from_code(code: u8) -> Self {
+        match code {
+            Self::FULLSCREEN => Self::Fullscreen,
+            Self::TRANSITIONING => Self::Transitioning,
+            _ => Self::Windowed,
+        }
+    }
+
+    fn code(self) -> u8 {
+        match self {
+            Self::Windowed => Self::WINDOWED,
+            Self::Fullscreen => Self::FULLSCREEN,
+            Self::Transitioning => Self::TRANSITIONING,
+        }
+    }
+}
+
+/// Advance occupancy from one `is_fullscreen` sample.
+///
+/// A falling edge (Fullscreen → not fullscreen) is Transitioning, not
+/// Windowed: tao has dropped its flag but AppKit has not finished tearing
+/// the Space down.
+pub(crate) fn occupancy_after_observation(
+    current: MacosFullscreenOccupancy,
+    is_fullscreen: bool,
+) -> MacosFullscreenOccupancy {
+    if is_fullscreen {
+        MacosFullscreenOccupancy::Fullscreen
+    } else if current == MacosFullscreenOccupancy::Fullscreen {
+        MacosFullscreenOccupancy::Transitioning
+    } else {
+        current
+    }
+}
+
+/// Whether close-button handling must drain native fullscreen first.
+///
+/// Other platforms treat fullscreen as a maximized window and hide/close
+/// tear it down correctly, so this is a no-op there.
+pub(crate) fn should_drain_macos_fullscreen_before_close(
+    is_macos: bool,
+    is_fullscreen: bool,
+    occupancy: MacosFullscreenOccupancy,
+) -> bool {
+    is_macos && (is_fullscreen || occupancy != MacosFullscreenOccupancy::Windowed)
+}
+
+/// How long AppKit's Space teardown keeps running after tao reports
+/// `is_fullscreen() == false`.
+///
+/// ~0.5s is the system animation; 700ms is that plus slack so hide/exit
+/// does not race the last frames (issue #507; tauri-apps/tauri#10580,
+/// #12056).
+#[cfg(target_os = "macos")]
+const MACOS_FULLSCREEN_EXIT_SETTLE: std::time::Duration = std::time::Duration::from_millis(700);
+
+#[cfg(target_os = "macos")]
+const MACOS_FULLSCREEN_EXIT_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
+#[cfg(target_os = "macos")]
+const MACOS_FULLSCREEN_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+#[cfg(target_os = "macos")]
+static MACOS_FULLSCREEN_OCCUPANCY: AtomicU8 = AtomicU8::new(MacosFullscreenOccupancy::WINDOWED);
+
+#[cfg(target_os = "macos")]
+static MACOS_FULLSCREEN_DRAIN_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+/// Keep occupancy in sync with the live window. Called from the main
+/// window's `on_window_event` so a green-button exit (no `CloseRequested`)
+/// still marks the animation as Transitioning.
+pub(crate) fn observe_macos_fullscreen_state(window: &tauri::Window) {
+    #[cfg(target_os = "macos")]
+    {
+        let is_fs = window.is_fullscreen().unwrap_or(false);
+        let current = MacosFullscreenOccupancy::from_code(
+            MACOS_FULLSCREEN_OCCUPANCY.load(AtomicOrdering::Relaxed),
+        );
+        let next = occupancy_after_observation(current, is_fs);
+        if next == current {
+            return;
+        }
+        MACOS_FULLSCREEN_OCCUPANCY.store(next.code(), AtomicOrdering::Release);
+        if next != MacosFullscreenOccupancy::Transitioning {
+            return;
+        }
+        // Drop Transitioning back to Windowed once the animation has had
+        // time to finish, unless a close-drain owns the wait.
+        if std::thread::Builder::new()
+            .name("macos-fs-occupancy-settle".into())
+            .spawn(|| {
+                std::thread::sleep(MACOS_FULLSCREEN_EXIT_SETTLE);
+                if MACOS_FULLSCREEN_DRAIN_IN_FLIGHT.load(AtomicOrdering::Acquire) {
+                    return;
+                }
+                let _ = MACOS_FULLSCREEN_OCCUPANCY.compare_exchange(
+                    MacosFullscreenOccupancy::TRANSITIONING,
+                    MacosFullscreenOccupancy::WINDOWED,
+                    AtomicOrdering::AcqRel,
+                    AtomicOrdering::Relaxed,
+                );
+            })
+            .is_err()
+        {
+            MACOS_FULLSCREEN_OCCUPANCY
+                .store(MacosFullscreenOccupancy::WINDOWED, AtomicOrdering::Release);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        // The occupancy helpers are macOS-only at runtime. Reference them
+        // here so `cargo build` / clippy without `--all-targets` on Linux
+        // does not report them as dead — the unit tests still exercise
+        // the real cases.
+        let _ = should_drain_macos_fullscreen_before_close(
+            false,
+            false,
+            occupancy_after_observation(MacosFullscreenOccupancy::Windowed, false),
+        );
+        let _ = MacosFullscreenOccupancy::from_code(MacosFullscreenOccupancy::Windowed.code());
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_fullscreen_should_drain(window: &tauri::Window) -> bool {
+    should_drain_macos_fullscreen_before_close(
+        true,
+        window.is_fullscreen().unwrap_or(false),
+        MacosFullscreenOccupancy::from_code(
+            MACOS_FULLSCREEN_OCCUPANCY.load(AtomicOrdering::Relaxed),
+        ),
+    )
+}
+
+/// Exit native fullscreen and wait until the Space is gone, then run `then`
+/// on the main thread. `then` receives the same window so the configured
+/// close behavior (hide / exit / ask) can run against a windowed window.
+///
+/// A second call while a drain is in flight is a no-op: the in-flight
+/// callback is the one close press that will be answered.
+#[cfg(target_os = "macos")]
+pub(crate) fn drain_macos_fullscreen_then(
+    window: tauri::Window,
+    then: impl FnOnce(tauri::Window) + Send + 'static,
+) {
+    if MACOS_FULLSCREEN_DRAIN_IN_FLIGHT
+        .compare_exchange(
+            false,
+            true,
+            AtomicOrdering::AcqRel,
+            AtomicOrdering::Acquire,
+        )
+        .is_err()
+    {
+        return;
+    }
+
+    if window.is_fullscreen().unwrap_or(false) {
+        let _ = window.set_fullscreen(false);
+    }
+    MACOS_FULLSCREEN_OCCUPANCY.store(
+        MacosFullscreenOccupancy::TRANSITIONING,
+        AtomicOrdering::Release,
+    );
+
+    tracing::info!("[close] draining macOS native fullscreen before close behavior");
+
+    let app = window.app_handle().clone();
+    if let Err(err) = std::thread::Builder::new()
+        .name("macos-fs-close-drain".into())
+        .spawn(move || {
+            wait_for_macos_fullscreen_space_release(&window);
+            MACOS_FULLSCREEN_OCCUPANCY
+                .store(MacosFullscreenOccupancy::WINDOWED, AtomicOrdering::Release);
+            MACOS_FULLSCREEN_DRAIN_IN_FLIGHT.store(false, AtomicOrdering::Release);
+            if let Err(err) = app.run_on_main_thread(move || then(window)) {
+                tracing::warn!(
+                    "[close] failed to hop back to main thread after fullscreen drain: {err}"
+                );
+            }
+        })
+    {
+        tracing::warn!("[close] failed to spawn fullscreen drain: {err}");
+        MACOS_FULLSCREEN_DRAIN_IN_FLIGHT.store(false, AtomicOrdering::Release);
+        MACOS_FULLSCREEN_OCCUPANCY
+            .store(MacosFullscreenOccupancy::WINDOWED, AtomicOrdering::Release);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn wait_for_macos_fullscreen_space_release(window: &tauri::Window) {
+    let deadline = std::time::Instant::now() + MACOS_FULLSCREEN_EXIT_TIMEOUT;
+    while window.is_fullscreen().unwrap_or(false) {
+        if std::time::Instant::now() >= deadline {
+            tracing::warn!(
+                "[close] timed out waiting for macOS fullscreen to drop; applying close behavior anyway"
+            );
+            break;
+        }
+        std::thread::sleep(MACOS_FULLSCREEN_EXIT_POLL);
+    }
+    // Flag drop is windowWillExitFullScreen. The Space is still up.
+    std::thread::sleep(MACOS_FULLSCREEN_EXIT_SETTLE);
+}
+
 /// Bring the hidden / minimized main workspace window back to the
 /// foreground. Used by:
 ///   * single-instance plugin (second launch)
@@ -2420,5 +2653,108 @@ mod settings_route_tests {
         }
         // An unnamed section keeps its long-standing desktop landing spot.
         assert_eq!(resolve_settings_route(None), "settings/appearance");
+    }
+}
+
+#[cfg(test)]
+mod macos_fullscreen_close_tests {
+    use super::{
+        occupancy_after_observation, should_drain_macos_fullscreen_before_close,
+        MacosFullscreenOccupancy,
+    };
+
+    /// Linux (and Windows) fullscreen is not a separate Space. Close must
+    /// not wait on it, or a maximized window would stall the hide/exit path.
+    #[test]
+    fn non_macos_never_drains_fullscreen() {
+        for occupancy in [
+            MacosFullscreenOccupancy::Windowed,
+            MacosFullscreenOccupancy::Fullscreen,
+            MacosFullscreenOccupancy::Transitioning,
+        ] {
+            assert!(
+                !should_drain_macos_fullscreen_before_close(false, true, occupancy),
+                "{occupancy:?} must not drain off macOS"
+            );
+        }
+    }
+
+    #[test]
+    fn macos_windowed_does_not_drain() {
+        assert!(!should_drain_macos_fullscreen_before_close(
+            true,
+            false,
+            MacosFullscreenOccupancy::Windowed,
+        ));
+    }
+
+    /// The red close button while native-fullscreen is the reported bug:
+    /// hide/exit without leaving the Space first.
+    #[test]
+    fn macos_live_fullscreen_drains() {
+        assert!(should_drain_macos_fullscreen_before_close(
+            true,
+            true,
+            MacosFullscreenOccupancy::Windowed,
+        ));
+        assert!(should_drain_macos_fullscreen_before_close(
+            true,
+            true,
+            MacosFullscreenOccupancy::Fullscreen,
+        ));
+    }
+
+    /// tao drops `is_fullscreen` at windowWillExitFullScreen, which is
+    /// the start of the animation. Occupancy still blocks close so we
+    /// do not hide into the leftover Space.
+    #[test]
+    fn macos_transitioning_drains_even_when_flag_already_dropped() {
+        assert!(should_drain_macos_fullscreen_before_close(
+            true,
+            false,
+            MacosFullscreenOccupancy::Fullscreen,
+        ));
+        assert!(should_drain_macos_fullscreen_before_close(
+            true,
+            false,
+            MacosFullscreenOccupancy::Transitioning,
+        ));
+    }
+
+    #[test]
+    fn occupancy_codes_roundtrip() {
+        use MacosFullscreenOccupancy::*;
+        for occupancy in [Windowed, Fullscreen, Transitioning] {
+            assert_eq!(
+                MacosFullscreenOccupancy::from_code(occupancy.code()),
+                occupancy
+            );
+        }
+        assert_eq!(
+            MacosFullscreenOccupancy::from_code(255),
+            Windowed,
+            "unknown codes must degrade to windowed"
+        );
+    }
+
+    #[test]
+    fn occupancy_tracks_enter_and_falling_edge() {
+        use MacosFullscreenOccupancy::*;
+
+        assert_eq!(occupancy_after_observation(Windowed, false), Windowed);
+        assert_eq!(occupancy_after_observation(Windowed, true), Fullscreen);
+        assert_eq!(occupancy_after_observation(Fullscreen, true), Fullscreen);
+        assert_eq!(
+            occupancy_after_observation(Fullscreen, false),
+            Transitioning
+        );
+        // Still animating: further !fullscreen samples must not jump to
+        // Windowed (that clear is time-based, after the Space is gone).
+        assert_eq!(
+            occupancy_after_observation(Transitioning, false),
+            Transitioning
+        );
+        // Re-entered before the settle timer fired.
+        assert_eq!(occupancy_after_observation(Transitioning, true), Fullscreen);
     }
 }
