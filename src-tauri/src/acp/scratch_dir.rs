@@ -150,8 +150,9 @@ fn leaves_room_for_a_child_socket(root: &Path) -> bool {
     // The deepest path we will hand a child: the root, a separator, and the
     // longest leaf `new_dir_name` can produce.
     let scratch_dir = root.as_os_str().len() + 1 + MAX_LEAF_NAME_LEN;
-    // `sun_path` has to hold the terminating NUL too.
-    scratch_dir + CHILD_SOCKET_RESERVE <= SUN_PATH_CAP - 1
+    // STRICTLY less than the cap: `sun_path` has to hold the terminating NUL
+    // too, so the last byte of the array is never available to the path.
+    scratch_dir + CHILD_SOCKET_RESERVE < SUN_PATH_CAP
 }
 
 /// Short fallback root, used when the ambient temp directory is too long to
