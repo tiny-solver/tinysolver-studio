@@ -2,10 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { NextIntlClientProvider } from "next-intl"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// Flipped per-test. The panel itself is runtime-agnostic now — only the file
-// picker underneath it differs — so these decide which branch of
-// `@/lib/config-sync` the (unmocked) helpers would take, not whether the
-// section renders at all.
+// Flipped per-test. The panel is runtime-agnostic now, so the only thing
+// `desktop: false` can still catch here is a re-introduced `return null` gate —
+// which is exactly what the availability tests below are for. The runtime
+// branch itself lives in `@/lib/config-sync` (mocked in this file) and is
+// pinned by `src/lib/config-sync.test.ts`.
 const env = vi.hoisted(() => ({
   desktop: true,
   remoteId: null as string | null,
@@ -316,10 +317,11 @@ describe("ConfigSyncSettings — file import", () => {
     )
   })
 
-  /// The browser has no path to hand over, so the picker returns the bytes.
-  /// The panel must pass whichever it was given straight back, untouched.
-  it("imports a browser-picked file by content, not by path", async () => {
-    env.desktop = false
+  /// The panel is deliberately blind to which runtime produced the pick: it
+  /// hands the `source` back exactly as given. Which source a real browser
+  /// produces is decided inside `@/lib/config-sync` — mocked here — and is
+  /// pinned by `config-sync.test.ts` instead, where the branch actually lives.
+  it("passes a by-content source straight back, untouched", async () => {
     const picked = {
       source: {
         kind: "content" as const,
@@ -423,6 +425,62 @@ describe("ConfigSyncSettings — encryption", () => {
     await waitFor(() => expect(passphrase.value).toBe(""))
     // Stored now, so an untouched field means "keep it".
     await waitFor(() => expect(passphrase.placeholder).toBe(t.passphraseKeep))
+  })
+
+  /// A passphrase typed and then withdrawn — the switch goes back off before
+  /// Save — must not be stored. The field is hidden at that point, so state
+  /// left behind there would ride along on a later Save about something else
+  /// entirely, and `hasPassphrase` would then claim a protection the user
+  /// never confirmed.
+  it("drops a typed passphrase when encryption is switched back off", async () => {
+    const { container } = await renderLoaded()
+    fireEvent.click(screen.getByRole("switch", { name: t.encryptLabel }))
+    const passphrase = (await waitFor(() => {
+      const field = container.querySelector("#config-sync-passphrase")
+      expect(field).toBeInTheDocument()
+      return field
+    })) as HTMLInputElement
+    fireEvent.change(passphrase, { target: { value: "withdrawn" } })
+
+    fireEvent.click(screen.getByRole("switch", { name: t.encryptLabel }))
+    await waitFor(() =>
+      expect(
+        container.querySelector("#config-sync-passphrase")
+      ).not.toBeInTheDocument()
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: t.saveButton }))
+    await waitFor(() => expect(updateConfigSyncSettings).toHaveBeenCalled())
+    expect(vi.mocked(updateConfigSyncSettings).mock.calls[0][0]).toMatchObject({
+      encrypt: false,
+      // `null` is "unchanged", which leaves whatever is already stored alone —
+      // that copy is what still decrypts the snapshot on the remote.
+      passphrase: null,
+    })
+  })
+})
+
+describe("ConfigSyncSettings — the master switch is not a Save button", () => {
+  /// It has to write something (see the handler's comment), but a credential
+  /// typed into a field and never submitted is not part of that something.
+  /// Otherwise a user who types a password, thinks better of it and turns sync
+  /// OFF has just stored the password instead of discarding it.
+  it("does not submit a typed password or passphrase", async () => {
+    const { container } = await renderLoaded()
+    const password = container.querySelector(
+      "#config-sync-password"
+    ) as HTMLInputElement
+    fireEvent.change(password, { target: { value: "half-typed" } })
+
+    fireEvent.click(screen.getByRole("switch", { name: t.webdavTitle }))
+    await waitFor(() => expect(updateConfigSyncSettings).toHaveBeenCalled())
+    const sent = vi.mocked(updateConfigSyncSettings).mock.calls[0][0]
+    expect(sent).toMatchObject({ enabled: false, password: null })
+    expect(JSON.stringify(sent)).not.toContain("half-typed")
+
+    // And the text survives, so the explicit Save the user may still want is
+    // one click away rather than retyped.
+    await waitFor(() => expect(password.value).toBe("half-typed"))
   })
 })
 

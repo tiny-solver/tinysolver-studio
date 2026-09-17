@@ -311,6 +311,20 @@ export function ConfigSyncSettings() {
   }, [currentInput, localize, t])
 
   /**
+   * Turning encryption off drops anything typed into the passphrase field but
+   * NOT the one already on file. The field is only visible while the switch is
+   * on, so a passphrase left in state there would be submitted by a later Save
+   * that the user believes has nothing to do with it — storing a secret they
+   * withdrew, and making `hasPassphrase` claim protection they never confirmed.
+   * The stored passphrase survives on purpose: it is what still decrypts the
+   * copy already sitting on the remote.
+   */
+  const handleToggleEncrypt = useCallback((next: boolean) => {
+    setEncrypt(next)
+    if (!next) setPassphrase("")
+  }, [])
+
+  /**
    * The master switch saves on click, like the proxy and launch-at-login
    * switches in the sections above. It has to: every other control — Save
    * included — lives inside the block this flag hides, so a toggle that only
@@ -323,8 +337,14 @@ export function ConfigSyncSettings() {
       setEnabled(next)
       setBusy("save")
       try {
+        // Secrets are explicitly withheld: `null` means "unchanged". Anything
+        // typed into the password or passphrase field has not been submitted
+        // yet, and flipping a switch is not a submission — a user who types a
+        // password, thinks better of it and turns sync OFF instead must not
+        // find that password stored. The fields keep their text, so an
+        // explicit Save is still one click away.
         const saved = await updateConfigSyncSettings(
-          currentInput({ enabled: next })
+          currentInput({ enabled: next, password: null, passphrase: null })
         )
         if (!mounted.current) return
         setHasPassword(saved.hasPassword)
@@ -333,8 +353,6 @@ export function ConfigSyncSettings() {
           serverUrl: saved.serverUrl,
           username: saved.username,
         })
-        setPassword("")
-        setPassphrase("")
       } catch (err) {
         if (mounted.current) setEnabled(previous)
         toast.error(localize(err))
@@ -776,7 +794,7 @@ export function ConfigSyncSettings() {
               <Switch
                 id="config-sync-encrypt"
                 checked={encrypt}
-                onCheckedChange={setEncrypt}
+                onCheckedChange={handleToggleEncrypt}
                 disabled={busy !== null}
               />
             </div>

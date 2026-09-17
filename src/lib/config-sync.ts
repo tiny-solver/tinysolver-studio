@@ -293,25 +293,46 @@ function downloadTextFile(fileName: string, content: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-/** `null` when the picker was dismissed. There is no cancel event for a file
- *  input in every browser we target, so a dismissed dialog simply never
- *  resolves to a file — the `cancel` event covers the modern ones and the
- *  promise is abandoned otherwise, which is the same outcome the user sees. */
+/** How long to wait, after the window gets focus back, for a `change` event a
+ *  slower browser has not dispatched yet. Focus returns the instant the picker
+ *  closes, which is before the file is attached. */
+const FILE_PICKER_SETTLE_MS = 400
+
+/** `null` when the picker was dismissed.
+ *
+ *  This promise MUST settle. Callers disable the panel while it is pending, so
+ *  one that never resolves leaves every button — export, save, test, upload,
+ *  restore — dead until the page is remounted. `cancel` is the clean signal
+ *  and covers current Chrome, Safari and Firefox; regaining window focus with
+ *  no file attached is the fallback for anything older, which includes the
+ *  WebKitGTK builds a Linux desktop can be running. */
 function pickLocalFile(): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input")
     input.type = "file"
     input.accept = ".json,application/json"
     input.style.display = "none"
-    input.addEventListener("change", () => {
-      const file = input.files?.[0] ?? null
+
+    let settled = false
+    const finish = (file: File | null) => {
+      if (settled) return
+      settled = true
+      window.removeEventListener("focus", onFocus)
       input.remove()
       resolve(file)
-    })
-    input.addEventListener("cancel", () => {
-      input.remove()
-      resolve(null)
-    })
+    }
+    function onFocus() {
+      window.setTimeout(
+        () => finish(input.files?.[0] ?? null),
+        FILE_PICKER_SETTLE_MS
+      )
+    }
+
+    input.addEventListener("change", () => finish(input.files?.[0] ?? null))
+    input.addEventListener("cancel", () => finish(null))
+    // Registered before the click, because opening the picker is what takes
+    // focus away in the first place.
+    window.addEventListener("focus", onFocus)
     document.body.appendChild(input)
     input.click()
   })
