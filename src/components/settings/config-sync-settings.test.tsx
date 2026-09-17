@@ -120,6 +120,7 @@ beforeEach(() => {
   vi.mocked(getConfigSyncSettings).mockResolvedValue({ ...SAVED })
   vi.mocked(getConfigSyncState).mockResolvedValue({
     lastUploadedSha256: null,
+    lastUploadedTarget: null,
     lastSyncAt: null,
     lastError: null,
   })

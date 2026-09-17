@@ -75,14 +75,18 @@ impl ConfigSyncSettings {
         !self.server_url.trim().is_empty()
     }
 
-    /// The remote location this configuration points at. Two settings that
-    /// agree here write the same two files; a change to any part of it means
-    /// the previously uploaded snapshot says nothing about the new location.
-    fn remote_identity(&self) -> (&str, &str, &str) {
-        (
-            self.server_url.as_str(),
-            self.remote_dir.as_str(),
-            self.profile.as_str(),
+    /// The remote location this configuration points at, as a value that can
+    /// be stored alongside the upload hash. Two settings that agree here write
+    /// the same two files.
+    ///
+    /// A NUL separator rather than a slash: every part is user-typed, and a
+    /// `/` would let `{dir: "a/b", profile: "c"}` and `{dir: "a", profile:
+    /// "b/c"}` produce the same key. (`sanitize_path_segment` rejects both
+    /// today; the separator is what keeps that from becoming load-bearing.)
+    fn remote_target(&self) -> String {
+        format!(
+            "{}\u{0}{}\u{0}{}",
+            self.server_url, self.remote_dir, self.profile
         )
     }
 }
@@ -164,6 +168,13 @@ pub struct ConfigSyncState {
     /// does not re-upload an unchanged configuration just to rebuild an
     /// in-memory baseline.
     pub last_uploaded_sha256: Option<String>,
+    /// Which remote the hash above was uploaded TO
+    /// ([`ConfigSyncSettings::remote_target`]). Without it the hash reads as
+    /// "this configuration is already up there" and suppresses the first
+    /// upload to a newly configured server, leaving it permanently empty.
+    /// `None` on a row written before this field existed — which costs one
+    /// redundant upload, the safe direction to be wrong in.
+    pub last_uploaded_target: Option<String>,
     pub last_sync_at: Option<String>,
     pub last_error: Option<String>,
 }
@@ -232,20 +243,13 @@ pub async fn save_settings_core(
         .await
         .map_err(AppCommandError::db)?;
 
-    // Pointing at a different server, folder, or profile invalidates the
-    // "already uploaded this" baseline: the hash describes local
-    // configuration, not where a copy of it landed, so keeping it would let
-    // the timer decide the NEW location is already up to date and leave it
-    // empty until some unrelated setting changes.
-    if existing.remote_identity() != merged.remote_identity() {
-        let mut state = load_state(conn).await;
-        if state.last_uploaded_sha256.is_some() || state.last_error.is_some() {
-            state.last_uploaded_sha256 = None;
-            state.last_error = None;
-            save_state(conn, &state).await;
-        }
-    }
-
+    // Note there is deliberately no "clear the upload baseline" step here.
+    // Pointing at a different server, folder, or profile does invalidate the
+    // baseline — but a second write that the save path has to remember to
+    // make is a write that can fail silently, crash in between, or be undone
+    // by an upload that was already in flight against the OLD target. The
+    // baseline records its own target instead (see `upload_snapshot_core`),
+    // so it simply stops matching; nothing has to be reset.
     Ok(ConfigSyncSettingsView::from(&merged))
 }
 
@@ -368,8 +372,14 @@ pub async fn upload_snapshot_core(
     let hash = sha256_hex(&bytes);
     let counts = snapshot.counts();
 
+    // The baseline suppresses an upload only when BOTH halves match: the same
+    // bytes AND the same destination. A hash on its own would say "already
+    // uploaded" about a server that has never been written to.
+    let target = settings.remote_target();
     let mut state = load_state(conn).await;
-    if !force && state.last_uploaded_sha256.as_deref() == Some(hash.as_str()) {
+    let already_there = state.last_uploaded_sha256.as_deref() == Some(hash.as_str())
+        && state.last_uploaded_target.as_deref() == Some(target.as_str());
+    if !force && already_there {
         // The common case on a timer: nothing changed, so nothing is sent and
         // no request is made at all.
         return Ok(UploadOutcome {
@@ -402,6 +412,7 @@ pub async fn upload_snapshot_core(
     match result {
         Ok(()) => {
             state.last_uploaded_sha256 = Some(hash.clone());
+            state.last_uploaded_target = Some(target);
             state.last_sync_at = Some(synced_at.clone());
             state.last_error = None;
             save_state(conn, &state).await;
@@ -683,24 +694,97 @@ mod tests {
         assert_eq!(stored.profile, "work");
     }
 
-    /// Retargeting the sync must not leave the new location empty. The hash
-    /// says "this configuration was uploaded", not "uploaded HERE", so it
-    /// stops meaning anything the moment the destination changes.
-    #[tokio::test]
-    async fn changing_the_remote_target_clears_the_upload_baseline() {
-        let db = fresh_in_memory_db().await;
-        save_settings_core(&db.conn, input()).await.expect("save");
+    /// Seed "this exact configuration is already on the currently configured
+    /// remote", which is the state the timer spends most of its life in.
+    async fn seed_uploaded_baseline(db: &crate::db::AppDatabase) -> String {
+        let snapshot = collect_snapshot_core(&db.conn).await.expect("collect");
+        let hash = sha256_hex(&serialize_snapshot(&snapshot).expect("bytes"));
         save_state(
             &db.conn,
             &ConfigSyncState {
-                last_uploaded_sha256: Some("previous".to_string()),
+                last_uploaded_sha256: Some(hash.clone()),
+                last_uploaded_target: Some(load_settings(&db.conn).await.remote_target()),
                 last_sync_at: Some("2026-01-01T00:00:00Z".to_string()),
-                last_error: Some("stale failure".to_string()),
+                last_error: None,
             },
         )
         .await;
+        hash
+    }
 
-        // Same target, unrelated field: the baseline is still valid.
+    #[tokio::test]
+    async fn sync_state_survives_a_reload() {
+        let db = fresh_in_memory_db().await;
+        let state = ConfigSyncState {
+            last_uploaded_sha256: Some("abc".to_string()),
+            last_uploaded_target: Some("https://dav.example.com/dav\u{0}codeg\u{0}work".to_string()),
+            last_sync_at: Some("2026-01-01T00:00:00Z".to_string()),
+            last_error: None,
+        };
+        save_state(&db.conn, &state).await;
+        let loaded = load_state(&db.conn).await;
+        assert_eq!(loaded.last_uploaded_sha256.as_deref(), Some("abc"));
+        assert_eq!(
+            loaded.last_uploaded_target.as_deref(),
+            state.last_uploaded_target.as_deref()
+        );
+    }
+
+    /// A row written before the target was recorded must not read as "already
+    /// uploaded" — being wrong in the other direction costs one extra upload,
+    /// being wrong this way costs an empty remote forever.
+    #[tokio::test]
+    async fn a_baseline_from_an_older_build_does_not_suppress_anything() {
+        let db = fresh_in_memory_db().await;
+        let snapshot = collect_snapshot_core(&db.conn).await.expect("collect");
+        let hash = sha256_hex(&serialize_snapshot(&snapshot).expect("bytes"));
+        app_metadata_service::upsert_value(
+            &db.conn,
+            CONFIG_SYNC_STATE_KEY,
+            &format!(r#"{{"lastUploadedSha256":"{hash}"}}"#),
+        )
+        .await
+        .expect("seed legacy row");
+
+        let state = load_state(&db.conn).await;
+        assert_eq!(state.last_uploaded_sha256.as_deref(), Some(hash.as_str()));
+        assert_eq!(state.last_uploaded_target, None);
+        upload_snapshot_core(&db.conn, "1.0.0", false)
+            .await
+            .expect_err("an unstamped baseline must not skip the upload");
+    }
+
+    /// An unchanged configuration must not touch the network — this is what
+    /// makes a 5-minute timer acceptable.
+    #[tokio::test]
+    async fn an_unchanged_snapshot_skips_the_upload_entirely() {
+        let db = fresh_in_memory_db().await;
+        let hash = seed_uploaded_baseline(&db).await;
+
+        // No server is configured, so reaching the transport at all would
+        // surface as an error rather than a skip.
+        let outcome = upload_snapshot_core(&db.conn, "1.0.0", false)
+            .await
+            .expect("skip without network");
+        assert!(!outcome.uploaded);
+        assert_eq!(outcome.sha256, hash);
+    }
+
+    /// Retargeting the sync must not leave the new location empty. The hash
+    /// alone says "this configuration was uploaded", not "uploaded HERE", so
+    /// the baseline records its destination and simply stops matching.
+    ///
+    /// Recorded rather than reset on save, because a reset is a second write:
+    /// it can fail silently, be interrupted, or be overwritten by an upload
+    /// that was already in flight against the old target. A self-describing
+    /// baseline has no such window.
+    #[tokio::test]
+    async fn a_baseline_does_not_carry_over_to_a_new_remote() {
+        let db = fresh_in_memory_db().await;
+        save_settings_core(&db.conn, input()).await.expect("save");
+        let hash = seed_uploaded_baseline(&db).await;
+
+        // Same target, unrelated field: still suppressed, no network.
         save_settings_core(
             &db.conn,
             ConfigSyncSettingsInput {
@@ -710,64 +794,36 @@ mod tests {
         )
         .await
         .expect("save");
-        assert_eq!(
-            load_state(&db.conn).await.last_uploaded_sha256.as_deref(),
-            Some("previous")
-        );
+        let outcome = upload_snapshot_core(&db.conn, "1.0.0", false)
+            .await
+            .expect("same target, same bytes: skip");
+        assert!(!outcome.uploaded);
+        assert_eq!(outcome.sha256, hash);
 
-        save_settings_core(
-            &db.conn,
+        // New profile, byte-identical configuration: the suppression must not
+        // apply. The configured URL is unreachable, so an attempt surfaces as
+        // an error — which is the proof that an attempt was made at all.
+        for retarget in [
             ConfigSyncSettingsInput {
                 profile: Some("personal".to_string()),
                 ..input()
             },
-        )
-        .await
-        .expect("save");
-        let state = load_state(&db.conn).await;
-        assert_eq!(state.last_uploaded_sha256, None);
-        assert_eq!(state.last_error, None);
-        // "When we last uploaded" is history, not a decision input — it stays
-        // so the panel does not claim the machine has never synced.
-        assert_eq!(state.last_sync_at.as_deref(), Some("2026-01-01T00:00:00Z"));
-    }
-
-    #[tokio::test]
-    async fn sync_state_survives_a_reload() {
-        let db = fresh_in_memory_db().await;
-        let state = ConfigSyncState {
-            last_uploaded_sha256: Some("abc".to_string()),
-            last_sync_at: Some("2026-01-01T00:00:00Z".to_string()),
-            last_error: None,
-        };
-        save_state(&db.conn, &state).await;
-        let loaded = load_state(&db.conn).await;
-        assert_eq!(loaded.last_uploaded_sha256.as_deref(), Some("abc"));
-    }
-
-    /// An unchanged configuration must not touch the network — this is what
-    /// makes a 5-minute timer acceptable.
-    #[tokio::test]
-    async fn an_unchanged_snapshot_skips_the_upload_entirely() {
-        let db = fresh_in_memory_db().await;
-        let snapshot = collect_snapshot_core(&db.conn).await.expect("collect");
-        let hash = sha256_hex(&serialize_snapshot(&snapshot).expect("bytes"));
-        save_state(
-            &db.conn,
-            &ConfigSyncState {
-                last_uploaded_sha256: Some(hash.clone()),
-                last_sync_at: Some("2026-01-01T00:00:00Z".to_string()),
-                last_error: None,
+            ConfigSyncSettingsInput {
+                remote_dir: Some("elsewhere".to_string()),
+                ..input()
             },
-        )
-        .await;
-
-        // No server is configured, so reaching the transport at all would
-        // surface as an error rather than a skip.
-        let outcome = upload_snapshot_core(&db.conn, "1.0.0", false)
-            .await
-            .expect("skip without network");
-        assert!(!outcome.uploaded);
-        assert_eq!(outcome.sha256, hash);
+            ConfigSyncSettingsInput {
+                server_url: "  ".to_string(),
+                ..input()
+            },
+        ] {
+            let db = fresh_in_memory_db().await;
+            save_settings_core(&db.conn, input()).await.expect("save");
+            seed_uploaded_baseline(&db).await;
+            save_settings_core(&db.conn, retarget).await.expect("save");
+            upload_snapshot_core(&db.conn, "1.0.0", false)
+                .await
+                .expect_err("a new target must be uploaded to, not skipped");
+        }
     }
 }

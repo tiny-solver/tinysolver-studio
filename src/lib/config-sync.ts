@@ -109,6 +109,10 @@ export interface ConfigSyncSettingsInput {
 
 export interface ConfigSyncState {
   lastUploadedSha256: string | null
+  /** Which remote the hash above went to. The pair is what suppresses a
+   *  redundant upload; the hash alone would also suppress the FIRST upload to
+   *  a newly configured server. */
+  lastUploadedTarget: string | null
   lastSyncAt: string | null
   lastError: string | null
 }
