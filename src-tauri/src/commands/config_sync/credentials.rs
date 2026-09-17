@@ -18,14 +18,19 @@ pub const WEBDAV_PASSWORD: &str = "config-sync-webdav-password";
 pub const SNAPSHOT_PASSPHRASE: &str = "config-sync-snapshot-passphrase";
 
 /// Missing and unreadable collapse to "no secret". That is right for a caller
-/// that is about to USE the secret — the next step, ask the user to type it
-/// again, is the same either way — and wrong for one that is about to write it
-/// back, which must call [`read`] instead. See [`ensure_readable`].
+/// about to USE the secret — the next step, ask the user to type it again, is
+/// the same either way — and wrong for one about to write anything back, which
+/// must call [`read`] instead.
 pub fn load(name: &str) -> String {
     read(name).ok().flatten().unwrap_or_default()
 }
 
 /// `Ok(None)` is "nothing stored"; `Err` is "the store would not open".
+///
+/// Keeping the two apart is what lets the save path write only the secrets it
+/// was actually given: a value that reads back as `""` because the store could
+/// not be opened must never travel out again as "delete this entry". See
+/// `webdav_sync::save_settings_core`.
 pub fn read(name: &str) -> Result<Option<String>, AppCommandError> {
     store::get(name).map_err(|e| {
         AppCommandError::io_error("Failed to read the config sync credentials")
@@ -35,21 +40,6 @@ pub fn read(name: &str) -> Result<Option<String>, AppCommandError> {
                 std::collections::BTreeMap::new(),
             )
     })
-}
-
-/// Refuse to go on when the secret store cannot be read.
-///
-/// The save path reads the stored secrets, merges the user's edits over them,
-/// and writes the result back — and an empty value means "delete this entry" on
-/// the way back. So a store that reads as empty only because it would not open
-/// turns any unrelated save (nudging the sync interval) into a permanent
-/// erasure of the passphrase the snapshot already on the remote is encrypted
-/// under. Stopping at the read is the difference between "try again" and "your
-/// backup is now undecryptable".
-pub fn ensure_readable() -> Result<(), AppCommandError> {
-    read(WEBDAV_PASSWORD)?;
-    read(SNAPSHOT_PASSPHRASE)?;
-    Ok(())
 }
 
 /// Stores, or removes the entry entirely when `value` is empty, so "cleared"
@@ -166,19 +156,26 @@ mod tests {
     fn an_unreadable_store_is_not_an_empty_one() {
         let _guard = test_guard();
         store(WEBDAV_PASSWORD, "app-password").expect("store");
-        assert_eq!(read(WEBDAV_PASSWORD).expect("readable"), Some("app-password".into()));
-        assert!(ensure_readable().is_ok());
+        assert_eq!(
+            read(WEBDAV_PASSWORD).expect("readable"),
+            Some("app-password".into())
+        );
+        // Absent reads as absent, not as a failure — that is what lets a fresh
+        // install, and a server with no token file yet, save at all.
+        assert_eq!(read(SNAPSHOT_PASSPHRASE).expect("readable"), None);
 
         {
             let _unreadable = unreadable_store();
-            assert!(read(WEBDAV_PASSWORD).is_err(), "a failed read must not read as absent");
-            assert!(ensure_readable().is_err());
+            assert!(
+                read(WEBDAV_PASSWORD).is_err(),
+                "a failed read must not read as absent"
+            );
             // `load` still collapses the two on purpose: its callers are about
             // to ask the user for the secret either way.
             assert_eq!(load(WEBDAV_PASSWORD), "");
         }
 
-        assert!(ensure_readable().is_ok(), "the guard must restore the store");
+        assert!(read(WEBDAV_PASSWORD).is_ok(), "the guard must restore the store");
         store(WEBDAV_PASSWORD, "").expect("clean up");
     }
 

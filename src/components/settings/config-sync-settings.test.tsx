@@ -460,6 +460,29 @@ describe("ConfigSyncSettings — encryption", () => {
   })
 })
 
+describe("ConfigSyncSettings — a file dialog does not gate the panel", () => {
+  /// A dialog is open for as long as the user is reading their filesystem, and
+  /// on an engine with no `cancel` event a dismissed one never reports back at
+  /// all (see `pickLocalFile`). Disabling the section for the duration would
+  /// therefore mean a Settings page that can be bricked by pressing Import and
+  /// pressing Escape. Nothing is written until the confirmation dialog, so
+  /// there is nothing here worth locking.
+  it("leaves every other action usable while the picker is open", async () => {
+    // Never resolves — exactly the dismissed-picker case.
+    vi.mocked(pickConfigFileToImport).mockReturnValue(new Promise(() => {}))
+    await renderLoaded()
+
+    fireEvent.click(screen.getByRole("button", { name: t.importButton }))
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: t.saveButton })).toBeEnabled()
+    )
+    expect(screen.getByRole("button", { name: t.exportButton })).toBeEnabled()
+    expect(screen.getByRole("button", { name: t.testButton })).toBeEnabled()
+    expect(screen.getByRole("switch", { name: t.webdavTitle })).toBeEnabled()
+  })
+})
+
 describe("ConfigSyncSettings — the master switch is not a Save button", () => {
   /// It has to write something (see the handler's comment), but a credential
   /// typed into a field and never submitted is not part of that something.

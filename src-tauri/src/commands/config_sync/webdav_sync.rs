@@ -384,20 +384,44 @@ pub async fn save_settings_core(
     conn: &DatabaseConnection,
     input: ConfigSyncSettingsInput,
 ) -> Result<ConfigSyncSettingsView, AppCommandError> {
-    // Before anything else, because this save is a read-modify-write of the
-    // secret store and an unreadable store reads back as empty — which travels
-    // out as a deletion. Nudging the sync interval must not be able to destroy
-    // the passphrase the snapshot already on the remote is encrypted under.
-    credentials::ensure_readable()?;
-
     let existing = load_settings(conn).await;
+
+    // What this save DECIDES about the secrets, read off the input before it is
+    // merged. Writing back whatever `load_settings` returned — which is what
+    // this used to do — is a read-modify-write of the secret store, and an
+    // unreadable store returns `""`, which means DELETE on the way back out. A
+    // denied keychain prompt plus any unrelated save would have destroyed the
+    // passphrase the copy already on the remote is encrypted under.
+    //
+    // Saying nothing about a secret must therefore touch nothing. That also
+    // keeps the master switch and the interval working on a machine with no
+    // usable keyring at all: a setting that needs no credential no longer
+    // fails because a credential could not be reached.
+    let new_password = input.password.clone().filter(|value| !value.is_empty());
+    let new_passphrase = input
+        .passphrase
+        .clone()
+        .filter(|value| !value.is_empty());
+    let keeps_account = same_account(&existing, &input.server_url, &input.username);
+
     let merged = merge_settings(&existing, input)?;
 
     // Secrets first. If the keyring refuses them the save fails outright rather
     // than persisting a configuration whose credentials went nowhere — that
     // would surface minutes later as "the server rejected your password".
-    credentials::store(WEBDAV_PASSWORD, &merged.password)?;
-    credentials::store(SNAPSHOT_PASSPHRASE, &merged.passphrase)?;
+    if let Some(password) = &new_password {
+        credentials::store(WEBDAV_PASSWORD, password)?;
+    } else if !keeps_account {
+        // The account moved, so the stored password does not belong to it any
+        // more — `merge_settings` drops it for the same reason. Unconditional
+        // rather than "only if one was read": deleting an absent entry is a
+        // no-op, and a store we could not READ may still be holding the old
+        // password for the old host.
+        credentials::store(WEBDAV_PASSWORD, "")?;
+    }
+    if let Some(passphrase) = &new_passphrase {
+        credentials::store(SNAPSHOT_PASSPHRASE, passphrase)?;
+    }
 
     let serialized = serde_json::to_string(&merged).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize config sync settings")
@@ -421,6 +445,22 @@ pub async fn save_settings_core(
     Ok(ConfigSyncSettingsView::from(&merged))
 }
 
+/// Whether an incoming edit still names the account the stored password was
+/// typed for.
+///
+/// The stored password belongs to that account. Carrying it over to a different
+/// host or user would mean an edit to the URL field alone is enough to make the
+/// next request hand that password to another server — by accident (repointing
+/// Jianguoyun at Nextcloud) or on purpose. Changing the folder or profile is not
+/// a change of credential, so those are deliberately not part of the comparison.
+///
+/// One definition, because two callers act on it: [`merge_settings`] decides
+/// whether to keep the password, and [`save_settings_core`] decides whether to
+/// erase it from the keyring. Those two answers must never differ.
+fn same_account(existing: &ConfigSyncSettings, server_url: &str, username: &str) -> bool {
+    server_url.trim() == existing.server_url && username.trim() == existing.username
+}
+
 /// Pure so the password-retention and path-validation rules are testable
 /// without a database.
 pub fn merge_settings(
@@ -429,13 +469,7 @@ pub fn merge_settings(
 ) -> Result<ConfigSyncSettings, AppCommandError> {
     let server_url = input.server_url.trim().to_string();
     let username = input.username.trim().to_string();
-    // The stored password belongs to the account it was typed for. Carrying
-    // it over to a different host or user would mean an edit to the URL field
-    // alone is enough to make the next request hand that password to another
-    // server — by accident (repointing Jianguoyun at Nextcloud) or on purpose.
-    // Changing the folder or profile is not a change of credential, so those
-    // are deliberately not part of the comparison.
-    let same_account = server_url == existing.server_url && username == existing.username;
+    let same_account = same_account(existing, &input.server_url, &input.username);
     let password = match input.password {
         Some(value) if !value.is_empty() => value,
         // Both `None` and `Some("")` keep the stored password. An empty field
@@ -1096,35 +1130,99 @@ mod tests {
         credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
     }
 
-    /// A keyring that will not open reads back as "no secret", and a save is a
-    /// read-modify-write: without a guard, changing the sync interval would
-    /// hand `""` to the credential store, which means DELETE. The passphrase
-    /// protecting the copy already on the remote would go with it, and no
-    /// retry brings it back.
+    /// A keyring that will not open reads back as "no secret", and the save
+    /// used to write whatever it had just read — so `""` went out as DELETE and
+    /// a change to the sync interval destroyed the passphrase protecting the
+    /// copy already on the remote. Nothing brings that back.
+    ///
+    /// The fix is that saying nothing about a secret touches nothing, which
+    /// also means the save still SUCCEEDS: settings that need no credential
+    /// must not fail because a credential could not be reached. A Linux desktop
+    /// with no Secret Service running would otherwise be unable to turn config
+    /// sync off, or change its interval, for as long as it stayed that way.
     #[tokio::test]
-    async fn an_unreadable_credential_store_refuses_the_save_instead_of_erasing_it() {
+    async fn a_save_that_carries_no_secret_leaves_an_unreadable_store_alone() {
         let _guard = credentials::test_guard();
         let db = fresh_in_memory_db().await;
         credentials::store(WEBDAV_PASSWORD, "app-password").expect("seed");
         credentials::store(SNAPSHOT_PASSPHRASE, "hunter2").expect("seed");
+        // Establish the account first, so the save below is not an account
+        // change (which deliberately DOES erase the password).
+        save_settings_core(&db.conn, input()).await.expect("seed settings");
 
-        let err = {
+        {
             let _unreadable = credentials::unreadable_store();
-            save_settings_core(&db.conn, input())
-                .await
-                .expect_err("a save that cannot read the store must not write to it")
-        };
-        assert_eq!(
-            err.i18n_key.as_deref(),
-            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_CREDENTIALS_UNREADABLE)
-        );
+            save_settings_core(
+                &db.conn,
+                ConfigSyncSettingsInput {
+                    interval_minutes: 30,
+                    // "I did not retype them" — the state every save that is
+                    // not about credentials is in.
+                    password: None,
+                    passphrase: None,
+                    ..input()
+                },
+            )
+            .await
+            .expect("a setting that needs no credential must still save");
+        }
 
-        // Both secrets are still there once the store opens again.
+        // Both secrets are untouched once the store opens again.
         assert_eq!(credentials::load(WEBDAV_PASSWORD), "app-password");
         assert_eq!(credentials::load(SNAPSHOT_PASSPHRASE), "hunter2");
+        assert_eq!(load_settings(&db.conn).await.interval_minutes, 30);
 
         credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
         credentials::store(SNAPSHOT_PASSPHRASE, "").expect("clean up");
+    }
+
+    /// The other half: a save that DOES carry a secret still writes it, and an
+    /// account change still erases the password that no longer belongs to the
+    /// account — unconditionally, because a store that could not be read may
+    /// still be holding the old host's copy.
+    #[tokio::test]
+    async fn a_save_writes_the_secrets_it_was_given_and_erases_an_orphaned_one() {
+        let _guard = credentials::test_guard();
+        let db = fresh_in_memory_db().await;
+        credentials::store(WEBDAV_PASSWORD, "").expect("start clean");
+        credentials::store(SNAPSHOT_PASSPHRASE, "").expect("start clean");
+
+        save_settings_core(
+            &db.conn,
+            ConfigSyncSettingsInput {
+                password: Some("typed".into()),
+                ..input()
+            },
+        )
+        .await
+        .expect("save");
+        assert_eq!(credentials::load(WEBDAV_PASSWORD), "typed");
+
+        // Same account, nothing typed: the stored password stays.
+        save_settings_core(
+            &db.conn,
+            ConfigSyncSettingsInput {
+                password: None,
+                ..input()
+            },
+        )
+        .await
+        .expect("save");
+        assert_eq!(credentials::load(WEBDAV_PASSWORD), "typed");
+
+        // A different host is a different account, so the password does not
+        // travel to it.
+        save_settings_core(
+            &db.conn,
+            ConfigSyncSettingsInput {
+                server_url: "https://other.example.com/dav".into(),
+                password: None,
+                ..input()
+            },
+        )
+        .await
+        .expect("save");
+        assert_eq!(credentials::load(WEBDAV_PASSWORD), "");
     }
 
     /// And when the two copies disagree — the user re-saved a new password

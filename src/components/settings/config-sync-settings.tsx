@@ -446,15 +446,21 @@ export function ConfigSyncSettings() {
     }
   }, [localize, t])
 
+  /**
+   * Deliberately outside the `busy` gate, unlike every other action here.
+   * `pickConfigFileToImport` is pending for as long as a file dialog is open,
+   * and on an engine that does not dispatch `cancel` (see `pickLocalFile`) a
+   * dismissed dialog leaves it pending for good — which, gated, would mean a
+   * settings section whose every button stays disabled until the page is
+   * remounted. Nothing is written until the confirmation below, so there is
+   * nothing here that a second click could corrupt.
+   */
   const handlePickImport = useCallback(async () => {
-    setBusy("import")
     try {
       const picked = await pickConfigFileToImport()
       if (picked && mounted.current) setPendingImport(picked)
     } catch (err) {
       toast.error(localize(err))
-    } finally {
-      if (mounted.current) setBusy(null)
     }
   }, [localize])
 

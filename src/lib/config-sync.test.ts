@@ -84,7 +84,9 @@ describe("local file transfer picks its runtime", () => {
     // The bytes went out as a download, and the object URL is released rather
     // than leaked for the life of the document.
     expect(createObjectURL).toHaveBeenCalledTimes(1)
-    await vi.waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:codeg/1"))
+    await vi.waitFor(() =>
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:codeg/1")
+    )
     // The browser owns the destination, so the reported "path" is the offered
     // file name rather than anything on a disk.
     expect(summary?.path).toMatch(/^codeg-config-.*\.json$/)
@@ -142,7 +144,10 @@ describe("local file transfer picks its runtime", () => {
     // dismissal path rather than hanging (see `pickLocalFile`).
     const pending = pickConfigFileToImport()
     const input = document.querySelector<HTMLInputElement>('input[type="file"]')
-    expect(input, "a browser import must go through a file input").not.toBeNull()
+    expect(
+      input,
+      "a browser import must go through a file input"
+    ).not.toBeNull()
     expect(open).not.toHaveBeenCalled()
     input!.dispatchEvent(new Event("cancel"))
 
@@ -151,28 +156,37 @@ describe("local file transfer picks its runtime", () => {
     expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 
-  /// The caller disables the whole panel while this promise is pending, so one
-  /// that never settles is not a leaked promise — it is a settings page with
-  /// every button dead until the page is remounted. `cancel` is not dispatched
-  /// by older engines (the WebKitGTK a Linux desktop build can be running is
-  /// the realistic one), so regaining window focus with no file attached has
-  /// to end it too.
-  it("settles when a picker without a cancel event is dismissed", async () => {
-    vi.useFakeTimers()
-    try {
-      desktop.mockReturnValue(false)
-      const pending = pickConfigFileToImport()
-      expect(document.querySelector('input[type="file"]')).not.toBeNull()
+  /// Regaining window focus is the usual way to guess "the dialog closed", and
+  /// it guesses wrong: a non-modal chooser, or an alt-tab back to the app while
+  /// the dialog is still open, both raise it. Resolving there would settle the
+  /// promise under a user who is still choosing, and the file they then pick
+  /// would arrive on a dead promise and be dropped without a word.
+  it("does not treat window focus as a dismissal", async () => {
+    desktop.mockReturnValue(false)
+    let settled = false
+    const pending = pickConfigFileToImport().then((value) => {
+      settled = true
+      return value
+    })
 
-      // The picker closed: focus comes back, no file was chosen, and no
-      // `cancel` is coming.
-      window.dispatchEvent(new Event("focus"))
-      await vi.advanceTimersByTimeAsync(1000)
+    window.dispatchEvent(new Event("focus"))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(settled, "the user may still be looking at the dialog").toBe(false)
 
-      expect(await pending).toBeNull()
-      expect(document.querySelector('input[type="file"]')).toBeNull()
-    } finally {
-      vi.useRealTimers()
+    // The file they were choosing all along still lands.
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]')!
+    // jsdom's `File` has no `text()`, and the picker reads the bytes itself.
+    const file = {
+      name: "picked.json",
+      text: async () => '{"schemaVersion":1,"domains":{}}',
     }
+    Object.defineProperty(input, "files", { value: [file] })
+    input.dispatchEvent(new Event("change"))
+
+    expect((await pending)?.source).toMatchObject({
+      kind: "content",
+      label: "picked.json",
+    })
   })
 })
