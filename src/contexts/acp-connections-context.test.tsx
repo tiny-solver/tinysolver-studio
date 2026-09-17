@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { act, render } from "@testing-library/react"
+import { act, cleanup, render } from "@testing-library/react"
 import { useTranslations } from "next-intl"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
@@ -2442,9 +2442,15 @@ describe("streaming flush window widens with the run it re-renders", () => {
         type: "content_delta",
         text: "A",
       })
-      // B's tool call flushes B's queue, and only B's.
       emitAcpEvent(b, {
         seq: 2,
+        connection_id: "conn-b",
+        type: "content_delta",
+        text: "B",
+      })
+      // B's tool call flushes B's queue, and only B's.
+      emitAcpEvent(b, {
+        seq: 3,
         connection_id: "conn-b",
         type: "tool_call",
         tool_call_id: "toolu_1",
@@ -2455,12 +2461,137 @@ describe("streaming flush window widens with the run it re-renders", () => {
         raw_input: null,
         raw_output: null,
       })
+      // Positive half: the out-of-turn flush really did fire, so A's empty
+      // reading below is scoping, not a flush that silently does nothing.
+      expect(liveTextFor(OTHER_TAB)).toBe("B")
       expect(liveTextFor(TAB)).toBe("")
 
       act(() => {
         vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
       })
       expect(liveTextFor(TAB)).toBe("A")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A snapshot REPLACES the live message wholesale. Deltas still coalescing
+  // when one lands would append to the message it installed — which already
+  // contains them, because the snapshot is generated at a higher seq — and
+  // the reply shows the same prose twice. The attach stream re-emits a
+  // snapshot on RECONNECT, mid-turn, so this is what a dropped WebSocket does
+  // to a streaming reply, not a corner case.
+  it("lands coalesced deltas before a mid-turn snapshot replaces the message", async () => {
+    const handlers = await mountStreamingOwner()
+    vi.useFakeTimers()
+    try {
+      emitAcpEvent(handlers, {
+        seq: 2,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "hello ",
+      })
+      expect(liveText()).toBe("")
+
+      // The reconnect snapshot was generated after that delta reached the
+      // backend, so it already carries the text sitting in our window. Still
+      // `prompting`: the turn did not stop because the socket did.
+      h.denormalizeSnapshot.mockReturnValue({
+        connectionId: "spawned-conn",
+        status: "prompting",
+        sessionId: null,
+        modes: null,
+        configOptions: null,
+        availableCommands: null,
+        usage: null,
+        liveMessage: {
+          id: "live-1",
+          role: "assistant",
+          content: [{ type: "text", text: "hello " }],
+          startedAt: 0,
+        },
+        pendingPermission: null,
+        pendingAskQuestion: null,
+        pendingUserMessage: null,
+        promptCapabilities: null,
+        selectorsReady: false,
+        supportsFork: false,
+        configStale: false,
+        configStaleKind: null,
+        lastError: null,
+        eventSeq: 9,
+        activeDelegations: [],
+      })
+      hydrateSnapshot(handlers, {
+        event_seq: 9,
+      } as unknown as LiveSessionSnapshot)
+
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_MAX_MS)
+      })
+      expect(liveText()).toBe("hello ")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Removing the entry disarms its window: "no connection, no queue".
+  //
+  // Asserted on the timer rather than on rendered text, because the text is
+  // already defended twice over — `status_changed` flushes before it applies
+  // `prompting`, and the out-of-turn guard drops a batch for a connection
+  // that isn't prompting — so a leak would have to thread between both to
+  // show up on screen. The invariant is the thing worth pinning: context keys
+  // are REUSED (close a tab mid-turn and reopen it and the next connection is
+  // handed the same `conv-<id>-<agent>-<folder>` string), and a window that
+  // outlives its connection is a dispatch aimed at whoever holds the key up
+  // to STREAM_FLUSH_MAX_MS later. Cheap to keep impossible; unpleasant to
+  // rediscover from a duplicated paragraph in someone's reply.
+  it("disarms a removed connection's flush window", async () => {
+    const handlers = await mountStreamingOwner()
+    vi.useFakeTimers()
+    try {
+      const idle = vi.getTimerCount()
+      emitAcpEvent(handlers, {
+        seq: 2,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "from the turn that was closed",
+      })
+      expect(liveText()).toBe("")
+      expect(vi.getTimerCount()).toBe(idle + 1)
+
+      await act(async () => {
+        await h.actions!.disconnect(TAB)
+      })
+      expect(h.store!.getConnection(TAB)).toBeUndefined()
+      expect(vi.getTimerCount()).toBe(idle)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // …and the same on unmount. This suite runs the attach transport, which is
+  // the one whose windows used to survive: the legacy `acp://event` listener
+  // effect owned the cleanup, and it returns early — before registering any —
+  // for exactly the transports that stream through attach subscriptions.
+  it("drops every armed window when the provider unmounts", async () => {
+    const handlers = await mountStreamingOwner()
+    vi.useFakeTimers()
+    try {
+      const idle = vi.getTimerCount()
+      emitAcpEvent(handlers, {
+        seq: 2,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "mid-sentence",
+      })
+      expect(vi.getTimerCount()).toBe(idle + 1)
+
+      act(() => {
+        cleanup()
+      })
+      expect(vi.getTimerCount()).toBeLessThan(idle + 1)
     } finally {
       vi.useRealTimers()
     }
@@ -4147,42 +4278,52 @@ describe("connect() teardown races", () => {
     const onEvent = vi.mocked(subscribe).mock.calls[0]![1] as (
       envelope: EventEnvelope
     ) => void
-    act(() => {
-      onEvent({
-        seq: 1,
-        connection_id: "spawned-conn",
-        type: "session_started",
-        session_id: "sess-1",
-      } as EventEnvelope)
-      onEvent({
-        seq: 2,
-        connection_id: "spawned-conn",
-        type: "status_changed",
-        status: "prompting",
-      } as EventEnvelope)
-      // Still inside its flush window when the rescue below fires.
-      onEvent({
-        seq: 3,
-        connection_id: "spawned-conn",
-        type: "content_delta",
-        text: "half a sentence",
-      } as EventEnvelope)
-    })
-    // Queued, not applied: the window has not elapsed.
-    expect(h.store!.getConnection(TAB)?.liveMessage?.content).toEqual([])
-
+    // Hold the clock from here on. The window is only 16 ms, so on real timers
+    // the rescue's own awaits could outlast it and the delta would land
+    // because the timer fired — the test would keep passing with the flush
+    // below deleted. Under fake timers the clock never advances, so the only
+    // thing that can deliver this text is the explicit flush.
     h.acpTouchConnection.mockResolvedValue(true)
-    await act(async () => {
-      await h.actions!.connect(RESCUE_TAB, "claude_code", "/tmp/x", "sess-1")
-    })
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        onEvent({
+          seq: 1,
+          connection_id: "spawned-conn",
+          type: "session_started",
+          session_id: "sess-1",
+        } as EventEnvelope)
+        onEvent({
+          seq: 2,
+          connection_id: "spawned-conn",
+          type: "status_changed",
+          status: "prompting",
+        } as EventEnvelope)
+        // Still inside its flush window when the rescue below fires.
+        onEvent({
+          seq: 3,
+          connection_id: "spawned-conn",
+          type: "content_delta",
+          text: "half a sentence",
+        } as EventEnvelope)
+      })
+      // Queued, not applied: the window has not elapsed.
+      expect(h.store!.getConnection(TAB)?.liveMessage?.content).toEqual([])
 
-    const rescued = h.store!.getConnection(RESCUE_TAB)
-    expect(rescued?.connectionId).toBe("spawned-conn")
-    expect(
-      (rescued?.liveMessage?.content ?? [])
-        .map((block) => (block.type === "text" ? block.text : ""))
-        .join("")
-    ).toBe("half a sentence")
+      await act(async () => {
+        await h.actions!.connect(RESCUE_TAB, "claude_code", "/tmp/x", "sess-1")
+      })
+
+      const rescued = h.store!.getConnection(RESCUE_TAB)
+      expect(rescued?.connectionId).toBe("spawned-conn")
+      expect(
+        (rescued?.liveMessage?.content ?? [])
+          .map((block) => (block.type === "text" ? block.text : ""))
+          .join("")
+      ).toBe("half a sentence")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("still connects when the backend GC'd the connection mid-probe", async () => {

@@ -816,7 +816,11 @@ export function liveRerenderChars(
       // batch grows, and the only one whose memo the batch invalidates. (A
       // trailing thinking run is charged in full on the assumption it is
       // expanded while it streams; if it is not, this over-charges by one
-      // block, which the ceiling bounds.)
+      // block, which the ceiling bounds. Same for a trailing run that belongs
+      // to a sub-agent: `parentToolUseId` is deliberately not read here, so a
+      // delegated run is charged as main prose. It renders inside a capsule
+      // that may be collapsed, so this errs toward the wider window — the
+      // direction that costs latency, never correctness.)
       if (i === lastIndex) chars += block.text.length
       continue
     }
@@ -3405,8 +3409,57 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
 
   // ── Dispatch (replaces useReducer dispatch) ──
 
+  /**
+   * Drop ONE connection's queued deltas and its window, without dispatching.
+   *
+   * Declared here rather than beside the other streaming helpers because
+   * `dispatch` below calls it and needs it in scope; it touches only the two
+   * refs, so there is no cycle.
+   */
+  const discardStreamingKey = useCallback((contextKey: string) => {
+    const timer = flushTimersRef.current.get(contextKey)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      flushTimersRef.current.delete(contextKey)
+    }
+    streamingQueuesRef.current.delete(contextKey)
+  }, [])
+
+  /** The same, for every connection at once. */
+  const discardStreamingQueues = useCallback(() => {
+    for (const timer of flushTimersRef.current.values()) clearTimeout(timer)
+    flushTimersRef.current.clear()
+    streamingQueuesRef.current.clear()
+  }, [])
+
   const dispatch = useCallback(
     (action: Action) => {
+      // A removed key must not leave deltas armed behind it. They would land
+      // up to `STREAM_FLUSH_MAX_MS` later, and context keys are REUSED — the
+      // same `conv-<id>-<agent>-<folder>` string is handed to the next
+      // connection that opens on that tab — so a late batch does not merely
+      // waste a dispatch, it appends a dead turn's prose to a live one.
+      //
+      // Done here, at the one place every removal funnels through, rather than
+      // at the six-plus sites that dispatch these: this is the invariant
+      // ("no entry, no queue"), and it holds for removals added later too.
+      //
+      // Discard rather than flush: a flush would re-enter `dispatch`, and
+      // there is no one left to render the result. Callers that DO want the
+      // deltas landed first call `flushStreamingQueue(key)` before removing —
+      // `connect()`'s orphan rescue is the one that does, ahead of its rekey.
+      //
+      // Ahead of the reducer, because a no-op removal (the entry is already
+      // gone) returns early below and would skip the cleanup — and "the entry
+      // is gone" is exactly when a stray queue must not survive.
+      if (action.type === "CONNECTION_REMOVED") {
+        discardStreamingKey(action.contextKey)
+      } else if (action.type === "REKEY_CONNECTION") {
+        discardStreamingKey(action.fromKey)
+      } else if (action.type === "REMOVE_ALL") {
+        discardStreamingQueues()
+      }
+
       const prev = storeRef.current.connections
       const next = connectionsReducer(prev, action)
       if (next === prev) return // no change
@@ -3461,7 +3514,12 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [notifyKeyListeners, notifyAllKeyListeners]
+    [
+      discardStreamingKey,
+      discardStreamingQueues,
+      notifyKeyListeners,
+      notifyAllKeyListeners,
+    ]
   )
 
   // ── setActiveKey ──
@@ -3555,8 +3613,27 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     [dispatch]
   )
 
-  /** Drain ONE connection's queue into a single `STREAM_BATCH`. */
-  const flushStreamingKey = useCallback(
+  /**
+   * Drain ONE connection's coalesced deltas into a single `STREAM_BATCH`.
+   *
+   * Scheduling is PER CONNECTION. The queue and its window used to be global,
+   * so the window a batch waited in was whichever connection's delta happened
+   * to arm the timer. Harmless while that window was a flat 16 ms; once
+   * `streamFlushDelayMs` sizes it from what is being re-rendered, a long reply
+   * in one conversation held every OTHER conversation's deltas for up to
+   * `STREAM_FLUSH_MAX_MS` — including a background conversation with no panel
+   * mounted, which costs nothing to flush and so bought nothing by waiting.
+   * Codeg runs several agents at once by design, so that is the normal case,
+   * not a corner of one.
+   *
+   * Connections are independent — own wire, own seq cursor, own
+   * `ConnectionState` — so there is nothing to coordinate between them, and
+   * per-key ordering is what the reducer and the out-of-turn guards already
+   * reason about. Nothing wants "flush everything": teardown discards instead
+   * (`discardStreamingQueues`), because a batch dispatched into a key that is
+   * being removed is at best wasted and at worst lands on its successor.
+   */
+  const flushStreamingQueue = useCallback(
     (contextKey: string) => {
       // CANCEL the pending window, don't just forget it. Most callers are
       // event handlers flushing out of turn (a tool card, a permission prompt,
@@ -3600,46 +3677,6 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     },
     [dispatch]
   )
-
-  /**
-   * Flush one connection's coalesced deltas, or every connection's when
-   * `contextKey` is omitted (teardown only).
-   *
-   * Scheduling is PER CONNECTION. The queue and its window used to be global,
-   * so the window a batch waited in was whichever connection's delta happened
-   * to arm the timer. Harmless while that window was a flat 16 ms; once
-   * `streamFlushDelayMs` sizes it from what is being re-rendered, a long reply
-   * in one conversation held every OTHER conversation's deltas for up to
-   * `STREAM_FLUSH_MAX_MS` — including a background conversation with no panel
-   * mounted, which costs nothing to flush and so bought nothing by waiting.
-   * Codeg runs several agents at once by design, so that is the normal case,
-   * not a corner of one.
-   *
-   * Connections are independent — own wire, own seq cursor, own
-   * `ConnectionState` — so there is nothing to coordinate between them, and
-   * per-key ordering is what the reducer and the out-of-turn guards already
-   * reason about.
-   */
-  const flushStreamingQueue = useCallback(
-    (contextKey?: string) => {
-      if (contextKey !== undefined) {
-        flushStreamingKey(contextKey)
-        return
-      }
-      // Snapshot the keys: `flushStreamingKey` mutates the map it iterates.
-      for (const key of Array.from(streamingQueuesRef.current.keys())) {
-        flushStreamingKey(key)
-      }
-    },
-    [flushStreamingKey]
-  )
-
-  /** Drop every queued delta and its window, without dispatching. */
-  const discardStreamingQueues = useCallback(() => {
-    for (const timer of flushTimersRef.current.values()) clearTimeout(timer)
-    flushTimersRef.current.clear()
-    streamingQueuesRef.current.clear()
-  }, [])
 
   const enqueueStreamingAction = useCallback(
     (action: StreamingAction) => {
@@ -4867,6 +4904,28 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       let activeSub: EventStreamSubscription | null = null
       const handlers: AttachHandlers = {
         onSnapshot: (snapshot) => {
+          // Land anything still coalescing BEFORE the snapshot replaces the
+          // live message. This handler also runs on an attach-stream
+          // RECONNECT, mid-turn, so deltas from before the drop can still be
+          // queued — and the hydrate would swap `liveMessage` out from under
+          // them, so the flush that follows would append a run the snapshot
+          // already contains, duplicating it on screen.
+          //
+          // Flush, not discard: `HYDRATE_FROM_SNAPSHOT` has a stale-snapshot
+          // branch that merges selector fields only and leaves `liveMessage`
+          // untouched, so discarding would silently drop prose nothing else
+          // redelivers. Flushing is what the queue's contract asks for anyway
+          // — every path that reads or replaces `liveMessage` from outside
+          // should see the same state it would have seen with no coalescing
+          // at all.
+          //
+          // The other three snapshot consumers don't need this: they hydrate
+          // at attach time, before `bindConnectionRoute` gives the key a
+          // route, so no delta of theirs can be in flight yet — and a queue
+          // left by a PREVIOUS connection under a recycled key is discarded
+          // at `CONNECTION_REMOVED` (see `dispatch`), which is the right
+          // outcome there, not a flush.
+          flushStreamingQueue(contextKey)
           const patch = denormalizeSnapshot(snapshot)
           dispatch({ type: "HYDRATE_FROM_SNAPSHOT", contextKey, patch })
           surfaceSnapshotErrorDetailsRef.current(contextKey, patch)
@@ -4934,6 +4993,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       applyMappedEnvelope,
       captureIdentityBeforeRemoval,
       dispatch,
+      flushStreamingQueue,
       seedDelegationsFromSnapshot,
     ]
   )
@@ -5052,19 +5112,21 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       cancelled = true
       listenerReadyRef.current = false
       resolveListenerReadyWaiters()
-      discardStreamingQueues()
       unlisten?.()
     }
     // Every dep here is a `useCallback(..., [])` — the subscription is
     // registered once per mount and torn down only on unmount. The event
     // handler deliberately isn't a dep; it's reached through
     // `handleMappedEventRef` so a changing closure can't churn the listener.
-  }, [
-    bufferUnmappedEvent,
-    discardStreamingQueues,
-    dispatch,
-    resolveListenerReadyWaiters,
-  ])
+  }, [bufferUnmappedEvent, dispatch, resolveListenerReadyWaiters])
+
+  // Drop every armed window on unmount. Its own effect, because the listener
+  // effect above returns early on web / remote-desktop transports — before it
+  // registers any cleanup — and those transports stream through the attach
+  // subscriptions, which fill these queues just the same. A timer surviving
+  // the provider fires into a `dispatch` whose store nothing is reading, and
+  // under a test runner it outlives the test that armed it.
+  useEffect(() => discardStreamingQueues, [discardStreamingQueues])
 
   /**
    * Ask the backend whether it still holds a live connection under this id.
@@ -6252,7 +6314,9 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     lastActivityRef.current.clear()
     // Same reuse hazard as the caches below, on a clock: a delta queued just
     // before this would otherwise dispatch up to STREAM_FLUSH_MAX_MS later,
-    // into whatever now holds its contextKey.
+    // into whatever now holds its contextKey. `dispatch` repeats this for
+    // REMOVE_ALL; this call is the one ahead of the await below, which is the
+    // window a still-armed timer would fire in.
     discardStreamingQueues()
     // Context keys are reused across backends, so a surviving entry here would
     // suppress the first snapshot alert of an unrelated session.
