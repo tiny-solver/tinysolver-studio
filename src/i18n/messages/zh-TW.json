@@ -1191,6 +1191,46 @@
           "question": "向你提問",
           "doom_loop": "同一呼叫以相同輸入重複 3 次時觸發"
         }
+      },
+      "behavior": {
+        "title": "行為與壓縮",
+        "description": "工作階段預設值、上下文壓縮與工具輸出上限。寫入 opencode.json，按下方儲存後生效。",
+        "docsLink": "設定文件",
+        "unset": "未設定",
+        "defaultAgent": "預設智慧體",
+        "defaultAgentHint": "新工作階段使用哪個主要智慧體。留空或名稱無效時回落到 build。",
+        "share": "工作階段分享",
+        "shareHint": "工作階段是否可以發佈成分享連結。",
+        "shareManual": "手動（需要時才分享）",
+        "shareAuto": "自動（每個新工作階段都分享）",
+        "shareDisabled": "停用",
+        "autoUpdate": "自動更新",
+        "autoUpdateHint": "OpenCode 是否自行升級到最新版本。",
+        "autoUpdateOn": "自動更新",
+        "autoUpdateNotify": "僅提示",
+        "autoUpdateOff": "永不",
+        "snapshot": "檔案系統快照",
+        "snapshotHint": "每一步之前記錄一次快照。關閉後復原與還原將無法回復檔案。",
+        "compactionAuto": "自動壓縮",
+        "compactionAutoHint": "上下文視窗快滿時自動總結對話。",
+        "compactionPrune": "裁剪舊工具輸出",
+        "compactionPruneHint": "壓縮時直接丟棄較早工具呼叫的輸出，而不是總結進去。",
+        "fields": {
+          "subagentDepth": "子智慧體層數",
+          "tailTurns": "保留原文的輪數",
+          "preserveRecentTokens": "保留原文的 token 數",
+          "reserved": "預留 token",
+          "maxLines": "工具輸出行數上限",
+          "maxBytes": "工具輸出位元組上限"
+        },
+        "hints": {
+          "subagentDepth": "子智慧體最多可以巢狀幾層。填 1 表示子智慧體不能再啟動子智慧體。",
+          "tailTurns": "最近多少輪使用者對話不參與壓縮。留空表示只受下方的 token 預算約束。",
+          "preserveRecentTokens": "壓縮後仍按原文保留的最近對話 token 預算。",
+          "reserved": "為壓縮本身預留的視窗，避免壓縮過程反而撐爆上下文。",
+          "maxLines": "超過該行數的輸出會落檔，只在對話裡留一段預覽。預設 2000。",
+          "maxBytes": "超過該位元組數的輸出會落檔，只在對話裡留一段預覽。預設 51200。"
+        }
       }
     },
     "openClaw": {
@@ -1461,7 +1501,11 @@
       "ready": "轉接器 {adapterCmd} 已安裝 —— Codeg 啟動的就是它。它自帶執行環境，所以不需要另外安裝 {nativeLabel}；即使日後你安裝了，兩者也能並存並共用 {configDir}。"
     },
     "cline": {
-      "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。"
+      "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。",
+      "signInGroup": "使用 Cline 帳號登入",
+      "byoGroup": "自帶供應商",
+      "externalGroup": "在 codeg 之外設定的",
+      "signInHint": "這類憑證由 cline 自己保管。在終端機執行下面的指令登入——它會印出一組驗證碼，並開啟瀏覽器頁面讓你確認。"
     },
     "opencodePlugins": {
       "title": "OpenCode 外掛",
@@ -1470,7 +1514,9 @@
       "status": {
         "installed": "已安裝",
         "needs_migration": "需要遷移",
-        "missing": "未安裝"
+        "missing": "未安裝",
+        "path": "路徑外掛",
+        "path_missing": "路徑不存在"
       },
       "installAll": "安裝全部缺失外掛",
       "pinVersions": "固定 @latest 版本",
@@ -2999,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "正在連線 {agent}",
           "connectingDescription": "正在建立連線",
+          "preparingTitle": "正在準備 {agent} 會話",
+          "preparingDescription": "正在讀取歷史會話記錄",
           "loadingSelectorsTitle": "正在載入 {agent} 選擇項",
           "loadingSelectorsDescription": "正在取得模式與會話設定選項",
           "initSessionTitle": "正在初始化 {agent} 會話",
@@ -3052,6 +3100,7 @@
         "searchModel": "搜尋模型...",
         "searchModelAria": "搜尋模型",
         "modelListLabel": "模型",
+        "recommendedBadge": "推薦",
         "noModels": "找不到模型",
         "cancel": "取消",
         "send": "傳送",
@@ -3091,7 +3140,9 @@
         "saveEdit": "儲存",
         "cancelEdit": "取消編輯",
         "editItem": "編輯",
-        "deleteItem": "刪除"
+        "deleteItem": "刪除",
+        "steerItemNow": "插入目前回合",
+        "steerItemAsNote": "作為留言，供下次檢查時讀取"
       },
       "welcomeInputPanel": {
         "agentsSettingsPath": "設定 > Agents",
@@ -3322,6 +3373,7 @@
       "messageList": {
         "attachedResources": "附加資源",
         "loading": "載入中...",
+        "loadBackgroundActivity": "載入背景活動",
         "loadEarlier": "載入更早的訊息",
         "loadingEarlier": "正在載入更早的訊息…",
         "error": "錯誤：{message}",

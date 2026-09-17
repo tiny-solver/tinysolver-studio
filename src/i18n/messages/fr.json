@@ -1191,6 +1191,46 @@
           "question": "Vous poser une question",
           "doom_loop": "Se déclenche quand le même appel se répète trois fois avec la même entrée"
         }
+      },
+      "behavior": {
+        "title": "Comportement et compactage",
+        "description": "Valeurs par défaut de session, compactage du contexte et limites de sortie des outils. Écrit dans opencode.json et appliqué après enregistrement ci-dessous.",
+        "docsLink": "Docs de configuration",
+        "unset": "Non configuré",
+        "defaultAgent": "Agent par défaut",
+        "defaultAgentHint": "Agent principal utilisé par une nouvelle session. Vide ou inconnu retombe sur build.",
+        "share": "Partage",
+        "shareHint": "Si une session peut être publiée sous forme de lien partagé.",
+        "shareManual": "Manuel (à la demande)",
+        "shareAuto": "Automatique (chaque nouvelle session)",
+        "shareDisabled": "Désactivé",
+        "autoUpdate": "Mise à jour automatique",
+        "autoUpdateHint": "Si OpenCode se met à jour tout seul vers la dernière version.",
+        "autoUpdateOn": "Mettre à jour automatiquement",
+        "autoUpdateNotify": "Notifier seulement",
+        "autoUpdateOff": "Jamais",
+        "snapshot": "Instantanés du système de fichiers",
+        "snapshotHint": "Enregistre un instantané avant chaque étape. Désactivé, annuler et revenir en arrière ne restaurent plus les fichiers.",
+        "compactionAuto": "Compactage automatique",
+        "compactionAutoHint": "Résume automatiquement la conversation quand la fenêtre de contexte se remplit.",
+        "compactionPrune": "Élaguer les anciennes sorties d'outils",
+        "compactionPruneHint": "Supprime la sortie des anciens appels d'outils lors du compactage au lieu de la résumer.",
+        "fields": {
+          "subagentDepth": "Profondeur des sous-agents",
+          "tailTurns": "Tours conservés tels quels",
+          "preserveRecentTokens": "Tokens conservés tels quels",
+          "reserved": "Tokens réservés",
+          "maxLines": "Limite de lignes de sortie",
+          "maxBytes": "Limite d'octets de sortie"
+        },
+        "hints": {
+          "subagentDepth": "Profondeur d'imbrication des sous-agents. À 1, un sous-agent ne peut pas en lancer un autre.",
+          "tailTurns": "Nombre de tours utilisateur récents laissés hors compactage. Non défini, seul le budget de tokens ci-dessous les limite.",
+          "preserveRecentTokens": "Budget de tokens des tours récents conservés tels quels après un compactage.",
+          "reserved": "Fenêtre laissée libre pour que le compactage lui-même ne fasse pas déborder le contexte.",
+          "maxLines": "Une sortie plus longue est écrite sur disque et remplacée par un aperçu. Par défaut 2000.",
+          "maxBytes": "Une sortie plus grosse est écrite sur disque et remplacée par un aperçu. Par défaut 51200."
+        }
       }
     },
     "openClaw": {
@@ -1461,7 +1501,11 @@
       "ready": "L'adaptateur {adapterCmd} est installé : c'est lui que Codeg lance. Il embarque son propre runtime, la {nativeLabel} n'est donc pas nécessaire ; si vous l'installez plus tard, les deux coexistent et partagent {configDir}."
     },
     "cline": {
-      "configDescription": "Configurez le fournisseur API et les identifiants Cline. Les paramètres sont enregistrés dans ~/.cline/data/."
+      "configDescription": "Configurez le fournisseur API et les identifiants Cline. Les paramètres sont enregistrés dans ~/.cline/data/.",
+      "signInGroup": "Se connecter avec Cline",
+      "byoGroup": "Utiliser votre propre fournisseur",
+      "externalGroup": "Configuré en dehors de codeg",
+      "signInHint": "Cline conserve lui-même cet identifiant. Lancez la commande ci-dessous dans un terminal pour vous connecter : elle affiche un code et ouvre une page du navigateur pour le confirmer."
     },
     "opencodePlugins": {
       "title": "Plugins OpenCode",
@@ -1470,7 +1514,9 @@
       "status": {
         "installed": "Installé",
         "needs_migration": "Migration requise",
-        "missing": "Non installé"
+        "missing": "Non installé",
+        "path": "Plugin par chemin",
+        "path_missing": "Chemin introuvable"
       },
       "installAll": "Installer tous les manquants",
       "pinVersions": "Fixer les versions @latest",
@@ -2999,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "Connexion à {agent}",
           "connectingDescription": "Établissement de la connexion",
+          "preparingTitle": "Préparation de la session {agent}",
+          "preparingDescription": "Lecture de l'historique de la conversation",
           "loadingSelectorsTitle": "Chargement des sélecteurs de {agent}",
           "loadingSelectorsDescription": "Récupération des options de mode et de configuration de session",
           "initSessionTitle": "Initialisation de la session {agent}",
@@ -3052,6 +3100,7 @@
         "searchModel": "Rechercher des modèles...",
         "searchModelAria": "Rechercher des modèles",
         "modelListLabel": "Modèles",
+        "recommendedBadge": "Recommandé",
         "noModels": "Aucun modèle trouvé",
         "cancel": "Annuler",
         "send": "Envoyer",
@@ -3091,7 +3140,9 @@
         "saveEdit": "Enregistrer",
         "cancelEdit": "Annuler la modification",
         "editItem": "Modifier",
-        "deleteItem": "Supprimer"
+        "deleteItem": "Supprimer",
+        "steerItemNow": "Insérer dans le tour en cours",
+        "steerItemAsNote": "Envoyer comme note pour la prochaine vérification"
       },
       "welcomeInputPanel": {
         "agentsSettingsPath": "Paramètres > Agents",
@@ -3322,6 +3373,7 @@
       "messageList": {
         "attachedResources": "Ressources jointes",
         "loading": "Chargement...",
+        "loadBackgroundActivity": "Charger l'activité en arrière-plan",
         "loadEarlier": "Charger les messages précédents",
         "loadingEarlier": "Chargement des messages précédents…",
         "error": "Erreur : {message}",

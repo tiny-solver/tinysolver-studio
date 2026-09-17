@@ -1191,6 +1191,46 @@
           "question": "Ask you a question",
           "doom_loop": "Trips when the same call repeats three times with identical input"
         }
+      },
+      "behavior": {
+        "title": "Behavior & compaction",
+        "description": "Session defaults, context compaction and tool-output limits. Written to opencode.json and applied once you save below.",
+        "docsLink": "Config docs",
+        "unset": "Not configured",
+        "defaultAgent": "Default agent",
+        "defaultAgentHint": "Which primary agent a new session opens in. Falls back to build when empty or unknown.",
+        "share": "Sharing",
+        "shareHint": "How a session may be published to a share link.",
+        "shareManual": "Manual (on request)",
+        "shareAuto": "Automatic (every new session)",
+        "shareDisabled": "Disabled",
+        "autoUpdate": "Auto-update",
+        "autoUpdateHint": "Whether OpenCode updates itself to the latest release.",
+        "autoUpdateOn": "Update automatically",
+        "autoUpdateNotify": "Notify only",
+        "autoUpdateOff": "Never",
+        "snapshot": "Filesystem snapshots",
+        "snapshotHint": "Records a snapshot before each step. Turning it off means undo and revert can no longer restore files.",
+        "compactionAuto": "Auto-compaction",
+        "compactionAutoHint": "Summarize the conversation automatically when the context window fills up.",
+        "compactionPrune": "Prune old tool output",
+        "compactionPruneHint": "Drop the output of older tool calls during compaction instead of summarizing it.",
+        "fields": {
+          "subagentDepth": "Sub-agent depth",
+          "tailTurns": "Turns kept verbatim",
+          "preserveRecentTokens": "Tokens kept verbatim",
+          "reserved": "Reserved tokens",
+          "maxLines": "Tool output line limit",
+          "maxBytes": "Tool output byte limit"
+        },
+        "hints": {
+          "subagentDepth": "How deep sub-agents may nest. 1 stops a sub-agent from launching another.",
+          "tailTurns": "Most recent user turns kept uncompacted. Unset means only the token budget below limits them.",
+          "preserveRecentTokens": "Token budget of recent turns kept uncompacted after a compaction.",
+          "reserved": "Window left free so a compaction itself never overflows the context.",
+          "maxLines": "Output longer than this is written to disk and replaced with a preview. Default 2000.",
+          "maxBytes": "Output larger than this is written to disk and replaced with a preview. Default 51200."
+        }
       }
     },
     "openClaw": {
@@ -1461,7 +1501,11 @@
       "ready": "Adapter {adapterCmd} is installed — that is what Codeg launches. It ships its own runtime, so the {nativeLabel} is not required; install it later and the two coexist, sharing {configDir}."
     },
     "cline": {
-      "configDescription": "Configure Cline API provider and credentials. Settings are saved to ~/.cline/data/."
+      "configDescription": "Configure Cline API provider and credentials. Settings are saved to ~/.cline/data/.",
+      "signInGroup": "Sign in with Cline",
+      "byoGroup": "Bring your own provider",
+      "externalGroup": "Configured outside codeg",
+      "signInHint": "Cline holds this credential itself. Run the command below in a terminal to sign in — it prints a code and opens a browser page to confirm it."
     },
     "opencodePlugins": {
       "title": "OpenCode Plugins",
@@ -1470,7 +1514,9 @@
       "status": {
         "installed": "Installed",
         "needs_migration": "Needs migration",
-        "missing": "Missing"
+        "missing": "Missing",
+        "path": "Path plugin",
+        "path_missing": "Path not found"
       },
       "installAll": "Install All Missing",
       "pinVersions": "Pin @latest Versions",
@@ -2999,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "Connecting to {agent}",
           "connectingDescription": "Establishing connection",
+          "preparingTitle": "Preparing {agent} session",
+          "preparingDescription": "Reading the conversation history",
           "loadingSelectorsTitle": "Loading {agent} selectors",
           "loadingSelectorsDescription": "Fetching mode and session config options",
           "initSessionTitle": "Initializing {agent} session",
@@ -3054,6 +3102,7 @@
         "searchModel": "Search models...",
         "searchModelAria": "Search models",
         "modelListLabel": "Models",
+        "recommendedBadge": "Recommended",
         "noModels": "No models found",
         "cancel": "Cancel",
         "send": "Send",
@@ -3091,7 +3140,9 @@
         "saveEdit": "Save",
         "cancelEdit": "Cancel edit",
         "editItem": "Edit",
-        "deleteItem": "Remove"
+        "deleteItem": "Remove",
+        "steerItemNow": "Insert into current turn",
+        "steerItemAsNote": "Send as note for next check"
       },
       "welcomeInputPanel": {
         "agentsSettingsPath": "Settings > Agents",
@@ -3322,6 +3373,7 @@
       "messageList": {
         "attachedResources": "Attached resources",
         "loading": "Loading...",
+        "loadBackgroundActivity": "Load background activity",
         "loadEarlier": "Load earlier messages",
         "loadingEarlier": "Loading earlier messages…",
         "error": "Error: {message}",

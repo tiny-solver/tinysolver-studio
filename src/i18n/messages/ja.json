@@ -1191,6 +1191,46 @@
           "question": "あなたへの質問",
           "doom_loop": "同じ入力で同じ呼び出しが 3 回繰り返されたときに作動"
         }
+      },
+      "behavior": {
+        "title": "動作とコンパクション",
+        "description": "セッションの既定値、コンテキストのコンパクション、ツール出力の上限。opencode.json に書き込まれ、下の保存で反映されます。",
+        "docsLink": "設定ドキュメント",
+        "unset": "未設定",
+        "defaultAgent": "既定エージェント",
+        "defaultAgentHint": "新しいセッションで使うプライマリエージェント。空または不明な場合は build に戻ります。",
+        "share": "共有",
+        "shareHint": "セッションを共有リンクとして公開できるかどうか。",
+        "shareManual": "手動（必要なときだけ）",
+        "shareAuto": "自動（新しいセッションを常に共有）",
+        "shareDisabled": "無効",
+        "autoUpdate": "自動更新",
+        "autoUpdateHint": "OpenCode が自身を最新版へ更新するかどうか。",
+        "autoUpdateOn": "自動的に更新",
+        "autoUpdateNotify": "通知のみ",
+        "autoUpdateOff": "更新しない",
+        "snapshot": "ファイルシステムのスナップショット",
+        "snapshotHint": "各ステップの前にスナップショットを記録します。オフにすると取り消しと復元でファイルを戻せなくなります。",
+        "compactionAuto": "自動コンパクション",
+        "compactionAutoHint": "コンテキストウィンドウが埋まったら会話を自動的に要約します。",
+        "compactionPrune": "古いツール出力を削る",
+        "compactionPruneHint": "コンパクション時に古いツール呼び出しの出力を要約せずに破棄します。",
+        "fields": {
+          "subagentDepth": "サブエージェントの深さ",
+          "tailTurns": "原文のまま残すターン数",
+          "preserveRecentTokens": "原文のまま残すトークン数",
+          "reserved": "予約トークン",
+          "maxLines": "ツール出力の行数上限",
+          "maxBytes": "ツール出力のバイト数上限"
+        },
+        "hints": {
+          "subagentDepth": "サブエージェントを何段までネストできるか。1 ならサブエージェントはさらに別のサブエージェントを起動できません。",
+          "tailTurns": "直近いくつのユーザーターンをコンパクションから除外するか。未設定なら下のトークン予算だけが上限になります。",
+          "preserveRecentTokens": "コンパクション後も原文のまま残す直近ターンのトークン予算。",
+          "reserved": "コンパクション自体がコンテキストを溢れさせないよう空けておくウィンドウ。",
+          "maxLines": "これを超える出力はディスクに書き出され、プレビューだけが残ります。既定 2000。",
+          "maxBytes": "これを超える出力はディスクに書き出され、プレビューだけが残ります。既定 51200。"
+        }
       }
     },
     "openClaw": {
@@ -1461,7 +1501,11 @@
       "ready": "アダプター {adapterCmd} はインストール済みで、Codeg が起動するのはこれです。独自のランタイムを同梱しているため {nativeLabel} は不要です。後から入れても両者は共存し、{configDir} を共有します。"
     },
     "cline": {
-      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。"
+      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。",
+      "signInGroup": "Cline アカウントでサインイン",
+      "byoGroup": "自分のプロバイダーを使う",
+      "externalGroup": "codeg の外で設定済み",
+      "signInHint": "この資格情報は cline 自身が保持します。ターミナルで下のコマンドを実行してサインインしてください。コードが表示され、ブラウザで確認するページが開きます。"
     },
     "opencodePlugins": {
       "title": "OpenCode プラグイン",
@@ -1470,7 +1514,9 @@
       "status": {
         "installed": "インストール済み",
         "needs_migration": "移行が必要",
-        "missing": "未インストール"
+        "missing": "未インストール",
+        "path": "パスプラグイン",
+        "path_missing": "パスが見つかりません"
       },
       "installAll": "不足プラグインをすべてインストール",
       "pinVersions": "@latest バージョンを固定",
@@ -2999,6 +3045,8 @@
         "tasks": {
           "connectingTitle": "{agent} に接続中",
           "connectingDescription": "接続を確立しています",
+          "preparingTitle": "{agent} セッションを準備中",
+          "preparingDescription": "会話履歴を読み込んでいます",
           "loadingSelectorsTitle": "{agent} のセレクターを読み込み中",
           "loadingSelectorsDescription": "モードとセッション設定オプションを取得しています",
           "initSessionTitle": "{agent} セッションを初期化中",
@@ -3052,6 +3100,7 @@
         "searchModel": "モデルを検索...",
         "searchModelAria": "モデルを検索",
         "modelListLabel": "モデル",
+        "recommendedBadge": "推奨",
         "noModels": "モデルが見つかりません",
         "cancel": "キャンセル",
         "send": "送信",
@@ -3091,7 +3140,9 @@
         "saveEdit": "保存",
         "cancelEdit": "編集をキャンセル",
         "editItem": "編集",
-        "deleteItem": "削除"
+        "deleteItem": "削除",
+        "steerItemNow": "現在のターンに挿入",
+        "steerItemAsNote": "メモとして送信し次回チェック時に読ませる"
       },
       "welcomeInputPanel": {
         "agentsSettingsPath": "設定 > エージェント",
@@ -3322,6 +3373,7 @@
       "messageList": {
         "attachedResources": "添付リソース",
         "loading": "読み込み中...",
+        "loadBackgroundActivity": "バックグラウンドの動作を読み込む",
         "loadEarlier": "以前のメッセージを読み込む",
         "loadingEarlier": "以前のメッセージを読み込み中…",
         "error": "エラー: {message}",

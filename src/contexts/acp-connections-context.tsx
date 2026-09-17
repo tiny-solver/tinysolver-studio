@@ -63,6 +63,7 @@ import type {
   QuestionAnswer,
   PendingPlanApprovalState,
   PlanApprovalAnswer,
+  SessionConfigKindInfo,
   SessionConfigOptionInfo,
   SessionFailureRecord,
   SessionModeStateInfo,
@@ -1100,7 +1101,12 @@ function sameConfigOptions(
       left.id !== right.id ||
       left.name !== right.name ||
       left.description !== right.description ||
-      left.category !== right.category
+      left.category !== right.category ||
+      // Rendered (the "recommended" badge), so it has to be compared or a
+      // push that changes ONLY the recommendation is swallowed and the badge
+      // goes stale. codex publishes `reasoning_effort`'s recommendation as the
+      // CURRENT model's default, so it moves on its own schedule.
+      (left.recommended_value ?? null) !== (right.recommended_value ?? null)
     ) {
       return false
     }
@@ -1109,38 +1115,48 @@ function sameConfigOptions(
     const rightKind = right.kind
     if (leftKind.type !== rightKind.type) return false
 
-    if (leftKind.type === "select") {
+    // Every kind must compare its own `current_value`. Falling through as
+    // "equal" is how the agent's authoritative answer to a boolean toggle got
+    // swallowed (#709) — so an unrecognized kind reports *unequal* instead: a
+    // redundant re-render on a cold path is the cheap failure, a dropped state
+    // update is the expensive one.
+    if (leftKind.type === "boolean") {
       if (leftKind.current_value !== rightKind.current_value) return false
-      if (leftKind.options.length !== rightKind.options.length) return false
-      if (leftKind.groups.length !== rightKind.groups.length) return false
+      continue
+    }
 
-      for (let j = 0; j < leftKind.options.length; j += 1) {
-        const lo = leftKind.options[j]
-        const ro = rightKind.options[j]
+    if (leftKind.type !== "select") return false
+
+    if (leftKind.current_value !== rightKind.current_value) return false
+    if (leftKind.options.length !== rightKind.options.length) return false
+    if (leftKind.groups.length !== rightKind.groups.length) return false
+
+    for (let j = 0; j < leftKind.options.length; j += 1) {
+      const lo = leftKind.options[j]
+      const ro = rightKind.options[j]
+      if (
+        lo.value !== ro.value ||
+        lo.name !== ro.name ||
+        lo.description !== ro.description
+      ) {
+        return false
+      }
+    }
+
+    for (let j = 0; j < leftKind.groups.length; j += 1) {
+      const lg = leftKind.groups[j]
+      const rg = rightKind.groups[j]
+      if (lg.group !== rg.group || lg.name !== rg.name) return false
+      if (lg.options.length !== rg.options.length) return false
+      for (let k = 0; k < lg.options.length; k += 1) {
+        const lgo = lg.options[k]
+        const rgo = rg.options[k]
         if (
-          lo.value !== ro.value ||
-          lo.name !== ro.name ||
-          lo.description !== ro.description
+          lgo.value !== rgo.value ||
+          lgo.name !== rgo.name ||
+          lgo.description !== rgo.description
         ) {
           return false
-        }
-      }
-
-      for (let j = 0; j < leftKind.groups.length; j += 1) {
-        const lg = leftKind.groups[j]
-        const rg = rightKind.groups[j]
-        if (lg.group !== rg.group || lg.name !== rg.name) return false
-        if (lg.options.length !== rg.options.length) return false
-        for (let k = 0; k < lg.options.length; k += 1) {
-          const lgo = lg.options[k]
-          const rgo = rg.options[k]
-          if (
-            lgo.value !== rgo.value ||
-            lgo.name !== rgo.name ||
-            lgo.description !== rgo.description
-          ) {
-            return false
-          }
         }
       }
     }
@@ -1165,6 +1181,35 @@ function sameCommands(
     }
   }
   return true
+}
+
+/**
+ * The kind an optimistic `setConfigOption` lands on, or `null` when the pick
+ * changes nothing — or cannot be interpreted here, in which case the agent's
+ * own answer is left to settle it.
+ *
+ * Config values are opaque strings the whole way down (this store, the Tauri
+ * command, the web handler, the preference store); only the backend's wire
+ * encoder knows an option's kind decides the payload, turning `"true"` into a
+ * real JSON boolean. This is the mirror of that decode, and it is deliberately
+ * strict about the two values a toggle emits: guessing "off" for anything else
+ * would be a silent lie about whether the agent may run tools unasked.
+ */
+function nextConfigOptionKind(
+  kind: SessionConfigKindInfo,
+  valueId: string
+): SessionConfigKindInfo | null {
+  if (kind.type === "select") {
+    if (kind.current_value === valueId) return null
+    return { ...kind, current_value: valueId }
+  }
+  if (kind.type === "boolean") {
+    if (valueId !== "true" && valueId !== "false") return null
+    const nextValue = valueId === "true"
+    if (kind.current_value === nextValue) return null
+    return { ...kind, current_value: nextValue }
+  }
+  return null
 }
 
 function dedupeCommandsByName(
@@ -2438,17 +2483,10 @@ function connectionsReducer(
       const idx = options.findIndex((o) => o.id === action.configId)
       if (idx === -1) return state
       const opt = options[idx]
-      if (
-        opt.kind.type !== "select" ||
-        opt.kind.current_value === action.valueId
-      ) {
-        return state
-      }
+      const kind = nextConfigOptionKind(opt.kind, action.valueId)
+      if (!kind) return state
       const updated = [...options]
-      updated[idx] = {
-        ...opt,
-        kind: { ...opt.kind, current_value: action.valueId },
-      }
+      updated[idx] = { ...opt, kind }
       const next = new Map(state)
       next.set(action.contextKey, { ...conn, configOptions: updated })
       return next
@@ -2672,8 +2710,33 @@ function connectionsReducer(
 
 // ── Ref-based store (replaces useReducer + Context) ──
 
+/**
+ * A `connect()` that has started but has not yet produced a store entry.
+ *
+ * The whole establishment leg — agent spawn, ACP `initialize`, then
+ * `session/resume|load|new` — happens inside ONE `await acpConnect(...)`, and
+ * `CONNECTION_CREATED` (the action that first writes `status: "connecting"`)
+ * only runs after it resolves. For a historical conversation that await is the
+ * SLOW part (seconds to a minute; see the agent-side resume cost), so without
+ * this the UI spent the entire wait reading `status === null` — indistinguishable
+ * from "nothing is happening": no composer placeholder, no loading cue, no
+ * status-bar task, a "disconnected" heart.
+ *
+ * Kept OUT of `ConnectionsMap` deliberately: there is no connection yet (no id,
+ * no session, nothing to route events to), and every reducer/sweep that walks
+ * that map would have to learn about a half-entry. It is a separate, reactive
+ * side table read only by `useConnection` (which reports it as `connecting`)
+ * and the composer's status chip.
+ */
+export interface ConnectPendingInfo {
+  agentType: AgentType
+  workingDir: string | null
+}
+
 interface InternalStore {
   connections: ConnectionsMap
+  /** contextKey → the in-flight `connect()` for it (see ConnectPendingInfo). */
+  connectPending: Map<string, ConnectPendingInfo>
   activeKey: string | null
   keyListeners: Map<string, Set<() => void>>
   activeKeyListeners: Set<() => void>
@@ -2683,6 +2746,10 @@ interface InternalStore {
 
 export interface ConnectionStoreApi {
   getConnection(key: string): ConnectionState | undefined
+  /** The in-flight `connect()` for this key, or undefined when none is. The
+   *  returned object is reference-stable for the lifetime of that connect, so
+   *  it is safe as a `useSyncExternalStore` snapshot. */
+  getConnectPending(key: string): ConnectPendingInfo | undefined
   getActiveKey(): string | null
   subscribeKey(key: string, cb: () => void): () => void
   subscribeActiveKey(cb: () => void): () => void
@@ -3018,6 +3085,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   // Ref-based store — mutations don't trigger React state updates
   const storeRef = useRef<InternalStore>({
     connections: new Map(),
+    connectPending: new Map(),
     activeKey: null,
     keyListeners: new Map(),
     activeKeyListeners: new Set(),
@@ -3286,6 +3354,25 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     for (const cb of storeRef.current.activeKeyListeners) cb()
   }, [])
 
+  /**
+   * Publish (or retire) the in-flight-`connect()` marker for a key and wake its
+   * subscribers. Rides the SAME per-key listener set as the connections map, so
+   * a surface watching one key observes the pending → entry handover as one
+   * continuous stream rather than two stores it has to reconcile.
+   */
+  const setConnectPending = useCallback(
+    (key: string, info: ConnectPendingInfo | null) => {
+      const { connectPending } = storeRef.current
+      if (info === null) {
+        if (!connectPending.delete(key)) return
+      } else {
+        connectPending.set(key, info)
+      }
+      notifyKeyListeners(key)
+    },
+    [notifyKeyListeners]
+  )
+
   // ── Dispatch (replaces useReducer dispatch) ──
 
   const dispatch = useCallback(
@@ -3364,6 +3451,9 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     return {
       getConnection(key: string) {
         return storeRef.current.connections.get(key)
+      },
+      getConnectPending(key: string) {
+        return storeRef.current.connectPending.get(key)
       },
       getActiveKey() {
         return storeRef.current.activeKey
@@ -5300,6 +5390,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         return
       }
       connectingKeysRef.current.add(contextKey)
+      // Reactive twin of `connectingKeysRef` (a plain ref nothing can observe).
+      // Published BEFORE the first await so the establishment leg — which for a
+      // historical session is the whole multi-second resume — reads as
+      // `connecting` in the UI instead of as a blank `null`. Set here, in step
+      // with `connectingKeysRef`, so the two retire together: the `finally`
+      // clears both, covering the abandoned/superseded returns inside the try
+      // as well as a throwing preflight.
+      setConnectPending(contextKey, {
+        agentType,
+        workingDir: workingDir ?? null,
+      })
 
       // Declared outside the try so the catch below can still tell whether this
       // agent is an ACP adapter when picking its "not installed" wording.
@@ -5759,6 +5860,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // so this is the one place that consumes it.
         const wasAbandoned = abandonedKeysRef.current.has(contextKey)
         connectingKeysRef.current.delete(contextKey)
+        setConnectPending(contextKey, null)
         abandonedKeysRef.current.delete(contextKey)
         const settledWaiters = connectSettledWaitersRef.current.get(contextKey)
         if (settledWaiters) {
@@ -5807,6 +5909,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       resolveConnectBlockState,
       seedDelegationsFromSnapshot,
       setActiveKey,
+      setConnectPending,
       setupAttachSubscription,
       t,
       teardownAttachSubscription,
