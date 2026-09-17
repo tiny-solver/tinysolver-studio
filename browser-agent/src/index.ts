@@ -31,13 +31,14 @@ import {
   describe,
   hoverAt,
   isDisabledControl,
-  obstructionAt,
   pointAt,
+  pointerReach,
   pressOn,
   selectIn,
   typeInto,
   type ActionFailure,
   type ActionRequest,
+  type ScrollReport,
 } from "./act"
 
 /**
@@ -84,6 +85,19 @@ function generationToken(): string {
  * without asking for a `WeakRef` the oldest WebKit we support may not have.
  */
 let refs = new Map<string, Element>()
+
+/**
+ * The names the snapshot *before* the last one handed out, and the token it
+ * handed them out under — names only, no elements, so nothing here can
+ * resolve to anything.
+ *
+ * Kept for one reason: to tell a caller that a ref it holds was unmade by its
+ * own next snapshot rather than by the page moving on. See [`stale`]. Holding
+ * the strings cannot make a dead ref live again, which is why it is safe to
+ * keep them at all.
+ */
+let superseded = new Set<string>()
+let supersededToken = ""
 
 /**
  * The address the last snapshot was taken at.
@@ -237,6 +251,8 @@ export function snapshot(options: SnapshotOptions = {}): SnapshotResult {
     for (const ref of Array.from(next.keys()))
       if (!shown.has(ref)) next.delete(ref)
   }
+  superseded = new Set(refs.keys())
+  supersededToken = refsToken
   refs = next
   refsTakenAt = location.href
   refsHistoryLength = history.length
@@ -320,7 +336,13 @@ function refsAreCurrent(generation: string): boolean {
 }
 
 export type ActionResult =
-  | { ok: true; url: string }
+  | {
+      ok: true
+      url: string
+      /** What a scroll key moved, when the action was one. Absent for every
+       *  other action, and for a key that scrolled nothing. */
+      scrolled?: ScrollReport
+    }
   | ({ ok: false; url: string } & ActionFailure)
 
 export type LocateResult =
@@ -343,7 +365,49 @@ export type RectResult =
     }
   | ({ ok: false; url: string } & ActionFailure)
 
-function stale(ref: string | null): ActionFailure {
+/**
+ * Why a ref did not resolve, in the caller's terms.
+ *
+ * `elementForRef` collapses four causes into one answer on purpose, because
+ * the fix for all four is the same: snapshot again. One of them deserves its
+ * own sentence anyway, because the plain answer is actively misleading there.
+ * A caller that snapshots a second time with a smaller `maxChars` — to glance
+ * at one part of a page it has already read — silently unmakes every ref
+ * outside the cut, since a snapshot replaces the ref table and a cut takes
+ * the refs with it. Acting on a ref it was handed a moment ago then says "not
+ * an element on the page as it is now" about a page that has not changed at
+ * all, and the caller has no way to see that it did this to itself.
+ *
+ * Both halves of that are covered, because a caller can arrive quoting either
+ * snapshot: the newer one (the ref is simply not in its table) or the older
+ * one the ref came from (the token itself is a generation behind). What is
+ * *not* covered, deliberately, is a ref the current table still holds whose
+ * element has left the page — `refs.has` is what tells the two apart, and
+ * without it a framework re-render would be reported as a caller's own doing
+ * and answered with "take a bigger snapshot", which is the same kind of lie
+ * this is here to remove.
+ */
+function stale(ref: string | null, generation?: string): ActionFailure {
+  const cut =
+    ref !== null &&
+    generation !== undefined &&
+    !refs.has(ref) &&
+    superseded.has(ref) &&
+    // Either the caller is on the current snapshot and this ref is not in it,
+    // or it is quoting the very snapshot the ref came from. Anything older
+    // than that, or a page that has moved since, is not this case and gets
+    // the plain answer.
+    (refsAreCurrent(generation) ||
+      (generation === supersededToken && location.href === refsTakenAt))
+  if (cut)
+    return {
+      error: "stale",
+      detail:
+        `${ref} was named by an earlier snapshot of this page, and the snapshot you took ` +
+        `after it did not name it — a smaller \`maxChars\` names fewer refs, and each ` +
+        `snapshot replaces the last one's. The page itself has not changed. Take a ` +
+        `snapshot large enough to include what you want and use a ref from that one.`,
+    }
   return {
     error: "stale",
     detail: ref
@@ -391,7 +455,7 @@ export function act(
   let element: Element | null = null
   if (ref !== null) {
     element = elementForRef(generation, ref)
-    if (!element) return failed(stale(ref))
+    if (!element) return failed(stale(ref, generation))
   } else if (!refsAreCurrent(generation)) {
     return failed(stale(null))
   } else if (request.kind !== "press") {
@@ -411,12 +475,8 @@ export function act(
         })
       const point = pointAt(target)
       if ("error" in point) return failed(point)
-      const cover = obstructionAt(point.x, point.y, target)
-      if (cover)
-        return failed({
-          error: "obscured",
-          detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`,
-        })
+      const blocked = pointerReach(target, point)
+      if (blocked) return failed(blocked)
       if (request.kind === "click") {
         const count = clamp(request.count, 1, 3, 1)
         const delivered = clickAt(
@@ -439,13 +499,20 @@ export function act(
       if (failure) return failed(failure)
       if (request.submit) {
         const after = pressOn(null, "Enter")
-        if (after) return failed(after)
+        if ("error" in after) return failed(after)
       }
       return { ok: true, url: location.href }
     }
     case "press": {
-      const failure = pressOn(element, String(request.key ?? ""))
-      return failure ? failed(failure) : { ok: true, url: location.href }
+      const done = pressOn(element, String(request.key ?? ""))
+      if ("error" in done) return failed(done)
+      return {
+        ok: true,
+        url: location.href,
+        // Omitted rather than null for a key that is not a scroll key: the
+        // field's presence is what says the question was asked at all.
+        ...(done.scrolled ? { scrolled: done.scrolled } : {}),
+      }
     }
     case "select": {
       const values = Array.isArray(request.values)
@@ -471,7 +538,7 @@ export function act(
 export function locate(generation: string, ref: string): LocateResult {
   const url = location.href
   const element = elementForRef(generation, ref)
-  if (!element) return { ok: false, url, ...stale(ref) }
+  if (!element) return { ok: false, url, ...stale(ref, generation) }
   if (isDisabledControl(element))
     return {
       ok: false,
@@ -481,14 +548,8 @@ export function locate(generation: string, ref: string): LocateResult {
     }
   const point = pointAt(element)
   if ("error" in point) return { ok: false, url, ...point }
-  const cover = obstructionAt(point.x, point.y, element)
-  if (cover)
-    return {
-      ok: false,
-      url,
-      error: "obscured",
-      detail: `${describe(cover)} is on top of ${describe(element)} where a pointer would land`,
-    }
+  const blocked = pointerReach(element, point)
+  if (blocked) return { ok: false, url, ...blocked }
   return { ok: true, url: location.href, x: point.x, y: point.y }
 }
 
@@ -502,7 +563,7 @@ export function locate(generation: string, ref: string): LocateResult {
 export function rectOf(generation: string, ref: string): RectResult {
   const url = location.href
   const element = elementForRef(generation, ref)
-  if (!element) return { ok: false, url, ...stale(ref) }
+  if (!element) return { ok: false, url, ...stale(ref, generation) }
   // Whether bringing it into view moved anything is read off the element's
   // own box, not the window's scroll offsets: an `overflow: auto` ancestor
   // scrolls without moving the window at all.
@@ -515,7 +576,7 @@ export function rectOf(generation: string, ref: string): RectResult {
       ok: false,
       url,
       error: "not-visible",
-      detail: `${describe(element)} has no visible box on screen`,
+      detail: `${describe(element)} has no visible box on screen to crop to`,
     }
   const after = element.getBoundingClientRect()
   return {

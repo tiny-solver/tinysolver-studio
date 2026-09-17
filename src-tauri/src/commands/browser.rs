@@ -1643,9 +1643,11 @@ async fn deliver_trusted_pointer(
     // land for real: the grant and the page have to be as they were.
     still_actionable(registry, tab_id, tab_generation, generation)?;
     match dispatch_pointer(surface, gesture).await {
+        // A pointer, never a key: nothing on this path scrolls.
         Ok(()) => Ok(Some(agent::ActionOutcome {
             fidelity: agent::Fidelity::Trusted,
             url: answer.url,
+            scrolled: None,
         })),
         Err(PointerFailure {
             delivered: false,
@@ -1697,6 +1699,7 @@ fn accept(
         return Ok(agent::ActionOutcome {
             fidelity,
             url: answer.url,
+            scrolled: answer.scrolled,
         });
     }
     let detail = answer

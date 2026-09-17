@@ -57,7 +57,9 @@ const CHROME =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 const PORT = 9333
 
-const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
+const PAGE = `<!doctype html><html><head><title>Probe</title>
+<style>#stretched::after{content:"";position:absolute;inset:0}</style>
+</head><body>
 <header><a href="/docs">Docs</a></header>
 <main>
   <h1>Orders</h1>
@@ -108,6 +110,48 @@ const PAGE = `<!doctype html><html><head><title>Probe</title></head><body>
     <div id="smallpop" popover="manual" style="padding:0;border:0;margin:0;left:200px;top:150px;right:auto;bottom:auto;width:140px;height:60px">
       <iframe id="smallframe" style="width:140px;height:60px;border:0" srcdoc="&lt;body style=&quot;margin:0&quot;&gt;&lt;button id=smallbtn style=&quot;width:140px;height:60px&quot;&gt;small&lt;/button&gt;"></iframe>
     </div>
+  </section>
+  <section id="reach">
+    <!-- The screen-reader-only recipe, as the frameworks ship it: a box by the
+         geometry, nothing at all to a person, and named by the aria tree like
+         any other heading. A pointer sent to its centre lands on whatever
+         draws the space it sits in. -->
+    <article id="post" style="position:relative;background:#eee;height:40px">
+      <h2 id="sronly" style="position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">Posted by ada</h2>
+      <p>post body</p>
+    </article>
+    <!-- The same intent written the modern way, and in the older way that
+         still ships in every framework's stylesheet: a box of a real size,
+         clipped away to nothing. Each is big enough to pass the size check,
+         so it is the style that has to catch them. Kept apart from the one
+         above, and from each other, because they fail at different checks and
+         one regressing must not hide behind another. -->
+    <div id="blocker" style="position:relative;background:#eee;height:40px">
+      <h2 id="clipped" style="position:absolute;clip-path:inset(50%);width:120px;height:20px">Clipped heading</h2>
+    </div>
+    <div id="legacy" style="position:relative;background:#eee;height:40px">
+      <h2 id="oldclip" style="position:absolute;clip:rect(0,0,0,0);width:120px;height:20px">Legacy clipped</h2>
+    </div>
+    <!-- And the one that must NOT be called erased: clipped, but not away.
+         Its centre is inside what is left, so it is an ordinary click. -->
+    <div id="partly" style="position:relative;height:60px">
+      <button id="peeking" style="clip-path:inset(0 0 30% 0);width:120px;height:40px">Peeking</button>
+    </div>
+    <!-- The stretched-link pattern: a card whose ::after covers the whole
+         card, over a link that is perfectly visible. A pointer at the link's
+         centre lands on the card — an ANCESTOR — and the right answer is
+         "click the card", not "this can never be clicked". -->
+    <div id="stretched" style="position:relative;height:40px;background:#f6f6f6">
+      <a id="inside" href="#stretched-went">Stretched</a>
+    </div>
+    <label>Notes <input id="notes" name="notes"></label>
+    <!-- A scroller of its own, so a key pressed inside it can be shown to
+         move the pane and leave the document where it was. -->
+    <div id="pane" style="width:200px;height:80px;overflow:auto">
+      <button id="deep">Deep</button>
+      <div style="height:800px"></div>
+    </div>
+    <div id="tall" style="height:3000px"></div>
   </section>
 <script>
   // Forty frames the picker must look past to reach the visible one, and
@@ -572,6 +616,196 @@ try {
     )
   }
   {
+    // "Something is in the way" and "this was never on screen" are both a
+    // refusal to click, and an agent has to tell them apart: the first is
+    // worth another look after the page settles, the second is worth nothing
+    // at all. An accessibility tree is full of the second — every article on
+    // a forum carries a screen-reader-only heading — so an agent that reads
+    // them as the first works its way down a column of them.
+    const { gen, ref } = await fresh()
+    const sronly = ref(/heading "Posted by ada" \[level=2\] \[ref=(e\d+)\]/)
+    const hidden = await actJson(gen, sronly, { kind: "click" })
+    check(
+      "a screen-reader-only heading is refused as never-visible, not obscured",
+      [hidden.ok, hidden.error, hidden.detail.includes("paints nothing")],
+      [false, "not-visible", true]
+    )
+    const clipped = ref(/heading "Clipped heading" \[level=2\] \[ref=(e\d+)\]/)
+    const through = await actJson(gen, clipped, { kind: "click" })
+    check(
+      "an element clipped away is told from one with something on top of it",
+      [through.ok, through.error, through.detail.includes("div#blocker")],
+      [false, "not-visible", true]
+    )
+    const legacy = ref(/heading "Legacy clipped" \[level=2\] \[ref=(e\d+)\]/)
+    check(
+      "the older `clip: rect(0 0 0 0)` spelling counts as erased too",
+      (await actJson(gen, legacy, { kind: "click" })).error,
+      "not-visible"
+    )
+    // Clipped is not erased. A box with most of itself still showing is an
+    // ordinary target, and reading "clip-path" as "gone" would refuse it.
+    const peeking = ref(/button "Peeking" \[ref=(e\d+)\]/)
+    check(
+      "a partly clipped element is still an ordinary click",
+      (await actJson(gen, peeking, { kind: "click" })).ok,
+      true
+    )
+    const located = JSON.parse(
+      await run(
+        `JSON.stringify(__codegAgent.locate(${gen}, ${JSON.stringify(clipped)}))`
+      )
+    )
+    check(
+      "the trusted path tells the two apart the same way",
+      located.error,
+      "not-visible"
+    )
+    // The line the verdict must not cross. An ancestor painting over its own
+    // descendant is ordinary and recoverable — the stretched-link card, an
+    // accordion shut over its contents — and calling that permanent would be
+    // worse than the confusing answer it replaced, because it tells an agent
+    // to give up on a link that is right there.
+    const covered = ref(/link "Stretched" \[ref=(e\d+)\]/)
+    const overlaid = await actJson(gen, covered, { kind: "click" })
+    check(
+      "an ancestor's own overlay is still obscured, not a permanent refusal",
+      [
+        overlaid.ok,
+        overlaid.error,
+        overlaid.detail.includes("div#stretched"),
+        overlaid.detail.includes("paints nothing"),
+      ],
+      [false, "obscured", true, false]
+    )
+  }
+  {
+    // A synthetic key event carries no default action, so a scroll key that
+    // only dispatched would report "done" over a page that never moved — the
+    // one failure an agent cannot see. These measure the page actually
+    // moving, which is the only thing that settles it.
+    const { gen, ref } = await fresh()
+    const top = () => run("Math.round(document.scrollingElement.scrollTop)")
+    const press = (target, key) => actJson(gen, target, { kind: "press", key })
+    await run("document.scrollingElement.scrollTop = 0")
+    // A ref-less press goes to whatever has focus, and the checks above left
+    // focus in a field. Start from the plain case on purpose; the field is its
+    // own check further down.
+    await run("document.activeElement?.blur()")
+    const down = await press(null, "PageDown")
+    const afterDown = await top()
+    check(
+      "PageDown with no ref scrolls the document",
+      [down.ok, afterDown > 0],
+      [true, true]
+    )
+    check(
+      "a page key moves less than a whole viewport, so the fold overlaps",
+      afterDown < (await run("window.innerHeight")),
+      true
+    )
+    await press(null, "PageDown")
+    const twice = await top()
+    check("a second PageDown goes further", twice > afterDown, true)
+    await press(null, "PageUp")
+    check("PageUp comes back", (await top()) < twice, true)
+    await press(null, "End")
+    const bottom = await top()
+    check(
+      "End reaches the bottom",
+      bottom >=
+        (await run(
+          "document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight - 2"
+        )),
+      true
+    )
+    await press(null, "Home")
+    check("Home returns to the top", await top(), 0)
+    check(
+      "Control+Home and Control+End scroll too, and Alt scrolls nothing",
+      [
+        (await press(null, "Control+End")).ok && (await top()) > 0,
+        (await press(null, "Control+Home")).ok && (await top()) === 0,
+        (await press(null, "Alt+End")).ok && (await top()) === 0,
+      ],
+      [true, true, true]
+    )
+
+    // The numbers a caller needs to stop. Measured in a real engine, where
+    // the clamping and the rounding are the engine's own.
+    await run("document.scrollingElement.scrollTop = 0")
+    const moved = await press(null, "PageDown")
+    const viewport = await run("window.innerHeight")
+    const limit = await run(
+      "document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight"
+    )
+    check(
+      "a scroll reports how far it went and how much is left",
+      [
+        moved.scrolled.by > 0,
+        moved.scrolled.by < viewport,
+        moved.scrolled.top === moved.scrolled.by,
+        Math.abs(moved.scrolled.max - Math.round(limit)) <= 1,
+      ],
+      [true, true, true, true]
+    )
+    await press(null, "End")
+    const stuck = await press(null, "PageDown")
+    check(
+      "and says plainly when there was nowhere left to go",
+      [stuck.ok, stuck.scrolled.by, stuck.scrolled.top === stuck.scrolled.max],
+      [true, 0, true]
+    )
+    check(
+      "a key that is not a scroll key reports no scrolling at all",
+      (await press(null, "Escape")).scrolled,
+      undefined
+    )
+    await press(null, "Home")
+
+    // The key belongs to the box it was pressed in, the way it does for a
+    // person: inside a scrollable pane it scrolls the pane, and the document
+    // stays where it was.
+    const deep = ref(/button "Deep" \[ref=(e\d+)\]/)
+    await run(`document.getElementById("pane").scrollTop = 0`)
+    const inPane = await press(deep, "PageDown")
+    check(
+      "PageDown inside an overflow pane scrolls the pane, not the document",
+      [
+        inPane.ok,
+        (await run(`document.getElementById("pane").scrollTop`)) > 0,
+        await top(),
+      ],
+      [true, true, 0]
+    )
+
+    // A field holding focus is the ordinary state after typing into one, and
+    // the engine pages the document from there rather than sitting still. The
+    // caret keys are the pair that stay the field's own.
+    const notes = ref(/textbox "Notes" \[ref=(e\d+)\]/)
+    await run(`document.scrollingElement.scrollTop = 0`)
+    await press(notes, "PageDown")
+    check(
+      "PageDown from a focused field still pages the document",
+      (await top()) > 0,
+      true
+    )
+    await run(`document.scrollingElement.scrollTop = 0`)
+    await press(notes, "End")
+    check("a caret key in a text field leaves the page put", await top(), 0)
+    await run(
+      `globalThis.__stop = (e) => { if (e.key === "PageDown") e.preventDefault() };
+       addEventListener("keydown", globalThis.__stop)`
+    )
+    const stopped = await press(null, "PageDown")
+    check(
+      "a page that cancels the key keeps its own meaning for it",
+      [stopped.ok, await top()],
+      [true, 0]
+    )
+    await run(`removeEventListener("keydown", globalThis.__stop)`)
+  }
+  {
     const { gen, ref } = await fresh()
     const spent = ref(/listitem \[ref=(e\d+)\]: beta/)
     await run(
@@ -629,6 +863,63 @@ try {
         ),
       ],
       [true, true, null]
+    )
+    // …and the caller is told it did this to itself. A ref unmade by one's
+    // own next snapshot is the one stale answer where "the page as it is now"
+    // is actively misleading: the page has not changed at all.
+    const before = JSON.parse(
+      await run("JSON.stringify(__codegAgent.snapshot({}))")
+    )
+    const far = [...before.tree.matchAll(/\[ref=(e\d+)\]/g)]
+      .map((x) => x[1])
+      .pop()
+    const after = JSON.parse(
+      await run("JSON.stringify(__codegAgent.snapshot({maxChars: 60}))")
+    )
+    const refused = await actJson(JSON.stringify(after.generation), far, {
+      kind: "click",
+    })
+    check(
+      "a ref unmade by one's own smaller snapshot says so, not 'the page changed'",
+      [
+        refused.error,
+        refused.detail.includes("maxChars"),
+        refused.detail.includes("has not changed"),
+      ],
+      ["stale", true, true]
+    )
+    // Quoting the snapshot the ref actually came from — which is what the
+    // tool descriptions ask for — reaches the same explanation.
+    const quotingOlder = await actJson(JSON.stringify(before.generation), far, {
+      kind: "click",
+    })
+    check(
+      "…and so does quoting the snapshot the ref came from",
+      quotingOlder.detail.includes("has not changed"),
+      true
+    )
+    // The line that explanation must not cross. Two full snapshots in a row
+    // name the same elements by the same refs — `ai` mode caches a ref on the
+    // element and reuses it while the role and name hold — so a ref from the
+    // one before last is in the current table as well. When the page then
+    // takes that element away, the caller is owed "the page moved on", not
+    // "your own snapshot dropped this": whether the current table still holds
+    // the name is the only thing that tells the two apart.
+    await run("JSON.stringify(__codegAgent.snapshot({}))")
+    const live = JSON.parse(
+      await run("JSON.stringify(__codegAgent.snapshot({}))")
+    )
+    const doomed = live.tree.match(/button "Peeking" \[ref=(e\d+)\]/)[1]
+    await run(
+      `__codegAgent.elementForRef(${JSON.stringify(live.generation)}, ${JSON.stringify(doomed)}).remove()`
+    )
+    const gone = await actJson(JSON.stringify(live.generation), doomed, {
+      kind: "click",
+    })
+    check(
+      "a ref whose element the page removed is not blamed on the caller's snapshot",
+      [gone.error, gone.detail.includes("has not changed")],
+      ["stale", false]
     )
   }
   {

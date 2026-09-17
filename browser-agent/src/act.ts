@@ -38,10 +38,17 @@ export type ActionError =
   /** The ref no longer names anything: another document, a moved page, a
    *  removed element. Take a new snapshot. */
   | "stale"
-  /** The element has no box on screen even after scrolling to it. */
+  /** Nothing of the element is on screen to point at. Two shapes, told apart
+   *  by the detail rather than by a code of their own, because the fix for
+   *  one of them is to stop rather than to do something else: an element that
+   *  *paints nothing* — the screen-reader-only node the accessibility tree
+   *  names and a pointer can never reach — is the one refusal here not worth
+   *  another try, while one that is merely *outside the viewport* is a page
+   *  that could not be scrolled to it this time. */
   | "not-visible"
   /** Another element is on top at the point a pointer would land. A user
-   *  could not click this either; a dialog's backdrop is the common case. */
+   *  could not click this either; a dialog's backdrop is the common case.
+   *  Something about the page has to change first, and can. */
   | "obscured"
   /** `type` on something that takes no text, `select` on no `<select>`. */
   | "not-editable"
@@ -54,6 +61,29 @@ export type ActionError =
   | "unsupported"
 
 export type ActionFailure = { error: ActionError; detail: string }
+
+/**
+ * What a scroll key moved, in CSS pixels, so a caller can tell a scroll that
+ * happened from one that had nowhere to go.
+ *
+ * An agent cannot see the page. The accessibility tree it reads back is the
+ * whole document rather than the part on screen, so it looks the same before
+ * and after a scroll — which makes "did that do anything?" unanswerable from
+ * the outside, and is how a model ends up pressing PageDown thirty times at
+ * the bottom of a page. `by` answers it, and `top` against `max` says whether
+ * there is anywhere left to go.
+ */
+export type ScrollReport = {
+  /** How far it actually moved. Negative upwards, `0` when it did not. */
+  by: number
+  /** Where the box is now. */
+  top: number
+  /** The furthest it can go: `top === max` is the end of it. */
+  max: number
+}
+
+/** What a press did, when it did not fail. */
+export type Pressed = { scrolled: ScrollReport | null }
 
 /** A point in viewport CSS pixels, which is what both a dispatched event and
  *  CDP's `Input.dispatchMouseEvent` take. */
@@ -82,24 +112,158 @@ export function pointAt(el: Element): Point | ActionFailure {
     behavior: "instant" as ScrollBehavior,
   })
   const box = visibleBox(el)
-  if (!box)
-    return {
-      error: "not-visible",
-      detail: `${describe(el)} has no visible box on screen`,
-    }
-  return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+  if (box) return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+  // Two ways to have no box worth pointing at, and only one of them is
+  // final. A box a pixel across is the element's own doing and will be a
+  // pixel across for ever; a real box that nothing of lands in the viewport
+  // is a place the page could not scroll to *this time*, which is a state
+  // and not a property.
+  const own = largestBox(el)
+  if (own.width <= 1 || own.height <= 1) return unreachable(el)
+  return {
+    error: "not-visible",
+    detail:
+      `${describe(el)} is laid out but none of it is inside the viewport, even after ` +
+      `scrolling to it — something between it and the page is holding it off screen.`,
+  }
+}
+
+/**
+ * The one refusal a caller must not retry, in words that say so.
+ *
+ * Every other failure here describes a page that could be different in a
+ * moment — a ref gone stale, a dialog in the way, a control disabled. This
+ * one describes an element that is in the accessibility tree without being on
+ * screen at all, which is a fixed property of the page's markup: the
+ * screen-reader-only heading a framework puts inside every article, written
+ * either as a box a pixel across or as a full-sized one clipped away to
+ * nothing. An agent that reads "no visible box" as bad luck will snapshot and
+ * try the next ref like it, and a page that has one of these has a row of
+ * them.
+ *
+ * Told only where the element itself is the evidence — see
+ * [`isVisuallyErased`] for why nothing infers it from what a pointer happened
+ * to hit.
+ *
+ * (An element under `pointer-events: none` never gets this far: `ai` mode
+ * refuses it a ref in the first place, so there is nothing to act on.)
+ */
+function unreachable(el: Element, touched?: Element): ActionFailure {
+  const instead = touched
+    ? `; ${describe(touched)} is what a pointer there would touch`
+    : ""
+  return {
+    error: "not-visible",
+    detail:
+      `${describe(el)} is in the accessibility tree but paints nothing on screen${instead}. ` +
+      `A person could not reach it either, and no snapshot will change that — ` +
+      `act on a ref that is actually drawn on the page.`,
+  }
+}
+
+/**
+ * Whether the element has been *erased* rather than merely covered: the CSS
+ * that puts a node in the accessibility tree and nowhere else.
+ *
+ * This is the positive evidence [`unreachable`] insists on. The tempting
+ * shortcut is to infer it — if a pointer at the element's own centre lands on
+ * one of its *ancestors*, surely the element draws nothing there — and that
+ * inference is wrong often enough to be dangerous, because the verdict it
+ * feeds is the one an agent must not retry. An ancestor is what a pointer
+ * finds whenever the ancestor paints over its own descendant: a card with
+ * `::after { position: absolute; inset: 0 }` over a perfectly visible link
+ * (the stretched-link pattern; a pseudo-element hit is attributed to its
+ * host), the content of a `height: 0; overflow: hidden` accordion whose refs
+ * the tree hands out all the same. Those are recoverable — click the card,
+ * open the accordion — and telling an agent to give up on them is worse than
+ * the confusing `obscured` this was meant to replace.
+ *
+ * So: only the element's own computed style decides. A box a pixel across is
+ * already gone by [`visibleBox`]; what is left is the full-sized box clipped
+ * away to nothing, in the two spellings the recipe has had.
+ */
+function isVisuallyErased(el: Element): boolean {
+  const style = getComputedStyle(el)
+  // The legacy `clip`, which every engine reports in `rect(a, b, c, d)` form.
+  // Any collapsed rectangle counts, not just the all-zero one `clip: rect(0 0
+  // 0 0)` reports — `rect(1px, 1px, 1px, 1px)` is the same nothing. The
+  // property only *applies* to an absolutely positioned box while the
+  // computed value is reported whatever the position is, so the position is
+  // what decides whether the value means anything: a `.sr-only` whose focus
+  // state puts it back in flow without resetting `clip` is visible, and
+  // calling it erased would refuse a control a person can see.
+  const positioned = style.position === "absolute" || style.position === "fixed"
+  const rect = style.clip.match(
+    /^rect\((-?[\d.]+)px,?\s*(-?[\d.]+)px,?\s*(-?[\d.]+)px,?\s*(-?[\d.]+)px\)$/
+  )
+  if (positioned && rect) {
+    const [top, right, bottom, left] = rect.slice(1).map(Number)
+    if (bottom - top <= 1 || right - left <= 1) return true
+  }
+  // And its replacement. `inset(50%)` is the one the accessibility guides
+  // print; the test is per axis, since the shorthand's sides pair up
+  // (`inset(60% 0 0 0)` insets the top alone and leaves four tenths of the
+  // box).
+  const path = style.clipPath.match(/^inset\(([^)]*?)(?:\s+round\s.*)?\)$/)
+  if (path) {
+    const sides = insetSides(path[1].trim().split(/\s+/))
+    if (
+      sides &&
+      (sides.top + sides.bottom >= 100 || sides.left + sides.right >= 100)
+    )
+      return true
+  }
+  return false
+}
+
+/**
+ * The four sides of an `inset()`, as percentages, from however many the
+ * shorthand was written with.
+ *
+ * `null` for anything that cannot be summed as one: a side given as a length
+ * would need the border box to resolve against, and an inset written in
+ * pixels that happens to close a box is not a recipe anyone follows. Zero is
+ * the exception, because zero is zero in any unit and an engine serializing
+ * `inset(50% 0 50% 0)` hands back `inset(50% 0px)` — a mix on paper, and the
+ * commonest way the real thing is written.
+ */
+function insetSides(
+  parts: string[]
+): { top: number; right: number; bottom: number; left: number } | null {
+  if (parts.length < 1 || parts.length > 4) return null
+  const percents = parts.map((part) =>
+    Number.parseFloat(part) === 0
+      ? 0
+      : part.endsWith("%")
+        ? Number.parseFloat(part)
+        : NaN
+  )
+  if (percents.some(Number.isNaN)) return null
+  const [a, b = a, c = a, d = b] = percents
+  return { top: a, right: b, bottom: c, left: d }
+}
+
+/** The element's own largest box, before the viewport has any say. Largest
+ *  rather than bounding, for the reason [`pointAt`] gives. */
+function largestBox(el: Element): DOMRect {
+  const rects = Array.from(el.getClientRects())
+  return rects.length
+    ? rects.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b))
+    : el.getBoundingClientRect()
 }
 
 function visibleBox(el: Element): DOMRect | null {
-  const rects = Array.from(el.getClientRects())
-  const box = rects.length
-    ? rects.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b))
-    : el.getBoundingClientRect()
+  const box = largestBox(el)
   const left = Math.max(box.left, 0)
   const top = Math.max(box.top, 0)
   const right = Math.min(box.right, window.innerWidth)
   const bottom = Math.min(box.bottom, window.innerHeight)
-  if (right - left < 1 || bottom - top < 1) return null
+  // `<= 1`, not `< 1`: the screen-reader-only recipe every framework shares is
+  // `width: 1px; height: 1px; clip: rect(0 0 0 0)`, which is a box by the
+  // geometry and nothing at all to a person. Below this is a target no one
+  // could hit on purpose, so refusing it costs nothing and catching the 1px
+  // case buys the whole class.
+  if (right - left <= 1 || bottom - top <= 1) return null
   return new DOMRect(left, top, right - left, bottom - top)
 }
 
@@ -111,17 +275,48 @@ function visibleBox(el: Element): DOMRect | null {
  * on the way back: a button rendered by a web component is inside the
  * component's shadow tree, and the element the agent named may be either.
  */
-export function obstructionAt(
-  x: number,
-  y: number,
-  target: Element
-): Element | null {
+function obstructionAt(x: number, y: number, target: Element): Element | null {
   const hit = deepElementFromPoint(x, y)
   if (!hit) return document.documentElement
   for (let node: Node | null = hit; node; node = parentOf(node)) {
     if (node === target) return null
   }
   return hit
+}
+
+/**
+ * Whether a pointer at `point` would reach `target`, and — when it would not
+ * — which kind of "no" that is.
+ *
+ * The two kinds want opposite things from the caller, which is why they are
+ * told apart here rather than reported as one refusal. `not-visible` means
+ * the element has been erased — it is in the tree and on no one's screen, and
+ * no amount of trying will change that. Everything else is `obscured`: the
+ * page is in a state where a pointer cannot get to this element, and the way
+ * forward is to deal with what is in the way. Only the element's own style
+ * decides which ([`isVisuallyErased`]), never what the pointer happened to
+ * hit, because an ancestor painting over its own descendant is ordinary and
+ * recoverable.
+ *
+ * An `obscured` names what is in the way, which is the thing to act on: the
+ * card that carries the overlay, the dialog to dismiss. That the obstruction
+ * is sometimes the target's own ancestor does not change the advice.
+ *
+ * Both callers — the dispatched path and the trusted one — go through here,
+ * so an agent cannot get two different answers for the same page depending on
+ * which platform it is running on.
+ */
+export function pointerReach(
+  target: Element,
+  point: Point
+): ActionFailure | null {
+  const cover = obstructionAt(point.x, point.y, target)
+  if (!cover) return null
+  if (isVisuallyErased(target)) return unreachable(target, cover)
+  return {
+    error: "obscured",
+    detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`,
+  }
 }
 
 function deepElementFromPoint(x: number, y: number): Element | null {
@@ -604,14 +799,21 @@ export function keyDescription(spec: string): KeyDescription | null {
  * agent presses a key *for*: Enter submits the form a text field is in (via
  * its default button, so the button's own handler runs) or activates a button
  * or link; Space activates a button; Tab moves focus; Backspace and Delete
- * edit; a printable key types. Arrow keys and Escape dispatch and do nothing
- * further, which is what they do on most pages, whose handlers act on
- * `keydown`.
+ * edit; PageUp, PageDown, Home and End scroll; a printable key types. Arrow
+ * keys and Escape dispatch and do nothing further, which is what they do on
+ * most pages, whose handlers act on `keydown` — and what they do inside a
+ * `<select>` or a text field is move a selection, not a viewport, so a guess
+ * here would be wrong as often as right.
+ *
+ * Answers with what the key did rather than with "nothing went wrong", so a
+ * scroll that had nowhere left to go is distinguishable from one that moved
+ * the page. `"error" in` it says which kind of answer it is, the way
+ * [`pointAt`]'s does.
  */
 export function pressOn(
   el: Element | null,
   spec: string
-): ActionFailure | null {
+): ActionFailure | Pressed {
   const desc = keyDescription(spec)
   if (!desc)
     return {
@@ -638,6 +840,7 @@ export function pressOn(
     cancelable: true,
     composed: true,
   } as KeyboardEventInit
+  let scrolled: ScrollReport | null = null
   const proceed = target.dispatchEvent(new KeyboardEvent("keydown", init))
   if (proceed) {
     const plain = !desc.ctrl && !desc.alt && !desc.meta
@@ -652,13 +855,13 @@ export function pressOn(
       )
         insertTyped(target, desc.key)
     } else {
-      defaultActionFor(target, desc)
+      scrolled = defaultActionFor(target, desc) ?? null
     }
   }
   target.dispatchEvent(
     new KeyboardEvent("keyup", { ...init, cancelable: false })
   )
-  return null
+  return { scrolled }
 }
 
 function deepActiveElement(): Element | null {
@@ -708,7 +911,13 @@ function insertTyped(target: Element, char: string): void {
   )
 }
 
-function defaultActionFor(target: Element, desc: KeyDescription): void {
+/** What the engine would do with the key. A [`ScrollReport`] when that was to
+ *  scroll something; nothing for every other key, which is why the branches
+ *  that do other work return bare. */
+function defaultActionFor(
+  target: Element,
+  desc: KeyDescription
+): ScrollReport | undefined {
   const plain = !desc.ctrl && !desc.alt && !desc.meta
   switch (desc.key) {
     case "Enter": {
@@ -762,9 +971,149 @@ function defaultActionFor(target: Element, desc: KeyDescription): void {
       }
       return
     }
+    case "PageDown":
+    case "PageUp":
+    case "Home":
+    case "End": {
+      const ends = desc.key === "Home" || desc.key === "End"
+      // Alt never scrolls anywhere (it is back/forward on some platforms).
+      // Ctrl and Meta do, but only with Home and End, where "jump to the very
+      // top" is the chord people reach for — Ctrl+Home on Windows and Linux,
+      // Cmd+Up... and Cmd+Home where a keyboard has the key. A modified page
+      // key is not a scroll anywhere, so those stay plain.
+      if (desc.alt) return
+      if (!ends && !plain) return
+      // In a listbox every one of these changes the selection rather than
+      // scrolling anything, and emulating that is not what an agent presses
+      // PageDown for. Neither, then.
+      if (target instanceof HTMLSelectElement) return
+      // Home and End put the caret at the ends of a line — and with Ctrl, at
+      // the ends of the text — while the engine scrolls only as far as
+      // following the caret needs. Scrolling the document out from under a
+      // field someone is in would be plainly wrong. PageUp and PageDown are
+      // not caret keys in the same way: a single-line field has no pages to
+      // move through and the engine pages the document instead, which is also
+      // what walking to the nearest scroller does — and a textarea with its
+      // own overflow is that scroller, so it pages itself. Which is why only
+      // the caret pair is held back here, and a press that arrives with a
+      // field focused — the ordinary state after typing into one — still
+      // scrolls.
+      const caret =
+        isTextControl(target) ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      if (caret && ends) return
+      return scrollByKey(target, desc.key)
+    }
     default:
       return
   }
+}
+
+/** How much of the scroller a page key moves, matching what the engines
+ *  themselves do: not a whole viewport, so the line at the fold stays on
+ *  screen and a reader keeps their place. */
+const PAGE_FRACTION = 0.875
+
+/**
+ * Do what the engine would do with a scroll key, to the box the key belongs
+ * to.
+ *
+ * Synthetic key events carry no default action at all — `isTrusted` is false,
+ * and scrolling is the engine's, not the page's. Without this a PageDown
+ * dispatches, no handler objects, and `pressOn` reports it done while the
+ * page has not moved: a *false success*, which is worse for an agent than a
+ * refusal, because the next snapshot looks like a page that refused to scroll
+ * rather than a key that never landed.
+ *
+ * Measured rather than assumed, and the measurement is the answer: the same
+ * false success comes back in a quieter form once the box is at its end, and
+ * the report is what lets a caller stop instead of pressing on into the
+ * bottom of the page.
+ */
+function scrollByKey(from: Element, key: string): ScrollReport {
+  const scroller = scrollerFor(from)
+  const before = scroller.scrollTop
+  const page = Math.max(1, scroller.clientHeight * PAGE_FRACTION)
+  switch (key) {
+    case "PageDown":
+      scrollTopTo(scroller, before + page)
+      break
+    case "PageUp":
+      scrollTopTo(scroller, before - page)
+      break
+    case "Home":
+      scrollTopTo(scroller, 0)
+      break
+    case "End":
+      scrollTopTo(scroller, scroller.scrollHeight)
+      break
+  }
+  // Read back rather than computed from what was asked for: the engine
+  // clamps at both ends, a page can cancel its own smooth scroll, and what
+  // matters to the caller is where the box actually is.
+  const after = scroller.scrollTop
+  return {
+    by: Math.round(after - before),
+    top: Math.round(after),
+    max: Math.round(Math.max(0, scroller.scrollHeight - scroller.clientHeight)),
+  }
+}
+
+/**
+ * Put the scroller at `top`, past either end if that is what was asked — the
+ * engine clamps, and clamping here as well would only disagree with it.
+ *
+ * `scrollTo` with `instant` rather than the `scrollTop` setter, because both
+ * honour the page's `scroll-behavior` and a page that asked for `smooth`
+ * would still be gliding when the agent reads the page back in its next call.
+ * The setter is the fallback for an engine without CSSOM-View's methods:
+ * every engine codeg ships on has them, and a throw from in here would come
+ * back as a broken evaluation rather than as one of this file's refusals,
+ * which is a bad trade for one line.
+ */
+function scrollTopTo(el: Element, top: number): void {
+  if (typeof el.scrollTo === "function")
+    el.scrollTo({ top, behavior: "instant" as ScrollBehavior })
+  else el.scrollTop = top
+}
+
+/**
+ * The box a scroll key pressed on `from` would move: the nearest ancestor
+ * that scrolls vertically, else the document's own scroller.
+ *
+ * Nearest-ancestor rather than always-the-window because that is the rule a
+ * person sees — a key pressed inside a scrollable panel scrolls the panel.
+ * It also falls out right for the two shapes that matter here: a press with
+ * no ref lands on whatever has focus, which on a page nobody has clicked is
+ * `document.body` and leaves the document's own scroller as the only
+ * candidate, and a press on a ref inside an overflow pane scrolls the pane.
+ *
+ * There is always an answer, so a caller never has to have a story for there
+ * being none: the walk ends at the document's scroller, which every document
+ * with a body has.
+ */
+export function scrollerFor(from: Element): Element {
+  for (let node: Element | null = from; node; node = parentElementOf(node)) {
+    // The document's scroller answers for these two whatever the quirks mode
+    // and whichever of them the engine picked, so let it.
+    if (node === document.body || node === document.documentElement) break
+    if (scrollsVertically(node)) return node
+  }
+  return document.scrollingElement ?? document.documentElement
+}
+
+function scrollsVertically(el: Element): boolean {
+  // A box with no height of its own is a collapsed one — `height: 0;
+  // overflow: auto` is how an accordion is animated, and it satisfies the
+  // test below while having nowhere to put a page key. Taking it would both
+  // scroll it by the one pixel `Math.max(1, …)` floors at and swallow the
+  // key the document should have had.
+  if (el.clientHeight <= 0) return false
+  // A rounded-up `clientHeight` can sit a pixel under `scrollHeight` on a box
+  // with nothing to scroll; one pixel is not a scroll either way.
+  if (el.scrollHeight - el.clientHeight <= 1) return false
+  const overflow = getComputedStyle(el).overflowY
+  return overflow === "auto" || overflow === "scroll" || overflow === "overlay"
 }
 
 function isActivatable(el: Element): boolean {

@@ -2798,21 +2798,59 @@
       behavior: "instant"
     });
     const box = visibleBox(el);
-    if (!box)
-      return {
-        error: "not-visible",
-        detail: `${describe(el)} has no visible box on screen`
-      };
-    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    if (box) return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    const own = largestBox(el);
+    if (own.width <= 1 || own.height <= 1) return unreachable(el);
+    return {
+      error: "not-visible",
+      detail: `${describe(el)} is laid out but none of it is inside the viewport, even after scrolling to it \u2014 something between it and the page is holding it off screen.`
+    };
+  }
+  function unreachable(el, touched) {
+    const instead = touched ? `; ${describe(touched)} is what a pointer there would touch` : "";
+    return {
+      error: "not-visible",
+      detail: `${describe(el)} is in the accessibility tree but paints nothing on screen${instead}. A person could not reach it either, and no snapshot will change that \u2014 act on a ref that is actually drawn on the page.`
+    };
+  }
+  function isVisuallyErased(el) {
+    const style = getComputedStyle(el);
+    const positioned = style.position === "absolute" || style.position === "fixed";
+    const rect = style.clip.match(
+      /^rect\((-?[\d.]+)px,?\s*(-?[\d.]+)px,?\s*(-?[\d.]+)px,?\s*(-?[\d.]+)px\)$/
+    );
+    if (positioned && rect) {
+      const [top, right, bottom, left] = rect.slice(1).map(Number);
+      if (bottom - top <= 1 || right - left <= 1) return true;
+    }
+    const path = style.clipPath.match(/^inset\(([^)]*?)(?:\s+round\s.*)?\)$/);
+    if (path) {
+      const sides = insetSides(path[1].trim().split(/\s+/));
+      if (sides && (sides.top + sides.bottom >= 100 || sides.left + sides.right >= 100))
+        return true;
+    }
+    return false;
+  }
+  function insetSides(parts) {
+    if (parts.length < 1 || parts.length > 4) return null;
+    const percents = parts.map(
+      (part) => Number.parseFloat(part) === 0 ? 0 : part.endsWith("%") ? Number.parseFloat(part) : NaN
+    );
+    if (percents.some(Number.isNaN)) return null;
+    const [a, b = a, c = a, d = b] = percents;
+    return { top: a, right: b, bottom: c, left: d };
+  }
+  function largestBox(el) {
+    const rects = Array.from(el.getClientRects());
+    return rects.length ? rects.reduce((a, b) => a.width * a.height >= b.width * b.height ? a : b) : el.getBoundingClientRect();
   }
   function visibleBox(el) {
-    const rects = Array.from(el.getClientRects());
-    const box = rects.length ? rects.reduce((a, b) => a.width * a.height >= b.width * b.height ? a : b) : el.getBoundingClientRect();
+    const box = largestBox(el);
     const left = Math.max(box.left, 0);
     const top = Math.max(box.top, 0);
     const right = Math.min(box.right, window.innerWidth);
     const bottom = Math.min(box.bottom, window.innerHeight);
-    if (right - left < 1 || bottom - top < 1) return null;
+    if (right - left <= 1 || bottom - top <= 1) return null;
     return new DOMRect(left, top, right - left, bottom - top);
   }
   function obstructionAt(x, y, target) {
@@ -2822,6 +2860,15 @@
       if (node === target) return null;
     }
     return hit;
+  }
+  function pointerReach(target, point) {
+    const cover = obstructionAt(point.x, point.y, target);
+    if (!cover) return null;
+    if (isVisuallyErased(target)) return unreachable(target, cover);
+    return {
+      error: "obscured",
+      detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`
+    };
   }
   function deepElementFromPoint(x, y) {
     let el = document.elementFromPoint(x, y);
@@ -3167,6 +3214,7 @@
       cancelable: true,
       composed: true
     };
+    let scrolled = null;
     const proceed = target.dispatchEvent(new KeyboardEvent("keydown", init));
     if (proceed) {
       const plain = !desc.ctrl && !desc.alt && !desc.meta;
@@ -3179,13 +3227,13 @@
         ))
           insertTyped(target, desc.key);
       } else {
-        defaultActionFor(target, desc);
+        scrolled = defaultActionFor(target, desc) ?? null;
       }
     }
     target.dispatchEvent(
       new KeyboardEvent("keyup", { ...init, cancelable: false })
     );
-    return null;
+    return { scrolled };
   }
   function deepActiveElement() {
     let active = document.activeElement;
@@ -3278,9 +3326,65 @@
         }
         return;
       }
+      case "PageDown":
+      case "PageUp":
+      case "Home":
+      case "End": {
+        const ends = desc.key === "Home" || desc.key === "End";
+        if (desc.alt) return;
+        if (!ends && !plain) return;
+        if (target instanceof HTMLSelectElement) return;
+        const caret = isTextControl(target) || target instanceof HTMLElement && target.isContentEditable;
+        if (caret && ends) return;
+        return scrollByKey(target, desc.key);
+      }
       default:
         return;
     }
+  }
+  var PAGE_FRACTION = 0.875;
+  function scrollByKey(from, key) {
+    const scroller = scrollerFor(from);
+    const before = scroller.scrollTop;
+    const page = Math.max(1, scroller.clientHeight * PAGE_FRACTION);
+    switch (key) {
+      case "PageDown":
+        scrollTopTo(scroller, before + page);
+        break;
+      case "PageUp":
+        scrollTopTo(scroller, before - page);
+        break;
+      case "Home":
+        scrollTopTo(scroller, 0);
+        break;
+      case "End":
+        scrollTopTo(scroller, scroller.scrollHeight);
+        break;
+    }
+    const after = scroller.scrollTop;
+    return {
+      by: Math.round(after - before),
+      top: Math.round(after),
+      max: Math.round(Math.max(0, scroller.scrollHeight - scroller.clientHeight))
+    };
+  }
+  function scrollTopTo(el, top) {
+    if (typeof el.scrollTo === "function")
+      el.scrollTo({ top, behavior: "instant" });
+    else el.scrollTop = top;
+  }
+  function scrollerFor(from) {
+    for (let node = from; node; node = parentElementOf(node)) {
+      if (node === document.body || node === document.documentElement) break;
+      if (scrollsVertically(node)) return node;
+    }
+    return document.scrollingElement ?? document.documentElement;
+  }
+  function scrollsVertically(el) {
+    if (el.clientHeight <= 0) return false;
+    if (el.scrollHeight - el.clientHeight <= 1) return false;
+    const overflow = getComputedStyle(el).overflowY;
+    return overflow === "auto" || overflow === "scroll" || overflow === "overlay";
   }
   function isActivatable(el) {
     if (el instanceof HTMLButtonElement) return true;
@@ -3392,6 +3496,8 @@
     return `${buf[0].toString(36)}${buf[1].toString(36)}`;
   }
   var refs = /* @__PURE__ */ new Map();
+  var superseded = /* @__PURE__ */ new Set();
+  var supersededToken = "";
   var refsTakenAt = "";
   var refsHistoryLength = 0;
   var refsNavTicks = 0;
@@ -3422,6 +3528,8 @@
       for (const ref of Array.from(next.keys()))
         if (!shown.has(ref)) next.delete(ref);
     }
+    superseded = new Set(refs.keys());
+    supersededToken = refsToken;
     refs = next;
     refsTakenAt = location.href;
     refsHistoryLength = history.length;
@@ -3467,7 +3575,17 @@
     if (navigationEntryId() !== refsEntryId) return false;
     return true;
   }
-  function stale(ref) {
+  function stale(ref, generation) {
+    const cut = ref !== null && generation !== void 0 && !refs.has(ref) && superseded.has(ref) && // Either the caller is on the current snapshot and this ref is not in it,
+    // or it is quoting the very snapshot the ref came from. Anything older
+    // than that, or a page that has moved since, is not this case and gets
+    // the plain answer.
+    (refsAreCurrent(generation) || generation === supersededToken && location.href === refsTakenAt);
+    if (cut)
+      return {
+        error: "stale",
+        detail: `${ref} was named by an earlier snapshot of this page, and the snapshot you took after it did not name it \u2014 a smaller \`maxChars\` names fewer refs, and each snapshot replaces the last one's. The page itself has not changed. Take a snapshot large enough to include what you want and use a ref from that one.`
+      };
     return {
       error: "stale",
       detail: ref ? `${ref} does not name an element on the page as it is now; take a new snapshot` : "the page has changed since that snapshot; take a new one"
@@ -3487,7 +3605,7 @@
     let element = null;
     if (ref !== null) {
       element = elementForRef(generation, ref);
-      if (!element) return failed(stale(ref));
+      if (!element) return failed(stale(ref, generation));
     } else if (!refsAreCurrent(generation)) {
       return failed(stale(null));
     } else if (request.kind !== "press") {
@@ -3507,12 +3625,8 @@
           });
         const point = pointAt(target);
         if ("error" in point) return failed(point);
-        const cover = obstructionAt(point.x, point.y, target);
-        if (cover)
-          return failed({
-            error: "obscured",
-            detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`
-          });
+        const blocked = pointerReach(target, point);
+        if (blocked) return failed(blocked);
         if (request.kind === "click") {
           const count = clamp(request.count, 1, 3, 1);
           const delivered = clickAt(
@@ -3535,13 +3649,20 @@
         if (failure) return failed(failure);
         if (request.submit) {
           const after = pressOn(null, "Enter");
-          if (after) return failed(after);
+          if ("error" in after) return failed(after);
         }
         return { ok: true, url: location.href };
       }
       case "press": {
-        const failure = pressOn(element, String(request.key ?? ""));
-        return failure ? failed(failure) : { ok: true, url: location.href };
+        const done = pressOn(element, String(request.key ?? ""));
+        if ("error" in done) return failed(done);
+        return {
+          ok: true,
+          url: location.href,
+          // Omitted rather than null for a key that is not a scroll key: the
+          // field's presence is what says the question was asked at all.
+          ...done.scrolled ? { scrolled: done.scrolled } : {}
+        };
       }
       case "select": {
         const values = Array.isArray(request.values) ? request.values.map(String) : [String(request.values ?? "")];
@@ -3558,7 +3679,7 @@
   function locate(generation, ref) {
     const url = location.href;
     const element = elementForRef(generation, ref);
-    if (!element) return { ok: false, url, ...stale(ref) };
+    if (!element) return { ok: false, url, ...stale(ref, generation) };
     if (isDisabledControl(element))
       return {
         ok: false,
@@ -3568,20 +3689,14 @@
       };
     const point = pointAt(element);
     if ("error" in point) return { ok: false, url, ...point };
-    const cover = obstructionAt(point.x, point.y, element);
-    if (cover)
-      return {
-        ok: false,
-        url,
-        error: "obscured",
-        detail: `${describe(cover)} is on top of ${describe(element)} where a pointer would land`
-      };
+    const blocked = pointerReach(element, point);
+    if (blocked) return { ok: false, url, ...blocked };
     return { ok: true, url: location.href, x: point.x, y: point.y };
   }
   function rectOf(generation, ref) {
     const url = location.href;
     const element = elementForRef(generation, ref);
-    if (!element) return { ok: false, url, ...stale(ref) };
+    if (!element) return { ok: false, url, ...stale(ref, generation) };
     const before = element.getBoundingClientRect();
     const point = pointAt(element);
     if ("error" in point) return { ok: false, url, ...point };
@@ -3591,7 +3706,7 @@
         ok: false,
         url,
         error: "not-visible",
-        detail: `${describe(element)} has no visible box on screen`
+        detail: `${describe(element)} has no visible box on screen to crop to`
       };
     const after = element.getBoundingClientRect();
     return {

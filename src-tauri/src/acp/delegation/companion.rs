@@ -1542,7 +1542,10 @@ fn parse_max_chars(arguments: &Value) -> Option<usize> {
 ///
 /// `tabId` / `generation` / `ref` are common; each tool adds its own. A
 /// missing `ref` is an argument error for every tool but `browser_press_key`,
-/// where leaving it out means "whatever has focus".
+/// where leaving it out means "whatever has focus" — and where `generation`
+/// is still required, because a key goes only to a page the agent has just
+/// looked at. That pairing is the one thing here a model gets wrong by
+/// reading the obvious thing into it, so the error for it says so in full.
 pub fn browser_action_request(
     name: &str,
     arguments: &Value,
@@ -1559,13 +1562,34 @@ pub fn browser_action_request(
     let tab_id = text("tabId").or_else(|| text("tab_id")).ok_or_else(|| {
         format!("{name} requires a non-empty `tabId` string (from browser_list_tabs)")
     })?;
-    let generation = text("generation").ok_or_else(|| {
-        format!(
-            "{name} requires `generation`: the token from the browser_snapshot that named the \
-             ref, echoed exactly"
-        )
-    })?;
     let target = text("ref");
+    let generation = text("generation").ok_or_else(|| {
+        // Said differently for the one tool that may arrive without a `ref`,
+        // because the usual sentence defines `generation` in terms of one:
+        // a model that left the ref out reads "the snapshot that named the
+        // ref" as a rule about a case it is not in, leaves the generation out
+        // too, and gets this error for every key it presses. Which is what
+        // happens to a model trying to scroll — no ref is involved in a key
+        // to the focused element, and it has no way to guess from here that a
+        // snapshot is wanted all the same.
+        //
+        // Keyed on the tool and not on the missing ref alone: for the other
+        // four a missing ref is itself an error (below), and telling one of
+        // them that `generation` is needed "even with no `ref`" would suggest
+        // going without one is a thing they allow.
+        if name == "browser_press_key" && target.is_none() {
+            format!(
+                "{name} requires `generation`: the token from your most recent browser_snapshot \
+                 of this tab, echoed exactly. It is needed even with no `ref` — a key goes only \
+                 to a page the agent has just looked at."
+            )
+        } else {
+            format!(
+                "{name} requires `generation`: the token from the browser_snapshot that named \
+                 the ref, echoed exactly"
+            )
+        }
+    })?;
     // An option that is present has to be one this tool understands. A
     // `button: "middle"` silently becoming a left click, or a `doubleClick:
     // "yes"` silently becoming a single one, would do a different action
@@ -2024,6 +2048,46 @@ pub fn render_browser_capture_result(outcome: &Value) -> Value {
     }
 }
 
+/// What a scroll key moved, as a clause to hang off "Done" — or nothing at
+/// all for an action that was not a scroll.
+///
+/// The one thing a snapshot cannot tell an agent afterwards. The tree is the
+/// whole document, not the part on screen, so it reads the same either way,
+/// and a model with no way to see that a key did nothing answers by pressing
+/// it again; thirty times, in the session this was written for. Says how far,
+/// and whether there is anywhere left to go.
+fn scroll_note(scrolled: Option<&Value>) -> String {
+    let Some(report) = scrolled.filter(|v| v.is_object()) else {
+        return String::new();
+    };
+    let f = |k: &str| report.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let (by, top, max) = (f("by"), f("top"), f("max"));
+    if by == 0.0 {
+        return if max <= 0.0 {
+            " Nothing scrolled: this box has no more content than fits in it.".to_string()
+        } else if top <= 0.0 {
+            " Nothing scrolled: already at the top.".to_string()
+        } else if top >= max {
+            " Nothing scrolled: already at the bottom.".to_string()
+        } else {
+            // Neither end, and it still did not move: a page that manages its
+            // own scrolling, or one that moved something this key does not
+            // reach. Worth saying plainly rather than reporting as a scroll.
+            " Nothing scrolled, though there is room to — the page may scroll \
+             a box this key does not reach."
+                .to_string()
+        };
+    }
+    let direction = if by > 0.0 { "down" } else { "up" };
+    let left = (max - top).max(0.0).round();
+    let where_now = if left <= 0.0 {
+        ", the bottom".to_string()
+    } else {
+        format!(", {left:.0}px left below")
+    };
+    format!(" Scrolled {direction} {:.0}px{where_now}.", by.abs())
+}
+
 /// Map an action tool's round-trip outcome (a serialized
 /// [`crate::acp::browser_tools::BrowserActOutcome`]) into an MCP `tools/call`
 /// result.
@@ -2044,8 +2108,9 @@ pub fn render_browser_act_result(outcome: &Value) -> Value {
                 _ => "as events dispatched by script (synthetic)",
             };
             format!(
-                "Done, {how}. The page was at {url}. Take a browser_snapshot to see what came \
-                 of it."
+                "Done, {how}.{} The page was at {url}. Take a browser_snapshot to see what came \
+                 of it.",
+                scroll_note(action.get("scrolled")),
             )
         }
         _ => outcome
@@ -2147,9 +2212,16 @@ pub fn render_browser_snapshot_result(outcome: &Value) -> Value {
                 n("refsCount"),
             ));
             if snapshot.get("truncated").and_then(|v| v.as_bool()) == Some(true) {
+                // Not only "there is more text": the cut takes the refs with
+                // it, and this snapshot has replaced whatever refs were live
+                // before. An agent that takes a small snapshot to glance at
+                // something, then acts on a ref from the large one it took
+                // before, gets `browser_stale_ref` and no way to see why from
+                // the message it is handed.
                 out.push_str(
                     "The tree below stops early — pass a larger `maxChars` (or 0 for all of it) \
-                     to see the rest.\n",
+                     to see the rest. Only the refs shown here can be acted on, and they have \
+                     replaced the ones from any earlier snapshot of this tab.\n",
                 );
             }
             out.push('\n');
@@ -4227,6 +4299,30 @@ mod tests {
                 key: "Enter".into()
             }
         );
+        // And the error for the ref-less case has to say so in its own terms.
+        // Told that `generation` is "from the snapshot that named the ref", a
+        // model with no ref reads a rule about someone else's case, leaves it
+        // out, and every key it presses is refused — which is what a model
+        // trying to scroll does.
+        let refless = browser_action_request(
+            "browser_press_key",
+            &json!({ "tabId": "t1", "key": "PageDown" }),
+        )
+        .unwrap_err();
+        assert!(refless.contains("`generation`"), "{refless}");
+        assert!(refless.contains("even with no `ref`"), "{refless}");
+        assert!(!refless.contains("that named the ref"), "{refless}");
+        // The other four keep the sentence that names the ref — including
+        // when they arrive without one, where suggesting that going without
+        // is allowed would be worse than saying nothing.
+        for arguments in [
+            json!({ "tabId": "t1", "ref": "e4" }),
+            json!({ "tabId": "t1" }),
+        ] {
+            let with_ref = browser_action_request("browser_click", &arguments).unwrap_err();
+            assert!(with_ref.contains("that named the ref"), "{with_ref}");
+            assert!(!with_ref.contains("even with no `ref`"), "{with_ref}");
+        }
         assert!(browser_action_request("browser_press_key", &base)
             .unwrap_err()
             .contains("`key`"));
@@ -4363,6 +4459,45 @@ mod tests {
         );
         assert_eq!(stale["isError"], false);
         assert_eq!(stale["structuredContent"]["error"], "browser_stale_ref");
+        // An action that did not scroll says nothing about scrolling.
+        assert!(!text.contains("crolled"));
+    }
+
+    /// The whole point of carrying the numbers back: a snapshot cannot tell
+    /// an agent whether a key moved the page, because the tree it reads is
+    /// the document rather than the view of it.
+    #[test]
+    fn a_scroll_says_how_far_it_went_and_whether_there_is_more() {
+        let note = |scrolled: Value| {
+            let result = render_browser_act_result(&json!({
+                "tabId": "t1",
+                "action": { "fidelity": "synthetic", "url": "http://x/", "scrolled": scrolled }
+            }));
+            result["content"][0]["text"].as_str().unwrap().to_string()
+        };
+
+        let moved = note(json!({ "by": 700, "top": 700, "max": 2900 }));
+        assert!(moved.contains("Scrolled down 700px"), "{moved}");
+        assert!(moved.contains("2200px left below"), "{moved}");
+
+        let arrived = note(json!({ "by": 700, "top": 2900, "max": 2900 }));
+        assert!(arrived.contains("the bottom"), "{arrived}");
+        assert!(!arrived.contains("left below"), "{arrived}");
+
+        let up = note(json!({ "by": -700, "top": 0, "max": 2900 }));
+        assert!(up.contains("Scrolled up 700px"), "{up}");
+
+        // The three ways to move nothing, each of which asks something
+        // different of the caller: stop pressing, turn around, or look
+        // elsewhere.
+        let bottom = note(json!({ "by": 0, "top": 2900, "max": 2900 }));
+        assert!(bottom.contains("already at the bottom"), "{bottom}");
+        let top = note(json!({ "by": 0, "top": 0, "max": 2900 }));
+        assert!(top.contains("already at the top"), "{top}");
+        let unscrollable = note(json!({ "by": 0, "top": 0, "max": 0 }));
+        assert!(unscrollable.contains("no more content than fits"), "{unscrollable}");
+        let stuck = note(json!({ "by": 0, "top": 100, "max": 2900 }));
+        assert!(stuck.contains("does not reach"), "{stuck}");
     }
 
     #[tokio::test]

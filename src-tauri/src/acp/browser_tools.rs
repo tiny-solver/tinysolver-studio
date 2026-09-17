@@ -608,6 +608,7 @@ mod tests {
             ActionOutcome {
                 fidelity: crate::browser::agent::Fidelity::Synthetic,
                 url: "https://example.com/".into(),
+                scrolled: None,
             },
         ))
         .unwrap();

@@ -85,16 +85,61 @@ behaviour (a link is followed, a submit button submits, a checkbox toggles),
 and the parts a dispatched event does *not* do that a real one would are
 emulated where they are what the key is for: focus moves on mousedown, Enter
 in a field submits its form through the default button, Space activates a
-button, Tab moves focus, a printable key types. What cannot be emulated — a
-popup needs user activation, `:hover` needs a real pointer — is why the
-fidelity field exists. Typing goes through `execCommand("insertText")` first,
-so the page sees the engine's own `beforeinput` / `input`, and falls back to
-setting the value through the prototype's setter (past any instance property a
-framework put on the node) plus a dispatched `input`.
+button, Tab moves focus, PageUp/PageDown/Home/End scroll, a printable key
+types. What cannot be emulated — a popup needs user activation, `:hover` needs
+a real pointer — is why the fidelity field exists.
+
+Scrolling is on that list for a reason that is worth stating plainly: there is
+no scroll tool, so the scroll keys are the only way an agent moves a page, and
+a dispatched key event carries no default action whatsoever. Without the
+emulation a PageDown dispatches, no handler objects, and the press is reported
+*done* over a page that has not moved — a false success, which is worse than a
+refusal, because the next snapshot reads as a page that would not scroll
+rather than as a key that never landed. The key scrolls the nearest scrollable
+ancestor of wherever it was pressed — the pane for a ref inside one, and for a
+press with no ref whatever has focus sits in, which on a page nobody has
+clicked is the document. Home and End are left to a focused
+text field, where they belong to the caret; PageUp and PageDown are not, since
+a single-line field has no pages of its own and the engine scrolls the
+document from there too — which is the state an agent is in every time it has
+just typed into something.
+
+The press answers with how far the box actually moved and how far it can still
+go, read back off the scroller rather than computed from what was asked for.
+Without that the false success returns in a quieter form: the tree an agent
+reads back is the whole document, not the part on screen, so a page already at
+its end looks exactly like one that just scrolled, and the only thing to do
+with an answer of "done" is press the key again.
+
+Typing goes through `execCommand("insertText")` first, so the page sees the
+engine's own `beforeinput` / `input`, and falls back to setting the value
+through the prototype's setter (past any instance property a framework put on
+the node) plus a dispatched `input`.
 
 A click is refused when something else is on top at the point a pointer would
 land — the user could not click it either, and a dialog's backdrop is the
 usual case. The refusal names what is in the way.
+
+It is a *different* refusal when the element has been erased rather than
+covered: the screen-reader-only heading a framework puts inside every article,
+written as `width: 1px; clip: rect(0 0 0 0)` or a `clip-path` that closes the
+box. `ai` mode's own visibility rule does not catch those — a 1px box is a box
+— so this is where they stop, and they are `not-visible` rather than
+`obscured` because the two ask opposite things of the caller. An `obscured` is
+worth another look once the page settles; a `not-visible` is the one refusal
+here that no retry and no fresh snapshot can turn into a success, and an
+accessibility tree offers them a row at a time.
+
+Which one it is, is decided by the element's own computed style and by nothing
+else. The tempting shortcut is to infer it from the hit test — if a pointer at
+the element's centre lands on one of its *ancestors*, surely the element draws
+nothing there — and that inference is wrong often enough to matter, because
+the verdict it feeds is the one a caller must not retry. An ancestor is what a
+pointer finds whenever an ancestor paints over its own descendant: a card
+whose `::after` covers a perfectly visible link (a pseudo-element hit is
+attributed to its host), the contents of an accordion shut with `height: 0`.
+Both are recoverable — click the card, open the accordion — and an `obscured`
+that names the ancestor says exactly that.
 
 For the third floor the snapshot section leaves open — the A → B → A route —
 the world records `history.length` and counts `popstate` / `hashchange`, which

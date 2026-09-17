@@ -701,8 +701,15 @@ pub enum ActionError {
     /// document, a moved page, a removed element, a token the host or the
     /// world has moved past: take a new snapshot.
     Stale,
+    /// Nothing of the element is on screen to point at. The detail, not a
+    /// code of its own, says which of the two shapes it is: one that *paints
+    /// nothing* — a screen-reader-only node, which the accessibility tree
+    /// names and a pointer can never reach — is the one refusal here another
+    /// try cannot turn into a success, while one merely *outside the
+    /// viewport* is a page that could not be scrolled to it this time.
     NotVisible,
-    /// Something else is on top where a pointer would land.
+    /// Something else is on top where a pointer would land. Unlike
+    /// [`Self::NotVisible`], the page can be in a different state in a moment.
     Obscured,
     NotEditable,
     NoOption,
@@ -727,6 +734,28 @@ pub struct WorldAnswer {
     pub x: Option<f64>,
     #[serde(default)]
     pub y: Option<f64>,
+    /// From `act` on a key that scrolled; never from `locate`.
+    #[serde(default)]
+    pub scrolled: Option<ScrollReport>,
+}
+
+/// What a scroll key moved, in CSS pixels. Mirrors `ScrollReport` in
+/// `browser-agent/src/act.ts`.
+///
+/// Carried back because an agent cannot see the page: the tree it reads is the
+/// whole document rather than the part on screen, so a scroll that happened
+/// and one that had nowhere to go produce the same snapshot. Without this the
+/// second is a false success, and a model answers it by pressing the key
+/// again.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScrollReport {
+    /// How far it moved. Negative upwards, `0` when it did not.
+    pub by: f64,
+    /// Where the box is now.
+    pub top: f64,
+    /// The furthest it can go: `top == max` is the end of it.
+    pub max: f64,
 }
 
 /// What an agent gets back from an action that happened.
@@ -738,6 +767,9 @@ pub struct ActionOutcome {
     /// has not navigated yet by then; the agent takes a snapshot to see what
     /// came of it.
     pub url: String,
+    /// Only for a key press that scrolled something.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scrolled: Option<ScrollReport>,
 }
 
 /// The host's half of the staleness check: whether `generation` — the token a
@@ -1424,9 +1456,24 @@ mod tests {
         let outcome = serde_json::to_value(ActionOutcome {
             fidelity: Fidelity::Trusted,
             url: "http://x/".into(),
+            scrolled: None,
         })
         .unwrap();
+        // No `scrolled` key at all for an action that did not scroll, rather
+        // than a null one: every action but a key press is in this shape.
         assert_eq!(outcome, serde_json::json!({ "fidelity": "trusted", "url": "http://x/" }));
+        let scrolled: WorldAnswer = serde_json::from_str(
+            r#"{"ok":true,"url":"http://x/","scrolled":{"by":700,"top":700,"max":2900}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            scrolled.scrolled,
+            Some(ScrollReport {
+                by: 700.0,
+                top: 700.0,
+                max: 2900.0
+            })
+        );
 
         for (kind, action) in [
             (ActionKind::Hover, AgentAction::Hover),

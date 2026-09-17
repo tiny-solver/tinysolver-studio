@@ -5,6 +5,7 @@ import {
   isDisabledControl,
   keyDescription,
   pressOn,
+  scrollerFor,
   selectIn,
   typeInto,
 } from "./act"
@@ -307,7 +308,7 @@ describe("pressOn", () => {
       seen.push(`down:${e.key}:${e.code}`)
     )
     input.addEventListener("keyup", (e) => seen.push(`up:${e.key}`))
-    expect(pressOn(input, "Escape")).toBeNull()
+    expect(pressOn(input, "Escape")).toEqual({ scrolled: null })
     expect(seen).toEqual(["down:Escape:Escape", "up:Escape"])
     expect(document.activeElement).toBe(input)
   })
@@ -447,7 +448,204 @@ describe("pressOn", () => {
       error: "unsupported",
     })
   })
+
+  // A dispatched key has no default action at all, so without this a PageDown
+  // reports "done" over a page that never moved — a false success, which
+  // leaves an agent reading the next snapshot as a page that refused to
+  // scroll rather than as a key that never landed.
+  it("scrolls on the page keys, which a dispatched key does not do by itself", () => {
+    mount(`<p>text</p>`)
+    const scroller = pageScroller()
+    givenScrollRoom(scroller, 3000, 800)
+    const to = watchScrolling(scroller)
+    pressOn(null, "PageDown")
+    expect(tops(to)).toEqual([700])
+    pressOn(null, "End")
+    pressOn(null, "Home")
+    expect(tops(to)).toEqual([700, 3000, 0])
+  })
+
+  it("pages up from wherever the scroller is", () => {
+    mount(`<p>text</p>`)
+    const scroller = pageScroller()
+    givenScrollRoom(scroller, 3000, 800, 1000)
+    const to = watchScrolling(scroller)
+    pressOn(null, "PageUp")
+    expect(tops(to)).toEqual([300])
+  })
+
+  it("leaves the page alone when a handler cancelled the key", () => {
+    mount(`<p>text</p>`)
+    const to = watchScrolling(pageScroller())
+    const stop = (e: Event) => e.preventDefault()
+    addEventListener("keydown", stop)
+    pressOn(null, "PageDown")
+    removeEventListener("keydown", stop)
+    expect(to).not.toHaveBeenCalled()
+  })
+
+  // Home and End are the field's own — they put the caret at the ends of a
+  // line. PageUp and PageDown are not: a single-line field has no pages to
+  // move through, and an engine pages the document from there, which is the
+  // state an agent is in every time it has just typed into something.
+  it("holds back only the caret keys in a text field", () => {
+    const root = mount(`<input id="q">`)
+    const to = watchScrolling(pageScroller())
+    const input = root.querySelector<HTMLInputElement>("#q")!
+    pressOn(input, "End")
+    pressOn(input, "Home")
+    expect(to).not.toHaveBeenCalled()
+    pressOn(input, "PageDown")
+    expect(to).toHaveBeenCalledTimes(1)
+  })
+
+  it("leaves a listbox's own keys to it", () => {
+    const root = mount(
+      `<select id="s"><option>a</option><option>b</option></select>`
+    )
+    const to = watchScrolling(pageScroller())
+    pressOn(root.querySelector("#s")!, "PageDown")
+    pressOn(root.querySelector("#s")!, "End")
+    expect(to).not.toHaveBeenCalled()
+  })
+
+  // Ctrl+Home is the chord people actually press to get to the top of a long
+  // page. Alt is nobody's scroll modifier — on some platforms it is back and
+  // forward — and a modified page key is not a scroll anywhere.
+  it("takes Control and Meta on the ends, and no modifier on the page keys", () => {
+    mount(`<p>text</p>`)
+    const scroller = pageScroller()
+    givenScrollRoom(scroller, 3000, 800, 1500)
+    const to = watchScrolling(scroller)
+    pressOn(null, "Control+Home")
+    expect(tops(to)).toEqual([0])
+    pressOn(null, "Meta+End")
+    expect(tops(to)).toEqual([0, 3000])
+    pressOn(null, "Control+PageDown")
+    pressOn(null, "Alt+Home")
+    expect(tops(to)).toEqual([0, 3000])
+  })
+
+  // The numbers are the whole point: an agent cannot see the page, and the
+  // tree it reads back is the document rather than the view of it, so this is
+  // the only way to tell a scroll that moved from one with nowhere to go.
+  it("reports how far it went, and says so when it went nowhere", () => {
+    mount(`<p>text</p>`)
+    const scroller = pageScroller()
+    givenScrollRoom(scroller, 3000, 800)
+    watchScrolling(scroller)
+    expect(pressOn(null, "PageDown")).toEqual({
+      scrolled: { by: 700, top: 700, max: 2200 },
+    })
+    expect(pressOn(null, "End")).toEqual({
+      scrolled: { by: 1500, top: 2200, max: 2200 },
+    })
+    // At the end, and honest about it rather than reporting another success.
+    expect(pressOn(null, "PageDown")).toEqual({
+      scrolled: { by: 0, top: 2200, max: 2200 },
+    })
+    // A key that is not a scroll key says nothing about scrolling at all.
+    expect(pressOn(null, "Escape")).toEqual({ scrolled: null })
+  })
 })
+
+describe("scrollerFor", () => {
+  it("takes the nearest ancestor that scrolls, and the document when none does", () => {
+    const root = mount(
+      `<div id="pane" style="overflow-y:auto"><p id="inside">text</p></div><p id="loose">text</p>`
+    )
+    const pane = root.querySelector<HTMLElement>("#pane")!
+    givenScrollRoom(pane, 800, 80)
+    expect(scrollerFor(root.querySelector("#inside")!)).toBe(pane)
+    expect(scrollerFor(root.querySelector("#loose")!)).toBe(pageScroller())
+  })
+
+  it("passes over room without overflow, and overflow without room", () => {
+    const root = mount(
+      `<div id="tall"><div id="clipped" style="overflow-y:auto"><p id="leaf">text</p></div></div>`
+    )
+    // Content past its box, but the box shows all of it rather than scrolling.
+    givenScrollRoom(root.querySelector<HTMLElement>("#tall")!, 800, 80)
+    // Set to scroll, with nothing to scroll.
+    givenScrollRoom(root.querySelector<HTMLElement>("#clipped")!, 80, 80)
+    expect(scrollerFor(root.querySelector("#leaf")!)).toBe(pageScroller())
+  })
+
+  // `height: 0; overflow: auto` is how an accordion is animated shut. It
+  // satisfies "content past its box" while having nowhere to put a page key,
+  // and taking it would swallow the key the document should have had.
+  it("passes over a box collapsed to no height", () => {
+    const root = mount(
+      `<div id="shut" style="overflow-y:auto"><p id="leaf">text</p></div>`
+    )
+    givenScrollRoom(root.querySelector<HTMLElement>("#shut")!, 800, 0)
+    expect(scrollerFor(root.querySelector("#leaf")!)).toBe(pageScroller())
+  })
+})
+
+/** jsdom has no `document.scrollingElement`; the fallback the walk ends on is
+ *  what it reaches there, and what these assert against. */
+function pageScroller(): Element {
+  return document.scrollingElement ?? document.documentElement
+}
+
+/** jsdom lays nothing out, so every box is zero and nothing would ever
+ *  qualify as a scroller. These are the numbers the walk reads. */
+function givenScrollRoom(
+  el: Element,
+  scrollHeight: number,
+  clientHeight: number,
+  scrollTop = 0
+): void {
+  stub(el, "scrollHeight", scrollHeight)
+  stub(el, "clientHeight", clientHeight)
+  stub(el, "scrollTop", scrollTop)
+}
+
+/**
+ * The page's scroller is one object for the whole file, so what a test puts
+ * on it outlives the test unless it is taken off again. Every stub goes on
+ * through here and comes off in `afterEach`, which leaves the prototype's own
+ * accessor uncovered for the next one.
+ */
+const stubbed: Array<[object, string]> = []
+
+function stub(target: object, name: string, value: unknown): void {
+  Object.defineProperty(target, name, {
+    configurable: true,
+    writable: true,
+    value,
+  })
+  stubbed.push([target, name])
+}
+
+afterEach(() => {
+  for (const [target, name] of stubbed.splice(0))
+    delete (target as Record<string, unknown>)[name]
+})
+
+/**
+ * jsdom ships no CSSOM-View methods either, so there is nothing to spy on
+ * until one is put there.
+ *
+ * The stand-in clamps and stores the way an engine does, because the report a
+ * press comes back with is read off the box *after* the scroll — a spy that
+ * only recorded the request would let a scroll that went nowhere look like one
+ * that moved.
+ */
+function watchScrolling(el: Element) {
+  const spy = vi.fn((options: ScrollToOptions) => {
+    const max = Math.max(0, el.scrollHeight - el.clientHeight)
+    stub(el, "scrollTop", Math.min(Math.max(options.top ?? 0, 0), max))
+  })
+  stub(el, "scrollTo", spy)
+  return spy
+}
+
+/** The `top` of every scroll asked for, in order. */
+function tops(spy: ReturnType<typeof vi.fn>): number[] {
+  return spy.mock.calls.map((call) => (call[0] as ScrollToOptions).top!)
+}
 
 describe("selectIn", () => {
   const html = `<label for="s">Size</label><select id="s">
