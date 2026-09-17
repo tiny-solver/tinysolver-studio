@@ -2153,11 +2153,48 @@ describe("streaming flush window widens with the run it re-renders", () => {
     return handlers
   }
 
-  function liveText(): string {
-    const content = h.store!.getConnection(TAB)?.liveMessage?.content ?? []
+  function liveTextFor(key: string): string {
+    const content = h.store!.getConnection(key)?.liveMessage?.content ?? []
     return content
       .map((block) => (block.type === "text" ? block.text : ""))
       .join("")
+  }
+
+  function liveText(): string {
+    return liveTextFor(TAB)
+  }
+
+  /** A second conversation streaming at the same time, on its own connection. */
+  const OTHER_TAB = "conv-2-claude_code-43"
+
+  async function mountTwoStreamingOwners() {
+    h.acpFindConnectionForConversation.mockResolvedValue(null)
+    h.acpConnect.mockReset()
+    h.acpConnect
+      .mockResolvedValueOnce("conn-a")
+      .mockResolvedValueOnce("conn-b")
+      .mockResolvedValue("conn-extra")
+    await mountProvider()
+    await act(async () => {
+      await h.actions!.connect(TAB, "claude_code", "/tmp/a", "sess-a", 42)
+    })
+    const a = latestAttachHandlers()
+    await act(async () => {
+      await h.actions!.connect(OTHER_TAB, "claude_code", "/tmp/b", "sess-b", 43)
+    })
+    const b = latestAttachHandlers()
+    for (const [handlers, id] of [
+      [a, "conn-a"],
+      [b, "conn-b"],
+    ] as const) {
+      emitAcpEvent(handlers, {
+        seq: 1,
+        connection_id: id,
+        type: "status_changed",
+        status: "prompting",
+      })
+    }
+    return { a, b }
   }
 
   it("holds a long run for more frames, and delivers exactly what arrived", async () => {
@@ -2339,6 +2376,91 @@ describe("streaming flush window widens with the run it re-renders", () => {
         vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
       })
       expect(liveText()).toBe(`${head}bc`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Codeg runs several agents at once by design. A window sized from what one
+  // conversation is re-rendering must not be charged to another — least of all
+  // to a background one that costs nothing to flush and gains nothing by
+  // waiting.
+  it("never makes one conversation wait on another's long reply", async () => {
+    const { a, b } = await mountTwoStreamingOwners()
+    vi.useFakeTimers()
+    try {
+      const head = "a".repeat(9000)
+      emitAcpEvent(a, {
+        seq: 2,
+        connection_id: "conn-a",
+        type: "content_delta",
+        text: head,
+      })
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveTextFor(TAB)).toBe(head)
+
+      // A's next delta is armed against its 9 KB run — two frames. B has said
+      // nothing, so B's is one, and B must get it.
+      emitAcpEvent(a, {
+        seq: 3,
+        connection_id: "conn-a",
+        type: "content_delta",
+        text: "A",
+      })
+      emitAcpEvent(b, {
+        seq: 2,
+        connection_id: "conn-b",
+        type: "content_delta",
+        text: "B",
+      })
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveTextFor(OTHER_TAB)).toBe("B")
+      expect(liveTextFor(TAB)).toBe(head)
+
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveTextFor(TAB)).toBe(`${head}A`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // The other half of the same rule: flushing one conversation out of turn
+  // must not release another's window early either.
+  it("does not let one conversation's event flush another's queue", async () => {
+    const { a, b } = await mountTwoStreamingOwners()
+    vi.useFakeTimers()
+    try {
+      emitAcpEvent(a, {
+        seq: 2,
+        connection_id: "conn-a",
+        type: "content_delta",
+        text: "A",
+      })
+      // B's tool call flushes B's queue, and only B's.
+      emitAcpEvent(b, {
+        seq: 2,
+        connection_id: "conn-b",
+        type: "tool_call",
+        tool_call_id: "toolu_1",
+        title: "Read",
+        kind: "read",
+        status: "in_progress",
+        content: null,
+        raw_input: null,
+        raw_output: null,
+      })
+      expect(liveTextFor(TAB)).toBe("")
+
+      act(() => {
+        vi.advanceTimersByTime(STREAM_FLUSH_FRAME_MS)
+      })
+      expect(liveTextFor(TAB)).toBe("A")
     } finally {
       vi.useRealTimers()
     }
@@ -4010,6 +4132,57 @@ describe("connect() teardown races", () => {
     )
     expect(h.store!.getConnection(TAB)).toBeUndefined()
     expect(h.acpConnect).not.toHaveBeenCalled()
+  })
+
+  // Orphan rescue happens MID-TURN, and the reducer drops a `STREAM_BATCH`
+  // for a key with no connection — so deltas still sitting in the old key's
+  // flush window are lost text unless they land before the entry moves. Up to
+  // STREAM_FLUSH_MAX_MS of a live reply.
+  it("lands the old key's coalesced deltas before rescuing its connection", async () => {
+    mountDesktop()
+    await act(async () => {})
+    await act(async () => {
+      await h.actions!.connect(TAB, "claude_code", "/tmp/x", "sess-1")
+    })
+    const onEvent = vi.mocked(subscribe).mock.calls[0]![1] as (
+      envelope: EventEnvelope
+    ) => void
+    act(() => {
+      onEvent({
+        seq: 1,
+        connection_id: "spawned-conn",
+        type: "session_started",
+        session_id: "sess-1",
+      } as EventEnvelope)
+      onEvent({
+        seq: 2,
+        connection_id: "spawned-conn",
+        type: "status_changed",
+        status: "prompting",
+      } as EventEnvelope)
+      // Still inside its flush window when the rescue below fires.
+      onEvent({
+        seq: 3,
+        connection_id: "spawned-conn",
+        type: "content_delta",
+        text: "half a sentence",
+      } as EventEnvelope)
+    })
+    // Queued, not applied: the window has not elapsed.
+    expect(h.store!.getConnection(TAB)?.liveMessage?.content).toEqual([])
+
+    h.acpTouchConnection.mockResolvedValue(true)
+    await act(async () => {
+      await h.actions!.connect(RESCUE_TAB, "claude_code", "/tmp/x", "sess-1")
+    })
+
+    const rescued = h.store!.getConnection(RESCUE_TAB)
+    expect(rescued?.connectionId).toBe("spawned-conn")
+    expect(
+      (rescued?.liveMessage?.content ?? [])
+        .map((block) => (block.type === "text" ? block.text : ""))
+        .join("")
+    ).toBe("half a sentence")
   })
 
   it("still connects when the backend GC'd the connection mid-probe", async () => {

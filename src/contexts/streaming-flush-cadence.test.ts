@@ -1,9 +1,81 @@
 import { describe, expect, it } from "vitest"
 import {
+  type LiveContentBlock,
   STREAM_FLUSH_FRAME_MS,
   STREAM_FLUSH_MAX_MS,
+  type ToolCallInfo,
+  liveRerenderChars,
   streamFlushDelayMs,
 } from "@/contexts/acp-connections-context"
+
+const text = (chars: number): LiveContentBlock => ({
+  type: "text",
+  text: "x".repeat(chars),
+})
+const thinking = (chars: number): LiveContentBlock => ({
+  type: "thinking",
+  text: "t".repeat(chars),
+})
+const toolCall = (id: string): LiveContentBlock => ({
+  type: "tool_call",
+  info: {
+    tool_call_id: id,
+    title: "Bash",
+    kind: "execute",
+    status: "completed",
+    content: null,
+    raw_input: '{"command":"ls"}',
+    // The card renders a clamped preview, so its cost does not scale with
+    // however much output the tool produced.
+    raw_output_chunks: ["y".repeat(50_000)],
+    raw_output_total_bytes: 50_000,
+    locations: null,
+    meta: null,
+    images: [],
+  } satisfies ToolCallInfo,
+})
+
+describe("liveRerenderChars", () => {
+  it("charges the trailing run, which is the block a batch grows", () => {
+    expect(liveRerenderChars([text(4000)])).toBe(4000)
+    expect(liveRerenderChars([thinking(4000)])).toBe(4000)
+  })
+
+  it("charges nothing for prose the batch leaves alone", () => {
+    // `TextPart` memoizes on the string by value, so a settled run bails out
+    // before the markdown renderer — measured at zero for eight 8 KB blocks.
+    expect(liveRerenderChars([text(8192), text(8192), text(100)])).toBe(100)
+  })
+
+  it("charges a flat rate per card, whatever the card is holding", () => {
+    const perBlock = liveRerenderChars([toolCall("a"), text(0)])
+    expect(perBlock).toBeGreaterThan(0)
+    // Independent of the 50 KB of raw output on the block.
+    expect(liveRerenderChars([toolCall("a"), toolCall("b"), text(0)])).toBe(
+      2 * perBlock
+    )
+    // …and it is small next to a run: cards move the window, prose sets it.
+    expect(perBlock).toBeLessThan(1024)
+  })
+
+  it("puts a tool-heavy turn past the first step on its own", () => {
+    const cards: LiveContentBlock[] = []
+    for (let i = 0; i < 100; i++) cards.push(toolCall(`call-${i}`))
+    // A hundred tools then a 2 KB summary: the run alone would read as one
+    // frame, while every one of those cards re-renders on every batch.
+    expect(streamFlushDelayMs(liveRerenderChars([...cards, text(2048)]))).toBe(
+      2 * STREAM_FLUSH_FRAME_MS
+    )
+    expect(streamFlushDelayMs(liveRerenderChars([text(2048)]))).toBe(
+      STREAM_FLUSH_FRAME_MS
+    )
+  })
+
+  it("is zero for a turn that has said nothing yet", () => {
+    expect(liveRerenderChars(undefined)).toBe(0)
+    expect(liveRerenderChars([])).toBe(0)
+  })
+})
 
 describe("streamFlushDelayMs", () => {
   it("leaves an ordinary reply on the single-frame window it has today", () => {
