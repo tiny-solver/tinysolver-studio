@@ -249,6 +249,8 @@
     "appLanguage": "應用語言",
     "languageSaveSuccess": "語言設定已儲存",
     "languageSaveFailed": "語言設定儲存失敗：{message}",
+    "dataTitle": "資料與同步",
+    "dataDescription": "「設定同步」在裝置之間搬運設定；「備份」打包這台裝置上的全部 codeg 資料。",
     "updateTitle": "應用升級",
     "versionTitle": "軟體更新",
     "updateDescription": "點擊檢查後會從設定的發佈來源拉取最新版本資訊，有新版本時可直接下載並安裝。",
@@ -4652,13 +4654,12 @@
     "useCustom": "使用「{query}」"
   },
   "BackupSettings": {
-    "title": "備份與還原",
-    "description": "匯出一份可攜的 codeg 資料備份，或從備份還原。",
     "tabs": {
       "backup": "備份",
       "restore": "還原"
     },
     "export": {
+      "description": "把這台裝置的 codeg 資料（資料庫與上傳檔案）打包成一個封存檔。",
       "includeExternal": "包含對話內容",
       "includeExternalHint": "一併打包各 CLI 的對話記錄（Claude、Codex、Gemini 等），體積更大。",
       "passphrase": "通行碼（選填）",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "用備份封存檔中的內容取代這台裝置目前的 codeg 資料。",
       "selectFile": "選擇備份檔案",
       "passphrasePrompt": "此備份已加密，請輸入其通行碼。",
       "unlock": "解鎖",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "設定同步",
-    "description": "在多台裝置之間同步模型服務商、智能體設定、自訂智能體、快捷訊息、任務範本和應用偏好。不包含對話紀錄、上傳檔案和 CLI 對話資料，請改用備份功能。",
+    "scopeTitle": "同步範圍",
     "scopeIncludedTitle": "包含",
     "scopeExcludedTitle": "不包含",
     "scopeIncluded": {

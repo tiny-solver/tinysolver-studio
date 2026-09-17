@@ -14,8 +14,7 @@ import {
 import { useLocale, useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { useAppI18n } from "@/components/i18n-provider"
-import { BackupSettings } from "@/components/settings/backup-settings"
-import { ConfigSyncSettings } from "@/components/settings/config-sync-settings"
+import { DataSyncSettings } from "@/components/settings/data-sync-settings"
 import { ReleaseNotes } from "@/components/settings/release-notes"
 import { SettingsSection } from "@/components/shared/settings-section"
 import {
@@ -781,9 +780,7 @@ export function SystemNetworkSettings() {
           </div>
         </section>
 
-        <ConfigSyncSettings />
-
-        <BackupSettings />
+        <DataSyncSettings />
 
         <AlertDialog
           open={rollbackConfirmOpen}

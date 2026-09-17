@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Check,
+  ChevronDown,
   CloudUpload,
   FileDown,
   FileUp,
@@ -17,8 +18,18 @@ import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -113,6 +124,12 @@ function formatTimestamp(value: string | null): string | null {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
 }
 
+/**
+ * The "Configuration sync" panel of the data & sync card
+ * (`data-sync-settings.tsx`): what a machine's settings are, in a file or on a
+ * WebDAV server. It renders no card shell or heading of its own — the card and
+ * the tab that selects this panel supply both.
+ */
 export function ConfigSyncSettings() {
   const t = useTranslations("ConfigSyncSettings")
   // Root translator so backend errors carrying `configSync.error.*` keys
@@ -172,8 +189,11 @@ export function ConfigSyncSettings() {
   )
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [rollbacks, setRollbacks] = useState<RollbackSnapshot[]>([])
+  const [rollbackOpen, setRollbackOpen] = useState(false)
   const [pendingRollback, setPendingRollback] =
     useState<RollbackSnapshot | null>(null)
+  // Reference material, folded by default — see the block it wraps.
+  const [scopeOpen, setScopeOpen] = useState(false)
 
   // Guards against a late `setState` when the settings page unmounts during a
   // slow WebDAV round-trip.
@@ -190,7 +210,12 @@ export function ConfigSyncSettings() {
   const refreshRollbacks = useCallback(async () => {
     try {
       const listed = await listConfigRollbacks()
-      if (mounted.current) setRollbacks(listed)
+      if (!mounted.current) return
+      setRollbacks(listed)
+      // The entry that owns the popover is rendered off this list, so an empty
+      // one takes the whole subtree away. Clearing the flag with it stops a
+      // later snapshot mounting a popover that is already open, un-asked.
+      if (listed.length === 0) setRollbackOpen(false)
     } catch (err) {
       // A missing or unreadable snapshot directory is not worth a toast: the
       // section simply does not appear.
@@ -528,55 +553,68 @@ export function ConfigSyncSettings() {
     username.trim() === savedAccount.username
 
   return (
-    <section className="rounded-xl border bg-card p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <CloudUpload className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold">{t("title")}</h2>
-      </div>
+    // Panel of the data & sync card: the heading is the tab that selected it,
+    // and the two columns below say what "sync" covers better than a paragraph
+    // repeating them would.
+    <div className="space-y-4">
+      {/* Eleven lines of reference text that answer one question — folded, so
+          the panel opens on the things you came here to do. The card's own
+          description already draws the line between sync and backup; this is
+          the detail behind it, and the two columns exist so nobody reads
+          "sync" as "backs up everything". */}
+      <Collapsible open={scopeOpen} onOpenChange={setScopeOpen}>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("scopeTitle")}
+            <ChevronDown className="size-3.5 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2">
+          <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-2xs font-medium text-muted-foreground">
+                {t("scopeIncludedTitle")}
+              </Label>
+              <ul className="space-y-1">
+                {SCOPE_INCLUDED.map((key) => (
+                  <li key={key} className="flex items-start gap-1.5 text-2xs">
+                    <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-500" />
+                    <span>{t(`scopeIncluded.${key}`)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-2xs font-medium text-muted-foreground">
+                {t("scopeExcludedTitle")}
+              </Label>
+              <ul className="space-y-1">
+                {SCOPE_EXCLUDED.map((key) => (
+                  <li
+                    key={key}
+                    className="flex items-start gap-1.5 text-2xs text-muted-foreground"
+                  >
+                    <X className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span>{t(`scopeExcluded.${key}`)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
-      <p className="text-xs text-muted-foreground leading-5">
-        {t("description")}
-      </p>
-
-      {/* The two columns exist so nobody reads "sync" as "backs up everything". */}
-      <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label className="text-2xs font-medium text-muted-foreground">
-            {t("scopeIncludedTitle")}
-          </Label>
-          <ul className="space-y-1">
-            {SCOPE_INCLUDED.map((key) => (
-              <li key={key} className="flex items-start gap-1.5 text-2xs">
-                <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-500" />
-                <span>{t(`scopeIncluded.${key}`)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-2xs font-medium text-muted-foreground">
-            {t("scopeExcludedTitle")}
-          </Label>
-          <ul className="space-y-1">
-            {SCOPE_EXCLUDED.map((key) => (
-              <li
-                key={key}
-                className="flex items-start gap-1.5 text-2xs text-muted-foreground"
-              >
-                <X className="mt-0.5 h-3 w-3 shrink-0" />
-                <span>{t(`scopeExcluded.${key}`)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* Local file transfer works with no server at all, so it comes first. */}
-      <div className="space-y-2">
+      {/* Local file transfer works with no server at all, so it comes first.
+          Every block below is separated the same way, so the panel reads as a
+          list of blocks rather than one run-on wall. */}
+      <div className="space-y-2 border-t pt-4">
         <Label className="text-xs font-medium text-muted-foreground">
           {t("fileTitle")}
         </Label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -603,49 +641,79 @@ export function ConfigSyncSettings() {
             )}
             {t("importButton")}
           </Button>
-        </div>
-        <p className="text-2xs text-muted-foreground">{t("fileHint")}</p>
-      </div>
 
-      {/* Only once there is something to undo — an empty list is noise. */}
-      {rollbacks.length > 0 ? (
-        <div className="space-y-2 border-t pt-4">
-          <Label className="text-xs font-medium text-muted-foreground">
-            {t("rollbackTitle")}
-          </Label>
-          <p className="text-2xs text-muted-foreground">{t("rollbackHint")}</p>
-          <ul className="space-y-1">
-            {rollbacks.map((snapshot) => (
-              <li
-                key={snapshot.id}
-                className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2"
-              >
-                <div className="min-w-0 space-y-0.5">
-                  <p className="truncate text-2xs">
-                    {formatTimestamp(snapshot.createdAt) ??
-                      t("rollbackUnknownTime")}
-                  </p>
-                  <CountsSummary counts={snapshot.counts} />
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => setPendingRollback(snapshot)}
-                  disabled={busy !== null}
-                >
+          {/* Only once there is something to undo — and on this row rather
+              than in a block of its own: it is the way back from the button
+              next to it, and up to ten restore points listed inline pushed
+              everything else off the panel. */}
+          {rollbacks.length > 0 ? (
+            <Popover open={rollbackOpen} onOpenChange={setRollbackOpen}>
+              <PopoverTrigger asChild>
+                {/* Readable while something else is in flight — only the undo
+                    buttons inside are gated on `busy`, which is what the
+                    inline list did. `ms-auto`, not `ml-auto`: Arabic runs the
+                    row right-to-left and a physical margin would park this
+                    against the Import button instead of the row's end. */}
+                <Button variant="ghost" size="sm" className="ms-auto">
                   {busy === "rollback" ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Undo2 className="h-4 w-4" />
                   )}
-                  {t("rollbackAction")}
+                  <span>{t("rollbackTitle")}</span>
+                  <span className="text-2xs text-muted-foreground tabular-nums">
+                    {rollbacks.length}
+                  </span>
                 </Button>
-              </li>
-            ))}
-          </ul>
+              </PopoverTrigger>
+              {/* Named after its trigger rather than repeating the words in a
+                  heading: one more line to read on a list this short, and the
+                  popover is a `dialog`, so the label is what announces it. */}
+              <PopoverContent
+                align="end"
+                aria-label={t("rollbackTitle")}
+                className="w-80 gap-2"
+              >
+                <p className="text-2xs text-muted-foreground leading-5">
+                  {t("rollbackHint")}
+                </p>
+                <ul className="max-h-64 space-y-1 overflow-y-auto">
+                  {rollbacks.map((snapshot) => (
+                    <li
+                      key={snapshot.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="truncate text-2xs">
+                          {formatTimestamp(snapshot.createdAt) ??
+                            t("rollbackUnknownTime")}
+                        </p>
+                        <CountsSummary counts={snapshot.counts} />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        // Closed here rather than left open behind the
+                        // confirmation: the popover is not modal, so it would
+                        // still be sitting there once the dialog is answered.
+                        onClick={() => {
+                          setRollbackOpen(false)
+                          setPendingRollback(snapshot)
+                        }}
+                        disabled={busy !== null}
+                      >
+                        {t("rollbackAction")}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </PopoverContent>
+            </Popover>
+          ) : null}
         </div>
-      ) : null}
+        <p className="text-2xs text-muted-foreground">{t("fileHint")}</p>
+      </div>
 
       <div className="border-t pt-4 space-y-4">
         <div className="flex items-center justify-between gap-4">
@@ -1066,7 +1134,7 @@ export function ConfigSyncSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </section>
+    </div>
   )
 }
 

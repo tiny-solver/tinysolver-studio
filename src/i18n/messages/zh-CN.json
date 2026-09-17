@@ -249,6 +249,8 @@
     "appLanguage": "应用语言",
     "languageSaveSuccess": "语言设置已保存",
     "languageSaveFailed": "语言设置保存失败：{message}",
+    "dataTitle": "数据与同步",
+    "dataDescription": "「配置同步」在设备之间搬运设置；「备份」打包这台设备上的全部 codeg 数据。",
     "updateTitle": "应用升级",
     "versionTitle": "软件更新",
     "updateDescription": "点击检查后会从配置的发布源拉取最新版本信息，有新版本时可直接下载并安装。",
@@ -4652,13 +4654,12 @@
     "connectionExpired": "远端连接“{name}”已失效。请更新 Token 后重新加载此窗口。"
   },
   "BackupSettings": {
-    "title": "备份与恢复",
-    "description": "导出一份可移植的 codeg 数据备份，或从备份中恢复。",
     "tabs": {
       "backup": "备份",
       "restore": "恢复"
     },
     "export": {
+      "description": "把这台设备的 codeg 数据（数据库与上传文件）打包成一个归档文件。",
       "includeExternal": "包含会话内容",
       "includeExternalHint": "同时打包各 CLI 的会话记录（Claude、Codex、Gemini 等），体积更大。",
       "passphrase": "口令（可选）",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "用备份归档中的内容替换这台设备当前的 codeg 数据。",
       "selectFile": "选择备份文件",
       "passphrasePrompt": "该备份已加密，请输入其口令。",
       "unlock": "解锁",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "配置同步",
-    "description": "在多台设备之间同步模型服务商、智能体设置、自定义智能体、快捷消息、任务模板和应用偏好。不包含会话记录、上传文件和 CLI 会话数据，那些请用备份功能。",
+    "scopeTitle": "同步范围",
     "scopeIncludedTitle": "包含",
     "scopeExcludedTitle": "不包含",
     "scopeIncluded": {

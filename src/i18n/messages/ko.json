@@ -249,6 +249,8 @@
     "appLanguage": "앱 언어",
     "languageSaveSuccess": "언어 설정이 저장되었습니다",
     "languageSaveFailed": "언어 설정 저장 실패: {message}",
+    "dataTitle": "데이터 및 동기화",
+    "dataDescription": "「설정 동기화」는 설정을 기기 사이로 옮기고, 「백업」은 이 기기의 codeg 데이터 전체를 묶습니다.",
     "updateTitle": "앱 업데이트",
     "versionTitle": "소프트웨어 업데이트",
     "updateDescription": "설정된 릴리스 소스에서 새 버전을 확인하고 가능하면 바로 설치합니다.",
@@ -4652,13 +4654,12 @@
     "useCustom": "\"{query}\" 사용"
   },
   "BackupSettings": {
-    "title": "백업 및 복원",
-    "description": "codeg 데이터의 이동 가능한 백업을 내보내거나 백업에서 복원합니다.",
     "tabs": {
       "backup": "백업",
       "restore": "복원"
     },
     "export": {
+      "description": "이 기기의 codeg 데이터(데이터베이스와 업로드한 파일)를 하나의 아카이브로 묶습니다.",
       "includeExternal": "대화 내용 포함",
       "includeExternalHint": "각 CLI의 대화 기록(Claude, Codex, Gemini 등)도 함께 보관합니다. 용량이 커집니다.",
       "passphrase": "암호문 (선택)",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "이 기기의 codeg 데이터를 백업 아카이브의 내용으로 바꿉니다.",
       "selectFile": "백업 파일 선택",
       "passphrasePrompt": "이 백업은 암호화되어 있습니다. 암호문을 입력하세요.",
       "unlock": "잠금 해제",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "설정 동기화",
-    "description": "모델 공급자, 에이전트 설정, 사용자 에이전트, 빠른 메시지, 작업 템플릿, 앱 환경설정을 여러 기기에서 공유합니다. 대화 기록, 업로드한 파일, CLI 세션 기록은 포함되지 않으니 백업 기능을 사용하세요.",
+    "scopeTitle": "동기화 범위",
     "scopeIncludedTitle": "포함됨",
     "scopeExcludedTitle": "포함되지 않음",
     "scopeIncluded": {

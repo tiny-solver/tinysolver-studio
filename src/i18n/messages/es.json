@@ -249,6 +249,8 @@
     "appLanguage": "Idioma de la app",
     "languageSaveSuccess": "La configuración de idioma se guardó",
     "languageSaveFailed": "No se pudo guardar la configuración de idioma: {message}",
+    "dataTitle": "Datos y sincronización",
+    "dataDescription": "La sincronización de configuración lleva tus ajustes de un equipo a otro; la copia de seguridad empaqueta todos los datos de codeg de este equipo.",
     "updateTitle": "Actualización de la app",
     "versionTitle": "Actualización de software",
     "updateDescription": "Comprueba versiones más nuevas en la fuente de versiones configurada e instálalas directamente cuando estén disponibles.",
@@ -4652,13 +4654,12 @@
     "useCustom": "Usar «{query}»"
   },
   "BackupSettings": {
-    "title": "Copia de seguridad y restauración",
-    "description": "Exporta una copia de seguridad portátil de tus datos de codeg, o restaura desde una.",
     "tabs": {
       "backup": "Copia de seguridad",
       "restore": "Restaurar"
     },
     "export": {
+      "description": "Empaqueta los datos de codeg de este equipo —base de datos y archivos subidos— en un solo archivo.",
       "includeExternal": "Incluir el contenido de las conversaciones",
       "includeExternalHint": "También archiva las transcripciones de las CLI (Claude, Codex, Gemini, …). Aumenta el tamaño.",
       "passphrase": "Frase de contraseña (opcional)",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "Sustituye los datos de codeg de este equipo por el contenido de una copia de seguridad.",
       "selectFile": "Seleccionar archivo de copia",
       "passphrasePrompt": "Esta copia está cifrada. Introduce su frase de contraseña.",
       "unlock": "Desbloquear",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "Sincronización de configuración",
-    "description": "Lleva proveedores de modelos, ajustes de agentes, agentes personalizados, mensajes rápidos, plantillas de tareas y preferencias de la app de un equipo a otro. No incluye conversaciones, archivos subidos ni registros de sesiones de CLI: para eso usa la copia de seguridad.",
+    "scopeTitle": "Qué se sincroniza",
     "scopeIncludedTitle": "Incluido",
     "scopeExcludedTitle": "No incluido",
     "scopeIncluded": {

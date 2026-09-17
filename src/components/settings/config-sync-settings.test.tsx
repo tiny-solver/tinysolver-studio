@@ -515,7 +515,26 @@ describe("ConfigSyncSettings — rollback snapshots", () => {
     counts: { modelProviders: 2 },
   }
 
-  it("hides the section when there is nothing to undo", async () => {
+  const OLDER = {
+    id: "config-20260601T090000000",
+    createdAt: "2026-06-01T09:00:00Z",
+    size: 2048,
+    counts: { quickMessages: 5 },
+  }
+
+  /**
+   * The restore points live behind the entry on the file-actions row — a list
+   * of up to ten of them inline pushed everything else off the panel. Opens it
+   * and hands back one undo button per listed snapshot, in list order.
+   */
+  async function openRollbackList() {
+    fireEvent.click(
+      await screen.findByRole("button", { name: new RegExp(t.rollbackTitle) })
+    )
+    return screen.findAllByRole("button", { name: t.rollbackAction })
+  }
+
+  it("hides the entry when there is nothing to undo", async () => {
     await renderLoaded()
     expect(screen.queryByText(t.rollbackTitle)).not.toBeInTheDocument()
   })
@@ -523,17 +542,20 @@ describe("ConfigSyncSettings — rollback snapshots", () => {
   /// Regression: every import and restore wrote a pre-apply snapshot and
   /// returned its path, but nothing listed or applied one — the safety net
   /// existed on disk and was unreachable from the product.
-  it("lists a saved configuration and applies it after confirmation", async () => {
-    vi.mocked(listConfigRollbacks).mockResolvedValue([SNAPSHOT])
+  it("lists saved configurations and applies the one that was picked", async () => {
+    vi.mocked(listConfigRollbacks).mockResolvedValue([SNAPSHOT, OLDER])
     vi.mocked(applyConfigRollback).mockResolvedValue({
-      applied: { domains: { modelProviders: 2 }, total: 2 },
+      applied: { domains: { quickMessages: 5 }, total: 5 },
       rollbackPath: null,
     })
     await renderLoaded()
-    await screen.findByText(t.rollbackTitle)
+    const [, undoOlder] = await openRollbackList()
     expect(screen.getByText("2 model providers")).toBeInTheDocument()
+    expect(screen.getByText("5 quick messages")).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: t.rollbackAction }))
+    // The second row, so the id travelling to the backend proves the rows are
+    // wired to their own snapshot rather than to whichever one is first.
+    fireEvent.click(undoOlder)
     await screen.findByText(t.rollbackConfirmTitle)
     expect(applyConfigRollback).not.toHaveBeenCalled()
 
@@ -541,7 +563,7 @@ describe("ConfigSyncSettings — rollback snapshots", () => {
       screen.getByRole("button", { name: t.rollbackConfirmAction })
     )
     await waitFor(() =>
-      expect(applyConfigRollback).toHaveBeenCalledWith(SNAPSHOT.id)
+      expect(applyConfigRollback).toHaveBeenCalledWith(OLDER.id)
     )
   })
 
@@ -554,10 +576,10 @@ describe("ConfigSyncSettings — rollback snapshots", () => {
       rollbackPath: null,
     })
     await renderLoaded()
-    await screen.findByText(t.rollbackTitle)
+    const [undo] = await openRollbackList()
     expect(listConfigRollbacks).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole("button", { name: t.rollbackAction }))
+    fireEvent.click(undo)
     await screen.findByText(t.rollbackConfirmTitle)
     fireEvent.click(
       screen.getByRole("button", { name: t.rollbackConfirmAction })
@@ -574,9 +596,9 @@ describe("ConfigSyncSettings — rollback snapshots", () => {
     )
     vi.mocked(listConfigRollbacks).mockResolvedValue([])
     await renderLoaded()
-    await screen.findByText(t.rollbackTitle)
+    const [undo] = await openRollbackList()
 
-    fireEvent.click(screen.getByRole("button", { name: t.rollbackAction }))
+    fireEvent.click(undo)
     await screen.findByText(t.rollbackConfirmTitle)
     fireEvent.click(
       screen.getByRole("button", { name: t.rollbackConfirmAction })

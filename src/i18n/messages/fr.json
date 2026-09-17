@@ -249,6 +249,8 @@
     "appLanguage": "Langue de l’app",
     "languageSaveSuccess": "Les paramètres de langue ont été enregistrés",
     "languageSaveFailed": "Échec de l’enregistrement des paramètres de langue : {message}",
+    "dataTitle": "Données et synchronisation",
+    "dataDescription": "La synchronisation de la configuration transfère vos réglages d’une machine à l’autre ; la sauvegarde empaquette toutes les données codeg de cette machine.",
     "updateTitle": "Mise à jour de l’app",
     "versionTitle": "Mise à jour logicielle",
     "updateDescription": "Vérifiez les nouvelles versions depuis la source de publication configurée et installez-les directement si disponibles.",
@@ -4652,13 +4654,12 @@
     "useCustom": "Utiliser « {query} »"
   },
   "BackupSettings": {
-    "title": "Sauvegarde et restauration",
-    "description": "Exportez une sauvegarde portable de vos données codeg, ou restaurez à partir d'une sauvegarde.",
     "tabs": {
       "backup": "Sauvegarde",
       "restore": "Restauration"
     },
     "export": {
+      "description": "Empaquette les données codeg de cette machine (base de données et fichiers importés) dans une seule archive.",
       "includeExternal": "Inclure le contenu des conversations",
       "includeExternalHint": "Archive aussi les transcriptions des CLI (Claude, Codex, Gemini, …). Augmente la taille.",
       "passphrase": "Phrase secrète (facultatif)",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "Remplace les données codeg de cette machine par le contenu d’une sauvegarde.",
       "selectFile": "Sélectionner le fichier de sauvegarde",
       "passphrasePrompt": "Cette sauvegarde est chiffrée. Saisissez sa phrase secrète.",
       "unlock": "Déverrouiller",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "Synchronisation de la configuration",
-    "description": "Transfère les fournisseurs de modèles, les réglages d’agents, les agents personnalisés, les messages rapides, les modèles de tâches et les préférences de l’app d’une machine à l’autre. Les conversations, les fichiers importés et les sessions CLI ne sont pas inclus : utilisez la sauvegarde pour cela.",
+    "scopeTitle": "Ce qui est synchronisé",
     "scopeIncludedTitle": "Inclus",
     "scopeExcludedTitle": "Non inclus",
     "scopeIncluded": {

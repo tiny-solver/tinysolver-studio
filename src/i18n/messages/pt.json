@@ -249,6 +249,8 @@
     "appLanguage": "Idioma do app",
     "languageSaveSuccess": "As configurações de idioma foram salvas",
     "languageSaveFailed": "Falha ao salvar as configurações de idioma: {message}",
+    "dataTitle": "Dados e sincronização",
+    "dataDescription": "A sincronização de configuração leva seus ajustes de uma máquina para outra; o backup empacota todos os dados do codeg desta máquina.",
     "updateTitle": "Atualização do app",
     "versionTitle": "Atualização de software",
     "updateDescription": "Verifique versões mais novas na fonte de releases configurada e instale diretamente quando disponíveis.",
@@ -4652,13 +4654,12 @@
     "useCustom": "Usar \"{query}\""
   },
   "BackupSettings": {
-    "title": "Backup e restauração",
-    "description": "Exporte um backup portátil dos seus dados do codeg ou restaure a partir de um.",
     "tabs": {
       "backup": "Backup",
       "restore": "Restauração"
     },
     "export": {
+      "description": "Empacota os dados do codeg desta máquina — banco de dados e arquivos enviados — em um único arquivo.",
       "includeExternal": "Incluir o conteúdo das conversas",
       "includeExternalHint": "Também arquiva as transcrições das CLIs (Claude, Codex, Gemini, …). Aumenta o tamanho.",
       "passphrase": "Senha (opcional)",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "Substitui os dados do codeg desta máquina pelo conteúdo de um arquivo de backup.",
       "selectFile": "Selecionar arquivo de backup",
       "passphrasePrompt": "Este backup está criptografado. Digite a senha dele.",
       "unlock": "Desbloquear",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "Sincronização de configuração",
-    "description": "Leve provedores de modelos, ajustes de agentes, agentes personalizados, mensagens rápidas, modelos de tarefa e preferências do app de uma máquina para outra. Conversas, arquivos enviados e registros de sessões de CLI não entram — para isso use o backup.",
+    "scopeTitle": "O que é sincronizado",
     "scopeIncludedTitle": "Incluído",
     "scopeExcludedTitle": "Não incluído",
     "scopeIncluded": {

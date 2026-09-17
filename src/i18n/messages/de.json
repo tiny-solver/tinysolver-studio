@@ -249,6 +249,8 @@
     "appLanguage": "App-Sprache",
     "languageSaveSuccess": "Spracheinstellungen wurden gespeichert",
     "languageSaveFailed": "Spracheinstellungen konnten nicht gespeichert werden: {message}",
+    "dataTitle": "Daten & Synchronisierung",
+    "dataDescription": "Die Konfigurationssynchronisierung überträgt deine Einstellungen zwischen Geräten; die Sicherung packt alle codeg-Daten dieses Geräts zusammen.",
     "updateTitle": "App-Update",
     "versionTitle": "Softwareupdate",
     "updateDescription": "Prüft die konfigurierte Release-Quelle auf neue Versionen und installiert sie bei Verfügbarkeit direkt.",
@@ -4652,13 +4654,12 @@
     "useCustom": "„{query}“ verwenden"
   },
   "BackupSettings": {
-    "title": "Sicherung & Wiederherstellung",
-    "description": "Exportiere eine portable Sicherung deiner codeg-Daten oder stelle aus einer Sicherung wieder her.",
     "tabs": {
       "backup": "Sicherung",
       "restore": "Wiederherstellung"
     },
     "export": {
+      "description": "Packt die codeg-Daten dieses Geräts – Datenbank und hochgeladene Dateien – in ein Archiv.",
       "includeExternal": "Gesprächsinhalte einschließen",
       "includeExternalHint": "Archiviert auch die CLI-Transkripte (Claude, Codex, Gemini, …). Erhöht die Größe.",
       "passphrase": "Passphrase (optional)",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "Ersetzt die codeg-Daten dieses Geräts durch den Inhalt einer Sicherung.",
       "selectFile": "Sicherungsdatei auswählen",
       "passphrasePrompt": "Diese Sicherung ist verschlüsselt. Gib ihre Passphrase ein.",
       "unlock": "Entsperren",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "Konfigurationssynchronisierung",
-    "description": "Überträgt Modellanbieter, Agenteneinstellungen, eigene Agenten, Schnellnachrichten, Aufgabenvorlagen und App-Einstellungen zwischen Geräten. Unterhaltungen, hochgeladene Dateien und CLI-Sitzungsdaten sind nicht enthalten – dafür gibt es die Datensicherung.",
+    "scopeTitle": "Was synchronisiert wird",
     "scopeIncludedTitle": "Enthalten",
     "scopeExcludedTitle": "Nicht enthalten",
     "scopeIncluded": {

@@ -249,6 +249,8 @@
     "appLanguage": "アプリ言語",
     "languageSaveSuccess": "言語設定を保存しました",
     "languageSaveFailed": "言語設定の保存に失敗しました: {message}",
+    "dataTitle": "データと同期",
+    "dataDescription": "「設定同期」は設定をマシン間で持ち運び、「バックアップ」はこのマシンの codeg データをまるごとまとめます。",
     "updateTitle": "アプリ更新",
     "versionTitle": "ソフトウェアアップデート",
     "updateDescription": "設定されたリリースソースで新しいバージョンを確認し、利用可能なら直接インストールします。",
@@ -4652,13 +4654,12 @@
     "useCustom": "「{query}」を使用"
   },
   "BackupSettings": {
-    "title": "バックアップと復元",
-    "description": "codeg データのポータブルなバックアップを書き出すか、バックアップから復元します。",
     "tabs": {
       "backup": "バックアップ",
       "restore": "復元"
     },
     "export": {
+      "description": "このマシンの codeg データ（データベースとアップロードしたファイル）を 1 つのアーカイブにまとめます。",
       "includeExternal": "会話内容を含める",
       "includeExternalHint": "各 CLI の会話履歴（Claude、Codex、Gemini など）も保存します。サイズが増えます。",
       "passphrase": "パスフレーズ（任意）",
@@ -4681,6 +4682,7 @@
       }
     },
     "restore": {
+      "description": "このマシンの codeg データをバックアップアーカイブの内容で置き換えます。",
       "selectFile": "バックアップファイルを選択",
       "passphrasePrompt": "このバックアップは暗号化されています。パスフレーズを入力してください。",
       "unlock": "ロック解除",
@@ -4750,7 +4752,7 @@
   },
   "ConfigSyncSettings": {
     "title": "設定同期",
-    "description": "モデルプロバイダー、エージェント設定、カスタムエージェント、クイックメッセージ、タスクテンプレート、アプリ設定を複数のマシン間で共有します。会話履歴やアップロードしたファイル、CLI セッション記録は含まれません——それらはバックアップを使ってください。",
+    "scopeTitle": "同期される範囲",
     "scopeIncludedTitle": "含まれるもの",
     "scopeExcludedTitle": "含まれないもの",
     "scopeIncluded": {
