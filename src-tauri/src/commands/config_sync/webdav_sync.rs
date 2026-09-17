@@ -735,7 +735,8 @@ pub async fn download_and_apply_core(
     // configuration, and an auto-sync tick landing mid-apply would push a
     // half-merged state straight back to the remote.
     let _suppression = super::auto_sync::suppress_auto_sync();
-    let rollback_path = super::local_io::save_rollback(conn).await;
+    let rollback_path =
+        super::local_io::save_rollback(conn, &super::snapshot::rollback_dir()).await;
     let applied = apply_snapshot_core(conn, &snapshot).await?;
 
     Ok(DownloadOutcome {

@@ -51,6 +51,7 @@ type ApplyFn = for<'a> fn(
     &'a Value,
 ) -> BoxFuture<'a, Result<usize, AppCommandError>>;
 type ValidateFn = fn(&Value) -> Result<(), AppCommandError>;
+type CountFn = fn(&Value) -> usize;
 
 /// One configuration domain: how it is read out of the local database, how it
 /// is checked before anything is written, and how it is written back in.
@@ -68,6 +69,12 @@ pub struct ConfigDomain {
     /// against the same DTO type; `validate_matches_apply` holds the two
     /// together.
     pub validate: ValidateFn,
+    /// How many entries [`Self::apply`] would write. Beside the applier rather
+    /// than derived from the JSON container, because the two are not the same
+    /// number: `preferences` is an object whose non-portable and non-string
+    /// members are skipped on the way in, so counting its keys promises the
+    /// confirmation dialog rows that the import will not write.
+    pub count: CountFn,
     pub apply: ApplyFn,
 }
 
@@ -80,36 +87,42 @@ pub const CONFIG_DOMAINS: &[ConfigDomain] = &[
         id: DOMAIN_MODEL_PROVIDERS,
         collect: collect_model_providers,
         validate: validate_model_providers,
+        count: count_rows,
         apply: apply_model_providers,
     },
     ConfigDomain {
         id: DOMAIN_AGENT_SETTINGS,
         collect: collect_agent_settings,
         validate: validate_agent_settings,
+        count: count_rows,
         apply: apply_agent_settings,
     },
     ConfigDomain {
         id: DOMAIN_CUSTOM_AGENTS,
         collect: collect_custom_agents,
         validate: validate_custom_agents,
+        count: count_rows,
         apply: apply_custom_agents,
     },
     ConfigDomain {
         id: DOMAIN_QUICK_MESSAGES,
         collect: collect_quick_messages,
         validate: validate_quick_messages,
+        count: count_rows,
         apply: apply_quick_messages,
     },
     ConfigDomain {
         id: DOMAIN_TASK_TEMPLATES,
         collect: collect_task_templates,
         validate: validate_task_templates,
+        count: count_rows,
         apply: apply_task_templates,
     },
     ConfigDomain {
         id: DOMAIN_PREFERENCES,
         collect: collect_preferences,
         validate: validate_preferences,
+        count: count_portable_preferences,
         apply: apply_preferences,
     },
 ];
@@ -142,15 +155,38 @@ fn validate_preferences(_value: &Value) -> Result<(), AppCommandError> {
     Ok(())
 }
 
-/// How many entries a collected domain value holds — array length for row
-/// domains, key count for `preferences`. Used for the manifest's `counts` and
-/// for the import confirmation dialog.
-pub fn count_entries(value: &Value) -> usize {
+/// Row domains apply every element they decode, so the list length is the
+/// answer.
+fn count_rows(value: &Value) -> usize {
     match value {
         Value::Array(items) => items.len(),
-        Value::Object(map) => map.len(),
         _ => 0,
     }
+}
+
+/// `preferences` does not. Its applier skips keys outside the portable
+/// allowlist and values that are not strings, so the key count overstates what
+/// an import writes — `{"appearanceMode":"dark","githubAccounts":"…"}` previews
+/// as two and applies one. `count_matches_apply_on_every_domain` keeps this
+/// filter and the applier's from drifting apart.
+fn count_portable_preferences(value: &Value) -> usize {
+    match value {
+        Value::Object(map) => map
+            .iter()
+            .filter(|(key, entry)| is_portable_key(key) && entry.is_string())
+            .count(),
+        _ => 0,
+    }
+}
+
+/// How many entries applying this domain would write. Domains this build does
+/// not know are not applied at all, so they count for nothing rather than for
+/// however many elements they happen to contain.
+pub fn count_entries(id: &str, value: &Value) -> usize {
+    CONFIG_DOMAINS
+        .iter()
+        .find(|domain| domain.id == id)
+        .map_or(0, |domain| (domain.count)(value))
 }
 
 fn db_err(err: sea_orm::DbErr) -> AppCommandError {
@@ -756,9 +792,27 @@ mod tests {
 
     #[test]
     fn count_entries_handles_arrays_objects_and_junk() {
-        assert_eq!(count_entries(&serde_json::json!([1, 2, 3])), 3);
-        assert_eq!(count_entries(&serde_json::json!({ "a": "b" })), 1);
-        assert_eq!(count_entries(&Value::Null), 0);
+        let rows = DOMAIN_QUICK_MESSAGES;
+        assert_eq!(count_entries(rows, &serde_json::json!([1, 2, 3])), 3);
+        assert_eq!(count_entries(rows, &Value::Null), 0);
+        // A row domain handed an object is junk, not one entry.
+        assert_eq!(count_entries(rows, &serde_json::json!({ "a": "b" })), 0);
+
+        // Preferences count only what an import would write.
+        assert_eq!(
+            count_entries(
+                DOMAIN_PREFERENCES,
+                &serde_json::json!({ "appearance_mode": "dark", "github_accounts": "leaked" })
+            ),
+            1
+        );
+
+        // A domain from a newer build is not applied, so it counts for nothing
+        // rather than advertising rows that will be skipped.
+        assert_eq!(
+            count_entries("somethingNewer", &serde_json::json!([1, 2, 3])),
+            0
+        );
     }
 
     /// The whole point of `validate` is that it answers the same question the
@@ -799,6 +853,54 @@ mod tests {
                 assert_eq!(
                     validated, applied,
                     "domain '{}' disagrees with itself on {payload}",
+                    domain.id
+                );
+            }
+        }
+    }
+
+    /// The other half of the same agreement. The confirmation dialog and the
+    /// manifest both quote `count`, and the user reads that as "this is what
+    /// will be written" — so whenever an apply succeeds, the number it reports
+    /// has to be the number that was promised.
+    ///
+    /// `preferences` is the one that can drift, because its applier filters and
+    /// its container does not: counting keys would promise the two entries
+    /// below that an import silently drops.
+    #[tokio::test]
+    async fn count_matches_apply_on_every_domain() {
+        use sea_orm::TransactionTrait;
+
+        let portable = *PORTABLE_PREFERENCE_KEYS
+            .first()
+            .expect("at least one portable preference key");
+        let mut mixed = Map::new();
+        mixed.insert(portable.to_string(), Value::from("kept"));
+        // Not on the allowlist: refused on the way in, so it must not be
+        // counted on the way out.
+        mixed.insert("definitely_not_portable".to_string(), Value::from("dropped"));
+        // On the allowlist but not a string — preferences are stored as text,
+        // and the applier skips anything else rather than stringifying it.
+        mixed.insert("appearance_zoom_level".to_string(), Value::from(7));
+
+        let payloads = [
+            serde_json::json!([]),
+            Value::Null,
+            serde_json::json!({}),
+            Value::Object(mixed),
+        ];
+
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        for domain in CONFIG_DOMAINS {
+            for payload in &payloads {
+                let promised = (domain.count)(payload);
+                let tx = db.conn.begin().await.expect("begin");
+                let applied = (domain.apply)(&tx, payload).await;
+                tx.rollback().await.expect("rollback");
+                let Ok(written) = applied else { continue };
+                assert_eq!(
+                    promised, written,
+                    "domain '{}' promised {promised} and wrote {written} for {payload}",
                     domain.id
                 );
             }

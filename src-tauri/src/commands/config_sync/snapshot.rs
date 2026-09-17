@@ -68,7 +68,7 @@ impl ConfigSnapshot {
     pub fn counts(&self) -> BTreeMap<String, usize> {
         self.domains
             .iter()
-            .map(|(id, value)| (id.clone(), count_entries(value)))
+            .map(|(id, value)| (id.clone(), count_entries(id, value)))
             .collect()
     }
 }
@@ -464,9 +464,20 @@ pub fn list_rollback_infos(dir: &Path) -> Vec<RollbackSnapshotInfo> {
     infos
 }
 
+/// The one definition of what an id looks like, shared by the lister and the
+/// resolver. Splitting it in two is how a list ends up offering a Restore
+/// button that the resolver then refuses: a file-manager copy that renames
+/// collisions produces `config-20260917T101530123 (1).json`, whose stem parses
+/// fine but is not an id this code will ever join to a path.
+fn is_rollback_id(id: &str) -> bool {
+    id.strip_prefix("config-")
+        .is_some_and(|stamp| !stamp.is_empty() && stamp.bytes().all(|b| b.is_ascii_alphanumeric()))
+}
+
 fn rollback_id(path: &Path) -> Option<String> {
     path.file_stem()
         .and_then(|stem| stem.to_str())
+        .filter(|stem| is_rollback_id(stem))
         .map(|stem| stem.to_string())
 }
 
@@ -487,10 +498,7 @@ fn created_at_from_id(id: &str) -> Option<String> {
 /// leaves no way to express a separator, a parent link, or an extension and so
 /// no way for the join below to leave `dir`.
 pub fn resolve_rollback(dir: &Path, id: &str) -> Result<PathBuf, AppCommandError> {
-    let looks_like_ours = id
-        .strip_prefix("config-")
-        .is_some_and(|stamp| !stamp.is_empty() && stamp.bytes().all(|b| b.is_ascii_alphanumeric()));
-    if !looks_like_ours {
+    if !is_rollback_id(id) {
         return Err(missing_rollback_error());
     }
     let path = dir.join(format!("{id}.json"));
@@ -985,6 +993,16 @@ mod tests {
         std::fs::write(dir.path().join("config-20240101T000000000.json"), b"{oops")
             .expect("write junk");
 
+        // A file manager renaming a collision on copy. The stem parses, so the
+        // lister used to publish it — and then Restore answered "no longer on
+        // this machine" about a file sitting right there, because the resolver
+        // holds ids to an alphabet with no room for a space or a bracket.
+        std::fs::copy(
+            dir.path().join(format!("{}.json", list_rollback_infos(dir.path())[0].id)),
+            dir.path().join("config-20240101T000000001 (1).json"),
+        )
+        .expect("copy");
+
         let infos = list_rollback_infos(dir.path());
         assert_eq!(infos.len(), 1, "the unparseable file must be skipped");
         assert_eq!(infos[0].counts.get("quickMessages"), Some(&1));
@@ -996,6 +1014,13 @@ mod tests {
                 .counts(),
             snapshot.counts()
         );
+
+        // The invariant behind both of those: the list is exactly the set of
+        // ids the resolver will accept, so no row in it can fail on click.
+        for info in &infos {
+            resolve_rollback(dir.path(), &info.id)
+                .unwrap_or_else(|_| panic!("listed id '{}' does not resolve", info.id));
+        }
     }
 
     #[test]

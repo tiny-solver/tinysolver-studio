@@ -25,7 +25,7 @@
 //! archives measured in gigabytes.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
@@ -34,8 +34,8 @@ use super::credentials::{self, SNAPSHOT_PASSPHRASE};
 use super::crypto;
 use super::snapshot::{
     apply_snapshot_core, build_manifest, collect_snapshot_core, read_rollback, resolve_rollback,
-    rollback_dir, serialize_snapshot, write_rollback_snapshot, ApplyReport, ConfigManifest,
-    ConfigSnapshot, ENCRYPTION_NONE,
+    serialize_snapshot, write_rollback_snapshot, ApplyReport, ConfigManifest, ConfigSnapshot,
+    ENCRYPTION_NONE,
 };
 use crate::app_error::{AppCommandError, CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT};
 
@@ -238,24 +238,27 @@ fn preview_of(export: ConfigExportFile) -> Result<ConfigImportPreview, AppComman
 pub async fn import_from_file_core(
     conn: &DatabaseConnection,
     path: &Path,
+    rollbacks: &Path,
 ) -> Result<ConfigImportResult, AppCommandError> {
     // Parse before writing the rollback snapshot: a malformed file should cost
     // the user nothing at all.
     let export = read_export_file(path)?;
-    apply_import(conn, &export.config).await
+    apply_import(conn, &export.config, rollbacks).await
 }
 
 pub async fn import_bytes_core(
     conn: &DatabaseConnection,
     bytes: &[u8],
+    rollbacks: &Path,
 ) -> Result<ConfigImportResult, AppCommandError> {
     let export = parse_export_bytes(bytes, &stored_passphrase())?;
-    apply_import(conn, &export.config).await
+    apply_import(conn, &export.config, rollbacks).await
 }
 
 async fn apply_import(
     conn: &DatabaseConnection,
     snapshot: &ConfigSnapshot,
+    rollbacks: &Path,
 ) -> Result<ConfigImportResult, AppCommandError> {
     // Hold the uploader off for the duration: applying rewrites local
     // configuration row by row, and a tick landing in the middle would push a
@@ -263,7 +266,7 @@ async fn apply_import(
     // The upload the import DOES deserve happens on the next tick, once the
     // configuration is whole again.
     let _suppression = super::auto_sync::suppress_auto_sync();
-    let rollback_path = save_rollback(conn).await;
+    let rollback_path = save_rollback(conn, rollbacks).await;
     let applied = apply_snapshot_core(conn, snapshot).await?;
     Ok(ConfigImportResult {
         applied,
@@ -286,7 +289,7 @@ pub async fn apply_rollback_core(
 ) -> Result<ConfigImportResult, AppCommandError> {
     let path = resolve_rollback(dir, id)?;
     let snapshot = read_rollback(&path)?;
-    apply_import(conn, &snapshot).await
+    apply_import(conn, &snapshot, dir).await
 }
 
 /// Newest first. Empty — never an error — when nothing has ever been imported:
@@ -297,7 +300,13 @@ pub fn list_rollbacks_core(dir: &Path) -> Vec<super::snapshot::RollbackSnapshotI
 
 /// Capture "what this machine looked like before" so a surprising import is
 /// undoable. Best effort by design — see [`ConfigImportResult::rollback_path`].
-pub async fn save_rollback(conn: &DatabaseConnection) -> Option<String> {
+///
+/// `dir` is a parameter for the same reason the read side takes one. Calling
+/// [`rollback_dir`] in here instead would mean an import driven against a
+/// temporary directory still WRITES to — and prunes — the real one, so the two
+/// halves of "undo" would disagree about where the snapshots are, and a test
+/// would evict the developer's own.
+pub async fn save_rollback(conn: &DatabaseConnection, dir: &Path) -> Option<String> {
     let snapshot = match collect_snapshot_core(conn).await {
         Ok(snapshot) => snapshot,
         Err(err) => {
@@ -305,8 +314,7 @@ pub async fn save_rollback(conn: &DatabaseConnection) -> Option<String> {
             return None;
         }
     };
-    let dir: PathBuf = rollback_dir();
-    match write_rollback_snapshot(&dir, &snapshot) {
+    match write_rollback_snapshot(dir, &snapshot) {
         Ok(path) => Some(path.to_string_lossy().to_string()),
         Err(err) => {
             tracing::warn!("[CONFIG-SYNC] rollback snapshot not written: {err}");
@@ -356,7 +364,8 @@ mod tests {
         assert_eq!(preview.counts.get("quickMessages"), Some(&1));
 
         let target = fresh_in_memory_db().await;
-        let result = import_from_file_core(&target.conn, &dest)
+        let rollbacks = tempfile::tempdir().expect("tempdir");
+        let result = import_from_file_core(&target.conn, &dest, rollbacks.path())
             .await
             .expect("import");
         assert!(result.applied.total >= 1);
@@ -419,7 +428,10 @@ mod tests {
         assert_eq!(preview.counts.get("quickMessages"), Some(&1));
 
         let target = fresh_in_memory_db().await;
-        let result = import_bytes_core(&target.conn, &sealed).await.expect("import");
+        let rollbacks = tempfile::tempdir().expect("tempdir");
+        let result = import_bytes_core(&target.conn, &sealed, rollbacks.path())
+            .await
+            .expect("import");
         assert!(result.applied.total >= 1);
         credentials::store(SNAPSHOT_PASSPHRASE, "").expect("clear");
     }
@@ -447,7 +459,8 @@ mod tests {
 
         // And nothing is written when the import is attempted anyway.
         let target = fresh_in_memory_db().await;
-        import_bytes_core(&target.conn, &bytes)
+        let rollbacks = tempfile::tempdir().expect("tempdir");
+        import_bytes_core(&target.conn, &bytes, rollbacks.path())
             .await
             .expect_err("must refuse");
         assert_eq!(
@@ -484,7 +497,7 @@ mod tests {
         std::fs::write(&path, compact).expect("write");
 
         let target = fresh_in_memory_db().await;
-        import_from_file_core(&target.conn, &path)
+        import_from_file_core(&target.conn, &path, dir.path())
             .await
             .expect("import compact");
         assert_eq!(
@@ -538,6 +551,46 @@ mod tests {
                 .await
                 .is_err()
         );
+
+        // And the undo left its own undo point in the SAME directory it reads
+        // from — see the next test for why that is not automatic.
+        let after = list_rollbacks_core(dir.path());
+        assert_eq!(after.len(), 2, "the undo must itself be undoable");
+    }
+
+    /// The write half and the read half of "undo" have to agree on where the
+    /// snapshots live. They did not: the reader took a directory and the writer
+    /// called [`rollback_dir`] regardless, so an import driven against a
+    /// temporary directory still wrote into — and PRUNED — the real
+    /// `~/.codeg/config-snapshots`. The button showed nothing while the test
+    /// suite quietly evicted the developer's own eleventh-newest snapshot.
+    #[tokio::test]
+    async fn an_import_saves_its_rollback_point_where_the_list_will_look() {
+        let rollbacks = tempfile::tempdir().expect("tempdir");
+        let source = fresh_in_memory_db().await;
+        seed_message(&source.conn, "Incoming").await;
+        let export = build_export_core(&source.conn, "9.9.9").await.expect("export");
+        let bytes = serde_json::to_vec(&export).expect("bytes");
+
+        let target = fresh_in_memory_db().await;
+        seed_message(&target.conn, "Local").await;
+        assert!(list_rollbacks_core(rollbacks.path()).is_empty());
+
+        let result = import_bytes_core(&target.conn, &bytes, rollbacks.path())
+            .await
+            .expect("import");
+
+        let listed = list_rollbacks_core(rollbacks.path());
+        assert_eq!(listed.len(), 1, "the rollback point went somewhere else");
+        assert!(
+            result
+                .rollback_path
+                .as_deref()
+                .is_some_and(|path| path.starts_with(&*rollbacks.path().to_string_lossy())),
+            "reported {:?}, expected it under {}",
+            result.rollback_path,
+            rollbacks.path().display()
+        );
     }
 
     #[tokio::test]
@@ -547,7 +600,7 @@ mod tests {
         std::fs::write(&path, b"just some notes").expect("write");
 
         let target = fresh_in_memory_db().await;
-        let err = import_from_file_core(&target.conn, &path)
+        let err = import_from_file_core(&target.conn, &path, dir.path())
             .await
             .expect_err("must reject");
         assert_eq!(

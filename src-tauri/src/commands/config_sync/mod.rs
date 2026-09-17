@@ -106,7 +106,7 @@ mod tauri_commands {
         src_path: String,
         db: State<'_, AppDatabase>,
     ) -> Result<ConfigImportResult, AppCommandError> {
-        import_from_file_core(&db.conn, Path::new(&src_path)).await
+        import_from_file_core(&db.conn, Path::new(&src_path), &rollback_dir()).await
     }
 
     #[tauri::command]
@@ -193,7 +193,7 @@ mod tauri_commands {
         content: String,
         db: State<'_, AppDatabase>,
     ) -> Result<ConfigImportResult, AppCommandError> {
-        import_bytes_core(&db.conn, content.as_bytes()).await
+        import_bytes_core(&db.conn, content.as_bytes(), &rollback_dir()).await
     }
 
     // ── Rollback snapshots ──

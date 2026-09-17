@@ -121,7 +121,7 @@ pub async fn config_sync_import_content(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<ContentParams>,
 ) -> Result<Json<ConfigImportResult>, AppCommandError> {
-    import_bytes_core(&state.db.conn, params.content.as_bytes())
+    import_bytes_core(&state.db.conn, params.content.as_bytes(), &rollback_dir())
         .await
         .map(Json)
 }
