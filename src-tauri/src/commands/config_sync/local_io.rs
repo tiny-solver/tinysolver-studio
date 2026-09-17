@@ -400,7 +400,7 @@ mod tests {
     /// should not be told their own file is not a codeg config.
     #[tokio::test]
     async fn an_encrypted_remote_config_json_is_accepted_with_the_stored_passphrase() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         let source = fresh_in_memory_db().await;
         seed_message(&source.conn, "Sealed").await;
         let snapshot = collect_snapshot_core(&source.conn).await.expect("collect");

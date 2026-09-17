@@ -114,17 +114,27 @@ mod store {
 /// The secret store is process-global by nature, so two tests that both save
 /// settings would overwrite each other's password. Any test that goes through
 /// [`store`] must hold this for its duration.
+///
+/// A `tokio` mutex rather than a `std` one because almost every holder is an
+/// async test that awaits a database while holding it, which `std`'s guard is
+/// not allowed to do. It also has no poisoning, so one failing test cannot
+/// cascade into the rest of the file.
 #[cfg(test)]
-pub fn test_guard() -> std::sync::MutexGuard<'static, ()> {
-    use std::sync::{Mutex, OnceLock};
-    static GUARD: OnceLock<Mutex<()>> = OnceLock::new();
-    // A poisoned guard means an unrelated test panicked while holding it; the
-    // secrets are re-seeded by every test that takes it, so recovering is
-    // correct and keeps one failure from cascading into the whole file.
-    GUARD
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+fn guard_lock() -> &'static tokio::sync::Mutex<()> {
+    static GUARD: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    GUARD.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+#[cfg(test)]
+pub async fn test_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    guard_lock().lock().await
+}
+
+/// For the plain `#[test]` cases in this module, which have no runtime to
+/// await on.
+#[cfg(test)]
+pub fn test_guard_blocking() -> tokio::sync::MutexGuard<'static, ()> {
+    guard_lock().blocking_lock()
 }
 
 /// Make every read fail for as long as the returned value is alive. RAII so a
@@ -154,7 +164,7 @@ mod tests {
     /// travels back out as a deletion.
     #[test]
     fn an_unreadable_store_is_not_an_empty_one() {
-        let _guard = test_guard();
+        let _guard = test_guard_blocking();
         store(WEBDAV_PASSWORD, "app-password").expect("store");
         assert_eq!(
             read(WEBDAV_PASSWORD).expect("readable"),
@@ -181,7 +191,7 @@ mod tests {
 
     #[test]
     fn a_secret_round_trips_and_clearing_removes_it() {
-        let _guard = test_guard();
+        let _guard = test_guard_blocking();
         store(WEBDAV_PASSWORD, "app-password").expect("store");
         assert_eq!(load(WEBDAV_PASSWORD), "app-password");
 
@@ -193,7 +203,7 @@ mod tests {
 
     #[test]
     fn the_two_secrets_do_not_share_an_entry() {
-        let _guard = test_guard();
+        let _guard = test_guard_blocking();
         store(WEBDAV_PASSWORD, "password").expect("store");
         store(SNAPSHOT_PASSPHRASE, "passphrase").expect("store");
         assert_eq!(load(WEBDAV_PASSWORD), "password");

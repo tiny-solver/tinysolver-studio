@@ -977,7 +977,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_view_never_carries_the_password() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         let db = fresh_in_memory_db().await;
         let view = save_settings_core(&db.conn, input()).await.expect("save");
         assert!(view.has_password);
@@ -999,7 +999,7 @@ mod tests {
     /// either.
     #[tokio::test]
     async fn the_settings_row_holds_no_secret() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         let db = fresh_in_memory_db().await;
         save_settings_core(
             &db.conn,
@@ -1032,7 +1032,7 @@ mod tests {
     /// into the keyring, and erased.
     #[tokio::test]
     async fn a_password_written_by_an_older_build_is_migrated_out_of_the_row() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         credentials::store(WEBDAV_PASSWORD, "").expect("start clean");
         let db = fresh_in_memory_db().await;
         app_metadata_service::upsert_value(
@@ -1068,7 +1068,7 @@ mod tests {
     /// archive taken from it) for the life of the install.
     #[tokio::test]
     async fn an_interrupted_migration_is_finished_by_the_next_load() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         credentials::store(WEBDAV_PASSWORD, "legacy-secret").expect("keyring half succeeded");
         let db = fresh_in_memory_db().await;
         app_metadata_service::upsert_value(
@@ -1105,7 +1105,7 @@ mod tests {
     /// create, arrived at behind its back.
     #[tokio::test]
     async fn the_migration_removes_the_password_and_nothing_else() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         credentials::store(WEBDAV_PASSWORD, "").expect("start clean");
         let db = fresh_in_memory_db().await;
         app_metadata_service::upsert_value(
@@ -1142,7 +1142,7 @@ mod tests {
     /// sync off, or change its interval, for as long as it stayed that way.
     #[tokio::test]
     async fn a_save_that_carries_no_secret_leaves_an_unreadable_store_alone() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         let db = fresh_in_memory_db().await;
         credentials::store(WEBDAV_PASSWORD, "app-password").expect("seed");
         credentials::store(SNAPSHOT_PASSPHRASE, "hunter2").expect("seed");
@@ -1182,7 +1182,7 @@ mod tests {
     /// still be holding the old host's copy.
     #[tokio::test]
     async fn a_save_writes_the_secrets_it_was_given_and_erases_an_orphaned_one() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         let db = fresh_in_memory_db().await;
         credentials::store(WEBDAV_PASSWORD, "").expect("start clean");
         credentials::store(SNAPSHOT_PASSPHRASE, "").expect("start clean");
@@ -1230,7 +1230,7 @@ mod tests {
     /// so it wins and the stale row copy is erased rather than resurrected.
     #[tokio::test]
     async fn the_keyring_copy_wins_over_a_stale_row_copy() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         credentials::store(WEBDAV_PASSWORD, "current").expect("store");
         let db = fresh_in_memory_db().await;
         app_metadata_service::upsert_value(
@@ -1526,7 +1526,7 @@ mod tests {
     /// baseline has no such window.
     #[tokio::test]
     async fn a_baseline_does_not_carry_over_to_a_new_remote() {
-        let _guard = credentials::test_guard();
+        let _guard = credentials::test_guard().await;
         let db = fresh_in_memory_db().await;
         save_settings_core(&db.conn, input()).await.expect("save");
         let hash = seed_uploaded_baseline(&db).await;
