@@ -1815,7 +1815,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // answers the same capabilities;
             // config.toml's provider/model Zod schemas are identical (so
             // `max_context_size` is still mandatory — see `commands/acp.rs`);
-            // `mcp.json`, `KIMI_MODEL_*`, `.kimi-code/skills`, and the
+            // `mcp.json`, `KIMI_MODEL_*`, the skill roots (all four of them —
+            // see `commands/acp.rs::skill_storage_spec`), and the
             // `agents/main/wire.jsonl` event log our parser reads are all
             // untouched. What is new is inert for us: a `NotifyUser` tool behind
             // `KIMI_CODE_EXPERIMENTAL_NOTIFY_USER` (default false) and a
@@ -1831,9 +1832,48 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // keeps inheriting the source session's); `acpMcpServersToConfigs`
             // is still absent from the bundle, and so is the "does not declare
             // a runtime identity" throw. `engines.node` is unmoved at >=22.19.0.
+            //
+            // 2.0.0 IS NOT A BREAKING RELEASE — do not let the major bump
+            // trigger a rewrite hunt. Upstream uses changesets, and the only
+            // entry filed as "major" is a new `/desktop` slash command plus a
+            // `kimi install-app` subcommand that print a URL and open a
+            // browser. The mandated check passes verbatim (same absent-`type`
+            // stdio arm with `runtime_id:"local"`, same three entry points,
+            // neither `acpMcpServersToConfigs` nor the runtime-identity throw
+            // anywhere in the bundle), and `engines.node` is still >=22.19.0.
+            // Region-by-region the whole `packages/acp-server` set is
+            // byte-identical to 0.43.1 except one line of `slash.ts`, and every
+            // other surface codeg touches (`config.toml`'s provider/model Zod
+            // schemas — `max_context_size` still `int().min(1)` and still the
+            // same six provider types; `mcp.json`; the credentials gate;
+            // `skillRoots`; `wire/wireService`) differs only by bundler
+            // renumbering (`init_dist$4` → `init_dist$5`).
+            //
+            // That one `slash.ts` line is the only user-visible delta and it is
+            // an improvement: skills carrying the new `scopes: ("tui"|"web")[]`
+            // field are dropped from ACP `availableCommands`, so the TUI-only
+            // `custom-theme` theme editor (and the new `/desktop`) stop showing
+            // up in codeg's slash menu. Live A/B confirms it — 17 commands on
+            // 0.43.1, the same 16 minus `custom-theme` on 2.0.0.
+            //
+            // Backed by a live run as for 0.39.0 and 0.42.0, because a major
+            // bump deserves one: `kimi acp` driven with the codeg-managed
+            // config.toml block and the synthetic gate token answers
+            // `initialize` / `session/new` / `session/prompt` / `session/list`
+            // with byte-identical payloads (same capabilities, same four modes,
+            // same `configOptions`, same `session_update` kinds), spawns a
+            // stdio MCP server handed over on `session/new`, and lands its tools
+            // in the model's tool list as `mcp__<server>__<tool>`. The
+            // `agents/main/wire.jsonl` our parser reads comes out structurally
+            // identical too — same `protocol_version 1.5`, same record types,
+            // same `context.append_loop_event` event types, same on-disk home
+            // layout. The upstream steering fixes in this release ride on
+            // `transcript`'s `groupTurns`, which the ACP replay does not use
+            // (`replay.ts` projects the raw context history), so they do not
+            // reach codeg.
             distribution: AgentDistribution::Npx {
-                version: "0.43.1",
-                package: "@moonshot-ai/kimi-code@0.43.1",
+                version: "2.0.0",
+                package: "@moonshot-ai/kimi-code@2.0.0",
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
@@ -2628,8 +2668,8 @@ mod tests {
         // range dies on the codeg-mcp stdio entry (see the registry entry).
         assert_npx_version(
             AgentType::KimiCode,
-            "0.43.1",
-            "@moonshot-ai/kimi-code@0.43.1",
+            "2.0.0",
+            "@moonshot-ai/kimi-code@2.0.0",
             Some("22.19.0"),
         );
         assert_npx_version(
