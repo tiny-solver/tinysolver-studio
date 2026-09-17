@@ -35,6 +35,23 @@ use codeg_lib::models::AgentType;
 use serde_json::json;
 use tokio::sync::oneshot;
 
+/// A temp directory short enough to bind a socket inside, whatever the ambient
+/// `$TMPDIR` happens to be.
+///
+/// `tempfile::tempdir()` honours `$TMPDIR`, and these tests then add
+/// `/.tmpXXXXXX/codeg-e2e-*.sock` on top. That is fine against the ~20-byte
+/// default and fatal against codeg's own per-session `TMPDIR`, which is 72
+/// bytes: `codeg-e2e-batch.sock` composed to exactly 104 there, and `sun_path`
+/// caps at 104 on macOS. Three of these tests went red inside a codeg session
+/// and green outside it, for reasons having nothing to do with the code under
+/// test.
+///
+/// Rooting in `/tmp` keeps the result near 40 bytes whatever the environment
+/// says. Still unique per test: `tempdir_in` mints a fresh name.
+fn socket_dir() -> tempfile::TempDir {
+    tempfile::tempdir_in("/tmp").unwrap()
+}
+
 struct AlwaysRoot;
 #[async_trait]
 impl ConversationDepthLookup for AlwaysRoot {
@@ -212,8 +229,8 @@ async fn end_to_end_uds_happy_path() {
             as Arc<dyn codeg_lib::acp::browser_tools::BrowserToolAccess>,
     );
 
-    // PID-scoped socket inside the OS temp dir — no clashes across test bins.
-    let dir = tempfile::tempdir().unwrap();
+    // Freshly-named directory per test — no clashes across test bins.
+    let dir = socket_dir();
     let socket = dir.path().join("codeg-e2e.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
@@ -331,7 +348,7 @@ async fn end_to_end_uds_batch_status() {
             as Arc<dyn codeg_lib::acp::browser_tools::BrowserToolAccess>,
     );
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = socket_dir();
     let socket = dir.path().join("codeg-e2e-batch.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
@@ -421,7 +438,7 @@ async fn end_to_end_uds_invalid_token_rejected() {
             as Arc<dyn codeg_lib::acp::browser_tools::BrowserToolAccess>,
     );
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = socket_dir();
     let socket = dir.path().join("codeg-e2e-reject.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
@@ -490,7 +507,7 @@ async fn end_to_end_uds_ask_question_round_trip() {
             as Arc<dyn codeg_lib::acp::browser_tools::BrowserToolAccess>,
     );
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = socket_dir();
     let socket = dir.path().join("codeg-e2e-ask.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
@@ -633,7 +650,7 @@ async fn end_to_end_uds_ask_revoked_after_register_declines() {
             as Arc<dyn codeg_lib::acp::browser_tools::BrowserToolAccess>,
     );
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = socket_dir();
     let socket = dir.path().join("codeg-e2e-ask-revoked.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
