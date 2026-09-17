@@ -4777,7 +4777,22 @@
       "quickMessages": "{count} 条快捷消息",
       "taskTemplates": "{count} 个任务模板",
       "preferences": "{count} 项应用偏好"
-    }
+    },
+    "rollbackTitle": "撤销导入",
+    "rollbackHint": "每次导入和每次还原前，都会先保存这台设备当时的配置，最近十份会保留下来。",
+    "rollbackAction": "撤销",
+    "rollbackUnknownTime": "时间未知",
+    "rollbackConfirmTitle": "回到这份配置？",
+    "rollbackConfirmBody": "这会用 {time} 保存的那份副本替换当前配置。当前配置会先被保存下来，所以这一步同样可以撤销。",
+    "rollbackConfirmAction": "撤销",
+    "rolledBack": "已恢复 {count} 条配置",
+    "encryptLabel": "加密快照",
+    "encryptHint": "用口令保护上传的文件。参与同步的每台设备都要使用同一个口令。",
+    "encryptedNotice": "快照会先用你的口令加密再上传。口令一旦丢失，服务器上的那份副本将无法恢复。",
+    "passphrase": "加密口令",
+    "passphraseKeep": "留空则沿用已保存的口令",
+    "passphrasePlaceholder": "加密口令",
+    "passphraseHint": "只保存在这台设备的钥匙串里，不会上传。请在你的其他设备上输入同一个口令。"
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "远程目录或配置集名称无效。",
       "quota": "WebDAV 服务器已无可用空间。",
       "network": "无法连接到 WebDAV 服务器。",
-      "server": "WebDAV 服务器返回错误（{status}）。"
+      "server": "WebDAV 服务器返回错误（{status}）。",
+      "passphraseRequired": "该快照已加密，请先设置加密口令再同步。",
+      "badPassphrase": "无法解密该快照。请检查口令，也可能是文件已损坏。",
+      "badDomain": "无法读取该快照中的 {domain} 部分。",
+      "noRollback": "这台设备上已经没有那份保存的配置了。",
+      "credentialsUnreadable": "无法读取已保存的凭据。请解锁系统钥匙串后重试。",
+      "notEncrypted": "服务器上的快照未加密，但本机已开启加密。请从本机上传以替换它，或关闭加密后再使用。"
     }
   },
   "WebConnection": {

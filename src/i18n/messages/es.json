@@ -4777,7 +4777,22 @@
       "quickMessages": "{count, plural, one {# mensaje rápido} other {# mensajes rápidos}}",
       "taskTemplates": "{count, plural, one {# plantilla de tarea} other {# plantillas de tareas}}",
       "preferences": "{count, plural, one {# preferencia} other {# preferencias}}"
-    }
+    },
+    "rollbackTitle": "Deshacer una importación",
+    "rollbackHint": "Cada importación y cada restauración guardan antes el estado de este equipo. Se conservan las diez últimas.",
+    "rollbackAction": "Deshacer",
+    "rollbackUnknownTime": "Hora desconocida",
+    "rollbackConfirmTitle": "¿Volver a esta configuración?",
+    "rollbackConfirmBody": "Se reemplazará la configuración actual por la copia guardada el {time}. La actual se guarda primero, así que esto también se puede deshacer.",
+    "rollbackConfirmAction": "Deshacer",
+    "rolledBack": "{count, plural, one {# entrada restaurada} other {# entradas restauradas}}",
+    "encryptLabel": "Cifrar la instantánea",
+    "encryptHint": "Protege el archivo subido con una frase de contraseña. Todos los equipos que sincronices necesitan la misma.",
+    "encryptedNotice": "La instantánea se cifra con tu frase de contraseña antes de subirse. Si la pierdes, la copia del servidor no se podrá recuperar.",
+    "passphrase": "Frase de contraseña",
+    "passphraseKeep": "Déjalo vacío para conservar la frase guardada",
+    "passphrasePlaceholder": "Frase de contraseña de cifrado",
+    "passphraseHint": "Se guarda en el llavero de este equipo y nunca se sube. Introduce la misma frase en tus otros equipos."
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "La carpeta remota o el nombre del perfil no son válidos.",
       "quota": "El servidor WebDAV no tiene espacio disponible.",
       "network": "No se pudo contactar con el servidor WebDAV.",
-      "server": "El servidor WebDAV devolvió un error ({status})."
+      "server": "El servidor WebDAV devolvió un error ({status}).",
+      "passphraseRequired": "Esta instantánea está cifrada. Configura la frase de contraseña antes de sincronizar.",
+      "badPassphrase": "No se pudo descifrar la instantánea. Comprueba la frase de contraseña; el archivo también podría estar dañado.",
+      "badDomain": "No se pudo leer la sección {domain} de esta instantánea.",
+      "noRollback": "Esa configuración guardada ya no está en este equipo.",
+      "credentialsUnreadable": "No se pudieron leer las credenciales guardadas. Desbloquea el llavero del sistema e inténtalo de nuevo.",
+      "notEncrypted": "La instantánea del servidor no está cifrada, pero el cifrado está activado en este dispositivo. Súbela desde este dispositivo para reemplazarla o desactiva el cifrado para usarla."
     }
   },
   "WebConnection": {

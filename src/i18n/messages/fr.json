@@ -4777,7 +4777,22 @@
       "quickMessages": "{count, plural, one {# message rapide} other {# messages rapides}}",
       "taskTemplates": "{count, plural, one {# modèle de tâche} other {# modèles de tâches}}",
       "preferences": "{count, plural, one {# préférence} other {# préférences}}"
-    }
+    },
+    "rollbackTitle": "Annuler un import",
+    "rollbackHint": "Chaque import et chaque restauration enregistrent d'abord l'état de cette machine. Les dix derniers sont conservés.",
+    "rollbackAction": "Annuler",
+    "rollbackUnknownTime": "Heure inconnue",
+    "rollbackConfirmTitle": "Revenir à cette configuration ?",
+    "rollbackConfirmBody": "La configuration actuelle sera remplacée par la copie enregistrée le {time}. L'actuelle est sauvegardée au préalable, cette étape est donc elle aussi réversible.",
+    "rollbackConfirmAction": "Annuler",
+    "rolledBack": "{count, plural, one {# entrée restaurée} other {# entrées restaurées}}",
+    "encryptLabel": "Chiffrer l'instantané",
+    "encryptHint": "Protège le fichier envoyé par une phrase secrète. Toutes les machines synchronisées doivent utiliser la même.",
+    "encryptedNotice": "L'instantané est chiffré avec votre phrase secrète avant l'envoi. Si vous la perdez, la copie sur le serveur sera irrécupérable.",
+    "passphrase": "Phrase secrète",
+    "passphraseKeep": "Laissez vide pour conserver la phrase enregistrée",
+    "passphrasePlaceholder": "Phrase secrète de chiffrement",
+    "passphraseHint": "Conservée dans le trousseau de cette machine et jamais envoyée. Saisissez la même phrase sur vos autres machines."
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "Le dossier distant ou le nom de profil n’est pas valide.",
       "quota": "Le serveur WebDAV n’a plus d’espace disponible.",
       "network": "Impossible de joindre le serveur WebDAV.",
-      "server": "Le serveur WebDAV a renvoyé une erreur ({status})."
+      "server": "Le serveur WebDAV a renvoyé une erreur ({status}).",
+      "passphraseRequired": "Cet instantané est chiffré. Définissez la phrase secrète avant de synchroniser.",
+      "badPassphrase": "Impossible de déchiffrer l'instantané. Vérifiez la phrase secrète — le fichier peut aussi être endommagé.",
+      "badDomain": "La section {domain} de cet instantané n'a pas pu être lue.",
+      "noRollback": "Cette configuration enregistrée n'est plus sur cette machine.",
+      "credentialsUnreadable": "Impossible de lire les identifiants enregistrés. Déverrouillez le trousseau du système, puis réessayez.",
+      "notEncrypted": "L'instantané présent sur le serveur n'est pas chiffré, alors que le chiffrement est activé sur cet appareil. Envoyez-le depuis cet appareil pour le remplacer, ou désactivez le chiffrement pour l'utiliser."
     }
   },
   "WebConnection": {

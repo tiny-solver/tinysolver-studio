@@ -4777,7 +4777,22 @@
       "quickMessages": "{count, plural, one {# quick message} other {# quick messages}}",
       "taskTemplates": "{count, plural, one {# task template} other {# task templates}}",
       "preferences": "{count, plural, one {# preference} other {# preferences}}"
-    }
+    },
+    "rollbackTitle": "Undo an import",
+    "rollbackHint": "Every import and every restore saves what this machine looked like beforehand. The last ten are kept.",
+    "rollbackAction": "Undo",
+    "rollbackUnknownTime": "Unknown time",
+    "rollbackConfirmTitle": "Go back to this configuration?",
+    "rollbackConfirmBody": "This replaces the current configuration with the copy saved on {time}. The current one is saved first, so this is itself undoable.",
+    "rollbackConfirmAction": "Undo",
+    "rolledBack": "{count, plural, one {# entry restored} other {# entries restored}}",
+    "encryptLabel": "Encrypt the snapshot",
+    "encryptHint": "Protect the uploaded file with a passphrase. Every machine you sync needs the same one.",
+    "encryptedNotice": "The snapshot is encrypted with your passphrase before it is uploaded. If you lose the passphrase, the copy on the server cannot be recovered.",
+    "passphrase": "Passphrase",
+    "passphraseKeep": "Leave empty to keep the saved passphrase",
+    "passphrasePlaceholder": "Encryption passphrase",
+    "passphraseHint": "Kept in this machine's keychain and never uploaded. Enter the same passphrase on your other machines."
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "The remote folder or profile name is not valid.",
       "quota": "The WebDAV server has no space left.",
       "network": "Could not reach the WebDAV server.",
-      "server": "The WebDAV server returned an error ({status})."
+      "server": "The WebDAV server returned an error ({status}).",
+      "passphraseRequired": "This snapshot is encrypted. Set the encryption passphrase before syncing.",
+      "badPassphrase": "The snapshot could not be decrypted. Check the passphrase — or the file may be damaged.",
+      "badDomain": "The {domain} section of this snapshot could not be read.",
+      "noRollback": "That saved configuration is no longer on this machine.",
+      "credentialsUnreadable": "Could not read the saved credentials. Unlock the system keychain, then try again.",
+      "notEncrypted": "The snapshot on the server is not encrypted, but encryption is turned on here. Upload from this device to replace it, or turn encryption off to use it."
     }
   },
   "WebConnection": {

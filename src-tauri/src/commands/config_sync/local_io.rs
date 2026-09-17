@@ -9,13 +9,20 @@
 //!
 //! Import also accepts a bare `config.json` — the exact file the sync writes
 //! to WebDAV — so a user who fetches one out of their cloud drive's web UI can
-//! feed it straight back in.
+//! feed it straight back in, encrypted or not.
 //!
 //! The checksum is NOT enforced on import. It exists to catch a truncated
 //! upload, which cannot happen to a local file the OS handed us whole; holding
 //! a hand-edited export to a byte-exact hash would only punish the user for
-//! reformatting their own file. Schema version, structure, and the preference
-//! allowlist are still enforced.
+//! reformatting their own file. Schema version, structure, domain payloads, and
+//! the preference allowlist are still enforced.
+//!
+//! Both halves come in a by-path and a by-content flavour. The desktop picks
+//! paths with a native dialog and lets the backend do the I/O; a browser has no
+//! path to hand over, so it posts the bytes instead. A config snapshot is tens
+//! of KB, so the second flavour costs one copy in memory — which is why this
+//! feature does not need the upload-staging machinery `backup` uses for
+//! archives measured in gigabytes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -23,14 +30,23 @@ use std::path::{Path, PathBuf};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 
+use super::credentials::{self, SNAPSHOT_PASSPHRASE};
+use super::crypto;
 use super::snapshot::{
-    apply_snapshot_core, build_manifest, collect_snapshot_core, rollback_dir, serialize_snapshot,
-    write_rollback_snapshot, ApplyReport, ConfigManifest, ConfigSnapshot,
+    apply_snapshot_core, build_manifest, collect_snapshot_core, read_rollback, resolve_rollback,
+    rollback_dir, serialize_snapshot, write_rollback_snapshot, ApplyReport, ConfigManifest,
+    ConfigSnapshot, ENCRYPTION_NONE,
 };
 use crate::app_error::{AppCommandError, CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT};
 
 /// Marker + version of the single-file export envelope.
 pub const EXPORT_FORMAT_VERSION: u32 = 1;
+
+/// Hard ceiling on a posted import, so a browser (or anything else speaking to
+/// the HTTP API) cannot hand the parser an unbounded body. Two orders of
+/// magnitude above any real snapshot, and the same bound the WebDAV client
+/// applies to a download.
+pub const MAX_IMPORT_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,11 +89,36 @@ pub async fn build_export_core(
 ) -> Result<ConfigExportFile, AppCommandError> {
     let snapshot = collect_snapshot_core(conn).await?;
     let bytes = serialize_snapshot(&snapshot)?;
-    let manifest = build_manifest(&bytes, app_version, snapshot.counts());
+    let manifest = build_manifest(&bytes, app_version, snapshot.counts(), ENCRYPTION_NONE);
     Ok(ConfigExportFile {
         codeg_config_export: EXPORT_FORMAT_VERSION,
         manifest,
         config: snapshot,
+    })
+}
+
+/// The export as text, for a caller with somewhere other than a local path to
+/// put it — a browser saves it with a `Blob` download. Byte-for-byte the same
+/// document [`export_to_file_core`] writes, so the two runtimes produce
+/// interchangeable files.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigExportContent {
+    pub content: String,
+    pub counts: BTreeMap<String, usize>,
+}
+
+pub async fn export_content_core(
+    conn: &DatabaseConnection,
+    app_version: &str,
+) -> Result<ConfigExportContent, AppCommandError> {
+    let export = build_export_core(conn, app_version).await?;
+    let content = serde_json::to_string_pretty(&export).map_err(|e| {
+        AppCommandError::task_execution_failed("Serialize config export").with_detail(e.to_string())
+    })?;
+    Ok(ConfigExportContent {
+        counts: export.config.counts(),
+        content,
     })
 }
 
@@ -90,6 +131,7 @@ pub async fn export_to_file_core(
     let bytes = serde_json::to_vec_pretty(&export).map_err(|e| {
         AppCommandError::task_execution_failed("Serialize config export").with_detail(e.to_string())
     })?;
+    let counts = export.config.counts();
 
     if let Some(parent) = dest.parent() {
         if !parent.as_os_str().is_empty() {
@@ -100,13 +142,27 @@ pub async fn export_to_file_core(
 
     Ok(ConfigExportSummary {
         path: dest.to_string_lossy().to_string(),
-        counts: export.config.counts(),
+        counts,
     })
 }
 
-/// Accepts either envelope shape. A bare `config.json` gets a synthesized
-/// manifest so the preview dialog has something to show.
-pub fn parse_export_bytes(bytes: &[u8]) -> Result<ConfigExportFile, AppCommandError> {
+/// Accepts all three shapes a user can plausibly present: the export envelope,
+/// a bare `config.json` lifted off the remote, and an encrypted one. The bare
+/// forms get a synthesized manifest so the preview dialog has something to
+/// show.
+///
+/// `passphrase` is only consulted for the encrypted shape, and an empty one
+/// there is reported as "configure a passphrase", not as "this file is junk" —
+/// the file is fine, this machine just cannot read it yet.
+pub fn parse_export_bytes(
+    bytes: &[u8],
+    passphrase: &str,
+) -> Result<ConfigExportFile, AppCommandError> {
+    if bytes.len() > MAX_IMPORT_BYTES {
+        return Err(AppCommandError::invalid_input("Config file is too large")
+            .with_i18n(CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT, BTreeMap::new()));
+    }
+
     let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| {
         AppCommandError::invalid_input("Not a codeg config file")
             .with_detail(e.to_string())
@@ -119,16 +175,29 @@ pub fn parse_export_bytes(bytes: &[u8]) -> Result<ConfigExportFile, AppCommandEr
                 .with_detail(e.to_string())
                 .with_i18n(CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT, BTreeMap::new())
         })?;
-        // Reject a newer schema the same way the WebDAV path does, before any
-        // of it reaches the database.
+        // Reject a newer schema — and a domain payload that would abort the
+        // apply — the same way the WebDAV path does, before any of it reaches
+        // the database.
         let snapshot_bytes = serialize_snapshot(&export.config)?;
         super::snapshot::parse_snapshot(&snapshot_bytes)?;
         return Ok(export);
     }
 
-    let snapshot = super::snapshot::parse_snapshot(bytes)?;
-    let snapshot_bytes = serialize_snapshot(&snapshot)?;
-    let manifest = build_manifest(&snapshot_bytes, "unknown", snapshot.counts());
+    if crypto::is_encrypted_value(&value) {
+        let payload = crypto::parse_envelope(value)?;
+        let plain = crypto::decrypt(&payload, passphrase)?;
+        return synthesize_export(&plain);
+    }
+
+    synthesize_export(bytes)
+}
+
+/// Wrap a bare `config.json` in the envelope the rest of the import path
+/// expects, with a manifest describing the snapshot as it now stands in memory.
+fn synthesize_export(snapshot_bytes: &[u8]) -> Result<ConfigExportFile, AppCommandError> {
+    let snapshot = super::snapshot::parse_snapshot(snapshot_bytes)?;
+    let canonical = serialize_snapshot(&snapshot)?;
+    let manifest = build_manifest(&canonical, "unknown", snapshot.counts(), ENCRYPTION_NONE);
     Ok(ConfigExportFile {
         codeg_config_export: EXPORT_FORMAT_VERSION,
         manifest,
@@ -136,15 +205,30 @@ pub fn parse_export_bytes(bytes: &[u8]) -> Result<ConfigExportFile, AppCommandEr
     })
 }
 
+/// The passphrase the user configured for WebDAV snapshots, reused here so a
+/// `config.json` pulled out of a cloud drive's web UI imports without a second
+/// place to type it.
+fn stored_passphrase() -> String {
+    credentials::load(SNAPSHOT_PASSPHRASE)
+}
+
 pub fn read_export_file(path: &Path) -> Result<ConfigExportFile, AppCommandError> {
     let bytes = std::fs::read(path).map_err(AppCommandError::io)?;
-    parse_export_bytes(&bytes)
+    parse_export_bytes(&bytes, &stored_passphrase())
 }
 
 /// Read and validate without touching the database — what the UI calls to
 /// populate "this file contains N providers, M agents…".
 pub fn peek_import_core(path: &Path) -> Result<ConfigImportPreview, AppCommandError> {
-    let export = read_export_file(path)?;
+    preview_of(read_export_file(path)?)
+}
+
+/// Same, for a caller that already has the bytes (the web import posts them).
+pub fn peek_import_bytes_core(bytes: &[u8]) -> Result<ConfigImportPreview, AppCommandError> {
+    preview_of(parse_export_bytes(bytes, &stored_passphrase())?)
+}
+
+fn preview_of(export: ConfigExportFile) -> Result<ConfigImportPreview, AppCommandError> {
     Ok(ConfigImportPreview {
         counts: export.config.counts(),
         manifest: export.manifest,
@@ -158,12 +242,57 @@ pub async fn import_from_file_core(
     // Parse before writing the rollback snapshot: a malformed file should cost
     // the user nothing at all.
     let export = read_export_file(path)?;
+    apply_import(conn, &export.config).await
+}
+
+pub async fn import_bytes_core(
+    conn: &DatabaseConnection,
+    bytes: &[u8],
+) -> Result<ConfigImportResult, AppCommandError> {
+    let export = parse_export_bytes(bytes, &stored_passphrase())?;
+    apply_import(conn, &export.config).await
+}
+
+async fn apply_import(
+    conn: &DatabaseConnection,
+    snapshot: &ConfigSnapshot,
+) -> Result<ConfigImportResult, AppCommandError> {
+    // Hold the uploader off for the duration: applying rewrites local
+    // configuration row by row, and a tick landing in the middle would push a
+    // half-merged state to the remote as if it were a state the user chose.
+    // The upload the import DOES deserve happens on the next tick, once the
+    // configuration is whole again.
+    let _suppression = super::auto_sync::suppress_auto_sync();
     let rollback_path = save_rollback(conn).await;
-    let applied = apply_snapshot_core(conn, &export.config).await?;
+    let applied = apply_snapshot_core(conn, snapshot).await?;
     Ok(ConfigImportResult {
         applied,
         rollback_path,
     })
+}
+
+/// Undo an import or a restore by re-applying the snapshot taken just before
+/// it. Writes its own rollback point first, so the undo is itself undoable —
+/// a user who rolls back to the wrong one is not out of options.
+///
+/// `dir` is a parameter rather than a call to [`rollback_dir`] for the same
+/// reason [`write_rollback_snapshot`] takes one: the command layer supplies the
+/// real directory, and a test supplies a temporary one instead of writing into
+/// the developer's `~/.codeg`.
+pub async fn apply_rollback_core(
+    conn: &DatabaseConnection,
+    dir: &Path,
+    id: &str,
+) -> Result<ConfigImportResult, AppCommandError> {
+    let path = resolve_rollback(dir, id)?;
+    let snapshot = read_rollback(&path)?;
+    apply_import(conn, &snapshot).await
+}
+
+/// Newest first. Empty — never an error — when nothing has ever been imported:
+/// the directory simply does not exist yet.
+pub fn list_rollbacks_core(dir: &Path) -> Vec<super::snapshot::RollbackSnapshotInfo> {
+    super::snapshot::list_rollback_infos(dir)
 }
 
 /// Capture "what this machine looked like before" so a surprising import is
@@ -251,10 +380,94 @@ mod tests {
         let snapshot = collect_snapshot_core(&source.conn).await.expect("collect");
         let bytes = serialize_snapshot(&snapshot).expect("bytes");
 
-        let export = parse_export_bytes(&bytes).expect("parse bare");
+        let export = parse_export_bytes(&bytes, "").expect("parse bare");
         assert_eq!(export.config.schema_version, SCHEMA_VERSION);
         assert_eq!(export.manifest.app_version, "unknown");
         assert_eq!(export.config.counts().get("quickMessages"), Some(&1));
+    }
+
+    /// The encrypted `config.json` the sync uploads has to come back in through
+    /// the same door: a user who downloads it from their cloud drive's web UI
+    /// should not be told their own file is not a codeg config.
+    #[tokio::test]
+    async fn an_encrypted_remote_config_json_is_accepted_with_the_stored_passphrase() {
+        let _guard = credentials::test_guard();
+        let source = fresh_in_memory_db().await;
+        seed_message(&source.conn, "Sealed").await;
+        let snapshot = collect_snapshot_core(&source.conn).await.expect("collect");
+        let sealed = crypto::encrypt(&serialize_snapshot(&snapshot).expect("bytes"), "hunter2")
+            .expect("encrypt");
+
+        // Nothing configured yet: the file is readable, this machine is not
+        // equipped to read it, and the message has to say which.
+        credentials::store(SNAPSHOT_PASSPHRASE, "").expect("clear");
+        let err = parse_export_bytes(&sealed, &stored_passphrase()).expect_err("must refuse");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_PASSPHRASE_REQUIRED)
+        );
+
+        credentials::store(SNAPSHOT_PASSPHRASE, "wrong").expect("store");
+        let err = parse_export_bytes(&sealed, &stored_passphrase()).expect_err("must refuse");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_BAD_PASSPHRASE)
+        );
+
+        credentials::store(SNAPSHOT_PASSPHRASE, "hunter2").expect("store");
+        let preview = peek_import_bytes_core(&sealed).expect("peek");
+        assert_eq!(preview.counts.get("quickMessages"), Some(&1));
+
+        let target = fresh_in_memory_db().await;
+        let result = import_bytes_core(&target.conn, &sealed).await.expect("import");
+        assert!(result.applied.total >= 1);
+        credentials::store(SNAPSHOT_PASSPHRASE, "").expect("clear");
+    }
+
+    /// Regression: only the envelope was checked, so a file whose domain
+    /// payload was nonsense previewed cleanly ("1 quick message") and then
+    /// aborted the apply — after the rollback snapshot had been written and
+    /// with the user told an import was starting.
+    #[tokio::test]
+    async fn a_file_that_would_abort_mid_apply_never_reaches_the_preview() {
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": SCHEMA_VERSION,
+            "domains": {
+                "quickMessages": [{ "title": "fine", "content": "body" }],
+                "customAgents": [{ "registryId": "acme" }]
+            }
+        }))
+        .expect("bytes");
+
+        let err = peek_import_bytes_core(&bytes).expect_err("must refuse at preview");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_BAD_DOMAIN)
+        );
+
+        // And nothing is written when the import is attempted anyway.
+        let target = fresh_in_memory_db().await;
+        import_bytes_core(&target.conn, &bytes)
+            .await
+            .expect_err("must refuse");
+        assert_eq!(
+            quick_message::Entity::find()
+                .all(&target.conn)
+                .await
+                .expect("messages")
+                .len(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn an_oversized_payload_is_refused_before_it_is_parsed() {
+        let huge = vec![b'x'; MAX_IMPORT_BYTES + 1];
+        let err = parse_export_bytes(&huge, "").expect_err("must refuse");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT)
+        );
     }
 
     /// A reformatted export (different indentation, reordered keys) must still
@@ -281,6 +494,49 @@ mod tests {
                 .expect("messages")
                 .len(),
             1
+        );
+    }
+
+    /// The safety net has to be reachable, not merely written: a snapshot taken
+    /// before an import must be listable by id and applicable by that id, or
+    /// the `rollbackPath` an import returns is a file the product cannot open.
+    #[tokio::test]
+    async fn a_rollback_snapshot_can_be_listed_and_applied_back() {
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let before = fresh_in_memory_db().await;
+        seed_message(&before.conn, "Original").await;
+        let snapshot = collect_snapshot_core(&before.conn).await.expect("collect");
+        write_rollback_snapshot(dir.path(), &snapshot).expect("write rollback");
+
+        let listed = list_rollbacks_core(dir.path());
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].counts.get("quickMessages"), Some(&1));
+
+        // A machine that has since been overwritten with someone else's config.
+        let target = fresh_in_memory_db().await;
+        seed_message(&target.conn, "Imported").await;
+
+        let result = apply_rollback_core(&target.conn, dir.path(), &listed[0].id)
+            .await
+            .expect("apply rollback");
+        assert!(result.applied.total >= 1);
+
+        let titles: Vec<String> = quick_message::Entity::find()
+            .all(&target.conn)
+            .await
+            .expect("messages")
+            .into_iter()
+            .map(|m| m.title)
+            .collect();
+        assert!(titles.contains(&"Original".to_string()), "{titles:?}");
+
+        // An id that is not on this machine is a plain "gone", not a panic and
+        // not a path.
+        assert!(
+            apply_rollback_core(&target.conn, dir.path(), "../../etc/passwd")
+                .await
+                .is_err()
         );
     }
 

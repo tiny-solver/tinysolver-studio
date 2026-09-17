@@ -4777,7 +4777,22 @@
       "quickMessages": "{count} 則快捷訊息",
       "taskTemplates": "{count} 個任務範本",
       "preferences": "{count} 項應用偏好"
-    }
+    },
+    "rollbackTitle": "復原匯入",
+    "rollbackHint": "每次匯入與每次還原前，都會先保存這台裝置當時的設定，最近十份會保留下來。",
+    "rollbackAction": "復原",
+    "rollbackUnknownTime": "時間不明",
+    "rollbackConfirmTitle": "回到這份設定？",
+    "rollbackConfirmBody": "這會用 {time} 保存的那份副本取代目前的設定。目前的設定會先被保存，所以這一步同樣可以復原。",
+    "rollbackConfirmAction": "復原",
+    "rolledBack": "已還原 {count} 項設定",
+    "encryptLabel": "加密快照",
+    "encryptHint": "用通行密語保護上傳的檔案。參與同步的每台裝置都要使用同一組。",
+    "encryptedNotice": "快照會先用你的通行密語加密再上傳。一旦遺失，伺服器上的副本將無法復原。",
+    "passphrase": "通行密語",
+    "passphraseKeep": "留空則沿用已保存的通行密語",
+    "passphrasePlaceholder": "加密通行密語",
+    "passphraseHint": "只保存在這台裝置的鑰匙圈中，不會上傳。請在你的其他裝置上輸入同一組。"
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "遠端目錄或設定集名稱無效。",
       "quota": "WebDAV 伺服器已無可用空間。",
       "network": "無法連線到 WebDAV 伺服器。",
-      "server": "WebDAV 伺服器回傳錯誤（{status}）。"
+      "server": "WebDAV 伺服器回傳錯誤（{status}）。",
+      "passphraseRequired": "該快照已加密，請先設定加密通行密語再同步。",
+      "badPassphrase": "無法解密該快照。請檢查通行密語，也可能是檔案已損毀。",
+      "badDomain": "無法讀取該快照中的 {domain} 部分。",
+      "noRollback": "這台裝置上已經沒有那份保存的設定了。",
+      "credentialsUnreadable": "無法讀取已儲存的憑證。請解鎖系統鑰匙圈後重試。",
+      "notEncrypted": "伺服器上的快照未加密，但本機已開啟加密。請從本機上傳以取代它，或關閉加密後再使用。"
     }
   },
   "WebConnection": {

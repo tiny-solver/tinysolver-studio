@@ -27,8 +27,9 @@ use sha2::{Digest, Sha256};
 
 use super::domains::{count_entries, CONFIG_DOMAINS};
 use crate::app_error::{
-    AppCommandError, CONFIG_SYNC_I18N_KEY_CHECKSUM, CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT,
-    CONFIG_SYNC_I18N_KEY_NEWER_SCHEMA,
+    AppCommandError, CONFIG_SYNC_I18N_KEY_BAD_DOMAIN, CONFIG_SYNC_I18N_KEY_CHECKSUM,
+    CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT, CONFIG_SYNC_I18N_KEY_NEWER_SCHEMA,
+    CONFIG_SYNC_I18N_KEY_NO_ROLLBACK,
 };
 
 /// Bump only for a change older binaries cannot read. Adding a domain does not
@@ -36,11 +37,14 @@ use crate::app_error::{
 /// empty, so both directions already degrade gracefully.
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// v1 uploads plaintext. The security boundary is the user's own
-/// self-authenticated WebDAV endpoint; the field exists so a future encrypted
-/// format is a value change rather than a format break, and so today's reader
-/// refuses a file it cannot decrypt instead of misparsing it.
+/// The default. The security boundary is then the user's own
+/// self-authenticated WebDAV endpoint, which is a real one for a self-hosted
+/// share and a weaker one on a hosted drive — hence the opt-in below.
 pub const ENCRYPTION_NONE: &str = "none";
+/// Opt-in passphrase encryption ([`super::crypto`]). The manifest stays
+/// plaintext either way, so "whose copy is on the remote, from when" is
+/// readable without the passphrase; only `config.json` is wrapped.
+pub const ENCRYPTION_AES_GCM: &str = "aes-256-gcm";
 
 pub const CONFIG_FILE_NAME: &str = "config.json";
 pub const MANIFEST_FILE_NAME: &str = "manifest.json";
@@ -176,7 +180,34 @@ pub fn parse_snapshot(bytes: &[u8]) -> Result<ConfigSnapshot, AppCommandError> {
             .with_i18n(CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT, BTreeMap::new())
     })?;
     reject_newer_schema(snapshot.schema_version)?;
+    validate_domains(&snapshot)?;
     Ok(snapshot)
+}
+
+/// Dry-decode every domain the snapshot carries, without a database.
+///
+/// Called from [`parse_snapshot`], which is the single door every snapshot
+/// enters through — file import, WebDAV download, and rollback alike — so a
+/// payload that would abort halfway through an apply is refused before the
+/// preview is even drawn. Without it the envelope's JSON being well-formed was
+/// the only thing checked, and a hand-edited file could confirm "3 providers,
+/// 2 agents" and then fail on the agents with the providers already written.
+///
+/// Domains this binary does not know are skipped, matching
+/// [`apply_snapshot_core`]: a snapshot from a newer build stays partially
+/// usable, and refusing it here would be stricter than the apply it guards.
+pub fn validate_domains(snapshot: &ConfigSnapshot) -> Result<(), AppCommandError> {
+    for domain in CONFIG_DOMAINS {
+        let Some(value) = snapshot.domains.get(domain.id) else {
+            continue;
+        };
+        (domain.validate)(value).map_err(|err| {
+            let mut params = BTreeMap::new();
+            params.insert("domain".to_string(), domain.id.to_string());
+            err.with_i18n(CONFIG_SYNC_I18N_KEY_BAD_DOMAIN, params)
+        })?;
+    }
+    Ok(())
 }
 
 pub fn parse_manifest(bytes: &[u8]) -> Result<ConfigManifest, AppCommandError> {
@@ -187,14 +218,18 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<ConfigManifest, AppCommandError> {
     })
 }
 
+/// `config_bytes` must be the bytes that are actually written out — the
+/// ciphertext when `encryption` is not [`ENCRYPTION_NONE`]. The checksum's job
+/// is detecting a truncated transfer, so it has to cover what was transferred.
 pub fn build_manifest(
     config_bytes: &[u8],
     app_version: &str,
     counts: BTreeMap<String, usize>,
+    encryption: &str,
 ) -> ConfigManifest {
     ConfigManifest {
         schema_version: SCHEMA_VERSION,
-        encryption: ENCRYPTION_NONE.to_string(),
+        encryption: encryption.to_string(),
         created_at: Utc::now().to_rfc3339(),
         app_version: app_version.to_string(),
         source_device: source_device(),
@@ -215,7 +250,10 @@ pub fn validate_manifest(
 ) -> Result<(), AppCommandError> {
     reject_newer_schema(manifest.schema_version)?;
 
-    if manifest.encryption != ENCRYPTION_NONE {
+    if !matches!(
+        manifest.encryption.as_str(),
+        ENCRYPTION_NONE | ENCRYPTION_AES_GCM
+    ) {
         return Err(AppCommandError::invalid_input(format!(
             "Unsupported snapshot encryption '{}'",
             manifest.encryption
@@ -378,6 +416,98 @@ fn prune_rollback_snapshots(dir: &Path, keep: usize) {
             tracing::warn!("[CONFIG-SYNC] failed to prune rollback snapshot: {err}");
         }
     }
+}
+
+/// One rollback snapshot, as the settings panel lists it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RollbackSnapshotInfo {
+    /// The file stem (`config-20260917T101530123`). Opaque to the frontend and
+    /// the only value it may hand back — [`resolve_rollback`] refuses anything
+    /// that is not exactly this shape, so the id can never become a path.
+    pub id: String,
+    /// RFC 3339, recovered from the id. `None` for a file whose name does not
+    /// carry a parseable stamp; the UI falls back to the id itself.
+    pub created_at: Option<String>,
+    pub size: u64,
+    /// What applying it would write, recounted from the payload.
+    pub counts: BTreeMap<String, usize>,
+}
+
+/// Newest first, skipping any file that no longer parses — a snapshot that
+/// cannot be read cannot be applied either, and listing it would only offer the
+/// user a button that fails.
+pub fn list_rollback_infos(dir: &Path) -> Vec<RollbackSnapshotInfo> {
+    let mut infos = Vec::new();
+    for path in list_rollback_snapshots(dir) {
+        let Some(id) = rollback_id(&path) else {
+            continue;
+        };
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                tracing::warn!("[CONFIG-SYNC] rollback snapshot unreadable: {err}");
+                continue;
+            }
+        };
+        let Ok(snapshot) = parse_snapshot(&bytes) else {
+            tracing::warn!("[CONFIG-SYNC] rollback snapshot does not parse: {}", id);
+            continue;
+        };
+        infos.push(RollbackSnapshotInfo {
+            created_at: created_at_from_id(&id),
+            size: bytes.len() as u64,
+            counts: snapshot.counts(),
+            id,
+        });
+    }
+    infos
+}
+
+fn rollback_id(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|stem| stem.to_string())
+}
+
+/// The names [`write_rollback_snapshot`] produces are `config-` plus a UTC
+/// `%Y%m%dT%H%M%S%3f` stamp, so the timestamp is recoverable without trusting
+/// the filesystem's mtime (which a copy or a restore would rewrite).
+fn created_at_from_id(id: &str) -> Option<String> {
+    let stamp = id.strip_prefix("config-")?;
+    chrono::NaiveDateTime::parse_from_str(stamp, "%Y%m%dT%H%M%S%3f")
+        .ok()
+        .map(|naive| naive.and_utc().to_rfc3339())
+}
+
+/// Map an id from [`list_rollback_infos`] back to its file.
+///
+/// The id arrives from the frontend, so it is validated rather than trusted:
+/// only the exact alphabet [`write_rollback_snapshot`] emits is accepted, which
+/// leaves no way to express a separator, a parent link, or an extension and so
+/// no way for the join below to leave `dir`.
+pub fn resolve_rollback(dir: &Path, id: &str) -> Result<PathBuf, AppCommandError> {
+    let looks_like_ours = id
+        .strip_prefix("config-")
+        .is_some_and(|stamp| !stamp.is_empty() && stamp.bytes().all(|b| b.is_ascii_alphanumeric()));
+    if !looks_like_ours {
+        return Err(missing_rollback_error());
+    }
+    let path = dir.join(format!("{id}.json"));
+    if !path.is_file() {
+        return Err(missing_rollback_error());
+    }
+    Ok(path)
+}
+
+fn missing_rollback_error() -> AppCommandError {
+    AppCommandError::not_found("That rollback snapshot is no longer on this machine")
+        .with_i18n(CONFIG_SYNC_I18N_KEY_NO_ROLLBACK, BTreeMap::new())
+}
+
+pub fn read_rollback(path: &Path) -> Result<ConfigSnapshot, AppCommandError> {
+    let bytes = std::fs::read(path).map_err(AppCommandError::io)?;
+    parse_snapshot(&bytes)
 }
 
 #[cfg(test)]
@@ -670,7 +800,7 @@ mod tests {
             domains: BTreeMap::from([("preferences".to_string(), serde_json::json!({}))]),
         };
         let bytes = serialize_snapshot(&snapshot).expect("serialize");
-        let manifest = build_manifest(&bytes, "1.0.0", snapshot.counts());
+        let manifest = build_manifest(&bytes, "1.0.0", snapshot.counts(), ENCRYPTION_NONE);
 
         validate_manifest(&manifest, &bytes).expect("matching bytes validate");
 
@@ -746,6 +876,125 @@ mod tests {
         assert!(
             !name.contains('\0'),
             "buffer was not cut at the NUL: {name:?}"
+        );
+    }
+
+    /// Regression: the envelope parsing alone let a payload through that the
+    /// applier would abort on, so the confirmation dialog promised rows it
+    /// could not write. The refusal has to happen at parse time, which is the
+    /// step both the file import and the WebDAV download go through.
+    #[test]
+    fn a_domain_that_would_abort_the_apply_is_refused_at_parse_time() {
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": SCHEMA_VERSION,
+            "domains": {
+                "quickMessages": [{ "title": "fine", "content": "body" }],
+                "modelProviders": "hand-edited into nonsense"
+            }
+        }))
+        .expect("bytes");
+
+        let err = parse_snapshot(&bytes).expect_err("must refuse");
+        assert_eq!(err.i18n_key.as_deref(), Some(CONFIG_SYNC_I18N_KEY_BAD_DOMAIN));
+        assert_eq!(
+            err.i18n_params
+                .as_ref()
+                .and_then(|params| params.get("domain"))
+                .map(String::as_str),
+            Some("modelProviders")
+        );
+    }
+
+    /// Forward compatibility is not sacrificed to the check above: a domain
+    /// this binary has never heard of is ignored by the applier, so refusing it
+    /// here would be stricter than the apply it guards.
+    #[test]
+    fn an_unknown_domain_is_not_what_the_dry_decode_is_for() {
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": SCHEMA_VERSION,
+            "domains": { "somethingFromANewerBuild": "whatever shape it likes" }
+        }))
+        .expect("bytes");
+        parse_snapshot(&bytes).expect("an unknown domain must not block the import");
+    }
+
+    #[test]
+    fn an_encrypted_manifest_is_a_known_format_now() {
+        let snapshot = ConfigSnapshot {
+            schema_version: SCHEMA_VERSION,
+            domains: BTreeMap::new(),
+        };
+        let payload = b"ciphertext-stand-in";
+        let manifest = build_manifest(payload, "1.0.0", snapshot.counts(), ENCRYPTION_AES_GCM);
+        // The checksum covers what is transferred, i.e. the ciphertext.
+        validate_manifest(&manifest, payload).expect("encrypted manifests validate");
+
+        let unknown = ConfigManifest {
+            encryption: "rot13".to_string(),
+            ..manifest
+        };
+        let err = validate_manifest(&unknown, payload).expect_err("must refuse");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT)
+        );
+    }
+
+    #[test]
+    fn a_rollback_id_can_never_become_a_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let snapshot = ConfigSnapshot {
+            schema_version: SCHEMA_VERSION,
+            domains: BTreeMap::new(),
+        };
+        let written = write_rollback_snapshot(dir.path(), &snapshot).expect("write");
+        let id = rollback_id(&written).expect("id");
+        assert_eq!(resolve_rollback(dir.path(), &id).expect("resolve"), written);
+
+        // Everything a traversal needs to express itself is outside the
+        // accepted alphabet.
+        for hostile in [
+            "../../etc/passwd",
+            "config-../../etc/passwd",
+            "config-a/b",
+            "config-a.b",
+            "config-",
+            "passwd",
+            "",
+        ] {
+            let err = resolve_rollback(dir.path(), hostile).expect_err("must refuse");
+            assert_eq!(
+                err.i18n_key.as_deref(),
+                Some(CONFIG_SYNC_I18N_KEY_NO_ROLLBACK)
+            );
+        }
+
+        // A well-formed id for a file that was pruned is the same "gone".
+        assert!(resolve_rollback(dir.path(), "config-19700101T000000000").is_err());
+    }
+
+    #[tokio::test]
+    async fn the_rollback_list_describes_what_applying_one_would_write() {
+        let source = fresh_in_memory_db().await;
+        seed_source(&source.conn).await;
+        let snapshot = collect_snapshot_core(&source.conn).await.expect("collect");
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_rollback_snapshot(dir.path(), &snapshot).expect("write");
+        // Unreadable junk alongside it must not take the list down with it.
+        std::fs::write(dir.path().join("config-20240101T000000000.json"), b"{oops")
+            .expect("write junk");
+
+        let infos = list_rollback_infos(dir.path());
+        assert_eq!(infos.len(), 1, "the unparseable file must be skipped");
+        assert_eq!(infos[0].counts.get("quickMessages"), Some(&1));
+        assert!(infos[0].size > 0);
+        assert!(infos[0].created_at.is_some(), "the id carries its stamp");
+        assert_eq!(
+            read_rollback(&resolve_rollback(dir.path(), &infos[0].id).expect("resolve"))
+                .expect("read")
+                .counts(),
+            snapshot.counts()
         );
     }
 

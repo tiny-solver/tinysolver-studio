@@ -4777,7 +4777,22 @@
       "quickMessages": "{count, plural, one {# Schnellnachricht} other {# Schnellnachrichten}}",
       "taskTemplates": "{count, plural, one {# Aufgabenvorlage} other {# Aufgabenvorlagen}}",
       "preferences": "{count, plural, one {# Einstellung} other {# Einstellungen}}"
-    }
+    },
+    "rollbackTitle": "Import rückgängig machen",
+    "rollbackHint": "Jeder Import und jede Wiederherstellung sichern vorher den Stand dieses Geräts. Die letzten zehn bleiben erhalten.",
+    "rollbackAction": "Rückgängig",
+    "rollbackUnknownTime": "Zeit unbekannt",
+    "rollbackConfirmTitle": "Zu dieser Konfiguration zurückkehren?",
+    "rollbackConfirmBody": "Die aktuelle Konfiguration wird durch die Kopie vom {time} ersetzt. Die aktuelle wird vorher gesichert, dieser Schritt lässt sich also ebenfalls rückgängig machen.",
+    "rollbackConfirmAction": "Rückgängig",
+    "rolledBack": "{count, plural, one {# Eintrag wiederhergestellt} other {# Einträge wiederhergestellt}}",
+    "encryptLabel": "Snapshot verschlüsseln",
+    "encryptHint": "Schützt die hochgeladene Datei mit einer Passphrase. Jedes synchronisierte Gerät braucht dieselbe.",
+    "encryptedNotice": "Der Snapshot wird vor dem Hochladen mit deiner Passphrase verschlüsselt. Geht sie verloren, lässt sich die Kopie auf dem Server nicht wiederherstellen.",
+    "passphrase": "Passphrase",
+    "passphraseKeep": "Leer lassen, um die gespeicherte Passphrase zu behalten",
+    "passphrasePlaceholder": "Passphrase zur Verschlüsselung",
+    "passphraseHint": "Bleibt im Schlüsselbund dieses Geräts und wird nie hochgeladen. Gib auf deinen anderen Geräten dieselbe Passphrase ein."
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "Der entfernte Ordner oder der Profilname ist ungültig.",
       "quota": "Auf dem WebDAV-Server ist kein Speicherplatz mehr frei.",
       "network": "Der WebDAV-Server war nicht erreichbar.",
-      "server": "Der WebDAV-Server hat einen Fehler zurückgegeben ({status})."
+      "server": "Der WebDAV-Server hat einen Fehler zurückgegeben ({status}).",
+      "passphraseRequired": "Dieser Snapshot ist verschlüsselt. Lege vor dem Synchronisieren die Passphrase fest.",
+      "badPassphrase": "Der Snapshot konnte nicht entschlüsselt werden. Prüfe die Passphrase – die Datei kann auch beschädigt sein.",
+      "badDomain": "Der Abschnitt {domain} dieses Snapshots konnte nicht gelesen werden.",
+      "noRollback": "Diese gespeicherte Konfiguration ist auf diesem Gerät nicht mehr vorhanden.",
+      "credentialsUnreadable": "Die gespeicherten Zugangsdaten konnten nicht gelesen werden. Entsperre den Systemschlüsselbund und versuche es erneut.",
+      "notEncrypted": "Der Snapshot auf dem Server ist nicht verschlüsselt, auf diesem Gerät ist die Verschlüsselung aber aktiviert. Lade von diesem Gerät hoch, um ihn zu ersetzen, oder deaktiviere die Verschlüsselung, um ihn zu verwenden."
     }
   },
   "WebConnection": {

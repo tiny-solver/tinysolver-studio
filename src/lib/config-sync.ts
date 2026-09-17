@@ -9,11 +9,15 @@
  * Kept out of `api.ts` on purpose — that module is already thousands of lines
  * and this feature has its own vocabulary.
  *
- * Desktop-only in this version: file paths come from native dialogs and the
- * commands are registered on the Tauri runtime, so the settings UI gates on
- * `isDesktop()` rather than degrading here.
+ * Works in both runtimes. Everything WebDAV is runtime-agnostic; the only
+ * split is local file transfer, where a local desktop window uses native save
+ * and open dialogs and everything else (a browser, or a desktop window pointed
+ * at a remote server) moves the document's text through the same command. A
+ * config snapshot is tens of KB, so that costs one string — which is why this
+ * feature needs none of the upload-staging machinery `backup` uses.
  */
 
+import { isLocalDesktop } from "./platform"
 import { getTransport } from "./transport"
 
 /** Stable domain ids, matching `domains::CONFIG_DOMAINS` in Rust. */
@@ -86,8 +90,13 @@ export interface ConfigSyncSettingsView {
   enabled: boolean
   serverUrl: string
   username: string
-  /** The password itself never crosses the bridge. */
+  /** The password itself never crosses the bridge — it lives in the OS
+   *  keyring, and this says only whether one is on file. */
   hasPassword: boolean
+  /** Wrap the uploaded snapshot in a passphrase-derived AES-256-GCM envelope.
+   *  The manifest stays plaintext either way. */
+  encrypt: boolean
+  hasPassphrase: boolean
   remoteDir: string
   profile: string
   autoSync: boolean
@@ -101,10 +110,25 @@ export interface ConfigSyncSettingsInput {
   /** `null` or `""` keeps the stored password. Never send a placeholder —
    *  the backend would store the placeholder verbatim. */
   password: string | null
+  /** Same rule. Unlike the password it is not tied to the account, so editing
+   *  the server URL does not orphan it. */
+  passphrase: string | null
+  encrypt: boolean
   remoteDir: string
   profile: string
   autoSync: boolean
   intervalMinutes: number
+}
+
+/** One pre-apply snapshot on this machine, as the settings panel lists it. */
+export interface RollbackSnapshot {
+  /** Opaque; the only value that may be sent back. */
+  id: string
+  /** `null` when the file name carries no parseable stamp. */
+  createdAt: string | null
+  size: number
+  /** What applying it would write, recounted from the payload. */
+  counts: DomainCounts
 }
 
 export interface ConfigSyncState {
@@ -150,11 +174,41 @@ export function defaultExportFileName(now: Date = new Date()): string {
   return `codeg-config-${stamp}.${CONFIG_EXPORT_EXTENSION}`
 }
 
+/** Where an import's bytes are coming from. A local desktop window names a
+ *  path the backend reads itself; everything else carries the text. */
+export type ConfigImportSource =
+  | { kind: "path"; path: string; label: string }
+  | { kind: "content"; content: string; label: string }
+
+export interface PickedConfigImport {
+  source: ConfigImportSource
+  preview: ConfigImportPreview
+}
+
+/** The export as text, for the runtimes that save it client-side. */
+interface ConfigExportContent {
+  content: string
+  counts: DomainCounts
+}
+
 /** `null` when the user dismissed the save dialog. */
 export async function exportConfigToFile(): Promise<ConfigExportSummary | null> {
+  const fileName = defaultExportFileName()
+
+  if (!isLocalDesktop()) {
+    const built = await getTransport().call<ConfigExportContent>(
+      "config_sync_export_content",
+      {}
+    )
+    downloadTextFile(fileName, built.content)
+    // The browser owns the destination from here, so the "path" is the name
+    // it was offered under — the summary is only ever shown as a toast.
+    return { path: fileName, counts: built.counts }
+  }
+
   const { save } = await import("@tauri-apps/plugin-dialog")
   const destPath = await save({
-    defaultPath: defaultExportFileName(),
+    defaultPath: fileName,
     filters: [{ name: "Codeg config", extensions: ["json"] }],
   })
   if (!destPath) return null
@@ -165,10 +219,18 @@ export async function exportConfigToFile(): Promise<ConfigExportSummary | null> 
 
 /** Opens a file picker and inspects the choice WITHOUT applying it. `null`
  *  when the dialog was dismissed. */
-export async function pickConfigFileToImport(): Promise<{
-  path: string
-  preview: ConfigImportPreview
-} | null> {
+export async function pickConfigFileToImport(): Promise<PickedConfigImport | null> {
+  if (!isLocalDesktop()) {
+    const file = await pickLocalFile()
+    if (!file) return null
+    const content = await file.text()
+    const preview = await getTransport().call<ConfigImportPreview>(
+      "config_sync_peek_content",
+      { content }
+    )
+    return { source: { kind: "content", content, label: file.name }, preview }
+  }
+
   const { open } = await import("@tauri-apps/plugin-dialog")
   const picked = await open({
     multiple: false,
@@ -181,14 +243,77 @@ export async function pickConfigFileToImport(): Promise<{
     "config_sync_peek_file",
     { srcPath }
   )
-  return { path: srcPath, preview }
+  return { source: { kind: "path", path: srcPath, label: srcPath }, preview }
 }
 
-export async function importConfigFromFile(
-  srcPath: string
+export async function importPickedConfig(
+  source: ConfigImportSource
 ): Promise<ConfigImportResult> {
+  if (source.kind === "content") {
+    return getTransport().call<ConfigImportResult>(
+      "config_sync_import_content",
+      { content: source.content }
+    )
+  }
   return getTransport().call<ConfigImportResult>("config_sync_import_file", {
-    srcPath,
+    srcPath: source.path,
+  })
+}
+
+/** Newest first. Empty when nothing has ever been imported or restored. */
+export async function listConfigRollbacks(): Promise<RollbackSnapshot[]> {
+  return getTransport().call<RollbackSnapshot[]>(
+    "config_sync_list_rollbacks",
+    {}
+  )
+}
+
+/** Re-apply the configuration captured just before an import or a restore.
+ *  Writes its own rollback point first, so the undo is itself undoable. */
+export async function applyConfigRollback(
+  id: string
+): Promise<ConfigImportResult> {
+  return getTransport().call<ConfigImportResult>("config_sync_apply_rollback", {
+    id,
+  })
+}
+
+function downloadTextFile(fileName: string, content: string): void {
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "application/json" })
+  )
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  // Revoking synchronously can cancel the download in some browsers; one turn
+  // of the event loop is enough for the click to have been taken.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+/** `null` when the picker was dismissed. There is no cancel event for a file
+ *  input in every browser we target, so a dismissed dialog simply never
+ *  resolves to a file — the `cancel` event covers the modern ones and the
+ *  promise is abandoned otherwise, which is the same outcome the user sees. */
+function pickLocalFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".json,application/json"
+    input.style.display = "none"
+    input.addEventListener("change", () => {
+      const file = input.files?.[0] ?? null
+      input.remove()
+      resolve(file)
+    })
+    input.addEventListener("cancel", () => {
+      input.remove()
+      resolve(null)
+    })
+    document.body.appendChild(input)
+    input.click()
   })
 }
 

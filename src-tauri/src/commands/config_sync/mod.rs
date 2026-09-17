@@ -29,22 +29,35 @@
 //! machine can never overwrite another machine's credentials, which is what
 //! would turn two clients into a sync loop.
 //!
+//! **Secrets stay out of the snapshot AND out of the settings row.** The
+//! WebDAV password and the optional snapshot passphrase live in the OS keyring
+//! (the `0600` token store on a server) — see [`credentials`]. A settings row
+//! is plaintext in the SQLite file, and that file is inside every backup
+//! archive; neither credential is portable, so neither belongs there.
+//!
 //! Layering mirrors the backup engine: `*_core` functions take plain
 //! references (`&DatabaseConnection`, `&EventEmitter`) so desktop commands,
-//! the (future) Axum handlers, and the background scheduler share one
-//! implementation.
+//! the Axum handlers in `web::handlers::config_sync`, and the background
+//! scheduler share one implementation.
 
 pub mod auto_sync;
+pub mod credentials;
+pub mod crypto;
 pub mod domains;
 pub mod local_io;
 pub mod portable_keys;
 pub mod snapshot;
 pub mod webdav_sync;
 
+/// Shared by the Tauri commands and the HTTP handlers, so "which version
+/// wrote this snapshot" is the same answer in both runtimes.
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // ─── Desktop Tauri commands ──────────────────────────────────────────────
 //
 // Thin wrappers only. The frontend picks paths with the native file dialog
-// and passes them in, exactly as the backup commands do.
+// and passes them in, exactly as the backup commands do — except in a browser,
+// which has no path to pass and posts the bytes instead (`*_content`).
 
 #[cfg(feature = "tauri-runtime")]
 mod tauri_commands {
@@ -56,17 +69,18 @@ mod tauri_commands {
     use crate::db::AppDatabase;
 
     use super::local_io::{
-        export_to_file_core, import_from_file_core, peek_import_core, ConfigExportSummary,
-        ConfigImportPreview, ConfigImportResult,
+        apply_rollback_core, export_content_core, export_to_file_core, import_bytes_core,
+        import_from_file_core, list_rollbacks_core, peek_import_bytes_core, peek_import_core,
+        ConfigExportContent, ConfigExportSummary, ConfigImportPreview, ConfigImportResult,
     };
-    use super::snapshot::ConfigManifest;
+    use super::snapshot::{rollback_dir, ConfigManifest, RollbackSnapshotInfo};
     use super::webdav_sync::{
         download_and_apply_core, load_settings, load_state, merge_settings, peek_remote_core,
         save_settings_core, test_connection_core, upload_snapshot_core, ConfigSyncSettingsInput,
         ConfigSyncSettingsView, ConfigSyncState, DownloadOutcome, UploadOutcome,
     };
 
-    const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+    use super::APP_VERSION;
 
     #[tauri::command]
     pub async fn config_sync_export_file(
@@ -152,6 +166,53 @@ mod tauri_commands {
         db: State<'_, AppDatabase>,
     ) -> Result<DownloadOutcome, AppCommandError> {
         download_and_apply_core(&db.conn).await
+    }
+
+    // ── By-content variants ──
+    //
+    // A Tauri window connected to a REMOTE codeg server routes these over
+    // HTTP, where there is no shared filesystem to name a path on. Registering
+    // them on the desktop too keeps one frontend code path for both.
+
+    #[tauri::command]
+    pub async fn config_sync_export_content(
+        db: State<'_, AppDatabase>,
+    ) -> Result<ConfigExportContent, AppCommandError> {
+        export_content_core(&db.conn, APP_VERSION).await
+    }
+
+    #[tauri::command]
+    pub async fn config_sync_peek_content(
+        content: String,
+    ) -> Result<ConfigImportPreview, AppCommandError> {
+        peek_import_bytes_core(content.as_bytes())
+    }
+
+    #[tauri::command]
+    pub async fn config_sync_import_content(
+        content: String,
+        db: State<'_, AppDatabase>,
+    ) -> Result<ConfigImportResult, AppCommandError> {
+        import_bytes_core(&db.conn, content.as_bytes()).await
+    }
+
+    // ── Rollback snapshots ──
+    //
+    // Every import and every restore writes one first. Without these two they
+    // were a safety net that existed on disk and nowhere in the product.
+
+    #[tauri::command]
+    pub async fn config_sync_list_rollbacks(
+    ) -> Result<Vec<RollbackSnapshotInfo>, AppCommandError> {
+        Ok(list_rollbacks_core(&rollback_dir()))
+    }
+
+    #[tauri::command]
+    pub async fn config_sync_apply_rollback(
+        id: String,
+        db: State<'_, AppDatabase>,
+    ) -> Result<ConfigImportResult, AppCommandError> {
+        apply_rollback_core(&db.conn, &rollback_dir(), &id).await
     }
 }
 

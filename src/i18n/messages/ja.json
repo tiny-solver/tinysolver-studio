@@ -4777,7 +4777,22 @@
       "quickMessages": "クイックメッセージ {count} 件",
       "taskTemplates": "タスクテンプレート {count} 件",
       "preferences": "アプリ設定 {count} 件"
-    }
+    },
+    "rollbackTitle": "インポートを元に戻す",
+    "rollbackHint": "インポートと復元のたびに、直前のこのマシンの設定を保存します。最新の 10 件が残ります。",
+    "rollbackAction": "元に戻す",
+    "rollbackUnknownTime": "時刻不明",
+    "rollbackConfirmTitle": "この設定に戻しますか？",
+    "rollbackConfirmBody": "現在の設定を {time} に保存されたコピーで置き換えます。現在の設定は先に保存されるので、この操作自体も元に戻せます。",
+    "rollbackConfirmAction": "元に戻す",
+    "rolledBack": "{count} 件の設定を復元しました",
+    "encryptLabel": "スナップショットを暗号化",
+    "encryptHint": "アップロードするファイルをパスフレーズで保護します。同期するすべてのマシンで同じものが必要です。",
+    "encryptedNotice": "スナップショットはアップロード前にパスフレーズで暗号化されます。パスフレーズを失うと、サーバー上のコピーは復元できません。",
+    "passphrase": "パスフレーズ",
+    "passphraseKeep": "空のままにすると保存済みのパスフレーズを使います",
+    "passphrasePlaceholder": "暗号化パスフレーズ",
+    "passphraseHint": "このマシンのキーチェーンにのみ保存され、アップロードされません。他のマシンでも同じパスフレーズを入力してください。"
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "リモートフォルダーまたはプロファイル名が無効です。",
       "quota": "WebDAV サーバーの空き容量がありません。",
       "network": "WebDAV サーバーに接続できませんでした。",
-      "server": "WebDAV サーバーがエラーを返しました（{status}）。"
+      "server": "WebDAV サーバーがエラーを返しました（{status}）。",
+      "passphraseRequired": "このスナップショットは暗号化されています。同期する前に暗号化パスフレーズを設定してください。",
+      "badPassphrase": "スナップショットを復号できませんでした。パスフレーズを確認してください。ファイルが壊れている可能性もあります。",
+      "badDomain": "このスナップショットの {domain} の部分を読み取れませんでした。",
+      "noRollback": "その保存済みの設定はこのマシンにもう残っていません。",
+      "credentialsUnreadable": "保存された認証情報を読み取れませんでした。システムキーチェーンのロックを解除してから再試行してください。",
+      "notEncrypted": "サーバー上のスナップショットは暗号化されていませんが、このデバイスでは暗号化が有効です。このデバイスからアップロードして置き換えるか、暗号化をオフにして使用してください。"
     }
   },
   "WebConnection": {

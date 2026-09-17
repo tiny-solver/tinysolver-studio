@@ -4777,7 +4777,22 @@
       "quickMessages": "{count, plural, one {# mensagem rápida} other {# mensagens rápidas}}",
       "taskTemplates": "{count, plural, one {# modelo de tarefa} other {# modelos de tarefa}}",
       "preferences": "{count, plural, one {# preferência} other {# preferências}}"
-    }
+    },
+    "rollbackTitle": "Desfazer uma importação",
+    "rollbackHint": "Cada importação e cada restauração guardam antes o estado desta máquina. Os dez últimos são mantidos.",
+    "rollbackAction": "Desfazer",
+    "rollbackUnknownTime": "Hora desconhecida",
+    "rollbackConfirmTitle": "Voltar a esta configuração?",
+    "rollbackConfirmBody": "A configuração atual será substituída pela cópia guardada em {time}. A atual é guardada primeiro, por isso este passo também pode ser desfeito.",
+    "rollbackConfirmAction": "Desfazer",
+    "rolledBack": "{count, plural, one {# entrada restaurada} other {# entradas restauradas}}",
+    "encryptLabel": "Cifrar o snapshot",
+    "encryptHint": "Protege o ficheiro enviado com uma frase-passe. Todas as máquinas sincronizadas precisam da mesma.",
+    "encryptedNotice": "O snapshot é cifrado com a sua frase-passe antes do envio. Se a perder, a cópia no servidor não poderá ser recuperada.",
+    "passphrase": "Frase-passe",
+    "passphraseKeep": "Deixe vazio para manter a frase-passe guardada",
+    "passphrasePlaceholder": "Frase-passe de cifra",
+    "passphraseHint": "Fica no porta-chaves desta máquina e nunca é enviada. Introduza a mesma frase-passe nas suas outras máquinas."
   },
   "backup": {
     "restore": {
@@ -4806,7 +4821,13 @@
       "remotePath": "A pasta remota ou o nome do perfil não é válido.",
       "quota": "O servidor WebDAV não tem mais espaço.",
       "network": "Não foi possível alcançar o servidor WebDAV.",
-      "server": "O servidor WebDAV retornou um erro ({status})."
+      "server": "O servidor WebDAV retornou um erro ({status}).",
+      "passphraseRequired": "Este snapshot está cifrado. Defina a frase-passe antes de sincronizar.",
+      "badPassphrase": "Não foi possível decifrar o snapshot. Verifique a frase-passe — o ficheiro também pode estar danificado.",
+      "badDomain": "Não foi possível ler a secção {domain} deste snapshot.",
+      "noRollback": "Essa configuração guardada já não está nesta máquina.",
+      "credentialsUnreadable": "Não foi possível ler as credenciais salvas. Desbloqueie o chaveiro do sistema e tente novamente.",
+      "notEncrypted": "O instantâneo no servidor não está criptografado, mas a criptografia está ativada neste dispositivo. Envie a partir deste dispositivo para substituí-lo ou desative a criptografia para usá-lo."
     }
   },
   "WebConnection": {

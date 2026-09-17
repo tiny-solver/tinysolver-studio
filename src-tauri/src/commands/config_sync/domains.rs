@@ -50,13 +50,24 @@ type ApplyFn = for<'a> fn(
     &'a DatabaseTransaction,
     &'a Value,
 ) -> BoxFuture<'a, Result<usize, AppCommandError>>;
+type ValidateFn = fn(&Value) -> Result<(), AppCommandError>;
 
-/// One configuration domain: how it is read out of the local database and how
-/// it is written back in.
+/// One configuration domain: how it is read out of the local database, how it
+/// is checked before anything is written, and how it is written back in.
 pub struct ConfigDomain {
     /// Stable snapshot key. Never rename: older snapshots are matched by it.
     pub id: &'static str,
     pub collect: CollectFn,
+    /// The decode half of [`Self::apply`], without the database. It exists so
+    /// a file can be REFUSED at preview time instead of failing halfway
+    /// through an apply: the envelope being well-formed JSON says nothing
+    /// about the domain payloads inside it, and a hand-edited export happily
+    /// previews "3 providers" and then aborts on the third.
+    ///
+    /// Each one runs the same `decode_rows::<Dto>` call its applier opens with,
+    /// against the same DTO type; `validate_matches_apply` holds the two
+    /// together.
+    pub validate: ValidateFn,
     pub apply: ApplyFn,
 }
 
@@ -68,34 +79,68 @@ pub const CONFIG_DOMAINS: &[ConfigDomain] = &[
     ConfigDomain {
         id: DOMAIN_MODEL_PROVIDERS,
         collect: collect_model_providers,
+        validate: validate_model_providers,
         apply: apply_model_providers,
     },
     ConfigDomain {
         id: DOMAIN_AGENT_SETTINGS,
         collect: collect_agent_settings,
+        validate: validate_agent_settings,
         apply: apply_agent_settings,
     },
     ConfigDomain {
         id: DOMAIN_CUSTOM_AGENTS,
         collect: collect_custom_agents,
+        validate: validate_custom_agents,
         apply: apply_custom_agents,
     },
     ConfigDomain {
         id: DOMAIN_QUICK_MESSAGES,
         collect: collect_quick_messages,
+        validate: validate_quick_messages,
         apply: apply_quick_messages,
     },
     ConfigDomain {
         id: DOMAIN_TASK_TEMPLATES,
         collect: collect_task_templates,
+        validate: validate_task_templates,
         apply: apply_task_templates,
     },
     ConfigDomain {
         id: DOMAIN_PREFERENCES,
         collect: collect_preferences,
+        validate: validate_preferences,
         apply: apply_preferences,
     },
 ];
+
+fn validate_model_providers(value: &Value) -> Result<(), AppCommandError> {
+    decode_rows::<ModelProviderDto>(DOMAIN_MODEL_PROVIDERS, value).map(drop)
+}
+
+fn validate_agent_settings(value: &Value) -> Result<(), AppCommandError> {
+    decode_rows::<AgentSettingDto>(DOMAIN_AGENT_SETTINGS, value).map(drop)
+}
+
+fn validate_custom_agents(value: &Value) -> Result<(), AppCommandError> {
+    decode_rows::<CustomAgentDto>(DOMAIN_CUSTOM_AGENTS, value).map(drop)
+}
+
+fn validate_quick_messages(value: &Value) -> Result<(), AppCommandError> {
+    decode_rows::<QuickMessageDto>(DOMAIN_QUICK_MESSAGES, value).map(drop)
+}
+
+fn validate_task_templates(value: &Value) -> Result<(), AppCommandError> {
+    decode_rows::<TaskTemplateDto>(DOMAIN_TASK_TEMPLATES, value).map(drop)
+}
+
+/// `preferences` has no shape to decode: the applier walks whatever object it
+/// is handed, skips non-portable keys and non-string values, and treats a
+/// non-object as carrying nothing. Anything this accepts, the applier accepts
+/// too — which is precisely the agreement the pair has to keep.
+fn validate_preferences(_value: &Value) -> Result<(), AppCommandError> {
+    Ok(())
+}
 
 /// How many entries a collected domain value holds — array length for row
 /// domains, key count for `preferences`. Used for the manifest's `counts` and
@@ -714,5 +759,64 @@ mod tests {
         assert_eq!(count_entries(&serde_json::json!([1, 2, 3])), 3);
         assert_eq!(count_entries(&serde_json::json!({ "a": "b" })), 1);
         assert_eq!(count_entries(&Value::Null), 0);
+    }
+
+    /// The whole point of `validate` is that it answers the same question the
+    /// applier would, one step earlier. If the two ever disagree, the preview
+    /// is lying: either it waves through a payload that aborts the apply, or it
+    /// refuses a file that would have applied fine.
+    ///
+    /// Run against a real (in-memory) database so `apply` is the actual
+    /// applier, not a stand-in — the drift this guards against is exactly a
+    /// `validate` that stopped tracking its applier's DTO.
+    #[tokio::test]
+    async fn validate_matches_apply_on_every_domain() {
+        use sea_orm::TransactionTrait;
+
+        // Shapes a hand-edited snapshot plausibly ends up with: the wrong
+        // container, the right container with the wrong element type, and a
+        // row missing a field the DTO requires.
+        let payloads = [
+            serde_json::json!("not a list"),
+            serde_json::json!(42),
+            serde_json::json!({ "registryId": "acme" }),
+            serde_json::json!([1, 2, 3]),
+            serde_json::json!([{ "unexpected": true }]),
+            serde_json::json!([]),
+            Value::Null,
+        ];
+
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        for domain in CONFIG_DOMAINS {
+            for payload in &payloads {
+                let validated = (domain.validate)(payload).is_ok();
+                // Each probe gets its own transaction, rolled back either way:
+                // a payload that applies must not leave rows behind for the
+                // next probe to trip over.
+                let tx = db.conn.begin().await.expect("begin");
+                let applied = (domain.apply)(&tx, payload).await.is_ok();
+                tx.rollback().await.expect("rollback");
+                assert_eq!(
+                    validated, applied,
+                    "domain '{}' disagrees with itself on {payload}",
+                    domain.id
+                );
+            }
+        }
+    }
+
+    /// And the pair is not vacuously in agreement: at least one of those
+    /// payloads must actually be refused, or a `validate` stubbed out to
+    /// `Ok(())` everywhere would pass the test above.
+    #[test]
+    fn a_malformed_row_domain_is_refused() {
+        for domain in CONFIG_DOMAINS {
+            if domain.id == DOMAIN_PREFERENCES {
+                continue;
+            }
+            let err = (domain.validate)(&serde_json::json!("not a list"))
+                .expect_err("a row domain must refuse a bare string");
+            assert!(err.message.contains(domain.id), "{}", err.message);
+        }
     }
 }

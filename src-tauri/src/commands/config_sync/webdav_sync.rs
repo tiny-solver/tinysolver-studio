@@ -23,18 +23,23 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use super::credentials::{self, SNAPSHOT_PASSPHRASE, WEBDAV_PASSWORD};
+use super::crypto;
 use super::snapshot::{
     apply_snapshot_core, build_manifest, collect_snapshot_core, parse_manifest, parse_snapshot,
     serialize_snapshot, sha256_hex, validate_manifest, ApplyReport, ConfigManifest,
-    CONFIG_FILE_NAME, MANIFEST_FILE_NAME,
+    CONFIG_FILE_NAME, ENCRYPTION_AES_GCM, ENCRYPTION_NONE, MANIFEST_FILE_NAME,
 };
 use crate::app_error::{AppCommandError, CONFIG_SYNC_I18N_KEY_NO_REMOTE};
 use crate::db::service::app_metadata_service;
 use crate::network::webdav::{sanitize_path_segment, WebdavClient};
 
-/// Credentials of this feature. NOT in `portable_keys`: if it travelled, one
+/// Settings of this feature. NOT in `portable_keys`: if they travelled, one
 /// machine's credentials would overwrite the other's and the two would sync
 /// into each other in a loop.
+///
+/// The two secrets live in the keyring ([`super::credentials`]), not in this
+/// row; what is left here is addresses and switches.
 pub const CONFIG_SYNC_SETTINGS_KEY: &str = "config_sync_settings";
 /// Last-uploaded hash and last result. Device-local by nature.
 pub const CONFIG_SYNC_STATE_KEY: &str = "config_sync_state";
@@ -55,9 +60,29 @@ pub struct ConfigSyncSettings {
     pub enabled: bool,
     pub server_url: String,
     pub username: String,
-    /// Stored as given. See the module docs of `mod.rs` for why the snapshot
-    /// itself stays unencrypted; this value never leaves the local database.
+    /// Never serialized into the settings row — it lives in the keyring, and
+    /// [`load_settings`] puts it here. `default` is what lets an OLD row, which
+    /// does still carry the password inline, deserialize so the value can be
+    /// migrated out of it.
+    #[serde(default, skip_serializing)]
     pub password: String,
+    /// Same treatment, for the optional snapshot passphrase. There is no legacy
+    /// form of this one: it never had a plaintext home.
+    #[serde(default, skip_serializing)]
+    pub passphrase: String,
+    /// Wrap `config.json` in [`super::crypto`]'s envelope before uploading.
+    /// Off by default — the plaintext boundary is the user's own authenticated
+    /// endpoint, which is a real boundary for a self-hosted share.
+    #[serde(default)]
+    pub encrypt: bool,
+    /// Opaque, non-secret, regenerated whenever the passphrase changes. It is
+    /// part of [`ConfigSyncSettings::remote_target`] so that re-keying (or
+    /// switching encryption on) makes the upload baseline stop matching and the
+    /// next tick re-uploads. A hash of the passphrase would do the same job and
+    /// would also park an offline-crackable digest of a user-chosen secret in
+    /// the database; a random id leaks nothing.
+    #[serde(default)]
+    pub passphrase_id: String,
     pub remote_dir: String,
     pub profile: String,
     pub auto_sync: bool,
@@ -75,9 +100,25 @@ impl ConfigSyncSettings {
         !self.server_url.trim().is_empty()
     }
 
+    /// How the payload is protected, as a value the upload baseline can be
+    /// stamped with. Turning encryption on, or re-keying it, leaves the
+    /// PLAINTEXT snapshot byte-identical — so without this the hash would still
+    /// match, the tick would skip, and the remote would keep the copy written
+    /// under the old protection. For a re-key that is not merely stale: the
+    /// remote would be unreadable with the passphrase this machine now holds.
+    fn protection(&self) -> &str {
+        if self.encrypt {
+            // Empty only in the transient state "encryption on, passphrase not
+            // yet set", which `merge_settings` refuses to persist.
+            &self.passphrase_id
+        } else {
+            "plain"
+        }
+    }
+
     /// The remote location this configuration points at, as a value that can
     /// be stored alongside the upload hash. Two settings that agree here write
-    /// the same two files.
+    /// the same two files, readable the same way.
     ///
     /// A NUL separator rather than a slash: every part is user-typed, and a
     /// `/` would let `{dir: "a/b", profile: "c"}` and `{dir: "a", profile:
@@ -85,8 +126,11 @@ impl ConfigSyncSettings {
     /// today; the separator is what keeps that from becoming load-bearing.)
     fn remote_target(&self) -> String {
         format!(
-            "{}\u{0}{}\u{0}{}",
-            self.server_url, self.remote_dir, self.profile
+            "{}\u{0}{}\u{0}{}\u{0}{}",
+            self.server_url,
+            self.remote_dir,
+            self.profile,
+            self.protection()
         )
     }
 }
@@ -98,6 +142,9 @@ impl Default for ConfigSyncSettings {
             server_url: String::new(),
             username: String::new(),
             password: String::new(),
+            passphrase: String::new(),
+            encrypt: false,
+            passphrase_id: String::new(),
             remote_dir: DEFAULT_REMOTE_DIR.to_string(),
             profile: DEFAULT_PROFILE.to_string(),
             auto_sync: true,
@@ -116,6 +163,10 @@ pub struct ConfigSyncSettingsView {
     pub server_url: String,
     pub username: String,
     pub has_password: bool,
+    pub encrypt: bool,
+    /// Same contract as `has_password`: the passphrase itself never crosses the
+    /// bridge, only whether one is on file.
+    pub has_passphrase: bool,
     pub remote_dir: String,
     pub profile: String,
     pub auto_sync: bool,
@@ -129,6 +180,8 @@ impl From<&ConfigSyncSettings> for ConfigSyncSettingsView {
             server_url: settings.server_url.clone(),
             username: settings.username.clone(),
             has_password: !settings.password.is_empty(),
+            encrypt: settings.encrypt,
+            has_passphrase: !settings.passphrase.is_empty(),
             remote_dir: settings.remote_dir.clone(),
             profile: settings.profile.clone(),
             auto_sync: settings.auto_sync,
@@ -153,6 +206,14 @@ pub struct ConfigSyncSettingsInput {
     pub username: String,
     #[serde(default)]
     pub password: Option<String>,
+    /// Same "empty means keep what is stored" rule as the password. Unlike the
+    /// password it is NOT scoped to the account: it protects the snapshot, not
+    /// the connection, so moving the same configuration to a different host
+    /// does not orphan it.
+    #[serde(default)]
+    pub passphrase: Option<String>,
+    #[serde(default)]
+    pub encrypt: bool,
     #[serde(default)]
     pub remote_dir: Option<String>,
     #[serde(default)]
@@ -209,7 +270,8 @@ fn remote_lock() -> &'static Mutex<()> {
 // ─── settings persistence ─────────────────────────────────────────────
 
 /// Never fails: a row this build cannot parse degrades to defaults (sync off)
-/// rather than breaking the settings page.
+/// rather than breaking the settings page. The secrets are read from the
+/// keyring and grafted on; the row itself holds none.
 pub async fn load_settings(conn: &DatabaseConnection) -> ConfigSyncSettings {
     let raw = match app_metadata_service::get_value(conn, CONFIG_SYNC_SETTINGS_KEY).await {
         Ok(Some(raw)) => raw,
@@ -219,12 +281,102 @@ pub async fn load_settings(conn: &DatabaseConnection) -> ConfigSyncSettings {
             return ConfigSyncSettings::default();
         }
     };
-    match serde_json::from_str::<ConfigSyncSettings>(&raw) {
+    let mut settings = match serde_json::from_str::<ConfigSyncSettings>(&raw) {
         Ok(settings) => settings,
         Err(err) => {
             tracing::warn!("[CONFIG-SYNC] failed to parse sync settings: {err}");
             ConfigSyncSettings::default()
         }
+    };
+
+    // Whatever the row still carries is a pre-keyring leftover.
+    let legacy_password = std::mem::take(&mut settings.password);
+    settings.password = credentials::load(WEBDAV_PASSWORD);
+    settings.passphrase = credentials::load(SNAPSHOT_PASSPHRASE);
+
+    // The trigger is "the ROW still holds a password", not "the keyring is
+    // empty". Those look equivalent and are not: if a previous migration
+    // stored the secret and then failed to rewrite the row, the keyring is
+    // populated while the plaintext is still sitting in `app_metadata` — and a
+    // keyring-empty test would skip the retry forever, leaving that copy in
+    // the database (and in every backup archive) for good.
+    if !legacy_password.is_empty() {
+        // The keyring copy wins where both exist; it is the one every later
+        // save writes to. The row copy is only a fallback for the very first
+        // migration, before anything has been stored.
+        if settings.password.is_empty() {
+            settings.password = legacy_password;
+        }
+        migrate_legacy_password(conn, &settings.password).await;
+    }
+    settings
+}
+
+/// Move a password written by a build that kept it in the settings row into the
+/// keyring, then strip the `password` key out of the row.
+///
+/// Best effort in both directions: a keyring that cannot be written leaves the
+/// row as it was and sync keeps working from it, because refusing to load
+/// settings would break the feature outright over a storage upgrade. Either
+/// half failing is retried on the next load — see the caller.
+async fn migrate_legacy_password(conn: &DatabaseConnection, password: &str) {
+    if let Err(err) = credentials::store(WEBDAV_PASSWORD, password) {
+        tracing::warn!(
+            "[CONFIG-SYNC] keeping the password in the settings row: {}",
+            err.message
+        );
+        return;
+    }
+
+    // Re-read and remove one key, rather than re-serializing the struct this
+    // load parsed. Two reasons, and both are silent corruption otherwise:
+    //
+    //  - A concurrent save may have landed in between. Writing the parsed
+    //    struct back would revert it — putting the OLD server URL beside the
+    //    NEW password the keyring just took, which is exactly the pairing
+    //    `merge_settings` refuses to create on purpose.
+    //  - A row written by a NEWER build carries fields this one does not know.
+    //    Serializing our struct over it drops them for good.
+    //
+    // Removing a single key from whatever the row holds *now* can only ever
+    // take the plaintext out.
+    let raw = match app_metadata_service::get_value(conn, CONFIG_SYNC_SETTINGS_KEY).await {
+        Ok(Some(raw)) => raw,
+        Ok(None) => return,
+        Err(err) => {
+            tracing::warn!("[CONFIG-SYNC] failed to re-read sync settings: {err}");
+            return;
+        }
+    };
+    let mut value = match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(value) => value,
+        Err(err) => {
+            tracing::warn!("[CONFIG-SYNC] failed to parse sync settings: {err}");
+            return;
+        }
+    };
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    if object.remove("password").is_none() {
+        // Someone else already erased it; nothing to write.
+        return;
+    }
+
+    match serde_json::to_string(&value) {
+        Ok(serialized) => {
+            if let Err(err) =
+                app_metadata_service::upsert_value(conn, CONFIG_SYNC_SETTINGS_KEY, &serialized).await
+            {
+                // The keyring copy is authoritative from here on, so the stale
+                // plaintext is redundant rather than load-bearing — but it is
+                // still plaintext, so say so.
+                tracing::warn!("[CONFIG-SYNC] failed to erase the stored password: {err}");
+            } else {
+                tracing::info!("[CONFIG-SYNC] moved the WebDAV password to the keyring");
+            }
+        }
+        Err(err) => tracing::warn!("[CONFIG-SYNC] failed to rewrite sync settings: {err}"),
     }
 }
 
@@ -232,13 +384,29 @@ pub async fn save_settings_core(
     conn: &DatabaseConnection,
     input: ConfigSyncSettingsInput,
 ) -> Result<ConfigSyncSettingsView, AppCommandError> {
+    // Before anything else, because this save is a read-modify-write of the
+    // secret store and an unreadable store reads back as empty — which travels
+    // out as a deletion. Nudging the sync interval must not be able to destroy
+    // the passphrase the snapshot already on the remote is encrypted under.
+    credentials::ensure_readable()?;
+
     let existing = load_settings(conn).await;
     let merged = merge_settings(&existing, input)?;
+
+    // Secrets first. If the keyring refuses them the save fails outright rather
+    // than persisting a configuration whose credentials went nowhere — that
+    // would surface minutes later as "the server rejected your password".
+    credentials::store(WEBDAV_PASSWORD, &merged.password)?;
+    credentials::store(SNAPSHOT_PASSPHRASE, &merged.passphrase)?;
 
     let serialized = serde_json::to_string(&merged).map_err(|e| {
         AppCommandError::invalid_input("Failed to serialize config sync settings")
             .with_detail(e.to_string())
     })?;
+    debug_assert!(
+        !serialized.contains(&merged.password) || merged.password.is_empty(),
+        "the settings row must never carry the password"
+    );
     app_metadata_service::upsert_value(conn, CONFIG_SYNC_SETTINGS_KEY, &serialized)
         .await
         .map_err(AppCommandError::db)?;
@@ -277,6 +445,25 @@ pub fn merge_settings(
         _ => String::new(),
     };
 
+    // The passphrase is deliberately NOT scoped the way the password is: it
+    // protects the snapshot, not the connection, so repointing at another host
+    // must not orphan it. It also survives `encrypt` being switched off, so a
+    // user who turns encryption off can still pull down the encrypted copy
+    // that is already on the remote.
+    let passphrase = match input.passphrase {
+        Some(value) if !value.is_empty() => value,
+        _ => existing.passphrase.clone(),
+    };
+    if input.encrypt && passphrase.is_empty() {
+        return Err(crypto::passphrase_required_error());
+    }
+    // Re-keying has to invalidate the upload baseline; see `protection`.
+    let passphrase_id = if passphrase == existing.passphrase && !existing.passphrase_id.is_empty() {
+        existing.passphrase_id.clone()
+    } else {
+        uuid::Uuid::new_v4().simple().to_string()
+    };
+
     let remote_dir = normalize_segment(input.remote_dir, &existing.remote_dir, DEFAULT_REMOTE_DIR)?;
     let profile = normalize_segment(input.profile, &existing.profile, DEFAULT_PROFILE)?;
 
@@ -285,6 +472,9 @@ pub fn merge_settings(
         server_url,
         username,
         password,
+        passphrase,
+        encrypt: input.encrypt,
+        passphrase_id,
         remote_dir,
         profile,
         auto_sync: input.auto_sync,
@@ -392,7 +582,10 @@ pub async fn upload_snapshot_core(
 
     let client = client_for(&settings)?;
     let dir = remote_dir_path(&settings)?;
-    let manifest = build_manifest(&bytes, app_version, counts.clone());
+    // What goes on the wire, which is also what the manifest's checksum has to
+    // cover — its job is catching a truncated transfer.
+    let (payload, encryption) = seal_for_upload(&settings, bytes).await?;
+    let manifest = build_manifest(&payload, app_version, counts.clone(), encryption);
     let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| {
         AppCommandError::task_execution_failed("Serialize manifest").with_detail(e.to_string())
     })?;
@@ -400,7 +593,9 @@ pub async fn upload_snapshot_core(
     let result = async {
         let _guard = remote_lock().lock().await;
         client.ensure_dir(&dir).await?;
-        client.put(&format!("{dir}/{CONFIG_FILE_NAME}"), bytes).await?;
+        client
+            .put(&format!("{dir}/{CONFIG_FILE_NAME}"), payload)
+            .await?;
         client
             .put(&format!("{dir}/{MANIFEST_FILE_NAME}"), manifest_bytes)
             .await?;
@@ -430,6 +625,70 @@ pub async fn upload_snapshot_core(
             Err(app_error)
         }
     }
+}
+
+/// Wrap the snapshot when encryption is on. Argon2 is deliberately expensive,
+/// so the derivation runs on a blocking thread rather than parking the runtime
+/// for ~100 ms on every upload.
+async fn seal_for_upload(
+    settings: &ConfigSyncSettings,
+    plain: Vec<u8>,
+) -> Result<(Vec<u8>, &'static str), AppCommandError> {
+    if !settings.encrypt {
+        return Ok((plain, ENCRYPTION_NONE));
+    }
+    let passphrase = settings.passphrase.clone();
+    let sealed = tokio::task::spawn_blocking(move || crypto::encrypt(&plain, &passphrase))
+        .await
+        .map_err(|e| {
+            AppCommandError::task_execution_failed("Encrypt snapshot").with_detail(e.to_string())
+        })??;
+    Ok((sealed, ENCRYPTION_AES_GCM))
+}
+
+/// The inverse. `manifest` says whether the bytes are wrapped — but it is only
+/// a second file on the same share, so whoever can replace the payload can
+/// replace the manifest too, checksum and all. It is therefore trusted to say
+/// "encrypted" and NOT trusted to say "plaintext": the local switch is the
+/// authority for the downgrade direction.
+async fn open_after_download(
+    manifest: &ConfigManifest,
+    settings: &ConfigSyncSettings,
+    payload: Vec<u8>,
+) -> Result<Vec<u8>, AppCommandError> {
+    if manifest.encryption != ENCRYPTION_AES_GCM {
+        // Without this, encryption protects nothing against the adversary it
+        // was added for. The share operator swaps in a plaintext snapshot of
+        // their choosing plus a manifest reading `encryption: "none"` with a
+        // matching SHA-256; every check above passes, and provider endpoints
+        // and API keys of their choosing land in the local database while the
+        // user's switch says "encrypted".
+        if settings.encrypt {
+            return Err(AppCommandError::invalid_input(
+                "The remote snapshot is not encrypted, but encryption is on for this machine",
+            )
+            .with_i18n(
+                crate::app_error::CONFIG_SYNC_I18N_KEY_NOT_ENCRYPTED,
+                BTreeMap::new(),
+            ));
+        }
+        return Ok(payload);
+    }
+    let value: serde_json::Value = serde_json::from_slice(&payload).map_err(|e| {
+        AppCommandError::invalid_input("Encrypted snapshot is not readable")
+            .with_detail(e.to_string())
+            .with_i18n(
+                crate::app_error::CONFIG_SYNC_I18N_KEY_INVALID_SNAPSHOT,
+                BTreeMap::new(),
+            )
+    })?;
+    let envelope = crypto::parse_envelope(value)?;
+    let passphrase = settings.passphrase.clone();
+    tokio::task::spawn_blocking(move || crypto::decrypt(&envelope, &passphrase))
+        .await
+        .map_err(|e| {
+            AppCommandError::task_execution_failed("Decrypt snapshot").with_detail(e.to_string())
+        })?
 }
 
 /// Fetch the remote pair, verify it, and apply it locally.
@@ -465,8 +724,11 @@ pub async fn download_and_apply_core(
     };
 
     let manifest = parse_manifest(&manifest_bytes)?;
-    // Checksum first: an interrupted upload must never reach the database.
+    // Checksum first: an interrupted upload must never reach the database — and
+    // it must not be handed to the decrypter either, where a truncated payload
+    // would come back as "wrong passphrase".
     validate_manifest(&manifest, &config_bytes)?;
+    let config_bytes = open_after_download(&manifest, &settings, config_bytes).await?;
     let snapshot = parse_snapshot(&config_bytes)?;
 
     // Hold the suppression guard across the apply. Applying rewrites local
@@ -516,6 +778,8 @@ mod tests {
             server_url: " https://dav.example.com/dav ".to_string(),
             username: " alice ".to_string(),
             password: Some("app-password".to_string()),
+            passphrase: None,
+            encrypt: false,
             remote_dir: Some("codeg".to_string()),
             profile: Some("work".to_string()),
             auto_sync: true,
@@ -678,6 +942,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_view_never_carries_the_password() {
+        let _guard = credentials::test_guard();
         let db = fresh_in_memory_db().await;
         let view = save_settings_core(&db.conn, input()).await.expect("save");
         assert!(view.has_password);
@@ -688,10 +953,392 @@ mod tests {
             "password leaked to the frontend: {serialized}"
         );
 
-        // And it round-trips through the database untouched.
+        // And it round-trips, untouched, from wherever it was put.
         let stored = load_settings(&db.conn).await;
         assert_eq!(stored.password, "app-password");
         assert_eq!(stored.profile, "work");
+    }
+
+    /// The settings row is plaintext in the SQLite file, and the SQLite file is
+    /// inside every backup archive. The credential has no business being in
+    /// either.
+    #[tokio::test]
+    async fn the_settings_row_holds_no_secret() {
+        let _guard = credentials::test_guard();
+        let db = fresh_in_memory_db().await;
+        save_settings_core(
+            &db.conn,
+            ConfigSyncSettingsInput {
+                passphrase: Some("snapshot-passphrase".to_string()),
+                encrypt: true,
+                ..input()
+            },
+        )
+        .await
+        .expect("save");
+
+        let row = app_metadata_service::get_value(&db.conn, CONFIG_SYNC_SETTINGS_KEY)
+            .await
+            .expect("read row")
+            .expect("row exists");
+        assert!(!row.contains("app-password"), "{row}");
+        assert!(!row.contains("snapshot-passphrase"), "{row}");
+        // The non-secret half is still there, or the settings page would come
+        // back blank.
+        assert!(row.contains("dav.example.com"), "{row}");
+
+        let loaded = load_settings(&db.conn).await;
+        assert_eq!(loaded.password, "app-password");
+        assert_eq!(loaded.passphrase, "snapshot-passphrase");
+    }
+
+    /// Upgrading must not log the user out of their own WebDAV share: a row
+    /// written by the build that stored the password inline is read once, moved
+    /// into the keyring, and erased.
+    #[tokio::test]
+    async fn a_password_written_by_an_older_build_is_migrated_out_of_the_row() {
+        let _guard = credentials::test_guard();
+        credentials::store(WEBDAV_PASSWORD, "").expect("start clean");
+        let db = fresh_in_memory_db().await;
+        app_metadata_service::upsert_value(
+            &db.conn,
+            CONFIG_SYNC_SETTINGS_KEY,
+            r#"{"enabled":true,"serverUrl":"https://dav.example.com/dav","username":"alice","password":"legacy-secret","remoteDir":"codeg","profile":"work","autoSync":true,"intervalMinutes":5}"#,
+        )
+        .await
+        .expect("seed legacy row");
+
+        let loaded = load_settings(&db.conn).await;
+        assert_eq!(loaded.password, "legacy-secret");
+        assert_eq!(credentials::load(WEBDAV_PASSWORD), "legacy-secret");
+
+        let row = app_metadata_service::get_value(&db.conn, CONFIG_SYNC_SETTINGS_KEY)
+            .await
+            .expect("read row")
+            .expect("row exists");
+        assert!(!row.contains("legacy-secret"), "still in the row: {row}");
+
+        // Idempotent: a second load reads the keyring copy and changes nothing.
+        assert_eq!(load_settings(&db.conn).await.password, "legacy-secret");
+        credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
+    }
+
+    /// The migration is two writes, and the second one can fail: the keyring
+    /// takes the secret, then the row rewrite loses to a busy database. That
+    /// leaves the state this test seeds — keyring populated, plaintext STILL in
+    /// the row — and the next load has to finish the job.
+    ///
+    /// Keying the retry off "the keyring is empty" would skip it forever here,
+    /// and the plaintext would stay in `app_metadata` (and in every backup
+    /// archive taken from it) for the life of the install.
+    #[tokio::test]
+    async fn an_interrupted_migration_is_finished_by_the_next_load() {
+        let _guard = credentials::test_guard();
+        credentials::store(WEBDAV_PASSWORD, "legacy-secret").expect("keyring half succeeded");
+        let db = fresh_in_memory_db().await;
+        app_metadata_service::upsert_value(
+            &db.conn,
+            CONFIG_SYNC_SETTINGS_KEY,
+            r#"{"enabled":true,"serverUrl":"https://dav.example.com/dav","username":"alice","password":"legacy-secret","remoteDir":"codeg","profile":"work","autoSync":true,"intervalMinutes":5}"#,
+        )
+        .await
+        .expect("seed half-migrated row");
+
+        assert_eq!(load_settings(&db.conn).await.password, "legacy-secret");
+
+        let row = app_metadata_service::get_value(&db.conn, CONFIG_SYNC_SETTINGS_KEY)
+            .await
+            .expect("read row")
+            .expect("row exists");
+        assert!(
+            !row.contains("legacy-secret"),
+            "a half-finished migration was never retried: {row}"
+        );
+        credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
+    }
+
+    /// The migration rewrites the row, and the row is shared: a save that lands
+    /// between this load's read and its write must survive, and so must fields
+    /// a NEWER build wrote that this one cannot parse. Both are the same
+    /// property — the migration removes one key rather than serializing its own
+    /// idea of the settings over the top — and the unknown field is the half
+    /// that can be pinned down without racing anything.
+    ///
+    /// Serializing the parsed struct back would drop `futureField` here, and in
+    /// the racing case would pair the OLD server URL with the NEW password the
+    /// keyring just took: the exact combination `merge_settings` refuses to
+    /// create, arrived at behind its back.
+    #[tokio::test]
+    async fn the_migration_removes_the_password_and_nothing_else() {
+        let _guard = credentials::test_guard();
+        credentials::store(WEBDAV_PASSWORD, "").expect("start clean");
+        let db = fresh_in_memory_db().await;
+        app_metadata_service::upsert_value(
+            &db.conn,
+            CONFIG_SYNC_SETTINGS_KEY,
+            r#"{"enabled":true,"serverUrl":"https://dav.example.com/dav","username":"alice","password":"legacy-secret","remoteDir":"codeg","profile":"work","autoSync":true,"intervalMinutes":5,"futureField":"written by a newer build"}"#,
+        )
+        .await
+        .expect("seed a row this build does not fully understand");
+
+        assert_eq!(load_settings(&db.conn).await.password, "legacy-secret");
+
+        let row = app_metadata_service::get_value(&db.conn, CONFIG_SYNC_SETTINGS_KEY)
+            .await
+            .expect("read row")
+            .expect("row exists");
+        assert!(!row.contains("legacy-secret"), "the password must be gone: {row}");
+        assert!(
+            row.contains("written by a newer build"),
+            "the migration overwrote a field it does not own: {row}"
+        );
+        credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
+    }
+
+    /// A keyring that will not open reads back as "no secret", and a save is a
+    /// read-modify-write: without a guard, changing the sync interval would
+    /// hand `""` to the credential store, which means DELETE. The passphrase
+    /// protecting the copy already on the remote would go with it, and no
+    /// retry brings it back.
+    #[tokio::test]
+    async fn an_unreadable_credential_store_refuses_the_save_instead_of_erasing_it() {
+        let _guard = credentials::test_guard();
+        let db = fresh_in_memory_db().await;
+        credentials::store(WEBDAV_PASSWORD, "app-password").expect("seed");
+        credentials::store(SNAPSHOT_PASSPHRASE, "hunter2").expect("seed");
+
+        let err = {
+            let _unreadable = credentials::unreadable_store();
+            save_settings_core(&db.conn, input())
+                .await
+                .expect_err("a save that cannot read the store must not write to it")
+        };
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_CREDENTIALS_UNREADABLE)
+        );
+
+        // Both secrets are still there once the store opens again.
+        assert_eq!(credentials::load(WEBDAV_PASSWORD), "app-password");
+        assert_eq!(credentials::load(SNAPSHOT_PASSPHRASE), "hunter2");
+
+        credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
+        credentials::store(SNAPSHOT_PASSPHRASE, "").expect("clean up");
+    }
+
+    /// And when the two copies disagree — the user re-saved a new password
+    /// after a partial migration — the keyring is the one every save writes to,
+    /// so it wins and the stale row copy is erased rather than resurrected.
+    #[tokio::test]
+    async fn the_keyring_copy_wins_over_a_stale_row_copy() {
+        let _guard = credentials::test_guard();
+        credentials::store(WEBDAV_PASSWORD, "current").expect("store");
+        let db = fresh_in_memory_db().await;
+        app_metadata_service::upsert_value(
+            &db.conn,
+            CONFIG_SYNC_SETTINGS_KEY,
+            r#"{"enabled":true,"serverUrl":"https://dav.example.com/dav","username":"alice","password":"outdated","remoteDir":"codeg","profile":"work","autoSync":true,"intervalMinutes":5}"#,
+        )
+        .await
+        .expect("seed row");
+
+        assert_eq!(load_settings(&db.conn).await.password, "current");
+        let row = app_metadata_service::get_value(&db.conn, CONFIG_SYNC_SETTINGS_KEY)
+            .await
+            .expect("read row")
+            .expect("row exists");
+        assert!(!row.contains("outdated"), "{row}");
+        credentials::store(WEBDAV_PASSWORD, "").expect("clean up");
+    }
+
+    /// Switching encryption on leaves the PLAINTEXT snapshot byte-identical, so
+    /// the hash alone would say "already uploaded" and the remote would keep
+    /// its unencrypted copy — the user would have turned on a protection that
+    /// never reached the server. Same shape as the retarget bug, same fix: the
+    /// baseline records what it was uploaded under.
+    #[test]
+    fn turning_encryption_on_or_rekeying_invalidates_the_upload_baseline() {
+        let plain = ConfigSyncSettings {
+            server_url: "https://dav.example.com/dav".to_string(),
+            ..Default::default()
+        };
+        let encrypted = merge_settings(
+            &plain,
+            ConfigSyncSettingsInput {
+                encrypt: true,
+                passphrase: Some("first".to_string()),
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_ne!(plain.remote_target(), encrypted.remote_target());
+
+        let rekeyed = merge_settings(
+            &encrypted,
+            ConfigSyncSettingsInput {
+                encrypt: true,
+                passphrase: Some("second".to_string()),
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_ne!(
+            encrypted.remote_target(),
+            rekeyed.remote_target(),
+            "a re-key leaves the remote unreadable; it must force a re-upload"
+        );
+
+        // Saving again without retyping the passphrase is not a re-key, and
+        // must NOT cost an upload every time the settings page is saved.
+        let resaved = merge_settings(
+            &rekeyed,
+            ConfigSyncSettingsInput {
+                encrypt: true,
+                passphrase: None,
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_eq!(rekeyed.remote_target(), resaved.remote_target());
+    }
+
+    #[test]
+    fn encryption_without_a_passphrase_is_refused_instead_of_failing_every_tick() {
+        let err = merge_settings(
+            &ConfigSyncSettings::default(),
+            ConfigSyncSettingsInput {
+                encrypt: true,
+                passphrase: None,
+                ..input()
+            },
+        )
+        .expect_err("must refuse");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_PASSPHRASE_REQUIRED)
+        );
+    }
+
+    /// The passphrase is not scoped to the account the way the password is, and
+    /// it outlives the switch: an encrypted snapshot already on the remote has
+    /// to stay readable after a user turns encryption off.
+    #[test]
+    fn the_passphrase_survives_a_host_change_and_the_switch_going_off() {
+        let stored_with_passphrase = ConfigSyncSettings {
+            passphrase: "kept".to_string(),
+            encrypt: true,
+            passphrase_id: "id".to_string(),
+            ..stored()
+        };
+
+        let moved = merge_settings(
+            &stored_with_passphrase,
+            ConfigSyncSettingsInput {
+                password: Some("new".to_string()),
+                server_url: "https://dav.other.example/dav".to_string(),
+                encrypt: true,
+                passphrase: None,
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_eq!(moved.passphrase, "kept");
+
+        let switched_off = merge_settings(
+            &stored_with_passphrase,
+            ConfigSyncSettingsInput {
+                encrypt: false,
+                passphrase: None,
+                ..input()
+            },
+        )
+        .expect("merge");
+        assert_eq!(switched_off.passphrase, "kept");
+        assert!(!switched_off.encrypt);
+    }
+
+    /// The manifest is the authority on whether the payload is wrapped, and it
+    /// stays plaintext so "whose copy, from when" is readable without the
+    /// passphrase. The payload itself must not be.
+    #[tokio::test]
+    async fn an_encrypted_upload_is_unreadable_but_its_manifest_is_not() {
+        let db = fresh_in_memory_db().await;
+        let snapshot = collect_snapshot_core(&db.conn).await.expect("collect");
+        let plain = serialize_snapshot(&snapshot).expect("bytes");
+
+        let settings = ConfigSyncSettings {
+            encrypt: true,
+            passphrase: "hunter2".to_string(),
+            ..Default::default()
+        };
+        let (payload, encryption) = seal_for_upload(&settings, plain.clone())
+            .await
+            .expect("seal");
+        assert_eq!(encryption, ENCRYPTION_AES_GCM);
+        assert_ne!(payload, plain);
+
+        let manifest = build_manifest(&payload, "1.0.0", snapshot.counts(), encryption);
+        // The checksum has to cover the transferred bytes, or a truncated
+        // ciphertext would read as a wrong passphrase.
+        validate_manifest(&manifest, &payload).expect("manifest matches the ciphertext");
+        let manifest_json = serde_json::to_string(&manifest).expect("json");
+        assert!(manifest_json.contains("aes-256-gcm"), "{manifest_json}");
+
+        let opened = open_after_download(&manifest, &settings, payload.clone())
+            .await
+            .expect("open");
+        assert_eq!(opened, plain);
+
+        // A machine without the passphrase gets told so, rather than being
+        // handed nonsense to parse.
+        let bare = ConfigSyncSettings::default();
+        let err = open_after_download(&manifest, &bare, payload)
+            .await
+            .expect_err("must refuse");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_PASSPHRASE_REQUIRED)
+        );
+    }
+
+    /// The manifest is a second file on the same share, not a signature: the
+    /// party this feature encrypts AGAINST can rewrite it. So it may be
+    /// believed when it says "encrypted" and not when it says "plaintext" —
+    /// otherwise a two-file swap (attacker's snapshot + `encryption: "none"` +
+    /// the matching checksum) walks straight past every check and writes
+    /// provider endpoints and API keys into the local database.
+    #[tokio::test]
+    async fn a_manifest_cannot_switch_encryption_off() {
+        let db = fresh_in_memory_db().await;
+        let snapshot = collect_snapshot_core(&db.conn).await.expect("collect");
+        let forged = serialize_snapshot(&snapshot).expect("bytes");
+        // Forged end to end: the checksum is over the attacker's own bytes, so
+        // `validate_manifest` has nothing to object to.
+        let manifest = build_manifest(&forged, "1.0.0", snapshot.counts(), ENCRYPTION_NONE);
+        validate_manifest(&manifest, &forged).expect("a forgery is self-consistent");
+
+        let protected = ConfigSyncSettings {
+            encrypt: true,
+            passphrase: "hunter2".to_string(),
+            ..Default::default()
+        };
+        let err = open_after_download(&manifest, &protected, forged.clone())
+            .await
+            .expect_err("a downgrade must not be applied");
+        assert_eq!(
+            err.i18n_key.as_deref(),
+            Some(crate::app_error::CONFIG_SYNC_I18N_KEY_NOT_ENCRYPTED)
+        );
+
+        // And the same pair is still accepted by a machine that never asked for
+        // encryption — the refusal is the user's switch, not a format rule.
+        let plain = ConfigSyncSettings::default();
+        assert_eq!(
+            open_after_download(&manifest, &plain, forged.clone())
+                .await
+                .expect("plaintext sync still works"),
+            forged
+        );
     }
 
     /// Seed "this exact configuration is already on the currently configured
@@ -780,6 +1427,7 @@ mod tests {
     /// baseline has no such window.
     #[tokio::test]
     async fn a_baseline_does_not_carry_over_to_a_new_remote() {
+        let _guard = credentials::test_guard();
         let db = fresh_in_memory_db().await;
         save_settings_core(&db.conn, input()).await.expect("save");
         let hash = seed_uploaded_baseline(&db).await;

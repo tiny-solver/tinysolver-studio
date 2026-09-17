@@ -96,6 +96,24 @@ pub const CONFIG_SYNC_I18N_KEY_QUOTA: &str = "configSync.error.quota";
 pub const CONFIG_SYNC_I18N_KEY_NETWORK: &str = "configSync.error.network";
 /// The server answered with an unexpected status. Params: `status`.
 pub const CONFIG_SYNC_I18N_KEY_SERVER: &str = "configSync.error.server";
+/// The snapshot is encrypted but no passphrase is stored on this machine.
+pub const CONFIG_SYNC_I18N_KEY_PASSPHRASE_REQUIRED: &str = "configSync.error.passphraseRequired";
+/// The stored passphrase did not decrypt the snapshot (or its bytes are
+/// corrupt — GCM cannot tell those apart, and neither can we).
+pub const CONFIG_SYNC_I18N_KEY_BAD_PASSPHRASE: &str = "configSync.error.badPassphrase";
+/// A domain payload inside an otherwise well-formed snapshot does not decode.
+/// Params: `domain`.
+pub const CONFIG_SYNC_I18N_KEY_BAD_DOMAIN: &str = "configSync.error.badDomain";
+/// The named rollback snapshot is not on this machine (pruned, or a stale id
+/// from a list the UI has not refreshed).
+pub const CONFIG_SYNC_I18N_KEY_NO_ROLLBACK: &str = "configSync.error.noRollback";
+/// The OS keyring (or the server's token file) would not open, so the stored
+/// credentials can be neither read nor safely rewritten.
+pub const CONFIG_SYNC_I18N_KEY_CREDENTIALS_UNREADABLE: &str =
+    "configSync.error.credentialsUnreadable";
+/// Encryption is on locally but the remote copy is not encrypted. Accepting it
+/// would let anyone who can write to the share undo the setting.
+pub const CONFIG_SYNC_I18N_KEY_NOT_ENCRYPTED: &str = "configSync.error.notEncrypted";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

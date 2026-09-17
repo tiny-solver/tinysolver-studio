@@ -9,6 +9,8 @@ import {
   Loader2,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
+  Undo2,
   X,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -39,14 +41,14 @@ import {
   toLocalizedErrorMessage,
   type AppErrorTranslator,
 } from "@/lib/app-error"
-import { isDesktop } from "@/lib/platform"
-import { getActiveRemoteConnectionId } from "@/lib/transport"
 import {
+  applyConfigRollback,
   downloadAndApplyConfig,
   exportConfigToFile,
   getConfigSyncSettings,
   getConfigSyncState,
-  importConfigFromFile,
+  importPickedConfig,
+  listConfigRollbacks,
   listenConfigSyncStatus,
   peekRemoteConfig,
   pickConfigFileToImport,
@@ -54,10 +56,11 @@ import {
   testConfigSyncConnection,
   updateConfigSyncSettings,
   uploadConfigNow,
-  type ConfigImportPreview,
   type ConfigManifest,
   type ConfigSyncSettingsInput,
   type DomainCounts,
+  type PickedConfigImport,
+  type RollbackSnapshot,
 } from "@/lib/config-sync"
 
 /** Fixed choices instead of a free number field: the interval only has to be
@@ -104,8 +107,6 @@ function presetFromUrl(url: string): PresetId {
   return "custom"
 }
 
-type PendingImport = { path: string; preview: ConfigImportPreview }
-
 function formatTimestamp(value: string | null): string | null {
   if (!value) return null
   const parsed = new Date(value)
@@ -122,10 +123,6 @@ export function ConfigSyncSettings() {
       toLocalizedErrorMessage(err, tRoot as unknown as AppErrorTranslator),
     [tRoot]
   )
-
-  // Native dialogs plus Tauri-only commands: a remote-desktop window points at
-  // another machine's server, where neither applies.
-  const desktop = isDesktop() && getActiveRemoteConnectionId() === null
 
   const [loaded, setLoaded] = useState(false)
   const [enabled, setEnabled] = useState(false)
@@ -144,6 +141,11 @@ export function ConfigSyncSettings() {
     serverUrl: "",
     username: "",
   })
+  // Encryption is opt-in: the default boundary is the user's own authenticated
+  // endpoint, which is a real one for a share they host themselves.
+  const [encrypt, setEncrypt] = useState(false)
+  const [passphrase, setPassphrase] = useState("")
+  const [hasPassphrase, setHasPassphrase] = useState(false)
   const [remoteDir, setRemoteDir] = useState("codeg")
   const [profile, setProfile] = useState("default")
   const [autoSync, setAutoSync] = useState(true)
@@ -153,13 +155,25 @@ export function ConfigSyncSettings() {
   const [lastError, setLastError] = useState<string | null>(null)
 
   const [busy, setBusy] = useState<
-    null | "save" | "test" | "upload" | "download" | "export" | "import"
+    | null
+    | "save"
+    | "test"
+    | "upload"
+    | "download"
+    | "export"
+    | "import"
+    | "rollback"
   >(null)
-  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
+  const [pendingImport, setPendingImport] = useState<PickedConfigImport | null>(
+    null
+  )
   const [remoteManifest, setRemoteManifest] = useState<ConfigManifest | null>(
     null
   )
   const [restoreOpen, setRestoreOpen] = useState(false)
+  const [rollbacks, setRollbacks] = useState<RollbackSnapshot[]>([])
+  const [pendingRollback, setPendingRollback] =
+    useState<RollbackSnapshot | null>(null)
 
   // Guards against a late `setState` when the settings page unmounts during a
   // slow WebDAV round-trip.
@@ -171,14 +185,27 @@ export function ConfigSyncSettings() {
     }
   }, [])
 
+  /** Refreshed after anything that writes one, so the undo list is never a
+   *  snapshot of the panel's first paint. */
+  const refreshRollbacks = useCallback(async () => {
+    try {
+      const listed = await listConfigRollbacks()
+      if (mounted.current) setRollbacks(listed)
+    } catch (err) {
+      // A missing or unreadable snapshot directory is not worth a toast: the
+      // section simply does not appear.
+      console.error("[config-sync] failed to list rollback snapshots", err)
+    }
+  }, [])
+
   useEffect(() => {
-    if (!desktop) return
     let cancelled = false
     void (async () => {
       try {
         const [settings, state] = await Promise.all([
           getConfigSyncSettings(),
           getConfigSyncState(),
+          refreshRollbacks(),
         ])
         if (cancelled) return
         setEnabled(settings.enabled)
@@ -190,6 +217,8 @@ export function ConfigSyncSettings() {
           serverUrl: settings.serverUrl,
           username: settings.username,
         })
+        setEncrypt(settings.encrypt)
+        setHasPassphrase(settings.hasPassphrase)
         setRemoteDir(settings.remoteDir)
         setProfile(settings.profile)
         setAutoSync(settings.autoSync)
@@ -205,12 +234,11 @@ export function ConfigSyncSettings() {
     return () => {
       cancelled = true
     }
-  }, [desktop])
+  }, [refreshRollbacks])
 
   // The background uploader reports here; without this the panel would show a
   // stale "last synced" until the page is reopened.
   useEffect(() => {
-    if (!desktop) return
     let unlisten: (() => void) | null = null
     let disposed = false
     void listenConfigSyncStatus((event) => {
@@ -224,7 +252,7 @@ export function ConfigSyncSettings() {
       disposed = true
       unlisten?.()
     }
-  }, [desktop])
+  }, [])
 
   const currentInput = useCallback(
     (
@@ -234,6 +262,8 @@ export function ConfigSyncSettings() {
       serverUrl: serverUrl.trim(),
       username: username.trim(),
       password: password.length > 0 ? password : null,
+      passphrase: passphrase.length > 0 ? passphrase : null,
+      encrypt,
       remoteDir: remoteDir.trim(),
       profile: profile.trim(),
       autoSync,
@@ -245,6 +275,8 @@ export function ConfigSyncSettings() {
       serverUrl,
       username,
       password,
+      passphrase,
+      encrypt,
       remoteDir,
       profile,
       autoSync,
@@ -258,6 +290,7 @@ export function ConfigSyncSettings() {
       const saved = await updateConfigSyncSettings(currentInput())
       if (!mounted.current) return
       setHasPassword(saved.hasPassword)
+      setHasPassphrase(saved.hasPassphrase)
       setSavedAccount({
         serverUrl: saved.serverUrl,
         username: saved.username,
@@ -265,9 +298,10 @@ export function ConfigSyncSettings() {
       setRemoteDir(saved.remoteDir)
       setProfile(saved.profile)
       setIntervalMinutes(saved.intervalMinutes)
-      // Clear the field once it is stored, so a second save does not re-send
-      // a value the user cannot see.
+      // Clear the fields once they are stored, so a second save does not
+      // re-send values the user cannot see.
       setPassword("")
+      setPassphrase("")
       toast.success(t("saved"))
     } catch (err) {
       toast.error(localize(err))
@@ -294,11 +328,13 @@ export function ConfigSyncSettings() {
         )
         if (!mounted.current) return
         setHasPassword(saved.hasPassword)
+        setHasPassphrase(saved.hasPassphrase)
         setSavedAccount({
           serverUrl: saved.serverUrl,
           username: saved.username,
         })
         setPassword("")
+        setPassphrase("")
       } catch (err) {
         if (mounted.current) setEnabled(previous)
         toast.error(localize(err))
@@ -370,12 +406,14 @@ export function ConfigSyncSettings() {
       toast.success(t("restored", { count: outcome.applied.total }), {
         description: t("restartHint"),
       })
+      // A restore just wrote a rollback point; the undo list has to show it.
+      await refreshRollbacks()
     } catch (err) {
       toast.error(localize(err))
     } finally {
       if (mounted.current) setBusy(null)
     }
-  }, [localize, t])
+  }, [localize, refreshRollbacks, t])
 
   const handleExport = useCallback(async () => {
     setBusy("export")
@@ -404,24 +442,52 @@ export function ConfigSyncSettings() {
 
   const handleConfirmImport = useCallback(async () => {
     if (!pendingImport) return
-    const path = pendingImport.path
+    const source = pendingImport.source
     setPendingImport(null)
     setBusy("import")
     try {
-      const result = await importConfigFromFile(path)
+      const result = await importPickedConfig(source)
       if (mounted.current) {
         toast.success(t("imported", { count: result.applied.total }), {
           description: t("restartHint"),
         })
       }
+      await refreshRollbacks()
     } catch (err) {
       toast.error(localize(err))
     } finally {
       if (mounted.current) setBusy(null)
     }
-  }, [pendingImport, localize, t])
+  }, [pendingImport, localize, refreshRollbacks, t])
 
-  if (!desktop) return null
+  /**
+   * Undo an import or a restore. The backend captures the pre-apply state
+   * every time either one runs; without this the snapshots were written,
+   * pruned, and never reachable from the product.
+   */
+  const handleConfirmRollback = useCallback(async () => {
+    if (!pendingRollback) return
+    const id = pendingRollback.id
+    setPendingRollback(null)
+    setBusy("rollback")
+    try {
+      const result = await applyConfigRollback(id)
+      if (mounted.current) {
+        toast.success(t("rolledBack", { count: result.applied.total }), {
+          description: t("restartHint"),
+        })
+      }
+      // The undo wrote its own rollback point, so it is itself undoable.
+      await refreshRollbacks()
+    } catch (err) {
+      toast.error(localize(err))
+      // A snapshot that has since been pruned must disappear from the list
+      // rather than stay there offering a button that fails.
+      await refreshRollbacks()
+    } finally {
+      if (mounted.current) setBusy(null)
+    }
+  }, [pendingRollback, localize, refreshRollbacks, t])
 
   const syncedLabel = formatTimestamp(lastSyncAt)
   // Only the hosted services need a setup note; "custom" has nothing to say.
@@ -517,13 +583,59 @@ export function ConfigSyncSettings() {
         <p className="text-2xs text-muted-foreground">{t("fileHint")}</p>
       </div>
 
+      {/* Only once there is something to undo — an empty list is noise. */}
+      {rollbacks.length > 0 ? (
+        <div className="space-y-2 border-t pt-4">
+          <Label className="text-xs font-medium text-muted-foreground">
+            {t("rollbackTitle")}
+          </Label>
+          <p className="text-2xs text-muted-foreground">{t("rollbackHint")}</p>
+          <ul className="space-y-1">
+            {rollbacks.map((snapshot) => (
+              <li
+                key={snapshot.id}
+                className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2"
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <p className="truncate text-2xs">
+                    {formatTimestamp(snapshot.createdAt) ??
+                      t("rollbackUnknownTime")}
+                  </p>
+                  <CountsSummary counts={snapshot.counts} />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setPendingRollback(snapshot)}
+                  disabled={busy !== null}
+                >
+                  {busy === "rollback" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Undo2 className="h-4 w-4" />
+                  )}
+                  {t("rollbackAction")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="border-t pt-4 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <Label className="text-xs font-medium">{t("webdavTitle")}</Label>
+            <Label
+              htmlFor="config-sync-enabled"
+              className="text-xs font-medium"
+            >
+              {t("webdavTitle")}
+            </Label>
             <p className="text-2xs text-muted-foreground">{t("webdavHint")}</p>
           </div>
           <Switch
+            id="config-sync-enabled"
             checked={enabled}
             onCheckedChange={(next) => void handleToggleEnabled(next)}
             disabled={!loaded || busy !== null}
@@ -651,7 +763,56 @@ export function ConfigSyncSettings() {
 
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <Label className="text-xs font-medium">
+                <Label
+                  htmlFor="config-sync-encrypt"
+                  className="text-xs font-medium"
+                >
+                  {t("encryptLabel")}
+                </Label>
+                <p className="text-2xs text-muted-foreground">
+                  {t("encryptHint")}
+                </p>
+              </div>
+              <Switch
+                id="config-sync-encrypt"
+                checked={encrypt}
+                onCheckedChange={setEncrypt}
+                disabled={busy !== null}
+              />
+            </div>
+
+            {encrypt ? (
+              <div className="space-y-2">
+                <Label
+                  htmlFor="config-sync-passphrase"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  {t("passphrase")}
+                </Label>
+                <Input
+                  id="config-sync-passphrase"
+                  type="password"
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  placeholder={
+                    hasPassphrase
+                      ? t("passphraseKeep")
+                      : t("passphrasePlaceholder")
+                  }
+                  autoComplete="new-password"
+                />
+                <p className="text-2xs text-muted-foreground">
+                  {t("passphraseHint")}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <Label
+                  htmlFor="config-sync-auto"
+                  className="text-xs font-medium"
+                >
                   {t("autoSyncLabel")}
                 </Label>
                 <p className="text-2xs text-muted-foreground">
@@ -659,6 +820,7 @@ export function ConfigSyncSettings() {
                 </p>
               </div>
               <Switch
+                id="config-sync-auto"
                 checked={autoSync}
                 onCheckedChange={setAutoSync}
                 disabled={busy !== null}
@@ -751,12 +913,23 @@ export function ConfigSyncSettings() {
               {remoteBusy ? <p>{t("working")}</p> : null}
             </div>
 
-            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-              <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" />
-              <p className="text-2xs text-muted-foreground leading-5">
-                {t("plaintextWarning")}
-              </p>
-            </div>
+            {/* The warning has to stop saying "plaintext" the moment it stops
+                being true, or it trains the user to ignore it. */}
+            {encrypt ? (
+              <div className="flex items-start gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+                <p className="text-2xs text-muted-foreground leading-5">
+                  {t("encryptedNotice")}
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-2xs text-muted-foreground leading-5">
+                  {t("plaintextWarning")}
+                </p>
+              </div>
+            )}
           </div>
         ) : null}
       </div>
@@ -792,6 +965,45 @@ export function ConfigSyncSettings() {
               }}
             >
               {t("importConfirmAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingRollback !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRollback(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("rollbackConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  {t("rollbackConfirmBody", {
+                    time:
+                      formatTimestamp(pendingRollback?.createdAt ?? null) ??
+                      t("rollbackUnknownTime"),
+                  })}
+                </p>
+                {pendingRollback ? (
+                  <CountsSummary counts={pendingRollback.counts} />
+                ) : null}
+                <p>{t("restartHint")}</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmRollback()
+              }}
+            >
+              {t("rollbackConfirmAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { NextIntlClientProvider } from "next-intl"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// Flipped per-test: the panel is desktop-only and must disappear entirely on
-// web / remote-desktop rather than render disabled controls.
+// Flipped per-test. The panel itself is runtime-agnostic now — only the file
+// picker underneath it differs — so these decide which branch of
+// `@/lib/config-sync` the (unmocked) helpers would take, not whether the
+// section renders at all.
 const env = vi.hoisted(() => ({
   desktop: true,
   remoteId: null as string | null,
@@ -41,7 +43,9 @@ vi.mock("@/lib/config-sync", async () => {
     downloadAndApplyConfig: vi.fn(),
     exportConfigToFile: vi.fn(),
     pickConfigFileToImport: vi.fn(),
-    importConfigFromFile: vi.fn(),
+    importPickedConfig: vi.fn(),
+    listConfigRollbacks: vi.fn(),
+    applyConfigRollback: vi.fn(),
     listenConfigSyncStatus: vi.fn(async (handler: (e: unknown) => void) => {
       statusHandler = handler
       return () => {}
@@ -62,10 +66,12 @@ vi.mock("sonner", () => ({
 import { ConfigSyncSettings } from "./config-sync-settings"
 import enMessages from "@/i18n/messages/en.json"
 import {
+  applyConfigRollback,
   downloadAndApplyConfig,
   getConfigSyncSettings,
   getConfigSyncState,
-  importConfigFromFile,
+  importPickedConfig,
+  listConfigRollbacks,
   peekRemoteConfig,
   pickConfigFileToImport,
   updateConfigSyncSettings,
@@ -78,10 +84,24 @@ const SAVED = {
   serverUrl: "https://dav.example.com/dav/",
   username: "alice",
   hasPassword: true,
+  encrypt: false,
+  hasPassphrase: false,
   remoteDir: "codeg",
   profile: "default",
   autoSync: true,
   intervalMinutes: 5,
+}
+
+/** The shape `pickConfigFileToImport` returns on a local desktop. */
+function pickedPath(counts: Record<string, number> = { modelProviders: 3 }) {
+  return {
+    source: {
+      kind: "path" as const,
+      path: "/tmp/config.json",
+      label: "/tmp/config.json",
+    },
+    preview: { manifest: manifest(), counts },
+  }
 }
 
 function manifest(overrides: Record<string, unknown> = {}) {
@@ -125,20 +145,25 @@ beforeEach(() => {
     lastError: null,
   })
   vi.mocked(updateConfigSyncSettings).mockResolvedValue({ ...SAVED })
+  vi.mocked(listConfigRollbacks).mockResolvedValue([])
 })
 
 describe("ConfigSyncSettings — availability", () => {
-  it("renders nothing on web", () => {
+  /// Regression: the panel used to `return null` for anything but a local
+  /// desktop window, because the commands were registered on the Tauri
+  /// runtime only. They exist on the HTTP API now, and a browser pointed at a
+  /// codeg-server has exactly the same configuration worth syncing.
+  it("renders in a browser, where the commands now exist too", async () => {
     env.desktop = false
-    const { container } = renderPanel()
-    expect(container).toBeEmptyDOMElement()
-    expect(getConfigSyncSettings).not.toHaveBeenCalled()
+    renderPanel()
+    await screen.findByRole("button", { name: t.saveButton })
+    expect(getConfigSyncSettings).toHaveBeenCalled()
   })
 
-  it("renders nothing for a remote-desktop window", () => {
+  it("renders for a remote-desktop window", async () => {
     env.remoteId = "remote-1"
-    const { container } = renderPanel()
-    expect(container).toBeEmptyDOMElement()
+    renderPanel()
+    await screen.findByRole("button", { name: t.saveButton })
   })
 
   it("shows the file actions even before WebDAV is set up", async () => {
@@ -190,8 +215,7 @@ describe("ConfigSyncSettings — credentials", () => {
       enabled: false,
     })
     await renderLoaded()
-    // The master switch is the first one; the second is "upload automatically".
-    fireEvent.click(screen.getAllByRole("switch")[0])
+    fireEvent.click(screen.getByRole("switch", { name: t.webdavTitle }))
     await waitFor(() => expect(updateConfigSyncSettings).toHaveBeenCalled())
     expect(vi.mocked(updateConfigSyncSettings).mock.calls[0][0]).toMatchObject({
       enabled: false,
@@ -268,18 +292,16 @@ describe("ConfigSyncSettings — restore from remote", () => {
 
 describe("ConfigSyncSettings — file import", () => {
   it("previews the file and applies it only after confirmation", async () => {
-    vi.mocked(pickConfigFileToImport).mockResolvedValue({
-      path: "/tmp/config.json",
-      preview: { manifest: manifest(), counts: { modelProviders: 3 } },
-    })
-    vi.mocked(importConfigFromFile).mockResolvedValue({
+    const picked = pickedPath()
+    vi.mocked(pickConfigFileToImport).mockResolvedValue(picked)
+    vi.mocked(importPickedConfig).mockResolvedValue({
       applied: { domains: { modelProviders: 3 }, total: 3 },
       rollbackPath: null,
     })
     await renderLoaded()
     fireEvent.click(screen.getByRole("button", { name: t.importButton }))
     await screen.findByText(t.importConfirmTitle)
-    expect(importConfigFromFile).not.toHaveBeenCalled()
+    expect(importPickedConfig).not.toHaveBeenCalled()
 
     // Regression: the confirm button used to be gated on a `preview.importable`
     // field the backend never sends, so it was `undefined` on every real file
@@ -290,14 +312,40 @@ describe("ConfigSyncSettings — file import", () => {
     expect(confirm).toBeEnabled()
     fireEvent.click(confirm)
     await waitFor(() =>
-      expect(importConfigFromFile).toHaveBeenCalledWith("/tmp/config.json")
+      expect(importPickedConfig).toHaveBeenCalledWith(picked.source)
+    )
+  })
+
+  /// The browser has no path to hand over, so the picker returns the bytes.
+  /// The panel must pass whichever it was given straight back, untouched.
+  it("imports a browser-picked file by content, not by path", async () => {
+    env.desktop = false
+    const picked = {
+      source: {
+        kind: "content" as const,
+        content: '{"schemaVersion":1,"domains":{}}',
+        label: "codeg-config.json",
+      },
+      preview: { manifest: manifest(), counts: { quickMessages: 1 } },
+    }
+    vi.mocked(pickConfigFileToImport).mockResolvedValue(picked)
+    vi.mocked(importPickedConfig).mockResolvedValue({
+      applied: { domains: { quickMessages: 1 }, total: 1 },
+      rollbackPath: null,
+    })
+    await renderLoaded()
+    fireEvent.click(screen.getByRole("button", { name: t.importButton }))
+    await screen.findByText(t.importConfirmTitle)
+    fireEvent.click(screen.getByRole("button", { name: t.importConfirmAction }))
+    await waitFor(() =>
+      expect(importPickedConfig).toHaveBeenCalledWith(picked.source)
     )
   })
 
   /// `peek` recounts the payload; the file's own manifest is just a claim.
   it("counts what will be applied, not what the file says about itself", async () => {
     vi.mocked(pickConfigFileToImport).mockResolvedValue({
-      path: "/tmp/config.json",
+      ...pickedPath({ modelProviders: 2 }),
       preview: {
         manifest: manifest({ counts: { modelProviders: 99 } }),
         counts: { modelProviders: 2 },
@@ -327,6 +375,135 @@ describe("ConfigSyncSettings — file import", () => {
     await waitFor(() => expect(pickConfigFileToImport).toHaveBeenCalled())
     expect(screen.queryByText(t.importConfirmTitle)).not.toBeInTheDocument()
     expect(toastError).not.toHaveBeenCalled()
+  })
+})
+
+describe("ConfigSyncSettings — encryption", () => {
+  it("asks for a passphrase only once encryption is switched on", async () => {
+    const { container } = await renderLoaded()
+    expect(
+      container.querySelector("#config-sync-passphrase")
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("switch", { name: t.encryptLabel }))
+    await waitFor(() =>
+      expect(
+        container.querySelector("#config-sync-passphrase")
+      ).toBeInTheDocument()
+    )
+    // And the warning stops claiming the upload is plaintext.
+    expect(screen.queryByText(t.plaintextWarning)).not.toBeInTheDocument()
+    expect(screen.getByText(t.encryptedNotice)).toBeInTheDocument()
+  })
+
+  it("sends the typed passphrase and then clears the field", async () => {
+    vi.mocked(getConfigSyncSettings).mockResolvedValue({
+      ...SAVED,
+      encrypt: true,
+      hasPassphrase: false,
+    })
+    vi.mocked(updateConfigSyncSettings).mockResolvedValue({
+      ...SAVED,
+      encrypt: true,
+      hasPassphrase: true,
+    })
+    const { container } = await renderLoaded()
+    const passphrase = container.querySelector(
+      "#config-sync-passphrase"
+    ) as HTMLInputElement
+    expect(passphrase.placeholder).toBe(t.passphrasePlaceholder)
+
+    fireEvent.change(passphrase, { target: { value: "correct horse" } })
+    fireEvent.click(screen.getByRole("button", { name: t.saveButton }))
+    await waitFor(() => expect(updateConfigSyncSettings).toHaveBeenCalled())
+    expect(vi.mocked(updateConfigSyncSettings).mock.calls[0][0]).toMatchObject({
+      encrypt: true,
+      passphrase: "correct horse",
+    })
+    await waitFor(() => expect(passphrase.value).toBe(""))
+    // Stored now, so an untouched field means "keep it".
+    await waitFor(() => expect(passphrase.placeholder).toBe(t.passphraseKeep))
+  })
+})
+
+describe("ConfigSyncSettings — rollback snapshots", () => {
+  const SNAPSHOT = {
+    id: "config-20260606T120000000",
+    createdAt: "2026-06-06T12:00:00Z",
+    size: 4096,
+    counts: { modelProviders: 2 },
+  }
+
+  it("hides the section when there is nothing to undo", async () => {
+    await renderLoaded()
+    expect(screen.queryByText(t.rollbackTitle)).not.toBeInTheDocument()
+  })
+
+  /// Regression: every import and restore wrote a pre-apply snapshot and
+  /// returned its path, but nothing listed or applied one — the safety net
+  /// existed on disk and was unreachable from the product.
+  it("lists a saved configuration and applies it after confirmation", async () => {
+    vi.mocked(listConfigRollbacks).mockResolvedValue([SNAPSHOT])
+    vi.mocked(applyConfigRollback).mockResolvedValue({
+      applied: { domains: { modelProviders: 2 }, total: 2 },
+      rollbackPath: null,
+    })
+    await renderLoaded()
+    await screen.findByText(t.rollbackTitle)
+    expect(screen.getByText("2 model providers")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: t.rollbackAction }))
+    await screen.findByText(t.rollbackConfirmTitle)
+    expect(applyConfigRollback).not.toHaveBeenCalled()
+
+    fireEvent.click(
+      screen.getByRole("button", { name: t.rollbackConfirmAction })
+    )
+    await waitFor(() =>
+      expect(applyConfigRollback).toHaveBeenCalledWith(SNAPSHOT.id)
+    )
+  })
+
+  /// The undo writes its own rollback point, so the list has to be re-read
+  /// rather than left showing the state from before the click.
+  it("re-reads the list after an undo", async () => {
+    vi.mocked(listConfigRollbacks).mockResolvedValue([SNAPSHOT])
+    vi.mocked(applyConfigRollback).mockResolvedValue({
+      applied: { domains: {}, total: 0 },
+      rollbackPath: null,
+    })
+    await renderLoaded()
+    await screen.findByText(t.rollbackTitle)
+    expect(listConfigRollbacks).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole("button", { name: t.rollbackAction }))
+    await screen.findByText(t.rollbackConfirmTitle)
+    fireEvent.click(
+      screen.getByRole("button", { name: t.rollbackConfirmAction })
+    )
+    await waitFor(() => expect(listConfigRollbacks).toHaveBeenCalledTimes(2))
+  })
+
+  /// A snapshot pruned since the list was drawn must leave the list rather
+  /// than sit there offering a button that fails every time.
+  it("drops a snapshot the backend can no longer find", async () => {
+    vi.mocked(listConfigRollbacks).mockResolvedValueOnce([SNAPSHOT])
+    vi.mocked(applyConfigRollback).mockRejectedValue(
+      new Error("That rollback snapshot is no longer on this machine")
+    )
+    vi.mocked(listConfigRollbacks).mockResolvedValue([])
+    await renderLoaded()
+    await screen.findByText(t.rollbackTitle)
+
+    fireEvent.click(screen.getByRole("button", { name: t.rollbackAction }))
+    await screen.findByText(t.rollbackConfirmTitle)
+    fireEvent.click(
+      screen.getByRole("button", { name: t.rollbackConfirmAction })
+    )
+    await waitFor(() => expect(toastError).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.queryByText(t.rollbackTitle)).not.toBeInTheDocument()
+    )
   })
 })
 
