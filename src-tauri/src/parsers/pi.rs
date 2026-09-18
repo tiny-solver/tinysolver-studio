@@ -52,6 +52,76 @@ pub(crate) fn resolve_pi_sessions_dir() -> PathBuf {
     )
 }
 
+/// Pi's agent directory: `PI_CODING_AGENT_DIR`, else `~/.pi/agent`.
+fn resolve_pi_agent_dir() -> PathBuf {
+    match std::env::var_os("PI_CODING_AGENT_DIR")
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.into_string().ok())
+    {
+        Some(dir) => expand_pi_tilde(&dir, dirs::home_dir().as_deref()),
+        None => dirs::home_dir()
+            .unwrap_or_default()
+            .join(".pi")
+            .join("agent"),
+    }
+}
+
+/// The `contextWindow` a model declares in Pi's own `models.json`.
+///
+/// Why this is needed: `infer_context_window_max_tokens` guesses from a table of
+/// known model names — Claude / Gemini / Gemma / Kimi / Grok / OpenAI — and
+/// returns `None` for anything else. Model ids served by a self-hosted
+/// OpenAI-compatible endpoint always land on `None`, so those sessions get no
+/// context meter at all. The number is missing, not the data: the window is
+/// simply unknown.
+///
+/// Pi records the real window per provider, which beats guessing by name and
+/// keeps working when the model changes. Any read failure (file absent, bad
+/// JSON, model not listed) yields `None` and falls back to the existing
+/// name-based guess, so behaviour is never worse than before.
+pub(crate) fn pi_declared_context_window(model: Option<&str>) -> Option<u64> {
+    let model = model?.trim();
+    if model.is_empty() {
+        return None;
+    }
+    pi_declared_context_window_from(
+        &read_pi_models_json().ok()?,
+        model,
+    )
+}
+
+fn read_pi_models_json() -> Result<String, std::io::Error> {
+    std::fs::read_to_string(resolve_pi_agent_dir().join("models.json"))
+}
+
+/// Pure over the file contents so it can be tested without touching the disk.
+/// When the same id appears under several providers, the largest window wins.
+pub(crate) fn pi_declared_context_window_from(
+    raw: &str,
+    model: &str,
+) -> Option<u64> {
+    let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+    let providers = value.get("providers")?.as_object()?;
+    let mut best: Option<u64> = None;
+    for provider in providers.values() {
+        let Some(models) = provider.get("models").and_then(Value::as_array) else {
+            continue;
+        };
+        for m in models {
+            if m.get("id").and_then(Value::as_str) != Some(model) {
+                continue;
+            }
+            let Some(win) = m.get("contextWindow").and_then(Value::as_u64) else {
+                continue;
+            };
+            if win > 0 {
+                best = Some(best.map_or(win, |cur| cur.max(win)));
+            }
+        }
+    }
+    best
+}
+
 fn resolve_pi_sessions_dir_from(
     session_dir_env: Option<OsString>,
     agent_dir_env: Option<OsString>,
@@ -257,7 +327,11 @@ impl PiParser {
         backfill_turn_durations(&mut turns, &[]);
 
         let used_tokens = latest_turn_total_usage_tokens(&turns);
-        let max_tokens = infer_context_window_max_tokens(parsed.model.as_deref());
+        // Ask Pi what the provider declared first; only then guess by name.
+        // Self-hosted model ids are absent from the built-in table, so guessing
+        // alone drops the context meter entirely.
+        let max_tokens = pi_declared_context_window(parsed.model.as_deref())
+            .or_else(|| infer_context_window_max_tokens(parsed.model.as_deref()));
         let session_stats =
             merge_context_window_stats(compute_session_stats(&turns), used_tokens, max_tokens);
 
@@ -1347,6 +1421,50 @@ mod tests {
     use serde_json::json;
     use std::io::Write;
     use tempfile::tempdir;
+
+    #[test]
+    fn declared_context_window_reads_pi_models_json_by_model_id() {
+        // Real shape: providers.<name>.models[].{id,contextWindow}
+        let raw = r#"{
+          "providers": {
+            "openai-compatible": { "models": [
+              { "id": "qwen-flash", "contextWindow": 262144, "maxTokens": 32768 }
+            ]},
+            "other": { "models": [
+              { "id": "qwen-flash", "contextWindow": 131072 }
+            ]}
+          }
+        }"#;
+        // Same id under several providers takes the largest, not the first hit.
+        assert_eq!(pi_declared_context_window_from(raw, "qwen-flash"), Some(262144));
+        // An id the file does not list → None, so the name-based guess still runs.
+        assert_eq!(pi_declared_context_window_from(raw, "nope"), None);
+    }
+
+    #[test]
+    fn declared_context_window_declines_junk_without_panicking() {
+        // Unreadable, not JSON, missing fields or a zero window must be None, never a panic.
+        assert_eq!(pi_declared_context_window_from("", "qwen-flash"), None);
+        assert_eq!(pi_declared_context_window_from("not json", "qwen-flash"), None);
+        assert_eq!(
+            pi_declared_context_window_from(r#"{"providers": "wrong"}"#, "qwen-flash"),
+            None
+        );
+        assert_eq!(
+            pi_declared_context_window_from(
+                r#"{"providers":{"p":{"models":[{"id":"m","contextWindow":0}]}}}"#,
+                "m"
+            ),
+            None
+        );
+        assert_eq!(
+            pi_declared_context_window_from(
+                r#"{"providers":{"p":{"models":[{"id":"m"}]}}}"#,
+                "m"
+            ),
+            None
+        );
+    }
 
     /// Same fixture — and same reason — as `acp::file_system_runtime`'s tests: a
     /// unix-shaped `/srv/x` has a root but NO drive prefix on Windows, so

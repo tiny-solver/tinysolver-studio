@@ -118,6 +118,20 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
 
   const hasTokenSection = rows.length > 0
 
+  // Cache hit rate: cache reads over everything the request actually sent,
+  // i.e. cacheRead / (input + cacheRead + cacheWrite). cacheWrite belongs in
+  // the denominator — dropping it treats repeated writes as free and inflates
+  // the ratio.
+  const cacheDenom = hasUsage
+    ? usage.input_tokens +
+      usage.cache_read_input_tokens +
+      usage.cache_creation_input_tokens
+    : 0
+  const cacheHitRatio =
+    hasUsage && cacheDenom > 0
+      ? usage.cache_read_input_tokens / cacheDenom
+      : null
+
   if (!hasContext && !hasTokenSection) return null
 
   // Native hover hint mirroring the popover's headline (the popover stays for
@@ -229,6 +243,16 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
                 </div>
               ))}
             </div>
+            {cacheHitRatio != null ? (
+              <div className="mt-1 flex items-center justify-between gap-2 border-t border-border pt-1 text-xs leading-none">
+                <span className="text-muted-foreground whitespace-nowrap">
+                  {t("cacheHit")}
+                </span>
+                <span className="tabular-nums font-medium">
+                  {(cacheHitRatio * 100).toFixed(1)}%
+                </span>
+              </div>
+            ) : null}
           </>
         ) : null}
       </PopoverContent>

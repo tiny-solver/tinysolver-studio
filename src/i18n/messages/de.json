@@ -2152,7 +2152,8 @@
         "output": "Ausgabe",
         "cacheRead": "Cache lesen",
         "cacheWrite": "Cache schreiben",
-        "total": "Gesamt"
+        "total": "Gesamt",
+        "cacheHit": "Cache-Trefferquote"
       },
       "quickActions": {
         "title": "Schnellaktionen",

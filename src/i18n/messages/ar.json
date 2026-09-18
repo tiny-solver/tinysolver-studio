@@ -2152,7 +2152,8 @@
         "output": "إخراج",
         "cacheRead": "قراءة الكاش",
         "cacheWrite": "كتابة الكاش",
-        "total": "الإجمالي"
+        "total": "الإجمالي",
+        "cacheHit": "معدل إصابة الكاش"
       },
       "quickActions": {
         "title": "إجراءات سريعة",

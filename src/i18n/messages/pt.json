@@ -2152,7 +2152,8 @@
         "output": "Saída",
         "cacheRead": "Leitura de cache",
         "cacheWrite": "Gravação de cache",
-        "total": "Total de tokens"
+        "total": "Total de tokens",
+        "cacheHit": "Taxa de acerto de cache"
       },
       "quickActions": {
         "title": "Ações rápidas",
