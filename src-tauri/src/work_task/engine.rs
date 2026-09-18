@@ -6284,10 +6284,7 @@ async fn compose_prompt(
                 });
             }
             blocks.extend(original);
-            if let Some(outstanding) = scan.outstanding {
-                blocks.push(outstanding_block(&outstanding));
-                blocks.extend(attachment_blocks(&outstanding.attachments, task.id));
-            }
+            push_replay(&mut blocks, &scan, resumed, task.id);
         }
         LaunchMode::Retry => {
             blocks.push(PromptInputBlock::Text {
@@ -6313,12 +6310,7 @@ async fn compose_prompt(
             // again.
             original_work_order = scan.interrupted.is_none();
             replayed_question = matches!(scan.interrupted, Some(FollowUpIntent::Question));
-            if let Some(outstanding) = scan.outstanding {
-                blocks.push(outstanding_block(&outstanding));
-                // Whatever the user attached to that instruction follows it, so
-                // the replay carries the screenshot as well as the sentence.
-                blocks.extend(attachment_blocks(&outstanding.attachments, task.id));
-            }
+            push_replay(&mut blocks, &scan, resumed, task.id);
         }
         LaunchMode::Return {
             intent,
@@ -6685,6 +6677,17 @@ struct InstructionScan {
     /// The unsettled `return` intent beneath any retry/requeue notes; `None`
     /// when the generation was (re)doing the task's original order.
     interrupted: Option<FollowUpIntent>,
+    /// That same `return` as an INSTRUCTION, and only when a newer
+    /// retry/requeue note took the `outstanding` slot away from it.
+    ///
+    /// A resumed session already has those words in its transcript, so the
+    /// note alone is the right replay there — that is what "a note refines the
+    /// turn it interrupts" means. A session with no context (a re-queued
+    /// task's fresh launch, a resume that failed over) has nothing: replaying
+    /// only the note hands the agent "take this into account" with no account
+    /// to take it into, and for a question it pairs a read-only licence with a
+    /// question the agent was never shown.
+    interrupted_instruction: Option<Outstanding>,
 }
 
 async fn instruction_scan(
@@ -6707,6 +6710,7 @@ async fn instruction_scan(
     let mut scan = InstructionScan {
         outstanding: None,
         interrupted: None,
+        interrupted_instruction: None,
     };
     for event in events {
         match event.kind.as_str() {
@@ -6737,16 +6741,23 @@ async fn instruction_scan(
                             payload.get("intent").and_then(|v| v.as_str()),
                         )
                         .unwrap_or_default();
+                        let returned =
+                            payload.get("feedback").and_then(|v| v.as_str()).map(|text| {
+                                Outstanding {
+                                    kind: OutstandingKind::Review(intent),
+                                    text: text.to_string(),
+                                    attachments: payload_blocks(&payload),
+                                }
+                            });
                         if scan.outstanding.is_none() {
-                            let Some(text) = payload.get("feedback").and_then(|v| v.as_str())
-                            else {
+                            let Some(returned) = returned else {
                                 break;
                             };
-                            scan.outstanding = Some(Outstanding {
-                                kind: OutstandingKind::Review(intent),
-                                text: text.to_string(),
-                                attachments: payload_blocks(&payload),
-                            });
+                            scan.outstanding = Some(returned);
+                        } else {
+                            // A retry/requeue note already claimed the newest
+                            // slot. Keep the returned words too — see the field.
+                            scan.interrupted_instruction = returned;
                         }
                         // The newest unsettled return IS the interrupted turn
                         // (a second return needs another review in between,
@@ -6779,11 +6790,40 @@ async fn instruction_scan(
     scan
 }
 
-/// The block that replays an outstanding instruction, framed the way the user
-/// meant it: an unanswered question must not come back as a work order. Shared
-/// by both replaying arms — a re-queued task reaches `Fresh` with exactly the
-/// same debt to the user as an interrupted one reaching `Retry`, so the two
-/// must not drift apart in what they replay or how they word it.
+/// Replay everything the launch still owes the user, oldest first, with each
+/// instruction's own attachments right behind the sentence that framed it.
+///
+/// `resumed` is the whole difference. A resumed session carries the interrupted
+/// turn in its transcript, so the newest instruction is the entire replay — a
+/// retry/requeue note refines a turn the agent can still read. A session with
+/// no context has to be given that turn as well, or the note lands on nothing:
+/// see [`InstructionScan::interrupted_instruction`].
+///
+/// Shared by both replaying arms — a re-queued task reaches `Fresh` with
+/// exactly the same debt to the user as an interrupted one reaching `Retry`,
+/// so the two must not drift apart in what they replay or how they word it.
+fn push_replay(
+    blocks: &mut Vec<PromptInputBlock>,
+    scan: &InstructionScan,
+    resumed: bool,
+    task_id: i32,
+) {
+    let mut push = |instruction: &Outstanding| {
+        blocks.push(outstanding_block(instruction));
+        blocks.extend(attachment_blocks(&instruction.attachments, task_id));
+    };
+    if !resumed {
+        if let Some(interrupted) = &scan.interrupted_instruction {
+            push(interrupted);
+        }
+    }
+    if let Some(outstanding) = &scan.outstanding {
+        push(outstanding);
+    }
+}
+
+/// The block that replays one outstanding instruction, framed the way the user
+/// meant it: an unanswered question must not come back as a work order.
 fn outstanding_block(outstanding: &Outstanding) -> PromptInputBlock {
     match outstanding.kind {
         OutstandingKind::Restart => restart_note_block(&outstanding.text),
@@ -8303,6 +8343,122 @@ mod tests {
             .expect("guard block");
         assert!(!guard.contains("Commit to the current branch as you like"));
         assert!(guard.contains("do NOT create, edit, delete or commit any file"));
+    }
+
+    /// …and the note the user types INTO the requeue box must not bury it. The
+    /// scan stops at the newest instruction, so a note takes the `outstanding`
+    /// slot and only the returned turn's *intent* survives — fine for a resumed
+    /// session, which still has the words, and useless for the session a
+    /// requeue now starts, which would get a read-only licence for a question
+    /// it was never shown, or "take this note into account" with no account.
+    #[tokio::test]
+    async fn a_requeue_note_does_not_bury_the_turn_it_refines() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let id = seeded_task(&db.conn).await;
+        user_action(
+            &db.conn,
+            id,
+            serde_json::json!({
+                "action": "return",
+                "intent": "question",
+                "feedback": "why did you pick a map here?",
+            }),
+        )
+        .await;
+        user_action(
+            &db.conn,
+            id,
+            serde_json::json!({ "action": "requeue", "note": "check the logs first" }),
+        )
+        .await;
+
+        let mut row = task_row();
+        row.id = id;
+        row.started_at = Some(chrono::Utc::now());
+        let blocks = compose_prompt(
+            &task_config(),
+            &row,
+            &LaunchMode::Fresh,
+            &WorkTaskFolderSettings::default(),
+            false,
+            &db.conn,
+        )
+        .await
+        .expect("compose");
+        let joined = texts(&blocks).join("\n");
+        assert!(
+            joined.contains("why did you pick a map here?"),
+            "the question the note refines has to reach a context-less session: {joined}"
+        );
+        assert!(joined.contains("check the logs first"));
+        // Oldest first: the turn, then the note that refines it.
+        let question = joined.find("why did you pick a map here?").expect("question");
+        let note = joined.find("check the logs first").expect("note");
+        assert!(question < note, "the note refines the turn, so it follows it");
+        // And it is still a question, so the licence stays read-only.
+        let guard = texts(&blocks)
+            .into_iter()
+            .find(|t| t.starts_with("—— Work task context ——"))
+            .expect("guard block");
+        assert!(guard.contains("do NOT create, edit, delete or commit any file"));
+    }
+
+    /// The mirror image, and the reason the extra replay is gated on `resumed`:
+    /// a session that really did resume already holds the returned turn, and
+    /// replaying it a second time would re-ask a question the transcript above
+    /// already shows being asked.
+    #[tokio::test]
+    async fn a_resumed_retry_replays_only_the_newest_instruction() {
+        let db = crate::db::test_helpers::fresh_in_memory_db().await;
+        let id = seeded_task(&db.conn).await;
+        user_action(
+            &db.conn,
+            id,
+            serde_json::json!({
+                "action": "return", "intent": "revise", "feedback": "rename the column",
+            }),
+        )
+        .await;
+        user_action(
+            &db.conn,
+            id,
+            serde_json::json!({ "action": "retry", "note": "install deps first" }),
+        )
+        .await;
+
+        let mut row = task_row();
+        row.id = id;
+        let resumed = compose_prompt(
+            &task_config(),
+            &row,
+            &LaunchMode::Retry,
+            &WorkTaskFolderSettings::default(),
+            true,
+            &db.conn,
+        )
+        .await
+        .expect("compose");
+        let joined = texts(&resumed).join("\n");
+        assert!(joined.contains("install deps first"));
+        assert!(
+            !joined.contains("rename the column"),
+            "the resumed transcript already carries it: {joined}"
+        );
+
+        // …while the fallback session that never resumed needs both.
+        let fell_back = compose_prompt(
+            &task_config(),
+            &row,
+            &LaunchMode::Retry,
+            &WorkTaskFolderSettings::default(),
+            false,
+            &db.conn,
+        )
+        .await
+        .expect("compose");
+        let joined = texts(&fell_back).join("\n");
+        assert!(joined.contains("rename the column"));
+        assert!(joined.contains("install deps first"));
     }
 
     /// A screenshot pasted into the follow-up box has to reach the agent as an
