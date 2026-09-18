@@ -1213,13 +1213,15 @@ pub async fn claim_due_scheduled(
 }
 
 /// canceled → todo ("requeue"): back to the board, worktree (if any) reused at
-/// the next start. The SESSION is not reused: the conversation link is dropped
-/// so the next start runs the task from the top rather than resuming the run
-/// the user canceled.
-/// canceled → todo, optionally carrying the note the user attached to the
-/// requeue. The note is written in the SAME transaction as the CAS: the moment
-/// this commits the task is schedulable, and an `auto_process` folder's pump
-/// can claim and launch it — a note written afterwards would lose that race.
+/// the next start, optionally carrying the note the user attached to the
+/// requeue.
+///
+/// The SESSION is not reused: the conversation link is dropped so the next start
+/// runs the task from the top rather than resuming the run the user canceled.
+///
+/// The note is written in the SAME transaction as the CAS: the moment this
+/// commits the task is schedulable, and an `auto_process` folder's pump can
+/// claim and launch it — a note written afterwards would lose that race.
 pub async fn requeue_canceled(
     conn: &DatabaseConnection,
     id: i32,
