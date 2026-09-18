@@ -501,6 +501,17 @@ pub struct SnapshotRequest {
     pub max_chars: Option<usize>,
 }
 
+/// The page's window at the instant it was walked, and only that instant.
+///
+/// Nothing downstream computes from it: an action measures the box it is about
+/// to touch, a scroll reads its scroller back afterwards, and a capture reports
+/// its own `width` / `height` / `region`. That is deliberate, because this
+/// number goes stale in a way nothing here can announce — the tab's agent
+/// activity strip is mounted by the first attempt on the page and takes its
+/// height out of the web view, so the very first snapshot of a tab reports a
+/// window about thirty pixels taller than every call after it will see. A
+/// reader who treats these as live geometry inherits that; every surface above
+/// reports its own instead.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotViewport {
@@ -703,14 +714,18 @@ pub enum ActionError {
     Stale,
     /// Nothing of the element is on screen to point at. The detail, not a
     /// code of its own, says which shape it is, because whether a page can
-    /// reach the element is not a property of the refusal. One that *paints
-    /// nothing* — a screen-reader-only node, which the accessibility tree
-    /// names and a pointer can never reach, whether it is erased by its style
-    /// or parked where no scroll goes — is the one refusal here another try
-    /// cannot turn into a success. The rest are the page as it happens to be:
-    /// an element *not being rendered* (something above it is hidden) wants
-    /// that opened and a fresh snapshot, and one merely *outside the
-    /// viewport* is a page that could not be scrolled to it this time.
+    /// reach the element is not a property of the refusal. The screen-reader
+    /// -only node — which the accessibility tree names and a pointer can
+    /// never reach — is the one refusal here another try cannot turn into a
+    /// success, and it carries *no snapshot will change that*: the two ways
+    /// of writing one describe themselves differently (*paints nothing* when
+    /// its style erases it, *parked outside the page* when a coordinate puts
+    /// it past any scroll) but share that verdict, which is the phrase the
+    /// tool description points a model at. The rest are the page as it
+    /// happens to be: an element *not being rendered* (something above it is
+    /// hidden) wants that opened and a fresh snapshot, and one merely
+    /// *outside the viewport* is a page that could not be scrolled to it
+    /// this time.
     NotVisible,
     /// Something else is on top where a pointer would land. Unlike
     /// [`Self::NotVisible`], the page can be in a different state in a moment.

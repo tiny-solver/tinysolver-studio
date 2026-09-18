@@ -2806,7 +2806,7 @@
       };
     const own = largestBox(el);
     if (own.width <= 1 || own.height <= 1) return unreachable(el);
-    if (isParkedOutsideTheDocument(el, own)) return unreachable(el);
+    if (isParkedOutsideTheDocument(el, own)) return unreachable(el, "parked");
     return {
       error: "not-visible",
       detail: `${describe(el)} is laid out but none of it is inside the viewport, even after scrolling to it \u2014 something between it and the page is holding it off screen.`
@@ -2827,11 +2827,13 @@
     }
     return box.right + window.scrollX < -window.innerWidth && box.right < -window.innerWidth || box.bottom + window.scrollY < -window.innerHeight && box.bottom < -window.innerHeight;
   }
-  function unreachable(el, touched) {
+  function unreachable(el, shape = "erased", touched) {
     const instead = touched ? `; ${describe(touched)} is what a pointer there would touch` : "";
+    const wrong = shape === "parked" ? `is parked outside the page, further out than any scroll reaches` : `is in the accessibility tree but paints nothing on screen`;
+    const act2 = shape === "parked" ? `act on a ref a pointer can land on.` : `act on a ref that is actually drawn on the page.`;
     return {
       error: "not-visible",
-      detail: `${describe(el)} is in the accessibility tree but paints nothing on screen${instead}. A person could not reach it either, and no snapshot will change that \u2014 act on a ref that is actually drawn on the page.`
+      detail: `${describe(el)} ${wrong}${instead}. A person could not reach it either, and no snapshot will change that \u2014 ` + act2
     };
   }
   function isVisuallyErased(el) {
@@ -2886,7 +2888,7 @@
   function pointerReach(target, point) {
     const cover = obstructionAt(point.x, point.y, target);
     if (!cover) return null;
-    if (isVisuallyErased(target)) return unreachable(target, cover);
+    if (isVisuallyErased(target)) return unreachable(target, "erased", cover);
     return { error: "obscured", detail: obscuredBy(cover, target) };
   }
   function obscuredBy(cover, target) {

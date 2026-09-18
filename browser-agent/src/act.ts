@@ -38,13 +38,17 @@ export type ActionError =
   /** The ref no longer names anything: another document, a moved page, a
    *  removed element. Take a new snapshot. */
   | "stale"
-  /** Nothing of the element is on screen to point at. Two shapes, told apart
+  /** Nothing of the element is on screen to point at. Four shapes, told apart
    *  by the detail rather than by a code of their own, because the fix for
-   *  one of them is to stop rather than to do something else: an element that
-   *  *paints nothing* — the screen-reader-only node the accessibility tree
-   *  names and a pointer can never reach — is the one refusal here not worth
-   *  another try, while one that is merely *outside the viewport* is a page
-   *  that could not be scrolled to it this time. */
+   *  two of them is to stop rather than to do something else. Those two are
+   *  the screen-reader-only node the accessibility tree names and a pointer
+   *  can never reach, which describes itself as *painting nothing* when its
+   *  style erases it and as *parked outside the page* when a coordinate puts
+   *  it past any scroll, and which says *no snapshot will change that* either
+   *  way. The other two are the page as it happens to be: *not being rendered
+   *  at the moment* wants whatever hides it opened and a fresh snapshot, and
+   *  merely *outside the viewport* is a page that could not be scrolled to it
+   *  this time. */
   | "not-visible"
   /** Another element is on top at the point a pointer would land. A user
    *  could not click this either; a dialog's backdrop is the common case.
@@ -142,7 +146,7 @@ export function pointAt(el: Element): Point | ActionFailure {
   if (own.width <= 1 || own.height <= 1) return unreachable(el)
   // So is a full-sized box parked where no scroll can reach it, which is the
   // same intent written a third way. See [`isParkedOutsideTheDocument`].
-  if (isParkedOutsideTheDocument(el, own)) return unreachable(el)
+  if (isParkedOutsideTheDocument(el, own)) return unreachable(el, "parked")
   // And what is left really is a state: a real box that nothing of lands in
   // the viewport is a place the page could not scroll to *this time*.
   return {
@@ -237,13 +241,25 @@ function isParkedOutsideTheDocument(el: Element, box: DOMRect): boolean {
  *
  * Every other failure here describes a page that could be different in a
  * moment — a ref gone stale, a dialog in the way, a control disabled. This
- * one describes an element that is in the accessibility tree without being on
- * screen at all, which is a fixed property of the page's markup: the
- * screen-reader-only heading a framework puts inside every article, written
- * either as a box a pixel across or as a full-sized one clipped away to
- * nothing. An agent that reads "no visible box" as bad luck will snapshot and
- * try the next ref like it, and a page that has one of these has a row of
- * them.
+ * one describes an element the accessibility tree names and a pointer can
+ * never reach, which is a fixed property of the page's markup: the
+ * screen-reader-only heading a framework puts inside every article. An agent
+ * that reads "no visible box" as bad luck will snapshot and try the next ref
+ * like it, and a page that has one of these has a row of them.
+ *
+ * `shape` picks the description, because that heading is written two ways and
+ * only one of them is invisible. A box a pixel across, or a full-sized one
+ * clipped away to nothing, paints nowhere. A box parked off-canvas paints
+ * perfectly well, at a coordinate no scroll reaches — telling that one it
+ * "paints nothing on screen" asserts something the caller can go and check,
+ * and its own box disagrees. A refusal a caller can catch out being wrong is
+ * one it has a reason to retry past, which is the single thing this message
+ * exists to prevent.
+ *
+ * What both shapes say identically is the verdict — "no snapshot will change
+ * that" — because that sentence, not either description, is what
+ * `browser_click`'s tool description tells a model to read the permanence
+ * off. Change one and change the other.
  *
  * Told only where the element itself is the evidence — see
  * [`isVisuallyErased`] for why nothing infers it from what a pointer happened
@@ -252,16 +268,28 @@ function isParkedOutsideTheDocument(el: Element, box: DOMRect): boolean {
  * (An element under `pointer-events: none` never gets this far: `ai` mode
  * refuses it a ref in the first place, so there is nothing to act on.)
  */
-function unreachable(el: Element, touched?: Element): ActionFailure {
+function unreachable(
+  el: Element,
+  shape: "erased" | "parked" = "erased",
+  touched?: Element
+): ActionFailure {
   const instead = touched
     ? `; ${describe(touched)} is what a pointer there would touch`
     : ""
+  const wrong =
+    shape === "parked"
+      ? `is parked outside the page, further out than any scroll reaches`
+      : `is in the accessibility tree but paints nothing on screen`
+  const act =
+    shape === "parked"
+      ? `act on a ref a pointer can land on.`
+      : `act on a ref that is actually drawn on the page.`
   return {
     error: "not-visible",
     detail:
-      `${describe(el)} is in the accessibility tree but paints nothing on screen${instead}. ` +
+      `${describe(el)} ${wrong}${instead}. ` +
       `A person could not reach it either, and no snapshot will change that — ` +
-      `act on a ref that is actually drawn on the page.`,
+      act,
   }
 }
 
@@ -430,7 +458,7 @@ export function pointerReach(
 ): ActionFailure | null {
   const cover = obstructionAt(point.x, point.y, target)
   if (!cover) return null
-  if (isVisuallyErased(target)) return unreachable(target, cover)
+  if (isVisuallyErased(target)) return unreachable(target, "erased", cover)
   return { error: "obscured", detail: obscuredBy(cover, target) }
 }
 

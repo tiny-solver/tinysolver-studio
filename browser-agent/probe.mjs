@@ -653,8 +653,16 @@ try {
     const hidden = await actJson(gen, sronly, { kind: "click" })
     check(
       "a screen-reader-only heading is refused as never-visible, not obscured",
-      [hidden.ok, hidden.error, hidden.detail.includes("paints nothing")],
-      [false, "not-visible", true]
+      [
+        hidden.ok,
+        hidden.error,
+        hidden.detail.includes("paints nothing"),
+        // The phrase `browser_click`'s description points a model at for
+        // permanence. Both shapes of this refusal carry it; only this one
+        // also paints nothing, so the two are asserted apart.
+        hidden.detail.includes("no snapshot will change that"),
+      ],
+      [false, "not-visible", true, true]
     )
     const clipped = ref(/heading "Clipped heading" \[level=2\] \[ref=(e\d+)\]/)
     const through = await actJson(gen, clipped, { kind: "click" })
@@ -726,6 +734,20 @@ try {
       "a box parked outside the document's origin is permanent too",
       [offLeft.error, offLeft.detail.includes("no snapshot will change that")],
       ["not-visible", true]
+    )
+    // …in words its own box does not contradict. This element paints, at a
+    // coordinate no scroll reaches; telling it that it "paints nothing on
+    // screen" asserts something the caller can go and check and find wrong,
+    // and a refusal caught out being wrong is one worth retrying past — the
+    // one thing the message exists to prevent. The verdict above is what the
+    // two shapes share; this is where they differ.
+    check(
+      "…and is described as parked rather than as painting nothing",
+      [
+        offLeft.detail.includes("parked outside the page"),
+        offLeft.detail.includes("paints nothing"),
+      ],
+      [true, false]
     )
     // The line that one must not cross. Outside the document is not by itself
     // permanent: no *scroll* reaches a negative coordinate, but CSS does, and

@@ -155,6 +155,16 @@ opposite things of the caller: an `obscured` is worth another look once the
 page settles, while this one no retry and no fresh snapshot can turn into a
 success, and an accessibility tree offers them a row at a time.
 
+Those shapes do not describe themselves alike, because only one of them is
+invisible. A box a pixel across, or one clipped to nothing, *paints nothing on
+screen*; a box parked off-canvas is *parked outside the page*, since it paints
+perfectly well at a coordinate no scroll reaches, and saying otherwise asserts
+something the caller can go and check — a refusal caught out being wrong is one
+worth retrying past, which is the single thing the message exists to prevent.
+What they share word for word is the verdict, `no snapshot will change that`.
+That sentence, not either description, is what `browser_click`'s tool
+description points a model at, so the three move together.
+
 `not-visible` covers recoverable shapes too, and the detail is what tells them
 apart — the code cannot, because whether a page can reach an element is not a
 property of the refusal. An element that is not being *rendered* at the moment
