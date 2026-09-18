@@ -12,9 +12,7 @@ import { useBrowserCapabilities } from "@/lib/browser/use-browser-capabilities"
 import { browserTabBackendId } from "@/lib/file-tab-id"
 
 import { isDesktop } from "@/lib/transport"
-import { cn } from "@/lib/utils"
 
-import { useBrowserAgentGlow } from "./browser-agent-access"
 import { BrowserBridgeView } from "./browser-bridge-view"
 import { BrowserFindBar } from "./browser-find-bar"
 import {
@@ -67,7 +65,6 @@ function NativeBrowserTabView({ tab }: { tab: BrowserWorkspaceTab }) {
     setFindOpen(true)
     setLocalFindRequest((n) => n + 1)
   }
-  const glow = useBrowserAgentGlow(tab, state)
   const url = state?.url || state?.requestedUrl || tab.browser.initialUrl
   const error = state?.error ?? null
   const ownedWindow = state?.surface === "window"
@@ -89,23 +86,12 @@ function NativeBrowserTabView({ tab }: { tab: BrowserWorkspaceTab }) {
           (`BrowserAgentActivityControl`), so it cannot shorten the page it is
           a record of. */}
       <BrowserDownloadBar tab={tab} />
-      {/* The border of the page area, not of anything inside it: a native
-          webview paints over any DOM at its rect, so the only mark that can
-          be seen on a shared page is one drawn around the hole it sits in.
-          The width never changes — the surface is fitted to this element's
-          content box, and a border that came and went would reflow the page.
-          Only the colour moves: dim while the page is merely shared, bright
-          for a moment each time an agent touches it. */}
-      <div
-        className={cn(
-          "relative min-h-0 flex-1 border-2 transition-colors",
-          glow === "active"
-            ? "border-violet-500"
-            : glow === "steady"
-              ? "border-violet-500/45"
-              : "border-transparent"
-        )}
-      >
+      {/* Nothing is drawn around the page for a shared tab. A native webview
+          paints over any DOM at its rect, so the only mark that could be seen
+          on the page itself is one around the hole it sits in — and a frame
+          around the whole page is too loud a way to say it. The chip in the
+          address field and the glyph on the tab strip carry that instead. */}
+      <div className="relative min-h-0 flex-1">
         {/* Always mounted so the native surface keeps its bounds; the DOM
             layers below only show when the surface is hidden (error) or
             never embedded (owned window). */}

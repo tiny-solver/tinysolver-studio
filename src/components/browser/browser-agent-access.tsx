@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { useRef, type KeyboardEvent } from "react"
 
 import {
   Bot,
@@ -59,66 +59,21 @@ import { FIELD_BTN, FIELD_PILL } from "./browser-toolbar-buttons"
  * still opens onto that default, and says which entry it is.
  */
 
-/** How long the page border stays lit after an agent touches the tab. Long
- *  enough to catch the eye of someone not looking straight at it, short
- *  enough that a run of reads reads as a flicker rather than a solid state. */
-const ACTIVITY_GLOW_MS = 1200
-
 /** One arrow press down the activity list: about two of its lines. */
 const LIST_SCROLL_STEP_PX = 48
 
 /**
  * The colour of "an agent can read this", everywhere it appears: the chip in
- * the toolbar, the glyph in the tab strip, the border around the page.
+ * the toolbar and the glyph in the tab strip. Nothing is drawn on the page
+ * itself.
  *
  * A fixed hue rather than the theme's `primary`, which is what this started
  * as. Every stock theme in the app sets `--primary` to a neutral (chroma 0),
- * so a primary-tinted border is a slightly darker grey line — indistinguishable
- * from the dividers on either side of it, and the border has no text or shape
- * to fall back on. Beyond that, a mark that says a page is exposed should not
- * be something the theme picker can tune down into the chrome.
+ * so a primary-tinted mark is a slightly darker grey — lost among the chrome
+ * around it. A mark that says a page is exposed should not be something the
+ * theme picker can tune down.
  */
 export const AGENT_MARK = "text-violet-600 dark:text-violet-400"
-
-/**
- * How the page's border should read right now: nothing when the tab is not
- * shared, lit when an agent has just touched it, steady otherwise.
- */
-export function useBrowserAgentGlow(
-  tab: BrowserWorkspaceTab,
-  state: BrowserTabState | null
-): "none" | "steady" | "active" {
-  const activity = useBrowserAgentActivity(tab.id)
-  const head = activity[0]
-  // Names one attempt. Every field of the head entry is in it, because any
-  // one of them alone is ambiguous within a millisecond: the count moves when
-  // a run grows (so an agent reading the same page twice in a row still
-  // re-lights the border), and the action and outcome move when a new line is
-  // pushed whose `at` and `count` happen to match the one it replaced —
-  // a refusal costs no page round trip, so two attempts really can land in
-  // the same millisecond.
-  const stamp = head
-    ? `${head.at}.${head.count}.${head.action}.${head.outcome}`
-    : null
-  // Lit during render rather than from an effect, so the border is already on
-  // in the paint that shows the new line on the strip.
-  const [seen, setSeen] = useState(stamp)
-  const [lit, setLit] = useState(false)
-  if (seen !== stamp) {
-    setSeen(stamp)
-    setLit(stamp !== null)
-  }
-  // `seen` is a dependency as well as `lit`: an attempt arriving while the
-  // border is already on has to restart the countdown, and `lit` alone does
-  // not change when it is already true.
-  useEffect(() => {
-    if (!lit) return
-    const timer = setTimeout(() => setLit(false), ACTIVITY_GLOW_MS)
-    return () => clearTimeout(timer)
-  }, [lit, seen])
-  if (!state?.agentGrant) return "none"
-  return lit ? "active" : "steady"
-}
 
 /** The pinned program's file name — what the person would have typed —
  *  rather than the path they never look at. Null when this grant has no pin,

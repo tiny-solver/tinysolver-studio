@@ -1,10 +1,4 @@
-import {
-  act,
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-} from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { NextIntlClientProvider } from "next-intl"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -36,7 +30,6 @@ import {
 import {
   BrowserAgentActivityControl,
   BrowserAgentShareControl,
-  useBrowserAgentGlow,
 } from "./browser-agent-access"
 
 const tab = {
@@ -534,69 +527,5 @@ describe("the activity record", () => {
     expect(screen.getByText(/Couldn't read the page/)).toBeVisible()
     expect(screen.getByText(/Read the page/)).toBeVisible()
     expect(screen.getByText("2×")).toBeVisible()
-  })
-})
-
-describe("the page border", () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    resetBrowserTabStoreForTests()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-    resetBrowserTabStoreForTests()
-  })
-
-  it("is drawn only on a shared tab, and brightens while an agent is at work", () => {
-    const shared = state({
-      agentGrant: {
-        level: "read",
-        origin: "https://example.com",
-        grantedAt: 1,
-      },
-    })
-    const view = renderHook(
-      ({ tabState }) => useBrowserAgentGlow(tab, tabState),
-      { initialProps: { tabState: state() } }
-    )
-    expect(view.result.current).toBe("none")
-
-    view.rerender({ tabState: shared })
-    expect(view.result.current).toBe("steady")
-
-    read({ at: 1 })
-    expect(view.result.current).toBe("active")
-    act(() => void vi.advanceTimersByTime(1200))
-    expect(view.result.current).toBe("steady")
-
-    // A second attempt while the border is still lit restarts the countdown
-    // rather than letting the first one's timer end it mid-run.
-    read({ at: 2 })
-    expect(view.result.current).toBe("active")
-    act(() => void vi.advanceTimersByTime(800))
-    read({ at: 3 })
-    act(() => void vi.advanceTimersByTime(800))
-    expect(view.result.current).toBe("active")
-    act(() => void vi.advanceTimersByTime(500))
-    expect(view.result.current).toBe("steady")
-
-    // Two attempts can land in the same millisecond — a refusal costs no page
-    // round trip. Each pushes a fresh line, so both carry `count: 1`, and
-    // with the same `at` the pair is indistinguishable by anything except
-    // what happened. Both of these are the head at some point, both are
-    // `900` / `1`, and the border still has to notice the second.
-    act(() => void vi.advanceTimersByTime(2000))
-    read({ at: 900, outcome: "refused" })
-    act(() => void vi.advanceTimersByTime(2000))
-    expect(view.result.current).toBe("steady")
-    read({ at: 900, outcome: "done" })
-    expect(view.result.current).toBe("active")
-
-    // Nothing is drawn on a tab that is no longer shared, however busy the
-    // agent was a moment ago.
-    read({ at: 4 })
-    view.rerender({ tabState: state() })
-    expect(view.result.current).toBe("none")
-    view.unmount()
   })
 })
