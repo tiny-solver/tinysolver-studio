@@ -724,7 +724,7 @@ fn apply_user_agent(webview: &WKWebView, url: &tauri::Url) {
     tracing::debug!(
         "[browser] user agent for {}: {}",
         url.host_str().unwrap_or("?"),
-        if wanted.is_some() { "sign-in identity" } else { "engine's own" }
+        profile::user_agent_name(wanted)
     );
     let value = wanted.map(NSString::from_str);
     // SAFETY: main thread, live webview; `None` restores the engine's own.
@@ -779,8 +779,14 @@ thread_local! {
     static PROFILES: RefCell<HashMap<String, ProfileStore>> = RefCell::new(HashMap::new());
 }
 
+/// The running release, `(major, minor)`. Safe from any thread.
+pub fn macos_version() -> (isize, isize) {
+    let version = NSProcessInfo::processInfo().operatingSystemVersion();
+    (version.majorVersion, version.minorVersion)
+}
+
 fn macos_major_version() -> isize {
-    NSProcessInfo::processInfo().operatingSystemVersion().majorVersion
+    macos_version().0
 }
 
 /// `WKWebsiteDataStore(forIdentifier:)` and `proxyConfigurations` both arrived

@@ -1183,7 +1183,7 @@ fn apply_user_agent(webview: &ICoreWebView2, key: usize, url: &Url) {
         tracing::debug!(
             "[browser] user agent for {}: {}",
             url.host_str().unwrap_or("?"),
-            if wanted.is_some() { "sign-in identity" } else { "engine's own" }
+            profile::user_agent_name(wanted)
         );
         // SAFETY: main thread, live settings.
         let _ = unsafe { settings.SetUserAgent(&HSTRING::from(value)) };

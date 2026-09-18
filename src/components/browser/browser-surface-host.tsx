@@ -32,9 +32,12 @@ import {
   useBrowserTabState,
 } from "@/lib/browser/browser-tab-store"
 import {
+  requestNativeSurfaceReclaim,
   useFallbackOverlayOpen,
   useNativeSurfaceOccluded,
+  useNativeSurfaceOcclusionPassive,
 } from "@/lib/browser/native-surface-occlusion"
+import { isBlankPageUrl } from "@/lib/browser/browser-url"
 import type { Bounds, BrowserTabState } from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
 import { cn } from "@/lib/utils"
@@ -182,19 +185,38 @@ export function NativeSurfaceHost({
     if (hidden) setFrozen(null)
   }
   const occluded = useNativeSurfaceOccluded()
+  const passiveOcclusion = useNativeSurfaceOcclusionPassive()
   const fallbackOverlay = useFallbackOverlayOpen()
   const view = useWorkspaceView()
   const route = useOptionalWorkbenchRoute()
   const routeVisible = route ? route.isConversations : true
   // The whole workspace surface is CSS-hidden under a full-page route.
   const hostHidden = useOverlayHostHidden()
-  const shouldShow =
-    !hidden && !occluded && !fallbackOverlay && routeVisible && !hostHidden
+  // Whether this tab has a page to leave a still of. A surface that has never
+  // committed a document — just created, or sitting on the blank page — has
+  // nothing to freeze, and hiding it would put an empty pane under the toast
+  // that asked for it. An overlay the user opened still gets its way (they
+  // are looking at the overlay, not at the pane); a notice does not.
+  const state = useBrowserTabState(storeKey)
+  const showsDocument =
+    state !== null && !state.error && !!state.url && !isBlankPageUrl(state.url)
+  const noticeOnly = occluded && passiveOcclusion && !fallbackOverlay
+  const occludedNow = occluded && (!noticeOnly || showsDocument)
+  const onScreen = !hidden && routeVisible && !hostHidden
+  const shouldShow = onScreen && !occludedNow && !fallbackOverlay
+  // A page in its own window is not over this window's toast — it is not over
+  // anything of ours at all — so a notice is no reason to take a whole window
+  // off the screen. Overlays keep their say over it, as they always had.
+  const windowShouldShow =
+    onScreen && !(occluded && !noticeOnly) && !fallbackOverlay
   // Hidden ONLY because an overlay is open over it: the placeholder stays on
   // screen, so it is worth a freeze frame. The other reasons (error page,
   // full-page route, hidden column) take the placeholder off screen too.
-  const overlayHide =
-    !hidden && routeVisible && !hostHidden && (occluded || fallbackOverlay)
+  const overlayHide = onScreen && (occludedNow || fallbackOverlay)
+  // A notice must not take the keyboard: the user did not ask for it, and
+  // whatever they were typing into the page is still where they left it.
+  // Everything else hands focus back so Esc and Tab reach the overlay.
+  const handoffFocus = !noticeOnly
 
   // One pass: measure, push bounds if they moved, push visibility if it
   // flipped. Called from every signal that could change either.
@@ -205,11 +227,13 @@ export function NativeSurfaceHost({
     // invisible by design — so only the "is this tab on screen" signals
     // apply, and there are no bounds to push.
     if (getBrowserTabState(storeKey)?.surface === "window") {
-      if (lastVisibleRef.current !== shouldShow) {
-        lastVisibleRef.current = shouldShow
-        void browserSetVisible(backendId, shouldShow, !shouldShow).catch(
-          () => {}
-        )
+      if (lastVisibleRef.current !== windowShouldShow) {
+        lastVisibleRef.current = windowShouldShow
+        void browserSetVisible(
+          backendId,
+          windowShouldShow,
+          !windowShouldShow
+        ).catch(() => {})
       }
       return
     }
@@ -241,7 +265,9 @@ export function NativeSurfaceHost({
         !elementVisible(el)
       ) {
         // Nothing worth a still: the placeholder is going off screen too.
-        void browserSetVisible(backendId, false, true, false).catch(() => {})
+        void browserSetVisible(backendId, false, handoffFocus, false).catch(
+          () => {}
+        )
       } else {
         void (async () => {
           // Paint the still UNDER the live native view, then hide. The view
@@ -270,18 +296,27 @@ export function NativeSurfaceHost({
           // — except that if the first one came back empty by TIMING OUT, the
           // retry spends that budget again, and the page sits over the
           // just-opened overlay for twice as long as it ever did before.
-          void browserSetVisible(backendId, false, true, false).catch(() => {})
+          void browserSetVisible(backendId, false, handoffFocus, false).catch(
+            () => {}
+          )
         })()
       }
     }
-  }, [backendId, overlayHide, shouldShow, storeKey])
+  }, [
+    backendId,
+    handoffFocus,
+    overlayHide,
+    shouldShow,
+    storeKey,
+    windowShouldShow,
+  ])
 
   // Whether this tab currently has a live surface. Also the re-creation
   // signal: if the state goes away while this host is mounted — the tab was
   // released by the background unload just as the user switched to it — the
   // effect below runs again and loads the page instead of leaving a blank
   // pane behind.
-  const loaded = useBrowserTabState(storeKey) !== null
+  const loaded = state !== null
 
   // Create the surface once per tab record; adopted popups and re-mounts
   // already have one (the store knows about it). A record whose surface was
@@ -387,10 +422,21 @@ export function NativeSurfaceHost({
     }
   }, [backendId, destroyOnUnmount, storeKey])
 
+  // Reaching for a page a notice is sitting on: a press or a wheel event only
+  // reaches this element while the native view is hidden, so while THAT is
+  // why it is hidden there is nothing else it can mean. The notice goes, the
+  // lease with it, and the page is live again — at the cost of swallowing the
+  // press that asked, which is what dismissing an overlay by clicking past it
+  // costs everywhere else.
+  const reclaim =
+    noticeOnly && !shouldShow ? () => requestNativeSurfaceReclaim() : undefined
+
   return (
     <div
       ref={ref}
       data-browser-surface={backendId}
+      onPointerDown={reclaim}
+      onWheel={reclaim}
       className={cn(
         "relative h-full w-full min-h-0 min-w-0 bg-background",
         className

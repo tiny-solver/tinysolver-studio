@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react"
+import { act, fireEvent, render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { BrowserWorkspaceTab } from "@/contexts/workspace-context"
@@ -48,6 +48,7 @@ import {
 import {
   acquireNativeSurfaceOcclusion,
   resetNativeSurfaceOcclusionForTests,
+  subscribeNativeSurfaceReclaim,
 } from "@/lib/browser/native-surface-occlusion"
 
 function tab(id = "abc"): BrowserWorkspaceTab {
@@ -92,6 +93,17 @@ function state(id = "abc"): BrowserTabState {
     openerTabId: null,
     profile: "default",
     agentGrant: null,
+  }
+}
+
+/** The same tab with a page committed in it — something to leave a still of. */
+function showing(id = "abc"): BrowserTabState {
+  return {
+    ...state(id),
+    url: "https://example.com/",
+    title: "Example",
+    origin: "https://example.com",
+    loading: false,
   }
 }
 
@@ -511,6 +523,156 @@ describe("BrowserSurfaceHost", () => {
     await flush()
     expect(api.browserSetVisible).toHaveBeenLastCalledWith(
       "host3",
+      false,
+      true,
+      false
+    )
+  })
+
+  // ---- a notice nobody opened (a toast) ----
+  //
+  // It has to take the page the same way — a native view is above every DOM
+  // element there is — but it is not an overlay the user is looking at, so it
+  // may not take the keyboard with it and may not be the last word.
+
+  it("hides the page for a notice without taking the keyboard, and gives it back on a press", async () => {
+    api.browserOpenTab.mockImplementation(() =>
+      Promise.resolve({ ...showing("host-notice") })
+    )
+    api.browserFreezeFrame.mockImplementation(() =>
+      Promise.resolve({
+        mime: "image/jpeg",
+        data: "QUJD",
+        width: 10,
+        height: 10,
+      })
+    )
+    const { container } = render(
+      <BrowserSurfaceHost tab={tab("host-notice")} />
+    )
+    await flush()
+    api.browserSetVisible.mockClear()
+
+    let release: () => void = () => {}
+    await act(async () => {
+      release = acquireNativeSurfaceOcclusion("toast", { passive: true })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await flushPaint()
+    // The still goes up as it does for any overlay; the focus handoff does
+    // not — the page keeps the caret the user left in it.
+    expect(
+      container.querySelector("img[data-browser-frozen-frame]")
+    ).not.toBeNull()
+    expect(api.browserSetVisible).toHaveBeenLastCalledWith(
+      "host-notice",
+      false,
+      false,
+      false
+    )
+
+    // Reaching for the page asks whoever holds the notice to take it away.
+    const reclaimed = vi.fn()
+    const stop = subscribeNativeSurfaceReclaim(reclaimed)
+    const placeholder = container.querySelector(
+      "[data-browser-surface]"
+    ) as HTMLElement
+    fireEvent.pointerDown(placeholder)
+    expect(reclaimed).toHaveBeenCalledTimes(1)
+    fireEvent.wheel(placeholder)
+    expect(reclaimed).toHaveBeenCalledTimes(2)
+    stop()
+
+    await act(async () => {
+      release()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(api.browserSetVisible).toHaveBeenLastCalledWith(
+      "host-notice",
+      true,
+      false
+    )
+    // And with the page back, a press on the placeholder is just a press on
+    // the placeholder again.
+    const quiet = vi.fn()
+    const stopQuiet = subscribeNativeSurfaceReclaim(quiet)
+    fireEvent.pointerDown(placeholder)
+    expect(quiet).not.toHaveBeenCalled()
+    stopQuiet()
+  })
+
+  // A surface that has never committed a document has no frame to leave
+  // behind, so hiding it for a notice would put an empty pane under the
+  // toast — which is what the still exists to prevent. Reachable: a toast is
+  // up and the user switches to a browser tab, whose surface is created
+  // right then.
+  it("leaves a pane with no page in it alone when a notice asks", async () => {
+    api.browserOpenTab.mockImplementation(() =>
+      Promise.resolve(state("host-blank"))
+    )
+    render(<BrowserSurfaceHost tab={tab("host-blank")} />)
+    await flush()
+    api.browserSetVisible.mockClear()
+    api.browserFreezeFrame.mockClear()
+
+    await act(async () => {
+      acquireNativeSurfaceOcclusion("toast", { passive: true })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await flushPaint()
+    expect(api.browserFreezeFrame).not.toHaveBeenCalled()
+    expect(api.browserSetVisible).not.toHaveBeenCalled()
+  })
+
+  // A page in its own window is not over this window's toast, so taking the
+  // whole window off the screen for one would be a bigger interruption than
+  // the notice is. An overlay still hides it, as it always did.
+  it("leaves an owned window up for a notice and hides it for an overlay", async () => {
+    api.browserOpenTab.mockImplementation(() =>
+      Promise.resolve({ ...showing("host-owned"), surface: "window" as const })
+    )
+    render(<BrowserSurfaceHost tab={tab("host-owned")} />)
+    await flush()
+    api.browserSetVisible.mockClear()
+
+    let release: () => void = () => {}
+    await act(async () => {
+      release = acquireNativeSurfaceOcclusion("toast", { passive: true })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await flushPaint()
+    expect(api.browserSetVisible).not.toHaveBeenCalled()
+
+    await act(async () => {
+      acquireNativeSurfaceOcclusion("dialog")
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(api.browserSetVisible).toHaveBeenLastCalledWith(
+      "host-owned",
+      false,
+      true
+    )
+    release()
+  })
+
+  // One real overlay in the set and the hide is an overlay's again, notice or
+  // no notice: the user is looking at the dialog and Esc has to reach it.
+  it("treats a notice with an overlay open over it as an overlay", async () => {
+    api.browserOpenTab.mockImplementation(() =>
+      Promise.resolve({ ...showing("host-both") })
+    )
+    render(<BrowserSurfaceHost tab={tab("host-both")} />)
+    await flush()
+    api.browserSetVisible.mockClear()
+
+    await act(async () => {
+      acquireNativeSurfaceOcclusion("toast", { passive: true })
+      acquireNativeSurfaceOcclusion("dialog")
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await flushPaint()
+    expect(api.browserSetVisible).toHaveBeenLastCalledWith(
+      "host-both",
       false,
       true,
       false

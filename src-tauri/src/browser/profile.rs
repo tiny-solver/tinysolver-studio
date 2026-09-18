@@ -566,14 +566,81 @@ pub fn sign_in_user_agent_enabled() -> bool {
 
 /// The user agent a tab must present for a main-frame navigation to `url`:
 /// the sign-in identity for Google's sign-in hosts while the switch is on,
-/// else `None` — the engine's own.
+/// the platform's default identity everywhere else (`None` where that is the
+/// engine's own string, untouched).
 pub fn user_agent_for(url: &Url) -> Option<&'static str> {
-    if !sign_in_user_agent_enabled() {
-        return None;
+    if sign_in_user_agent_enabled() && url.host_str().is_some_and(is_google_sign_in_host) {
+        return Some(SIGN_IN_USER_AGENT);
     }
-    url.host_str()
-        .filter(|host| is_google_sign_in_host(host))
-        .map(|_| SIGN_IN_USER_AGENT)
+    default_user_agent()
+}
+
+/// What a log line calls the identity a tab was just given.
+pub fn user_agent_name(user_agent: Option<&str>) -> &'static str {
+    match user_agent {
+        Some(value) if value == SIGN_IN_USER_AGENT => "sign-in identity",
+        Some(_) => "default identity",
+        None => "engine's own",
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The identity every other host sees
+// ---------------------------------------------------------------------------
+
+/// What a tab presents when no host asks for another identity — `None` where
+/// the engine already names a browser and nothing needs saying.
+///
+/// macOS is the exception. WKWebView's own string ends at `(KHTML, like
+/// Gecko)`: `Version/… Safari/…` are Safari's tokens and an embedder only gets
+/// them by asking, so what a site sniffing that string sees is an engine with
+/// no browser on it. `https://www.baidu.com/` answers it with a five-line
+/// document whose whole content is `location.replace(https → http)`; WebKit
+/// upgrades that http navigation straight back to https, gets the same
+/// document again, and the tab flickers through the loop about seventeen times
+/// a second until it is closed. Measured in a bare WKWebView with none of this
+/// app's code in it (170 main-frame loads in 10 s), and measured to load once
+/// with the tokens appended — it is the engine's identity that is short, not
+/// something we do to it.
+///
+/// This is not the borrowed identity of the sign-in hosts above: nothing here
+/// is claimed that is not true. These tabs are WebKit, at the version Safari
+/// ships on this release — so a bot check that rejects a user agent not
+/// matching the engine behind it (Turnstile among them) still sees a pair that
+/// matches.
+#[cfg(target_os = "macos")]
+pub fn default_user_agent() -> Option<&'static str> {
+    static USER_AGENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    Some(USER_AGENT.get_or_init(|| {
+        let (major, minor) = crate::browser::shim::macos::macos_version();
+        // The prefix is Safari's own and frozen by Apple: `10_15_7` and
+        // `605.1.15` are what Safari sends on every release since, Apple
+        // Silicon included, so it is copied rather than derived.
+        format!(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 \
+             (KHTML, like Gecko) Version/{}.{minor} Safari/605.1.15",
+            safari_major(major)
+        )
+    }))
+}
+
+/// Safari's marketing version on a macOS release: the two were aligned in
+/// macOS 26, and before that Safari ran three majors ahead (macOS 11 →
+/// Safari 14 … macOS 15 → Safari 18).
+#[cfg(target_os = "macos")]
+fn safari_major(macos_major: isize) -> isize {
+    if macos_major >= 26 {
+        macos_major
+    } else {
+        macos_major.max(11) + 3
+    }
+}
+
+/// Windows and Linux need nothing: WebView2's own string is Chrome's, and
+/// WebKitGTK's already carries `Version/… Safari/…`.
+#[cfg(not(target_os = "macos"))]
+pub fn default_user_agent() -> Option<&'static str> {
+    None
 }
 
 /// Whether this platform switches the user agent per navigation. It takes a
@@ -789,14 +856,53 @@ mod tests {
             "https://example.com/accounts.google.com",
             "http://localhost:3000/",
         ] {
-            assert_eq!(user_agent_for(&Url::parse(native).unwrap()), None, "{native}");
+            // Everything else gets the platform's own identity, borrowing
+            // nobody's: on macOS that is the engine's string with the tokens
+            // it is missing, elsewhere the engine's string untouched.
+            assert_eq!(
+                user_agent_for(&Url::parse(native).unwrap()),
+                default_user_agent(),
+                "{native}"
+            );
+            assert_ne!(user_agent_for(&Url::parse(native).unwrap()), Some(SIGN_IN_USER_AGENT));
         }
         assert!(SIGN_IN_USER_AGENT.contains("Firefox/"));
         assert!(is_google_sign_in_host("ACCOUNTS.GOOGLE.COM."));
 
+        // The switch only gives back the borrowed identity; the default one
+        // is not a preference and stays.
         set_sign_in_user_agent(false);
-        assert_eq!(user_agent_for(&sign_in), None);
+        assert_eq!(user_agent_for(&sign_in), default_user_agent());
         set_sign_in_user_agent(true);
+    }
+
+    /// The tokens a sniffing site looks for, and the reason this exists: a
+    /// string that stops at `(KHTML, like Gecko)` is read as "not a browser".
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_default_identity_names_the_browser_the_engine_belongs_to() {
+        let user_agent = default_user_agent().expect("macOS answers with one");
+        assert!(user_agent.starts_with("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "));
+        assert!(user_agent.contains("AppleWebKit/605.1.15 (KHTML, like Gecko) Version/"));
+        assert!(user_agent.ends_with(" Safari/605.1.15"));
+        // Nothing of Firefox's in it: that identity is the sign-in hosts' and
+        // is a claim this one does not make.
+        assert!(!user_agent.contains("Gecko/"));
+        assert!(!user_agent.contains("Firefox/"));
+        // Same string every time — it is handed out as `&'static str`.
+        assert_eq!(default_user_agent(), default_user_agent());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn safari_ran_three_majors_ahead_of_macos_until_they_were_aligned() {
+        assert_eq!(safari_major(11), 14);
+        assert_eq!(safari_major(15), 18);
+        assert_eq!(safari_major(26), 26);
+        assert_eq!(safari_major(30), 30);
+        // A release older than any this app runs on still names a Safari that
+        // existed, rather than `Version/13.0` for macOS 10.
+        assert_eq!(safari_major(10), 14);
     }
 
     /// The environment list extends the built-in one with the same rule

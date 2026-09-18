@@ -276,7 +276,11 @@ export function StatusBarMcp() {
               // untouchable until its parent is on — the same treatment the
               // settings panel gives it. Turning it on from here while the
               // group is off would write a `true` that nothing acts on, and
-              // show an agent a tool it cannot call.
+              // show an agent a tool it cannot call. Not indented for it,
+              // though: the settings list draws its rows on one rail, and a
+              // single stepped-in row here read as a misaligned one rather
+              // than as a nested one. Being off and untouchable while the
+              // group is off already says where it belongs.
               const parent = group.requires
               const available =
                 !parent ||
@@ -291,8 +295,7 @@ export function StatusBarMcp() {
                     "flex items-center gap-2 px-2 py-1.5 transition-colors",
                     available
                       ? "cursor-pointer hover:bg-accent/40"
-                      : "cursor-not-allowed opacity-55",
-                    parent && "pl-6"
+                      : "cursor-not-allowed opacity-55"
                   )}
                 >
                   {/* One tile tint for every row — the theme's accent, so the

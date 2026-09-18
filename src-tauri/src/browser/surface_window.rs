@@ -127,6 +127,14 @@ fn build(
         .disable_drag_drop_handler()
         .zoom_hotkeys_enabled(true)
         .browser_extensions_enabled(false);
+    // The same identity the embedded tabs start with. An owned window keeps it
+    // for life: the per-navigation hook that swaps in the sign-in identity is
+    // the embedded surface's, so this is the only place a window is told what
+    // it is.
+    let builder = match profile::default_user_agent() {
+        Some(user_agent) => builder.user_agent(user_agent),
+        None => builder,
+    };
     // Same container and proxy as the embedded tabs, so a page behaves the
     // same whichever surface hosts it.
     #[cfg(target_os = "macos")]

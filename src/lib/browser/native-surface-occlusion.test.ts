@@ -5,9 +5,12 @@ import {
   acquireNativeSurfaceOcclusion,
   acquireNativeSurfaceOcclusionFor,
   isNativeSurfaceOccluded,
+  isNativeSurfaceOcclusionPassive,
   nativeSurfaceOcclusionHolders,
+  requestNativeSurfaceReclaim,
   resetNativeSurfaceOcclusionForTests,
   subscribeNativeSurfaceOcclusion,
+  subscribeNativeSurfaceReclaim,
   useFallbackOverlayOpen,
   useNativeSurfaceOccluded,
   useNativeSurfaceOcclusion,
@@ -55,6 +58,48 @@ describe("native surface occlusion leases", () => {
     expect(result.current).toBe(true)
     act(() => holder.unmount())
     expect(result.current).toBe(false)
+  })
+
+  // A toast holds the surfaces down like anything else, but the hosts treat
+  // it differently — so "is anything holding this down" and "is a notice all
+  // that is" are two answers, and a change in either has to be published.
+  it("tells a notice-only hold from one an overlay is part of", () => {
+    const listener = vi.fn()
+    subscribeNativeSurfaceOcclusion(listener)
+    const releaseToast = acquireNativeSurfaceOcclusion("toast", {
+      passive: true,
+    })
+    expect(isNativeSurfaceOccluded()).toBe(true)
+    expect(isNativeSurfaceOcclusionPassive()).toBe(true)
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    // The count does not change on the edge that matters here: what changes
+    // is whose hold it is.
+    const releaseDialog = acquireNativeSurfaceOcclusion("dialog")
+    expect(isNativeSurfaceOccluded()).toBe(true)
+    expect(isNativeSurfaceOcclusionPassive()).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    releaseDialog()
+    expect(isNativeSurfaceOcclusionPassive()).toBe(true)
+    expect(listener).toHaveBeenCalledTimes(3)
+
+    releaseToast()
+    releaseToast() // double release is a no-op here too
+    expect(isNativeSurfaceOccluded()).toBe(false)
+    expect(isNativeSurfaceOcclusionPassive()).toBe(false)
+    expect(nativeSurfaceOcclusionHolders()).toEqual({})
+    expect(listener).toHaveBeenCalledTimes(4)
+  })
+
+  it("carries the reclaim signal to whoever is holding a notice", () => {
+    const holder = vi.fn()
+    const stop = subscribeNativeSurfaceReclaim(holder)
+    requestNativeSurfaceReclaim()
+    expect(holder).toHaveBeenCalledTimes(1)
+    stop()
+    requestNativeSurfaceReclaim()
+    expect(holder).toHaveBeenCalledTimes(1)
   })
 
   it("the fallback detector sees lease-less open dialogs and menus", async () => {

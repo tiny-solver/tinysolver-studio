@@ -41,7 +41,11 @@ const mocks = vi.hoisted(() => {
     }),
     adoptBrowserTab: vi.fn(() => "browser:opener-p1"),
     closeFileTab: vi.fn(),
-    openBrowserTab: vi.fn(() => "browser:new"),
+    // `string | null` like the real one: a workspace that opened no tab
+    // (an address it would not take) is one of the cases below.
+    openBrowserTab: vi.fn<(...args: unknown[]) => string | null>(
+      () => "browser:new"
+    ),
     browserAnswerOpenRequest: vi.fn(() => Promise.resolve(true)),
     browserClose: vi.fn(() => Promise.resolve()),
     browserListTabs: vi.fn(() =>

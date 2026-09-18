@@ -737,7 +737,15 @@ fn configure_child<'a>(
         .with_visible(visible)
         .with_focused(false)
         .with_devtools(devtools)
-        .with_hotkeys_zoom(true)
+        .with_hotkeys_zoom(true);
+    // The identity this surface starts out with. Every main-frame navigation
+    // re-decides it (`shim::*::apply_user_agent`), but that hook is not
+    // installed yet here, and the first request must not be the one that goes
+    // out as a nameless engine.
+    if let Some(user_agent) = profile::default_user_agent() {
+        builder = builder.with_user_agent(user_agent);
+    }
+    builder = builder
         .with_navigation_handler(move |url| {
             let Ok(parsed) = Url::parse(&url) else {
                 tracing::info!("[browser] tab {nav_id} blocked unparsable navigation {url:?}");
