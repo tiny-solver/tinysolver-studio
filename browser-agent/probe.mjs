@@ -144,12 +144,38 @@ const PAGE = `<!doctype html><html><head><title>Probe</title>
     <div id="stretched" style="position:relative;height:40px;background:#f6f6f6">
       <a id="inside" href="#stretched-went">Stretched</a>
     </div>
+    <!-- The other screen-reader-only recipe, still shipping in plenty of
+         themes: a real box of a real size, parked outside the document's
+         scrollable origin. Scroll offsets are clamped at zero, so nothing can
+         ever bring this into view — a property like the clipped ones, but it
+         is geometry rather than computed style that says so. -->
+    <div id="offleft" style="position:absolute;left:-9999px;width:200px;height:20px;overflow:hidden">Parked off to the left</div>
+    <!-- And the two things that are ALSO outside the document and must NOT be
+         called permanent, because a page puts them back: the off-canvas
+         drawer a hamburger slides in, offset by exactly its own width, and
+         the skip link a focus rule drops into view. Both park flush; the
+         recipe above parks nine thousand pixels out.
+         No backticks in here: this whole page is a template literal. -->
+    <nav id="drawer" style="position:fixed;top:140px;left:-320px;width:320px;height:40px;background:#dde">
+      <a id="drawerlink" href="#drawer-went">Drawer link</a>
+    </nav>
+    <a id="skip" href="#act" style="position:absolute;left:0;top:-40px;width:200px;height:30px">Skip to content</a>
     <label>Notes <input id="notes" name="notes"></label>
     <!-- A scroller of its own, so a key pressed inside it can be shown to
          move the pane and leave the document where it was. -->
     <div id="pane" style="width:200px;height:80px;overflow:auto">
       <button id="deep">Deep</button>
       <div style="height:800px"></div>
+    </div>
+    <!-- Room on both axes, for measuring what an engine's own Home and End do
+         horizontally before deciding what ours should. -->
+    <div id="both" style="width:200px;height:80px;overflow:auto">
+      <div style="width:1200px;height:800px">wide and tall</div>
+    </div>
+    <!-- Room on one axis only, to settle whether the ends keys fall back to
+         the axis that has somewhere to go. -->
+    <div id="wideonly" style="width:200px;height:80px;overflow:auto">
+      <div style="width:1200px;height:20px">wide only</div>
     </div>
     <div id="tall" style="height:3000px"></div>
   </section>
@@ -678,6 +704,110 @@ try {
       ],
       [false, "obscured", true, false]
     )
+    // …and it has to say *which* relation that is. `describe` names an
+    // element by its own text, and a card's text is its link's text, so the
+    // plain wording comes out as "X is on top of X" — which names nothing to
+    // act on, and naming what to act on is this message's whole job.
+    check(
+      "an ancestor overlay is named as one, without repeating the target's words",
+      [
+        overlaid.detail.includes("ancestor"),
+        (overlaid.detail.match(/"Stretched"/g) ?? []).length,
+      ],
+      [true, 1]
+    )
+    // The recipe the style checks do not see: a real box parked where no
+    // scroll can reach it. Permanent for a reason of its own — offsets clamp
+    // at zero — so it must not come back as "could not be scrolled to *this
+    // time*", which is the answer an agent retries.
+    const parked = ref(/\[ref=(e\d+)\][^\n]*: Parked off to the left/)
+    const offLeft = await actJson(gen, parked, { kind: "click" })
+    check(
+      "a box parked outside the document's origin is permanent too",
+      [offLeft.error, offLeft.detail.includes("no snapshot will change that")],
+      ["not-visible", true]
+    )
+    // The line that one must not cross. Outside the document is not by itself
+    // permanent: no *scroll* reaches a negative coordinate, but CSS does, and
+    // the two commonest things parked out there are things a page puts back.
+    // Both park flush — by exactly their own size — which is what separates
+    // them from a box left nine thousand pixels out.
+    for (const [what, pattern] of [
+      ["an off-canvas drawer", /link "Drawer link" \[ref=(e\d+)\]/],
+      ["a skip link above the fold", /link "Skip to content" \[ref=(e\d+)\]/],
+    ]) {
+      const answer = await actJson(gen, ref(pattern), { kind: "click" })
+      check(
+        `…but ${what} is a state the page can undo, and is not called permanent`,
+        [answer.error, answer.detail.includes("no snapshot will change that")],
+        ["not-visible", false]
+      )
+    }
+  }
+  {
+    // `body { transform: translateX(…) }` is the other drawer pattern, and it
+    // pushes the whole page aside at once. The walk has to read the page's own
+    // style rather than merely stopping at it, or every element the drawer
+    // pushed off the left becomes a permanent refusal that closing the drawer
+    // undoes.
+    const { gen, ref } = await fresh()
+    const exported = ref(/button "Export" \[ref=(e\d+)\]/)
+    // Both of the page's boxes, because `transform` does not inherit: a walk
+    // that stops at the body never sees a root-level page transition, and
+    // `html` is as much "between here and the page" as `body` is.
+    for (const box of ["body", "documentElement"]) {
+      await run(`document.${box}.style.transform = "translateX(-3000px)"`)
+      const pushed = await actJson(gen, exported, { kind: "click" })
+      await run(`document.${box}.style.transform = ""`)
+      check(
+        `a page pushed aside by a transform on the ${box} is not permanent either`,
+        [pushed.error, pushed.detail.includes("no snapshot will change that")],
+        ["not-visible", false]
+      )
+    }
+    // The page's *overflow*, unlike its transform, must not switch the test
+    // off: `body { overflow: hidden }` is what every application with its own
+    // scroller writes, and the scroll it hides is the one already counted in
+    // `window.scrollX` / `scrollY`.
+    const parked = ref(/\[ref=(e\d+)\][^\n]*: Parked off to the left/)
+    await run(`document.body.style.overflow = "hidden"`)
+    const stillGone = await actJson(gen, parked, { kind: "click" })
+    await run(`document.body.style.overflow = ""`)
+    check(
+      "…while the page's own overflow does not switch the test off",
+      [
+        stillGone.error,
+        stillGone.detail.includes("no snapshot will change that"),
+      ],
+      ["not-visible", true]
+    )
+  }
+  {
+    // The line on the other side of `unreachable`. An element that is not
+    // being rendered *at this moment* — the accordion shut since the
+    // snapshot, the panel a route change collapsed — has no boxes at all, and
+    // so arrives at the same place as the one-pixel recipe. But it is a state
+    // and not a property: open the thing that hides it, snapshot again, and
+    // the ref works. Telling an agent no snapshot will change that is the
+    // same lie the off-viewport wording was split off to avoid.
+    await run(
+      `(() => {
+         const w = document.createElement("div")
+         w.id = "shutter"
+         w.innerHTML = '<button id="in-shutter">In shutter</button>'
+         document.getElementById("reach").appendChild(w)
+       })()`
+    )
+    const { gen, ref } = await fresh()
+    const inShutter = ref(/button "In shutter" \[ref=(e\d+)\]/)
+    await run(`document.getElementById("shutter").style.display = "none"`)
+    const shut = await actJson(gen, inShutter, { kind: "click" })
+    check(
+      "an element hidden since the snapshot is a state, not a permanent refusal",
+      [shut.error, shut.detail.includes("no snapshot will change that")],
+      ["not-visible", false]
+    )
+    await run(`document.getElementById("shutter").remove()`)
   }
   {
     // A synthetic key event carries no default action, so a scroll key that
@@ -806,6 +936,180 @@ try {
     await run(`removeEventListener("keydown", globalThis.__stop)`)
   }
   {
+    // Why the ends keys move one axis and not two, settled by asking the
+    // engine rather than by reasoning about what "the beginning" ought to
+    // mean. Trusted keys, because a dispatched one has no default action —
+    // that is the premise of the whole emulation — so these are the engine's
+    // own answer, and the emulation is written to match it.
+    //
+    // It is flatly not what one would guess: `Home` reads as "go to the
+    // start", and in a box scrolled both down and across it goes only up.
+    // Kept as a check rather than a comment because the guess is the kind
+    // that gets acted on later.
+    const trustedKey = async (key, keyCode, settle = 900) => {
+      for (const type of ["rawKeyDown", "keyUp"])
+        await send("Input.dispatchKeyEvent", {
+          type,
+          key,
+          code: key,
+          windowsVirtualKeyCode: keyCode,
+          nativeVirtualKeyCode: keyCode,
+        })
+      // Long enough for Chrome's own smooth keyboard scroll to finish: a
+      // short wait reads a frame of the animation and answers neither "it
+      // moved" nor "it did not".
+      await sleep(settle)
+    }
+    const offsets = (target) =>
+      run(`[${target}.scrollLeft, ${target}.scrollTop].map(Math.round)`)
+    const focusOn = async (target, left, top = 0) =>
+      run(`${target}.tabIndex = -1; ${target}.focus();
+           ${target}.scrollTo({ left: ${left}, top: ${top}, behavior: "instant" })`)
+    const release = (target) =>
+      run(`${target}.blur(); ${target}.removeAttribute("tabindex");
+           ${target}.scrollTo({ left: 0, top: 0, behavior: "instant" })`)
+
+    const both = "document.getElementById('both')"
+    await focusOn(both, 400, 300)
+    await trustedKey("End", 35)
+    const ended = await offsets(both)
+    await focusOn(both, 400, 300)
+    await trustedKey("Home", 36)
+    const homed = await offsets(both)
+    await release(both)
+    check(
+      "the engine's own ends keys move the box down and up, never across",
+      [ended[0], ended[1] > 300, homed[0], homed[1]],
+      [400, true, 400, 0]
+    )
+
+    // Not even when the axis they move has nowhere to go and the other one
+    // does: a box that can only scroll across stays where it is.
+    const wideOnly = "document.getElementById('wideonly')"
+    await focusOn(wideOnly, 400)
+    await trustedKey("Home", 36)
+    const across = await offsets(wideOnly)
+    await release(wideOnly)
+    check(
+      "…and they do not fall back to the axis that has room",
+      across,
+      [400, 0]
+    )
+
+    // The same of the document's own scroller, which is what a ref-less key
+    // lands on almost every time.
+    const page = "document.scrollingElement"
+    await run(
+      `(() => {
+         const wide = document.createElement("div")
+         wide.id = "wide"
+         wide.style.cssText = "width:4000px;height:10px"
+         document.body.appendChild(wide)
+       })()`
+    )
+    await run(`${page}.scrollTo({ left: 600, top: 400, behavior: "instant" })`)
+    await trustedKey("End", 35)
+    const pageEnded = await offsets(page)
+    await run(`${page}.scrollTo({ left: 600, top: 400, behavior: "instant" })`)
+    await trustedKey("Home", 36)
+    const pageHomed = await offsets(page)
+    check(
+      "the document's scroller answers the same way",
+      [pageEnded[0], pageEnded[1] > 400, pageHomed[0], pageHomed[1]],
+      [600, true, 600, 0]
+    )
+    await run(
+      `document.getElementById("wide").remove();
+       ${page}.scrollTo({ left: 0, top: 0, behavior: "instant" })`
+    )
+  }
+  {
+    // The layout most single-page apps ship: the document itself does not
+    // scroll, an inner box does. A ref-less key lands on `document.body`,
+    // whose walk ends at the document's own scroller — which has nothing to
+    // move — so the press reports "no more content than fits" about a page
+    // with four thousand pixels left in it.
+    //
+    // Built here and taken down again: a document that cannot scroll is not a
+    // state the rest of this file can run in.
+    await run(
+      `(() => {
+         globalThis.__spa = {
+           html: document.documentElement.getAttribute("style"),
+           body: document.body.getAttribute("style"),
+           // The shell is the body's only laid-out child in a real
+           // application, and it has to be here too: the middle of the screen
+           // is where the answer comes from, and this page's own three
+           // thousand pixels would be sitting in it otherwise.
+           hidden: Array.from(document.body.children).map((child) => [
+             child,
+             child.style.display,
+           ]),
+         }
+         for (const [child] of globalThis.__spa.hidden) child.style.display = "none"
+         document.documentElement.style.cssText += ";height:100%;overflow:hidden"
+         document.body.style.cssText += ";height:100%;overflow:hidden;margin:0"
+         const root = document.createElement("div")
+         root.id = "approot"
+         root.style.cssText = "height:100%;overflow-y:auto"
+         root.innerHTML = '<div style="height:4000px">app</div>'
+         document.body.appendChild(root)
+         // A control of the application's own that scrolls nothing — the rail
+         // down the side, the fixed toolbar. Naming it is how a caller says
+         // which box it means.
+         const aside = document.createElement("button")
+         aside.id = "spa-aside"
+         aside.textContent = "Rail"
+         aside.style.cssText = "position:fixed;left:0;top:0;z-index:5"
+         document.body.appendChild(aside)
+       })()`
+    )
+    await run("document.activeElement?.blur()")
+    const { gen, ref } = await fresh()
+    const pageRoom = await run(
+      "document.scrollingElement.scrollHeight - document.scrollingElement.clientHeight"
+    )
+    const inner = await actJson(gen, null, { kind: "press", key: "PageDown" })
+    check(
+      "a page whose own scroller cannot move still scrolls the box that can",
+      [
+        pageRoom <= 1,
+        inner.ok,
+        await run(`document.getElementById("approot").scrollTop > 0`),
+        inner.scrolled?.by > 0,
+      ],
+      [true, true, true, true]
+    )
+    // …but only for a press that named nothing. A caller that gave a `ref`
+    // pointed at a box and is owed an answer about that box: moving a
+    // different one and reporting the pixels reads as the named box having
+    // scrolled, which is the same false success one layer along.
+    await run(`document.getElementById("approot").scrollTop = 0`)
+    const rail = ref(/button "Rail" \[ref=(e\d+)\]/)
+    const named = await actJson(gen, rail, { kind: "press", key: "PageDown" })
+    check(
+      "…and not for one that named a box of its own that does not scroll",
+      [
+        named.ok,
+        await run(`document.getElementById("approot").scrollTop`),
+        named.scrolled?.by,
+      ],
+      [true, 0, 0]
+    )
+    await run(
+      `(() => {
+         document.getElementById("approot").remove()
+         document.getElementById("spa-aside").remove()
+         const put = (el, was) =>
+           was === null ? el.removeAttribute("style") : el.setAttribute("style", was)
+         put(document.documentElement, globalThis.__spa.html)
+         put(document.body, globalThis.__spa.body)
+         for (const [child, was] of globalThis.__spa.hidden) child.style.display = was
+         delete globalThis.__spa
+       })()`
+    )
+  }
+  {
     const { gen, ref } = await fresh()
     const spent = ref(/listitem \[ref=(e\d+)\]: beta/)
     await run(
@@ -921,6 +1225,64 @@ try {
       [gone.error, gone.detail.includes("has not changed")],
       ["stale", false]
     )
+    // The same line, on the side the check above cannot reach — and the one
+    // an agent actually meets. When the element leaves *before* the next
+    // snapshot, the new table never names it, so "is the name in the current
+    // table" says exactly what it says for a cut: no. Only the names the cut
+    // itself took tell the two apart, and both ways of quoting have to agree.
+    //
+    // Run twice: once with uncut snapshots, and once with both of them capped.
+    // The capped pair is not a variation, it is the ordinary case — the host
+    // caps every snapshot it takes — so a page-wide "was this cut" flag would
+    // be permanently true there and hand back the very sentence this removes.
+    const vanish = (where) =>
+      run(
+        `(() => {
+           const b = document.createElement("button")
+           b.id = "vanishing"
+           b.textContent = "Vanishing"
+           document.getElementById(${JSON.stringify(where)}).appendChild(b)
+         })()`
+      )
+    const snap = async (maxChars) =>
+      JSON.parse(
+        await run(
+          `JSON.stringify(__codegAgent.snapshot(${JSON.stringify(maxChars ? { maxChars } : {})}))`
+        )
+      )
+    // Near the top of the tree, so a cap that trims the page's tail still
+    // shows it — being shown is what makes the ref answerable at all.
+    await vanish("act")
+    const whole = await snap()
+    for (const [how, cap] of [
+      ["uncut", 0],
+      ["capped", whole.tree.length - 400],
+    ]) {
+      if (cap) await vanish("act")
+      const held = await snap(cap)
+      const vanishing = held.tree.match(/button "Vanishing" \[ref=(e\d+)\]/)[1]
+      await run(`document.getElementById("vanishing").remove()`)
+      const reread = await snap(cap)
+      for (const [quoting, token] of [
+        ["the newer snapshot", reread.generation],
+        ["the snapshot the ref came from", held.generation],
+      ]) {
+        const answer = await actJson(JSON.stringify(token), vanishing, {
+          kind: "click",
+        })
+        check(
+          `an element removed between two ${how} snapshots is not blamed on maxChars — quoting ${quoting}`,
+          [
+            held.truncated,
+            reread.truncated,
+            answer.error,
+            answer.detail.includes("has not changed"),
+            answer.detail.includes("maxChars"),
+          ],
+          [!!cap, !!cap, "stale", false, false]
+        )
+      }
+    }
   }
   {
     // Where the engine has the Navigation API, even a replaceState away and

@@ -100,6 +100,24 @@ let superseded = new Set<string>()
 let supersededToken = ""
 
 /**
+ * The names the last snapshot *would* have handed out and the cap took away.
+ *
+ * The one thing that tells a name the caller's own `maxChars` dropped from a
+ * name the page dropped, and [`stale`] cannot say the first without it: both
+ * leave a name the current table does not hold, so the table alone answers
+ * neither.
+ *
+ * Names, not elements — like [`superseded`], nothing here can resolve to
+ * anything — and disjoint from `refs` by construction, since these are
+ * exactly the entries deleted from it. A page-wide "was this snapshot cut"
+ * flag would not do: the host caps *every* snapshot by default, so on any
+ * page past the cap that flag is permanently true and says nothing about
+ * this ref. A ref the page removed is never in the tree the cap cut, so it
+ * can never be in here.
+ */
+let cutAway = new Set<string>()
+
+/**
  * The address the last snapshot was taken at.
  *
  * The generation answers for a *new document*, which is the only kind of
@@ -243,17 +261,22 @@ export function snapshot(options: SnapshotOptions = {}): SnapshotResult {
     rendered = renderAriaSnapshotAsYaml(json, { lineToNode })
   }
   const { text, truncated } = truncate(rendered, options.maxChars)
+  const cut = new Set<string>()
   if (truncated) {
     // A ref the agent was not shown is not a ref it holds. Whatever the cap
     // cut from the text is cut from the map too, so a name guessed from the
     // pattern cannot act on an element that was never in the answer.
     const shown = shownRefs(lineToNode, rendered, text)
     for (const ref of Array.from(next.keys()))
-      if (!shown.has(ref)) next.delete(ref)
+      if (!shown.has(ref)) {
+        next.delete(ref)
+        cut.add(ref)
+      }
   }
   superseded = new Set(refs.keys())
   supersededToken = refsToken
   refs = next
+  cutAway = cut
   refsTakenAt = location.href
   refsHistoryLength = history.length
   refsNavTicks = navTicks
@@ -380,18 +403,31 @@ export type RectResult =
  *
  * Both halves of that are covered, because a caller can arrive quoting either
  * snapshot: the newer one (the ref is simply not in its table) or the older
- * one the ref came from (the token itself is a generation behind). What is
- * *not* covered, deliberately, is a ref the current table still holds whose
- * element has left the page — `refs.has` is what tells the two apart, and
- * without it a framework re-render would be reported as a caller's own doing
- * and answered with "take a bigger snapshot", which is the same kind of lie
- * this is here to remove.
+ * one the ref came from (the token itself is a generation behind).
+ *
+ * What decides it is [`cutAway`], and nothing weaker would do. The ref table
+ * cannot tell this apart from the ordinary case on its own: `ai` mode caches
+ * a ref on the element and reuses it while the role and the name hold, so two
+ * snapshots of an unchanged page name the same elements by the same refs —
+ * and a name missing from the second means either the cap took it *or the
+ * page did*. A page that re-renders between two snapshots, which is most of
+ * why a ref goes stale at all, leaves exactly the table this would otherwise
+ * read as the caller's own doing, and would be answered with "the page has
+ * not changed, take a bigger snapshot" — the same kind of lie this is here to
+ * remove, pointing the other way.
+ *
+ * Nor would "was the last snapshot cut", which is the tempting shorthand and
+ * is not the same question. The host caps every snapshot it takes, so on any
+ * page past that cap the answer is permanently yes and the lie comes back
+ * word for word. `cutAway` names the refs *this* cut took, which is the
+ * question actually being asked.
  */
 function stale(ref: string | null, generation?: string): ActionFailure {
   const cut =
     ref !== null &&
     generation !== undefined &&
-    !refs.has(ref) &&
+    // Disjoint from `refs`: these are the names deleted from it.
+    cutAway.has(ref) &&
     superseded.has(ref) &&
     // Either the caller is on the current snapshot and this ref is not in it,
     // or it is quoting the very snapshot the ref came from. Anything older

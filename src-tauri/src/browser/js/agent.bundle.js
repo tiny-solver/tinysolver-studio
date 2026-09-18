@@ -2799,12 +2799,33 @@
     });
     const box = visibleBox(el);
     if (box) return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    if (!isRendered(el))
+      return {
+        error: "not-visible",
+        detail: `${describe(el)} is not being rendered at the moment \u2014 it, or something above it, is hidden (\`display: none\`, \`visibility: hidden\`). Whatever hides it has to be opened first; then take a new snapshot and use a ref from that one.`
+      };
     const own = largestBox(el);
     if (own.width <= 1 || own.height <= 1) return unreachable(el);
+    if (isParkedOutsideTheDocument(el, own)) return unreachable(el);
     return {
       error: "not-visible",
       detail: `${describe(el)} is laid out but none of it is inside the viewport, even after scrolling to it \u2014 something between it and the page is holding it off screen.`
     };
+  }
+  function isParkedOutsideTheDocument(el, box) {
+    const viewport = document.scrollingElement ?? document.documentElement;
+    for (let node = el; node; node = parentElementOf(node)) {
+      const page = node === document.body || node === document.documentElement;
+      const style = getComputedStyle(node);
+      if (page) {
+        if (node !== viewport && (node.scrollTop !== 0 || node.scrollLeft !== 0))
+          return false;
+      } else if (node !== el && (style.overflowX !== "visible" || style.overflowY !== "visible")) {
+        return false;
+      }
+      if (style.transform !== "none") return false;
+    }
+    return box.right + window.scrollX < -window.innerWidth && box.right < -window.innerWidth || box.bottom + window.scrollY < -window.innerHeight && box.bottom < -window.innerHeight;
   }
   function unreachable(el, touched) {
     const instead = touched ? `; ${describe(touched)} is what a pointer there would touch` : "";
@@ -2854,6 +2875,7 @@
     return new DOMRect(left, top, right - left, bottom - top);
   }
   function obstructionAt(x, y, target) {
+    if (typeof document.elementFromPoint !== "function") return null;
     const hit = deepElementFromPoint(x, y);
     if (!hit) return document.documentElement;
     for (let node = hit; node; node = parentOf(node)) {
@@ -2865,12 +2887,23 @@
     const cover = obstructionAt(point.x, point.y, target);
     if (!cover) return null;
     if (isVisuallyErased(target)) return unreachable(target, cover);
-    return {
-      error: "obscured",
-      detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`
-    };
+    return { error: "obscured", detail: obscuredBy(cover, target) };
+  }
+  function obscuredBy(cover, target) {
+    const named = describe(target);
+    const actionable = cover !== document.documentElement && cover !== document.body;
+    if (!actionable || !isAncestorOf(cover, target))
+      return `${describe(cover)} is on top of ${named} where a pointer would land`;
+    const shared = textOf(cover) === textOf(target);
+    return `${describeNode(cover, !shared)} is an ancestor of ${named} and paints over it where a pointer would land \u2014 act on the ancestor, the way a person clicking the card would.`;
+  }
+  function isAncestorOf(maybe, node) {
+    for (let up = parentOf(node); up; up = parentOf(up))
+      if (up === maybe) return true;
+    return false;
   }
   function deepElementFromPoint(x, y) {
+    if (typeof document.elementFromPoint !== "function") return null;
     let el = document.elementFromPoint(x, y);
     while (el?.shadowRoot) {
       const inner = el.shadowRoot.elementFromPoint(x, y);
@@ -3227,7 +3260,7 @@
         ))
           insertTyped(target, desc.key);
       } else {
-        scrolled = defaultActionFor(target, desc) ?? null;
+        scrolled = defaultActionFor(target, desc, el !== null) ?? null;
       }
     }
     target.dispatchEvent(
@@ -3276,7 +3309,7 @@
       })
     );
   }
-  function defaultActionFor(target, desc) {
+  function defaultActionFor(target, desc, named) {
     const plain = !desc.ctrl && !desc.alt && !desc.meta;
     switch (desc.key) {
       case "Enter": {
@@ -3336,15 +3369,15 @@
         if (target instanceof HTMLSelectElement) return;
         const caret = isTextControl(target) || target instanceof HTMLElement && target.isContentEditable;
         if (caret && ends) return;
-        return scrollByKey(target, desc.key);
+        return scrollByKey(target, desc.key, named);
       }
       default:
         return;
     }
   }
   var PAGE_FRACTION = 0.875;
-  function scrollByKey(from, key) {
-    const scroller = scrollerFor(from);
+  function scrollByKey(from, key, named) {
+    const scroller = scrollerFor(from, named);
     const before = scroller.scrollTop;
     const page = Math.max(1, scroller.clientHeight * PAGE_FRACTION);
     switch (key) {
@@ -3373,12 +3406,23 @@
       el.scrollTo({ top, behavior: "instant" });
     else el.scrollTop = top;
   }
-  function scrollerFor(from) {
+  function scrollerFor(from, named = true) {
+    const own = scrollableAncestorOf(from);
+    if (own) return own;
+    const page = document.scrollingElement ?? document.documentElement;
+    if (named || page.scrollHeight - page.clientHeight > 1) return page;
+    const middle = deepElementFromPoint(
+      Math.floor(window.innerWidth / 2),
+      Math.floor(window.innerHeight / 2)
+    );
+    return (middle && scrollableAncestorOf(middle)) ?? page;
+  }
+  function scrollableAncestorOf(from) {
     for (let node = from; node; node = parentElementOf(node)) {
       if (node === document.body || node === document.documentElement) break;
       if (scrollsVertically(node)) return node;
     }
-    return document.scrollingElement ?? document.documentElement;
+    return null;
   }
   function scrollsVertically(el) {
     if (el.clientHeight <= 0) return false;
@@ -3478,11 +3522,18 @@
     return null;
   }
   function describe(el) {
+    return describeNode(el, true);
+  }
+  function describeNode(el, withText) {
     let name = el.tagName.toLowerCase();
     if (el.id) name += `#${el.id}`;
-    const text = (el.textContent ?? "").trim().replace(/\s+/g, " ");
+    if (!withText) return name;
+    const text = textOf(el);
     if (text) name += ` "${text.length > 40 ? `${text.slice(0, 40)}\u2026` : text}"`;
     return name;
+  }
+  function textOf(el) {
+    return (el.textContent ?? "").trim().replace(/\s+/g, " ");
   }
 
   // browser-agent/src/index.ts
@@ -3498,6 +3549,7 @@
   var refs = /* @__PURE__ */ new Map();
   var superseded = /* @__PURE__ */ new Set();
   var supersededToken = "";
+  var cutAway = /* @__PURE__ */ new Set();
   var refsTakenAt = "";
   var refsHistoryLength = 0;
   var refsNavTicks = 0;
@@ -3523,14 +3575,19 @@
       rendered = renderAriaSnapshotAsYaml(json, { lineToNode });
     }
     const { text, truncated } = truncate(rendered, options.maxChars);
+    const cut = /* @__PURE__ */ new Set();
     if (truncated) {
       const shown = shownRefs(lineToNode, rendered, text);
       for (const ref of Array.from(next.keys()))
-        if (!shown.has(ref)) next.delete(ref);
+        if (!shown.has(ref)) {
+          next.delete(ref);
+          cut.add(ref);
+        }
     }
     superseded = new Set(refs.keys());
     supersededToken = refsToken;
     refs = next;
+    cutAway = cut;
     refsTakenAt = location.href;
     refsHistoryLength = history.length;
     refsNavTicks = navTicks;
@@ -3576,7 +3633,8 @@
     return true;
   }
   function stale(ref, generation) {
-    const cut = ref !== null && generation !== void 0 && !refs.has(ref) && superseded.has(ref) && // Either the caller is on the current snapshot and this ref is not in it,
+    const cut = ref !== null && generation !== void 0 && // Disjoint from `refs`: these are the names deleted from it.
+    cutAway.has(ref) && superseded.has(ref) && // Either the caller is on the current snapshot and this ref is not in it,
     // or it is quoting the very snapshot the ref came from. Anything older
     // than that, or a page that has moved since, is not this case and gets
     // the plain answer.

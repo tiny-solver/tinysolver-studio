@@ -702,10 +702,14 @@ pub enum ActionError {
     /// world has moved past: take a new snapshot.
     Stale,
     /// Nothing of the element is on screen to point at. The detail, not a
-    /// code of its own, says which of the two shapes it is: one that *paints
+    /// code of its own, says which shape it is, because whether a page can
+    /// reach the element is not a property of the refusal. One that *paints
     /// nothing* — a screen-reader-only node, which the accessibility tree
-    /// names and a pointer can never reach — is the one refusal here another
-    /// try cannot turn into a success, while one merely *outside the
+    /// names and a pointer can never reach, whether it is erased by its style
+    /// or parked where no scroll goes — is the one refusal here another try
+    /// cannot turn into a success. The rest are the page as it happens to be:
+    /// an element *not being rendered* (something above it is hidden) wants
+    /// that opened and a fresh snapshot, and one merely *outside the
     /// viewport* is a page that could not be scrolled to it this time.
     NotVisible,
     /// Something else is on top where a pointer would land. Unlike

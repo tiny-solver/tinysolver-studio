@@ -228,6 +228,15 @@ impl BrowserActOutcome {
     }
 
     pub fn stale_ref(tab_id: &str, detail: &str) -> Self {
+        // The world's details are sentences and some of them end like one.
+        // Another sentence is added after them here, and without this the two
+        // full stops meet in the middle of the answer.
+        //
+        // Exactly one, not every trailing dot: a detail can end by quoting a
+        // name off the page, and `Load more...` must keep its ellipsis rather
+        // than come back as `Load more`.
+        let detail = detail.trim_end();
+        let detail = detail.strip_suffix('.').unwrap_or(detail);
         Self::refused(
             tab_id,
             ERROR_STALE_REF,
@@ -598,6 +607,37 @@ mod tests {
         let stale = BrowserActOutcome::stale_ref("t3", "e9 is gone");
         assert_eq!(stale.error.as_deref(), Some(ERROR_STALE_REF));
         assert!(stale.note.unwrap().contains("browser_snapshot"));
+
+        // The world's longer details are written as sentences and end as
+        // sentences; the instruction added after them brings its own full
+        // stop. The first of these is the world's own words for the one detail
+        // that does end in a stop (`browser-agent/src/index.ts`, the
+        // `maxChars` explanation) — the others are the shapes every remaining
+        // producer has.
+        for detail in [
+            "e18 was named by an earlier snapshot of this page, and the snapshot you took after \
+             it did not name it. The page itself has not changed. Take a snapshot large enough \
+             to include what you want and use a ref from that one.",
+            "e18 does not name an element on the page as it is now; take a new snapshot",
+            "the page has navigated since that snapshot; take a new one",
+        ] {
+            let note = BrowserActOutcome::stale_ref("t3", detail).note.unwrap();
+            assert!(!note.contains(".."), "{note}");
+            assert!(note.contains(". Call browser_snapshot on tab t3 again"), "{note}");
+            // And it takes a stop off, never a word.
+            assert!(note.starts_with(detail.trim_end_matches('.')), "{note}");
+        }
+        // Exactly one stop, though. A detail that ends by quoting a name off
+        // the page keeps the name: `Load more...` must not come back as
+        // `Load more`, which is a different button.
+        let quoted =
+            BrowserActOutcome::stale_ref("t3", "e4 does not name the button Load more...")
+                .note
+                .unwrap();
+        assert!(
+            quoted.starts_with("e4 does not name the button Load more... Call browser_snapshot"),
+            "{quoted}"
+        );
 
         // Unshared: the same words as a read, so the level is not disclosed.
         let none = BrowserActOutcome::grant_required("t3");

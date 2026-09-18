@@ -4,6 +4,7 @@ import {
   clickAt,
   isDisabledControl,
   keyDescription,
+  pointerReach,
   pressOn,
   scrollerFor,
   selectIn,
@@ -581,6 +582,123 @@ describe("scrollerFor", () => {
     givenScrollRoom(root.querySelector<HTMLElement>("#shut")!, 800, 0)
     expect(scrollerFor(root.querySelector("#leaf")!)).toBe(pageScroller())
   })
+
+  // The layout most applications ship: `html, body { overflow: hidden }` with
+  // a full-height box inside doing the scrolling. A ref-less key lands on
+  // `document.body`, whose walk ends at a scroller with nothing in it, and
+  // answering "no more content than fits" there would be a false success
+  // about a page with thousands of pixels left.
+  it("takes the box under the middle of the screen when the page cannot move", () => {
+    const root = mount(
+      `<div id="shell" style="overflow-y:auto"><p id="leaf">text</p></div>`
+    )
+    const shell = root.querySelector<HTMLElement>("#shell")!
+    givenScrollRoom(shell, 4000, 800)
+    const asked = whereItLooked(root.querySelector("#leaf")!)
+    expect(scrollerFor(document.body, false)).toBe(shell)
+    // The middle of the screen and not some other point: the justification
+    // for taking this box at all is that a wheel resting there would turn it.
+    expect(asked.mock.calls).toEqual([
+      [Math.floor(window.innerWidth / 2), Math.floor(window.innerHeight / 2)],
+    ])
+  })
+
+  // …and only then, so nothing here can take a key away from a document that
+  // wanted it.
+  it("leaves the page's own scroller alone while the page can still move", () => {
+    const root = mount(
+      `<div id="shell" style="overflow-y:auto"><p id="leaf">text</p></div>`
+    )
+    givenScrollRoom(root.querySelector<HTMLElement>("#shell")!, 4000, 800)
+    givenScrollRoom(pageScroller(), 6000, 800)
+    whereItLooked(root.querySelector("#leaf")!)
+    expect(scrollerFor(document.body, false)).toBe(pageScroller())
+  })
+
+  // A caller that gave a `ref` pointed at a box and is owed an answer about
+  // that box; moving a different one and reporting the pixels would read as
+  // the named box having scrolled.
+  it("does not re-route a press that named an element", () => {
+    const root = mount(
+      `<div id="shell" style="overflow-y:auto"><p id="leaf">text</p></div>` +
+        `<button id="aside">aside</button>`
+    )
+    givenScrollRoom(root.querySelector<HTMLElement>("#shell")!, 4000, 800)
+    whereItLooked(root.querySelector("#leaf")!)
+    expect(scrollerFor(root.querySelector("#aside")!)).toBe(pageScroller())
+  })
+})
+
+describe("pointerReach", () => {
+  // `describe` names an element by its own text, and a container's text is
+  // its contents'. In the stretched-link pattern the card and the link have
+  // the same words, so the plain wording reads "X is on top of X" — which
+  // names nothing to act on, and that is the message's only job.
+  it("says an overlay is the target's own ancestor, once", () => {
+    const root = mount(`<div id="card"><a id="link" href="/go">Go</a></div>`)
+    const card = root.querySelector<HTMLElement>("#card")!
+    stub(document, "elementFromPoint", () => card)
+    const blocked = pointerReach(root.querySelector("#link")!, { x: 5, y: 5 })
+    expect(blocked?.error).toBe("obscured")
+    expect(blocked?.detail).toContain("div#card is an ancestor of a#link")
+    expect(blocked?.detail.match(/"Go"/g)).toHaveLength(1)
+  })
+
+  // The commoner card has words of its own — a title and a description — and
+  // those are worth keeping: they are how a caller finds the card in the
+  // tree. Only the repetition is dropped.
+  it("keeps an ancestor's own words when they are not the target's", () => {
+    const root = mount(
+      `<div id="card">Weekly report <a id="link" href="/go">Go</a></div>`
+    )
+    stub(document, "elementFromPoint", () => root.querySelector("#card"))
+    const detail = pointerReach(root.querySelector("#link")!, {
+      x: 5,
+      y: 5,
+    })?.detail
+    expect(detail).toContain(`div#card "Weekly report Go" is an ancestor`)
+  })
+
+  it("keeps the plain wording for an overlay that is not an ancestor", () => {
+    const root = mount(
+      `<a id="link" href="/go">Go</a><div id="veil">Veil</div>`
+    )
+    stub(document, "elementFromPoint", () => root.querySelector("#veil"))
+    expect(
+      pointerReach(root.querySelector("#link")!, { x: 5, y: 5 })?.detail
+    ).toBe(
+      `div#veil "Veil" is on top of a#link "Go" where a pointer would land`
+    )
+  })
+
+  // `obstructionAt` answers `documentElement` when the hit test finds nothing,
+  // and every element descends from that — so the ancestor sentence would end
+  // in "act on the ancestor" about `<html>`, which is advice with nothing
+  // behind it.
+  it("does not tell the caller to act on the page itself", () => {
+    const root = mount(`<a id="link" href="/go">Go</a>`)
+    stub(document, "elementFromPoint", () => null)
+    const detail = pointerReach(root.querySelector("#link")!, {
+      x: 5,
+      y: 5,
+    })?.detail
+    expect(detail).toContain("is on top of")
+    expect(detail).not.toContain("act on the ancestor")
+  })
+
+  // An engine with no hit testing is not an engine where everything is
+  // covered. jsdom is that engine, which is why this can be asked here at
+  // all: refusing every click with the retryable `obscured`, naming an
+  // obstruction that does not exist, sends a caller hunting for an overlay
+  // for ever. A point that genuinely hit nothing — the case above — is a
+  // different thing and keeps its refusal.
+  it("lets the click through where the engine cannot hit test at all", () => {
+    const root = mount(`<a id="link" href="/go">Go</a>`)
+    expect("elementFromPoint" in document).toBe(false)
+    expect(
+      pointerReach(root.querySelector("#link")!, { x: 5, y: 5 })
+    ).toBeNull()
+  })
 })
 
 /** jsdom has no `document.scrollingElement`; the fallback the walk ends on is
@@ -645,6 +763,17 @@ function watchScrolling(el: Element) {
 /** The `top` of every scroll asked for, in order. */
 function tops(spy: ReturnType<typeof vi.fn>): number[] {
   return spy.mock.calls.map((call) => (call[0] as ScrollToOptions).top!)
+}
+
+/** jsdom has no hit testing at all — `document.elementFromPoint` is not even
+ *  defined — so the stand-in both supplies the answer and records the point
+ *  it was asked about, which is half of what the walk claims to do. */
+function whereItLooked(answer: Element | null) {
+  // Declares no parameters and still records the ones it was called with,
+  // which is the point: the coordinates are the assertion.
+  const spy = vi.fn(() => answer)
+  stub(document, "elementFromPoint", spy)
+  return spy
 }
 
 describe("selectIn", () => {

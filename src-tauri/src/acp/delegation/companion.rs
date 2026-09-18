@@ -2064,7 +2064,17 @@ fn scroll_note(scrolled: Option<&Value>) -> String {
     let (by, top, max) = (f("by"), f("top"), f("max"));
     if by == 0.0 {
         return if max <= 0.0 {
-            " Nothing scrolled: this box has no more content than fits in it.".to_string()
+            // The world already looked past the page's own scroller to the box
+            // under the middle of the screen, so this is not "the page does not
+            // scroll" — it is "nothing here does, on this axis". Said that way
+            // and not as "press again with a ref inside the box", because the
+            // caller may have just done exactly that: a `ref` inside a box that
+            // only scrolls across lands here too, and telling it to repeat
+            // itself is a loop.
+            " Nothing scrolled: nothing here has anywhere to go up or down — these keys move \
+             only the vertical axis. If what you want to move is a box of its own, name a \
+             `ref` inside that box."
+                .to_string()
         } else if top <= 0.0 {
             " Nothing scrolled: already at the top.".to_string()
         } else if top >= max {
@@ -4502,8 +4512,14 @@ mod tests {
         assert!(bottom.contains("already at the bottom"), "{bottom}");
         let top = note(json!({ "by": 0, "top": 0, "max": 2900 }));
         assert!(top.contains("already at the top"), "{top}");
+        // Nothing here scrolls — the world already looked past the page's own
+        // scroller — so the way out is a ref inside whatever does. It must not
+        // read as "press again with the ref you used": a ref inside a box that
+        // scrolls only across arrives here too.
         let unscrollable = note(json!({ "by": 0, "top": 0, "max": 0 }));
-        assert!(unscrollable.contains("no more content than fits"), "{unscrollable}");
+        assert!(unscrollable.contains("up or down"), "{unscrollable}");
+        assert!(unscrollable.contains("name a `ref` inside that box"), "{unscrollable}");
+        assert!(!unscrollable.contains("press again"), "{unscrollable}");
         let stuck = note(json!({ "by": 0, "top": 100, "max": 2900 }));
         assert!(stuck.contains("does not reach"), "{stuck}");
     }

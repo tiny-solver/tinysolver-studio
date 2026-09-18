@@ -113,19 +113,123 @@ export function pointAt(el: Element): Point | ActionFailure {
   })
   const box = visibleBox(el)
   if (box) return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
-  // Two ways to have no box worth pointing at, and only one of them is
-  // final. A box a pixel across is the element's own doing and will be a
-  // pixel across for ever; a real box that nothing of lands in the viewport
-  // is a place the page could not scroll to *this time*, which is a state
-  // and not a property.
+  // Several ways to have no box worth pointing at, and they do not ask the
+  // same thing of the caller — which is the whole reason this is not one
+  // sentence. Two of them are the element's own doing and will still be true
+  // next time; the rest are the page as it happens to be right now.
+  //
+  // Not being laid out at all is the second kind, and it arrives here looking
+  // like the first: an element under a `display: none` has no boxes, so its
+  // measurements are the same zeroes a one-pixel recipe leaves. The accordion
+  // shut since the snapshot, the panel a route change collapsed — open what
+  // hides it, snapshot again, and the ref works. Asked first, because the
+  // size tests below cannot tell the two apart.
+  //
+  // "Snapshot again" is not a loop even when nothing opens it: `ai` mode
+  // names only what is visible, so the next snapshot does not hand this ref
+  // out again and there is nothing left to retry. The probe pins that.
+  if (!isRendered(el))
+    return {
+      error: "not-visible",
+      detail:
+        `${describe(el)} is not being rendered at the moment — it, or something above it, is ` +
+        `hidden (\`display: none\`, \`visibility: hidden\`). Whatever hides it has to be ` +
+        `opened first; then take a new snapshot and use a ref from that one.`,
+    }
   const own = largestBox(el)
+  // A box a pixel across is the element's own doing and will be a pixel
+  // across for ever.
   if (own.width <= 1 || own.height <= 1) return unreachable(el)
+  // So is a full-sized box parked where no scroll can reach it, which is the
+  // same intent written a third way. See [`isParkedOutsideTheDocument`].
+  if (isParkedOutsideTheDocument(el, own)) return unreachable(el)
+  // And what is left really is a state: a real box that nothing of lands in
+  // the viewport is a place the page could not scroll to *this time*.
   return {
     error: "not-visible",
     detail:
       `${describe(el)} is laid out but none of it is inside the viewport, even after ` +
       `scrolling to it — something between it and the page is holding it off screen.`,
   }
+}
+
+/**
+ * Whether the box is parked so far outside the document that nothing brings
+ * it back.
+ *
+ * The third spelling of the screen-reader-only recipe, `position: absolute;
+ * left: -9999px`, which no computed-style test sees: nothing about the style
+ * is unusual, it is *where* the box is that puts it out of the world. Read
+ * after [`pointAt`] has already had `scrollIntoView` try.
+ *
+ * Distance is the whole test, and the reason is that "outside the document"
+ * alone is not permanent at all. Scroll offsets clamp at zero, so no scroll
+ * reaches a negative coordinate — but CSS does, and the two commonest things
+ * parked out there are things a page puts back:
+ *
+ *   - the off-canvas drawer, `left: -320px; width: 320px`, which a hamburger
+ *     slides in;
+ *   - the skip link, `top: -40px`, which `:focus` drops into view.
+ *
+ * Both are parked *flush*: an off-canvas panel is offset by exactly its own
+ * size, because that is what putting it off the edge means, so its far edge
+ * lands on the origin or a few pixels past it. The recipe is parked nine
+ * thousand pixels away, which is nobody's animation. So the line is drawn a
+ * whole viewport out: past that there is no design that means to bring it
+ * back, and every flush-parked thing is comfortably inside it.
+ *
+ * Only where the element's frame of reference is the document's, which is
+ * what the walk checks — a box that scrolls or transforms anywhere between
+ * here and the page makes the arithmetic mean something else, and both of
+ * those change in a moment.
+ *
+ * The page's own two boxes are read like any other and not walked past: `body
+ * { transform: translateX(-300px) }` is how the *other* drawer pattern works
+ * and it pushes everything aside at once, and a transform on `html` does the
+ * same for a root-level page transition. The walk simply ends at `html`,
+ * whose parent is not an element.
+ *
+ * What the page's boxes are excused is the *overflow* test, and only for the
+ * reason that they are the page: the scroll that belongs to the viewport is
+ * already in the arithmetic as `window.scrollX` / `scrollY`, and refusing on
+ * `overflow` alone would switch this whole test off for every application
+ * that writes `body { overflow: hidden }`, which is most of them. What is not
+ * excused is a page box that is *itself* scrolled — `html { overflow: hidden
+ * } / body { overflow: auto }` puts the offset in `body.scrollTop` where the
+ * window knows nothing of it.
+ *
+ * The element's *own* overflow is not asked about at all, only its
+ * ancestors': overflow clips an element's descendants and says nothing about
+ * where its own border box sits, and `overflow: hidden` is part of the recipe
+ * — it is there so the parked box raises no scrollbars. Testing it would
+ * refuse to recognise the very thing this is for. Its own transform is
+ * another matter, since that moves the box being measured.
+ *
+ * The error runs towards recoverability on purpose: a missed one costs a
+ * retry, a wrong one tells an agent to give up on an element that is there.
+ */
+function isParkedOutsideTheDocument(el: Element, box: DOMRect): boolean {
+  const viewport = document.scrollingElement ?? document.documentElement
+  for (let node: Element | null = el; node; node = parentElementOf(node)) {
+    const page = node === document.body || node === document.documentElement
+    const style = getComputedStyle(node)
+    if (page) {
+      if (node !== viewport && (node.scrollTop !== 0 || node.scrollLeft !== 0))
+        return false
+    } else if (
+      node !== el &&
+      (style.overflowX !== "visible" || style.overflowY !== "visible")
+    ) {
+      return false
+    }
+    if (style.transform !== "none") return false
+  }
+  return (
+    (box.right + window.scrollX < -window.innerWidth &&
+      box.right < -window.innerWidth) ||
+    (box.bottom + window.scrollY < -window.innerHeight &&
+      box.bottom < -window.innerHeight)
+  )
 }
 
 /**
@@ -276,6 +380,19 @@ function visibleBox(el: Element): DOMRect | null {
  * component's shadow tree, and the element the agent named may be either.
  */
 function obstructionAt(x: number, y: number, target: Element): Element | null {
+  // An engine with no hit testing at all cannot answer this, and refusing
+  // every click on the strength of a missing method would be worse than
+  // letting them through: the element has a visible box — [`pointAt`] found
+  // the point inside it — and the refusal would be `obscured`, the kind a
+  // caller retries, naming an obstruction that does not exist. Told apart
+  // from a point that genuinely hit nothing, which every engine answers with
+  // `null` and which stays the conservative refusal it has always been.
+  //
+  // A property read rather than a platform fact, but not one a page can
+  // arrange: the prototype this resolves against is *this world's*, and a
+  // page defining its own reaches only its own — the isolation that keeps
+  // `__codegAgent` out of the page's reach, read from the other side.
+  if (typeof document.elementFromPoint !== "function") return null
   const hit = deepElementFromPoint(x, y)
   if (!hit) return document.documentElement
   for (let node: Node | null = hit; node; node = parentOf(node)) {
@@ -300,7 +417,8 @@ function obstructionAt(x: number, y: number, target: Element): Element | null {
  *
  * An `obscured` names what is in the way, which is the thing to act on: the
  * card that carries the overlay, the dialog to dismiss. That the obstruction
- * is sometimes the target's own ancestor does not change the advice.
+ * is sometimes the target's own ancestor does not change the advice, but it
+ * does change the words — see [`obscuredBy`].
  *
  * Both callers — the dispatched path and the trusted one — go through here,
  * so an agent cannot get two different answers for the same page depending on
@@ -313,13 +431,55 @@ export function pointerReach(
   const cover = obstructionAt(point.x, point.y, target)
   if (!cover) return null
   if (isVisuallyErased(target)) return unreachable(target, cover)
-  return {
-    error: "obscured",
-    detail: `${describe(cover)} is on top of ${describe(target)} where a pointer would land`,
-  }
+  return { error: "obscured", detail: obscuredBy(cover, target) }
 }
 
+/**
+ * What is in the way, said so that the caller can tell it from the thing it
+ * is in the way of.
+ *
+ * [`describe`] names an element by its own text, and a container's text is
+ * whatever its contents say. In the pattern this message meets most often —
+ * a card whose `::after` covers the link inside it — the card's only text
+ * *is* the link's, so the plain wording comes out as "X is on top of X".
+ * Which names nothing to act on, and naming the thing to act on is the only
+ * job this message has.
+ *
+ * So when the obstruction is the target's own ancestor, say that, and let the
+ * tag and the id carry it rather than repeating the words twice.
+ *
+ * Except for the page itself. [`obstructionAt`] answers `document.
+ * documentElement` when the hit test finds nothing at all, and every element
+ * is a descendant of that, so the ancestor sentence would end in "act on the
+ * ancestor" about `<html>` — advice with nothing behind it. The page is
+ * nobody's card; those keep the plain wording, which is merely odd rather
+ * than an instruction to do something pointless.
+ */
+function obscuredBy(cover: Element, target: Element): string {
+  const named = describe(target)
+  const actionable =
+    cover !== document.documentElement && cover !== document.body
+  if (!actionable || !isAncestorOf(cover, target))
+    return `${describe(cover)} is on top of ${named} where a pointer would land`
+  const shared = textOf(cover) === textOf(target)
+  return (
+    `${describeNode(cover, !shared)} is an ancestor of ${named} and paints over it where a ` +
+    `pointer would land — act on the ancestor, the way a person clicking the card would.`
+  )
+}
+
+/** Whether `maybe` is above `node` in the tree, shadow boundaries included. */
+function isAncestorOf(maybe: Element, node: Node): boolean {
+  for (let up = parentOf(node); up; up = parentOf(up))
+    if (up === maybe) return true
+  return false
+}
+
+/** `null` rather than a throw where the engine has no hit testing at all —
+ *  one rule for both callers, and a throw from here would come back as a
+ *  broken evaluation rather than as one of this file's refusals. */
 function deepElementFromPoint(x: number, y: number): Element | null {
+  if (typeof document.elementFromPoint !== "function") return null
   let el = document.elementFromPoint(x, y)
   while (el?.shadowRoot) {
     const inner = el.shadowRoot.elementFromPoint(x, y)
@@ -855,7 +1015,7 @@ export function pressOn(
       )
         insertTyped(target, desc.key)
     } else {
-      scrolled = defaultActionFor(target, desc) ?? null
+      scrolled = defaultActionFor(target, desc, el !== null) ?? null
     }
   }
   target.dispatchEvent(
@@ -913,10 +1073,15 @@ function insertTyped(target: Element, char: string): void {
 
 /** What the engine would do with the key. A [`ScrollReport`] when that was to
  *  scroll something; nothing for every other key, which is why the branches
- *  that do other work return bare. */
+ *  that do other work return bare.
+ *
+ *  `named` is whether the caller pointed at an element or left the key to
+ *  whatever has focus — which only the scroll keys care about, and only for
+ *  [`scrollerFor`]'s last resort. */
 function defaultActionFor(
   target: Element,
-  desc: KeyDescription
+  desc: KeyDescription,
+  named: boolean
 ): ScrollReport | undefined {
   const plain = !desc.ctrl && !desc.alt && !desc.meta
   switch (desc.key) {
@@ -1002,7 +1167,7 @@ function defaultActionFor(
         isTextControl(target) ||
         (target instanceof HTMLElement && target.isContentEditable)
       if (caret && ends) return
-      return scrollByKey(target, desc.key)
+      return scrollByKey(target, desc.key, named)
     }
     default:
       return
@@ -1029,9 +1194,17 @@ const PAGE_FRACTION = 0.875
  * false success comes back in a quieter form once the box is at its end, and
  * the report is what lets a caller stop instead of pressing on into the
  * bottom of the page.
+ *
+ * Vertical only, including Home and End, which is not the guess their names
+ * invite. An engine's own Home leaves `scrollLeft` exactly where it was —
+ * in a box scrolled both down and across, in the document's scroller, and
+ * even in a box that can *only* scroll across, where the axis it moves has
+ * nowhere to go and it still declines the other one. Measured with trusted
+ * keys in the probe rather than reasoned about, and pinned there, because
+ * "Home means go to the start" is the kind of guess that gets acted on.
  */
-function scrollByKey(from: Element, key: string): ScrollReport {
-  const scroller = scrollerFor(from)
+function scrollByKey(from: Element, key: string, named: boolean): ScrollReport {
+  const scroller = scrollerFor(from, named)
   const before = scroller.scrollTop
   const page = Math.max(1, scroller.clientHeight * PAGE_FRACTION)
   switch (key) {
@@ -1079,7 +1252,8 @@ function scrollTopTo(el: Element, top: number): void {
 
 /**
  * The box a scroll key pressed on `from` would move: the nearest ancestor
- * that scrolls vertically, else the document's own scroller.
+ * that scrolls vertically, else the document's own scroller — and, for a
+ * press that named no element, the box the page keeps its scrolling in.
  *
  * Nearest-ancestor rather than always-the-window because that is the rule a
  * person sees — a key pressed inside a scrollable panel scrolls the panel.
@@ -1092,14 +1266,50 @@ function scrollTopTo(el: Element, top: number): void {
  * being none: the walk ends at the document's scroller, which every document
  * with a body has.
  */
-export function scrollerFor(from: Element): Element {
+export function scrollerFor(from: Element, named = true): Element {
+  const own = scrollableAncestorOf(from)
+  if (own) return own
+  const page = document.scrollingElement ?? document.documentElement
+  if (named || page.scrollHeight - page.clientHeight > 1) return page
+  // The page's own scroller has nothing to move — which would be the end of
+  // it, were it not the layout most applications ship: `html, body {
+  // overflow: hidden }` with a full-height box inside doing the scrolling. A
+  // ref-less key lands on `document.body`, whose walk ends right here, so the
+  // press would answer "no more content than fits" about a page with
+  // thousands of pixels left in it. That is the false success this file
+  // exists to remove, moved one step along rather than removed.
+  //
+  // So ask the same question of whatever is under the middle of the screen,
+  // which is the box a wheel resting there would turn, and the box a person
+  // would have clicked into before pressing the key. Where the middle of the
+  // screen is a small box rather than the shell — a dashboard tile, a middle
+  // column — this answers about that box, and the report carries no name for
+  // what it moved, so `top === max` reads as the end of the page rather than
+  // the end of the tile. Accepted: the answer before this existed was
+  // `max: 0` on the first press, which stops a caller sooner and for a reason
+  // that is not true either.
+  //
+  // Only for a press that named nothing, and only when the page itself cannot
+  // move. A caller that gave a `ref` pointed at a box and is owed an answer
+  // about *that* box: moving a different one and reporting the pixels would
+  // read as the named box having scrolled, which is a new false success for
+  // the one this removes. And the gate on the page keeps a key that a
+  // document wanted from ever being taken from it.
+  const middle = deepElementFromPoint(
+    Math.floor(window.innerWidth / 2),
+    Math.floor(window.innerHeight / 2)
+  )
+  return (middle && scrollableAncestorOf(middle)) ?? page
+}
+
+function scrollableAncestorOf(from: Element): Element | null {
   for (let node: Element | null = from; node; node = parentElementOf(node)) {
     // The document's scroller answers for these two whatever the quirks mode
     // and whichever of them the engine picked, so let it.
     if (node === document.body || node === document.documentElement) break
     if (scrollsVertically(node)) return node
   }
-  return document.scrollingElement ?? document.documentElement
+  return null
 }
 
 function scrollsVertically(el: Element): boolean {
@@ -1280,9 +1490,20 @@ export function selectIn(el: Element, values: string[]): ActionFailure | null {
 /** How to name an element in a message: enough for a reader to find it in
  *  the tree, no more. */
 export function describe(el: Element): string {
+  return describeNode(el, true)
+}
+
+/** The same, with the words optional: [`obscuredBy`] drops them where they
+ *  would be the other element's words repeated back. */
+function describeNode(el: Element, withText: boolean): string {
   let name = el.tagName.toLowerCase()
   if (el.id) name += `#${el.id}`
-  const text = (el.textContent ?? "").trim().replace(/\s+/g, " ")
+  if (!withText) return name
+  const text = textOf(el)
   if (text) name += ` "${text.length > 40 ? `${text.slice(0, 40)}…` : text}"`
   return name
+}
+
+function textOf(el: Element): string {
+  return (el.textContent ?? "").trim().replace(/\s+/g, " ")
 }

@@ -104,6 +104,25 @@ a single-line field has no pages of its own and the engine scrolls the
 document from there too — which is the state an agent is in every time it has
 just typed into something.
 
+All four move one axis. That is not the guess their names invite, and it is
+the engine's own behaviour rather than a simplification: a trusted Home leaves
+`scrollLeft` exactly where it was — in a box scrolled both down and across, in
+the document's scroller, and even in a box that can *only* scroll across,
+where the axis it moves has nowhere to go and it still declines the other one.
+Measured in the probe with trusted keys, and pinned there, because "Home means
+go to the start" is the kind of guess that gets acted on later.
+
+Where the walk ends at the document's scroller and *that* cannot move either,
+one more question is asked: what is under the middle of the screen? The layout
+most applications ship is `html, body { overflow: hidden }` with a full-height
+box inside doing the scrolling, and a ref-less key lands on `document.body`,
+whose walk ends at a scroller with nothing in it. Answering "no more content
+than fits" there is the same false success one step along, about a page with
+thousands of pixels left in it. The middle of the screen is the box a wheel
+resting there would turn, and the box a person would have clicked into first.
+Asked only when the page itself cannot move, so it can never take a key away
+from a document that wanted it.
+
 The press answers with how far the box actually moved and how far it can still
 go, read back off the scroller rather than computed from what was asked for.
 Without that the false success returns in a quieter form: the tree an agent
@@ -118,28 +137,52 @@ the node) plus a dispatched `input`.
 
 A click is refused when something else is on top at the point a pointer would
 land — the user could not click it either, and a dialog's backdrop is the
-usual case. The refusal names what is in the way.
+usual case. The refusal names what is in the way, and where that turns out to
+be the target's own ancestor it says so in those words. It has to: `describe`
+names an element by its own text, and a container's text is whatever its
+contents say, so the card in the stretched-link pattern and the link inside it
+come out with the same name and the plain wording reads "X is on top of X" —
+which names nothing to act on, and naming the thing to act on is the only job
+that message has.
 
 It is a *different* refusal when the element has been erased rather than
 covered: the screen-reader-only heading a framework puts inside every article,
-written as `width: 1px; clip: rect(0 0 0 0)` or a `clip-path` that closes the
-box. `ai` mode's own visibility rule does not catch those — a 1px box is a box
-— so this is where they stop, and they are `not-visible` rather than
-`obscured` because the two ask opposite things of the caller. An `obscured` is
-worth another look once the page settles; a `not-visible` is the one refusal
-here that no retry and no fresh snapshot can turn into a success, and an
-accessibility tree offers them a row at a time.
+written as `width: 1px; clip: rect(0 0 0 0)`, as a `clip-path` that closes the
+box, or as a full-sized box parked at `left: -9999px`. `ai` mode's own
+visibility rule does not catch those — a 1px box is a box — so this is where
+they stop. They are `not-visible` rather than `obscured` because the two ask
+opposite things of the caller: an `obscured` is worth another look once the
+page settles, while this one no retry and no fresh snapshot can turn into a
+success, and an accessibility tree offers them a row at a time.
 
-Which one it is, is decided by the element's own computed style and by nothing
-else. The tempting shortcut is to infer it from the hit test — if a pointer at
-the element's centre lands on one of its *ancestors*, surely the element draws
-nothing there — and that inference is wrong often enough to matter, because
-the verdict it feeds is the one a caller must not retry. An ancestor is what a
-pointer finds whenever an ancestor paints over its own descendant: a card
-whose `::after` covers a perfectly visible link (a pseudo-element hit is
-attributed to its host), the contents of an accordion shut with `height: 0`.
-Both are recoverable — click the card, open the accordion — and an `obscured`
-that names the ancestor says exactly that.
+`not-visible` covers recoverable shapes too, and the detail is what tells them
+apart — the code cannot, because whether a page can reach an element is not a
+property of the refusal. An element that is not being *rendered* at the moment
+(it, or an ancestor, is `display: none` — the accordion shut since the
+snapshot, the tab not selected) reads as erased from its measurements alone,
+since an unrendered box is the same zeroes a one-pixel recipe leaves. It is
+asked about first, and answered with what to do: open what hides it, snapshot
+again. So is an element merely outside the viewport, which is a page that
+could not be scrolled to it *this time*.
+
+Which one it is, is decided by the element itself and by nothing else: its
+computed style, or where its box sits. The tempting shortcut is to infer it
+from the hit test — if a pointer at the element's centre lands on one of its
+*ancestors*, surely the element draws nothing there — and that inference is
+wrong often enough to matter, because the verdict it feeds is the one a caller
+must not retry. An ancestor is what a pointer finds whenever an ancestor
+paints over its own descendant: a card whose `::after` covers a perfectly
+visible link (a pseudo-element hit is attributed to its host), the contents of
+an accordion shut with `height: 0`. Both are recoverable — click the card,
+open the accordion — and an `obscured` that names the ancestor says exactly
+that.
+
+The `left: -9999px` recipe is the one place geometry rather than style decides
+it, and it is a hard fact rather than a heuristic: scroll offsets clamp at
+zero, so a box whose far edge is still in negative document coordinates cannot
+be reached by any scroll. Read only where the element's frame of reference is
+the document's — a box that scrolls or transforms in between makes the
+arithmetic mean something else, and both of those can change in a moment.
 
 For the third floor the snapshot section leaves open — the A → B → A route —
 the world records `history.length` and counts `popstate` / `hashchange`, which
