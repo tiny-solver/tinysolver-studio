@@ -2,17 +2,22 @@
 
 /**
  * The extra tools codeg hands an agent inside a conversation, as one panel:
- * live feedback, ask-user-question, get-session-info, the two create-from-chat
- * writers, and the built-in browser's read surface. All six are injected by
- * `codeg-mcp` when an agent starts, so what the user is really deciding here is
- * one thing — how much of the app an agent may reach from a conversation.
+ * live feedback, ask-user-question, get-session-info, the built-in browser
+ * (and, inside it, running code), and the two create-from-chat writers. All of
+ * them are injected by `codeg-mcp` when an agent starts, so what the user is
+ * really deciding here is one thing — how much of the app an agent may reach
+ * from a conversation.
  *
  * They used to be four sections, each with its own heading, description, card
  * and Save bar: four times the chrome for five switches, which is what made
  * `/settings/general` read as far longer than it configures.
  *
+ * The names, one-liners and icons come from `lib/agent-tool-groups`, shared
+ * with the status-bar codeg-mcp popover — the two lists are the same switches
+ * and had drifted into calling three of them by different names.
+ *
  * Persistence stays split the way the backend has it — `feedback.enabled`,
- * `question.enabled`, `session_info.enabled`, `browser_tools.enabled` and
+ * `question.enabled`, `session_info.enabled`, `browser_tools.*` and
  * `chat_authoring.*` remain five endpoints. Save writes only the groups whose value actually moved, so a
  * failing endpoint can't roll back its neighbours, and a group whose *load*
  * failed (its switch is showing a default, not what is stored) is left alone
@@ -21,17 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
-import {
-  CalendarClock,
-  Code2,
-  Globe,
-  HelpCircle,
-  ListTodo,
-  MessageSquare,
-  MessageSquarePlus,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react"
+import { Wrench } from "lucide-react"
 import { toast } from "sonner"
 
 import { SettingCard, SettingRow } from "@/components/shared/setting-card"
@@ -41,8 +36,15 @@ import {
   SettingsSection,
 } from "@/components/shared/settings-section"
 import { Switch } from "@/components/ui/switch"
+import {
+  AGENT_TOOLS_NAMESPACE,
+  AGENT_TOOL_GROUPS,
+} from "@/lib/agent-tool-groups"
 import { subscribe } from "@/lib/platform"
-import { CHAT_AUTHORING_SETTINGS_CHANGED_EVENT } from "@/lib/types"
+import {
+  BROWSER_TOOLS_SETTINGS_CHANGED_EVENT,
+  CHAT_AUTHORING_SETTINGS_CHANGED_EVENT,
+} from "@/lib/types"
 import {
   getBrowserToolsSettings,
   getChatAuthoringSettings,
@@ -54,6 +56,7 @@ import {
   setFeedbackSettings,
   setQuestionSettings,
   setSessionInfoSettings,
+  type BrowserToolsSettings,
   type ChatAuthoringSettings,
 } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
@@ -86,80 +89,38 @@ const DEFAULTS: AgentToolValues = {
   workTasks: false,
 }
 
-// Literal message keys per row — next-intl only resolves literal keys, so the
-// table keeps the rows data-driven without losing key checking.
+/** The rows, in the order they read: what an agent may say to you, what it may
+ *  look up, what it may do with the browser, what it may write.
+ *
+ *  Presentation (name, one-liner, paragraph, icon, which switch gates which)
+ *  comes from `lib/agent-tool-groups`, which the status-bar codeg-mcp popover
+ *  reads too — the two surfaces had drifted into calling three of the same
+ *  switches by different names, and one table is the only fix that stays
+ *  fixed. What lives here is the half that is this panel's own: which field of
+ *  the form each slug edits, and the element id its label points at. */
 const TOOL_ROWS = [
-  {
-    key: "feedback",
-    id: "agent-tools-feedback",
-    icon: MessageSquarePlus,
-    label: "feedbackLabel",
-    hint: "feedbackHint",
-  },
-  {
-    key: "question",
-    id: "agent-tools-question",
-    icon: HelpCircle,
-    label: "questionLabel",
-    hint: "questionHint",
-  },
-  {
-    key: "sessionInfo",
-    id: "agent-tools-session-info",
-    icon: MessageSquare,
-    label: "sessionInfoLabel",
-    hint: "sessionInfoHint",
-  },
-  {
-    key: "browserTools",
-    id: "agent-tools-browser",
-    icon: Globe,
-    label: "browserToolsLabel",
-    hint: "browserToolsHint",
-  },
-  // The one switch on this panel that is not "may an agent see X". It hands
-  // an agent a way to run its own code on a page, so it sits behind the
-  // browser switch rather than beside it, and even on, every snippet is shown
-  // to the user and approved on its own.
-  {
-    key: "browserEval",
-    id: "agent-tools-browser-eval",
-    icon: Code2,
-    label: "browserEvalLabel",
-    hint: "browserEvalHint",
-  },
-  {
-    key: "automations",
-    id: "agent-tools-automations",
-    icon: CalendarClock,
-    label: "automationsLabel",
-    hint: "automationsHint",
-  },
-  {
-    key: "workTasks",
-    id: "agent-tools-work-tasks",
-    icon: ListTodo,
-    label: "workTasksLabel",
-    hint: "workTasksHint",
-  },
+  { key: "feedback", slug: "feedback", id: "agent-tools-feedback" },
+  { key: "question", slug: "ask", id: "agent-tools-question" },
+  { key: "sessionInfo", slug: "sessions", id: "agent-tools-session-info" },
+  { key: "browserTools", slug: "browser", id: "agent-tools-browser" },
+  { key: "browserEval", slug: "browser_eval", id: "agent-tools-browser-eval" },
+  { key: "automations", slug: "automations", id: "agent-tools-automations" },
+  { key: "workTasks", slug: "taskboard", id: "agent-tools-work-tasks" },
 ] as const satisfies ReadonlyArray<{
   key: keyof AgentToolValues
+  slug: string
   id: string
-  icon: LucideIcon
-  label: string
-  hint: string
 }>
 
-/** Rows that only mean anything while another row is on: shown off and not
- *  touchable until it is. Kept beside the table rather than in it, so the
- *  rows stay `as const` and next-intl keeps checking their message keys. */
-const REQUIRES: Partial<Record<keyof AgentToolValues, keyof AgentToolValues>> =
-  {
-    browserEval: "browserTools",
-  }
+/** Slug → the form field it edits, for resolving a `requires` relation (which
+ *  is expressed in slugs, because the backend sends it that way) back to a
+ *  row of this form. */
+const FIELD_OF_SLUG: Record<string, keyof AgentToolValues | undefined> =
+  Object.fromEntries(TOOL_ROWS.map((row) => [row.slug, row.key]))
 
 export function AgentToolsSettingsSection() {
   const t = useTranslations("AgentToolsSettings")
+  const tools = useTranslations(AGENT_TOOLS_NAMESPACE)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [values, setValues] = useState<AgentToolValues>(DEFAULTS)
@@ -217,18 +178,22 @@ export function AgentToolsSettingsSection() {
       } else failures.push(toErrorMessage(chat.reason))
 
       const supersededByBroadcast = remoteGenRef.current !== gen
-      // `prev` already holds the broadcast's value for these two fields (or the
-      // user's pending edit, in `values`), so keeping it is the merge.
-      const keepAuthoring = (prev: AgentToolValues): AgentToolValues =>
+      // `prev` already holds the broadcast's value for the fields a broadcast
+      // can carry (or the user's pending edit, in `values`), so keeping it is
+      // the merge. These are exactly the switches the status-bar popover can
+      // also write — a read that started before that write is older than it.
+      const keepBroadcast = (prev: AgentToolValues): AgentToolValues =>
         supersededByBroadcast
           ? {
               ...next,
               automations: prev.automations,
               workTasks: prev.workTasks,
+              browserTools: prev.browserTools,
+              browserEval: prev.browserEval,
             }
           : next
-      setValues(keepAuthoring)
-      setBaseline(keepAuthoring)
+      setValues(keepBroadcast)
+      setBaseline(keepBroadcast)
       setLoadError(failures.length > 0 ? failures.join("; ") : null)
       setLoading(false)
     })()
@@ -280,6 +245,49 @@ export function AgentToolsSettingsSection() {
       })
       // Transport not ready is not a reason to break the form; it just means
       // this window keeps whatever it loaded.
+      .catch(() => {})
+    return () => {
+      disposed = true
+      unsubscribe?.()
+    }
+  }, [])
+
+  /**
+   * The same convergence for the two browser switches, which are two keys of
+   * one record and now have the same two editors: this form, which writes the
+   * pair, and the popover, which writes one key. Without it a form left open
+   * since before a popover toggle submits its stale value for the switch the
+   * user never touched and silently reverts it.
+   */
+  useEffect(() => {
+    let disposed = false
+    let unsubscribe: (() => void) | undefined
+    void subscribe<BrowserToolsSettings>(
+      BROWSER_TOOLS_SETTINGS_CHANGED_EVENT,
+      (remote) => {
+        remoteGenRef.current += 1
+        const incoming = {
+          browserTools: remote.enabled,
+          browserEval: remote.eval,
+        }
+        const current = valuesRef.current
+        const base = baselineRef.current
+        setValues((prev) => ({
+          ...prev,
+          ...(current.browserTools === base.browserTools
+            ? { browserTools: incoming.browserTools }
+            : {}),
+          ...(current.browserEval === base.browserEval
+            ? { browserEval: incoming.browserEval }
+            : {}),
+        }))
+        setBaseline((prev) => ({ ...prev, ...incoming }))
+      }
+    )
+      .then((fn) => {
+        if (disposed) fn()
+        else unsubscribe = fn
+      })
       .catch(() => {})
     return () => {
       disposed = true
@@ -397,14 +405,18 @@ export function AgentToolsSettingsSection() {
           on screen next to it. */}
       <SettingCard>
         {TOOL_ROWS.map((row) => {
-          const gate = REQUIRES[row.key]
+          const meta = AGENT_TOOL_GROUPS[row.slug]
+          if (!meta) return null
+          // A row that only means anything while another is on: shown off and
+          // not touchable until it is.
+          const gate = meta.requires ? FIELD_OF_SLUG[meta.requires] : undefined
           const available = !gate || values[gate]
           return (
             <SettingRow
               key={row.key}
-              icon={row.icon}
-              title={t(row.label)}
-              description={t(row.hint)}
+              icon={meta.icon}
+              title={tools(meta.label)}
+              description={tools(meta.hint)}
               htmlFor={row.id}
               control={
                 <Switch

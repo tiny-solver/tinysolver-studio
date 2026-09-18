@@ -99,6 +99,14 @@ export type AgentAction =
   | "console"
   /** Ran its own code, with the person's say-so for that snippet. */
   | "eval"
+  /** Opened this tab. */
+  | "open"
+  /** Pointed this tab at another address. */
+  | "navigate"
+  /** Asked for this tab to be closed. Only ever seen as a refusal or a
+   *  failure: a strip dies with its tab, so a close that worked has nowhere
+   *  to leave a line. */
+  | "close"
 
 export type PointerButton = "left" | "right"
 
@@ -428,6 +436,10 @@ export interface BrowserOpenRequestPayload {
   /** The profile the new tab belongs in (the opener's for a modifier-click);
    *  null leaves the choice to the frontend. */
   profile: string | null
+  /** Set when the asker is waiting to be told which tab this became — an
+   *  agent tool, which has to answer with the tab's id. Absent for the
+   *  fire-and-forget askers (a deep link, a modifier-click). */
+  requestId?: string | null
 }
 
 export const BROWSER_OPEN_REQUEST_EVENT = "browser://open-request"

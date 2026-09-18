@@ -2188,21 +2188,6 @@
         "sessions": "Sessions",
         "activeDelegations": "Délégations",
         "depthLimit": "Profondeur",
-        "tools": "Outils",
-        "groupDelegation": "Délégation",
-        "descDelegation": "Confie une tâche à un autre agent.",
-        "groupFeedback": "Retour en direct",
-        "descFeedback": "Ajoute des notes sans interrompre le tour.",
-        "groupAsk": "Question à l'utilisateur",
-        "descAsk": "Laisse l'agent vous consulter avant de décider.",
-        "groupSessions": "Consultation de session",
-        "descSessions": "Consulte les sessions passées et leurs résultats.",
-        "groupAutomations": "Créer une automatisation",
-        "descAutomations": "Crée et gère des automatisations planifiées.",
-        "groupTaskboard": "Créer une tâche",
-        "descTaskboard": "Crée et gère des tâches de travail.",
-        "groupBrowser": "Onglets du navigateur",
-        "descBrowser": "Voir les onglets du navigateur intégré et lire ceux que vous partagez.",
         "start": "Démarrer le service",
         "starting": "Démarrage…",
         "actionFailed": "Échec : {message}",
@@ -4924,25 +4909,53 @@
   "AgentToolsSettings": {
     "title": "Outils dans la conversation",
     "description": "Outils supplémentaires que codeg fournit à un agent au sein d'une conversation. Ils sont injectés au démarrage de l'agent : une modification s'applique donc aux agents démarrés ensuite.",
-    "feedbackLabel": "Retour en direct",
-    "feedbackHint": "Envoyez des notes et corrections à un agent pendant qu'il travaille. Si l'agent prend en charge l'insertion instantanée, votre note est insérée immédiatement dans le tour en cours ; sinon, l'agent reçoit un outil pour consulter vos retours — ces agents ne le consultent généralement que si vous le mentionnez dans votre prompt, par exemple ajoutez « vérifie régulièrement mon feedback en direct » à votre message.",
-    "questionLabel": "Poser une question à l'utilisateur",
-    "questionHint": "Permet aux agents de s'interrompre et de vous poser une question à choix multiples affichée au-dessus de la zone de saisie de la conversation. L'agent attend votre réponse (ou que vous ignoriez).",
-    "sessionInfoLabel": "Obtenir les infos de session",
-    "sessionInfoHint": "Permet aux agents de consulter une session que vous mentionnez dans votre message (un badge de session) pour lire son titre, son agent, son statut, son espace de travail, sa consommation de jetons et ses messages récents.",
-    "browserToolsLabel": "Lire le navigateur intégré",
-    "browserToolsHint": "Permet aux agents de voir quelles pages sont ouvertes dans le navigateur intégré et de lire celles que vous partagez. Désactivé par défaut. La page qu’un agent peut lire reste un choix distinct, fait dans la barre d’outils de l’onglet concerné ; désactiver ceci prend effet immédiatement, y compris pour les agents déjà lancés.",
-    "browserEvalLabel": "Exécuter du code dans le navigateur intégré",
-    "browserEvalHint": "Autorise les agents à exécuter leur propre JavaScript sur une page que vous avez partagée. Désactivé par défaut, et nécessite l’interrupteur ci-dessus. Chaque extrait vous est montré et approuvé un par un : rien ne peut le rendre automatique.",
-    "automationsLabel": "Créer des automatisations",
-    "automationsHint": "Enregistre la conversation comme une automatisation qui s'exécute selon un planning. Désactivé par défaut : elle démarre ensuite des agents d'elle-même.",
-    "workTasksLabel": "Créer des tâches à faire",
-    "workTasksHint": "Ajoute une carte au tableau des tâches depuis la conversation. Désactivé par défaut : écrit l'état de l'application.",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
     "saved": "Paramètres des outils enregistrés",
     "saveFailed": "Échec de l'enregistrement des paramètres des outils",
     "loadFailed": "Échec du chargement : {detail}"
+  },
+  "AgentTools": {
+    "delegation": {
+      "label": "Délégation",
+      "short": "Confie une tâche à un autre agent.",
+      "hint": "Permet à un agent de confier une sous-tâche autonome à un autre agent, qui l'exécute dans sa propre session et rend compte. Le reste — profondeur d'imbrication, agent chargé de l'exécuter — se règle dans la section juste au-dessus."
+    },
+    "feedback": {
+      "label": "Retour en direct",
+      "short": "Ajoute des notes sans interrompre le tour.",
+      "hint": "Envoyez des notes et corrections à un agent pendant qu'il travaille. Si l'agent prend en charge l'insertion instantanée, votre note est insérée immédiatement dans le tour en cours ; sinon, l'agent reçoit un outil pour consulter vos retours — ces agents ne le consultent généralement que si vous le mentionnez dans votre prompt, par exemple ajoutez « vérifie régulièrement mon feedback en direct » à votre message."
+    },
+    "ask": {
+      "label": "Poser une question à l'utilisateur",
+      "short": "Laisse l'agent vous consulter avant de décider.",
+      "hint": "Permet aux agents de s'interrompre et de vous poser une question à choix multiples affichée au-dessus de la zone de saisie de la conversation. L'agent attend votre réponse (ou que vous ignoriez)."
+    },
+    "sessions": {
+      "label": "Obtenir les infos de session",
+      "short": "Consulte les sessions passées et leurs résultats.",
+      "hint": "Permet aux agents de consulter une session que vous mentionnez dans votre message (un badge de session) pour lire son titre, son agent, son statut, son espace de travail, sa consommation de jetons et ses messages récents."
+    },
+    "browser": {
+      "label": "Lire et piloter le navigateur intégré",
+      "short": "Ouvre, lit et manipule les pages du navigateur intégré.",
+      "hint": "Permet à un agent de voir quelles pages sont ouvertes dans le navigateur intégré, de lire celles que vous partagez, et de cliquer et saisir sur celles où vous autorisez les actions. Il peut aussi ouvrir une adresse lui-même, envoyer un onglet ailleurs et fermer des onglets. Désactivé par défaut. La page qu'il peut lire reste votre décision, dans la barre de l'onglet concerné — mais notez qu'avec un niveau de partage par défaut, une page que l'agent ouvre pour lui-même lui est partagée dès qu'elle se charge. La désactivation prend effet immédiatement, y compris sur les agents déjà en cours."
+    },
+    "browserEval": {
+      "label": "Exécuter du code dans le navigateur intégré",
+      "short": "Exécute son propre code sur une page partagée — vous approuvez chaque extrait.",
+      "hint": "Autorise les agents à exécuter leur propre JavaScript sur une page que vous avez partagée. Désactivé par défaut, et nécessite l’interrupteur ci-dessus. Chaque extrait vous est montré et approuvé un par un : rien ne peut le rendre automatique."
+    },
+    "automations": {
+      "label": "Créer des automatisations",
+      "short": "Crée et gère des automatisations planifiées.",
+      "hint": "Enregistre la conversation comme une automatisation qui s'exécute selon un planning. Désactivé par défaut : elle démarre ensuite des agents d'elle-même."
+    },
+    "taskboard": {
+      "label": "Créer des tâches à faire",
+      "short": "Crée et gère des tâches de travail.",
+      "hint": "Ajoute une carte au tableau des tâches depuis la conversation. Désactivé par défaut : écrit l'état de l'application."
+    }
   },
   "DesktopNotificationSettings": {
     "title": "Notifications du bureau",
@@ -6357,6 +6370,21 @@
           "done": "A exécuté du code sur la page",
           "refused": "Exécution de code refusée sur cette page",
           "failed": "Impossible d’exécuter le code"
+        },
+        "open": {
+          "done": "A ouvert cette page",
+          "refused": "Ouverture d'un onglet refusée",
+          "failed": "Impossible d'ouvrir un onglet"
+        },
+        "navigate": {
+          "done": "Est allé à une autre adresse",
+          "refused": "Refusé : cette page n'autorise pas les actions",
+          "failed": "Impossible de changer d'adresse"
+        },
+        "close": {
+          "done": "A fermé cet onglet",
+          "refused": "Fermeture refusée : cette page n'autorise pas les actions",
+          "failed": "Impossible de fermer cet onglet"
         }
       },
       "activityCount": "{count}×",

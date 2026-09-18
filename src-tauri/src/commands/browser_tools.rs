@@ -81,17 +81,75 @@ pub async fn apply_persisted_browser_tools_config(
     config.set(settings.into_runtime_config()).await;
 }
 
+/// Serializes every write of this record — both the whole-struct writer below
+/// and the per-flag one.
+///
+/// The two keys are upserted separately and then re-read separately, so two
+/// writers can interleave into a runtime config neither of them intended,
+/// which then stays wrong until the next write or a restart. That is not
+/// theoretical here: the status-bar popover now carries the group switch and
+/// `browser_eval` one row apart, and the settings form can write both at once.
+static BROWSER_TOOLS_WRITE_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+/// Which of the switches in the record to move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrowserToolsFlag {
+    /// The group: whether an agent sees the built-in browser at all.
+    Group,
+    /// `browser_eval`, which the group covers but does not imply.
+    Eval,
+}
+
+/// Move exactly one switch, leaving the other at whatever the database says at
+/// the moment of the write.
+///
+/// [`set_browser_tools_settings_core`] republishes both keys, which is right
+/// for the settings form (it edits both together) and wrong for any caller
+/// that means to move one: two such callers racing — the popover's two
+/// adjacent switches are one click apart — each read the pair and write the
+/// pair back, and whoever lands second silently reverts the other's flip.
+///
+/// Turning the group off does not clear the stored `eval`: the runtime config
+/// drops it ([`BrowserToolsSettings::into_runtime_config`]), so nothing is
+/// live, and someone turning the browser back on gets back the answer they
+/// gave rather than a switch that quietly reset itself.
+pub async fn set_browser_tools_flag_core(
+    conn: &DatabaseConnection,
+    config: &BrowserToolsRuntimeConfig,
+    emitter: &EventEmitter,
+    flag: BrowserToolsFlag,
+    enabled: bool,
+) -> Result<BrowserToolsSettings, AppCommandError> {
+    let key = match flag {
+        BrowserToolsFlag::Group => KEY_BROWSER_TOOLS_ENABLED,
+        BrowserToolsFlag::Eval => KEY_BROWSER_TOOLS_EVAL_ENABLED,
+    };
+    let _guard = BROWSER_TOOLS_WRITE_LOCK.lock().await;
+    app_metadata_service::upsert_value(conn, key, &enabled.to_string())
+        .await
+        .map_err(AppCommandError::from)?;
+    let settings = load_browser_tools_settings(conn).await;
+    config.set(settings.clone().into_runtime_config()).await;
+    emit_event(emitter, BROWSER_TOOLS_SETTINGS_CHANGED_EVENT, &settings);
+    Ok(settings)
+}
+
 /// Persist + apply + broadcast. Shared by the Tauri command and the HTTP
 /// handler so the write + re-apply + notify chain lives in one place.
 ///
 /// The apply is what makes turning this off take effect on sessions that are
 /// already running: the access impl reads the same handle on every call.
+///
+/// Takes [`BROWSER_TOOLS_WRITE_LOCK`] too: its two upserts are not atomic
+/// either, so a per-flag write landing between them would be half-overwritten.
 pub async fn set_browser_tools_settings_core(
     conn: &DatabaseConnection,
     config: &BrowserToolsRuntimeConfig,
     emitter: &EventEmitter,
     desired: BrowserToolsSettings,
 ) -> Result<BrowserToolsSettings, AppCommandError> {
+    let _guard = BROWSER_TOOLS_WRITE_LOCK.lock().await;
     app_metadata_service::upsert_value(
         conn,
         KEY_BROWSER_TOOLS_ENABLED,

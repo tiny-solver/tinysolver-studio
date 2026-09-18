@@ -4,6 +4,7 @@ import { useEffect } from "react"
 
 import { useWorkspaceActions } from "@/contexts/workspace-context"
 import {
+  browserAnswerOpenRequest,
   browserCapabilities,
   browserClose,
   browserListDownloads,
@@ -60,6 +61,7 @@ import {
 import { getTransport, isDesktop } from "@/lib/transport"
 import { bridgeStatus } from "@/lib/browser/browser-bridge"
 import { getCurrentWindowLabel } from "@/lib/browser/window-label"
+import { browserTabBackendId } from "@/lib/file-tab-id"
 
 /**
  * The one subscriber to the backend's `browser://*` streams. Mounted once
@@ -294,10 +296,23 @@ export function BrowserEventsBridge() {
             const openerTabId = request.openerTabId
               ? browserWorkspaceTabId(request.openerTabId)
               : undefined
-            openBrowserTab(request.url, {
+            const workspaceTabId = openBrowserTab(request.url, {
               activate: request.activate,
               openerTabId,
               profile: request.profile ?? undefined,
+            })
+            // An asker that named itself is waiting to hear which tab this
+            // became — an agent's `browser_open_tab`, which has no other way
+            // to name the page it just asked for. The backend id is known as
+            // soon as the record is (the native surface is built later, when
+            // the tab is on screen), so the answer does not wait on a webview.
+            if (!request.requestId) return
+            void browserAnswerOpenRequest(
+              request.requestId,
+              workspaceTabId ? browserTabBackendId(workspaceTabId) : null
+            ).catch(() => {
+              // Nobody to tell. The waiter's own timeout covers this, and the
+              // tab — if there is one — is on screen regardless.
             })
           }
         ),

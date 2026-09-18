@@ -70,6 +70,8 @@ pub mod hooks;
 #[cfg(feature = "tauri-runtime")]
 pub mod listener;
 #[cfg(feature = "tauri-runtime")]
+pub mod open_request;
+#[cfg(feature = "tauri-runtime")]
 pub mod policy;
 #[cfg(feature = "tauri-runtime")]
 pub mod profile;

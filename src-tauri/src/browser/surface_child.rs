@@ -807,6 +807,7 @@ fn configure_child<'a>(
                             owner_window: Some(nav_owner.clone()),
                             opener_tab_id: Some(nav_id.clone()),
                             profile: Some(nav_profile.clone()),
+                            request_id: None,
                         },
                     );
                     return false;

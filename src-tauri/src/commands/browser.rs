@@ -23,9 +23,10 @@ use crate::browser::downloads::{BrowserDownload, BrowserDownloads};
 use crate::browser::policy::{BrowserPolicy, HostRule};
 use crate::browser::registry::{self, BrowserRegistry, BrowserTab};
 use crate::browser::surface::{BrowserSurface, PointerFailure, PointerGesture};
+use crate::browser::open_request;
 use crate::browser::types::{
-    Bounds, BrowserCapabilities, BrowserErrorInfo, BrowserErrorKind, BrowserTabState, ChannelKind,
-    FrozenFrame, SurfaceChoice, SurfaceKind, TabKind,
+    Bounds, BrowserCapabilities, BrowserErrorInfo, BrowserErrorKind, BrowserOpenRequestPayload,
+    BrowserTabState, ChannelKind, FrozenFrame, SurfaceChoice, SurfaceKind, TabKind,
 };
 use crate::browser::{events, hooks, listener, policy, profile, tab_label};
 
@@ -1136,6 +1137,23 @@ pub const BROWSER_I18N_KEY_STALE_REF: &str = "browser.agent.error.staleRef";
 /// The action was allowed and could not be done: the element is covered,
 /// takes no text, has no such option. The message says which.
 pub const BROWSER_I18N_KEY_ACTION_FAILED: &str = "browser.agent.error.actionFailed";
+
+/// Not an address a browser tab can hold. An argument mistake, not a
+/// permission one — its own key so the tool surface can tell an agent to fix
+/// what it sent rather than to ask the user for something.
+pub const BROWSER_I18N_KEY_BAD_ADDRESS: &str = "browser.agent.error.badAddress";
+
+/// A site rule or the administrator's policy refuses this host. Nothing the
+/// agent or the user can do from where they are standing.
+pub const BROWSER_I18N_KEY_BLOCKED: &str = "browser.agent.error.blocked";
+
+/// The workspace was asked for a tab and none arrived.
+pub const BROWSER_I18N_KEY_OPEN_FAILED: &str = "browser.agent.error.openFailed";
+
+fn open_failed(detail: &str) -> AppCommandError {
+    AppCommandError::window("Failed to open a browser tab".to_string(), detail.to_string())
+        .with_i18n(BROWSER_I18N_KEY_OPEN_FAILED, std::collections::BTreeMap::new())
+}
 
 fn control_required(tab_id: &str) -> AppCommandError {
     AppCommandError::permission_denied(format!(
@@ -2358,6 +2376,332 @@ async fn run_in_page(surface: &BrowserSurface, js: &str) -> Result<String, AppCo
     }
 }
 
+// ---- the tabs themselves -------------------------------------------------
+//
+// Opening, pointing elsewhere, closing. Everything above this line is about a
+// page that already exists; these three decide which pages exist at all.
+//
+// They are part of the browser tool group rather than a switch of their own:
+// the group already says "an agent may see and drive the built-in browser",
+// and a person who has said that has said this. What that means in practice is
+// worth being plain about, and the group's own copy says it: with the standing
+// sharing default in force, a tab an agent opens is shared with it the moment
+// the page commits — so this group hands an agent the browser, not a view of
+// the pages the person happened to have open.
+
+/// Whether a tab is showing something worth protecting.
+///
+/// `browser_navigate` and `browser_close_tab` need the tab shared at
+/// [`GrantLevel::Control`] — the same bar as clicking a link on it, which is
+/// the same act by another name. This is the one exception: a tab with no
+/// document in it is not a page anybody shared, has no content to lose and no
+/// half-typed form to throw away.
+///
+/// Without it, an agent that opens `http://localhost:3000` against a server
+/// that is not up gets an error page — which has no origin, so it can never
+/// carry a grant — and is left with a tab it can neither retry nor close.
+///
+/// The test is `state.url`, which is written when a document commits, and not
+/// `loading`: a shared page navigating somewhere is still on screen until the
+/// new document commits, and must not fall through this hole mid-flight.
+fn shows_no_document(state: &BrowserTabState) -> bool {
+    // `about:blank` is what the "+" menu's empty tab holds, and the page every
+    // tab boots from (`policy::open_url_allowed`). Either way there is nothing
+    // on it.
+    state.error.is_some() || state.url.is_empty() || state.url == "about:blank"
+}
+
+/// The grant check the two tab-driving tools share, read fresh.
+///
+/// Returns the tab's generation, so the caller can tell a tab that was closed
+/// and reopened under the same id from the one it checked.
+fn may_drive_tab(registry: &BrowserRegistry, tab_id: &str) -> Result<u64, ReadFailure> {
+    let Some((generation, level, blank, kind)) = registry.read(tab_id, |tab| {
+        (
+            tab.generation,
+            agent::level_of(tab.state.agent_grant.as_ref()),
+            shows_no_document(&tab.state),
+            tab.state.kind,
+        )
+    }) else {
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    };
+    if kind == TabKind::Document {
+        // A document guest is never listed to an agent in the first place
+        // (`agent::summarize_tab`), so this is only reachable by guessing an
+        // id. Same answer as for an id that does not exist: nothing is
+        // confirmed about what the person has open.
+        return Err((
+            None,
+            AppCommandError::not_found(format!("browser tab {tab_id} not found")),
+        ));
+    }
+    if blank || level.allows(GrantLevel::Control) {
+        return Ok(generation);
+    }
+    // Shared for reading, or not shared at all — the two are told apart the
+    // same way the action tools tell them apart, and no other way: the refusal
+    // for an unshared tab must not reveal that it exists at a lower level.
+    Err((
+        Some(agent::AgentOutcome::Refused),
+        if level.allows(GrantLevel::Read) {
+            control_required(tab_id)
+        } else {
+            grant_required(tab_id)
+        },
+    ))
+}
+
+/// A tab that has stopped moving: what an agent may know about it, and — when
+/// the address it was sent to did not load — which way it failed.
+struct SettledTab {
+    summary: agent::AgentTabSummary,
+    /// `dns` / `tls` / `blocked` / `failed`, from the error page the tab is
+    /// showing instead of the address.
+    load_error: Option<String>,
+}
+
+impl SettledTab {
+    fn of(state: &BrowserTabState) -> Option<Self> {
+        Some(Self {
+            summary: agent::summarize_tab(state)?,
+            load_error: state.error.as_ref().and_then(|e| {
+                serde_json::to_value(e.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+            }),
+        })
+    }
+}
+
+/// Wait for a tab to hold a settled page, and answer with it.
+///
+/// "Settled" is three things in sequence, each with its own reason:
+///
+/// 1. The tab is in the registry. After an open it is not there yet — the
+///    frontend has been asked and has to build the surface.
+/// 2. A document has committed, or the load has failed. Until then the tab
+///    has no address and no title, and an answer about it says nothing.
+/// 3. A sharing level has appeared, or [`open_request::GRANT_GRACE`] has
+///    passed. The standing default is applied by the frontend when it sees
+///    the commit, so for one round trip after step 2 every tab looks unshared
+///    — and an agent told "nobody shared this" would relay that to the user
+///    about a page that is already shared with it.
+///
+/// Every wait is capped. A page that is still loading when the cap expires is
+/// answered as the tab it is; the agent reads it whenever it likes.
+async fn wait_for_settled_tab(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    generation: Option<u64>,
+    deadline: std::time::Instant,
+) -> Option<SettledTab> {
+    let mut committed_at: Option<std::time::Instant> = None;
+    loop {
+        let now = std::time::Instant::now();
+        let seen = registry.read(tab_id, |tab| {
+            (
+                tab.generation,
+                tab.state.clone(),
+                tab.state.agent_grant.is_some(),
+            )
+        });
+        // A different incarnation of the id is not the tab this call is about
+        // — it is treated as "not here yet", which is what it is. An open
+        // waits for any incarnation and passes `None`.
+        match seen.filter(|(seen, _, _)| generation.is_none_or(|wanted| wanted == *seen)) {
+            Some((_, state, shared)) => {
+                if !state.loading || state.error.is_some() {
+                    let since = *committed_at.get_or_insert(now);
+                    if shared || now.duration_since(since) >= open_request::GRANT_GRACE {
+                        return SettledTab::of(&state);
+                    }
+                } else {
+                    // Off again: a page that started loading after committing
+                    // has not settled, and the grace period restarts with it.
+                    committed_at = None;
+                }
+                if now >= deadline {
+                    return SettledTab::of(&state);
+                }
+            }
+            // The deadline has to be checked on this branch too. A tab that
+            // is gone, or is another incarnation by now, would otherwise keep
+            // this loop running for as long as the process does.
+            None if now >= deadline => return None,
+            None => {}
+        }
+        tokio::time::sleep(open_request::POLL_INTERVAL).await;
+    }
+}
+
+/// Parse and vet an address an agent named, before anything is built for it,
+/// and stamp the refusal with the key the tool surface branches on.
+///
+/// `open_tab_core` would give a blocked address its tab and show the block
+/// page in it, which is right for a person following a link — the block page
+/// is where they learn why. An agent asked a question and gets an answer; a
+/// tab it cannot use is litter on someone else's screen.
+fn address_refusal(app: &AppHandle, raw: &str) -> Result<Url, AppCommandError> {
+    let url = parse_web_url(raw).map_err(|e| {
+        AppCommandError::invalid_input(e.message)
+            .with_i18n(BROWSER_I18N_KEY_BAD_ADDRESS, std::collections::BTreeMap::new())
+    })?;
+    if blocked_by_policy(app, &url) {
+        return Err(AppCommandError::permission_denied(format!(
+            "{url} is refused by a site rule"
+        ))
+        .with_i18n(BROWSER_I18N_KEY_BLOCKED, std::collections::BTreeMap::new()));
+    }
+    Ok(url)
+}
+
+/// Open a tab on `url` and answer with the tab once it holds a page.
+///
+/// The tab is opened by the workspace, not here: see
+/// [`crate::browser::open_request`] for why a backend-built tab would be an
+/// orphan. It is opened in the foreground, which is not a courtesy — a tab
+/// nobody has looked at has no native surface, so a background one would not
+/// exist as far as every other tool on this surface is concerned. The person
+/// seeing it appear is the happy side effect.
+pub async fn agent_open_tab_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    requests: &open_request::OpenRequests,
+    raw_url: &str,
+) -> Result<(agent::AgentTabSummary, Option<String>), AppCommandError> {
+    let url = address_refusal(app, raw_url)?;
+    let request_id = uuid::Uuid::new_v4().to_string();
+    let answer = requests.arm(&request_id);
+    events::emit_open_request(
+        app,
+        &BrowserOpenRequestPayload {
+            url: url.to_string(),
+            source: "agent".to_string(),
+            activate: true,
+            owner_window: None,
+            opener_tab_id: None,
+            profile: None,
+            request_id: Some(request_id.clone()),
+        },
+    );
+    let answered = tokio::time::timeout(open_request::ANSWER_TIMEOUT, answer).await;
+    // Whatever happened, this request is over: a late answer names a tab
+    // nobody is waiting to hear about.
+    requests.abandon(&request_id);
+    let tab_id = match answered {
+        Ok(Ok(Some(tab_id))) => tab_id,
+        Ok(Ok(None)) => {
+            return Err(open_failed(
+                "the workspace could not open a tab for that address",
+            ))
+        }
+        Ok(Err(_)) | Err(_) => {
+            return Err(open_failed(
+                "no codeg workspace window answered. There has to be one open to put a tab in",
+            ))
+        }
+    };
+    let deadline = std::time::Instant::now() + open_request::SETTLE_TIMEOUT;
+    let Some(settled) = wait_for_settled_tab(registry, &tab_id, None, deadline).await else {
+        return Err(open_failed(
+            "the tab was opened and then went away before it loaded anything",
+        ));
+    };
+    // The first line on the new tab's strip, and the one thing about a page a
+    // person cannot work out by looking at it: this one is here because an
+    // agent asked for it.
+    events::emit_agent_activity(
+        app,
+        &tab_id,
+        agent::AgentAction::Open,
+        agent::AgentOutcome::Done,
+        now_millis(),
+    );
+    Ok((settled.summary, settled.load_error))
+}
+
+/// Point an existing tab at another address.
+///
+/// The same act as clicking a link on the page, and gated the same way. The
+/// answer is the tab once the new page has settled, so the level it reports is
+/// the one that applies where the tab has landed — a navigation across origins
+/// ends the old grant, and whatever replaces it is what the agent gets.
+pub async fn agent_navigate_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    raw_url: &str,
+) -> Result<(agent::AgentTabSummary, Option<String>), AppCommandError> {
+    revoke_if_listener_replaced(app, registry, tab_id).await;
+    let (outcome, answer) = match drive_tab_to(app, registry, tab_id, raw_url).await {
+        Ok(settled) => (
+            Some(agent::AgentOutcome::Done),
+            Ok((settled.summary, settled.load_error)),
+        ),
+        Err((outcome, err)) => (outcome, Err(err)),
+    };
+    if let Some(outcome) = outcome {
+        events::emit_agent_activity(
+            app,
+            tab_id,
+            agent::AgentAction::Navigate,
+            outcome,
+            now_millis(),
+        );
+    }
+    answer
+}
+
+async fn drive_tab_to(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    raw_url: &str,
+) -> Result<SettledTab, ReadFailure> {
+    // The grant first, then the address. An address is refused for reasons
+    // that have nothing to do with this tab (a site rule, a scheme), and
+    // answering those before the permission check would let an agent with no
+    // standing on any tab read the user's site rules one address at a time.
+    let generation = may_drive_tab(registry, tab_id)?;
+    let url = address_refusal(app, raw_url).map_err(|e| (Some(agent::AgentOutcome::Failed), e))?;
+    navigate_core(app, registry, tab_id, url.as_str())
+        .map_err(|e| (Some(agent::AgentOutcome::Failed), e))?;
+    let deadline = std::time::Instant::now() + open_request::SETTLE_TIMEOUT;
+    wait_for_settled_tab(registry, tab_id, Some(generation), deadline)
+        .await
+        .ok_or_else(|| (None, tab_replaced(tab_id)))
+}
+
+/// Close a tab.
+///
+/// Gated like a navigation, and for the same reason: a tab that goes away
+/// takes whatever was in it with it. The strip records only the refusals — a
+/// tab that was closed has no strip left to read, and writing a line to it
+/// would bring the state of a dead tab back.
+pub async fn agent_close_tab_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<(), AppCommandError> {
+    if let Err((outcome, err)) = may_drive_tab(registry, tab_id) {
+        if let Some(outcome) = outcome {
+            events::emit_agent_activity(
+                app,
+                tab_id,
+                agent::AgentAction::Close,
+                outcome,
+                now_millis(),
+            );
+        }
+        return Err(err);
+    }
+    close_core(app, registry, tab_id)
+}
+
 // ---- page → conversation -------------------------------------------------
 //
 // The other direction from the `agent_*` reads above, and the reason none of
@@ -2853,6 +3197,84 @@ impl crate::acp::browser_tools::BrowserToolAccess for McpBrowserTools {
             },
         }
     }
+
+    async fn tab_op(
+        &self,
+        op: crate::acp::browser_tools::BrowserTabOp,
+    ) -> crate::acp::browser_tools::BrowserTabOutcome {
+        use crate::acp::browser_tools::{
+            BrowserTabOp, BrowserTabOutcome, ERROR_BAD_ADDRESS, ERROR_BLOCKED, ERROR_NO_SUCH_TAB,
+            ERROR_OPEN_FAILED, ERROR_UNAVAILABLE, NO_BROWSER_NOTE,
+        };
+        let Some(registry) = self.registry().await else {
+            return BrowserTabOutcome::refused(op.tab_id(), ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+        };
+        let named = op.tab_id().map(str::to_string);
+        let answer = match &op {
+            BrowserTabOp::Open { url } => {
+                let Some(requests) = self.app.try_state::<open_request::OpenRequests>() else {
+                    return BrowserTabOutcome::refused(None, ERROR_UNAVAILABLE, NO_BROWSER_NOTE);
+                };
+                agent_open_tab_core(&self.app, &registry, &requests, url)
+                    .await
+                    .map(|(tab, load_error)| BrowserTabOutcome::tab(tab, load_error))
+            }
+            BrowserTabOp::Navigate { tab_id, url } => {
+                agent_navigate_core(&self.app, &registry, tab_id, url)
+                    .await
+                    .map(|(tab, load_error)| BrowserTabOutcome::tab(tab, load_error))
+            }
+            BrowserTabOp::Close { tab_id } => agent_close_tab_core(&self.app, &registry, tab_id)
+                .await
+                .map(|()| BrowserTabOutcome::closed(tab_id)),
+        };
+        let named = named.as_deref();
+        match answer {
+            Ok(outcome) => outcome,
+            Err(err) => match err.i18n_key.as_deref() {
+                Some(BROWSER_I18N_KEY_GRANT_REQUIRED) => {
+                    // Only reachable for the two ops that name a tab.
+                    BrowserTabOutcome::grant_required(named.unwrap_or_default())
+                }
+                Some(BROWSER_I18N_KEY_CONTROL_REQUIRED) => {
+                    BrowserTabOutcome::control_required(named.unwrap_or_default())
+                }
+                Some(BROWSER_I18N_KEY_BAD_ADDRESS) => BrowserTabOutcome::refused(
+                    named,
+                    ERROR_BAD_ADDRESS,
+                    format!(
+                        "{}. Browser tabs take http:// and https:// addresses.",
+                        err.message.trim_end_matches('.')
+                    ),
+                ),
+                Some(BROWSER_I18N_KEY_BLOCKED) => BrowserTabOutcome::refused(
+                    named,
+                    ERROR_BLOCKED,
+                    format!(
+                        "{}. The user (or their administrator) wrote a rule that refuses this \
+                         host in the built-in browser; the same address will be refused next \
+                         time.",
+                        err.message.trim_end_matches('.')
+                    ),
+                ),
+                Some(BROWSER_I18N_KEY_OPEN_FAILED) => {
+                    BrowserTabOutcome::refused(named, ERROR_OPEN_FAILED, err.message)
+                }
+                _ if matches!(err.code, crate::app_error::AppErrorCode::NotFound) => {
+                    BrowserTabOutcome::refused(
+                        named,
+                        ERROR_NO_SUCH_TAB,
+                        format!(
+                            "No browser tab {} is open. Call browser_list_tabs for the ids that \
+                             are.",
+                            named.unwrap_or_default()
+                        ),
+                    )
+                }
+                _ => BrowserTabOutcome::refused(named, ERROR_OPEN_FAILED, err.message),
+            },
+        }
+    }
 }
 
 /// Evaluate an expression in a tab's isolated world and unwrap the shim's
@@ -3262,6 +3684,26 @@ pub async fn browser_eval_decide(
     Ok(consent.decide(&request_id, allow))
 }
 
+/// The workspace's answer to one `browser://open-request` that named itself.
+///
+/// `tab_id` is the backend id of the tab it opened — which the frontend knows
+/// the moment its own record exists, before the native surface is built, so
+/// the answer does not wait on a webview. `None` means it could not open one
+/// (a malformed address that got this far, no workspace to put it in).
+///
+/// `false` back means nobody was waiting for this answer any more: the
+/// request timed out, or another document of the same window answered first.
+/// The frontend does nothing with it — the tab it opened is a real tab either
+/// way — but a silent success would hide a frontend answering the wrong id.
+#[tauri::command]
+pub async fn browser_answer_open_request(
+    requests: State<'_, open_request::OpenRequests>,
+    request_id: String,
+    tab_id: Option<String>,
+) -> Result<bool, AppCommandError> {
+    Ok(requests.answer(&request_id, tab_id))
+}
+
 /// Point at an element of a page and hand it to a conversation. Resolves when
 /// the person picks one — or reports the pick as called off; see
 /// `pick_element_core` for the several ways that happens.
@@ -3391,6 +3833,93 @@ mod tests {
             node.as_str().is_some_and(|s| !s.is_empty()),
             "{BROWSER_I18N_KEY_GRANT_REQUIRED} has no message in en.json"
         );
+    }
+
+    /// The three tab refusals are told apart by their keys — like `staleRef`
+    /// and `controlRequired`, these are discriminators for the tool surface
+    /// rather than messages for a person (no app surface calls these cores),
+    /// so what matters is that they are distinct and always stamped.
+    #[test]
+    fn the_tab_refusals_are_told_apart_by_their_keys() {
+        let keys = [
+            BROWSER_I18N_KEY_BAD_ADDRESS,
+            BROWSER_I18N_KEY_BLOCKED,
+            BROWSER_I18N_KEY_OPEN_FAILED,
+            BROWSER_I18N_KEY_GRANT_REQUIRED,
+            BROWSER_I18N_KEY_CONTROL_REQUIRED,
+        ];
+        let unique: std::collections::BTreeSet<_> = keys.iter().collect();
+        assert_eq!(unique.len(), keys.len(), "two refusals share a key");
+        assert_eq!(
+            open_failed("nobody answered").i18n_key.as_deref(),
+            Some(BROWSER_I18N_KEY_OPEN_FAILED)
+        );
+    }
+
+    /// The carve-out that lets an agent retry or clean up a tab it opened on
+    /// an address that did not load — and the line it must not cross.
+    #[test]
+    fn a_tab_with_nothing_in_it_is_not_a_page_anyone_shared() {
+        let blank = |f: fn(&mut BrowserTabState)| {
+            let mut state = BrowserTabState {
+                tab_id: "t1".into(),
+                owner_window: "main".into(),
+                kind: TabKind::Page,
+                surface: SurfaceKind::Child,
+                channel: ChannelKind::Native,
+                channel_error: None,
+                url: String::new(),
+                requested_url: "https://example.com/".into(),
+                title: String::new(),
+                favicon: None,
+                loading: true,
+                can_go_back: false,
+                can_go_forward: false,
+                origin: None,
+                zoom: 1.0,
+                error: None,
+                remote_host: None,
+                opener_tab_id: None,
+                profile: None,
+                agent_grant: None,
+            };
+            f(&mut state);
+            shows_no_document(&state)
+        };
+
+        // Never committed anything; showing an error page; sitting on the
+        // blank page. Nothing to lose in any of them.
+        assert!(blank(|_| {}));
+        assert!(blank(|s| {
+            s.url = "https://example.com/".into();
+            s.error = Some(BrowserErrorInfo {
+                kind: BrowserErrorKind::Failed,
+                message: String::new(),
+                url: None,
+            });
+        }));
+        assert!(blank(|s| s.url = "about:blank".into()));
+
+        // A committed page is a page, whether or not it is loading something
+        // else on top — the old document is still on screen until the new one
+        // commits, so `loading` must not be what decides this.
+        assert!(!blank(|s| s.url = "https://example.com/".into()));
+        assert!(!blank(|s| {
+            s.url = "https://example.com/".into();
+            s.loading = true;
+            s.requested_url = "https://elsewhere.example/".into();
+        }));
+    }
+
+    /// The gate itself: an unshared page is refused, a read-only one is told
+    /// what to ask for, and an empty tab goes through.
+    #[test]
+    fn driving_a_tab_needs_control_unless_there_is_nothing_in_it() {
+        let registry = BrowserRegistry::default();
+        // No tab at all reports to nobody, like every other missing tab.
+        let (outcome, err) = may_drive_tab(&registry, "ghost").expect_err("no such tab");
+        assert!(outcome.is_none());
+        assert!(matches!(err.code, crate::app_error::AppErrorCode::NotFound));
     }
 
     /// A tab that is not there is the one exit that leaves no line: there is

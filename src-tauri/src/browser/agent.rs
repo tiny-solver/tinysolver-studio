@@ -270,6 +270,19 @@ pub enum AgentAction {
     /// every other line says what was done, and this one says only that
     /// something was.
     Eval,
+    /// Opened this tab. Always the first line on a tab's strip when it is
+    /// there at all, which is the point: where a page came from is the one
+    /// thing a person cannot recover by looking at it.
+    Open,
+    /// Pointed this tab at another address.
+    Navigate,
+    /// Asked for this tab to be closed.
+    ///
+    /// Only ever recorded as a refusal or a failure. A strip is a display
+    /// buffer that dies with its tab, so a successful close has nowhere to
+    /// leave a line — writing one would only revive the state of a tab that is
+    /// already gone. What the person sees instead is the tab disappearing.
+    Close,
 }
 
 impl From<&ActionKind> for AgentAction {

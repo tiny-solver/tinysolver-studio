@@ -349,6 +349,23 @@ export function browserEvalDecide(
   })
 }
 
+/** Tell the backend which tab a `browser://open-request` became.
+ *
+ *  Only for a request that carried a `requestId`: something on the backend is
+ *  parked waiting for the id (an agent's `browser_open_tab`). `null` says the
+ *  workspace could not open one, so the waiter fails now instead of timing
+ *  out. Resolves `false` when nobody is waiting any more, which is not an
+ *  error — the tab that was opened is a real tab either way. */
+export function browserAnswerOpenRequest(
+  requestId: string,
+  tabId: string | null
+): Promise<boolean> {
+  return getTransport().call<boolean>("browser_answer_open_request", {
+    requestId,
+    tabId,
+  })
+}
+
 /** Let the person point at an element of the page and hand it to a
  *  conversation. Resolves when they pick one, or with `cancelled` when they
  *  press Escape, start another pick, navigate, or leave it armed too long —

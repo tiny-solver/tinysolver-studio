@@ -5036,6 +5036,11 @@ export type CodegMcpServiceState =
 export interface CodegMcpToolGroup {
   key: string
   enabled: boolean
+  /** The group this one lives inside, when it lives inside one
+   * (`browser_eval` inside `browser`). Sent by the backend so the two
+   * surfaces that render this list cannot disagree about which switch gates
+   * which. Absent for a group proper. */
+  requires?: string | null
 }
 
 /** Mirror of Rust `CodegMcpServiceStatus`. */

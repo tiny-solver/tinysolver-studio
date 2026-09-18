@@ -317,6 +317,20 @@ pub struct BrokerBrowserEvalRequest {
     pub request: crate::browser::eval::EvalRequest,
 }
 
+/// Open a tab, point one somewhere else, or close one. Backs
+/// `browser_open_tab` / `browser_navigate` / `browser_close_tab` — one
+/// variant for the three the way one `BrowserAct` backs the five action
+/// tools, because they share a gate, an answer shape and a renderer.
+///
+/// Waits for the page to settle, so this round trip is as long as a page
+/// load (`browser::open_request::SETTLE_TIMEOUT`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerBrowserTabOpRequest {
+    pub token: String,
+    #[serde(flatten)]
+    pub op: crate::acp::browser_tools::BrowserTabOp,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -342,6 +356,7 @@ pub enum BrokerMessage {
     BrowserConsole(BrokerBrowserConsoleRequest),
     BrowserCapture(BrokerBrowserCaptureRequest),
     BrowserEval(BrokerBrowserEvalRequest),
+    BrowserTabOp(BrokerBrowserTabOpRequest),
     /// Liveness probe. Unlike every other variant this one is NOT sent by a
     /// companion — it comes from codeg's own service-status check
     /// (`acp::delegation::service`), which is why it carries no `token`: a
@@ -595,6 +610,15 @@ pub async fn client_browser_eval_round_trip(
     req: &BrokerBrowserEvalRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::BrowserEval(req.clone())).await
+}
+
+/// Dispatch one of the three tab-lifecycle requests and read back the
+/// serialized [`crate::acp::browser_tools::BrowserTabOutcome`].
+pub async fn client_browser_tab_op_round_trip(
+    socket_path: &str,
+    req: &BrokerBrowserTabOpRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::BrowserTabOp(req.clone())).await
 }
 
 /// Probe the listener: write a [`BrokerMessage::Ping`] and read the

@@ -18,13 +18,14 @@ use tokio::sync::RwLock;
 use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::browser_tools::{
     BrowserActOutcome, BrowserCaptureOutcome, BrowserConsoleOutcome, BrowserEvalOutcome,
-    BrowserSnapshotOutcome, BrowserTabsOutcome, BrowserToolAccess,
+    BrowserSnapshotOutcome, BrowserTabOutcome, BrowserTabsOutcome, BrowserToolAccess,
     ERROR_NO_SUCH_TAB,
 };
 use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerBrowserActRequest,
     BrokerBrowserCaptureRequest, BrokerBrowserConsoleRequest, BrokerBrowserEvalRequest,
-    BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
+    BrokerBrowserSnapshotRequest, BrokerBrowserTabOpRequest, BrokerBrowserTabsRequest,
+    BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
     BrokerCreateAutomationRequest, BrokerCreateWorkTaskRequest, BrokerResponse,
     BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest,
@@ -603,6 +604,13 @@ impl DelegationListener {
                 // confirmation's own timeout either way.
                 browser_eval_response(self.process_browser_eval(req).await)?
             }
+            BrokerMessage::BrowserTabOp(req) => {
+                // Bounded by the settle timeout on the codeg side. No
+                // peer-close race for the same reason the snapshot arm has
+                // none: dropping the future mid-flight would leave a tab open
+                // (or a page navigated) with nothing on the strip to say so.
+                browser_tab_op_response(self.process_browser_tab_op(req).await)?
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -929,6 +937,29 @@ impl DelegationListener {
         self.browser.eval(&req.tab_id, req.request).await
     }
 
+    /// Validate the token and open / navigate / close one tab.
+    ///
+    /// The token is checked before the access impl, as everywhere here: an
+    /// invalid one must not be able to open a tab on the user's screen, and
+    /// hears the same "no such tab" every other unauthenticated round trip
+    /// gets. An `Open` has no tab to name, so it hears the note instead —
+    /// which reveals nothing either, being what a session with the browser
+    /// switched off also hears.
+    async fn process_browser_tab_op(&self, req: BrokerBrowserTabOpRequest) -> BrowserTabOutcome {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            let tab_id = req.op.tab_id();
+            return BrowserTabOutcome::refused(
+                tab_id,
+                ERROR_NO_SUCH_TAB,
+                match tab_id {
+                    Some(tab_id) => format!("No browser tab {tab_id} is open."),
+                    None => crate::acp::browser_tools::NO_BROWSER_NOTE.to_string(),
+                },
+            );
+        }
+        self.browser.tab_op(req.op).await
+    }
+
     /// Validate the token and hand the progress report to the task engine,
     /// which resolves the parent connection to its owning task + generation.
     async fn process_task_progress(&self, req: BrokerTaskProgressRequest) -> TaskReportAck {
@@ -1168,6 +1199,16 @@ fn browser_console_response(outcome: BrowserConsoleOutcome) -> std::io::Result<B
 /// like the capture's: what a snippet can send back is already bounded twice,
 /// in the page's renderer and again in `EvalOutcome::from_answer`.
 fn browser_eval_response(outcome: BrowserEvalOutcome) -> std::io::Result<BrokerResponse> {
+    Ok(BrokerResponse {
+        outcome: serde_json::to_value(&outcome).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
+        })?,
+    })
+}
+
+/// Serialize a [`BrowserTabOutcome`] for the `BrowserTabOp` arm. Nothing to
+/// guard for size: the answer is a tab summary at most.
+fn browser_tab_op_response(outcome: BrowserTabOutcome) -> std::io::Result<BrokerResponse> {
     Ok(BrokerResponse {
         outcome: serde_json::to_value(&outcome).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
@@ -1598,6 +1639,27 @@ mod tests {
                 serde_json::to_value(&request.action).unwrap()
             ));
             BrowserActOutcome::control_required(tab_id)
+        }
+        async fn tab_op(
+            &self,
+            op: crate::acp::browser_tools::BrowserTabOp,
+        ) -> BrowserTabOutcome {
+            self.calls
+                .lock()
+                .await
+                .push(format!("tab_op {}", serde_json::to_value(&op).unwrap()));
+            match op.tab_id() {
+                Some(tab_id) => BrowserTabOutcome::control_required(tab_id),
+                None => BrowserTabOutcome::tab(
+                    crate::browser::agent::AgentTabSummary {
+                        tab_id: "t9".into(),
+                        origin: Some("http://localhost:3000".into()),
+                        level: crate::browser::agent::GrantLevel::Control,
+                        title: Some("dev".into()),
+                    },
+                    None,
+                ),
+            }
         }
     }
 

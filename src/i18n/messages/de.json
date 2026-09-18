@@ -2188,21 +2188,6 @@
         "sessions": "Sitzungen",
         "activeDelegations": "Delegationen",
         "depthLimit": "Max. Tiefe",
-        "tools": "Tools",
-        "groupDelegation": "Delegation",
-        "descDelegation": "Gibt eine Aufgabe an einen anderen Agenten ab.",
-        "groupFeedback": "Live-Feedback",
-        "descFeedback": "Ergänzt Hinweise, ohne den Zug zu unterbrechen.",
-        "groupAsk": "Rückfrage stellen",
-        "descAsk": "Lässt den Agenten vor einer Entscheidung nachfragen.",
-        "groupSessions": "Sitzungsabfrage",
-        "descSessions": "Schlägt frühere Sitzungen und Ergebnisse nach.",
-        "groupAutomations": "Automatisierung erstellen",
-        "descAutomations": "Erstellt und verwaltet geplante Automationen.",
-        "groupTaskboard": "Aufgabe erstellen",
-        "descTaskboard": "Erstellt und verwaltet Arbeitsaufgaben.",
-        "groupBrowser": "Browser-Tabs",
-        "descBrowser": "Die Tabs des integrierten Browsers sehen und die freigegebenen lesen.",
         "start": "Dienst starten",
         "starting": "Wird gestartet…",
         "actionFailed": "Fehlgeschlagen: {message}",
@@ -4924,25 +4909,53 @@
   "AgentToolsSettings": {
     "title": "Tools in der Unterhaltung",
     "description": "Zusätzliche Tools, die codeg einem Agenten innerhalb einer Unterhaltung gibt. Sie werden beim Start des Agenten injiziert – eine Änderung gilt daher für danach gestartete Agenten.",
-    "feedbackLabel": "Live-Feedback",
-    "feedbackHint": "Sende einem Agenten Notizen und Korrekturen, während er arbeitet. Unterstützt der Agent sofortiges Einfügen, landet deine Notiz umgehend im laufenden Turn; andernfalls erhält der Agent ein Tool zum Abrufen deines Feedbacks – solche Agenten prüfen es meist nur, wenn du es im Prompt erwähnst, z. B. mit \"prüfe regelmäßig mein Live-Feedback\".",
-    "questionLabel": "Benutzer fragen",
-    "questionHint": "Erlaubt Agenten, anzuhalten und dir eine Multiple-Choice-Frage zu stellen, die über dem Eingabefeld der Unterhaltung erscheint. Der Agent wartet, bis du antwortest (oder überspringst).",
-    "sessionInfoLabel": "Sitzungsinformationen abrufen",
-    "sessionInfoHint": "Erlaubt Agenten, eine in deiner Nachricht referenzierte Sitzung (ein Sitzungs-Badge) nachzuschlagen, um Titel, Agent, Status, Arbeitsbereich, Token-Verbrauch und letzte Nachrichten zu lesen.",
-    "browserToolsLabel": "Integrierten Browser lesen",
-    "browserToolsHint": "Lässt Agenten sehen, welche Seiten im integrierten Browser offen sind, und die freigegebenen lesen. Standardmäßig aus. Welche Seite ein Agent lesen darf, entscheiden Sie weiterhin einzeln in der Symbolleiste des jeweiligen Tabs; das Ausschalten wirkt sofort, auch für bereits laufende Agenten.",
-    "browserEvalLabel": "Code im integrierten Browser ausführen",
-    "browserEvalHint": "Erlaubt Agenten, eigenes JavaScript auf einer von dir geteilten Seite auszuführen. Standardmäßig aus und nur zusammen mit dem Schalter darüber. Jeder Codeausschnitt wird dir gezeigt und einzeln bestätigt – automatisch geht das nicht.",
-    "automationsLabel": "Automatisierungen erstellen",
-    "automationsHint": "Speichert die Unterhaltung als Automatisierung, die nach Zeitplan läuft. Standardmäßig aus – sie startet danach selbst Agenten.",
-    "workTasksLabel": "To-do-Aufgaben erstellen",
-    "workTasksHint": "Stellt aus der Unterhaltung heraus eine Karte auf das To-do-Board. Standardmäßig aus – schreibt App-Zustand.",
     "save": "Speichern",
     "saving": "Wird gespeichert…",
     "saved": "Tool-Einstellungen gespeichert",
     "saveFailed": "Tool-Einstellungen konnten nicht gespeichert werden",
     "loadFailed": "Laden fehlgeschlagen: {detail}"
+  },
+  "AgentTools": {
+    "delegation": {
+      "label": "Delegation",
+      "short": "Gibt eine Aufgabe an einen anderen Agenten ab.",
+      "hint": "Lässt einen Agenten eine in sich geschlossene Teilaufgabe an einen anderen Agenten übergeben, der sie in seiner eigenen Sitzung erledigt und zurückmeldet. Der Rest — wie tief Delegationen verschachtelt sein dürfen, welcher Agent sie ausführt — steht im Abschnitt darüber."
+    },
+    "feedback": {
+      "label": "Live-Feedback",
+      "short": "Ergänzt Hinweise, ohne den Zug zu unterbrechen.",
+      "hint": "Sende einem Agenten Notizen und Korrekturen, während er arbeitet. Unterstützt der Agent sofortiges Einfügen, landet deine Notiz umgehend im laufenden Turn; andernfalls erhält der Agent ein Tool zum Abrufen deines Feedbacks – solche Agenten prüfen es meist nur, wenn du es im Prompt erwähnst, z. B. mit \"prüfe regelmäßig mein Live-Feedback\"."
+    },
+    "ask": {
+      "label": "Benutzer fragen",
+      "short": "Lässt den Agenten vor einer Entscheidung nachfragen.",
+      "hint": "Erlaubt Agenten, anzuhalten und dir eine Multiple-Choice-Frage zu stellen, die über dem Eingabefeld der Unterhaltung erscheint. Der Agent wartet, bis du antwortest (oder überspringst)."
+    },
+    "sessions": {
+      "label": "Sitzungsinformationen abrufen",
+      "short": "Schlägt frühere Sitzungen und Ergebnisse nach.",
+      "hint": "Erlaubt Agenten, eine in deiner Nachricht referenzierte Sitzung (ein Sitzungs-Badge) nachzuschlagen, um Titel, Agent, Status, Arbeitsbereich, Token-Verbrauch und letzte Nachrichten zu lesen."
+    },
+    "browser": {
+      "label": "Integrierten Browser lesen und steuern",
+      "short": "Öffnet, liest und bedient Seiten im integrierten Browser.",
+      "hint": "Lässt einen Agenten sehen, welche Seiten im integrierten Browser offen sind, die freigegebenen lesen und auf denen, für die Sie Aktionen erlauben, klicken und tippen. Er kann außerdem selbst eine Adresse öffnen, einen Tab woanders hinschicken und Tabs schließen. Standardmäßig aus. Welche Seite er lesen darf, entscheiden weiterhin Sie in der Leiste des jeweiligen Tabs — beachten Sie jedoch: Mit einer voreingestellten Freigabestufe ist eine Seite, die der Agent selbst öffnet, in dem Moment für ihn freigegeben, in dem sie lädt. Das Ausschalten wirkt sofort, auch auf bereits laufende Agenten."
+    },
+    "browserEval": {
+      "label": "Code im integrierten Browser ausführen",
+      "short": "Führt eigenen Code auf einer freigegebenen Seite aus — Sie genehmigen jeden Schnipsel.",
+      "hint": "Erlaubt Agenten, eigenes JavaScript auf einer von dir geteilten Seite auszuführen. Standardmäßig aus und nur zusammen mit dem Schalter darüber. Jeder Codeausschnitt wird dir gezeigt und einzeln bestätigt – automatisch geht das nicht."
+    },
+    "automations": {
+      "label": "Automatisierungen erstellen",
+      "short": "Erstellt und verwaltet geplante Automationen.",
+      "hint": "Speichert die Unterhaltung als Automatisierung, die nach Zeitplan läuft. Standardmäßig aus – sie startet danach selbst Agenten."
+    },
+    "taskboard": {
+      "label": "To-do-Aufgaben erstellen",
+      "short": "Erstellt und verwaltet Arbeitsaufgaben.",
+      "hint": "Stellt aus der Unterhaltung heraus eine Karte auf das To-do-Board. Standardmäßig aus – schreibt App-Zustand."
+    }
   },
   "DesktopNotificationSettings": {
     "title": "Desktop-Benachrichtigungen",
@@ -6357,6 +6370,21 @@
           "done": "Code auf der Seite ausgeführt",
           "refused": "Code-Ausführung auf dieser Seite abgelehnt",
           "failed": "Code konnte nicht ausgeführt werden"
+        },
+        "open": {
+          "done": "Hat diese Seite geöffnet",
+          "refused": "Öffnen eines Tabs abgelehnt",
+          "failed": "Tab konnte nicht geöffnet werden"
+        },
+        "navigate": {
+          "done": "Ist zu einer anderen Adresse gegangen",
+          "refused": "Abgelehnt: Diese Seite erlaubt keine Aktionen",
+          "failed": "Adresse konnte nicht gewechselt werden"
+        },
+        "close": {
+          "done": "Hat diesen Tab geschlossen",
+          "refused": "Schließen abgelehnt: Diese Seite erlaubt keine Aktionen",
+          "failed": "Tab konnte nicht geschlossen werden"
         }
       },
       "activityCount": "{count}×",

@@ -85,6 +85,20 @@ pub const ERROR_EVAL_DECLINED: &str = "browser_eval_declined";
 /// quiet period a refusal buys. Worth retrying later, unlike the two above.
 pub const ERROR_EVAL_BUSY: &str = "browser_eval_busy";
 
+/// Not an address a browser tab can hold: a malformed URL, or a scheme this
+/// browser does not load. The agent's own mistake to fix, which is why it is
+/// not one of the permission slugs.
+pub const ERROR_BAD_ADDRESS: &str = "browser_bad_address";
+
+/// A site rule the user wrote, or an administrator's policy, refuses this
+/// host. Not a sharing matter and not retryable: the same address will be
+/// refused next time.
+pub const ERROR_BLOCKED: &str = "browser_blocked";
+
+/// The workspace was asked for a tab and none arrived — no window open to put
+/// one in, or the tab went away before it loaded.
+pub const ERROR_OPEN_FAILED: &str = "browser_open_failed";
+
 /// What a `browser_snapshot` asks for when the caller names no cap.
 ///
 /// Not a ceiling: `max_chars` is honoured as given, however large, and the
@@ -405,6 +419,112 @@ impl BrowserEvalOutcome {
     }
 }
 
+/// What `browser_open_tab` / `browser_navigate` / `browser_close_tab` answer:
+/// the tab as it stands afterwards, or why nothing happened.
+///
+/// One type for the three because the useful answer to all three is the same
+/// one `browser_list_tabs` gives about a tab — the id to name it by, where it
+/// is, and whether the agent may read it. A close has no tab left to describe,
+/// so it answers with the id and nothing else.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserTabOutcome {
+    /// The tab this is about. Absent only when an open was refused before any
+    /// tab existed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<String>,
+    /// The tab as it stands now. Absent for a close, and for every refusal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tab: Option<AgentTabSummary>,
+    /// The tab is showing an error page instead of the address it was sent to,
+    /// and which kind (`dns`, `tls`, `blocked`, `failed`).
+    ///
+    /// Not a refusal — the tab opened, and it is the agent's to retry or close
+    /// — but without it the answer is "this tab has no address and is not
+    /// shared with you", which reads like a permission problem and sends the
+    /// agent to ask the user for something that would not help. A dev server
+    /// that is not up yet is the ordinary shape of this.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_error: Option<String>,
+    /// One of the `browser_*` slugs above. `None` exactly when the call did
+    /// what it was asked to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl BrowserTabOutcome {
+    /// A tab that is open and settled, after an open or a navigation.
+    pub fn tab(summary: AgentTabSummary, load_error: Option<String>) -> Self {
+        Self {
+            tab_id: Some(summary.tab_id.clone()),
+            tab: Some(summary),
+            load_error,
+            error: None,
+            note: None,
+        }
+    }
+
+    /// The tab is gone.
+    pub fn closed(tab_id: &str) -> Self {
+        Self {
+            tab_id: Some(tab_id.to_string()),
+            tab: None,
+            load_error: None,
+            error: None,
+            note: Some(format!("Browser tab {tab_id} is closed.")),
+        }
+    }
+
+    pub fn refused(tab_id: Option<&str>, error: &str, note: impl Into<String>) -> Self {
+        Self {
+            tab_id: tab_id.map(str::to_string),
+            tab: None,
+            load_error: None,
+            error: Some(error.to_string()),
+            note: Some(note.into()),
+        }
+    }
+
+    /// Nobody shared the tab — the same words every other tool gives, so the
+    /// refusal does not disclose which gate it fell at.
+    pub fn grant_required(tab_id: &str) -> Self {
+        let read = BrowserSnapshotOutcome::grant_required(tab_id);
+        Self::refused(Some(tab_id), ERROR_GRANT_REQUIRED, read.note.unwrap_or_default())
+    }
+
+    /// Shared for reading. Pointing a tab somewhere else, or closing it, is at
+    /// least as much as clicking a link on it.
+    pub fn control_required(tab_id: &str) -> Self {
+        let act = BrowserActOutcome::control_required(tab_id);
+        Self::refused(Some(tab_id), ERROR_CONTROL_REQUIRED, act.note.unwrap_or_default())
+    }
+}
+
+/// Which of the three tab tools is being asked for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum BrowserTabOp {
+    /// Open a new tab on this address, in the foreground.
+    Open { url: String },
+    /// Point an existing tab at this address.
+    Navigate { tab_id: String, url: String },
+    /// Close an existing tab.
+    Close { tab_id: String },
+}
+
+impl BrowserTabOp {
+    /// The tab the op names, for a refusal that has to name one before the
+    /// access impl is reached.
+    pub fn tab_id(&self) -> Option<&str> {
+        match self {
+            Self::Open { .. } => None,
+            Self::Navigate { tab_id, .. } | Self::Close { tab_id } => Some(tab_id),
+        }
+    }
+}
+
 /// Listener-facing access to the built-in browser's agent surface. The
 /// production impl (`crate::commands::browser::McpBrowserTools`) exists only in
 /// the desktop build; server mode and tests use [`NoBrowserTabs`]. Mirrors
@@ -435,6 +555,14 @@ pub trait BrowserToolAccess: Send + Sync {
     /// particular snippet — so this call blocks on a human and can take as
     /// long as one takes to read it.
     async fn eval(&self, tab_id: &str, request: EvalRequest) -> BrowserEvalOutcome;
+
+    /// Open a tab, point one somewhere else, or close one.
+    ///
+    /// Waits for the page to settle, so it can be in flight for as long as a
+    /// page takes to load. Opening needs nothing but the group switch — there
+    /// is no tab yet to have a grant; the other two need the tab shared at
+    /// `control`, unless it has no document in it to protect.
+    async fn tab_op(&self, op: BrowserTabOp) -> BrowserTabOutcome;
 }
 
 /// The answer where there is no built-in browser: server mode, and the stub in
@@ -471,6 +599,10 @@ impl BrowserToolAccess for NoBrowserTabs {
 
     async fn eval(&self, tab_id: &str, _request: EvalRequest) -> BrowserEvalOutcome {
         BrowserEvalOutcome::refused(tab_id, ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
+    }
+
+    async fn tab_op(&self, op: BrowserTabOp) -> BrowserTabOutcome {
+        BrowserTabOutcome::refused(op.tab_id(), ERROR_UNAVAILABLE, NO_BROWSER_NOTE)
     }
 }
 
@@ -683,6 +815,83 @@ mod tests {
             none.capture("t1", CaptureRequest::default()).await.error.as_deref(),
             Some(ERROR_UNAVAILABLE)
         );
+    }
+
+    /// The three tab tools share one answer shape: an open and a navigation
+    /// describe the tab the way the listing does, a close has no tab left to
+    /// describe, and a refusal carries the slug and no tab at all.
+    #[tokio::test]
+    async fn a_tab_op_answers_with_the_tab_or_with_why_not() {
+        let opened = BrowserTabOutcome::tab(
+            AgentTabSummary {
+                tab_id: "t7".into(),
+                origin: Some("http://localhost:3000".into()),
+                level: crate::browser::agent::GrantLevel::Control,
+                title: Some("dev".into()),
+            },
+            None,
+        );
+        let wire = serde_json::to_value(&opened).unwrap();
+        assert_eq!(wire["tabId"], "t7");
+        assert_eq!(wire["tab"]["origin"], "http://localhost:3000");
+        assert!(wire.get("error").is_none());
+        assert!(wire.get("loadError").is_none());
+
+        // A page that did not load says so as a fact about the page, not as a
+        // refusal: `error` stays empty and the tab is still the agent's to
+        // retry.
+        let failed = serde_json::to_value(BrowserTabOutcome::tab(
+            AgentTabSummary {
+                tab_id: "t8".into(),
+                origin: None,
+                level: crate::browser::agent::GrantLevel::None,
+                title: None,
+            },
+            Some("failed".into()),
+        ))
+        .unwrap();
+        assert_eq!(failed["loadError"], "failed");
+        assert!(failed.get("error").is_none());
+
+        let closed = serde_json::to_value(BrowserTabOutcome::closed("t7")).unwrap();
+        assert_eq!(closed["tabId"], "t7");
+        assert!(closed.get("tab").is_none());
+        assert!(closed.get("error").is_none());
+
+        // Read-only and unshared say what the other tools say, so driving a
+        // tab cannot become a way to probe its level.
+        assert_eq!(
+            BrowserTabOutcome::control_required("t7").note,
+            BrowserActOutcome::control_required("t7").note
+        );
+        assert_eq!(
+            BrowserTabOutcome::grant_required("t7").note,
+            BrowserSnapshotOutcome::grant_required("t7").note
+        );
+
+        // An open that never got a tab has no id to give, and says so by
+        // leaving the key off rather than sending an empty string.
+        let no_tab = serde_json::to_value(BrowserTabOutcome::refused(
+            None,
+            ERROR_BLOCKED,
+            "a site rule refuses that address",
+        ))
+        .unwrap();
+        assert!(no_tab.get("tabId").is_none());
+        assert_eq!(no_tab["error"], ERROR_BLOCKED);
+
+        let unavailable = NoBrowserTabs
+            .tab_op(BrowserTabOp::Close { tab_id: "t7".into() })
+            .await;
+        assert_eq!(unavailable.error.as_deref(), Some(ERROR_UNAVAILABLE));
+        assert_eq!(unavailable.tab_id.as_deref(), Some("t7"));
+        // An open has no tab to name even here.
+        let unavailable = NoBrowserTabs
+            .tab_op(BrowserTabOp::Open {
+                url: "https://example.com/".into(),
+            })
+            .await;
+        assert_eq!(unavailable.tab_id, None);
     }
 
     #[tokio::test]

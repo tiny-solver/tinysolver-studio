@@ -47,13 +47,15 @@ use crate::acp::chat_authoring::{
 use crate::acp::delegation::transport::{
     client_ask_round_trip, client_browser_act_round_trip, client_browser_capture_round_trip,
     client_browser_console_round_trip, client_browser_eval_round_trip,
-    client_browser_snapshot_round_trip, client_browser_tabs_round_trip,
+    client_browser_snapshot_round_trip, client_browser_tab_op_round_trip,
+    client_browser_tabs_round_trip,
     client_cancel, client_cancel_task_round_trip, client_commit_feedback,
     client_create_automation_round_trip, client_create_work_task_round_trip,
     client_feedback_round_trip, client_resume_task_round_trip, client_round_trip,
     client_session_round_trip, client_status_round_trip, client_task_complete_round_trip,
     client_task_progress_round_trip, BrokerAskRequest, BrokerBrowserActRequest, BrokerBrowserCaptureRequest, BrokerBrowserConsoleRequest,
-    BrokerBrowserEvalRequest, BrokerBrowserSnapshotRequest, BrokerBrowserTabsRequest,
+    BrokerBrowserEvalRequest, BrokerBrowserSnapshotRequest, BrokerBrowserTabOpRequest,
+    BrokerBrowserTabsRequest,
     BrokerCancelRequest,
     BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerCreateAutomationRequest,
     BrokerCreateWorkTaskRequest, BrokerFeedbackRequest, BrokerRequest, BrokerResponse,
@@ -158,14 +160,20 @@ pub struct CompanionFeatures {
     pub automations: bool,
     /// `create_work_task` — queue a card on the work-task board from chat.
     pub taskboard: bool,
-    /// `browser_list_tabs` / `browser_snapshot` / `browser_console_messages` /
-    /// `browser_screenshot` and the five action tools (`browser_click`,
-    /// `browser_hover`, `browser_type`, `browser_press_key`,
-    /// `browser_select_option`) — the built-in browser's agent surface. Off
-    /// unless the desktop build's setting says otherwise: the listing names
-    /// the sites the user has open, and nothing else codeg hands an agent is a
-    /// window onto what they are looking at right now. Reading and acting are
-    /// then each gated per tab by the person, behind this switch.
+    /// The built-in browser's agent surface: `browser_list_tabs` /
+    /// `browser_snapshot` / `browser_console_messages` / `browser_screenshot`,
+    /// the five action tools (`browser_click`, `browser_hover`,
+    /// `browser_type`, `browser_press_key`, `browser_select_option`) and the
+    /// three that decide which tabs exist (`browser_open_tab`,
+    /// `browser_navigate`, `browser_close_tab`). Off unless the desktop
+    /// build's setting says otherwise: the listing names the sites the user
+    /// has open, and nothing else codeg hands an agent is a window onto what
+    /// they are looking at right now.
+    ///
+    /// Reading a page, and acting on one, are then each gated per tab by the
+    /// person, behind this switch. Opening one is not — there is no tab yet to
+    /// share — so this switch is also the whole of the decision to let an
+    /// agent point the browser wherever it likes. The settings copy says so.
     pub browser: bool,
     /// `browser_eval` — running the agent's own code on a shared page. Its own
     /// token rather than part of `browser`, and off unless someone turned it
@@ -235,7 +243,8 @@ impl CompanionFeatures {
             "create_work_task" => self.taskboard,
             "browser_list_tabs" | "browser_snapshot" | "browser_console_messages"
             | "browser_screenshot" | "browser_click" | "browser_hover" | "browser_type"
-            | "browser_press_key" | "browser_select_option" => self.browser,
+            | "browser_press_key" | "browser_select_option" | "browser_open_tab"
+            | "browser_navigate" | "browser_close_tab" => self.browser,
             // Both, so a `--features browser_eval` with no `browser` — a
             // parent bug, or someone editing the agent's MCP config by hand —
             // cannot leave the strongest tool as the only one present.
@@ -825,6 +834,23 @@ async fn build_tools_call_spawn(
             let round_trip =
                 Box::pin(async move { client_browser_eval_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_browser_eval_result).await
+        }
+        "browser_open_tab" | "browser_navigate" | "browser_close_tab" => {
+            let op = match browser_tab_op(name.as_str(), &arguments) {
+                Ok(parsed) => parsed,
+                Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
+            };
+            let req = BrokerBrowserTabOpRequest {
+                token: ctx.token.clone(),
+                op,
+            };
+            // No broker-side cancel. A tab that has been opened is on the
+            // user's screen and a page that has been navigated has already
+            // gone; dropping the round trip would only lose the answer about
+            // something that happened anyway.
+            let round_trip =
+                Box::pin(async move { client_browser_tab_op_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_browser_tab_op_result).await
         }
         "task_progress" => {
             let message = arguments
@@ -1867,6 +1893,106 @@ pub fn browser_eval_request(
     };
     validate_code(&code).map_err(|bad| bad.message())?;
     Ok((tab_id, EvalRequest { code }))
+}
+
+/// Parse the arguments of `browser_open_tab` / `browser_navigate` /
+/// `browser_close_tab` into the op the broker carries.
+///
+/// Strict, like the action tools: a tool that silently did something adjacent
+/// to what it was asked is worse than one that refuses. An `url` that is not a
+/// string is an argument error here rather than an address the host tries to
+/// parse, so the agent hears about its own mistake in the shape MCP has for
+/// one.
+pub fn browser_tab_op(
+    name: &str,
+    arguments: &Value,
+) -> Result<crate::acp::browser_tools::BrowserTabOp, String> {
+    use crate::acp::browser_tools::BrowserTabOp;
+    let text = |key: &str| -> Result<String, String> {
+        match arguments.get(key) {
+            Some(Value::String(s)) if !s.trim().is_empty() => Ok(s.trim().to_string()),
+            _ => Err(match key {
+                "tabId" => format!("{name} requires a non-empty `tabId` string (from browser_list_tabs)"),
+                _ => format!("{name} requires a non-empty `{key}` string"),
+            }),
+        }
+    };
+    match name {
+        "browser_open_tab" => Ok(BrowserTabOp::Open { url: text("url")? }),
+        "browser_navigate" => Ok(BrowserTabOp::Navigate {
+            tab_id: text("tabId")?,
+            url: text("url")?,
+        }),
+        "browser_close_tab" => Ok(BrowserTabOp::Close {
+            tab_id: text("tabId")?,
+        }),
+        other => Err(format!("unknown browser tab tool {other}")),
+    }
+}
+
+/// Map a `browser_open_tab` / `browser_navigate` / `browser_close_tab`
+/// round-trip outcome (a serialized
+/// [`crate::acp::browser_tools::BrowserTabOutcome`]) into an MCP `tools/call`
+/// result.
+///
+/// The successful text says the level as well as the address, because that is
+/// what decides the agent's next move: a tab it may read it reads, and a tab
+/// it may not it has to ask the user about. Saying only "opened" would leave
+/// it to find that out by being refused.
+pub fn render_browser_tab_op_result(outcome: &Value) -> Value {
+    let text = match outcome.get("tab") {
+        Some(tab) if tab.is_object() => {
+            let id = tab.get("tabId").and_then(Value::as_str).unwrap_or("?");
+            let level = tab.get("level").and_then(Value::as_str).unwrap_or("none");
+            let title = tab.get("title").and_then(Value::as_str);
+            // A page that did not load comes first and on its own. It has no
+            // origin and so no sharing either, and leading with "this tab is
+            // not shared with you" would send the agent to ask the user for
+            // something that would not fix it — a dev server that is not up
+            // yet being the ordinary case.
+            if let Some(kind) = outcome.get("loadError").and_then(Value::as_str) {
+                return json!({
+                    "content": [{ "type": "text", "text": format!(
+                        "Browser tab {id} is open and the address did not load ({kind}). The tab \
+                         is showing an error page. Retry it with browser_navigate once whatever \
+                         serves that address is up, or close it with browser_close_tab."
+                    ) }],
+                    "structuredContent": outcome,
+                    "isError": false,
+                });
+            }
+            let origin = tab
+                .get("origin")
+                .and_then(Value::as_str)
+                .unwrap_or("(no address yet)");
+            let mut out = format!("Browser tab {id} is on {origin}");
+            if let Some(title) = title {
+                out.push_str(&format!(" — {title}"));
+            }
+            out.push_str(match level {
+                "control" => ". It is shared with you for reading and acting.",
+                "read" => {
+                    ". It is shared with you for reading; acting on it needs the user to allow \
+                     actions."
+                }
+                _ => {
+                    ". It is NOT shared with you: you cannot read this page until the user opens \
+                     that tab and presses \"Share with agents\" in its toolbar."
+                }
+            });
+            out
+        }
+        _ => outcome
+            .get("note")
+            .and_then(Value::as_str)
+            .unwrap_or("Nothing happened to the browser.")
+            .to_string(),
+    };
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "structuredContent": outcome,
+        "isError": false,
+    })
 }
 
 /// Map a `browser_eval` round-trip outcome (a serialized
@@ -3988,6 +4114,12 @@ mod tests {
             names,
             vec![
                 "browser_list_tabs".to_string(),
+                // The three that decide which tabs exist ride the same switch:
+                // the group is the user's one decision about whether an agent
+                // may drive the built-in browser.
+                "browser_open_tab".to_string(),
+                "browser_navigate".to_string(),
+                "browser_close_tab".to_string(),
                 "browser_snapshot".to_string(),
                 "browser_console_messages".to_string(),
                 "browser_screenshot".to_string(),
@@ -4413,6 +4545,81 @@ mod tests {
         let err = browser_action_request("browser_click", &json!({ "generation": "g", "ref": "e1" }))
             .unwrap_err();
         assert!(err.contains("`tabId`"));
+    }
+
+    /// The three tab tools are as strict about their two arguments: an
+    /// address that is not a string is the caller's mistake, and answering it
+    /// with an argument error is the only way it hears about it — a blank or
+    /// numeric `url` passed on to the host would come back as "that is not an
+    /// address", which reads like the site's fault.
+    #[test]
+    fn the_tab_tools_take_a_non_empty_string_for_each_argument() {
+        use crate::acp::browser_tools::BrowserTabOp;
+        assert_eq!(
+            browser_tab_op("browser_open_tab", &json!({ "url": " https://example.com/ " })).unwrap(),
+            BrowserTabOp::Open {
+                url: "https://example.com/".into()
+            }
+        );
+        assert_eq!(
+            browser_tab_op(
+                "browser_navigate",
+                &json!({ "tabId": "t1", "url": "https://example.com/" })
+            )
+            .unwrap(),
+            BrowserTabOp::Navigate {
+                tab_id: "t1".into(),
+                url: "https://example.com/".into()
+            }
+        );
+        assert_eq!(
+            browser_tab_op("browser_close_tab", &json!({ "tabId": "t1" })).unwrap(),
+            BrowserTabOp::Close {
+                tab_id: "t1".into()
+            }
+        );
+
+        for (name, args, wanted) in [
+            ("browser_open_tab", json!({}), "`url`"),
+            ("browser_open_tab", json!({ "url": "  " }), "`url`"),
+            ("browser_open_tab", json!({ "url": 7 }), "`url`"),
+            ("browser_navigate", json!({ "url": "https://x.test/" }), "`tabId`"),
+            ("browser_navigate", json!({ "tabId": "t1" }), "`url`"),
+            ("browser_close_tab", json!({}), "`tabId`"),
+        ] {
+            let err = browser_tab_op(name, &args).unwrap_err();
+            assert!(err.contains(wanted), "{name}: {err}");
+        }
+    }
+
+    /// The tab tools ride the browser group — the user's one decision about
+    /// whether an agent may drive the built-in browser — and are unknown
+    /// until it is on.
+    #[tokio::test]
+    async fn tab_tools_spawn_with_the_browser_group_and_not_before() {
+        let open = json!({
+            "jsonrpc": "2.0", "id": 71, "method": "tools/call",
+            "params": { "name": "browser_open_tab",
+                        "arguments": { "url": "http://localhost:3000/" } }
+        })
+        .to_string();
+        assert!(matches!(
+            dispatch_with_features(BROWSER_ONLY, &open).await,
+            LineAction::Spawn(_)
+        ));
+        let resp = unwrap_respond(dispatch_for_test(&open).await);
+        assert!(resp.error.unwrap().message.contains("unknown tool"));
+
+        // A malformed call is refused before the broker is dialled.
+        let bad = json!({
+            "jsonrpc": "2.0", "id": 72, "method": "tools/call",
+            "params": { "name": "browser_navigate", "arguments": { "url": "http://x.test/" } }
+        })
+        .to_string();
+        let resp = unwrap_respond(dispatch_with_features(BROWSER_ONLY, &bad).await);
+        let err = resp.error.expect("argument error");
+        assert_eq!(err.code, -32602);
+        assert!(err.message.contains("`tabId`"), "{}", err.message);
     }
 
     /// The action tools go to the broker when the group is on, and are

@@ -153,6 +153,8 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
         "open_import_sessions" => {
             crate::commands::windows::open_import_sessions_window(
                 app.clone(),
+                main_window()?,
+                app.state(),
                 app.state(),
                 None,
                 None,
@@ -165,6 +167,8 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
         "open_project_boot" => {
             crate::commands::windows::open_project_boot_window(
                 app.clone(),
+                main_window()?,
+                app.state(),
                 app.state(),
                 None,
                 None,
@@ -763,6 +767,7 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
                     owner_window: cmd.get("owner").and_then(Value::as_str).map(str::to_string),
                     opener_tab_id: cmd.get("opener").and_then(Value::as_str).map(str::to_string),
                     profile: cmd.get("profile").and_then(Value::as_str).map(str::to_string),
+                    request_id: None,
                 },
             );
             Ok(Value::Null)

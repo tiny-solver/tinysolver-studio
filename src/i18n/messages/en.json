@@ -2188,21 +2188,6 @@
         "sessions": "Sessions",
         "activeDelegations": "Delegations",
         "depthLimit": "Depth cap",
-        "tools": "Tools",
-        "groupDelegation": "Delegation",
-        "descDelegation": "Hand a task to another agent.",
-        "groupFeedback": "Live feedback",
-        "descFeedback": "Add notes mid-turn without interrupting.",
-        "groupAsk": "Ask a question",
-        "descAsk": "Let the agent ask you before it decides.",
-        "groupSessions": "Session lookup",
-        "descSessions": "Look up past sessions and their results.",
-        "groupAutomations": "Create automation",
-        "descAutomations": "Create and manage scheduled automations.",
-        "groupTaskboard": "Create task",
-        "descTaskboard": "Create and manage work tasks.",
-        "groupBrowser": "Browser tabs",
-        "descBrowser": "See the built-in browser's tabs, and read the ones you share.",
         "start": "Start service",
         "starting": "Starting…",
         "actionFailed": "Failed: {message}",
@@ -4924,25 +4909,53 @@
   "AgentToolsSettings": {
     "title": "In-conversation tools",
     "description": "Extra tools codeg gives an agent inside a conversation. Each is injected when the agent starts, so a change applies to agents started afterwards.",
-    "feedbackLabel": "Live Feedback",
-    "feedbackHint": "Send notes and corrections to an agent while it's working. When the agent supports instant steering, your note is inserted into the running turn immediately; otherwise the agent gets a tool to check for your feedback — those agents typically only check when you mention it in your prompt, for example add \"check my live feedback regularly\" to your message.",
-    "questionLabel": "Ask user question",
-    "questionHint": "Let agents pause and ask you a multiple-choice question that appears above the conversation input box. The agent waits until you answer (or skip).",
-    "sessionInfoLabel": "Get session info",
-    "sessionInfoHint": "Let agents look up a session you reference in your message (a session badge) to read its title, agent, status, workspace, token usage, and recent messages.",
-    "browserToolsLabel": "Read the built-in browser",
-    "browserToolsHint": "Let agents see which pages are open in the built-in browser, and read the ones you share. Off by default. Which page an agent may read stays a separate choice you make in that tab’s toolbar — and turning this off applies at once, including to agents already running.",
-    "browserEvalLabel": "Run code in the built-in browser",
-    "browserEvalHint": "Let agents run their own JavaScript on a page you’ve shared. Off by default, and needs the switch above. Every snippet is shown to you and approved one at a time — there is no way to make it automatic.",
-    "automationsLabel": "Create automations",
-    "automationsHint": "Save the conversation as an automation that runs on a schedule. Off by default — it goes on to start agents on its own.",
-    "workTasksLabel": "Create to-do tasks",
-    "workTasksHint": "Queue a card on the to-do board from the conversation. Off by default — it writes app state.",
     "save": "Save",
     "saving": "Saving…",
     "saved": "Tool settings saved",
     "saveFailed": "Failed to save tool settings",
     "loadFailed": "Failed to load: {detail}"
+  },
+  "AgentTools": {
+    "delegation": {
+      "label": "Delegation",
+      "short": "Hand a task to another agent.",
+      "hint": "Lets an agent hand a self-contained sub-task to another agent, which runs in its own session and reports back. The rest of it — how deep delegations may nest, which agent runs them — is the section just above."
+    },
+    "feedback": {
+      "label": "Live Feedback",
+      "short": "Add notes mid-turn without interrupting.",
+      "hint": "Send notes and corrections to an agent while it's working. When the agent supports instant steering, your note is inserted into the running turn immediately; otherwise the agent gets a tool to check for your feedback — those agents typically only check when you mention it in your prompt, for example add \"check my live feedback regularly\" to your message."
+    },
+    "ask": {
+      "label": "Ask user question",
+      "short": "Let the agent ask you before it decides.",
+      "hint": "Let agents pause and ask you a multiple-choice question that appears above the conversation input box. The agent waits until you answer (or skip)."
+    },
+    "sessions": {
+      "label": "Get session info",
+      "short": "Look up past sessions and their results.",
+      "hint": "Let agents look up a session you reference in your message (a session badge) to read its title, agent, status, workspace, token usage, and recent messages."
+    },
+    "browser": {
+      "label": "Read and drive the built-in browser",
+      "short": "Open, read and act on pages in the built-in browser.",
+      "hint": "Lets an agent see which pages are open in the built-in browser, read the ones you share, and click and type on the ones you allow actions on. It can also open an address itself, point a tab somewhere else and close tabs. Off by default. Which page it may read is still yours to decide in that tab's toolbar — but note that with a standing sharing level set, a page the agent opens for itself is shared with it the moment that page loads. Turning this off takes effect at once, on agents already running too."
+    },
+    "browserEval": {
+      "label": "Run code in the built-in browser",
+      "short": "Run its own code on a page you shared — you approve each snippet.",
+      "hint": "Let agents run their own JavaScript on a page you’ve shared. Off by default, and needs the switch above. Every snippet is shown to you and approved one at a time — there is no way to make it automatic."
+    },
+    "automations": {
+      "label": "Create automations",
+      "short": "Create and manage scheduled automations.",
+      "hint": "Save the conversation as an automation that runs on a schedule. Off by default — it goes on to start agents on its own."
+    },
+    "taskboard": {
+      "label": "Create to-do tasks",
+      "short": "Create and manage work tasks.",
+      "hint": "Queue a card on the to-do board from the conversation. Off by default — it writes app state."
+    }
   },
   "DesktopNotificationSettings": {
     "title": "Desktop notifications",
@@ -6357,6 +6370,21 @@
           "done": "Ran code on the page",
           "refused": "Refused to run code on this page",
           "failed": "Couldn’t run the code"
+        },
+        "open": {
+          "done": "Opened this page",
+          "refused": "Refused to open a tab",
+          "failed": "Could not open a tab"
+        },
+        "navigate": {
+          "done": "Went to another address",
+          "refused": "Refused: this page does not allow actions",
+          "failed": "Could not change the address"
+        },
+        "close": {
+          "done": "Closed this tab",
+          "refused": "Refused to close: this page does not allow actions",
+          "failed": "Could not close this tab"
         }
       },
       "activityCount": "{count}×",

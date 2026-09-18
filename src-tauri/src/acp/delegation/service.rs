@@ -398,6 +398,17 @@ mod tests {
             )
         }
 
+        async fn tab_op(
+            &self,
+            op: crate::acp::browser_tools::BrowserTabOp,
+        ) -> crate::acp::browser_tools::BrowserTabOutcome {
+            crate::acp::browser_tools::BrowserTabOutcome::refused(
+                op.tab_id(),
+                crate::acp::browser_tools::ERROR_UNAVAILABLE,
+                "stub",
+            )
+        }
+
         async fn capture(
             &self,
             tab_id: &str,

@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => {
     adoptBrowserTab: vi.fn(() => "browser:opener-p1"),
     closeFileTab: vi.fn(),
     openBrowserTab: vi.fn(() => "browser:new"),
+    browserAnswerOpenRequest: vi.fn(() => Promise.resolve(true)),
     browserClose: vi.fn(() => Promise.resolve()),
     browserListTabs: vi.fn(() =>
       Promise.resolve([{ tabId: "stale-1" }, { tabId: "stale-2" }])
@@ -69,6 +70,7 @@ vi.mock("@/lib/browser/browser-api", () => ({
   browserSetHostRules: mocks.browserSetHostRules,
   browserSetSignInUserAgent: mocks.browserSetSignInUserAgent,
   browserAgentGrant: mocks.browserAgentGrant,
+  browserAnswerOpenRequest: mocks.browserAnswerOpenRequest,
 }))
 vi.mock("@/lib/transport", () => ({
   getTransport: () => ({ subscribe: mocks.subscribe }),
@@ -248,6 +250,51 @@ describe("BrowserEventsBridge", () => {
       "https://example.com/no-opinion",
       { activate: true, openerTabId: undefined, profile: undefined }
     )
+
+    // A request that names itself is one somebody is parked on — an agent's
+    // `browser_open_tab`, which has to answer with the id of the tab it got.
+    // The backend id is derived from the record, so the answer goes back
+    // before any native surface exists.
+    mocks.handlers.get("browser://open-request")!({
+      url: "https://example.com/awaited",
+      source: "agent",
+      activate: true,
+      ownerWindow: "main",
+      requestId: "req-7",
+    })
+    expect(mocks.browserAnswerOpenRequest).toHaveBeenCalledWith("req-7", "new")
+    // A workspace that opened nothing says so, rather than leaving the waiter
+    // to time out.
+    mocks.openBrowserTab.mockReturnValueOnce(null)
+    mocks.handlers.get("browser://open-request")!({
+      url: "not-an-address",
+      source: "agent",
+      activate: true,
+      ownerWindow: "main",
+      requestId: "req-8",
+    })
+    expect(mocks.browserAnswerOpenRequest).toHaveBeenLastCalledWith(
+      "req-8",
+      null
+    )
+    // A request addressed to another window is not answered by this one —
+    // answering for a tab it did not open would hand the waiter a stranger.
+    mocks.handlers.get("browser://open-request")!({
+      url: "https://example.com/elsewhere",
+      source: "agent",
+      activate: true,
+      ownerWindow: "remote-workspace-3",
+      requestId: "req-9",
+    })
+    expect(mocks.browserAnswerOpenRequest).toHaveBeenCalledTimes(2)
+    // And the fire-and-forget askers still say nothing.
+    mocks.handlers.get("browser://open-request")!({
+      url: "https://example.com/deep-link",
+      source: "deeplink",
+      activate: true,
+      ownerWindow: "main",
+    })
+    expect(mocks.browserAnswerOpenRequest).toHaveBeenCalledTimes(2)
 
     mocks.handlers.get("browser://state")!({
       tabId: "abc",

@@ -254,6 +254,12 @@ pub struct BrowserOpenRequestPayload {
     /// The profile the new tab belongs in: the opener's for a modifier-click
     /// (the same signed-in session), else the frontend's choice.
     pub profile: Option<String>,
+    /// Names this request, for a caller that needs to be told which tab the
+    /// workspace opened. Absent for the fire-and-forget askers (a deep link, a
+    /// modifier-click) — nobody is waiting for those, and a frontend that
+    /// answered them would only be talking to itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -362,10 +368,14 @@ mod tests {
             owner_window: Some("main".into()),
             opener_tab_id: Some("t1".into()),
             profile: Some("p-work".into()),
+            request_id: None,
         })
         .unwrap();
         assert_eq!(request["profile"], "p-work");
         assert_eq!(request["openerTabId"], "t1");
+        // An asker nobody is waiting on carries no id at all, rather than a
+        // null the frontend would have to test for before answering.
+        assert!(request.get("requestId").is_none());
         let blocked = serde_json::to_value(BrowserNavigationBlockedPayload {
             tab_id: "t1".into(),
             url: "https://blocked.example/".into(),

@@ -17,15 +17,21 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-// Capture the change-event handler so a test can play a remote write back.
-let authoringHandler: ((p: unknown) => void) | undefined
+// Capture the change-event handlers so a test can play a remote write back.
+// Keyed by event: the panel listens for two broadcasts (create-from-chat and
+// browser tools), and a single slot would quietly hand one test's payload to
+// the other one's handler.
+const handlers = new Map<string, (p: unknown) => void>()
 const unsubscribeSpy = vi.fn()
 vi.mock("@/lib/platform", () => ({
-  subscribe: vi.fn((_event: string, handler: (p: unknown) => void) => {
-    authoringHandler = handler
+  subscribe: vi.fn((event: string, handler: (p: unknown) => void) => {
+    handlers.set(event, handler)
     return Promise.resolve(unsubscribeSpy)
   }),
 }))
+const authoringHandler = () => handlers.get("chat-authoring-settings://changed")
+const browserToolsHandler = () =>
+  handlers.get("browser-tools-settings://changed")
 
 // Avoid mutating the shared module cache across tests.
 vi.mock("@/hooks/use-feedback-enabled", () => ({
@@ -64,7 +70,7 @@ const LABELS = {
   feedback: "Live Feedback",
   question: "Ask user question",
   sessionInfo: "Get session info",
-  browserTools: "Read the built-in browser",
+  browserTools: "Read and drive the built-in browser",
   browserEval: "Run code in the built-in browser",
   automations: "Create automations",
   workTasks: "Create to-do tasks",
@@ -119,6 +125,8 @@ function primeBackend(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The handlers belong to the unmounted render, not to the next one.
+  handlers.clear()
 })
 
 describe("AgentToolsSettingsSection", () => {
@@ -278,7 +286,7 @@ describe("AgentToolsSettingsSection", () => {
 
     // Elsewhere (the popover), automations is switched on.
     act(() =>
-      authoringHandler?.({
+      authoringHandler()?.({
         automations_enabled: true,
         work_tasks_enabled: false,
       })
@@ -314,7 +322,7 @@ describe("AgentToolsSettingsSection", () => {
     expect(screen.getByLabelText(LABELS.automations)).toBeChecked()
 
     act(() =>
-      authoringHandler?.({
+      authoringHandler()?.({
         automations_enabled: false,
         work_tasks_enabled: false,
       })
@@ -337,6 +345,37 @@ describe("AgentToolsSettingsSection", () => {
     )
   })
 
+  /** The same problem for the two browser switches, which the popover now
+   * carries as two adjacent rows: a form left open across a popover toggle
+   * must adopt it, or saving the other switch reverts it. */
+  it("adopts a remote browser-tools write instead of reverting it on save", async () => {
+    primeBackend({ browserTools: true })
+    renderWithIntl()
+    await waitFor(() =>
+      expect(screen.getByLabelText(LABELS.browserTools)).toBeChecked()
+    )
+
+    // Elsewhere (the popover), running code is switched on.
+    act(() => browserToolsHandler()?.({ enabled: true, eval: true }))
+    await waitFor(() =>
+      expect(screen.getByLabelText(LABELS.browserEval)).toBeChecked()
+    )
+
+    // The user now flips the OTHER switch here and saves. The pair goes, so
+    // the remote value has to be the one that rides along.
+    fireEvent.click(screen.getByLabelText(LABELS.browserTools))
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() =>
+      expect(mockSetBrowser).toHaveBeenCalledWith({
+        enabled: false,
+        // Clamped by the panel exactly as the backend clamps it: the row
+        // shows off while the group is off, and sends what it shows.
+        eval: false,
+      })
+    )
+  })
+
   /** A broadcast that lands while the initial reads are still in flight is the
    * newer fact — the load must not restore what it sampled before it. */
   it("does not let a slow initial load overwrite a broadcast", async () => {
@@ -352,11 +391,11 @@ describe("AgentToolsSettingsSection", () => {
     )
 
     renderWithIntl()
-    await waitFor(() => expect(authoringHandler).toBeDefined())
+    await waitFor(() => expect(authoringHandler()).toBeDefined())
 
     // The popover writes while the form's own reads are still pending.
     act(() =>
-      authoringHandler?.({
+      authoringHandler()?.({
         automations_enabled: true,
         work_tasks_enabled: false,
       })

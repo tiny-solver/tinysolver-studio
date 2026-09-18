@@ -2188,21 +2188,6 @@
         "sessions": "Sessões",
         "activeDelegations": "Delegações",
         "depthLimit": "Profundidade",
-        "tools": "Ferramentas",
-        "groupDelegation": "Delegação",
-        "descDelegation": "Passa uma tarefa para outro agente.",
-        "groupFeedback": "Feedback ao vivo",
-        "descFeedback": "Acrescenta notas sem interromper o turno.",
-        "groupAsk": "Perguntar ao usuário",
-        "descAsk": "Deixa o agente perguntar antes de decidir.",
-        "groupSessions": "Consulta de sessões",
-        "descSessions": "Consulta sessões anteriores e seus resultados.",
-        "groupAutomations": "Criar automação",
-        "descAutomations": "Cria e gere automações agendadas.",
-        "groupTaskboard": "Criar tarefa",
-        "descTaskboard": "Cria e gere tarefas de trabalho.",
-        "groupBrowser": "Abas do navegador",
-        "descBrowser": "Ver as abas do navegador integrado e ler as que você compartilhar.",
         "start": "Iniciar serviço",
         "starting": "Iniciando…",
         "actionFailed": "Falhou: {message}",
@@ -4924,25 +4909,53 @@
   "AgentToolsSettings": {
     "title": "Ferramentas na conversa",
     "description": "Ferramentas extras que o codeg dá a um agente dentro de uma conversa. Elas são injetadas quando o agente inicia, então a mudança vale para os agentes iniciados depois.",
-    "feedbackLabel": "Feedback ao vivo",
-    "feedbackHint": "Envie notas e correções a um agente enquanto ele trabalha. Se o agente oferecer inserção instantânea, sua nota entra imediatamente no turno em andamento; caso contrário, o agente recebe uma ferramenta para verificar seu feedback — esses agentes normalmente só verificam quando você menciona isso no prompt, por exemplo, adicione \"verifique meu feedback ao vivo regularmente\" à sua mensagem.",
-    "questionLabel": "Perguntar ao usuário",
-    "questionHint": "Permite que os agentes pausem e façam uma pergunta de múltipla escolha que aparece acima da caixa de entrada da conversa. O agente aguarda até você responder (ou pular).",
-    "sessionInfoLabel": "Obter informações da sessão",
-    "sessionInfoHint": "Permite que os agentes consultem uma sessão mencionada na sua mensagem (um selo de sessão) para ler o título, agente, status, espaço de trabalho, uso de tokens e mensagens recentes.",
-    "browserToolsLabel": "Ler o navegador integrado",
-    "browserToolsHint": "Deixa os agentes verem quais páginas estão abertas no navegador integrado e lerem as que você compartilhar. Desativado por padrão. Qual página um agente pode ler continua sendo uma escolha à parte, feita na barra daquela aba; desativar isto vale na hora, inclusive para agentes já em execução.",
-    "browserEvalLabel": "Executar código no navegador integrado",
-    "browserEvalHint": "Permite que os agentes executem o próprio JavaScript numa página que você compartilhou. Desativado por padrão e depende do interruptor acima. Cada trecho é mostrado a você e aprovado um de cada vez — não há como torná-lo automático.",
-    "automationsLabel": "Criar automações",
-    "automationsHint": "Salva a conversa como uma automação que roda em um agendamento. Desativado por padrão — depois ela inicia agentes por conta própria.",
-    "workTasksLabel": "Criar tarefas a fazer",
-    "workTasksHint": "Coloca um cartão no quadro de tarefas a partir da conversa. Desativado por padrão — grava o estado do app.",
     "save": "Salvar",
     "saving": "Salvando…",
     "saved": "Configurações de ferramentas salvas",
     "saveFailed": "Falha ao salvar as configurações de ferramentas",
     "loadFailed": "Falha ao carregar: {detail}"
+  },
+  "AgentTools": {
+    "delegation": {
+      "label": "Delegação",
+      "short": "Passa uma tarefa para outro agente.",
+      "hint": "Permite que um agente passe uma subtarefa autônoma para outro agente, que a executa na própria sessão e devolve o resultado. O restante — quantos níveis de aninhamento, qual agente executa — está na seção logo acima."
+    },
+    "feedback": {
+      "label": "Feedback ao vivo",
+      "short": "Acrescenta notas sem interromper o turno.",
+      "hint": "Envie notas e correções a um agente enquanto ele trabalha. Se o agente oferecer inserção instantânea, sua nota entra imediatamente no turno em andamento; caso contrário, o agente recebe uma ferramenta para verificar seu feedback — esses agentes normalmente só verificam quando você menciona isso no prompt, por exemplo, adicione \"verifique meu feedback ao vivo regularmente\" à sua mensagem."
+    },
+    "ask": {
+      "label": "Perguntar ao usuário",
+      "short": "Deixa o agente perguntar antes de decidir.",
+      "hint": "Permite que os agentes pausem e façam uma pergunta de múltipla escolha que aparece acima da caixa de entrada da conversa. O agente aguarda até você responder (ou pular)."
+    },
+    "sessions": {
+      "label": "Obter informações da sessão",
+      "short": "Consulta sessões anteriores e seus resultados.",
+      "hint": "Permite que os agentes consultem uma sessão mencionada na sua mensagem (um selo de sessão) para ler o título, agente, status, espaço de trabalho, uso de tokens e mensagens recentes."
+    },
+    "browser": {
+      "label": "Ler e conduzir o navegador integrado",
+      "short": "Abre, lê e age sobre as páginas do navegador integrado.",
+      "hint": "Permite que um agente veja quais páginas estão abertas no navegador integrado, leia as que você compartilhar e clique e digite naquelas em que você permitir ações. Ele também pode abrir um endereço por conta própria, levar uma aba para outro lugar e fechar abas. Desativado por padrão. Qual página ele pode ler continua sendo decisão sua, na barra daquela aba — mas note que, com um nível de compartilhamento padrão definido, uma página que o agente abre para si fica compartilhada com ele assim que carrega. Desativar tem efeito imediato, inclusive sobre agentes já em execução."
+    },
+    "browserEval": {
+      "label": "Executar código no navegador integrado",
+      "short": "Executa o próprio código numa página compartilhada — você aprova cada trecho.",
+      "hint": "Permite que os agentes executem o próprio JavaScript numa página que você compartilhou. Desativado por padrão e depende do interruptor acima. Cada trecho é mostrado a você e aprovado um de cada vez — não há como torná-lo automático."
+    },
+    "automations": {
+      "label": "Criar automações",
+      "short": "Cria e gere automações agendadas.",
+      "hint": "Salva a conversa como uma automação que roda em um agendamento. Desativado por padrão — depois ela inicia agentes por conta própria."
+    },
+    "taskboard": {
+      "label": "Criar tarefas a fazer",
+      "short": "Cria e gere tarefas de trabalho.",
+      "hint": "Coloca um cartão no quadro de tarefas a partir da conversa. Desativado por padrão — grava o estado do app."
+    }
   },
   "DesktopNotificationSettings": {
     "title": "Notificações do sistema",
@@ -6357,6 +6370,21 @@
           "done": "Executou código na página",
           "refused": "Execução de código recusada nesta página",
           "failed": "Não foi possível executar o código"
+        },
+        "open": {
+          "done": "Abriu esta página",
+          "refused": "Recusou abrir uma aba",
+          "failed": "Não foi possível abrir uma aba"
+        },
+        "navigate": {
+          "done": "Foi para outro endereço",
+          "refused": "Recusado: esta página não permite ações",
+          "failed": "Não foi possível mudar o endereço"
+        },
+        "close": {
+          "done": "Fechou esta aba",
+          "refused": "Fechamento recusado: esta página não permite ações",
+          "failed": "Não foi possível fechar esta aba"
         }
       },
       "activityCount": "{count}×",
