@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   openFilePreview: vi.fn(() => Promise.resolve("/abs/path")),
   openFileDialog: vi.fn(() => Promise.resolve<string | string[] | null>(null)),
   fileTabs: [] as FileWorkspaceTab[],
+  previewFileTabIds: new Set<string>(),
   browserState: null as { url: string; title: string } | null,
 }))
 
@@ -85,6 +86,7 @@ vi.mock("@/contexts/workspace-context", () => ({
   useWorkspaceFileTabs: () => ({
     fileTabs: mocks.fileTabs,
     activeFileTabId: mocks.fileTabs[0]?.id ?? null,
+    previewFileTabIds: mocks.previewFileTabIds,
   }),
   useWorkspaceView: () => ({ mode: "fusion", filesMaximized: false }),
 }))
@@ -102,6 +104,14 @@ function fileTab(path: string): FileWorkspaceTab {
     language: "typescript",
     content: "",
     loading: false,
+  } as FileWorkspaceTab
+}
+
+function htmlTab(path: string, content: string): FileWorkspaceTab {
+  return {
+    ...fileTab(path),
+    language: "html",
+    content,
   } as FileWorkspaceTab
 }
 
@@ -149,6 +159,7 @@ beforeEach(() => {
   remoteDesktop = false
   browserAvailable = true
   mocks.fileTabs = [fileTab("/repo/a.ts")]
+  mocks.previewFileTabIds = new Set<string>()
   mocks.browserState = null
   vi.clearAllMocks()
   mocks.openFileDialog.mockResolvedValue(null)
@@ -247,6 +258,50 @@ describe("FileWorkspaceTabBar — an empty browser tab", () => {
     expect(tab).not.toHaveTextContent("New tab")
     expect(tab).toHaveTextContent("example.com")
     expect(tab.title).toBe("example.com\nhttps://example.com/api/items.json")
+  })
+})
+
+describe("FileWorkspaceTabBar — a previewed HTML file", () => {
+  const PAGE = "<!doctype html><title>NETRUNNER // ACCESS TERMINAL</title><p>x"
+
+  it("is named by the document, with the file behind it on hover", () => {
+    mocks.fileTabs = [htmlTab("/repo/site/index.html", PAGE)]
+    mocks.previewFileTabIds = new Set(["file:/repo/site/index.html"])
+    renderStrip()
+    const tab = screen.getByRole("tab")
+    expect(tab).toHaveTextContent("NETRUNNER // ACCESS TERMINAL")
+    expect(tab).not.toHaveTextContent("index.html")
+    // Browser-tab shape: what it is, then where it lives, one per line.
+    expect(tab.title).toBe(
+      "NETRUNNER // ACCESS TERMINAL\n/repo/site/index.html"
+    )
+  })
+
+  it("is named by the file while its source is showing", () => {
+    // The tab is an editor then, and `index.html` is what is being edited.
+    mocks.fileTabs = [htmlTab("/repo/site/index.html", PAGE)]
+    renderStrip()
+    const tab = screen.getByRole("tab")
+    expect(tab).toHaveTextContent("index.html")
+    expect(tab).not.toHaveTextContent("NETRUNNER")
+    expect(tab.title).toBe("/repo/site/index.html")
+  })
+
+  it("keeps the file name when the document has no title of its own", () => {
+    mocks.fileTabs = [htmlTab("/repo/site/index.html", "<p>no title here")]
+    mocks.previewFileTabIds = new Set(["file:/repo/site/index.html"])
+    renderStrip()
+    expect(screen.getByRole("tab")).toHaveTextContent("index.html")
+  })
+
+  it("leaves a previewed markdown file alone", () => {
+    // Only HTML has a document title; a `# heading` is not one, and reading
+    // one out of the source would rename the tab on every keystroke.
+    const md = { ...fileTab("/repo/notes.md"), language: "markdown" }
+    mocks.fileTabs = [md as FileWorkspaceTab]
+    mocks.previewFileTabIds = new Set(["file:/repo/notes.md"])
+    renderStrip()
+    expect(screen.getByRole("tab")).toHaveTextContent("notes.md")
   })
 })
 

@@ -2246,6 +2246,8 @@
       "closeAll": "关闭所有",
       "preview": "预览",
       "editSource": "编辑源码",
+      "openInSystemBrowser": "在系统浏览器中打开",
+      "more": "更多",
       "maximize": "最大化",
       "restore": "还原",
       "emptyDirectory": "空目录"
@@ -2371,7 +2373,6 @@
       "imageZoomOut": "缩小",
       "imageZoomReset": "重置缩放",
       "htmlPreviewTitle": "HTML 预览",
-      "htmlPreviewTrust": "运行脚本",
       "htmlPreviewTrustHint": "运行此文件的脚本并允许网络访问。仅对可信任的文件启用。",
       "officePreviewTitle": "办公文档预览",
       "officeFullRender": "完整渲染",

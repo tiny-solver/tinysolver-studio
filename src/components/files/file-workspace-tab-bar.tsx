@@ -30,6 +30,8 @@ import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { useLongPressDrag } from "@/hooks/use-long-press-drag"
 import { normalizeAbsPath } from "@/lib/file-open-target"
+import { extractHtmlTitle } from "@/lib/html-preview-inline"
+import { isHtmlPreviewable } from "@/lib/language-detect"
 import { openFileDialog } from "@/lib/platform"
 import { isDesktop, isRemoteDesktopMode } from "@/lib/transport"
 import { cn, handleMiddleClickClose } from "@/lib/utils"
@@ -70,7 +72,8 @@ const STRIP_ICON_BTN =
 export function FileWorkspaceTabBar() {
   const t = useTranslations("Folder.fileWorkspace")
   const { mode, filesMaximized } = useWorkspaceView()
-  const { fileTabs, activeFileTabId } = useWorkspaceFileTabs()
+  const { fileTabs, activeFileTabId, previewFileTabIds } =
+    useWorkspaceFileTabs()
   const {
     switchFileTab,
     closeFileTab,
@@ -159,6 +162,7 @@ export function FileWorkspaceTabBar() {
                   : undefined
           }
           embedded
+          previewing={previewFileTabIds.has(tab.id)}
           closeLabel={t("closeFileTab")}
           closeText={t("close")}
           closeOthersText={t("closeOthers")}
@@ -310,6 +314,9 @@ interface FileWorkspaceTabItemProps {
    *  reverse-corner foot (which flares over it) leaves no stray line. */
   adjacentActive?: "before" | "after"
   embedded: boolean
+  /** The tab is showing the rendered document rather than its source — what
+   *  lets an HTML tab be named by the page instead of by the file. */
+  previewing: boolean
   closeLabel: string
   closeText: string
   closeOthersText: string
@@ -329,6 +336,7 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
   active,
   adjacentActive,
   embedded,
+  previewing,
   closeLabel,
   closeText,
   closeOthersText,
@@ -369,17 +377,31 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
   // cleared the live title and `title_changed` has not fired yet.
   const recordTitle = isBlankPageUrl(tab.title) ? null : tab.title
   const browserHost = browserUrl ? hostnameOf(browserUrl) : null
+  // An HTML file being previewed is named the way a browser names a page: by
+  // the document's own <title>, the file name behind it on hover. Read from
+  // the tab's source rather than from the rendered document, so it is the same
+  // answer for both renderers (inline iframe / document guest), it is there
+  // before anything loads, and a background tab has it too. Empty (no <title>
+  // element, or the tab is showing source) = the file name, as before.
+  const htmlTitle = useMemo(
+    () =>
+      previewing && tab.kind === "file" && isHtmlPreviewable(tab.path)
+        ? extractHtmlTitle(tab.content ?? "")
+        : "",
+    [previewing, tab.content, tab.kind, tab.path]
+  )
   const displayTitle = isBrowser
     ? browserState?.title ||
       (blankPage
         ? tBrowserTab("untitled")
         : (recordTitle ?? browserHost ?? tab.title))
-    : tab.title
+    : htmlTitle || tab.title
   const sharedWith = browserState?.agentGrant?.origin ?? null
   // A browser tab is the one kind whose label is always truncated (a page
   // title is a sentence, not a filename) AND whose address is not shown
   // anywhere in the strip, so hovering gives both — title first, then the
-  // address it is on, one per line.
+  // address it is on, one per line. A previewed HTML file is in the same
+  // position and gets the same two lines, its path standing in for the address.
   const displayHint = isBrowser
     ? [
         displayTitle,
@@ -388,7 +410,9 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
       ]
         .filter(Boolean)
         .join("\n")
-    : (tab.description ?? tab.title)
+    : htmlTitle
+      ? [htmlTitle, tab.description ?? tab.path].filter(Boolean).join("\n")
+      : (tab.description ?? tab.title)
 
   const handleLongPressStart = useCallback(
     () => onTouchSortingStart(tab.id),
@@ -526,7 +550,8 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
             <button
               type="button"
               className={cn(
-                "rounded-md hover:bg-foreground/10",
+                // Round, like the strip's own "+" and maximize buttons.
+                "rounded-full hover:bg-foreground/10",
                 // Embedded: an absolute overlay pinned to the right edge, so it
                 // claims no row space — the label runs the full width and fades
                 // under it (browser-tab-label) instead of stopping short of an

@@ -18,6 +18,10 @@ import {
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 import { DocGuestPreview } from "@/components/files/doc-guest-preview"
 import {
+  usePublishHtmlPreviewControls,
+  type HtmlPreviewChrome,
+} from "@/components/files/html-preview-controls"
+import {
   useBrowserPrefs,
   type HtmlPreviewEngine,
 } from "@/lib/browser/browser-prefs"
@@ -72,6 +76,7 @@ export function resetHtmlPreviewEngineOverridesForTests(): void {
 export function HtmlPreview({
   tab,
   rootPath,
+  chrome = "bar",
 }: {
   tab: FileWorkspaceTab
   // Sub-resource resolution root: the owning workspace folder when the
@@ -79,6 +84,13 @@ export function HtmlPreview({
   // working), else the file's own directory — a natural sandbox for
   // outside-workspace files. The tab path itself is absolute.
   rootPath: string | null
+  /** Where the preview's controls go. `"bar"` — its own header strip, for
+   *  hosts with nowhere else to put them (the file viewer drawer, the canvas
+   *  file card). `"hoisted"` — no strip; the controls are published for the
+   *  host's own header instead (see `html-preview-controls`), which is what
+   *  the file column does so the document does not sit under two rows of
+   *  chrome. */
+  chrome?: HtmlPreviewChrome
 }) {
   const prefs = useBrowserPrefs()
   const capabilities = useBrowserCapabilities()
@@ -99,6 +111,7 @@ export function HtmlPreview({
         key={tab.id}
         tab={tab}
         rootPath={rootPath}
+        chrome={chrome}
         onUseInline={useInline}
       />
     )
@@ -108,6 +121,7 @@ export function HtmlPreview({
       key={tab.id}
       tab={tab}
       rootPath={rootPath}
+      chrome={chrome}
       onUseGuest={guestAvailable ? useGuest : null}
     />
   )
@@ -118,10 +132,12 @@ export function HtmlPreview({
 export function InlineHtmlPreview({
   tab,
   rootPath,
+  chrome = "bar",
   onUseGuest,
 }: {
   tab: FileWorkspaceTab
   rootPath: string | null
+  chrome?: HtmlPreviewChrome
   /** Offered when a document guest is available and the user chose the
    *  inline renderer for this file. */
   onUseGuest: (() => void) | null
@@ -141,6 +157,39 @@ export function InlineHtmlPreview({
   // resource.
   const title = useMemo(() => extractHtmlTitle(content), [content])
   const heading = title || path.split("/").pop() || path
+
+  const toggleTrusted = useCallback(() => setTrusted((v) => !v), [])
+  // Same two labels the document guest uses: one renderer or the other, the
+  // switch is the same promise to the user. The HINT is not shared — this one
+  // also hands the document the network.
+  const scriptsLabel = trusted ? tDoc("scriptsOn") : tDoc("scriptsOff")
+  usePublishHtmlPreviewControls(
+    tab.id,
+    useMemo(
+      () =>
+        chrome !== "hoisted"
+          ? null
+          : {
+              scripts: {
+                on: trusted,
+                disabled: false,
+                label: scriptsLabel,
+                hint: t("htmlPreviewTrustHint"),
+                toggle: toggleTrusted,
+              },
+              reload: null,
+              switchEngine: onUseGuest
+                ? {
+                    to: "guest" as const,
+                    label: tDoc("useGuest"),
+                    run: onUseGuest,
+                  }
+                : null,
+              note: null,
+            },
+      [chrome, onUseGuest, scriptsLabel, t, tDoc, toggleTrusted, trusted]
+    )
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -186,46 +235,48 @@ export function InlineHtmlPreview({
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="h-9 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-border bg-muted/20">
-        <span
-          className="min-w-0 truncate text-xs font-medium text-foreground/80"
-          title={heading || undefined}
-        >
-          {heading}
-        </span>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
-            onClick={() => setTrusted((v) => !v)}
-            aria-pressed={trusted}
-            title={t("htmlPreviewTrustHint")}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
-              trusted
-                ? "text-amber-600 dark:text-amber-500 hover:bg-amber-500/10"
-                : "text-muted-foreground hover:bg-primary/8"
-            )}
+      {chrome === "bar" && (
+        <div className="h-9 shrink-0 flex items-center justify-between gap-3 px-3 border-b border-border bg-muted/20">
+          <span
+            className="min-w-0 truncate text-xs font-medium text-foreground/80"
+            title={heading || undefined}
           >
-            {trusted ? (
-              <ShieldOff className="h-3.5 w-3.5" />
-            ) : (
-              <ShieldCheck className="h-3.5 w-3.5" />
-            )}
-            {t("htmlPreviewTrust")}
-          </button>
-          {onUseGuest ? (
+            {heading}
+          </span>
+          <div className="flex shrink-0 items-center gap-0.5">
             <button
               type="button"
-              onClick={onUseGuest}
-              title={tDoc("useGuest")}
-              aria-label={tDoc("useGuest")}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/8"
+              onClick={toggleTrusted}
+              aria-pressed={trusted}
+              title={t("htmlPreviewTrustHint")}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors",
+                trusted
+                  ? "text-amber-600 dark:text-amber-500 hover:bg-amber-500/10"
+                  : "text-muted-foreground hover:bg-primary/8"
+              )}
             >
-              <AppWindow className="h-3.5 w-3.5" />
+              {trusted ? (
+                <ShieldOff className="h-3.5 w-3.5" />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5" />
+              )}
+              {scriptsLabel}
             </button>
-          ) : null}
+            {onUseGuest ? (
+              <button
+                type="button"
+                onClick={onUseGuest}
+                title={tDoc("useGuest")}
+                aria-label={tDoc("useGuest")}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-primary/8"
+              >
+                <AppWindow className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
       <div className="relative flex-1 min-h-0">
         {loading && (
           <div className="absolute top-2 right-3 z-10 rounded-md bg-background/70 px-2 py-1 text-2xs text-muted-foreground backdrop-blur-sm">

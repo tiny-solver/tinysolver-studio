@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
   Copy,
@@ -19,6 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  usePublishHtmlPreviewControls,
+  type HtmlPreviewChrome,
+} from "@/components/files/html-preview-controls"
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 import { useOpenUrlTarget } from "@/hooks/use-open-url-target"
 import {
@@ -53,9 +57,9 @@ function basename(path: string): string {
 }
 
 const headerBtn =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors text-muted-foreground hover:bg-primary/8 disabled:opacity-50"
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs transition-colors text-muted-foreground hover:bg-primary/8 disabled:opacity-50"
 const iconBtn =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/8 disabled:opacity-50"
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-primary/8 disabled:opacity-50"
 
 /**
  * An HTML file shown through the document guest (see the Rust `doc_guest`
@@ -72,12 +76,15 @@ const iconBtn =
 export function DocGuestPreview({
   tab,
   rootPath,
+  chrome = "bar",
   onUseInline,
 }: {
   tab: FileWorkspaceTab
   /** Sub-resource resolution root: the owning workspace folder, else null
    *  (the file's own directory). Same value the inline preview takes. */
   rootPath: string | null
+  /** Its own header strip, or the host's (see `html-preview-controls`). */
+  chrome?: HtmlPreviewChrome
   /** The user prefers the inline preview for this file. */
   onUseInline: () => void
 }) {
@@ -161,75 +168,132 @@ export function DocGuestPreview({
   const error = state?.error ?? null
   const reset = doc?.reset && doc.reset !== dismissedReset ? doc.reset : null
 
+  const reload = useCallback(
+    () => void browserReload(backendId).catch(() => {}),
+    [backendId]
+  )
+  const toggleScripts = useCallback(
+    () => void setMode(mode === "dynamic" ? "safe" : "dynamic"),
+    [mode, setMode]
+  )
+  const scriptsLabel = mode === "dynamic" ? t("scriptsOn") : t("scriptsOff")
+  // Whether there is a guest behind the surface at all. A BOOLEAN, not `state`
+  // itself: the published controls only care that one exists, and `state` is a
+  // fresh object on every page event (url, title, loading), which would
+  // republish — and re-render the host header — on each one.
+  const guestReady = Boolean(state)
+  const scriptsDisabled = switching || !guestReady
+  // Hoisted: the host header shows all of this, so the strip below is not
+  // rendered at all. Copying the path is NOT published — a host with a header
+  // of its own already names the file and can offer that itself.
+  usePublishHtmlPreviewControls(
+    tab.id,
+    useMemo(
+      () =>
+        chrome !== "hoisted"
+          ? null
+          : {
+              scripts: {
+                on: mode === "dynamic",
+                disabled: scriptsDisabled,
+                label: scriptsLabel,
+                hint: t("scriptsHint"),
+                toggle: toggleScripts,
+              },
+              reload: guestReady ? { label: t("reload"), run: reload } : null,
+              switchEngine: {
+                to: "inline" as const,
+                label: t("useInline"),
+                run: onUseInline,
+              },
+              note: tab.isDirty ? t("unsaved") : null,
+            },
+      [
+        chrome,
+        guestReady,
+        mode,
+        onUseInline,
+        reload,
+        scriptsDisabled,
+        scriptsLabel,
+        t,
+        tab.isDirty,
+        toggleScripts,
+      ]
+    )
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/20 px-3">
-        <span
-          className="min-w-0 truncate text-xs font-medium text-foreground/80"
-          title={heading || undefined}
-        >
-          {heading}
-        </span>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {tab.isDirty ? (
-            <span className="mr-1 truncate text-2xs text-muted-foreground">
-              {t("unsaved")}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={() =>
-              void setMode(mode === "dynamic" ? "safe" : "dynamic")
-            }
-            aria-pressed={mode === "dynamic"}
-            disabled={switching || !state}
-            title={t("scriptsHint")}
-            className={cn(
-              headerBtn,
-              mode === "dynamic" &&
-                "text-amber-600 hover:bg-amber-500/10 dark:text-amber-500"
-            )}
+      {chrome === "bar" && (
+        <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/20 px-3">
+          <span
+            className="min-w-0 truncate text-xs font-medium text-foreground/80"
+            title={heading || undefined}
           >
-            {mode === "dynamic" ? (
-              <ShieldOff className="h-3.5 w-3.5" />
-            ) : (
-              <ShieldCheck className="h-3.5 w-3.5" />
-            )}
-            {mode === "dynamic" ? t("scriptsOn") : t("scriptsOff")}
-          </button>
-          <button
-            type="button"
-            className={iconBtn}
-            title={t("reload")}
-            aria-label={t("reload")}
-            disabled={!state}
-            onClick={() => void browserReload(backendId).catch(() => {})}
-          >
-            <RotateCw className="h-3.5 w-3.5" />
-          </button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={iconBtn}
-                title={t("more")}
-                aria-label={t("more")}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => void copyTextToClipboard(path)}>
-                <Copy className="h-3.5 w-3.5" />
-                {t("copyPath")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={onUseInline}>
-                {t("useInline")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {heading}
+          </span>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {tab.isDirty ? (
+              <span className="mr-1 truncate text-2xs text-muted-foreground">
+                {t("unsaved")}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={toggleScripts}
+              aria-pressed={mode === "dynamic"}
+              disabled={scriptsDisabled}
+              title={t("scriptsHint")}
+              className={cn(
+                headerBtn,
+                mode === "dynamic" &&
+                  "text-amber-600 hover:bg-amber-500/10 dark:text-amber-500"
+              )}
+            >
+              {mode === "dynamic" ? (
+                <ShieldOff className="h-3.5 w-3.5" />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5" />
+              )}
+              {scriptsLabel}
+            </button>
+            <button
+              type="button"
+              className={iconBtn}
+              title={t("reload")}
+              aria-label={t("reload")}
+              disabled={!state}
+              onClick={reload}
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={iconBtn}
+                  title={t("more")}
+                  aria-label={t("more")}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => void copyTextToClipboard(path)}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {t("copyPath")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onUseInline}>
+                  {t("useInline")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
+      )}
       {reset ? (
         <NoticeRow
           text={t("reset", { file: reset.path })}
@@ -305,8 +369,8 @@ export function DocGuestPreview({
             ) : null}
             <button
               type="button"
-              className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs hover:bg-primary/8"
-              onClick={() => void browserReload(backendId).catch(() => {})}
+              className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-full border border-border px-3 text-xs hover:bg-primary/8"
+              onClick={reload}
             >
               <RotateCw className="h-3.5 w-3.5" />
               {t("reload")}
@@ -343,7 +407,7 @@ function NoticeRow({
       {children}
       <button
         type="button"
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-primary/8"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-primary/8"
         title={t("dismiss")}
         aria-label={t("dismiss")}
         onClick={onDismiss}
@@ -364,7 +428,7 @@ function NoticeAction({
   return (
     <button
       type="button"
-      className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/8"
+      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/8"
       onClick={onClick}
     >
       {label}

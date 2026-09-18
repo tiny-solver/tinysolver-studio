@@ -1928,6 +1928,10 @@ export function FileWorkspacePanel() {
         key={activeFileTab.id}
         tab={activeFileTab}
         rootPath={previewRoot}
+        // The file column already has a header of its own (FileWorkspaceHeader,
+        // directly above this panel): the preview's controls go there rather
+        // than into a second strip under it.
+        chrome="hoisted"
       />
     )
   }

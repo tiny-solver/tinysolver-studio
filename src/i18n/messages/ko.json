@@ -2246,6 +2246,8 @@
       "closeAll": "모두 닫기",
       "preview": "미리보기",
       "editSource": "소스 편집",
+      "openInSystemBrowser": "시스템 브라우저에서 열기",
+      "more": "더 보기",
       "maximize": "최대화",
       "restore": "복원",
       "emptyDirectory": "빈 폴더"
@@ -2371,7 +2373,6 @@
       "imageZoomOut": "축소",
       "imageZoomReset": "확대/축소 초기화",
       "htmlPreviewTitle": "HTML 미리보기",
-      "htmlPreviewTrust": "스크립트 사용",
       "htmlPreviewTrustHint": "이 파일의 스크립트를 실행하고 네트워크 접근을 허용합니다. 신뢰할 수 있는 파일에서만 사용하세요.",
       "officePreviewTitle": "Office 문서 미리보기",
       "officeFullRender": "전체 렌더링",

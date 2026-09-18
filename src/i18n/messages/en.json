@@ -2246,6 +2246,8 @@
       "closeAll": "Close All",
       "preview": "Preview",
       "editSource": "Edit Source",
+      "openInSystemBrowser": "Open in system browser",
+      "more": "More",
       "maximize": "Maximize",
       "restore": "Restore",
       "emptyDirectory": "Empty folder"
@@ -2371,7 +2373,6 @@
       "imageZoomOut": "Zoom out",
       "imageZoomReset": "Reset zoom",
       "htmlPreviewTitle": "HTML preview",
-      "htmlPreviewTrust": "Enable scripts",
       "htmlPreviewTrustHint": "Run this file's scripts and allow network access. Enable only for files you trust.",
       "officePreviewTitle": "Office document preview",
       "officeFullRender": "Full render",

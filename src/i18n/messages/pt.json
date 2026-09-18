@@ -2246,6 +2246,8 @@
       "closeAll": "Fechar tudo",
       "preview": "Visualizar",
       "editSource": "Editar fonte",
+      "openInSystemBrowser": "Abrir no navegador do sistema",
+      "more": "Mais",
       "maximize": "Maximizar",
       "restore": "Restaurar",
       "emptyDirectory": "Pasta vazia"
@@ -2371,7 +2373,6 @@
       "imageZoomOut": "Reduzir",
       "imageZoomReset": "Redefinir zoom",
       "htmlPreviewTitle": "Visualização HTML",
-      "htmlPreviewTrust": "Ativar scripts",
       "htmlPreviewTrustHint": "Executa os scripts deste arquivo e permite acesso à rede. Ative apenas para arquivos confiáveis.",
       "officePreviewTitle": "Pré-visualização de documento do Office",
       "officeFullRender": "Renderização completa",
