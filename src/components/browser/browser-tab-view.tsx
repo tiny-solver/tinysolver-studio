@@ -14,7 +14,7 @@ import { browserTabBackendId } from "@/lib/file-tab-id"
 import { isDesktop } from "@/lib/transport"
 import { cn } from "@/lib/utils"
 
-import { BrowserAgentStrip, useBrowserAgentGlow } from "./browser-agent-access"
+import { useBrowserAgentGlow } from "./browser-agent-access"
 import { BrowserBridgeView } from "./browser-bridge-view"
 import { BrowserFindBar } from "./browser-find-bar"
 import {
@@ -85,7 +85,9 @@ function NativeBrowserTabView({ tab }: { tab: BrowserWorkspaceTab }) {
         onClose={() => setFindOpen(false)}
       />
       <BrowserNoticeBar tab={tab} state={state} />
-      <BrowserAgentStrip tab={tab} />
+      {/* No band for what agents did: that record is in the address field
+          (`BrowserAgentActivityControl`), so it cannot shorten the page it is
+          a record of. */}
       <BrowserDownloadBar tab={tab} />
       {/* The border of the page area, not of anything inside it: a native
           webview paints over any DOM at its rect, so the only mark that can

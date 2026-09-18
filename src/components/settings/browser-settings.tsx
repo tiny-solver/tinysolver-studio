@@ -18,6 +18,7 @@ import { useEffect, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
   AppWindow,
+  Bot,
   Download,
   Eraser,
   FileCode2,
@@ -69,6 +70,7 @@ import {
   LINK_SOURCES,
   addBrowserProfile,
   removeBrowserProfile,
+  setBrowserDefaultAgentGrant,
   setBrowserDevtools,
   setBrowserHostRules,
   setBrowserHtmlPreviewEngine,
@@ -80,6 +82,7 @@ import {
   setDefaultLinkTarget,
   useBrowserPrefs,
   type BrowserProfile,
+  type DefaultAgentGrant,
   type LinkSource,
   type LinkTarget,
   type SurfaceOverride,
@@ -120,6 +123,16 @@ const ACTION_LABEL_KEYS = {
   system: "targetSystem",
   block: "ruleActionBlock",
 } as const satisfies Record<HostRuleAction, string>
+
+// Widest first, ending at "nothing": the list reads as how much a page hands
+// over, and the answer that hands over nothing is the end of that scale rather
+// than a separate kind of thing.
+const AGENT_GRANTS: readonly DefaultAgentGrant[] = ["control", "read", "none"]
+const AGENT_GRANT_LABEL_KEYS = {
+  read: "agentGrantRead",
+  control: "agentGrantControl",
+  none: "agentGrantNone",
+} as const satisfies Record<DefaultAgentGrant, string>
 
 const SURFACES: readonly SurfaceOverride[] = ["auto", "child", "window"]
 const SURFACE_LABEL_KEYS = {
@@ -641,6 +654,39 @@ export function BrowserSettingsSection() {
             managed={policy?.managedRules ?? []}
           />
         </SettingRow>
+        {/* What a browser tab hands to agents on every site it arrives at,
+            without being asked. The page's own control still says so and takes
+            it back per site; "share nothing" puts that control back in charge
+            of every decision, which is how the browser behaved before this
+            setting existed. */}
+        <SettingRow
+          icon={Bot}
+          title={t("agentGrantTitle")}
+          description={t("agentGrantHint")}
+          control={
+            <Select
+              value={prefs.defaultAgentGrant}
+              onValueChange={(value) =>
+                setBrowserDefaultAgentGrant(value as DefaultAgentGrant)
+              }
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-44 bg-background text-xs"
+                aria-label={t("agentGrantTitle")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {AGENT_GRANTS.map((level) => (
+                  <SelectItem key={level} value={level}>
+                    {t(AGENT_GRANT_LABEL_KEYS[level])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
       </SettingCard>
 
       <SettingCard>

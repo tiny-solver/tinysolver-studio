@@ -25,13 +25,17 @@ vi.mock("sonner", () => ({
 }))
 
 import {
+  resetBrowserPrefsForTests,
+  setBrowserDefaultAgentGrant,
+} from "@/lib/browser/browser-prefs"
+import {
   recordBrowserAgentActivity,
   resetBrowserTabStoreForTests,
 } from "@/lib/browser/browser-tab-store"
 
 import {
+  BrowserAgentActivityControl,
   BrowserAgentShareControl,
-  BrowserAgentStrip,
   useBrowserAgentGlow,
 } from "./browser-agent-access"
 
@@ -115,11 +119,15 @@ async function openMenu(trigger: Element) {
 describe("the share control", () => {
   beforeEach(() => {
     resetBrowserTabStoreForTests()
+    resetBrowserPrefsForTests()
     mocks.browserAgentGrant.mockClear()
     mocks.success.mockClear()
     mocks.error.mockClear()
   })
-  afterEach(() => resetBrowserTabStoreForTests())
+  afterEach(() => {
+    resetBrowserTabStoreForTests()
+    resetBrowserPrefsForTests()
+  })
 
   it("offers the two levels, and says which site the page was handed over at", async () => {
     wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
@@ -127,9 +135,7 @@ describe("the share control", () => {
     expect(button).not.toBeDisabled()
     await openMenu(button)
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole("menuitem", { name: "Let agents read this page" })
-      )
+      fireEvent.click(screen.getByRole("menuitem", { name: /Read only/ }))
       await Promise.resolve()
     })
     expect(mocks.browserAgentGrant).toHaveBeenCalledWith("abc", "read")
@@ -144,17 +150,42 @@ describe("the share control", () => {
     wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
     await openMenu(screen.getByRole("button", { name: "Share with agents" }))
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole("menuitem", {
-          name: "Let agents read and act on this page",
-        })
-      )
+      fireEvent.click(screen.getByRole("menuitem", { name: /Read and act/ }))
       await Promise.resolve()
     })
     expect(mocks.browserAgentGrant).toHaveBeenCalledWith("abc", "control")
     expect(mocks.success).toHaveBeenCalledWith(
       "Agents can now read and act on example.com"
     )
+  })
+
+  // Being the default is being the entry the menu opens onto — first in the
+  // list, where the pointer already is and where a keyboard lands — and being
+  // marked as such, since "read and act" above "read" inverts the usual
+  // narrowest-first order. Nothing is shared by either of them until pressed.
+  it("opens onto the default level, and says which one that is", async () => {
+    const { unmount } = wrap(
+      <BrowserAgentShareControl tab={tab} state={state()} />
+    )
+    await openMenu(screen.getByRole("button", { name: "Share with agents" }))
+    const items = () =>
+      screen.getAllByRole("menuitem").map((item) => item.textContent)
+    expect(items()).toEqual(["Read and actDefault", "Read only"])
+    expect(mocks.browserAgentGrant).not.toHaveBeenCalled()
+    unmount()
+
+    setBrowserDefaultAgentGrant("read")
+    const second = wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
+    await openMenu(screen.getByRole("button", { name: "Share with agents" }))
+    expect(items()).toEqual(["Read onlyDefault", "Read and act"])
+    second.unmount()
+
+    // With nothing shared by default there is no near entry to mark: the
+    // menu is the only way anything is shared, narrowest first.
+    setBrowserDefaultAgentGrant("none")
+    wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
+    await openMenu(screen.getByRole("button", { name: "Share with agents" }))
+    expect(items()).toEqual(["Read only", "Read and act"])
   })
 
   // A tab with no web origin cannot be shared at all — the grant is a binding
@@ -340,9 +371,7 @@ describe("the share control", () => {
     wrap(<BrowserAgentShareControl tab={tab} state={state()} />)
     await openMenu(screen.getByRole("button", { name: "Share with agents" }))
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole("menuitem", { name: "Let agents read this page" })
-      )
+      fireEvent.click(screen.getByRole("menuitem", { name: /Read only/ }))
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -355,40 +384,79 @@ describe("the share control", () => {
   })
 })
 
-describe("the activity strip", () => {
+describe("the activity record", () => {
   beforeEach(() => resetBrowserTabStoreForTests())
   afterEach(() => resetBrowserTabStoreForTests())
 
+  // Nothing has touched the tab, so there is nothing to say — and, unlike the
+  // band this replaced, nothing takes room in the address field either.
   it("is absent until an agent has done something", () => {
-    const { container } = wrap(<BrowserAgentStrip tab={tab} />)
+    const { container } = wrap(<BrowserAgentActivityControl tab={tab} />)
     expect(container).toBeEmptyDOMElement()
   })
 
   // The one case nothing else in the app reports: only the agent is told it
-  // was refused.
-  it("shows a refusal on a tab nobody shared", () => {
+  // was refused. From the closed control the mark is all there is, so the
+  // refusal has to reach the glyph — and say so in the one string that is
+  // both the tooltip and the accessible name.
+  it("shows a refusal on a tab nobody shared", async () => {
     read({ outcome: "refused" })
-    wrap(<BrowserAgentStrip tab={tab} />)
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    const button = screen.getByRole("button", {
+      name: "Agent activity: Refused: this page isn't shared",
+    })
+    expect(button.className).toContain("text-amber-600")
+    expect(button).toHaveAttribute(
+      "title",
+      "Agent activity: Refused: this page isn't shared"
+    )
+    await openMenu(button)
     expect(screen.getByText(/Refused: this page isn't shared/)).toBeVisible()
+  })
+
+  // A plain read leaves the glyph alone: the mark means "something went other
+  // than asked", and an agent reading a page it was given did not.
+  it("stays quiet when everything an agent did was allowed", () => {
+    read()
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    expect(
+      screen.getByRole("button", { name: "Agent activity: Read the page" })
+        .className
+    ).not.toContain("text-amber-600")
+  })
+
+  // The mark follows the newest line that did NOT go as asked, not the newest
+  // line. Sharing the page after a refusal and letting the agent read it
+  // would otherwise take the mark back off while the refusal was still in the
+  // list — and nothing else in the app ever mentions that refusal.
+  it("keeps the mark up after a refusal is followed by a success", () => {
+    read({ at: 1, action: "click", outcome: "refused" })
+    read({ at: 2 })
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    const button = screen.getByRole("button", {
+      name: /Refused to click: actions aren't allowed on this page/,
+    })
+    expect(button.className).toContain("text-amber-600")
   })
 
   // Each kind of touch is its own line, in its own words, so a run of clicks
   // does not swallow the keystroke among them — and a refused action says
-  // what was refused, which is not the same sentence as a refused read.
-  it("names each kind of action, done or refused", () => {
+  // what was refused, which is not the same sentence as a refused read. All
+  // of them are in the one list: there is no top line and no disclosure.
+  it("names each kind of action, done or refused", async () => {
     read({ at: 1, action: "click" })
     read({ at: 2, action: "type" })
     read({ at: 3, action: "select", outcome: "failed" })
     read({ at: 4, action: "press", outcome: "refused" })
     read({ at: 5, action: "capture" })
     read({ at: 6, action: "console", outcome: "refused" })
-    wrap(<BrowserAgentStrip tab={tab} />)
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    await openMenu(screen.getByRole("button", { name: /^Agent activity:/ }))
     // The two reads that are not a snapshot say what was read — a refused
     // console read is not the same sentence as a refused page read.
     expect(
       screen.getByText(/Refused to read the console: this page isn't shared/)
     ).toBeVisible()
-    fireEvent.click(screen.getByRole("button", { name: /5 more/ }))
     expect(screen.getByText(/Took a screenshot/)).toBeVisible()
     expect(
       screen.getByText(/Refused to press a key: actions aren't allowed/)
@@ -398,17 +466,72 @@ describe("the activity strip", () => {
     expect(screen.getByText(/^Clicked/)).toBeVisible()
   })
 
-  it("counts a run rather than repeating it, and keeps the older lines behind a disclosure", async () => {
+  // The list is a record, not a set of choices, so it holds no menu items —
+  // and Radix, finding none to move focus between, swallows the vertical keys
+  // rather than letting them scroll. The control takes them back. Pinned
+  // because it rests on Radix running its own handler only while the event is
+  // un-prevented: an upgrade that changed that would leave a 50-line record
+  // that a keyboard cannot read past its first screenful.
+  it("scrolls its list with the vertical keys, which the menu would swallow", async () => {
+    read({ at: 1 })
+    read({ at: 2, outcome: "failed" })
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    await openMenu(screen.getByRole("button", { name: /^Agent activity:/ }))
+    const list = screen.getByRole("group", {
+      name: "What agents did here",
+    })
+    // jsdom lays nothing out, so `scrollTop` would stay 0 however it is
+    // written; stand in for a scroller that remembers, which is also what
+    // pins the moves as relative rather than absolute.
+    const written: number[] = []
+    let top = 0
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = value
+        written.push(value)
+      },
+    })
+    Object.defineProperty(list, "clientHeight", {
+      configurable: true,
+      get: () => 200,
+    })
+    const menu = screen.getByRole("menu")
+    fireEvent.keyDown(menu, { key: "ArrowDown" })
+    fireEvent.keyDown(menu, { key: "ArrowDown" })
+    fireEvent.keyDown(menu, { key: "PageDown" })
+    fireEvent.keyDown(menu, { key: "ArrowUp" })
+    expect(written).toEqual([48, 96, 296, 248])
+    // A key the list has no use for is left to the menu.
+    written.length = 0
+    fireEvent.keyDown(menu, { key: "a" })
+    expect(written).toEqual([])
+  })
+
+  // A line stands for a run, so the closed control has to say how big it is:
+  // one refused click and a retry loop of forty would otherwise look exactly
+  // the same, and the loop is the case this control exists for.
+  it("says how many attempts the line it names stands for", () => {
+    read({ at: 1, action: "click", outcome: "refused" })
+    read({ at: 2, action: "click", outcome: "refused" })
+    read({ at: 3, action: "click", outcome: "refused" })
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    expect(
+      screen.getByRole("button", {
+        name: "Agent activity: Refused to click: actions aren't allowed on this page 3×",
+      })
+    ).toBeVisible()
+  })
+
+  it("counts a run rather than repeating it", async () => {
     read({ at: 1_700_000_000_000 })
     read({ at: 1_700_000_001_000 })
     read({ at: 1_700_000_002_000, outcome: "failed" })
-    wrap(<BrowserAgentStrip tab={tab} />)
+    wrap(<BrowserAgentActivityControl tab={tab} />)
+    // Two lines for three attempts: the pair of reads is one of them.
+    await openMenu(screen.getByRole("button", { name: /^Agent activity:/ }))
     expect(screen.getByText(/Couldn't read the page/)).toBeVisible()
-    // The run of two is one line, and it is not on screen yet.
-    expect(screen.queryByText(/Read the page/)).toBeNull()
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /1 more/ }))
-    })
     expect(screen.getByText(/Read the page/)).toBeVisible()
     expect(screen.getByText("2×")).toBeVisible()
   })

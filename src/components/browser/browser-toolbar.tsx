@@ -39,23 +39,19 @@ import {
   DEFAULT_BROWSER_PROFILE_ID,
   useBrowserPrefs,
 } from "@/lib/browser/browser-prefs"
+import { clearBrowserAgentActivity } from "@/lib/browser/browser-tab-store"
 import { isBlankPageUrl } from "@/lib/browser/browser-url"
 import type { BrowserTabState } from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
 import { openUrl } from "@/lib/platform"
 import { cn, copyTextToClipboard } from "@/lib/utils"
 
-import { BrowserAgentShareControl } from "./browser-agent-access"
+import {
+  BrowserAgentActivityControl,
+  BrowserAgentShareControl,
+} from "./browser-agent-access"
 import { BrowserSendToChatControl } from "./browser-page-handoff"
-
-// Circular, like the tab strip's buttons directly above this row
-// (`STRIP_ICON_BTN` in `file-workspace-tab-bar.tsx`). Now that the toolbar is
-// the file column's top row, the two are stacked with nothing between them,
-// and a row of 4px-cornered squares under a row of circles reads as two
-// unrelated toolbars. The width override on the profile chip below turns the
-// same class into a pill, which is the shape's other half.
-const ICON_BTN =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+import { ICON_BTN } from "./browser-toolbar-buttons"
 
 /** How far the pointer may travel between press and release and still count
  *  as a click rather than a drag. The usual few pixels of hand tremor. */
@@ -239,9 +235,18 @@ export function BrowserToolbar({
     }
     setEditing(false)
     inputRef.current?.blur()
-    void browserNavigate(backendId, url).catch((error: unknown) => {
-      toast.error(t("invalidUrl"), { description: String(error) })
-    })
+    const asOf = Date.now()
+    void browserNavigate(backendId, url).then(
+      // Asking for a page starts the record of what agents did to it again —
+      // but only once the backend has taken the request. A tab whose surface
+      // has gone refuses it, and then the document those lines are about is
+      // still the one on screen. The grant is bound to the origin and is left
+      // exactly as it was in either case.
+      () => clearBrowserAgentActivity(tab.id, asOf),
+      (error: unknown) => {
+        toast.error(t("invalidUrl"), { description: String(error) })
+      }
+    )
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -289,53 +294,37 @@ export function BrowserToolbar({
         title={loading ? t("stop") : t("reload")}
         aria-label={loading ? t("stop") : t("reload")}
         disabled={!backendId}
-        onClick={() =>
-          backendId &&
-          void (loading ? browserStop(backendId) : browserReload(backendId))
-        }
+        onClick={() => {
+          if (!backendId) return
+          if (loading) {
+            // Stopping a load is not asking for the page again — the document
+            // those lines are about is the one staying on screen — so it
+            // clears nothing. Nor do back and forward (the two buttons above):
+            // they are a move to another page, not a fresh look at this one.
+            void browserStop(backendId)
+            return
+          }
+          const asOf = Date.now()
+          void browserReload(backendId).then(
+            () => clearBrowserAgentActivity(tab.id, asOf),
+            () => {
+              // A reload the backend would not take leaves the page, and so
+              // the record of what was done to it, as they were. Nothing is
+              // said about it: this button has never had an error surface.
+            }
+          )
+        }}
       >
         {loading ? <X className="h-4 w-4" /> : <RotateCw className="h-4 w-4" />}
       </button>
-      <input
-        ref={inputRef}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onFocus={(event) => {
-          setEditing(true)
-          event.currentTarget.select()
-        }}
-        onMouseDown={(event) => {
-          // Only a PRIMARY click that brings focus in selects everything.
-          // Once the bar has focus a click means "put the caret here and
-          // edit"; and a right or middle press is not a click at all —
-          // cancelling its release would take the context menu with it on the
-          // platforms that raise one from the release.
-          pressRef.current =
-            event.button === 0 && document.activeElement !== event.currentTarget
-              ? { x: event.clientX, y: event.clientY }
-              : null
-        }}
-        onMouseUp={(event) => {
-          const press = pressRef.current
-          pressRef.current = null
-          if (!press) return
-          if (
-            Math.abs(event.clientX - press.x) > DRAG_SLOP_PX ||
-            Math.abs(event.clientY - press.y) > DRAG_SLOP_PX
-          ) {
-            return
-          }
-          event.preventDefault()
-          event.currentTarget.select()
-        }}
-        onBlur={() => setEditing(false)}
-        onKeyDown={onKeyDown}
-        spellCheck={false}
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        placeholder={t("addressPlaceholder")}
-        aria-label={t("addressPlaceholder")}
+      {/* The address field: a pill, with the page's own controls inside its
+          two ends — who may touch the page on the left, what has touched it
+          and where it can be sent on the right. Round on both ends rather
+          than a rounded rectangle, so the controls sitting in it read as
+          being in a field and not as a row of buttons with a box drawn round
+          some of them. The focus ring is the wrapper's (`focus-within`): the
+          input inside carries no chrome of its own. */}
+      <div
         className={cn(
           // Inverted from the old placement: the row used to be a `bg-muted`
           // band with a `bg-background` field cut into it, but the row is now
@@ -343,12 +332,57 @@ export function BrowserToolbar({
           // `backdrop-blur-sm` for the same reason the strip's buttons are —
           // over a workspace background image a flat tint reads as a muddy
           // patch, a blurred one as frosted glass.
-          "mx-1 h-7 min-w-0 flex-1 rounded-md border border-border/60 bg-muted/50 px-2.5 text-xs text-foreground outline-none backdrop-blur-sm",
-          "focus:border-ring/50 focus:ring-2 focus:ring-ring/20"
+          "mx-1 flex h-7 min-w-0 flex-1 items-center gap-0.5 rounded-full border border-border/60 bg-muted/50 px-0.5 backdrop-blur-sm",
+          "focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/20"
         )}
-      />
-      <BrowserSendToChatControl tab={tab} state={state} />
-      <BrowserAgentShareControl tab={tab} state={state} />
+      >
+        <BrowserAgentShareControl tab={tab} state={state} />
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onFocus={(event) => {
+            setEditing(true)
+            event.currentTarget.select()
+          }}
+          onMouseDown={(event) => {
+            // Only a PRIMARY click that brings focus in selects everything.
+            // Once the bar has focus a click means "put the caret here and
+            // edit"; and a right or middle press is not a click at all —
+            // cancelling its release would take the context menu with it on
+            // the platforms that raise one from the release.
+            pressRef.current =
+              event.button === 0 &&
+              document.activeElement !== event.currentTarget
+                ? { x: event.clientX, y: event.clientY }
+                : null
+          }}
+          onMouseUp={(event) => {
+            const press = pressRef.current
+            pressRef.current = null
+            if (!press) return
+            if (
+              Math.abs(event.clientX - press.x) > DRAG_SLOP_PX ||
+              Math.abs(event.clientY - press.y) > DRAG_SLOP_PX
+            ) {
+              return
+            }
+            event.preventDefault()
+            event.currentTarget.select()
+          }}
+          onBlur={() => setEditing(false)}
+          onKeyDown={onKeyDown}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          placeholder={t("addressPlaceholder")}
+          aria-label={t("addressPlaceholder")}
+          className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-xs text-foreground outline-none"
+        />
+        <BrowserAgentActivityControl tab={tab} />
+        <BrowserSendToChatControl tab={tab} state={state} />
+      </div>
       <ProfileMenu tab={tab} currentUrl={currentUrl} />
       {/* The address's own actions, folded into one control. They act on the
           page rather than on the browsing — nobody reaches for them mid-scroll

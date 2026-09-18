@@ -15,6 +15,7 @@ import {
   setBrowserDevtools,
   setBrowserHostRules,
   setBrowserHtmlPreviewEngine,
+  setBrowserDefaultAgentGrant,
   setBrowserNewTabProfile,
   setBrowserProfiles,
   setBrowserSignInUserAgent,
@@ -288,6 +289,25 @@ describe("browser prefs", () => {
     setBrowserSignInUserAgent(true)
     expect(localStorage.getItem("browser:sign-in-user-agent")).toBeNull()
     expect(getBrowserPrefs().signInUserAgent).toBe(true)
+  })
+
+  // Reading and acting is the default, so only the two narrower answers are
+  // stored; anything else in the key means the default — including the value
+  // a build that had no "share nothing" would have left there.
+  it("stores the default sharing level only when it is not the default one", () => {
+    expect(getBrowserPrefs().defaultAgentGrant).toBe("control")
+    setBrowserDefaultAgentGrant("read")
+    expect(localStorage.getItem("browser:default-agent-grant")).toBe("read")
+    expect(getBrowserPrefs().defaultAgentGrant).toBe("read")
+    setBrowserDefaultAgentGrant("none")
+    expect(localStorage.getItem("browser:default-agent-grant")).toBe("none")
+    expect(getBrowserPrefs().defaultAgentGrant).toBe("none")
+    setBrowserDefaultAgentGrant("control")
+    expect(localStorage.getItem("browser:default-agent-grant")).toBeNull()
+    expect(getBrowserPrefs().defaultAgentGrant).toBe("control")
+    localStorage.setItem("browser:default-agent-grant", "everything")
+    resetCacheOnly()
+    expect(getBrowserPrefs().defaultAgentGrant).toBe("control")
   })
 
   it("useBrowserPrefs re-renders on change", () => {

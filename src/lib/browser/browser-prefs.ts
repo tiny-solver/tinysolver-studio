@@ -39,6 +39,11 @@ export type SurfaceOverride = "auto" | "child" | "window"
  *  inline `srcdoc` iframe the web build uses. */
 export type HtmlPreviewEngine = "guest" | "inline"
 
+/** The level a page is shared at when nobody picked one. Same three values as
+ *  the grant itself (`GrantLevel`), including `none` — which here is not "no
+ *  grant yet" but a standing answer: share nothing until asked. */
+export type DefaultAgentGrant = "none" | "read" | "control"
+
 /** The profile every installation has; it cannot be deleted, only cleared.
  *  Its name is localized, so it is not in the list the user edits. */
 export const DEFAULT_BROWSER_PROFILE_ID = "default"
@@ -105,6 +110,24 @@ export interface BrowserPrefsSnapshot {
    *  embedded browsers. On by default: without it, signing in to Google from
    *  a tab fails with "this browser may not be secure". */
   signInUserAgent: boolean
+  /** What every site a browser tab arrives at is shared at, applied on its
+   *  own (`browser-agent-grant.ts`) as soon as the page commits — and the
+   *  entry the share menu opens onto and tags. `none` is the original
+   *  behaviour: a tab hands nothing over until somebody uses that menu.
+   *
+   *  Reading and acting by default: a page kept open beside an agent is
+   *  almost always one the person is about to ask it to do something on, and
+   *  both narrower answers are a click away in the same menu.
+   *
+   *  A level applied here is the default for a SITE, not a lease on the tab:
+   *  the moment a page leaves the origin it was granted for, the backend
+   *  revokes as it always did, and this re-applies at the next one. The one
+   *  place it deliberately does not reach is the "share again" button of a
+   *  replaced grant (`browser-status-layer.tsx`), which stays at `read`: that
+   *  one sits in an alarm bar reporting that something else is now serving the
+   *  address, and a one-press button there must not hand over more than
+   *  reading because of a preference set somewhere else. */
+  defaultAgentGrant: DefaultAgentGrant
 }
 
 export const DEFAULT_BROWSER_PREFS: BrowserPrefsSnapshot = Object.freeze({
@@ -125,6 +148,7 @@ export const DEFAULT_BROWSER_PREFS: BrowserPrefsSnapshot = Object.freeze({
   profiles: Object.freeze([]) as readonly BrowserProfile[],
   newTabProfile: DEFAULT_BROWSER_PROFILE_ID,
   signInUserAgent: true,
+  defaultAgentGrant: "control",
 }) as BrowserPrefsSnapshot
 
 const KEY_PREFIX = "browser:"
@@ -146,6 +170,7 @@ const HTML_PREVIEW_KEY = `${KEY_PREFIX}html-preview-engine`
 const PROFILES_KEY = `${KEY_PREFIX}profiles`
 const NEW_TAB_PROFILE_KEY = `${KEY_PREFIX}new-tab-profile`
 const SIGN_IN_UA_KEY = `${KEY_PREFIX}sign-in-user-agent`
+const AGENT_GRANT_KEY = `${KEY_PREFIX}default-agent-grant`
 
 function readRaw(key: string): string | null {
   if (typeof window === "undefined") return null
@@ -162,6 +187,14 @@ function parseTarget(raw: string | null): LinkTarget | null {
 
 function parseSurface(raw: string | null): SurfaceOverride | null {
   return raw === "auto" || raw === "child" || raw === "window" ? raw : null
+}
+
+/** Anything but the two stored values means the default — including the value
+ *  a build before this setting had three levels would have left behind. */
+function parseAgentGrant(raw: string | null): DefaultAgentGrant {
+  return raw === "read" || raw === "none"
+    ? raw
+    : DEFAULT_BROWSER_PREFS.defaultAgentGrant
 }
 
 /** Stored rules, one bad entry dropped rather than the whole list. */
@@ -238,6 +271,7 @@ function read(): BrowserPrefsSnapshot {
     profiles,
     newTabProfile,
     signInUserAgent: readRaw(SIGN_IN_UA_KEY) !== "false",
+    defaultAgentGrant: parseAgentGrant(readRaw(AGENT_GRANT_KEY)),
   }
 }
 
@@ -347,6 +381,12 @@ export function setBrowserSignInUserAgent(enabled: boolean): void {
   write(SIGN_IN_UA_KEY, enabled ? null : "false")
 }
 
+/** The level new pages are shared at (`control`, the default, removes the
+ *  key). */
+export function setBrowserDefaultAgentGrant(level: DefaultAgentGrant): void {
+  write(AGENT_GRANT_KEY, level === "read" || level === "none" ? level : null)
+}
+
 export function subscribeBrowserPrefs(listener: () => void): () => void {
   if (typeof window === "undefined") return () => {}
   const onChange = () => listener()
@@ -395,6 +435,7 @@ export function resetBrowserPrefsForTests(): void {
     localStorage.removeItem(PROFILES_KEY)
     localStorage.removeItem(NEW_TAB_PROFILE_KEY)
     localStorage.removeItem(SIGN_IN_UA_KEY)
+    localStorage.removeItem(AGENT_GRANT_KEY)
   } catch {
     /* ignore */
   }

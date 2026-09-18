@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     ),
     browserSetHostRules: vi.fn(() => Promise.resolve()),
     browserSetSignInUserAgent: vi.fn(() => Promise.resolve()),
+    browserAgentGrant: vi.fn(() => Promise.resolve({}) as Promise<unknown>),
     subscribe: vi.fn((event: string, handler: Handler) => {
       handlers.set(event, handler)
       return Promise.resolve(() => {
@@ -67,6 +68,7 @@ vi.mock("@/lib/browser/browser-api", () => ({
   browserListDownloads: mocks.browserListDownloads,
   browserSetHostRules: mocks.browserSetHostRules,
   browserSetSignInUserAgent: mocks.browserSetSignInUserAgent,
+  browserAgentGrant: mocks.browserAgentGrant,
 }))
 vi.mock("@/lib/transport", () => ({
   getTransport: () => ({ subscribe: mocks.subscribe }),
@@ -80,8 +82,10 @@ vi.mock("@/contexts/workspace-context", () => ({
   }),
 }))
 
+import { resetDefaultAgentGrantForTests } from "@/lib/browser/browser-agent-grant"
 import {
   resetBrowserPrefsForTests,
+  setBrowserDefaultAgentGrant,
   setBrowserHostRules,
   setBrowserSignInUserAgent,
 } from "@/lib/browser/browser-prefs"
@@ -126,14 +130,17 @@ describe("BrowserEventsBridge", () => {
     mocks.browserListDownloads.mockClear()
     mocks.browserSetHostRules.mockClear()
     mocks.browserSetSignInUserAgent.mockClear()
+    mocks.browserAgentGrant.mockClear()
     resetBrowserTabStoreForTests()
     resetBrowserDownloadsForTests()
     resetBrowserPrefsForTests()
+    resetDefaultAgentGrantForTests()
   })
   afterEach(() => {
     resetBrowserTabStoreForTests()
     resetBrowserDownloadsForTests()
     resetBrowserPrefsForTests()
+    resetDefaultAgentGrantForTests()
   })
 
   it("subscribes to the streams once the capabilities say a browser exists, after sweeping orphans", async () => {
@@ -403,6 +410,10 @@ describe("BrowserEventsBridge", () => {
   // The user performed the other two transitions and can see the result in
   // the toolbar; this one happened to them.
   it("only interrupts for the grant the page took away, not the ones the user made", async () => {
+    // With pages shared by default the grant that ends here is re-made at the
+    // next site, so the notice belongs to the other setting: sharing only
+    // where the person asked for it.
+    setBrowserDefaultAgentGrant("none")
     render(<BrowserEventsBridge />)
     await flush()
     const grant = mocks.handlers.get("browser://agent-grant")!
@@ -436,6 +447,53 @@ describe("BrowserEventsBridge", () => {
       kind: "agent-grant-lost",
       origin: "https://example.com",
     })
+  })
+
+  // A standing default means the person never shared this page in the first
+  // place — the browser did, and is about to again at wherever the tab
+  // landed. An alarm bar there would be reporting the mechanism working.
+  it("says nothing about a page walking off a site it was shared with by default", async () => {
+    render(<BrowserEventsBridge />)
+    await flush()
+    mocks.handlers.get("browser://agent-grant")!({
+      tabId: "abc",
+      change: "navigated",
+      level: "none",
+      origin: "https://example.com",
+    })
+    const view = renderHook(() => useBrowserTabNotice("browser:abc"))
+    expect(view.result.current).toBeNull()
+    view.unmount()
+  })
+
+  // The wiring, which the rule itself (`browser-agent-grant.ts`) cannot show:
+  // a committed page reaches it, and the level the settings hold is asked for.
+  it("shares a page that has just committed at the standing default", async () => {
+    render(<BrowserEventsBridge />)
+    await flush()
+    mocks.handlers.get("browser://state")!({
+      tabId: "abc",
+      ownerWindow: "main",
+      kind: "page",
+      surface: "child",
+      channel: "native",
+      channelError: null,
+      url: "https://example.com/",
+      requestedUrl: "https://example.com/",
+      title: "Example",
+      favicon: null,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      origin: "https://example.com",
+      zoom: 1,
+      error: null,
+      remoteHost: null,
+      openerTabId: null,
+      profile: "default",
+      agentGrant: null,
+    })
+    expect(mocks.browserAgentGrant).toHaveBeenCalledWith("abc", "control")
   })
 
   // The tab never moved, so nothing else on screen changed: the toolbar still

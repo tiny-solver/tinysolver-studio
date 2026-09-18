@@ -12,6 +12,7 @@ import {
   browserTabHiddenAt,
   browserWorkspaceTabId,
   claimSurfaceCreation,
+  clearBrowserAgentActivity,
   forgetSurfaceCreation,
   hasSurfaceClaim,
   runSurfaceOp,
@@ -289,6 +290,66 @@ describe("browser tab store", () => {
       act(() => removeBrowserTabState("browser:abc"))
       expect(view.result.current).toEqual([])
       view.unmount()
+    })
+
+    // Asking for the page again (a reload, an address typed into the bar)
+    // clears it: those lines are about the document being replaced.
+    it("clears one tab's lines on demand, and only that tab's", () => {
+      const view = renderHook(() => useBrowserAgentActivity("browser:abc"))
+      const other = renderHook(() => useBrowserAgentActivity("browser:other"))
+      read()
+      act(() =>
+        recordBrowserAgentActivity({
+          tabId: "other",
+          action: "read",
+          outcome: "done",
+          at: 1,
+        })
+      )
+      act(() => clearBrowserAgentActivity("browser:abc", 500))
+      expect(view.result.current).toEqual([])
+      expect(other.result.current).toHaveLength(1)
+      // The next attempt starts a fresh list rather than reviving the old one.
+      read({ at: 900 })
+      expect(view.result.current).toEqual([
+        { action: "read", outcome: "done", at: 900, count: 1 },
+      ])
+      view.unmount()
+      other.unmount()
+    })
+
+    // The callers ask the backend first and clear when it answers, so the
+    // cut-off is the moment they asked, not the moment they were answered.
+    // Over a remote workspace that gap is a network round trip — long enough
+    // for the new document to land and for an agent to reach for it, and
+    // those lines are about the page that is on screen now.
+    it("keeps what was recorded after the cut-off", () => {
+      const view = renderHook(() => useBrowserAgentActivity("browser:abc"))
+      read({ at: 100 })
+      read({ at: 700, action: "click", outcome: "refused" })
+      act(() => clearBrowserAgentActivity("browser:abc", 500))
+      expect(view.result.current).toEqual([
+        { action: "click", outcome: "refused", at: 700, count: 1 },
+      ])
+      view.unmount()
+    })
+
+    // The store notifies on a real clear only: a tab with nothing recorded is
+    // reloaded on every visit, and waking every subscriber for it would make
+    // the reload path cost more the more browser tabs are open. Nor does a
+    // clear that kept every line it looked at.
+    it("says nothing when there was nothing to clear", () => {
+      const listener = vi.fn()
+      const unsubscribe = subscribeBrowserTabs(listener)
+      clearBrowserAgentActivity("browser:abc", 500)
+      expect(listener).not.toHaveBeenCalled()
+      read({ at: 900 })
+      listener.mockClear()
+      clearBrowserAgentActivity("browser:abc", 500)
+      expect(listener).not.toHaveBeenCalled()
+      clearBrowserAgentActivity("browser:abc", 1000)
+      expect(listener).toHaveBeenCalledTimes(1)
+      unsubscribe()
     })
   })
 

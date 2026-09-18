@@ -27,6 +27,7 @@ import {
   useBrowserTabDownloads,
 } from "@/lib/browser/browser-downloads-store"
 import {
+  clearBrowserAgentActivity,
   setBrowserTabNotice,
   useBrowserTabNotice,
   type BrowserTabNotice,
@@ -331,7 +332,19 @@ export function BrowserErrorPage({
         <button
           type="button"
           className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs hover:bg-primary/8"
-          onClick={() => backendId && void browserReload(backendId)}
+          // The toolbar's reload button by another name, so it forgets what
+          // agents did here on the same terms (`browser-toolbar.tsx`): the
+          // lines are about a document this is asking to replace.
+          onClick={() => {
+            if (!backendId) return
+            const asOf = Date.now()
+            void browserReload(backendId).then(
+              () => clearBrowserAgentActivity(tab.id, asOf),
+              () => {
+                /* the tab's surface is gone; the error page stays */
+              }
+            )
+          }}
         >
           <RotateCw className="h-3.5 w-3.5" />
           {t("retry")}

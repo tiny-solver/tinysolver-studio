@@ -33,6 +33,8 @@ import { browserTabBackendId } from "@/lib/file-tab-id"
 import { emitAttachPageToSession } from "@/lib/session-attachment-events"
 import { cn } from "@/lib/utils"
 
+import { FIELD_BTN, FIELD_PILL } from "./browser-toolbar-buttons"
+
 /**
  * "Send to chat": the other direction from the agent share control next to it.
  *
@@ -218,10 +220,8 @@ export function BrowserSendToChatControl({
       <button
         type="button"
         className={cn(
-          // Pill, like everything else on the toolbar row it sits in
-          // (`ICON_BTN` in `browser-toolbar.tsx`).
-          "flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium",
-          "bg-violet-500/12 text-violet-600 transition-colors hover:bg-violet-500/20",
+          FIELD_PILL,
+          "bg-violet-500/12 text-violet-600 hover:bg-violet-500/20",
           "dark:text-violet-400"
         )}
         title={t("pickingHint")}
@@ -229,7 +229,9 @@ export function BrowserSendToChatControl({
         onClick={stopPicking}
       >
         <X className="h-3.5 w-3.5 shrink-0" />
-        <span>{t("picking")}</span>
+        {/* Capped for the same reason as the share pill beside it: inside the
+            address field, a long word here costs the address its room. */}
+        <span className="max-w-24 truncate">{t("picking")}</span>
       </button>
     )
   }
@@ -239,23 +241,22 @@ export function BrowserSendToChatControl({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={cn(
-            "relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground",
-            "transition-colors hover:bg-primary/8 hover:text-foreground",
-            "disabled:pointer-events-none disabled:opacity-40"
-          )}
+          className={cn(FIELD_BTN, "relative")}
           title={conversationTabId ? t("send") : t("noConversation")}
           aria-label={t("sendLabel")}
           disabled={!ready || !conversationTabId}
         >
-          <MessageSquareShare className="h-4 w-4" />
+          <MessageSquareShare className="h-3.5 w-3.5" />
           {/* Something on this page threw. Shown without a number: within one
               document the answer only goes from no to yes, and the count is
               read from the tab when the menu opens. */}
           {marked ? (
             <span
               aria-hidden
-              className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
+              // Inset by the same half step the button is round by: at `end-0`
+              // the dot straddles the address field's own rounded edge, which
+              // it is the last child of.
+              className="absolute end-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
             />
           ) : null}
         </button>

@@ -40,14 +40,24 @@ describe("normalizeTypedAddress", () => {
 
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { NextIntlClientProvider } from "next-intl"
-import { beforeEach, vi } from "vitest"
+import { afterEach, beforeEach, vi } from "vitest"
 
 import type { BrowserWorkspaceTab } from "@/contexts/workspace-context"
 import enMessages from "@/i18n/messages/en.json"
 import {
+  browserNavigate,
+  browserReload,
+  browserStop,
+} from "@/lib/browser/browser-api"
+import {
   resetBrowserPrefsForTests,
   setBrowserProfiles,
 } from "@/lib/browser/browser-prefs"
+import {
+  recordBrowserAgentActivity,
+  resetBrowserTabStoreForTests,
+} from "@/lib/browser/browser-tab-store"
+import type { BrowserTabState } from "@/lib/browser/types"
 
 import { openUrl } from "@/lib/platform"
 
@@ -68,9 +78,15 @@ vi.mock("@/lib/browser/browser-api", () => ({
   browserAgentGrant: vi.fn(() => Promise.resolve()),
   browserGoBack: vi.fn(),
   browserGoForward: vi.fn(),
-  browserNavigate: vi.fn(),
-  browserReload: vi.fn(),
-  browserStop: vi.fn(),
+  browserNavigate: vi.fn(() => Promise.resolve()),
+  browserReload: vi.fn(() => Promise.resolve()),
+  browserStop: vi.fn(() => Promise.resolve()),
+  // …and the hand-off control, which asks the tab for its console when its
+  // own menu opens.
+  browserPageCapture: vi.fn(),
+  browserPageConsole: vi.fn(() => Promise.resolve({ count: 0 })),
+  browserPickCancel: vi.fn(),
+  browserPickElement: vi.fn(),
 }))
 vi.mock("@/lib/platform", () => ({ openUrl: vi.fn() }))
 
@@ -93,12 +109,46 @@ function tabIn(
   } as BrowserWorkspaceTab
 }
 
-function renderToolbar(profile: string, initialUrl?: string) {
+function renderToolbar(
+  profile: string,
+  initialUrl?: string,
+  state: BrowserTabState | null = null
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <BrowserToolbar tab={tabIn(profile, initialUrl)} state={null} />
+      <BrowserToolbar tab={tabIn(profile, initialUrl)} state={state} />
     </NextIntlClientProvider>
   )
+}
+
+/** A loaded page on a tab that has been shared with agents for reading. */
+function sharedState(): BrowserTabState {
+  return {
+    tabId: "abc",
+    ownerWindow: "main",
+    kind: "page",
+    surface: "child",
+    channel: "native",
+    channelError: null,
+    url: "https://example.com/",
+    requestedUrl: "https://example.com/",
+    title: "Example",
+    favicon: null,
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    origin: "https://example.com",
+    zoom: 1,
+    error: null,
+    remoteHost: null,
+    openerTabId: null,
+    profile: "default",
+    agentGrant: {
+      level: "read",
+      origin: "https://example.com",
+      grantedAt: 1,
+    },
+  }
 }
 
 // jsdom has no `PointerEvent`; Radix reads `button` off the event, so a real
@@ -303,5 +353,132 @@ describe("BrowserToolbar address selection", () => {
     fireEvent.mouseDown(bar, { clientX: 60, clientY: 20 })
     expect(fireEvent.mouseUp(bar, { clientX: 60, clientY: 20 })).toBe(true)
     expect(selection(bar)).toEqual([8, 8])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Asking for the page again
+// ---------------------------------------------------------------------------
+
+describe("BrowserToolbar and the agent activity record", () => {
+  beforeEach(() => {
+    resetBrowserPrefsForTests()
+    resetBrowserTabStoreForTests()
+    vi.mocked(browserReload).mockClear()
+    vi.mocked(browserStop).mockClear()
+    vi.mocked(browserNavigate).mockClear()
+    toolbarMocks.workspaceActions = {
+      openBrowserTab: toolbarMocks.openBrowserTab,
+    }
+  })
+  afterEach(() => resetBrowserTabStoreForTests())
+
+  function touched() {
+    act(() =>
+      recordBrowserAgentActivity({
+        tabId: "abc",
+        action: "read",
+        outcome: "done",
+        at: 1_700_000_000_000,
+      })
+    )
+  }
+
+  function record() {
+    return screen.queryByRole("button", { name: /^Agent activity/ })
+  }
+
+  // The lines describe attempts on the document that is being replaced, so
+  // asking for the page again starts the record again. The grant does not go
+  // with them: it is bound to the origin and survives a reload of it, and
+  // taking it away here would revoke access nobody took back.
+  it("forgets what agents did on a reload, and keeps the tab shared", async () => {
+    renderToolbar("default", undefined, sharedState())
+    touched()
+    expect(record()).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Reload" }))
+    })
+    expect(vi.mocked(browserReload)).toHaveBeenCalledWith("abc")
+    expect(record()).toBeNull()
+    expect(
+      screen.getByRole("button", { name: "Agents can read example.com" })
+    ).toBeVisible()
+  })
+
+  it("forgets them for an address entered in the bar too", async () => {
+    renderToolbar("default", undefined, sharedState())
+    touched()
+    const bar = screen.getByRole("textbox", { name: "Enter an address" })
+    await act(async () => {
+      fireEvent.change(bar, { target: { value: "example.com/next" } })
+      fireEvent.keyDown(bar, { key: "Enter" })
+    })
+    expect(vi.mocked(browserNavigate)).toHaveBeenCalledWith(
+      "abc",
+      "https://example.com/next"
+    )
+    expect(record()).toBeNull()
+  })
+
+  // Stopping a load is the opposite of asking for the page again: the
+  // document on screen is the one those lines are about, and it stays.
+  it("keeps them when the button is stopping a load rather than starting one", async () => {
+    renderToolbar("default", undefined, { ...sharedState(), loading: true })
+    touched()
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }))
+    })
+    expect(vi.mocked(browserStop)).toHaveBeenCalledWith("abc")
+    expect(record()).toBeInTheDocument()
+  })
+
+  // The clear waits for the backend to take the request. A tab whose surface
+  // has gone refuses it, and then the document those lines are about is still
+  // the one on screen.
+  it("keeps them when the backend refuses the reload or the address", async () => {
+    vi.mocked(browserReload).mockRejectedValueOnce(new Error("no surface"))
+    vi.mocked(browserNavigate).mockRejectedValueOnce(new Error("no surface"))
+    renderToolbar("default", undefined, sharedState())
+    touched()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Reload" }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(record()).toBeInTheDocument()
+
+    const bar = screen.getByRole("textbox", { name: "Enter an address" })
+    await act(async () => {
+      fireEvent.change(bar, { target: { value: "example.com/next" } })
+      fireEvent.keyDown(bar, { key: "Enter" })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(vi.mocked(browserNavigate)).toHaveBeenCalled()
+    expect(record()).toBeInTheDocument()
+  })
+
+  // A bar with nothing in it, or something that is not an address, never
+  // reaches the backend — and must not take the record with it either.
+  it("keeps them when Enter does not navigate anywhere", async () => {
+    renderToolbar("default", "about:blank", {
+      ...sharedState(),
+      url: "about:blank",
+      requestedUrl: "about:blank",
+    })
+    touched()
+    const bar = screen.getByRole("textbox", { name: "Enter an address" })
+    await act(async () => {
+      fireEvent.keyDown(bar, { key: "Enter" })
+    })
+    await act(async () => {
+      fireEvent.change(bar, { target: { value: "not an address" } })
+      fireEvent.keyDown(bar, { key: "Enter" })
+    })
+    expect(vi.mocked(browserNavigate)).not.toHaveBeenCalled()
+    expect(record()).toBeInTheDocument()
   })
 })

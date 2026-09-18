@@ -22,6 +22,7 @@ import enMessages from "@/i18n/messages/en.json"
 import {
   getBrowserPrefs,
   resetBrowserPrefsForTests,
+  setBrowserDefaultAgentGrant,
   setBrowserNewTabProfile,
   setBrowserProfiles,
   setDefaultLinkTarget,
@@ -174,6 +175,24 @@ describe("BrowserSettingsSection", () => {
     expect(
       screen.queryByRole("button", { name: "Remove rule" })
     ).not.toBeInTheDocument()
+  })
+
+  // Reading and acting is what a page hands over unless told otherwise, and
+  // the third answer is the browser's original behaviour: hand nothing over
+  // until the page's own control is used. The trigger renders the text of the
+  // LISTED item for the current value, so a level that reads back is a level
+  // the picker offers.
+  it("offers all three sharing defaults, including handing nothing over", () => {
+    renderSection()
+    expandSection()
+    const level = () =>
+      screen.getByRole("combobox", { name: "Default sharing level" })
+    expect(level()).toHaveTextContent("Read and act")
+    act(() => setBrowserDefaultAgentGrant("read"))
+    expect(level()).toHaveTextContent("Read only")
+    act(() => setBrowserDefaultAgentGrant("none"))
+    expect(level()).toHaveTextContent("Share nothing")
+    expect(getBrowserPrefs().defaultAgentGrant).toBe("none")
   })
 
   it("persists the background-unload switch, which is off by default", () => {

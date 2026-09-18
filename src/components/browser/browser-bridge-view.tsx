@@ -19,10 +19,9 @@ import { browserTabBackendId } from "@/lib/file-tab-id"
 import { openExternalTab } from "@/lib/link-open"
 import { copyTextToClipboard, randomUUID } from "@/lib/utils"
 
-// Same shape as the desktop toolbar's buttons (`browser-toolbar.tsx`): this
-// row stands in the same place, under the same tab strip.
-const ICON_BTN =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+// The desktop toolbar's own button shape: this row stands in the same place,
+// under the same tab strip.
+import { ICON_BTN } from "./browser-toolbar-buttons"
 
 /** The frame keeps its origin (its own bridge port, shared with nothing) and
  *  never navigates the workbench. */

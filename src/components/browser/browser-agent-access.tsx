@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import {
   Bot,
-  ChevronDown,
   Eye,
+  History,
   MousePointerClick,
   ShieldOff,
   TriangleAlert,
@@ -22,7 +22,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { shareableOrigin } from "@/lib/browser/browser-agent-grant"
 import { browserAgentGrant } from "@/lib/browser/browser-api"
+import { useBrowserPrefs } from "@/lib/browser/browser-prefs"
 import {
   useBrowserAgentActivity,
   type BrowserAgentActivity,
@@ -38,20 +40,32 @@ import type {
 import { browserTabBackendId } from "@/lib/file-tab-id"
 import { cn } from "@/lib/utils"
 
+import { FIELD_BTN, FIELD_PILL } from "./browser-toolbar-buttons"
+
 /**
  * The one place a person hands a page to an agent, and the running account of
- * what agents did with it.
+ * what agents did with it. Both live inside the address field — the left end
+ * for the decision, the right end for the record of what it let happen.
  *
  * Two levels are offered, `read` and `control`, as two entries of one menu:
  * reading a page cannot change it, acting on it can, and they are different
  * decisions for the person to make. A shared tab can be moved between the two
  * without being taken back first.
+ *
+ * The settings' default (`defaultAgentGrant` in `browser-prefs`) has usually
+ * answered this already — `browser-agent-grant.ts` applies it to every site a
+ * tab arrives at — so the unshared menu below is what a person sees on a site
+ * they took the grant back on, or with the default set to share nothing. It
+ * still opens onto that default, and says which entry it is.
  */
 
 /** How long the page border stays lit after an agent touches the tab. Long
  *  enough to catch the eye of someone not looking straight at it, short
  *  enough that a run of reads reads as a flicker rather than a solid state. */
 const ACTIVITY_GLOW_MS = 1200
+
+/** One arrow press down the activity list: about two of its lines. */
+const LIST_SCROLL_STEP_PX = 48
 
 /**
  * The colour of "an agent can read this", everywhere it appears: the chip in
@@ -65,26 +79,6 @@ const ACTIVITY_GLOW_MS = 1200
  * be something the theme picker can tune down into the chrome.
  */
 export const AGENT_MARK = "text-violet-600 dark:text-violet-400"
-
-function shareableOrigin(state: BrowserTabState | null): string | null {
-  // Both halves of the backend's rule (`agent::grantable_origin`), so this
-  // says the same thing it does. Duplicated only to decide whether the
-  // control is offered at all — the backend still decides whether the share
-  // happens, and says why when it refuses.
-  //
-  // A document guest cannot be shared, and its address does not say so: under
-  // WebView2 it is served from `http://codeg-doc.doc-<token>/…`, a perfectly
-  // ordinary-looking http origin. No surface renders this control for one
-  // today (they show a local file, and have a toolbar of their own), but a
-  // rule that agrees with the backend on only one of its two clauses is a
-  // trap for whoever mounts it somewhere new.
-  if (!state || state.kind === "document") return null
-  const origin = state.origin
-  if (!origin) return null
-  return origin.startsWith("http://") || origin.startsWith("https://")
-    ? origin
-    : null
-}
 
 /**
  * How the page's border should read right now: nothing when the tab is not
@@ -147,6 +141,7 @@ export function BrowserAgentShareControl({
   const backendId = browserTabBackendId(tab.id)
   const grant = state?.agentGrant ?? null
   const origin = shareableOrigin(state)
+  const defaultLevel = useBrowserPrefs().defaultAgentGrant
 
   const share = (level: GrantLevel) => {
     if (!backendId) return
@@ -170,13 +165,7 @@ export function BrowserAgentShareControl({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className={cn(
-              // Circular, like everything else on the toolbar row it sits in
-              // (`ICON_BTN` in `browser-toolbar.tsx`).
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground",
-              "transition-colors hover:bg-primary/8 hover:text-foreground",
-              "disabled:pointer-events-none disabled:opacity-40"
-            )}
+            className={FIELD_BTN}
             title={
               origin
                 ? t("share", { origin: displayOrigin(origin) })
@@ -185,21 +174,40 @@ export function BrowserAgentShareControl({
             aria-label={t("shareLabel")}
             disabled={!backendId || !origin}
           >
-            <Bot className="h-4 w-4" />
+            <Bot className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-56">
+        <DropdownMenuContent align="start" className="min-w-56">
           <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
             {origin ? t("share", { origin: displayOrigin(origin) }) : null}
           </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => share("read")}>
-            <Eye className="h-3.5 w-3.5" />
-            <span>{t("shareRead")}</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => share("control")}>
-            <MousePointerClick className="h-3.5 w-3.5" />
-            <span>{t("shareControl")}</span>
-          </DropdownMenuItem>
+          {/* The default goes first, which is what being the default amounts
+              to in a menu: it is the entry the pointer is already next to and
+              the one a keyboard lands on when the menu opens. The tag says so
+              out loud, because "read and act" arriving above "read" inverts
+              the usual narrowest-first order and should not look like an
+              accident. A default of `none` marks neither and leaves the
+              narrowest first: this menu is then the only way anything is
+              shared at all. */}
+          {(defaultLevel === "control"
+            ? (["control", "read"] as const)
+            : (["read", "control"] as const)
+          ).map((level) => (
+            <DropdownMenuItem key={level} onSelect={() => share(level)}>
+              {level === "read" ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <MousePointerClick className="h-3.5 w-3.5" />
+              )}
+              <span>{t(level === "read" ? "shareRead" : "shareControl")}</span>
+              {/* `ms-auto`, not `ml-auto`: Arabic is a live locale here. */}
+              {level === defaultLevel ? (
+                <span className="ms-auto shrink-0 text-[10px] text-muted-foreground">
+                  {t("levelDefault")}
+                </span>
+              ) : null}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
     )
@@ -215,18 +223,24 @@ export function BrowserAgentShareControl({
         <button
           type="button"
           className={cn(
-            "flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium",
-            "bg-violet-500/12 transition-colors hover:bg-violet-500/20",
+            FIELD_PILL,
+            "bg-violet-500/12 hover:bg-violet-500/20",
             AGENT_MARK
           )}
           title={sharedWith}
           aria-label={sharedWith}
         >
           <Bot className="h-3.5 w-3.5 shrink-0" />
-          <span>{t(acting ? "sharedControl" : "shared")}</span>
+          {/* Capped like the profile chip's name: this pill is inside the
+              address field now, and "Shared · can act" runs to twice the
+              length in some locales — enough to leave a narrow pane with an
+              address bar that has no room for an address. */}
+          <span className="max-w-24 truncate">
+            {t(acting ? "sharedControl" : "shared")}
+          </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
+      <DropdownMenuContent align="start" className="min-w-56">
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
           {sharedWith}
         </DropdownMenuLabel>
@@ -333,89 +347,160 @@ function activityLabel(
 }
 
 /**
- * What agents have done to this tab, newest first: the latest line always,
- * the rest behind a disclosure.
+ * What agents have done to this tab, newest first, behind a button at the
+ * right end of the address field.
+ *
+ * It used to be a band stacked between the toolbar and the page. That put a
+ * record of what happened in the way of the thing it happened to — it pushed
+ * every page down by 28px the moment an agent first touched the tab (so a
+ * viewport an agent had just measured stopped being true), and it stayed
+ * there afterwards with nothing but old lines on it. A button that appears
+ * when there is something to show says the same thing without taking the
+ * page's room, and the whole list is one click away rather than the top line
+ * plus a disclosure.
  *
  * Shown whenever there is anything to show — including on a tab nobody
  * shared, where every line is a refusal. That is the case worth surfacing
  * most: an agent reaching for a page it was never given is invisible
- * otherwise, since the only party told about it is the agent.
+ * otherwise, since the only party told about it is the agent. Which is why
+ * the closed button carries the same three glyphs the band did, and why the
+ * one it shows is the newest line that did NOT go as asked rather than the
+ * newest line: from the closed state that mark is all there is, and a refusal
+ * followed by one successful read would otherwise take it back off while the
+ * refusal was still in the list. The cost of that choice is that the closed
+ * control stops naming the newest attempt once anything is flagged — which is
+ * the right way round, since "an agent was refused here" outranks "and then it
+ * read the page thirty more times", and the list says both.
  */
-export function BrowserAgentStrip({ tab }: { tab: BrowserWorkspaceTab }) {
+export function BrowserAgentActivityControl({
+  tab,
+}: {
+  tab: BrowserWorkspaceTab
+}) {
   const t = useTranslations("Browser.agent")
   const activity = useBrowserAgentActivity(tab.id)
-  const [expanded, setExpanded] = useState(false)
+  const listRef = useRef<HTMLDivElement | null>(null)
   const latest = activity[0]
   if (!latest) return null
-  const rest = activity.slice(1)
+  // Newest first, so the first non-`done` line is the newest one.
+  const flagged = activity.find((entry) => entry.outcome !== "done") ?? null
+  const shown = flagged ?? latest
+  // With the count, because a line stands for a run: one refused click and a
+  // retry loop of forty would otherwise produce the same glyph, the same
+  // colour and the same sentence, and the loop is the case this control is
+  // for.
+  const label = t("activityLabel", {
+    entry:
+      shown.count > 1
+        ? `${activityLabel(t, shown)} ${t("activityCount", { count: shown.count })}`
+        : activityLabel(t, shown),
+  })
+  const Glyph = flagged
+    ? flagged.outcome === "refused"
+      ? ShieldOff
+      : TriangleAlert
+    : History
+  // Radix keeps focus on the menu's content and steers the vertical keys at
+  // menu items — this menu has none (its lines are a record, not choices), so
+  // it swallows them and the list would not scroll for anyone on a keyboard.
+  // Scroll it here instead: Radix's own handler is composed AFTER this one
+  // and skipped once this one has called `preventDefault`. Which also means
+  // the day this menu gains a real `DropdownMenuItem`, arrow-to-focus will
+  // stop working for it unless these keys are handed back.
+  const scrollList = (event: KeyboardEvent<HTMLDivElement>) => {
+    const list = listRef.current
+    if (!list) return
+    const step =
+      event.key === "ArrowDown"
+        ? LIST_SCROLL_STEP_PX
+        : event.key === "ArrowUp"
+          ? -LIST_SCROLL_STEP_PX
+          : event.key === "PageDown"
+            ? list.clientHeight
+            : event.key === "PageUp"
+              ? -list.clientHeight
+              : event.key === "Home"
+                ? -list.scrollHeight
+                : event.key === "End"
+                  ? list.scrollHeight
+                  : null
+    if (step === null) return
+    event.preventDefault()
+    list.scrollTop += step
+  }
   return (
-    <div className="flex shrink-0 flex-col border-b border-border/60 bg-muted/40">
-      <div className="flex h-7 items-center gap-2 px-3 text-xs text-muted-foreground">
-        {latest.outcome === "refused" ? (
-          <ShieldOff className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-        ) : latest.outcome === "failed" ? (
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-        ) : (
-          <Bot className={cn("h-3.5 w-3.5 shrink-0", AGENT_MARK)} />
-        )}
-        <ActivityLine t={t} entry={latest} className="min-w-0 flex-1" />
-        {rest.length > 0 ? (
-          <button
-            type="button"
-            className="flex shrink-0 items-center gap-1 rounded px-1 py-0.5 hover:bg-primary/8 hover:text-foreground"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((open) => !open)}
-          >
-            {expanded ? t("collapse") : t("expand", { count: rest.length })}
-            <ChevronDown
-              className={cn(
-                "h-3 w-3 transition-transform",
-                expanded && "rotate-180"
-              )}
-            />
-          </button>
-        ) : null}
-      </div>
-      {expanded ? (
-        <div className="max-h-40 overflow-y-auto border-t border-border/40">
-          {rest.map((entry, index) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(FIELD_BTN, flagged && "text-amber-600")}
+          // The same sentence either way round: a tooltip nobody hovers and
+          // an accessible name nobody sees would otherwise each carry half.
+          title={label}
+          aria-label={label}
+        >
+          <Glyph className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-80 max-w-[90vw] p-0"
+        onKeyDown={scrollList}
+      >
+        <div className="px-2 py-1.5 text-xs font-normal text-muted-foreground">
+          {t("activityTitle")}
+        </div>
+        {/* Deep enough for a working session's worth of lines, and scrolled
+            past that rather than grown into a menu taller than the window. */}
+        <div
+          ref={listRef}
+          role="group"
+          aria-label={t("activityTitle")}
+          className="max-h-64 overflow-y-auto border-t border-border/40 py-1"
+        >
+          {activity.map((entry, index) => (
             <ActivityLine
               // Entries are append-only at the head and collapse in place, so
-              // an index below the head names the same attempt for as long as
-              // the list lives.
+              // an index names the same attempt for as long as the list lives.
               key={`${entry.at}-${index}`}
               t={t}
               entry={entry}
-              className="flex h-6 items-center px-3 pl-8 text-xs text-muted-foreground"
             />
           ))}
         </div>
-      ) : null}
-    </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 function ActivityLine({
   t,
   entry,
-  className,
 }: {
   t: ReturnType<typeof useTranslations<"Browser.agent">>
   entry: BrowserAgentActivity
-  className?: string
 }) {
   // Clock time, not "3s ago": no ticking to keep it honest, and "when
   // exactly" is the question a record of what touched your page is for.
   const when = new Date(entry.at).toLocaleTimeString()
   return (
-    <div className={cn("truncate", className)}>
-      {activityLabel(t, entry)}
-      {entry.count > 1 ? (
-        <span className="ml-1.5 tabular-nums">
-          {t("activityCount", { count: entry.count })}
-        </span>
-      ) : null}
-      <span className="ml-1.5 text-muted-foreground/70 tabular-nums">
+    <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+      {entry.outcome === "refused" ? (
+        <ShieldOff className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+      ) : entry.outcome === "failed" ? (
+        <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+      ) : (
+        <Bot className={cn("h-3.5 w-3.5 shrink-0", AGENT_MARK)} />
+      )}
+      <span className="min-w-0 flex-1 truncate">
+        {activityLabel(t, entry)}
+        {entry.count > 1 ? (
+          <span className="ms-1.5 tabular-nums">
+            {t("activityCount", { count: entry.count })}
+          </span>
+        ) : null}
+      </span>
+      <span className="shrink-0 text-muted-foreground/70 tabular-nums">
         {when}
       </span>
     </div>

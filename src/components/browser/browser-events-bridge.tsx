@@ -12,6 +12,10 @@ import {
   browserSetSignInUserAgent,
 } from "@/lib/browser/browser-api"
 import {
+  applyDefaultAgentGrant,
+  forgetDefaultAgentGrant,
+} from "@/lib/browser/browser-agent-grant"
+import {
   getBrowserPrefs,
   subscribeBrowserPrefs,
 } from "@/lib/browser/browser-prefs"
@@ -62,7 +66,8 @@ import { getCurrentWindowLabel } from "@/lib/browser/window-label"
  * inside the workspace providers (it needs the workspace actions to add and
  * remove tab records); renders nothing.
  *
- * - `browser://state`  → the tab store (toolbar, status layer, tab title)
+ * - `browser://state`  → the tab store (toolbar, status layer, tab title), and
+ *   the standing sharing default applied to a page that has just committed
  * - `browser://popup`  → an adopted popup becomes a tab next to its opener
  * - `browser://closed` → a surface the backend tore down (owned window closed
  *   by the user, owner window gone) drops its tab record
@@ -165,6 +170,10 @@ export function BrowserEventsBridge() {
       const subs = await Promise.all([
         transport.subscribe<BrowserTabState>(BROWSER_STATE_EVENT, (state) => {
           setBrowserTabState(state)
+          // A committed page is the moment the standing sharing default has
+          // something to bind to, and this event is the only one that says a
+          // page committed — whoever asked for it.
+          applyDefaultAgentGrant(state)
         }),
         transport.subscribe<BrowserPopupPayload>(
           BROWSER_POPUP_EVENT,
@@ -191,6 +200,10 @@ export function BrowserEventsBridge() {
           (closed) => {
             const tabId = browserWorkspaceTabId(closed.tabId)
             removeBrowserTabState(tabId)
+            // This path does not go through `releaseBrowserTab` (the surface
+            // is already gone), so the sharing memory is dropped here too —
+            // a backend tab id is handed out again.
+            forgetDefaultAgentGrant(closed.tabId)
             closeFileTab(tabId)
           }
         ),
@@ -230,7 +243,20 @@ export function BrowserEventsBridge() {
             // working on the tab has just started being refused for.
             if (!grant.origin) return
             if (grant.change === "navigated") {
-              // The page walked off the origin it was shared for.
+              // The page walked off the origin it was shared for. Worth
+              // interrupting for only where sharing is something the person
+              // did: with a standing default in force this fires on every
+              // cross-site click, and an alarm bar on every click is worse
+              // than none — the toolbar says what the new page is shared at,
+              // in the same place it always does.
+              //
+              // The cost is paid in the case where the tab lands somewhere
+              // the default cannot cover (an address no grant binds to, or
+              // one the backend refuses): the grant ends, nothing replaces
+              // it, and nothing says so. That is the same silence a page
+              // nobody shared already lives in, and the price of not crying
+              // wolf on the ordinary path.
+              if (getBrowserPrefs().defaultAgentGrant !== "none") return
               setBrowserTabNotice(browserWorkspaceTabId(grant.tabId), {
                 kind: "agent-grant-lost",
                 origin: grant.origin,

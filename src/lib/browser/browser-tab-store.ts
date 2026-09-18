@@ -8,6 +8,7 @@
 
 import { useSyncExternalStore } from "react"
 
+import { forgetDefaultAgentGrant } from "./browser-agent-grant"
 import { browserClose } from "./browser-api"
 import type {
   AgentAction,
@@ -273,6 +274,10 @@ export function releaseBrowserTab(workspaceTabId: string): void {
     : null
   if (!backendId) return
   forgetSurfaceCreation(backendId)
+  // Including what its pages were shared at: the id comes back when a
+  // suspended tab is built again, and the sites the last one visited are not
+  // this one's answers.
+  forgetDefaultAgentGrant(backendId)
   if (isDesktop()) {
     void runSurfaceOp(backendId, () => browserClose(backendId)).catch(() => {
       /* already gone */
@@ -363,6 +368,41 @@ export function recordBrowserAgentActivity(
           ...previous.slice(0, AGENT_ACTIVITY_LIMIT - 1),
         ]
   agentActivity.set(key, next)
+  notify()
+}
+
+/**
+ * Forget what agents did to this tab up to `recordedBefore`. Called when the
+ * person asks for the page again — a reload, or an address entered in the bar
+ * — because those lines describe attempts on a document that is being
+ * replaced, and a record that outlives its page turns into a pile nobody
+ * reads.
+ *
+ * The cut-off is the moment the request went out, not the moment the answer
+ * came back, and it is what keeps this from deleting more than it means to:
+ * the callers wait for the backend to accept before clearing (a request it
+ * refuses leaves the page, and so its record, alone), and over a remote
+ * workspace that wait is a network round trip — long enough for the new
+ * document to commit and for an agent to be recorded against it.
+ *
+ * The grant is deliberately NOT touched: it is bound to an origin and survives
+ * a reload of it (that is the whole point of binding it to the site rather
+ * than to the document), so taking it away here would revoke access the person
+ * never took back. Clearing what was recorded is not the same as changing what
+ * is allowed.
+ */
+export function clearBrowserAgentActivity(
+  workspaceTabId: string,
+  recordedBefore: number
+): void {
+  const previous = agentActivity.get(workspaceTabId)
+  if (!previous) return
+  // A run whose most recent attempt lands after the cut-off is still going,
+  // so it stays whole — including the attempts of it that came before.
+  const kept = previous.filter((entry) => entry.at > recordedBefore)
+  if (kept.length === previous.length) return
+  if (kept.length === 0) agentActivity.delete(workspaceTabId)
+  else agentActivity.set(workspaceTabId, kept)
   notify()
 }
 
