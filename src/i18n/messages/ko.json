@@ -2152,7 +2152,8 @@
         "output": "출력",
         "cacheRead": "캐시 읽기",
         "cacheWrite": "캐시 쓰기",
-        "total": "합계"
+        "total": "합계",
+        "cacheHit": "캐시 적중률"
       },
       "quickActions": {
         "title": "빠른 작업",
