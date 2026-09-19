@@ -208,7 +208,9 @@ export function AskQuestionCard({
     reclamp()
     window.addEventListener("resize", reclamp)
     return () => window.removeEventListener("resize", reclamp)
-  }, [floating, collapsed])
+    // `renderedId` too: a replacement question set can be taller than the one
+    // it renders over, which grows the window the same way expanding it does.
+  }, [floating, collapsed, renderedId])
 
   if (question.question_id !== renderedId) {
     setRenderedId(question.question_id)
@@ -318,6 +320,10 @@ export function AskQuestionCard({
       setError(true)
       setSubmitting(false)
       inFlight.current = false
+      // Collapsing mid-flight hides the footer, and with it the retry and the
+      // error line — a failed answer to a still-blocking question would be
+      // silent. Come back out so the failure is where the user can see it.
+      setCollapsed(false)
     }
   }
 
@@ -629,6 +635,10 @@ export function AskQuestionCard({
           onPointerMove={floating ? handleDragMove : undefined}
           onPointerUp={floating ? handleDragEnd : undefined}
           onPointerCancel={floating ? handleDragEnd : undefined}
+          // The drag ends when capture does. Without this, a capture that is
+          // revoked mid-gesture leaves `dragOrigin` latched, and the next bare
+          // hover over the header drags the window with no button held.
+          onLostPointerCapture={floating ? handleDragEnd : undefined}
           className={cn(
             "flex shrink-0 gap-2.5",
             resolvedSubtitle && !collapsed ? "items-start" : "items-center",

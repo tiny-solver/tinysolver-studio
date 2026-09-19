@@ -651,6 +651,21 @@ describe("AskQuestionCard collapse & floating", () => {
       screen.queryByRole("button", { name: "Pop out" })
     ).not.toBeInTheDocument()
   })
+
+  it("re-opens itself when an answer collapsed mid-flight comes back failed", async () => {
+    const onAnswer = vi.fn().mockRejectedValueOnce(new Error("boom"))
+    renderWith(single, onAnswer)
+    fireEvent.click(screen.getByRole("radio", { name: /Rewrite/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }))
+    // Collapsing drops the footer — the error line and the retry live there,
+    // so a failure while collapsed would leave a blocking question looking
+    // answered.
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't submit. Please try again."
+    )
+    expect(screen.getByRole("button", { name: "Submit" })).not.toBeDisabled()
+  })
 })
 
 describe("AskQuestionCard floating containment", () => {
