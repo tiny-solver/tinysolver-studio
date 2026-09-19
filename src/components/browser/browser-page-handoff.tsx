@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Bug,
   Camera,
-  MessageSquareShare,
+  MousePointerClick,
   SquareDashedMousePointer,
   X,
 } from "lucide-react"
@@ -246,7 +246,7 @@ export function BrowserSendToChatControl({
           aria-label={t("sendLabel")}
           disabled={!ready || !conversationTabId}
         >
-          <MessageSquareShare className="h-3.5 w-3.5" />
+          <MousePointerClick className="h-3.5 w-3.5" />
           {/* Something on this page threw. Shown without a number: within one
               document the answer only goes from no to yes, and the count is
               read from the tab when the menu opens. */}
