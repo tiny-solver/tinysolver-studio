@@ -24,8 +24,8 @@ pub fn emit_state(app: &AppHandle, state: &BrowserTabState) {
     emit_event(&EventEmitter::Tauri(app.clone()), STATE_EVENT, state);
 }
 
-/// A docked inspector for `tab_id` has gone; the workspace can have its
-/// layout back. See [`DEVTOOLS_CLOSED_EVENT`].
+/// The inspector for `tab_id` has gone; the page can be put back where the
+/// host wants it. See [`DEVTOOLS_CLOSED_EVENT`].
 pub fn emit_devtools_closed(app: &AppHandle, tab_id: &str) {
     emit_event(
         &EventEmitter::Tauri(app.clone()),

@@ -17,7 +17,6 @@ import { toast } from "sonner"
 
 import {
   useOptionalWorkspaceActions,
-  useOptionalWorkspaceView,
   type BrowserWorkspaceTab,
 } from "@/contexts/workspace-context"
 import {
@@ -46,10 +45,7 @@ import {
   DEFAULT_BROWSER_PROFILE_ID,
   useBrowserPrefs,
 } from "@/lib/browser/browser-prefs"
-import {
-  clearBrowserAgentActivity,
-  recordDockedInspector,
-} from "@/lib/browser/browser-tab-store"
+import { clearBrowserAgentActivity } from "@/lib/browser/browser-tab-store"
 import { isBlankPageUrl } from "@/lib/browser/browser-url"
 import type { BrowserTabState } from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
@@ -188,13 +184,6 @@ export function BrowserToolbar({
   // English message the error already carries.
   const tRoot = useTranslations()
   const inspectorEnabled = useBrowserPrefs().devtools
-  // The inspector docks into this window on macOS and the page is resized to
-  // fill it; maximizing the file pane is how the workspace agrees with that
-  // instead of being hidden behind it. Read here so the decision is made with
-  // the pane's state as it is when the item is pressed.
-  const filesMaximized = useOptionalWorkspaceView()?.filesMaximized ?? false
-  const setFilesMaximized =
-    useOptionalWorkspaceActions()?.setFilesMaximized ?? null
   const backendId = browserTabBackendId(tab.id)
   const currentUrl = state?.url || state?.requestedUrl || tab.browser.initialUrl
   // The blank page is the absence of an address, so the bar shows its
@@ -447,29 +436,19 @@ export function BrowserToolbar({
               disabled={!backendId}
               onSelect={() => {
                 if (!backendId) return
-                // A tab opened while the switch was off has no inspector to
-                // show and the engine cannot be told otherwise now, so the
-                // backend refuses rather than doing nothing — say which.
-                void browserOpenDevtools(backendId).then(
-                  (docked) => {
-                    // Docked = it took this window. Make room by maximizing
-                    // the file pane — unless the person already had it that
-                    // way, which is their layout and not ours to put back, or
-                    // another tab's inspector already did it.
-                    if (!docked || !setFilesMaximized) return
-                    if (recordDockedInspector(backendId, filesMaximized)) {
-                      setFilesMaximized(true)
-                    }
-                  },
-                  (error: unknown) => {
-                    toast.error(t("inspectorFailed"), {
-                      description: toLocalizedErrorMessage(
-                        error,
-                        tRoot as unknown as AppErrorTranslator
-                      ),
-                    })
-                  }
-                )
+                // Nothing to do on the way back: the inspector opens in a
+                // window of its own and this page keeps its slot. A tab opened
+                // while the switch was off has no inspector to show and the
+                // engine cannot be told otherwise now, so the backend refuses
+                // rather than doing nothing — say which.
+                void browserOpenDevtools(backendId).catch((error: unknown) => {
+                  toast.error(t("inspectorFailed"), {
+                    description: toLocalizedErrorMessage(
+                      error,
+                      tRoot as unknown as AppErrorTranslator
+                    ),
+                  })
+                })
               }}
             >
               <Bug />

@@ -1132,28 +1132,33 @@ fn devtools_refusal(built_with: Option<bool>, tab_id: &str) -> Option<AppCommand
     }
 }
 
-/// How often a docked inspector is asked whether it is still there. WebKit
-/// announces its closing no other way, and the workspace is laid out around it
-/// until it does, so the poll is what ends that. One private selector per
-/// tick, on the main thread, and only while one is open.
+/// How often an open inspector is asked whether it is still there. WebKit
+/// announces its closing no other way, and a page it was docked into stays
+/// where WebKit left it until somebody notices, so the poll is what ends that.
+/// One private selector per tick, on the main thread, and only while one is
+/// open.
 const DEVTOOLS_POLL: Duration = Duration::from_millis(700);
 
-/// Show the web inspector for a tab's page. `true` when it DOCKED into the
-/// workspace window, which the frontend lays itself out around until
-/// `browser://devtools-closed` says it is gone.
+/// Show the web inspector for a tab's page.
+///
+/// It opens in a window of its own (`shim::macos::prefer_detached_inspector`),
+/// so the page keeps its slot and the workspace has nothing to do about it.
+/// Watched all the same: somebody who has told WebKit they want the inspector
+/// docked gets it docked, and then the page is left filling the host window
+/// until `browser://devtools-closed` puts it back.
 pub fn open_devtools_core(
     app: &AppHandle,
     registry: &BrowserRegistry,
     tab_id: &str,
-) -> Result<bool, AppCommandError> {
+) -> Result<(), AppCommandError> {
     let surface = devtools_target(registry, tab_id)?;
-    let docked = surface
+    let watchable = surface
         .open_devtools()
         .map_err(|e| window_err("Failed to open the web inspector", e))?;
-    if docked {
-        watch_docked_devtools(app.clone(), surface, tab_id.to_string());
+    if watchable {
+        watch_devtools(app.clone(), surface, tab_id.to_string());
     }
-    Ok(docked)
+    Ok(())
 }
 
 /// The surface to show an inspector on, or why not. Apart from
@@ -1169,19 +1174,19 @@ fn devtools_target(
     surface_of(registry, tab_id)
 }
 
-/// Say when the docked inspector on `surface` has gone, once.
+/// Say when the inspector on `surface` has gone, once.
 ///
 /// Stops the moment the answer is no — including when the surface has gone
 /// with the tab, which answers the same way and needs the same thing done
 /// about it. Deliberately UNBOUNDED otherwise: the tab is what bounds it, and
-/// a cap would have to either give the workspace its layout back while the
-/// inspector is still docked, or stop watching and never give it back at all.
-/// The handle it holds is an id and an `AppHandle`, not the webview.
+/// a cap would have to either say an inspector that is still up has closed, or
+/// stop watching and never say it at all. The handle it holds is an id and an
+/// `AppHandle`, not the webview.
 ///
 /// A second open while one is already being watched starts a second watcher;
-/// both see the same close, and the frontend counts inspectors rather than
-/// events, so the extra one changes nothing.
-fn watch_docked_devtools(app: AppHandle, surface: BrowserSurface, tab_id: String) {
+/// both see the same close, and what the close does — put the page back where
+/// the host wants it — is the same done once or twice.
+fn watch_devtools(app: AppHandle, surface: BrowserSurface, tab_id: String) {
     tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(DEVTOOLS_POLL).await;
@@ -3670,13 +3675,13 @@ pub async fn browser_stop(
 
 /// Show the engine's web inspector for a tab's page. Refuses, rather than
 /// doing nothing, when that tab was opened with the inspector switched off —
-/// see [`devtools_refusal`]. `true` = it docked into the workspace window.
+/// see [`devtools_refusal`].
 #[tauri::command]
 pub async fn browser_open_devtools(
     app: AppHandle,
     registry: State<'_, BrowserRegistry>,
     tab_id: String,
-) -> Result<bool, AppCommandError> {
+) -> Result<(), AppCommandError> {
     open_devtools_core(&app, &registry, &tab_id)
 }
 

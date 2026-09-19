@@ -284,11 +284,6 @@ interface WorkspaceActionsValue {
   reloadActiveFile: () => Promise<void>
   toggleFileTabPreview: (tabId: string) => void
   toggleFilesMaximized: () => void
-  /** Set it outright rather than flipping it. For a caller that knows the
-   *  state it wants and may be acting long after it decided (the web
-   *  inspector giving the layout back when it closes): a toggle then would
-   *  fight whatever the person did in between. */
-  setFilesMaximized: (maximized: boolean) => void
   // Open (or re-activate) a built-in browser tab for an http(s) URL. One tab
   // per URL (fragment ignored): a second open activates the existing tab.
   // Returns the tab id, or null when the URL does not parse. The native
@@ -698,10 +693,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
   const toggleFilesMaximized = useCallback(() => {
     setFilesMaximized((prev) => !prev)
-  }, [])
-
-  const setFilesMaximizedTo = useCallback((maximized: boolean) => {
-    setFilesMaximized(maximized)
   }, [])
 
   const setActivePane = useCallback((nextPane: WorkspacePane) => {
@@ -3059,7 +3050,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       reloadActiveFile,
       toggleFileTabPreview,
       toggleFilesMaximized,
-      setFilesMaximized: setFilesMaximizedTo,
       openBrowserTab,
       adoptBrowserTab,
       restoreBrowserTabs,
@@ -3092,7 +3082,6 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       reloadActiveFile,
       toggleFileTabPreview,
       toggleFilesMaximized,
-      setFilesMaximizedTo,
       openBrowserTab,
       adoptBrowserTab,
       restoreBrowserTabs,

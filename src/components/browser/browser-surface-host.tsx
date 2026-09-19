@@ -406,9 +406,10 @@ export function NativeSurfaceHost({
   // Something OTHER than this host moved the surface, so the bounds it last
   // pushed are no longer where the page is — and since the placeholder has
   // not moved, nothing it measures says so. Forget what was pushed and push
-  // again. Raised when a docked web inspector closes: macOS leaves the page
-  // filling the window afterwards (see `shim/macos.rs::open_devtools`), and
-  // the layout it was making room for may not change at all on the way back.
+  // again. Raised when a web inspector closes: one that had been docked into
+  // the window leaves the page filling it afterwards (see
+  // `shim/macos.rs::prefer_detached_inspector`) with nothing in the layout
+  // changing on the way back.
   const boundsResync = useBrowserBoundsResync(storeKey)
   const seenResyncRef = useRef(boundsResync)
   useEffect(() => {

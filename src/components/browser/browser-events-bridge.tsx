@@ -33,7 +33,6 @@ import {
   setBrowserTabNotice,
   setBrowserTabState,
   setDocGuestState,
-  releaseDockedInspector,
   requestBrowserBoundsResync,
   takeSuspendCloseRequest,
 } from "@/lib/browser/browser-tab-store"
@@ -107,7 +106,7 @@ import { browserTabBackendId } from "@/lib/file-tab-id"
 const HOST_RULES_RETRY_MS = 1000
 
 export function BrowserEventsBridge() {
-  const { adoptBrowserTab, closeFileTab, openBrowserTab, setFilesMaximized } =
+  const { adoptBrowserTab, closeFileTab, openBrowserTab } =
     useWorkspaceActions()
 
   useEffect(() => {
@@ -225,27 +224,17 @@ export function BrowserEventsBridge() {
             closeFileTab(tabId)
           }
         ),
-        // A web inspector that had DOCKED into this window (macOS, embedded
-        // surface) has gone. Give the layout back: restoring the file pane is
-        // both what undoes the room made for it and what re-asserts the page's
-        // bounds, which WebKit leaves filling the window otherwise.
-        //
-        // Set, never toggled: this can land minutes after the room was made,
-        // and a toggle would flip whatever the person has done to the layout
-        // since — un-maximize it themselves and the close would put it back.
-        // Setting false is what "the inspector is done with the window" means,
-        // and is a no-op when they have already said the same thing.
+        // A tab's web inspector has gone. Put the page back where the host
+        // wants it — unconditionally, because the host cannot tell whether it
+        // has to: an inspector docked into this window (which is not how they
+        // open, but is what WebKit gives whoever asks it for that) leaves the
+        // page filling the window, and the placeholder never moved, so nothing
+        // the host measures differs. For one that was in its own window all
+        // along this re-sends the bounds the page already has.
         transport.subscribe<BrowserDevtoolsClosedPayload>(
           BROWSER_DEVTOOLS_CLOSED_EVENT,
           (closed) => {
-            // Unconditional, and before the layout: WebKit left the page
-            // filling the window and the placeholder never moved, so the host
-            // has nothing to notice on its own. Restoring the pane usually
-            // moves the placeholder too, but not when the person had already
-            // un-maximized it — and then this is the only thing that puts the
-            // page back in its slot.
             requestBrowserBoundsResync(closed.tabId)
-            if (releaseDockedInspector(closed.tabId)) setFilesMaximized(false)
           }
         ),
         transport.subscribe<BrowserShortcutPayload>(
@@ -371,7 +360,7 @@ export function BrowserEventsBridge() {
       cancelled = true
       for (const unsubscribe of unsubscribers) unsubscribe()
     }
-  }, [adoptBrowserTab, closeFileTab, openBrowserTab, setFilesMaximized])
+  }, [adoptBrowserTab, closeFileTab, openBrowserTab])
 
   return null
 }

@@ -283,51 +283,6 @@ export function useBrowserTabState(
  */
 const suspendCloseRequests = new Set<string>()
 
-/**
- * Tabs with a web inspector DOCKED in the workspace window, and whether the
- * file pane was maximized to make room for one.
- *
- * Two facts, not one, because they come apart. The set is every open docked
- * inspector: the pane goes back when the LAST of them is gone, so a second
- * tab's inspector has to be counted even though the pane is already maximized
- * by then — counting only the first would give the pane back under the
- * second. The flag is whether WE maximized it: a pane the person had already
- * maximized is theirs, and no inspector closing may un-maximize it.
- *
- * Deliberately not cleared when a tab is released. The tab going away is what
- * takes its inspector with it, and the backend's watcher notices exactly that
- * and sends the close event — so clearing here would delete the mark the
- * event needs and leave the pane maximized for good.
- */
-const dockedInspectors = new Set<string>()
-let paneMaximizedForInspector = false
-
-/**
- * Record that this tab's inspector docked, and answer whether the pane has to
- * be maximized now. `paneAlreadyMaximized` is what the person's layout is at
- * this moment: true means leave it alone and never restore it.
- */
-export function recordDockedInspector(
-  backendTabId: string,
-  paneAlreadyMaximized: boolean
-): boolean {
-  dockedInspectors.add(backendTabId)
-  if (paneAlreadyMaximized || paneMaximizedForInspector) return false
-  paneMaximizedForInspector = true
-  return true
-}
-
-/**
- * One tab's docked inspector is gone. `true` when the pane should be restored
- * now: this was the last one open AND the pane is maximized because of them.
- */
-export function releaseDockedInspector(backendTabId: string): boolean {
-  if (!dockedInspectors.delete(backendTabId)) return false
-  if (dockedInspectors.size > 0 || !paneMaximizedForInspector) return false
-  paneMaximizedForInspector = false
-  return true
-}
-
 /** Whether this `browser://closed` is a suspend of ours — and spends the id. */
 export function takeSuspendCloseRequest(requestId: string | null): boolean {
   return requestId !== null && suspendCloseRequests.delete(requestId)
@@ -536,11 +491,12 @@ export function useBrowserFindRequest(workspaceTabId: string | null): number {
 //
 // The host only pushes bounds it has not already pushed, which is right while
 // the host is the only thing that moves a surface — and wrong the moment
-// something else does. macOS's docked web inspector resizes the page to fill
-// the window and leaves it there after it closes; the placeholder never moved,
-// so nothing the host measures differs and the page would stay full-window
-// until the next real layout change. Counted, not a flag, so two closes in a
-// row are two resyncs.
+// something else does. A web inspector docked into the window (which is not
+// how they open, but is what WebKit gives whoever asks it for that) resizes
+// the page to fill it and leaves it there after it closes; the placeholder
+// never moved, so nothing the host measures differs and the page would stay
+// full-window until the next real layout change. Counted, not a flag, so two
+// closes in a row are two resyncs.
 const boundsResyncs = new Map<string, number>()
 
 export function requestBrowserBoundsResync(backendTabId: string): void {
@@ -574,8 +530,6 @@ export function resetBrowserTabStoreForTests(): void {
   agentActivity.clear()
   consoleErrors.clear()
   suspendCloseRequests.clear()
-  dockedInspectors.clear()
-  paneMaximizedForInspector = false
 }
 
 function shallowEqualState(a: BrowserTabState, b: BrowserTabState): boolean {

@@ -419,19 +419,59 @@ pub fn is_loading(webview: &wry::WebView) -> bool {
     unsafe { wk.isLoading() }
 }
 
-/// Show the Web Inspector for this page. `true` when it is now DOCKED into
-/// the window the page lives in, which the caller has to deal with.
+/// Ask WebKit to put web inspectors in a window of their own rather than
+/// docking them into the window that holds the inspected page.
 ///
-/// WebKit gives no choice about that. `_WKInspector` attaches by default, and
-/// attaching resizes the inspected view to fill its window with the inspector
-/// below it — measured here: a tab in a 900×620 slot became 2560×933 across
-/// the whole workspace window, tab strip, sidebar and address bar hidden
-/// behind it. Its private `detach` is a no-op on macOS 27 whether it is sent
-/// before `show` or after; re-sending the view's frame while the inspector is
-/// up is ignored too, and closing the inspector leaves the view full-window
-/// until somebody sets its frame again. So the honest answer is to say that
-/// the host window is taken and let the workspace lay itself out to match
-/// (`browser://devtools-closed` undoes it) rather than to pretend otherwise.
+/// A docked inspector is the wrong shape for an embedded tab: attaching
+/// resizes the inspected view to fill its host window, and for a child surface
+/// that window is the whole workspace — measured here, a tab in a 900×620 slot
+/// became 2560×933 with the tab strip, sidebar and address bar behind it.
+/// `_WKInspector`'s private `detach` does nothing about it on macOS 27, sent
+/// before `show` or after, and re-sending the view's frame while the inspector
+/// is up is ignored. This preference is what WebKit itself consults when it
+/// opens one, and it does decide it.
+///
+/// REGISTERED, not written: the registration domain is the fallback, so a
+/// value stored for this app still wins — and WebKit stores one the moment
+/// somebody docks or undocks an inspector from its own toolbar. Whoever wants
+/// it docked says so once and keeps it.
+///
+/// The preference belongs to the app, not to a view: from the first browser
+/// tab that opens one, every inspector in this app opens in its own window,
+/// the app's own windows included. That is the same bargain — one dock click
+/// to say otherwise — and there is no per-webview version of this key to
+/// narrow it with.
+///
+/// Called at startup, before any webview exists, because the More menu is not
+/// the only way in: a `with_devtools` webview offers "Inspect Element" in its
+/// own context menu, which reaches WebKit without passing through any of this
+/// crate. Also called from [`open_devtools`], where it costs nothing.
+///
+/// Measured on macOS 27, same binary, this call the only difference: without
+/// it the inspected view went 900×620 → 1200×280 and no window was added;
+/// with it the view kept its frame and a `_WKInspectorWindow` appeared. With
+/// `…StartsAttached = YES` in the app domain it docked either way.
+pub fn prefer_detached_inspector() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // SAFETY: plain Foundation objects; `NSUserDefaults` is thread-safe
+        // and an unknown key here is inert rather than undefined.
+        unsafe {
+            let no: *mut AnyObject =
+                objc2::msg_send![objc2::class!(NSNumber), numberWithBool: false];
+            let key = ns_string!("__WebInspectorPageGroupLevel1__.WebKit2InspectorStartsAttached");
+            let registration: *mut AnyObject =
+                objc2::msg_send![objc2::class!(NSDictionary), dictionaryWithObject: no, forKey: key];
+            let defaults: *mut AnyObject =
+                objc2::msg_send![objc2::class!(NSUserDefaults), standardUserDefaults];
+            let _: () = objc2::msg_send![defaults, registerDefaults: registration];
+        }
+    });
+}
+
+/// Show the Web Inspector for this page — in its own window, see
+/// [`prefer_detached_inspector`]. `true` when there was an inspector and it
+/// was asked to show, which is also what makes its closing worth watching for.
 ///
 /// The selectors are private — `_inspector` is a `_WKInspector`, the same one
 /// wry's own `open_devtools` uses — and each is checked for before it is sent,
@@ -439,6 +479,7 @@ pub fn is_loading(webview: &wry::WebView) -> bool {
 /// undefined. `isInspectable` is set by wry at build time from
 /// `with_devtools`; without it the inspector is nil.
 pub fn open_devtools(webview: &wry::WebView) -> bool {
+    prefer_detached_inspector();
     with_inspector(webview, |inspector| unsafe {
         let can_show: bool = objc2::msg_send![inspector, respondsToSelector: objc2::sel!(show)];
         if !can_show {
@@ -451,7 +492,7 @@ pub fn open_devtools(webview: &wry::WebView) -> bool {
 }
 
 /// Whether the inspector for this page is on screen. Polled while one is
-/// docked, because WebKit reports its closing no other way.
+/// open, because WebKit reports its closing no other way.
 pub fn devtools_visible(webview: &wry::WebView) -> bool {
     with_inspector(webview, |inspector| unsafe {
         let can_ask: bool =

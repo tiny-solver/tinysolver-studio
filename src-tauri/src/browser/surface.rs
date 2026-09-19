@@ -185,9 +185,9 @@ impl BrowserSurface {
         per_surface!(self, child: |c| Ok(c.close()?), window: |w| Ok(w.close()?))
     }
 
-    /// Show the engine's web inspector for this page. `true` when it DOCKED
-    /// into this surface's host window and the workspace has to lay itself
-    /// out around it until [`Self::devtools_visible`] says it is gone.
+    /// Show the engine's web inspector for this page. `true` when it is up and
+    /// this surface can be asked whether it still is — which is what
+    /// [`Self::devtools_visible`] is polled for.
     ///
     /// Only does anything on a surface that was BUILT with the inspector
     /// available: all three engines take it as a webview attribute at creation
@@ -198,16 +198,16 @@ impl BrowserSurface {
     /// `commands::browser::devtools_refusal`.
     ///
     /// Never `true` for an owned window: its host window holds the page and
-    /// nothing else, so an inspector docked into it is the ordinary browser
-    /// layout rather than something covering a workbench.
+    /// nothing else, so wherever the inspector goes is the ordinary browser
+    /// layout, and there is nothing to put back afterwards.
     pub fn open_devtools(&self) -> Result<bool, SurfaceError> {
         per_surface!(self,
             child: |c| Ok(c.open_devtools()?),
             window: |w| { w.open_devtools(); Ok(false) })
     }
 
-    /// Whether a docked inspector is still up. Only ever asked of the surface
-    /// that said it docked one.
+    /// Whether the inspector is still up. Only ever asked of a surface that
+    /// said it had one to watch.
     pub fn devtools_visible(&self) -> Result<bool, SurfaceError> {
         per_surface!(self,
             child: |c| Ok(c.devtools_visible()?),

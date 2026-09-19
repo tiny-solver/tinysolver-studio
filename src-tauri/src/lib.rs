@@ -1218,6 +1218,16 @@ mod tauri_app {
                     ),
                 );
 
+                // Before any inspectable webview exists: web inspectors in
+                // this app open in a window of their own instead of docking
+                // into the window they are inspecting, which for a browser
+                // tab would be the whole workspace. Here rather than at the
+                // menu item that opens one, because a page can be
+                // right-clicked into "Inspect Element" without going through
+                // any of our code.
+                #[cfg(target_os = "macos")]
+                crate::browser::shim::macos::prefer_detached_inspector();
+
                 // Single-window workspace: ensure the main window exists.
                 // Workspace state (open folders, opened tabs, active tab) is
                 // restored by the frontend via `list_open_folder_details` /

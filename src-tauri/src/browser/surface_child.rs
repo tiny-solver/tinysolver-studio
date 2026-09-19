@@ -359,15 +359,16 @@ impl ChildHandle {
     }
 
     /// Through the shim, not `wry::WebView::open_devtools()`: the platforms
-    /// differ in where the inspector ends up, and the caller needs to know.
-    /// `true` = it docked into this surface's host window (macOS).
+    /// differ in what they will say about the inspector afterwards, and the
+    /// caller needs to know. `true` = it is up and this surface can be asked
+    /// when it goes (macOS).
     pub fn open_devtools(&self) -> Result<bool, ChildError> {
         self.with(shim::open_devtools)
     }
 
-    /// Whether a docked inspector is still on screen. Polled after
-    /// `open_devtools` answered `true` — WebKit reports its closing no other
-    /// way, and the window has to be given back when it does.
+    /// Whether the inspector is still on screen. Polled after `open_devtools`
+    /// answered `true` — WebKit reports its closing no other way, and a page
+    /// an inspector was docked into has to be put back when it does.
     pub fn devtools_visible(&self) -> Result<bool, ChildError> {
         self.with(shim::devtools_visible)
     }

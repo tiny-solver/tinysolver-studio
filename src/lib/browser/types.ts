@@ -396,15 +396,16 @@ export interface BrowserDownload {
 export type SurfaceChoice = "auto" | "child" | "window"
 
 /**
- * A docked web inspector closed.
+ * A tab's web inspector closed; put the page back where the host wants it.
  *
- * Only raised for the docking kind — macOS, embedded surface — because only
- * that one takes the workspace window: WebKit resizes the page to fill it with
- * the inspector below, ignores any bounds set while it is up, and leaves the
- * page full-window after it goes. So the workspace maximizes the file pane to
- * match while one is open, and this is what tells it to put the layout back
- * (which also re-asserts the page's bounds, the only way it returns to its
- * slot). Windows opens DevTools in a window of their own and never sends this.
+ * Raised for the kind the host can ask about — macOS, embedded surface;
+ * Windows hands DevTools to WebView2 and never sends this. Normally there is
+ * nothing to put back, because the inspector opens in a window of its own and
+ * the page never moves. But WebKit docks one into the host window for whoever
+ * has asked it to, and a docked inspector resizes the page to fill that
+ * window, ignores any bounds set while it is up, and leaves the page
+ * full-window after it goes — which nothing else would notice, since the
+ * placeholder it is laid out against never moved.
  */
 export interface BrowserDevtoolsClosedPayload {
   tabId: string
@@ -477,8 +478,7 @@ export const BROWSER_AGENT_GRANT_EVENT = "browser://agent-grant"
 export const BROWSER_AGENT_ACTIVITY_EVENT = "browser://agent-activity"
 export const BROWSER_CONSOLE_ERRORS_EVENT = "browser://console-errors"
 export const BROWSER_EVAL_REQUEST_EVENT = "browser://eval-request"
-/** A web inspector that had DOCKED into the workspace window is gone; see
- *  `BrowserDevtoolsClosedPayload`. */
+/** A tab's web inspector is gone; see `BrowserDevtoolsClosedPayload`. */
 export const BROWSER_DEVTOOLS_CLOSED_EVENT = "browser://devtools-closed"
 
 /** `browser://eval-request`: one `browser_eval` snippet, waiting on a person.
