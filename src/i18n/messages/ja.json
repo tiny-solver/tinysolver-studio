@@ -3453,9 +3453,7 @@
         "submit": "送信",
         "submitError": "送信できませんでした。もう一度お試しください。",
         "collapse": "折りたたむ",
-        "expand": "展開",
-        "float": "ポップアウト",
-        "dock": "パネルに戻す"
+        "expand": "展開"
       },
       "planApproval": {
         "title": "エージェントが計画を提示しました — 確認してください",
