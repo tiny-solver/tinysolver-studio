@@ -6246,6 +6246,11 @@
     "hotReload": "Reloads after save",
     "noProjectOpen": "Open the Studio from a project folder. The scene editor reads and writes that folder's outputs/game/content/.",
     "missingAsset": "missing file",
-    "migrated": "This scene was in the first prototype's format and has been converted. The next edit saves it in the current schema."
+    "migrated": "This scene was in the first prototype's format and has been converted. The next edit saves it in the current schema.",
+    "sendToChat": "Send to chat",
+    "sendToChatHint": "Put the scene, the selected object and any preview errors into the chat composer, then type your request.",
+    "sendToChatNoSession": "Open a conversation beside the Studio to send context to it.",
+    "contextSent": "Context added to the chat composer. Type your request and send.",
+    "engineErrors": "Preview errors: {count}"
   }
 }

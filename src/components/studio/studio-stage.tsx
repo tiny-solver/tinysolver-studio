@@ -43,6 +43,10 @@ export interface StudioStageProps {
   onMove: (id: string, x: number, y: number) => void
   /** Engine announced itself; `hot` says whether it accepts `codeg:scene`. */
   onReady: (hot: boolean) => void
+  /** The engine reported a runtime problem (`codeg:error`): an exception, a
+   *  rejected promise, a `console.error`. Collected so it can be handed to
+   *  the agent. */
+  onEngineError?: (message: string) => void
   /** Desktop loopback iframes keep their real origin; web ones run opaque. */
   sameOrigin: boolean
 }
@@ -56,6 +60,7 @@ export function StudioStage({
   onSelect,
   onMove,
   onReady,
+  onEngineError,
   sameOrigin,
 }: StudioStageProps) {
   const t = useTranslations("Studio")
@@ -92,7 +97,16 @@ export function StudioStage({
   useEffect(() => {
     const listen = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return
-      const data = event.data as { type?: string; hot?: boolean } | null
+      const data = event.data as {
+        type?: string
+        hot?: boolean
+        message?: unknown
+      } | null
+      if (data?.type === "codeg:error") {
+        if (typeof data.message === "string" && data.message.trim())
+          onEngineError?.(data.message.slice(0, 2000))
+        return
+      }
       if (data?.type !== "codeg:ready") return
       hot.current = data.hot === true
       onReady(hot.current)
@@ -103,7 +117,7 @@ export function StudioStage({
     // `scene` is read at handshake time only; later edits go through the
     // effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onReady, post])
+  }, [onReady, onEngineError, post])
 
   // Every edit, straight into the running engine.
   useEffect(() => {

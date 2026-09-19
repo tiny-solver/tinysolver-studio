@@ -150,6 +150,50 @@ fn content_type(path: &Path) -> &'static str {
     }
 }
 
+/// Classic (non-module) script injected into every served HTML page. It runs
+/// before the game's module scripts and reports runtime problems to the
+/// embedding Studio as `{ type: "codeg:error", kind, message }`, so the editor
+/// can show them and hand them to the agent. Injected here rather than asked
+/// of the engine because an agent is free to rewrite the engine, and the
+/// errors that matter most are the ones from code nobody has reviewed yet.
+/// Only the preview gets it — a packaged build is a plain file copy.
+const ERROR_REPORTER: &str = r#"<script data-codeg-preview>(function(){
+if(window.parent===window)return;
+var seen=0;
+function send(kind,detail){
+  if(seen++>50)return;
+  var m=detail&&detail.message?detail.message:String(detail==null?"":detail);
+  if(detail&&detail.stack)m+="\n"+String(detail.stack).split("\n").slice(0,4).join("\n");
+  try{parent.postMessage({type:"codeg:error",kind:kind,message:m.slice(0,2000)},"*")}catch(e){}
+}
+addEventListener("error",function(e){
+  if(e.target&&e.target!==window&&(e.target.src||e.target.href))send("resource","Failed to load "+(e.target.src||e.target.href));
+  else send("error",e.error||e.message);
+},true);
+addEventListener("unhandledrejection",function(e){send("rejection",e.reason)});
+var orig=console.error;
+console.error=function(){
+  orig.apply(console,arguments);
+  send("console",Array.prototype.map.call(arguments,function(a){return a&&a.message?a.message:String(a)}).join(" "));
+};
+})();</script>"#;
+
+/// Put the reporter first in `<head>` (or at the very top when the page has
+/// none) so it is installed before any other script runs.
+fn inject_reporter(html: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(html);
+    let lower = text.to_ascii_lowercase();
+    let at = lower
+        .find("<head")
+        .and_then(|start| lower[start..].find('>').map(|end| start + end + 1))
+        .unwrap_or(0);
+    let mut out = String::with_capacity(text.len() + ERROR_REPORTER.len());
+    out.push_str(&text[..at]);
+    out.push_str(ERROR_REPORTER);
+    out.push_str(&text[at..]);
+    out.into_bytes()
+}
+
 /// Serve one file of a registered root. Shared by both listeners.
 pub async fn serve(id: &str, rel: &str) -> Response {
     let Some(root) = root_for(id) else {
@@ -160,6 +204,11 @@ pub async fn serve(id: &str, rel: &str) -> Response {
     };
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
+            let bytes = if content_type(&path).starts_with("text/html") {
+                inject_reporter(&bytes)
+            } else {
+                bytes
+            };
             let mut response = Response::new(Body::from(bytes));
             let headers = response.headers_mut();
             headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type(&path)));
@@ -268,6 +317,11 @@ mod tests {
         );
         assert_eq!(ok.headers().get(header::CACHE_CONTROL).unwrap(), "no-store");
 
+        let body = axum::body::to_bytes(ok.into_body(), usize::MAX).await.unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.starts_with("<script data-codeg-preview>"), "no <head>: reporter goes first");
+        assert!(body.ends_with("<h1>hi</h1>"));
+
         let js = serve(&id, "outputs/game/src/main.js").await;
         assert_eq!(js.headers().get(header::CONTENT_TYPE).unwrap(), "text/javascript; charset=utf-8");
 
@@ -280,6 +334,16 @@ mod tests {
         }
         assert_eq!(serve("nope", "outputs/game/index.html").await.status(), StatusCode::NOT_FOUND);
         assert_eq!(serve(&id, "outputs/game/missing.png").await.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn reporter_lands_right_after_the_head_tag() {
+        let page = b"<!doctype html><html><HEAD lang=\"ko\"><script type=\"module\" src=\"a.js\"></script></head></html>";
+        let out = String::from_utf8(inject_reporter(page)).unwrap();
+        let head = out.find("<HEAD lang=\"ko\">").unwrap() + "<HEAD lang=\"ko\">".len();
+        assert!(out[head..].starts_with("<script data-codeg-preview>"));
+        assert!(out.find("data-codeg-preview").unwrap() < out.find("a.js").unwrap());
+        assert_eq!(out.matches("codeg:error").count(), 1);
     }
 
     #[test]

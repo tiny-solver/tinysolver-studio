@@ -14,6 +14,7 @@ import {
   Hammer,
   ImageIcon,
   Layers,
+  MessageSquarePlus,
   MousePointer2,
   Play,
   Redo2,
@@ -49,12 +50,15 @@ import {
   listContentBuilds,
 } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
+import { joinFsPath } from "@/lib/path-utils"
+import { buildAgentContext } from "@/lib/studio/agent-context"
 import { revealItemInDir, isLocalDesktop } from "@/lib/platform"
 import { BrowserLink } from "@/components/ui/browser-link"
 import { getServerBaseUrl } from "@/lib/transport"
 import { getWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import type { ContentBuild, ContentScene } from "@/lib/types"
 import { StudioStage } from "./studio-stage"
+import { useChatBridge, useEngineErrorList } from "./use-chat-bridge"
 import "./studio.css"
 
 const EXAMPLE =
@@ -98,6 +102,7 @@ export function StudioWorkspace({
   const [preview, setPreview] = useState<Preview | null>(null)
   const [hot, setHot] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
+  const chat = useChatBridge()
   const [builds, setBuilds] = useState<ContentBuild[]>([])
   const [building, setBuilding] = useState(false)
   const [commands, setCommands] = useState(EXAMPLE)
@@ -431,6 +436,12 @@ export function StudioWorkspace({
   }
 
   const onReady = useCallback((isHot: boolean) => setHot(isHot), [])
+  // Scoped to the running engine: a reload or another scene starts over.
+  const {
+    errors: engineErrors,
+    push: onEngineError,
+    clear: clearEngineErrors,
+  } = useEngineErrorList(`${reloadToken}:${sceneId ?? ""}`)
   const onMove = useCallback(
     (id: string, x: number, y: number) =>
       dispatch([{ type: "node.update", id, transform: { x, y } }]),
@@ -443,6 +454,26 @@ export function StudioWorkspace({
       ? `${preview.base}${target.entry}?scene=${encodeURIComponent(sceneId)}`
       : null
   const hasEngine = Boolean(target?.manifest?.engine)
+
+  // Hand the agent what the user is looking at: the scene file as a badge,
+  // plus the selection and the preview's runtime errors as text. The user
+  // types the actual request after it.
+  const sendToChat = () => {
+    if (!target || !scene) return
+    const rel = scenePath(target, scene.id)
+    const sent = chat.send(
+      buildAgentContext({
+        projectName: target.manifest?.name ?? null,
+        scenePath: rel,
+        scene,
+        selected,
+        hot,
+        engineErrors,
+      }),
+      joinFsPath(target.root, rel)
+    )
+    if (sent) setNotice(t("contextSent"))
+  }
 
   if (!projectRoot) {
     return (
@@ -521,6 +552,16 @@ export function StudioWorkspace({
             </BrowserLink>
           )}
           <button
+            onClick={sendToChat}
+            disabled={!ready || !scene || !chat.canSend}
+            title={
+              chat.canSend ? t("sendToChatHint") : t("sendToChatNoSession")
+            }
+          >
+            <MessageSquarePlus size={16} />
+            {t("sendToChat")}
+          </button>
+          <button
             onClick={() => void build()}
             disabled={!ready || busy || building || !hasEngine}
             title={hasEngine ? t("buildHint") : t("engineMissing")}
@@ -579,6 +620,19 @@ export function StudioWorkspace({
         <div className="studio-error" role="alert">
           {error}
           <button onClick={() => setError("")}>{t("dismiss")}</button>
+        </div>
+      )}
+      {engineErrors.length > 0 && (
+        <div className="studio-error" role="status">
+          <span className="studio-engine-error">
+            {t("engineErrors", { count: engineErrors.length })}
+            {" · "}
+            {engineErrors[engineErrors.length - 1].split("\n")[0]}
+          </span>
+          <button onClick={sendToChat} disabled={!chat.canSend}>
+            {t("sendToChat")}
+          </button>
+          <button onClick={clearEngineErrors}>{t("dismiss")}</button>
         </div>
       )}
       {notice && (
@@ -746,6 +800,7 @@ export function StudioWorkspace({
                 onSelect={setSelectedId}
                 onMove={onMove}
                 onReady={onReady}
+                onEngineError={onEngineError}
                 sameOrigin={preview?.sameOrigin ?? false}
               />
             )}

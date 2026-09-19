@@ -20,7 +20,7 @@ use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
     BrokerCreateAutomationRequest, BrokerCreateWorkTaskRequest, BrokerResponse,
-    BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest,
+    BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest, BrokerStudioRequest,
     BrokerTaskCompleteRequest, BrokerTaskProgressRequest,
 };
 use crate::acp::delegation::types::{
@@ -531,6 +531,13 @@ impl DelegationListener {
                 // and there is nothing to tear down on cancel.
                 session_response(self.process_session_info(req).await)?
             }
+            BrokerMessage::Studio(req) => {
+                // Bounded filesystem work on the caller's project (scene files
+                // are capped by the schema; a build copies one output folder).
+                // Like SessionInfo: never long-polls, nothing to tear down if
+                // the caller cancels — the file either landed or it didn't.
+                studio_response(self.process_studio(req).await)?
+            }
             BrokerMessage::TaskProgress(req) => {
                 task_ack_response(self.process_task_progress(req).await)?
             }
@@ -773,6 +780,21 @@ impl DelegationListener {
             .await
     }
 
+    /// Validate the token, then run a `studio_*` operation against the caller's
+    /// project: the explicit `project` argument when the agent gave one, else
+    /// the working directory the token was registered with (the folder the
+    /// session was opened in — for a content project, its root).
+    async fn process_studio(&self, req: BrokerStudioRequest) -> serde_json::Value {
+        let Some(entry) = self.tokens.lookup(&req.token).await else {
+            return serde_json::json!({ "ok": false, "note": "invalid token" });
+        };
+        let root = req
+            .project
+            .map(std::path::PathBuf::from)
+            .unwrap_or(entry.working_dir);
+        crate::studio_tools::run(root, req.op).await
+    }
+
     /// Validate the token and hand the progress report to the task engine,
     /// which resolves the parent connection to its owning task + generation.
     async fn process_task_progress(&self, req: BrokerTaskProgressRequest) -> TaskReportAck {
@@ -963,6 +985,11 @@ fn session_response(info: SessionInfo) -> std::io::Result<BrokerResponse> {
             std::io::Error::new(std::io::ErrorKind::InvalidData, format!("encode: {e}"))
         })?,
     })
+}
+
+/// Wrap a `studio_*` outcome (already a JSON value) as a [`BrokerResponse`].
+fn studio_response(outcome: serde_json::Value) -> std::io::Result<BrokerResponse> {
+    Ok(BrokerResponse { outcome })
 }
 
 /// Serialize a [`TaskReportAck`] into a [`BrokerResponse`] for the
@@ -2863,5 +2890,78 @@ mod tests {
             path.as_os_str().len(),
             dialed.err()
         );
+    }
+
+    // -- studio_* tools ------------------------------------------------------
+
+    /// The token's working directory IS the project: a `studio_*` call with no
+    /// `project` argument edits the scene of the folder the session runs in.
+    #[tokio::test]
+    async fn studio_ops_run_against_the_token_working_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = crate::commands::content_project::create_content_project(
+            "listener-studio".into(),
+            dir.path().to_string_lossy().to_string(),
+            "web-three".into(),
+            vec!["game".into()],
+        )
+        .await
+        .unwrap();
+        let tokens = Arc::new(TokenRegistry::default());
+        tokens
+            .register(
+                "tok".into(),
+                TokenEntry {
+                    parent_connection_id: "parent-conn".into(),
+                    working_dir: PathBuf::from(&project),
+                },
+            )
+            .await;
+        let listener = make_session_listener(tokens, Arc::new(StubSessionInfo::default()));
+
+        let call = |token: &str, op: crate::studio_tools::StudioOp| {
+            let listener = listener.clone();
+            let msg = BrokerMessage::Studio(BrokerStudioRequest {
+                token: token.into(),
+                project: None,
+                op,
+            });
+            async move {
+                let (mut client, mut server) = duplex(64 * 1024);
+                let server_task = tokio::spawn(async move {
+                    listener.serve_one(&mut server).await.unwrap();
+                });
+                write_frame(&mut client, &msg).await.unwrap();
+                let resp: BrokerResponse = read_frame(&mut client).await.unwrap();
+                server_task.await.unwrap();
+                resp.outcome
+            }
+        };
+
+        let listed = call("tok", crate::studio_tools::StudioOp::ListScenes).await;
+        assert_eq!(listed["ok"], true);
+        assert_eq!(listed["scenes"][0]["id"], "main");
+
+        let applied = call(
+            "tok",
+            crate::studio_tools::StudioOp::ApplyCommands {
+                scene: "main".into(),
+                commands: serde_json::json!([
+                    { "type": "node.update", "id": "hero", "transform": { "y": 1400 } }
+                ]),
+            },
+        )
+        .await;
+        assert_eq!(applied["ok"], true, "{applied}");
+        let raw = std::fs::read_to_string(
+            std::path::Path::new(&project).join("outputs/game/content/main.studio.json"),
+        )
+        .unwrap();
+        assert!(raw.contains("1400"));
+
+        // An unknown token never touches the filesystem.
+        let refused = call("nope", crate::studio_tools::StudioOp::ListScenes).await;
+        assert_eq!(refused["ok"], false);
+        assert_eq!(refused["note"], "invalid token");
     }
 }

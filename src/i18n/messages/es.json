@@ -6246,6 +6246,11 @@
     "hotReload": "Se recarga tras guardar",
     "noProjectOpen": "Abre el Studio desde una carpeta de proyecto. El editor de escenas lee y escribe outputs/game/content/ de esa carpeta.",
     "missingAsset": "archivo faltante",
-    "migrated": "Esta escena tenía el formato del primer prototipo y se convirtió. La próxima edición la guardará con el esquema actual."
+    "migrated": "Esta escena tenía el formato del primer prototipo y se convirtió. La próxima edición la guardará con el esquema actual.",
+    "sendToChat": "Enviar al chat",
+    "sendToChatHint": "Coloca la escena, el objeto seleccionado y los errores de la vista previa en el cuadro del chat; luego escribe tu petición.",
+    "sendToChatNoSession": "Abre una conversación junto al Studio para enviarle contexto.",
+    "contextSent": "Contexto añadido al cuadro del chat. Escribe tu petición y envíala.",
+    "engineErrors": "Errores de la vista previa: {count}"
   }
 }

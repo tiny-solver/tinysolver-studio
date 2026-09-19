@@ -6246,6 +6246,11 @@
     "hotReload": "Lädt nach dem Speichern neu",
     "noProjectOpen": "Öffne das Studio aus einem Projektordner. Der Szeneneditor liest und schreibt outputs/game/content/ dieses Ordners.",
     "missingAsset": "Datei fehlt",
-    "migrated": "Diese Szene lag im Format des ersten Prototyps vor und wurde konvertiert. Die nächste Änderung speichert sie im aktuellen Schema."
+    "migrated": "Diese Szene lag im Format des ersten Prototyps vor und wurde konvertiert. Die nächste Änderung speichert sie im aktuellen Schema.",
+    "sendToChat": "An Chat senden",
+    "sendToChatHint": "Legt Szene, ausgewähltes Objekt und Vorschaufehler in das Chat-Eingabefeld. Danach die Anfrage eingeben.",
+    "sendToChatNoSession": "Öffne neben dem Studio eine Unterhaltung, um Kontext zu senden.",
+    "contextSent": "Kontext zum Chat-Eingabefeld hinzugefügt. Anfrage eingeben und senden.",
+    "engineErrors": "Vorschaufehler: {count}"
   }
 }

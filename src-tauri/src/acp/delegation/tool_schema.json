@@ -274,5 +274,74 @@
         }
       }
     }
+  },
+  {
+    "name": "studio_list_scenes",
+    "description": "List the game scenes of the Codeg Studio content project you are working in: the project name, its engine (id, version, entry html), the content directory, and every scene id/name/path under outputs/game/content/*.studio.json. Call this first whenever the user talks about the game, a scene, an object on screen, placement, or the Studio editor, so you address scenes by their real ids. Read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_read_scene",
+    "description": "Return one scene file as JSON: `document.container` (width/height in pixels, origin top-left, y down), `document.assets` (id, file relative to assets/, width, height, missing), `document.nodes` (id, parent, type sprite|rect|text, transform {x,y,w,h,anchor,z}, props such as asset/text/size/color/visible/interactive/onClick) and the engine-owned `logic` (actions the engine runs on click). Read it before changing a scene so your commands use existing ids and coordinates.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["scene"],
+      "properties": {
+        "scene": {
+          "type": "string",
+          "description": "Scene id — the file stem of outputs/game/content/<id>.studio.json (letters, digits, - and _). Get the ids from studio_list_scenes."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_apply_scene_commands",
+    "description": "Edit a scene with a validated command batch and write it to disk — the same validator the Studio editor uses, applied atomically (one invalid command rejects the whole batch and nothing is written). The editor and the running game preview reload from disk on their own, so the user sees the result immediately. PREFER THIS over rewriting the .studio.json by hand for placement, visibility, text, color, add/remove/reorder: it keeps ids, bounds and anchors valid and preserves every field it does not know (logic, engine props). Edit files directly only for things the commands cannot express (new logic.actions, engine code in src/, assets). Commands: {type:'node.update', id, transform?:{x?,y?,w?,h?,anchor?,z?}, props?:{...shallow merge}} · {type:'node.add', node:{id, parent?:'root'|<node id>, type:'sprite'|'rect'|'text', transform:{x,y,w,h,anchor?,z?}, props?}} · {type:'node.remove', id} (children go too) · {type:'node.reorder', id, direction:'forward'|'backward'} (to the very front/back) · {type:'scene.update', name}. Coordinates are container pixels; anchor is top-left (default), center or bottom-center; a node with a parent is positioned relative to that parent's top-left. A sprite's props.asset names an entry of document.assets; props.onClick names a key of logic.actions.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["scene", "commands"],
+      "properties": {
+        "scene": {
+          "type": "string",
+          "description": "Scene id — the file stem of outputs/game/content/<id>.studio.json (letters, digits, - and _). Get the ids from studio_list_scenes."
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "description": "The command batch, applied in order.",
+          "items": { "type": "object" }
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_build",
+    "description": "Package the game as a deployable static build: runs the manifest's engine.build (when set), copies outputs/game and assets into build/game/v<N>-<timestamp>/ with a top-level index.html and build-info.json, and writes a zip next to it. Use it when the user asks to build, package, export, release or publish the game, after the changes they asked for are in place. Returns the version, directory and zip path.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
   }
 ]

@@ -4823,6 +4823,12 @@ struct CompanionFeatureFlags {
     automations: bool,
     /// `create_work_task`, gated by the chat-authoring setting.
     taskboard: bool,
+    /// `studio_*` scene tools. Per-launch like `tasks`, not a setting: on when
+    /// the session's working directory is a content project (has a
+    /// `codeg-project.json` or an `outputs/game/content/`), so an agent in a
+    /// game project gets the Studio verbs and one in a plain repo never sees
+    /// them. On its own it still injects the companion.
+    studio: bool,
 }
 
 /// The `--features` value for a companion launch, or `None` when no group is
@@ -4852,6 +4858,9 @@ fn companion_features_arg(flags: CompanionFeatureFlags) -> Option<String> {
     }
     if flags.taskboard {
         features.push("taskboard");
+    }
+    if flags.studio {
+        features.push("studio");
     }
     if features.is_empty() {
         return None;
@@ -4949,6 +4958,7 @@ where
         tasks: tasks_enabled,
         automations: authoring.automations_enabled,
         taskboard: authoring.work_tasks_enabled,
+        studio: crate::studio_tools::is_content_project(working_dir),
     };
     // `None` (no feature enabled) short-circuits BEFORE the binary lookup, the
     // token registration and the server append: there is no companion to launch,
@@ -23586,8 +23596,9 @@ mod tests {
                 tasks: true,
                 automations: true,
                 taskboard: true,
+                studio: true,
             }),
-            Some("delegation,feedback,ask,sessions,tasks,automations,taskboard".to_string())
+            Some("delegation,feedback,ask,sessions,tasks,automations,taskboard,studio".to_string())
         );
     }
 

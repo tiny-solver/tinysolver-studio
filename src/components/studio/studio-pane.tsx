@@ -80,6 +80,7 @@ export function StudioPane({ projectRoot }: { projectRoot: string }) {
             root={projectRoot}
             dir={splitEntry(entry).dir}
             entryFile={splitEntry(entry).file}
+            projectName={manifest?.name ?? null}
           />
         ) : (
           <StudioWorkspace projectRoot={projectRoot} embedded />

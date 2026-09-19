@@ -296,7 +296,7 @@ pub struct ContentScene {
     pub path: String,
 }
 
-fn game_content_dir(manifest: Option<&ContentProjectManifest>) -> String {
+pub(crate) fn game_content_dir(manifest: Option<&ContentProjectManifest>) -> String {
     let outputs = manifest
         .map(|m| m.paths.outputs.as_str())
         .unwrap_or("outputs");
@@ -866,7 +866,7 @@ const STARTER_SCENE: &str = r##"{
 }
 "##;
 
-const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 `?scene=<id>`로 장면을 고르고(기본 `main`), 로드되면 `parent.postMessage({ type: \"codeg:ready\", hot: true|false })`를 보낸다. `hot: true`면 `codeg:scene` 메시지로 받은 문서를 다시 그릴 수 있다는 뜻이다. 엔진 코드를 새로 쓰더라도 이 두 가지는 유지한다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 zip을 만든다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
+const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 `?scene=<id>`로 장면을 고르고(기본 `main`), 로드되면 `parent.postMessage({ type: \"codeg:ready\", hot: true|false })`를 보낸다. `hot: true`면 `codeg:scene` 메시지로 받은 문서를 다시 그릴 수 있다는 뜻이다. 엔진 코드를 새로 쓰더라도 이 두 가지는 유지한다.\n- Codeg Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 zip을 만든다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
 
 const THREE_INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ko">

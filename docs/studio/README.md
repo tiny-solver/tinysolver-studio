@@ -75,7 +75,9 @@ pnpm dev
 | `node.reorder` | `id`, `direction`: forward(맨 앞 z) 또는 backward(맨 뒤 z) |
 
 - 명령은 전체 배치가 검증된 경우에만 적용된다. 실패하면 원본을 유지한다.
-- 실시간 MCP 도구 노출은 아직 없다. 에이전트는 파일을 쓰고, 편집기는 파일 변경을 본다.
+- 에이전트는 같은 명령을 MCP 도구로 쓴다. 콘텐츠 프로젝트 폴더에서 연 세션에는 codeg-mcp 동반 프로세스가 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`를 노출한다. 검증기는 `src-tauri/src/studio_scene.rs`(이 문서의 `document.ts`와 같은 규칙)이고, 파일에 쓰면 편집기와 미리보기가 감시 스트림으로 알아챈다.
+- 편집기 → 에이전트: 헤더의 **대화로 보내기**가 장면 파일 배지와 함께 현재 장면·선택한 노드·미리보기 런타임 오류를 옆 대화의 입력창에 넣는다. 전송은 사용자가 한다. 게임 보기의 오류 띠에도 같은 버튼이 있다.
+- 미리보기 서버는 서빙하는 HTML에 오류 보고 스크립트를 주입한다(`codeg:error` postMessage). 엔진을 에이전트가 새로 썼더라도 예외·거부된 프로미스·`console.error`·리소스 로드 실패가 편집기에 뜬다. 빌드 산출물에는 들어가지 않는다.
 
 ## 구조
 
@@ -94,7 +96,9 @@ flowchart LR
 - `src/lib/studio/project-storage.ts`: 장면 목록·읽기·저장·etag.
 - `src/components/studio/studio-stage.tsx`: iframe + 드래그 오버레이 + 엔진 핸드셰이크.
 - `src/components/studio/studio-workspace.tsx`: 편집기 화면, 감시 구독, 자동 저장, 빌드.
-- `src-tauri/src/content_preview.rs`: 프로젝트 폴더 HTTP 서빙(공개 라우트 + 데스크톱 루프백).
+- `src-tauri/src/content_preview.rs`: 프로젝트 폴더 HTTP 서빙(공개 라우트 + 데스크톱 루프백), HTML에 오류 보고 스크립트 주입.
+- `src-tauri/src/studio_scene.rs`, `studio_tools.rs`: 장면 검증·명령의 Rust 쌍둥이와 `studio_*` MCP 도구 구현. `acp/delegation/`의 companion·listener·transport가 연결한다.
+- `src/lib/studio/agent-context.ts`, `src/components/studio/use-chat-bridge.ts`: 대화로 보내는 컨텍스트와 대화 입력창 연결.
 - `src-tauri/src/commands/content_project.rs`: 스캐폴드, 매니페스트, 장면 목록, 빌드 패키징. `content_project_three_main.js`가 스캐폴드되는 러너.
 - `src/components/studio/game-preview.tsx`, `studio-pane.tsx`: 작업공간 파일 창의 게임 보기/장면 편집 전환.
 
@@ -138,7 +142,7 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 
 ## 다음 제작 흐름과 데스크톱
 
-새 프로젝트 → 작업공간 → 대화로 게임 수정 → 편집기·iframe 즉시 반영 → 빌드 버튼 → `build/game/<version>/` + zip. 이 루프는 구현됐다. 남은 것은 에셋 업로드, 호스팅 연동, 에이전트 역할 반영이다.
+새 프로젝트 → 작업공간 → 대화로 게임 수정 → 편집기·iframe 즉시 반영 → 빌드 버튼 → `build/game/<version>/` + zip. 이 루프는 구현됐고 에이전트는 MCP 도구와 편집기 컨텍스트로 루프 안에 있다. 남은 것은 엔진 런타임 분리, 출시(벤더링·호스팅), 에셋 업로드, 에이전트 역할 반영이다.
 
 데스크톱 앱 이름은 `Codeg Studio`이며 `pnpm tauri build --bundles app`으로 빌드한다. 로컬 개발용 빌드에서는 업스트림 자동 업데이트 대상과 서명 업데이트 산출물을 비활성화한다.
 

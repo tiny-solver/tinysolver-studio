@@ -6246,6 +6246,11 @@
     "hotReload": "保存后重新加载",
     "noProjectOpen": "请从项目文件夹打开 Studio。场景编辑器读写该文件夹的 outputs/game/content/。",
     "missingAsset": "文件缺失",
-    "migrated": "此场景为首个原型的格式，已转换。下次编辑将以当前架构保存。"
+    "migrated": "此场景为首个原型的格式，已转换。下次编辑将以当前架构保存。",
+    "sendToChat": "发送到对话",
+    "sendToChatHint": "将场景、选中的对象和预览错误放入对话输入框,然后输入你的请求。",
+    "sendToChatNoSession": "在 Studio 旁打开一个对话即可发送上下文。",
+    "contextSent": "已将上下文加入对话输入框。输入请求后发送。",
+    "engineErrors": "预览错误 {count} 个"
   }
 }

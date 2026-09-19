@@ -122,6 +122,21 @@
 
 프로젝트 폴더를 HTTP로 서빙하는 것은 백엔드다(`src-tauri/src/content_preview.rs`). `get_content_preview(root)`가 폴더를 등록하고 추측할 수 없는 id를 돌려주며, iframe은 `/api/content-preview/<id>/outputs/game/index.html`을 연다. 이 라우트는 Bearer 없이 열리는 공개 라우터에 있고 id가 자격이다(iframe 탐색은 헤더를 못 싣는다). 데스크톱은 내장 웹 서비스가 꺼져 있어도 되도록 첫 호출에 `127.0.0.1:<임시 포트>` 루프백 리스너를 띄워 같은 핸들러를 서빙한다. 요청은 등록된 루트 안으로 제한되고(정규화, 심링크 탈출 거부), 캐시는 `no-store`다.
 
+## 에이전트 연결
+
+- **도구**: 세션의 작업 폴더가 콘텐츠 프로젝트(`codeg-project.json` 또는 `outputs/game/content/`가 있음)면 codeg-mcp 동반 프로세스가 `studio` 도구 그룹을 노출한다. 설정 토글이 아니라 폴더로 정해진다.
+
+  | 도구 | 동작 |
+  | --- | --- |
+  | `studio_list_scenes` | 프로젝트 이름·엔진·장면 id 목록 |
+  | `studio_read_scene` | 장면 파일 JSON |
+  | `studio_apply_scene_commands` | 편집기와 같은 명령 배치를 검증해 원자적으로 파일에 쓴다. 하나라도 틀리면 아무것도 쓰지 않는다 |
+  | `studio_build` | `build_content_project` |
+
+  검증기는 `src-tauri/src/studio_scene.rs`이고 `src/lib/studio/document.ts`와 규칙이 같아야 한다(한쪽을 고치면 다른 쪽도). 도구는 파일만 쓴다. 편집기·미리보기는 아래 변경 감시로 알아챈다. `project` 인자를 생략하면 세션의 작업 폴더가 대상이다.
+- **컨텍스트**: 편집기의 "대화로 보내기"는 옆 대화 입력창에 장면 파일 배지와 `[Codeg Studio] Scene … Selected node … Runtime errors …` 텍스트를 넣는다(`src/lib/studio/agent-context.ts`). 자동 전송은 없다.
+- **오류**: 미리보기 서버가 HTML `<head>` 맨 앞에 보고 스크립트를 주입해 `{ type: "codeg:error", kind, message }`를 parent로 올린다. 엔진의 협조가 필요 없다. 패키징된 빌드는 파일 복사라서 포함되지 않는다.
+
 ## 변경 감시
 
 편집기는 파일 탭과 같은 작업공간 스트림(`getWorkspaceStateStore(root).acquire("paths")`)을 구독한다. 현재 장면 파일이 바뀌면 etag를 비교해 편집 중이 아니면 다시 읽고, 편집 중이면 배너를 띄운다(자기 저장의 에코는 etag가 같아 무시된다). `outputs/game/` 또는 `assets/` 아래 다른 파일이 바뀌면 iframe을 다시 불러온다. 장면 파일이 생기거나 지워지면 장면 목록을 갱신한다.
