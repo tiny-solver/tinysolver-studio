@@ -111,6 +111,21 @@ export function TurnStats({
   )
   const hasCopy = copyText.trim().length > 0
   const hasUsage = Boolean(usage)
+  // An all-zero usage means "nobody said", not "nothing was spent": a reply
+  // that exists cannot have cost zero tokens. Qoder zeroes every counter for
+  // its own hosted models (see `QODER_EXPOSE_TOKEN_USAGE` in the registry), and
+  // a confident "Input 0" reads as a broken counter rather than as absent data.
+  // Same judgement the composer's context popover makes about cache rows.
+  //
+  // Deliberately NOT folded into `hasUsage`: that one gates `hasJump`, where a
+  // reply IS substantial whether or not its counters survived.
+  const hasTokenCounts =
+    usage != null &&
+    usage.input_tokens +
+      usage.output_tokens +
+      usage.cache_creation_input_tokens +
+      usage.cache_read_input_tokens >
+      0
   // The duration itself is shown by the reply's fold header
   // (`CompletedTurnContent`), not here — this row only uses it as a signal that
   // the turn was substantial.
@@ -244,7 +259,7 @@ export function TurnStats({
             </TooltipContent>
           </Tooltip>
         )}
-        {hasUsage && usage && (
+        {hasTokenCounts && usage && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button

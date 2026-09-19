@@ -203,3 +203,41 @@ describe("TurnStats model label", () => {
     )
   })
 })
+
+const tokenStatsLabel = enMessages.Folder.chat.messageList.tokenStats
+
+describe("TurnStats zeroed counters", () => {
+  const zeroUsage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  }
+
+  it("hides the token tooltip rather than claiming the reply cost nothing", () => {
+    // Qoder redacts every counter to 0 for its own hosted models, so a reply
+    // that plainly consumed context arrives all-zero. The old row showed a
+    // lone "Input 0", which reads as a broken counter, not as missing data.
+    renderStats(<TurnStats copyText="hello" usage={zeroUsage} />)
+    expect(screen.queryByLabelText(tokenStatsLabel)).not.toBeInTheDocument()
+  })
+
+  it("keeps the jump affordance for a zero-counter reply", () => {
+    // Suppressing the counters must not also suppress navigation: the reply is
+    // substantial whether or not its usage survived the agent's redaction.
+    renderStats(
+      <TurnStats copyText="hello" usage={zeroUsage} previousUserIndex={3} />
+    )
+    expect(screen.getByLabelText(jumpLabel)).toBeInTheDocument()
+  })
+
+  it("shows the tooltip as soon as one counter is non-zero", () => {
+    renderStats(
+      <TurnStats
+        copyText="hello"
+        usage={{ ...zeroUsage, input_tokens: 2_803 }}
+      />
+    )
+    expect(screen.getByLabelText(tokenStatsLabel)).toBeInTheDocument()
+  })
+})

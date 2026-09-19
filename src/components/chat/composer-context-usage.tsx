@@ -94,14 +94,29 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
       ? null
       : Math.max(0, Math.min(100, contextPercentRaw))
   const hasContext = contextPercent != null
-  const hasUsage = usage != null
+  // All-zero counters are "nobody said", not "nothing was spent" — the same
+  // judgement the cache rows below already make, applied to the whole section.
+  // A session that produced replies cannot have cost zero tokens; qoder zeroes
+  // every counter for its own hosted models (see `QODER_EXPOSE_TOKEN_USAGE` in
+  // the registry), and a breakdown of zeros reads as a broken counter. Those
+  // sessions still light the ring — qoder states its occupancy separately, as
+  // a ratio that survives the redaction.
+  const hasUsage =
+    usage != null &&
+    usage.input_tokens +
+      usage.output_tokens +
+      usage.cache_creation_input_tokens +
+      usage.cache_read_input_tokens >
+      0
   const fallbackTotal = hasUsage
     ? usage.input_tokens +
       usage.output_tokens +
       usage.cache_creation_input_tokens +
       usage.cache_read_input_tokens
     : null
-  const total = sessionStats?.total_tokens ?? fallbackTotal
+  const reportedTotal = sessionStats?.total_tokens
+  const total =
+    reportedTotal != null && reportedTotal > 0 ? reportedTotal : fallbackTotal
 
   const dashOffset = ICON_CIRCUMFERENCE * (1 - (contextPercent ?? 0) / 100)
 
@@ -223,14 +238,19 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
                 style={{ width: `${contextPercent ?? 0}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-xs leading-none text-muted-foreground">
-              <span>{t("usedMax")}</span>
-              <span className="tabular-nums">
-                {contextUsed == null || contextMax == null
-                  ? "--"
-                  : `${formatTokenCount(contextUsed)} / ${formatTokenCount(contextMax)}`}
-              </span>
-            </div>
+            {/* Dropped entirely rather than shown as "--": an agent can state
+                its occupancy as a percentage without ever naming the two token
+                counts behind it (qoder does exactly that once it has redacted
+                them), and a labelled row with nothing in it reads as a figure
+                that failed to load rather than one that was never reported. */}
+            {contextUsed != null && contextMax != null ? (
+              <div className="flex items-center justify-between text-xs leading-none text-muted-foreground">
+                <span>{t("usedMax")}</span>
+                <span className="tabular-nums">
+                  {`${formatTokenCount(contextUsed)} / ${formatTokenCount(contextMax)}`}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
         {hasTokenSection ? (

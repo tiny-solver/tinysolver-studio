@@ -140,3 +140,77 @@ describe("ComposerContextUsage cache hit rate", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument()
   })
 })
+
+/** Render the indicator for a session whose stats are supplied wholesale. */
+function renderStats(stats: SessionStats | null) {
+  const tabs: TabSlice = {
+    tabs: [{ id: "tab-1", kind: "conversation", conversationId: 7 }],
+  }
+  const runtime: RuntimeSlice = {
+    byConversationId: new Map([[7, { sessionStats: stats }]]),
+  }
+  mockTabs.mockImplementation((sel: (s: TabSlice) => unknown) => sel(tabs))
+  mockRuntime.mockImplementation((sel: (s: RuntimeSlice) => unknown) =>
+    sel(runtime)
+  )
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ComposerContextUsage tabId="tab-1" />
+    </NextIntlClientProvider>
+  )
+}
+
+describe("ComposerContextUsage zeroed counters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("hides a breakdown of zeros rather than claiming nothing was spent", async () => {
+    // Qoder redacts every counter to 0 for its own hosted models, so a session
+    // that plainly produced replies arrives with an all-zero usage. "Total 0"
+    // is a confident wrong answer; the occupancy it DOES report still shows.
+    renderStats({
+      total_usage: usage(),
+      total_tokens: 0,
+      total_duration_ms: 0,
+      context_window_usage_percent: 16.74,
+    } as SessionStats)
+
+    expect(screen.getByText("16.7%")).toBeInTheDocument()
+    await openPopover()
+    expect(screen.queryByText(copy.input)).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.total)).not.toBeInTheDocument()
+    // Nor a "Used / Max --": the two counts were never reported, and an empty
+    // labelled row reads as a figure that failed to load.
+    expect(screen.queryByText(copy.usedMax)).not.toBeInTheDocument()
+  })
+
+  it("renders nothing when the counters are zero and no occupancy is known", () => {
+    // What the qoder session looked like before the ratio was read: a lone
+    // "0" that was neither a measurement nor an affordance.
+    renderStats({
+      total_usage: usage(),
+      total_tokens: 0,
+      total_duration_ms: 0,
+    } as SessionStats)
+
+    expect(screen.queryByRole("button")).not.toBeInTheDocument()
+  })
+
+  it("still shows the breakdown once any counter is non-zero", async () => {
+    renderStats({
+      total_usage: usage({ input_tokens: 2_803, output_tokens: 19 }),
+      total_tokens: 2_822,
+      total_duration_ms: 0,
+      context_window_used_tokens: 2_803,
+      context_window_max_tokens: 180_000,
+      context_window_usage_percent: 1.5572,
+    } as SessionStats)
+
+    expect(screen.getByText("1.6%")).toBeInTheDocument()
+    await openPopover()
+    expect(valueFor(copy.usedMax)).toBe("2.8K / 180K")
+    expect(valueFor(copy.input)).toBe("2.8K")
+    expect(valueFor(copy.total)).toBe("2.8K")
+  })
+})

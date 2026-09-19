@@ -1890,9 +1890,41 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // converter, `max_context_size`, `skillRoots`, `availableCommands`
             // and `protocol_version` are byte-identical, so no live run was
             // needed this time.
+            //
+            // 2.0.2 is another patch and the mandated check passes verbatim
+            // again: byte-identical converter body (`{transport: "stdio",
+            // command, args, env, runtime_id: "local"}`), the same three entry
+            // points routing through it with `session/fork` still ignoring
+            // `mcpServers`, and neither `acpMcpServersToConfigs` nor the "does
+            // not declare a runtime identity" throw anywhere in the bundle.
+            // `engines.node` is unmoved at >=22.19.0. The region diff is much
+            // larger than 2.0.1's but every bit of it points away from us: 315
+            // of 339 changed regions are bundler renumbering, and 52 regions
+            // are DELETED outright — all of them `packages/kap-server/` (ws v3,
+            // projection, protocol messages, history routes). That is the
+            // `kimi web` server, booted only from `cli/sub/web` and the TUI
+            // `/web` command; codeg drives `kimi acp` over stdio and never
+            // reaches it. Every `packages/acp-server/` region is renumber-only,
+            // as are `wire/record` + `wireService`, `skillRoots`, config.toml's
+            // `max_context_size` Zod and `mcp.json`. The 24 real regions are
+            // engine-internal: a steering dedupe (`loopService` no longer
+            // dispatches `TurnSteer` when the nudge message IS the active
+            // prompt's own message — strictly one duplicate fewer, and
+            // `parsers/kimi_code.rs` reads `context.append_loop_event` records,
+            // not `turn.steer`), a resume fix that seeds the synthetic
+            // `turnEnded` by appending to a non-empty journal instead of
+            // skipping it (with `nextTurnId` now advancing monotonically),
+            // pre-shrinking history to the window budget before compaction, an
+            // additive optional `goods_version` on the managed userinfo, one
+            // dropped sentence in the built-in system prompt, and a models.dev
+            // catalog refresh (21 models added, 8 dropped, 19 limit tweaks)
+            // that leaves all 378 kimi rows untouched — `moonshotai` still
+            // reads `kimi-k3` = 1048576 and `kimi-k2.*` = 262144, so the
+            // `parsers/mod.rs::infer_context_window_max_tokens` mirror still
+            // holds. No live run, same as 2.0.1.
             distribution: AgentDistribution::Npx {
-                version: "2.0.1",
-                package: "@moonshot-ai/kimi-code@2.0.1",
+                version: "2.0.2",
+                package: "@moonshot-ai/kimi-code@2.0.2",
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
@@ -2242,12 +2274,37 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // name in plaintext (the sibling `<sessionId>/state.json` keeps its
             // own copy AES-GCM-encrypted under the machine key, so it is not
             // the source). `engines.node: ">=20"`.
+            //
+            // `QODER_EXPOSE_TOKEN_USAGE` turns OFF qoder's own token-count
+            // redaction, and without it every qoder session reports zero tokens
+            // everywhere codeg can see. The CLI passes each response's usage
+            // through a sanitizer that keeps the real counters only when the
+            // model came from a BYO/custom provider or that env is truthy
+            // (`1`/`true`/`yes`); otherwise it rewrites `input_tokens`,
+            // `output_tokens` and both cache counters to 0 before the usage
+            // reaches the transcript, leaving `credits` and
+            // `context_usage_ratio` as the only surviving signal. Its own
+            // process log is redacted by the same pass, so the zeros there are
+            // not evidence that the backend returned none. Verified on the
+            // 1.1.54 bundle: `-p` with the env set writes
+            // `input_tokens: 2803, output_tokens: 19` where the default run
+            // writes zeros.
+            //
+            // The name is assembled at runtime from a `QODER_`/`QODERCN_`
+            // prefix (`Sr(A) = `${vv}${A}``, `ebA = Sr("EXPOSE_TOKEN_USAGE")`),
+            // so grepping the bundle for the full literal returns nothing —
+            // grep the bare suffix instead, the same trap `parsers::qoder`
+            // documents for the config-dir vars.
+            //
+            // Registry env is only the base: `merge_agent_env` lets a per-agent
+            // `runtime_env` override it, so a user who wants the redaction back
+            // sets `QODER_EXPOSE_TOKEN_USAGE=0` in the agent's env settings.
             distribution: AgentDistribution::Npx {
                 version: "1.1.57",
                 package: "@qoder-ai/qodercli@1.1.57",
                 cmd: "qoder",
                 args: &["--acp"],
-                env: &[],
+                env: &[("QODER_EXPOSE_TOKEN_USAGE", "1")],
                 // package.json declares `engines.node: ">=20.0.0"`.
                 node_required: Some("20.0.0"),
             },
@@ -2687,8 +2744,8 @@ mod tests {
         // range dies on the codeg-mcp stdio entry (see the registry entry).
         assert_npx_version(
             AgentType::KimiCode,
-            "2.0.1",
-            "@moonshot-ai/kimi-code@2.0.1",
+            "2.0.2",
+            "@moonshot-ai/kimi-code@2.0.2",
             Some("22.19.0"),
         );
         assert_npx_version(
@@ -2744,6 +2801,24 @@ mod tests {
                 assert_eq!(args, &["acp"]);
             }
             other => panic!("expected npx distribution for Hermes, got {other:?}"),
+        }
+    }
+
+    // qoder redacts its own token counters unless this env is truthy, and a
+    // transcript full of zeros parses cleanly — the gauge just reads 0 forever
+    // with nothing to flag it. Pin the pair so dropping it fails loudly here
+    // instead of silently in the UI.
+    #[test]
+    fn qoder_launches_with_token_usage_exposed() {
+        let meta = get_agent_meta(AgentType::Qoder);
+        match meta.distribution {
+            AgentDistribution::Npx { env, .. } => {
+                assert!(
+                    env.contains(&("QODER_EXPOSE_TOKEN_USAGE", "1")),
+                    "qoder must launch with token redaction off, got {env:?}"
+                );
+            }
+            other => panic!("expected npx distribution for Qoder, got {other:?}"),
         }
     }
 
