@@ -162,10 +162,14 @@ fn provider_declared_context_window(config: &Value, model: &str) -> Option<u64> 
         return overridden;
     }
 
+    // Last declaration wins: `applyModelsJson` walks `models` in order and
+    // upserts by id (`models[existingIndex] = model`), so a repeated id ends up
+    // holding the LAST entry's fields.
     let declared = config
         .get("models")
         .and_then(Value::as_array)?
         .iter()
+        .rev()
         .find(|entry| entry.get("id").and_then(Value::as_str) == Some(model))?;
     match declared.get("contextWindow") {
         // Absent is not unknown — it is pi's `?? 128000`.
@@ -1551,6 +1555,24 @@ mod tests {
             ),
             Some(128_000),
             "the name table's 258K is what pi is NOT running with"
+        );
+    }
+
+    /// One provider listing an id twice: pi's `applyModelsJson` upserts in file
+    /// order, so the second entry overwrites the first and 100K is what pi
+    /// runs with. Reading the first instead would report 9× the room.
+    #[test]
+    fn a_repeated_model_id_resolves_to_its_last_declaration() {
+        assert_eq!(
+            pi_declared_context_window_from(
+                r#"{"providers":{"p":{"models":[
+                     {"id":"m","contextWindow":900000},
+                     {"id":"m","contextWindow":100000}
+                   ]}}}"#,
+                Some("p"),
+                "m"
+            ),
+            Some(100_000)
         );
     }
 
