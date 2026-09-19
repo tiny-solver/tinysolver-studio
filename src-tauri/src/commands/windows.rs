@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::sync::atomic::AtomicU32;
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering as AtomicOrdering};
 use std::sync::Mutex;
 
@@ -2088,54 +2090,109 @@ const MACOS_FULLSCREEN_EXIT_POLL: std::time::Duration = std::time::Duration::fro
 #[cfg(target_os = "macos")]
 const MACOS_FULLSCREEN_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
+/// How long one `is_fullscreen()` sample may take before the drain gives up
+/// on it and lets its own deadline decide. Generous next to a main thread
+/// that is merely busy, short next to one that is never coming back.
+#[cfg(target_os = "macos")]
+const MACOS_FULLSCREEN_EXIT_PROBE: std::time::Duration = std::time::Duration::from_millis(250);
+
 /// How long an in-flight drain keeps suppressing later close presses.
 ///
 /// Comfortably past the longest honest drain (poll timeout + settle), and
-/// short enough that a wedged one costs a few seconds rather than the rest
+/// short enough that a stalled one costs a few seconds rather than the rest
 /// of the session — same bargain as `CLOSE_PROMPT_GRACE`.
 #[cfg(target_os = "macos")]
 const MACOS_FULLSCREEN_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// When the in-flight drain started, or `None` when none is running.
+/// The in-flight drain: which press owns it, and when it started.
 ///
-/// A second press while a drain is in flight is dropped: the in-flight
-/// callback is the one press that will be answered. It is a timestamp and
-/// not a flag because the drain CAN wedge — `Window::is_fullscreen` off the
-/// main thread blocks on the event loop with no timeout — and a wedged
-/// drain must not leave the close button dead for good.
+/// A second press while one is in flight is dropped — the in-flight callback
+/// is the press that will be answered. Two details earn their keep:
+///
+///   * It is a timestamp, not a flag. The drain is bounded (see
+///     `wait_for_macos_fullscreen_space_release`), but a starved or panicked
+///     drain thread must still not leave the close button dead for good.
+///   * It carries a generation, because a stale claim is exactly when a
+///     later press takes over — and then the stale thread finishes and
+///     releases. Without the generation it would clear its successor's
+///     claim, and the press after THAT would act on a window whose Space is
+///     still going.
 #[cfg(target_os = "macos")]
-static MACOS_FULLSCREEN_DRAIN_STARTED_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+static MACOS_FULLSCREEN_DRAIN: Mutex<Option<(u64, std::time::Instant)>> = Mutex::new(None);
 
 #[cfg(target_os = "macos")]
-fn claim_macos_fullscreen_drain() -> bool {
+static MACOS_FULLSCREEN_DRAIN_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// `Some(generation)` when this press owns the drain, `None` when another one
+/// already does.
+#[cfg(target_os = "macos")]
+fn claim_macos_fullscreen_drain() -> Option<u64> {
     let now = std::time::Instant::now();
-    let mut started_at = MACOS_FULLSCREEN_DRAIN_STARTED_AT
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(started) = *started_at {
-        if now.duration_since(started) < MACOS_FULLSCREEN_DRAIN_GRACE {
-            return false;
-        }
+    let took_over;
+    let generation;
+    {
+        let mut drain = MACOS_FULLSCREEN_DRAIN
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        took_over = match *drain {
+            Some((_, started)) if now.duration_since(started) < MACOS_FULLSCREEN_DRAIN_GRACE => {
+                return None
+            }
+            Some(_) => true,
+            None => false,
+        };
+        generation = MACOS_FULLSCREEN_DRAIN_SEQ.fetch_add(1, AtomicOrdering::Relaxed);
+        *drain = Some((generation, now));
+    }
+    if took_over {
         tracing::warn!("[close] previous fullscreen drain never finished; taking the press over");
     }
-    *started_at = Some(now);
-    true
+    Some(generation)
+}
+
+/// No-op unless `generation` still owns the drain, so a thread whose claim
+/// expired cannot clear the claim that replaced it.
+#[cfg(target_os = "macos")]
+fn release_macos_fullscreen_drain(generation: u64) {
+    let mut drain = MACOS_FULLSCREEN_DRAIN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if matches!(*drain, Some((owner, _)) if owner == generation) {
+        *drain = None;
+    }
 }
 
 #[cfg(target_os = "macos")]
-fn release_macos_fullscreen_drain() {
-    *MACOS_FULLSCREEN_DRAIN_STARTED_AT
+type MacosDrainAction = Mutex<Option<Box<dyn FnOnce() + Send>>>;
+
+/// Take the close action out of the slot, run it, and only then hand the
+/// claim back.
+///
+/// The claim spans the action, not just the wait: handing it back first
+/// leaves a gap in which a second press sees a free drain and acts ahead of
+/// the press already being answered. `app.exit(0)` never returns, so the
+/// release is best-effort — which is what the grace on the claim is for.
+/// Every exit from a drain goes through here, and the `Option` is what makes
+/// "at most once" hold when two of those exits are reached.
+#[cfg(target_os = "macos")]
+fn finish_macos_fullscreen_drain(generation: u64, action: &std::sync::Arc<MacosDrainAction>) {
+    let action = action
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+    if let Some(action) = action {
+        action();
+    }
+    release_macos_fullscreen_drain(generation);
 }
 
 #[cfg(target_os = "macos")]
 fn macos_fullscreen_drain_in_flight() -> bool {
     let now = std::time::Instant::now();
-    let started_at = *MACOS_FULLSCREEN_DRAIN_STARTED_AT
+    let drain = *MACOS_FULLSCREEN_DRAIN
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    started_at.is_some_and(|started| now.duration_since(started) < MACOS_FULLSCREEN_DRAIN_GRACE)
+    drain.is_some_and(|(_, started)| now.duration_since(started) < MACOS_FULLSCREEN_DRAIN_GRACE)
 }
 
 /// Run `action` once the main window no longer owns a macOS
@@ -2160,10 +2217,16 @@ pub(crate) fn with_macos_fullscreen_drained(
         // close press arriving mid-drain reads as windowed while the Space is
         // still going. Hand it to the drain, which drops it as a duplicate of
         // the press already being answered.
+        //
+        // The sample is the bounded one because the dialog's answer reaches
+        // here on a tokio worker, where the plain getter would park a runtime
+        // thread on the event loop indefinitely. An unanswered sample drains:
+        // being wrong that way costs a delay, being wrong the other way is
+        // the bug this whole module exists for.
         if let Some(window) = app.get_webview_window("main") {
             if should_drain_macos_fullscreen_before_close(
                 true,
-                window.is_fullscreen().unwrap_or(false),
+                sample_macos_fullscreen(&window) != Some(false),
             ) || macos_fullscreen_drain_in_flight()
             {
                 drain_macos_fullscreen_then(window, action);
@@ -2183,25 +2246,19 @@ fn drain_macos_fullscreen_then(
     window: tauri::WebviewWindow,
     then: impl FnOnce() + Send + 'static,
 ) {
-    if !claim_macos_fullscreen_drain() {
+    let Some(generation) = claim_macos_fullscreen_drain() else {
         return;
-    }
+    };
 
     let _ = window.set_fullscreen(false);
     tracing::info!("[close] draining macOS native fullscreen before close behavior");
 
-    // Shared so the spawn-failure path below can still reach the action: a
-    // close the user pressed and that this path then swallowed leaves a
-    // window nothing can dismiss, which is worse than hiding into a Space
-    // that has not finished going.
-    type DrainAction = Mutex<Option<Box<dyn FnOnce() + Send>>>;
-    let action: std::sync::Arc<DrainAction> =
-        std::sync::Arc::new(Mutex::new(Some(Box::new(then))));
-    let take = |slot: &DrainAction| {
-        slot.lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
-    };
+    // Shared, and taken exactly once, so every way this can go wrong still
+    // answers the press: a close the user pressed and that this path then
+    // swallowed leaves a window nothing can dismiss, which is worse than
+    // acting on a Space that has not quite finished going.
+    let action: std::sync::Arc<MacosDrainAction> =
+        std::sync::Arc::new(Mutex::new(Some(Box::new(then) as Box<dyn FnOnce() + Send>)));
 
     let app = window.app_handle().clone();
     let spawned = std::thread::Builder::new()
@@ -2210,29 +2267,56 @@ fn drain_macos_fullscreen_then(
             let action = action.clone();
             move || {
                 wait_for_macos_fullscreen_space_release(&window);
-                release_macos_fullscreen_drain();
-                let Some(action) = take(&action) else { return };
-                if let Err(err) = app.run_on_main_thread(action) {
+                let hop = {
+                    let action = action.clone();
+                    move || finish_macos_fullscreen_drain(generation, &action)
+                };
+                // `run_on_main_thread` consumes the closure either way, which
+                // is why the action lives behind the shared `Option` rather
+                // than being moved in: a rejected hop must not eat the press.
+                if let Err(err) = app.run_on_main_thread(hop) {
                     tracing::warn!(
                         "[close] failed to hop back to main thread after fullscreen drain: {err}"
                     );
+                    finish_macos_fullscreen_drain(generation, &action);
                 }
             }
         });
 
     if let Err(err) = spawned {
         tracing::warn!("[close] failed to spawn fullscreen drain: {err}");
-        release_macos_fullscreen_drain();
-        if let Some(action) = take(&action) {
-            action();
-        }
+        finish_macos_fullscreen_drain(generation, &action);
     }
+}
+
+/// One `is_fullscreen()` sample that cannot outlive `MACOS_FULLSCREEN_EXIT_PROBE`.
+///
+/// `WebviewWindow::is_fullscreen` off the main thread posts to the event loop
+/// and then blocks on a channel with NO timeout, so a stalled or closing loop
+/// would hang the drain thread outright — a deadline around the loop cannot
+/// bound a call that never returns. Hopping the read onto the main thread
+/// (where the runtime answers it inline) and waiting on our own channel with
+/// a deadline is what makes the whole drain finite.
+///
+/// `None` is "no answer this round", never "not fullscreen": the caller's own
+/// deadline decides when to stop asking.
+#[cfg(target_os = "macos")]
+fn sample_macos_fullscreen(window: &tauri::WebviewWindow) -> Option<bool> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let probe = {
+        let window = window.clone();
+        move || {
+            let _ = tx.send(window.is_fullscreen().unwrap_or(false));
+        }
+    };
+    window.app_handle().run_on_main_thread(probe).ok()?;
+    rx.recv_timeout(MACOS_FULLSCREEN_EXIT_PROBE).ok()
 }
 
 #[cfg(target_os = "macos")]
 fn wait_for_macos_fullscreen_space_release(window: &tauri::WebviewWindow) {
     let deadline = std::time::Instant::now() + MACOS_FULLSCREEN_EXIT_TIMEOUT;
-    while window.is_fullscreen().unwrap_or(false) {
+    while sample_macos_fullscreen(window) != Some(false) {
         if std::time::Instant::now() >= deadline {
             tracing::warn!(
                 "[close] timed out waiting for macOS fullscreen to drop; applying close behavior anyway"
@@ -2669,26 +2753,37 @@ mod macos_fullscreen_close_tests {
     fn a_drain_claim_is_exclusive_and_observable_until_released() {
         use super::{
             claim_macos_fullscreen_drain, macos_fullscreen_drain_in_flight,
-            release_macos_fullscreen_drain,
+            release_macos_fullscreen_drain, MACOS_FULLSCREEN_DRAIN,
         };
 
-        release_macos_fullscreen_drain();
+        *MACOS_FULLSCREEN_DRAIN.lock().unwrap() = None;
         assert!(!macos_fullscreen_drain_in_flight());
-        assert!(claim_macos_fullscreen_drain());
+
+        let first = claim_macos_fullscreen_drain().expect("first press claims the drain");
         assert!(
             macos_fullscreen_drain_in_flight(),
             "a second press must be able to see the drain it should defer to"
         );
         assert!(
-            !claim_macos_fullscreen_drain(),
+            claim_macos_fullscreen_drain().is_none(),
             "a press arriving mid-drain must not start a second one"
         );
-        release_macos_fullscreen_drain();
+
+        release_macos_fullscreen_drain(first);
         assert!(!macos_fullscreen_drain_in_flight());
+        let second =
+            claim_macos_fullscreen_drain().expect("the next press is answerable once done");
+        assert_ne!(first, second);
+
+        // The wedge case the generation exists for: the thread that lost its
+        // claim to a takeover must not clear the claim that replaced it.
+        release_macos_fullscreen_drain(first);
         assert!(
-            claim_macos_fullscreen_drain(),
-            "the next press must be answerable once the drain is done"
+            macos_fullscreen_drain_in_flight(),
+            "a stale release must leave the incumbent drain owning the press"
         );
-        release_macos_fullscreen_drain();
+
+        release_macos_fullscreen_drain(second);
+        assert!(!macos_fullscreen_drain_in_flight());
     }
 }
