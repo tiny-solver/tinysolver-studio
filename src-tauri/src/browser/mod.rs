@@ -114,8 +114,14 @@ mod tests {
     use super::TAB_LABEL_PREFIX;
 
     /// A browser tab must have NO Tauri IPC: its label (and the popup and
-    /// document-guest prefixes) may never appear in a capability's window
-    /// list, and no capability may use a bare wildcard that would cover it.
+    /// document-guest prefixes) may never appear in a capability's window or
+    /// webview list, and no capability may use a bare wildcard that would
+    /// cover it.
+    ///
+    /// Both keys, not just `windows`: the owned-window surface is a real
+    /// `tauri::WebviewWindow`, so it carries a WEBVIEW label of the same name
+    /// alongside its window label, and a capability scoped with `webviews`
+    /// reaches it exactly as one scoped with `windows` does.
     #[test]
     fn browser_labels_are_absent_from_every_capability() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities");
@@ -127,16 +133,28 @@ mod tests {
             }
             let raw = std::fs::read_to_string(&path).unwrap();
             let json: serde_json::Value = serde_json::from_str(&raw).unwrap();
-            let windows = json["windows"].as_array().cloned().unwrap_or_default();
-            for pattern in windows.iter().filter_map(|w| w.as_str()) {
-                assert_ne!(pattern, "*", "{}: a bare wildcard covers browser tabs", path.display());
-                assert_ne!(pattern, "**", "{}: a bare wildcard covers browser tabs", path.display());
-                for forbidden in [TAB_LABEL_PREFIX, "browser-popup-", "codeg-doc-"] {
-                    assert!(
-                        !pattern.starts_with(forbidden),
-                        "{}: capability window pattern {pattern:?} grants IPC to browser surfaces",
+            for key in ["windows", "webviews"] {
+                let scoped = json[key].as_array().cloned().unwrap_or_default();
+                for pattern in scoped.iter().filter_map(|w| w.as_str()) {
+                    assert_ne!(
+                        pattern,
+                        "*",
+                        "{}: a bare wildcard in {key} covers browser tabs",
                         path.display()
                     );
+                    assert_ne!(
+                        pattern,
+                        "**",
+                        "{}: a bare wildcard in {key} covers browser tabs",
+                        path.display()
+                    );
+                    for forbidden in [TAB_LABEL_PREFIX, "browser-popup-", "codeg-doc-"] {
+                        assert!(
+                            !pattern.starts_with(forbidden),
+                            "{}: capability {key} pattern {pattern:?} grants IPC to browser surfaces",
+                            path.display()
+                        );
+                    }
                 }
             }
             checked += 1;
