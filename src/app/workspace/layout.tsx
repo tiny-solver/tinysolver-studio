@@ -2,6 +2,7 @@
 
 import { BrowserEvalConfirm } from "@/components/browser/browser-eval-confirm"
 import { BrowserEventsBridge } from "@/components/browser/browser-events-bridge"
+import { BrowserServiceBridge } from "@/components/browser/browser-service-bridge"
 import { BrowserTabsPersistence } from "@/components/browser/browser-tabs-persistence"
 import { BrowserTabsSuspender } from "@/components/browser/browser-tabs-suspender"
 import {
@@ -1284,6 +1285,11 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
                       <WorkspaceDocumentTitle />
                       <TabKeysSync />
                       <BrowserEventsBridge />
+                      {/* Beside the events bridge and not inside it: that one
+                          stops where no built-in browser exists, and a local
+                          server is worth hearing about in web mode too (the
+                          port bridge can show it). */}
+                      <BrowserServiceBridge />
                       {/* Mounted beside the bridge, not inside a tab: the tab
                           an agent asks to run code on is usually not the one
                           the person is looking at. */}

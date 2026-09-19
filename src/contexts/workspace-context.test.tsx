@@ -3285,6 +3285,7 @@ describe("browser tabs", () => {
       closeFileTab,
       restoreBrowserTabs,
       suspendBrowserTab,
+      setActivePane,
     } = useWorkspaceActions()
     const { fileTabs, activeFileTabId } = useWorkspaceFileTabs()
     const { activePane } = useWorkspaceView()
@@ -3308,6 +3309,16 @@ describe("browser tabs", () => {
           }
         >
           open-bg
+        </button>
+        <button
+          onClick={() =>
+            openBrowserTab("http://localhost:4000/", { activate: "tab" })
+          }
+        >
+          open-shown
+        </button>
+        <button onClick={() => setActivePane("conversation")}>
+          to-conversation
         </button>
         <button onClick={() => openBrowserTab("not a url")}>open-bad</button>
         <button onClick={() => openBrowserTab("about:blank")}>
@@ -3583,6 +3594,56 @@ describe("browser tabs", () => {
     expect(tabs[1].opener).toBe(tabs[0].id)
     // Like a browser: the page the user is reading stays in front.
     expect(screen.getByTestId("active").textContent).toBe(tabs[0].id)
+  })
+
+  // The strip and the column are one surface: a tab sitting in the strip
+  // while the column shows "open a file from the right panel" is a dead end
+  // the user can only leave by clicking the tab already in front of them.
+  it("shows a background tab when nothing else holds the selection", () => {
+    render(
+      <WorkspaceProvider>
+        <BrowserProbe />
+      </WorkspaceProvider>
+    )
+    act(() => screen.getByText("open-bg").click())
+    const tabs = readTabs()
+    expect(tabs).toHaveLength(1)
+    expect(screen.getByTestId("active").textContent).toBe(tabs[0].id)
+    // Claimed, not activated: whichever pane the user was on is still the
+    // one in front.
+    expect(screen.getByTestId("pane").textContent).toBe("conversation")
+  })
+
+  it("selects a tab opened with `tab` without pulling the files pane forward", () => {
+    render(
+      <WorkspaceProvider>
+        <BrowserProbe />
+      </WorkspaceProvider>
+    )
+    act(() => screen.getByText("open").click())
+    act(() => screen.getByText("to-conversation").click())
+    expect(screen.getByTestId("pane").textContent).toBe("conversation")
+
+    act(() => screen.getByText("open-shown").click())
+    const tabs = readTabs()
+    expect(tabs).toHaveLength(2)
+    // Selected even though the strip was not empty: a page opened for someone
+    // is only opened if it is the one the column shows.
+    expect(screen.getByTestId("active").textContent).toBe(tabs[1].id)
+    expect(screen.getByTestId("pane").textContent).toBe("conversation")
+
+    // An ordinary open still brings the pane forward...
+    act(() => screen.getByText("open").click())
+    expect(screen.getByTestId("active").textContent).toBe(tabs[0].id)
+    expect(screen.getByTestId("pane").textContent).toBe("files")
+
+    // ...and a second `tab` open of an address already in the strip
+    // re-selects that tab, again without moving the pane.
+    act(() => screen.getByText("to-conversation").click())
+    act(() => screen.getByText("open-shown").click())
+    expect(readTabs()).toHaveLength(2)
+    expect(screen.getByTestId("active").textContent).toBe(tabs[1].id)
+    expect(screen.getByTestId("pane").textContent).toBe("conversation")
   })
 
   it("closes a browser tab without a dirty prompt and moves activation to a neighbour", () => {

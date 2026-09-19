@@ -75,7 +75,7 @@ import {
 } from "@/lib/browser/browser-tab-store"
 import {
   BLANK_PAGE_URL,
-  hostnameOf,
+  displayHostPort,
   normalizeUrlForDedupe,
 } from "@/lib/browser/browser-url"
 import {
@@ -296,11 +296,17 @@ interface WorkspaceActionsValue {
   // in the same profile is activated where it is — except for the blank page
   // (`BLANK_PAGE_URL`), which always opens a fresh empty tab. `profile`
   // defaults to the opener's, else to the preference for new tabs.
+  // `activate`: `true`/omitted shows the tab and brings the files pane
+  // forward; `"tab"` selects it in the strip but leaves the pane where it is
+  // (for an opener that is not the file column — a local server coming up —
+  // which should show its page without pulling anyone out of a conversation);
+  // `false` leaves the selection alone, claiming it only when nothing holds
+  // it, so the strip never carries a tab with an empty column beside it.
   openBrowserTab: (
     url: string,
     options?: {
       folderId?: number
-      activate?: boolean
+      activate?: boolean | "tab"
       openerTabId?: string
       index?: number
       profile?: string
@@ -792,7 +798,13 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       id: buildFileTabId({ kind: "browser", id: backendTabId }),
       kind: "browser",
       folderId,
-      title: title || (hostnameOf(url) ?? url),
+      // Host AND port, not just the host: two local servers are two tabs both
+      // called "localhost" otherwise, which is now a routine sight — a tab
+      // opened in the background (an auto-opened local server, a ⌘-click)
+      // keeps this name until someone switches to it and the page says its
+      // own. For an ordinary address with no explicit port this is the host,
+      // exactly as before.
+      title: title || (displayHostPort(url) ?? url),
       description: null,
       path: null,
       language: "browser",
@@ -809,7 +821,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       url: string,
       options?: {
         folderId?: number
-        activate?: boolean
+        activate?: boolean | "tab"
         openerTabId?: string
         index?: number
         profile?: string
@@ -817,6 +829,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     ) => {
       const normalized = normalizeUrlForDedupe(url)
       if (!normalized) return null
+      const activate = options?.activate ?? true
       const opener = options?.openerTabId
         ? fileTabsRef.current.find((tab) => tab.id === options.openerTabId)
         : undefined
@@ -850,7 +863,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
                 normalizeUrlForDedupe(tab.browser.initialUrl) === normalized
             )
       if (existing) {
-        if (options?.activate !== false) activateTab(existing.id)
+        if (activate === "tab") setActiveFileTabId(existing.id)
+        else activateTab(existing.id, activate === false)
         return existing.id
       }
       const record = browserTabRecord(
@@ -876,8 +890,18 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         next.splice(at, 0, record)
         return next
       }
-      if (options?.activate === false) {
+      if (activate === false) {
         setFileTabs(insert)
+        // Claim the selection only when nothing holds it, exactly as
+        // `activateTab`'s background mode does: a strip that holds tabs while
+        // the column beside it shows "open a file from the right panel" is a
+        // state the user can only get out of by clicking a tab.
+        setActiveFileTabId((prev) => prev ?? record.id)
+      } else if (activate === "tab") {
+        // Shown, but the pane stays put — the page loads and is there to look
+        // at without the workspace jumping out of whatever it was on.
+        setFileTabs(insert)
+        setActiveFileTabId(record.id)
       } else if (opener) {
         setFileTabs(insert)
         setActiveFileTabId(record.id)

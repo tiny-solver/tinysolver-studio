@@ -9,6 +9,7 @@ import {
   Maximize2,
   Minimize2,
   Plus,
+  ServerCog,
   X,
   Globe,
 } from "lucide-react"
@@ -19,12 +20,14 @@ import {
   useWorkspaceView,
 } from "@/contexts/workspace-context"
 import { AGENT_MARK } from "@/components/browser/browser-agent-access"
+import { browserListServices } from "@/lib/browser/browser-api"
 import { useBrowserTabState } from "@/lib/browser/browser-tab-store"
 import {
   BLANK_PAGE_URL,
-  hostnameOf,
+  displayHostPort,
   isBlankPageUrl,
 } from "@/lib/browser/browser-url"
+import type { DetectedService } from "@/lib/browser/types"
 import { useBrowserCapabilities } from "@/lib/browser/use-browser-capabilities"
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
@@ -46,6 +49,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -227,24 +232,32 @@ export function FileWorkspaceTabBar() {
 }
 
 /**
- * The "+" at the end of the file tab strip: the two tabs a person can add to
- * this strip by hand.
+ * The "+" at the end of the file tab strip: the tabs a person can add to this
+ * strip by hand.
  *
- * Both already exist elsewhere, but neither is reachable *from here*. A file
- * otherwise arrives from the aux-panel file tree or a transcript badge — both
- * of which can be closed or absent — and a browser tab has had no manual
- * entry point at all: every one of them so far arrived by following a link,
- * so there was no way to simply open a page. The blank page is exactly that
- * (see `BLANK_PAGE_URL`): an empty tab with a focused address bar.
+ * All of them already exist elsewhere, but none is reachable *from here*. A
+ * file otherwise arrives from the aux-panel file tree or a transcript badge —
+ * both of which can be closed or absent — and a browser tab had no manual
+ * entry point at all: every one of them arrived by following a link, so there
+ * was no way to simply open a page. The blank page is exactly that (see
+ * `BLANK_PAGE_URL`): an empty tab with a focused address bar.
  *
- * Renders nothing when neither row is possible rather than an empty menu —
- * off the desktop there is no built-in browser, and a native picker is no use
- * to a window driving a remote backend.
+ * The local servers below them are the ones codeg has watched start in its
+ * terminals (`browser::services`), listed fresh every time the menu opens:
+ * the backend connects to each one while answering, so an address here is an
+ * address that was answering a moment ago. This is the entry point for
+ * everyone who left the notification off, and the way back to a page that was
+ * offered and dismissed.
+ *
+ * Renders nothing when no row is possible rather than an empty menu — off the
+ * desktop there is no built-in browser, and a native picker is no use to a
+ * window driving a remote backend.
  */
 function FileTabAddMenu() {
   const t = useTranslations("Folder.fileWorkspace")
   const { openFilePreview, openBrowserTab } = useWorkspaceActions()
   const capabilities = useBrowserCapabilities()
+  const [services, setServices] = useState<readonly DetectedService[]>([])
 
   // A native dialog picks a path on THIS machine; a desktop window driving a
   // remote backend would hand the server a path it cannot read, and the web
@@ -264,10 +277,25 @@ function FileTabAddMenu() {
     if (path) void openFilePreview(normalizeAbsPath(path))
   }, [openFilePreview, t])
 
+  // Asked on every open, not held: a server that has stopped must not be
+  // offered, and the backend's answer already excludes those. The previous
+  // answer stays on screen until the new one lands (they are the same list
+  // in the overwhelming majority of cases) and an error empties it rather
+  // than showing addresses nobody vouched for.
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open || !canOpenBrowser) return
+      void browserListServices()
+        .then(setServices)
+        .catch(() => setServices([]))
+    },
+    [canOpenBrowser]
+  )
+
   if (!canOpenFile && !canOpenBrowser) return null
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -300,6 +328,30 @@ function FileTabAddMenu() {
             <FileText />
             {t("openFile")}
           </DropdownMenuItem>
+        )}
+        {canOpenBrowser && services.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{t("localServices")}</DropdownMenuLabel>
+            {services.map((service) => (
+              <DropdownMenuItem
+                key={service.origin}
+                onSelect={() => {
+                  openBrowserTab(service.url)
+                }}
+              >
+                <ServerCog />
+                <span className="min-w-0 flex-1 truncate">
+                  {displayHostPort(service.url) ?? service.url}
+                </span>
+                {service.source === "agent" && (
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {t("localServiceFromAgent")}
+                  </span>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -370,13 +422,15 @@ const FileWorkspaceTabItem = memo(function FileWorkspaceTabItem({
   const blankPage = browserUrl !== null && isBlankPageUrl(browserUrl)
   // What to call it, most specific first: the live page's own title, then the
   // record's. Except that a tab opened empty took `about:blank` for its
-  // record title — a record is named once, and `hostnameOf` had nothing to
+  // record title — a record is named once, and the address had no host to
   // offer for the blank page — so the moment it goes somewhere, that title
   // names the wrong page. The host stands in until the page says its own,
   // which also covers the stretch of every navigation where the backend has
   // cleared the live title and `title_changed` has not fired yet.
   const recordTitle = isBlankPageUrl(tab.title) ? null : tab.title
-  const browserHost = browserUrl ? hostnameOf(browserUrl) : null
+  // Host and port, the same answer the record is named with, so a page that
+  // loses its title mid-navigation does not also change what it is called.
+  const browserHost = browserUrl ? displayHostPort(browserUrl) : null
   // An HTML file being previewed is named the way a browser names a page: by
   // the document's own <title>, the file name behind it on hover. Read from
   // the tab's source rather than from the rendered document, so it is the same

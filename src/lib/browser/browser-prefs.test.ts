@@ -18,6 +18,7 @@ import {
   setBrowserDefaultAgentGrant,
   setBrowserNewTabProfile,
   setBrowserProfiles,
+  setBrowserServiceAutoOpen,
   setBrowserSignInUserAgent,
   setBrowserSurfaceOverride,
   setBrowserTerminalClickMenu,
@@ -322,6 +323,24 @@ describe("browser prefs", () => {
     localStorage.setItem("browser:default-agent-grant", "everything")
     resetCacheOnly()
     expect(getBrowserPrefs().defaultAgentGrant).toBe("control")
+  })
+
+  // Notifying is the default (VS Code's too), so only the two other answers
+  // are stored; anything else in the key means the default.
+  it("stores the local-server mode only when it is not the default one", () => {
+    expect(getBrowserPrefs().serviceAutoOpen).toBe("notify")
+    setBrowserServiceAutoOpen("open")
+    expect(localStorage.getItem("browser:service-auto-open")).toBe("open")
+    expect(getBrowserPrefs().serviceAutoOpen).toBe("open")
+    setBrowserServiceAutoOpen("off")
+    expect(localStorage.getItem("browser:service-auto-open")).toBe("off")
+    expect(getBrowserPrefs().serviceAutoOpen).toBe("off")
+    setBrowserServiceAutoOpen("notify")
+    expect(localStorage.getItem("browser:service-auto-open")).toBeNull()
+    expect(getBrowserPrefs().serviceAutoOpen).toBe("notify")
+    localStorage.setItem("browser:service-auto-open", "sometimes")
+    resetCacheOnly()
+    expect(getBrowserPrefs().serviceAutoOpen).toBe("notify")
   })
 
   it("useBrowserPrefs re-renders on change", () => {

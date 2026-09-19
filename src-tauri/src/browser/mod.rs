@@ -18,6 +18,9 @@
 //!   run its own code, which a person approves snippet by snippet
 //! - `listener`   — which program is serving a loopback address, for grants
 //!   made on one (`http://localhost:3000` names a port, not a site)
+//! - `service_url` — reading a dev server's address out of terminal output
+//! - `services`   — which of those addresses are live, and telling the
+//!   workspace about a new one so it can offer to open it
 //! - `doc_guest`  — the `codeg-doc:` guest that shows a local HTML file
 //! - `profile`    — the tabs' own data store / directory and their proxy
 //! - `downloads`  — destination policy and records for page downloads
@@ -51,6 +54,11 @@ pub mod agent;
 pub mod capture;
 pub mod console;
 pub mod eval;
+// The terminal that prints a dev server's address runs in both runtimes, so
+// the watch that notices it does too — `service_url` is pure text work and
+// `services` is a socket probe plus an event; neither touches a webview.
+pub mod service_url;
+pub mod services;
 pub mod types;
 
 #[cfg(feature = "tauri-runtime")]

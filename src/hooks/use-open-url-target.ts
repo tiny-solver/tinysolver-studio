@@ -56,19 +56,16 @@ export function isPrimaryModifier(event: {
 }
 
 /**
- * Decide and execute where an http(s) (or mailto/tel) address goes, INSIDE the
- * caller's call stack. The decision itself (`resolveLinkAction`) is a pure
- * function of a preferences snapshot and this surface; only the execution
- * touches the app: the built-in browser tab (or the transcript's side panel
- * under a full-page route), the system browser, or the OS handler.
+ * Where an address WOULD go, without sending it there.
  *
- * Returns the action taken so callers can react. Of the rejections only the
- * site-rule block is reported here (its wording is the browser's); the caller
- * owns the toast for an unsupported scheme. Local file paths are not handled:
- * they are `useOpenFileTarget`'s job and never reach this hook.
+ * The same decision `useOpenUrlTarget` executes — site rules, the per-source
+ * preference, the surfaces that exist right now — split out because one
+ * caller has to know the answer before acting on it: the local-server watch
+ * opens a tab on its own only where the answer is the built-in browser, and
+ * degrades to asking where it is the system browser (nothing may launch the
+ * system browser without a person pressing something).
  */
-export function useOpenUrlTarget() {
-  const t = useTranslations("Browser.toast")
+export function useLinkDecision() {
   // Null outside the workspace (no tab strip to open into): the built-in
   // target is then simply unavailable and links go to the system browser.
   const openBrowserTab = useOptionalWorkspaceActions()?.openBrowserTab ?? null
@@ -76,7 +73,7 @@ export function useOpenUrlTarget() {
   const viewerHost = useSessionViewerHost()
   const fileColumnVisible = route ? route.isConversations : true
 
-  const run = useCallback(
+  return useCallback(
     (url: string, options: OpenUrlOptions): LinkAction => {
       const capabilities = browserCapabilitiesSnapshot()
       const somewhereToOpen = openBrowserTab !== null || viewerHost !== null
@@ -97,7 +94,7 @@ export function useOpenUrlTarget() {
           somewhereToOpen,
       }
       const prefs = getBrowserPrefs()
-      const action = resolveLinkAction(url, {
+      return resolveLinkAction(url, {
         source: options.source,
         modifier: options.modifier ?? false,
         forceTarget: options.forceTarget,
@@ -106,6 +103,35 @@ export function useOpenUrlTarget() {
         hostRules: prefs.hostRules,
         managedHostRules: capabilities?.policy.managedRules,
       })
+    },
+    [fileColumnVisible, openBrowserTab, viewerHost]
+  )
+}
+
+/**
+ * Decide and execute where an http(s) (or mailto/tel) address goes, INSIDE the
+ * caller's call stack. The decision itself (`resolveLinkAction`) is a pure
+ * function of a preferences snapshot and this surface; only the execution
+ * touches the app: the built-in browser tab (or the transcript's side panel
+ * under a full-page route), the system browser, or the OS handler.
+ *
+ * Returns the action taken so callers can react. Of the rejections only the
+ * site-rule block is reported here (its wording is the browser's); the caller
+ * owns the toast for an unsupported scheme. Local file paths are not handled:
+ * they are `useOpenFileTarget`'s job and never reach this hook.
+ */
+export function useOpenUrlTarget() {
+  const t = useTranslations("Browser.toast")
+  // Null outside the workspace (no tab strip to open into): the built-in
+  // target is then simply unavailable and links go to the system browser.
+  const openBrowserTab = useOptionalWorkspaceActions()?.openBrowserTab ?? null
+  const viewerHost = useSessionViewerHost()
+  const decide = useLinkDecision()
+
+  const run = useCallback(
+    (url: string, options: OpenUrlOptions): LinkAction => {
+      const prefs = getBrowserPrefs()
+      const action = decide(url, options)
       switch (action.kind) {
         case "system":
           void openInSystemBrowser(action.url)
@@ -123,8 +149,12 @@ export function useOpenUrlTarget() {
           }
           // The first-open notice offers the "system browser always"
           // preference, which is the desktop's; a bridged dev server in web
-          // mode has no such choice.
-          if (!prefs.firstOpenSeen && surface.builtinAvailable) {
+          // mode has no such choice. Reaching this case at all means there
+          // was somewhere to open into, so the capability alone answers it.
+          if (
+            !prefs.firstOpenSeen &&
+            (browserCapabilitiesSnapshot()?.available ?? false)
+          ) {
             markBrowserFirstOpenSeen()
             toast(t("firstOpen"), {
               description: t("firstOpenHint"),
@@ -152,7 +182,7 @@ export function useOpenUrlTarget() {
       }
       return action
     },
-    [fileColumnVisible, openBrowserTab, t, viewerHost]
+    [decide, openBrowserTab, t, viewerHost]
   )
 
   return useCallback(

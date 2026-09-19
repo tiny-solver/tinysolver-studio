@@ -1,7 +1,8 @@
 "use client"
 
 /**
- * Built-in browser settings: where links open by default (per source), whether
+ * Built-in browser settings: where links open by default (per source), what
+ * happens when a server started in a terminal announces its address, whether
  * browser tabs get the web inspector, which native surface hosts them, whether
  * background tabs are unloaded after a while, where downloads land, the
  * browser profiles (create, clear, delete; which one new tabs open in) and the
@@ -31,6 +32,7 @@ import {
   MousePointerClick,
   Network,
   Plus,
+  ServerCog,
   Trash2,
   UserRound,
   Wrench,
@@ -68,6 +70,7 @@ import {
 import {
   DEFAULT_BROWSER_PROFILE_ID,
   LINK_SOURCES,
+  SERVICE_AUTO_OPEN_MODES,
   addBrowserProfile,
   removeBrowserProfile,
   setBrowserDefaultAgentGrant,
@@ -75,6 +78,7 @@ import {
   setBrowserHostRules,
   setBrowserHtmlPreviewEngine,
   setBrowserNewTabProfile,
+  setBrowserServiceAutoOpen,
   setBrowserSignInUserAgent,
   setBrowserSurfaceOverride,
   setBrowserSuspendBackgroundTabs,
@@ -85,6 +89,7 @@ import {
   type DefaultAgentGrant,
   type LinkSource,
   type LinkTarget,
+  type ServiceAutoOpen,
   type SurfaceOverride,
 } from "@/lib/browser/browser-prefs"
 import {
@@ -133,6 +138,12 @@ const AGENT_GRANT_LABEL_KEYS = {
   control: "agentGrantControl",
   none: "agentGrantNone",
 } as const satisfies Record<DefaultAgentGrant, string>
+
+const SERVICE_AUTO_OPEN_LABEL_KEYS = {
+  off: "serviceOpenOff",
+  notify: "serviceOpenNotify",
+  open: "serviceOpenOpen",
+} as const satisfies Record<ServiceAutoOpen, string>
 
 const SURFACES: readonly SurfaceOverride[] = ["auto", "child", "window"]
 const SURFACE_LABEL_KEYS = {
@@ -690,6 +701,36 @@ export function BrowserSettingsSection() {
       </SettingCard>
 
       <SettingCard>
+        {/* Both rows are about the terminal: one is what a click on a link
+            does, the other what a server starting in it does. */}
+        <SettingRow
+          icon={ServerCog}
+          title={t("serviceOpenTitle")}
+          description={t("serviceOpenHint")}
+          control={
+            <Select
+              value={prefs.serviceAutoOpen}
+              onValueChange={(value) =>
+                setBrowserServiceAutoOpen(value as ServiceAutoOpen)
+              }
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-44 bg-background text-xs"
+                aria-label={t("serviceOpenTitle")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {SERVICE_AUTO_OPEN_MODES.map((mode) => (
+                  <SelectItem key={mode} value={mode}>
+                    {t(SERVICE_AUTO_OPEN_LABEL_KEYS[mode])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
         <SettingRow
           icon={MousePointerClick}
           title={t("terminalMenuTitle")}

@@ -5210,10 +5210,20 @@ async fn run_connection(
     // Default terminals to the session working directory so an agent that calls
     // `terminal/create` without a `cwd` (e.g. CodeBuddy) runs in the folder the
     // conversation runs in rather than codeg's own process cwd.
+    // An agent that runs `pnpm dev` through `terminal/create` has started a
+    // local server the same way a person in the terminal panel has, and that
+    // output is the only place its address appears. A connection with no real
+    // window behind it (`work_task`, the delegation probe) still watches; the
+    // event it emits names that window and no workspace answers to it.
     let terminal_runtime = Arc::new(
         TerminalRuntime::with_base_env(terminal_base_env)
             .with_default_cwd(Some(cwd.clone()))
-            .with_default_shell_config(terminal_shell_config),
+            .with_default_shell_config(terminal_shell_config)
+            .with_service_watch(Some(crate::browser::services::ServiceWatch::new(
+                emitter.clone(),
+                state.read().await.owner_window_label.clone(),
+                crate::browser::types::ServiceSource::Agent,
+            ))),
     );
     let cwd_string = cwd.to_string_lossy().to_string();
     // The connection's security posture in one place, so what a live session

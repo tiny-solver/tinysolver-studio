@@ -26,9 +26,10 @@ use crate::browser::surface::{BrowserSurface, PointerFailure, PointerGesture};
 use crate::browser::open_request;
 use crate::browser::types::{
     Bounds, BrowserCapabilities, BrowserErrorInfo, BrowserErrorKind, BrowserOpenRequestPayload,
-    BrowserTabState, ChannelKind, FrozenFrame, SurfaceChoice, SurfaceKind, TabKind,
+    BrowserTabState, ChannelKind, DetectedService, FrozenFrame, SurfaceChoice, SurfaceKind,
+    TabKind,
 };
-use crate::browser::{events, hooks, listener, policy, profile, tab_label};
+use crate::browser::{events, hooks, listener, policy, profile, services, tab_label};
 
 #[cfg(all(
     feature = "browser-child",
@@ -3429,6 +3430,25 @@ pub async fn browser_capabilities(
     policy: State<'_, BrowserPolicy>,
 ) -> Result<BrowserCapabilities, AppCommandError> {
     Ok(capabilities(&policy))
+}
+
+/// The local servers this window has seen start, minus the ones that have
+/// since stopped answering.
+///
+/// Read when the "+" menu opens rather than kept in sync: liveness is a
+/// property of a socket, not of an event stream, and one connect per entry at
+/// the moment someone looks is both cheaper and more truthful than anything
+/// that tries to notice a server going away.
+#[tauri::command]
+pub async fn browser_list_services(
+    window: WebviewWindow,
+) -> Result<Vec<DetectedService>, AppCommandError> {
+    let owner = window.label().to_string();
+    // One connect per entry, with a timeout each: blocking work with no
+    // business on a runtime thread other tabs' events queue behind.
+    tokio::task::spawn_blocking(move || services::registry().list_live(&owner))
+        .await
+        .map_err(|err| window_err("Failed to list local services", err))
 }
 
 /// The user's site rules, pushed by the frontend (which owns the preference)

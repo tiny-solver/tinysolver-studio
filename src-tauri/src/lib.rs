@@ -1472,6 +1472,7 @@ mod tauri_app {
                 browser_commands::browser_open_devtools,
                 browser_commands::browser_get_state,
                 browser_commands::browser_list_tabs,
+                browser_commands::browser_list_services,
                 browser_commands::browser_clear_data,
                 browser_commands::browser_find,
                 browser_commands::browser_list_downloads,

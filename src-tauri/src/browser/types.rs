@@ -256,6 +256,46 @@ pub struct BrowserConsoleErrorsPayload {
     pub errors: bool,
 }
 
+/// A local server codeg started has just announced its address; the workspace
+/// decides what to do about it (`browser:service-auto-open`).
+///
+/// Broadcast to every window like the rest of these; only the one named by
+/// `owner_window` acts. Nothing has been opened at this point — the backend
+/// has only established that the address is a loopback one and that something
+/// is listening on it.
+pub const SERVICE_DETECTED_EVENT: &str = "browser://service-detected";
+
+/// Where a detected address was printed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ServiceSource {
+    /// A codeg terminal: the terminal panel, or a canvas terminal card.
+    Terminal,
+    /// A terminal an agent asked codeg to run (ACP `terminal/create`).
+    Agent,
+}
+
+/// A loopback address something printed, and that answered a connection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedService {
+    /// The full address, fragment dropped and query kept.
+    pub url: String,
+    /// `scheme://host[:port]` — what the list and the announce dedupe by.
+    pub origin: String,
+    /// `host:port`, the socket the liveness probe connects to.
+    pub authority: String,
+    /// Window whose workspace this belongs to; `web` in server mode.
+    pub owner_window: String,
+    pub source: ServiceSource,
+    /// The terminal that printed it — a codeg terminal id, or an ACP one.
+    ///
+    /// Not a title: the backend's terminal title is a placeholder, and the
+    /// name a person sees on a terminal tab only exists in the frontend. The
+    /// id is what lets that side put a name to this.
+    pub terminal_id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserOpenRequestPayload {

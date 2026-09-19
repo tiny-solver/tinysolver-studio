@@ -25,6 +25,7 @@ import {
   setBrowserDefaultAgentGrant,
   setBrowserNewTabProfile,
   setBrowserProfiles,
+  setBrowserServiceAutoOpen,
   setDefaultLinkTarget,
 } from "@/lib/browser/browser-prefs"
 
@@ -178,6 +179,22 @@ describe("BrowserSettingsSection", () => {
     expect(
       screen.queryByRole("button", { name: "Remove rule" })
     ).not.toBeInTheDocument()
+  })
+
+  // Notifying is the default, as it is in every editor that forwards a port
+  // on its own: a tab opening by itself should be something a person turned
+  // on. The trigger shows the LISTED item for the current value, so a mode
+  // that reads back is a mode the picker offers.
+  it("offers all three answers for a local server, notifying by default", () => {
+    renderSection()
+    expandSection()
+    const mode = () => screen.getByRole("combobox", { name: "Local servers" })
+    expect(mode()).toHaveTextContent("Notify me")
+    act(() => setBrowserServiceAutoOpen("open"))
+    expect(mode()).toHaveTextContent("Open a tab")
+    act(() => setBrowserServiceAutoOpen("off"))
+    expect(mode()).toHaveTextContent("Do nothing")
+    expect(getBrowserPrefs().serviceAutoOpen).toBe("off")
   })
 
   // Reading and acting is what a page hands over unless told otherwise, and

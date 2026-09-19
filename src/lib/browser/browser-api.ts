@@ -17,6 +17,7 @@ import type {
   BrowserCapabilities,
   BrowserDownload,
   BrowserTabState,
+  DetectedService,
   DocGuestState,
   DocMode,
   FrozenFrame,
@@ -280,6 +281,16 @@ export function browserGetState(tabId: string): Promise<BrowserTabState> {
 
 export function browserListTabs(): Promise<BrowserTabState[]> {
   return getTransport().call<BrowserTabState[]>("browser_list_tabs", {})
+}
+
+/** The local servers this window has seen start and that still answer.
+ *
+ *  A round trip per call on purpose: the backend probes every entry while
+ *  answering, so the list a menu shows is the list that was true when it
+ *  opened. Empty off the desktop, where the command does not exist. */
+export function browserListServices(): Promise<DetectedService[]> {
+  if (!isDesktop()) return Promise.resolve([])
+  return getTransport().call<DetectedService[]>("browser_list_services", {})
 }
 
 /** Share this tab with agents at `level`, or take it back with `"none"`.

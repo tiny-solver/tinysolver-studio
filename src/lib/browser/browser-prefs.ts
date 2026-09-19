@@ -44,6 +44,18 @@ export type HtmlPreviewEngine = "guest" | "inline"
  *  grant yet" but a standing answer: share nothing until asked. */
 export type DefaultAgentGrant = "none" | "read" | "control"
 
+/** What happens when a server codeg started announces its address.
+ *
+ *  The same three answers VS Code offers for an auto-forwarded port
+ *  (`silent` / `notify` / `openPreview`), under the names they have here. */
+export type ServiceAutoOpen = "off" | "notify" | "open"
+
+export const SERVICE_AUTO_OPEN_MODES: readonly ServiceAutoOpen[] = [
+  "off",
+  "notify",
+  "open",
+]
+
 /** The profile every installation has; it cannot be deleted, only cleared.
  *  Its name is localized, so it is not in the list the user edits. */
 export const DEFAULT_BROWSER_PROFILE_ID = "default"
@@ -133,6 +145,17 @@ export interface BrowserPrefsSnapshot {
    *  address, and a one-press button there must not hand over more than
    *  reading because of a preference set somewhere else. */
   defaultAgentGrant: DefaultAgentGrant
+  /** What to do when a server started in a codeg terminal (or in a terminal
+   *  an agent asked codeg to run) prints its loopback address.
+   *
+   *  `notify` by default, which is VS Code's default for the same situation:
+   *  a tab appearing on its own is a surprise the first time it happens to
+   *  somebody, and one press in a toast is a small price for never being
+   *  surprised. `open` is for people who want their app in front of them; it
+   *  opens in the background, so the file column keeps whatever was there.
+   *  `off` still LISTS the servers (the "+" menu reads them from the backend
+   *  either way) — it only means "do not interrupt me". */
+  serviceAutoOpen: ServiceAutoOpen
 }
 
 export const DEFAULT_BROWSER_PREFS: BrowserPrefsSnapshot = Object.freeze({
@@ -154,6 +177,7 @@ export const DEFAULT_BROWSER_PREFS: BrowserPrefsSnapshot = Object.freeze({
   newTabProfile: DEFAULT_BROWSER_PROFILE_ID,
   signInUserAgent: true,
   defaultAgentGrant: "control",
+  serviceAutoOpen: "notify",
 }) as BrowserPrefsSnapshot
 
 const KEY_PREFIX = "browser:"
@@ -176,6 +200,7 @@ const PROFILES_KEY = `${KEY_PREFIX}profiles`
 const NEW_TAB_PROFILE_KEY = `${KEY_PREFIX}new-tab-profile`
 const SIGN_IN_UA_KEY = `${KEY_PREFIX}sign-in-user-agent`
 const AGENT_GRANT_KEY = `${KEY_PREFIX}default-agent-grant`
+const SERVICE_AUTO_OPEN_KEY = `${KEY_PREFIX}service-auto-open`
 
 function readRaw(key: string): string | null {
   if (typeof window === "undefined") return null
@@ -200,6 +225,13 @@ function parseAgentGrant(raw: string | null): DefaultAgentGrant {
   return raw === "read" || raw === "none"
     ? raw
     : DEFAULT_BROWSER_PREFS.defaultAgentGrant
+}
+
+/** Anything but the two stored values means the default. */
+function parseServiceAutoOpen(raw: string | null): ServiceAutoOpen {
+  return raw === "off" || raw === "open"
+    ? raw
+    : DEFAULT_BROWSER_PREFS.serviceAutoOpen
 }
 
 /** Stored rules, one bad entry dropped rather than the whole list. */
@@ -277,6 +309,7 @@ function read(): BrowserPrefsSnapshot {
     newTabProfile,
     signInUserAgent: readRaw(SIGN_IN_UA_KEY) !== "false",
     defaultAgentGrant: parseAgentGrant(readRaw(AGENT_GRANT_KEY)),
+    serviceAutoOpen: parseServiceAutoOpen(readRaw(SERVICE_AUTO_OPEN_KEY)),
   }
 }
 
@@ -392,6 +425,12 @@ export function setBrowserDefaultAgentGrant(level: DefaultAgentGrant): void {
   write(AGENT_GRANT_KEY, level === "read" || level === "none" ? level : null)
 }
 
+/** What a newly announced local server does (`notify`, the default, removes
+ *  the key). */
+export function setBrowserServiceAutoOpen(mode: ServiceAutoOpen): void {
+  write(SERVICE_AUTO_OPEN_KEY, mode === "off" || mode === "open" ? mode : null)
+}
+
 export function subscribeBrowserPrefs(listener: () => void): () => void {
   if (typeof window === "undefined") return () => {}
   const onChange = () => listener()
@@ -441,6 +480,7 @@ export function resetBrowserPrefsForTests(): void {
     localStorage.removeItem(NEW_TAB_PROFILE_KEY)
     localStorage.removeItem(SIGN_IN_UA_KEY)
     localStorage.removeItem(AGENT_GRANT_KEY)
+    localStorage.removeItem(SERVICE_AUTO_OPEN_KEY)
   } catch {
     /* ignore */
   }

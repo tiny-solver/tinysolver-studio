@@ -5,11 +5,13 @@ import type { ReactNode } from "react"
 
 import enMessages from "@/i18n/messages/en.json"
 import type { FileWorkspaceTab } from "@/contexts/workspace-context"
+import type { DetectedService } from "@/lib/browser/types"
 
 const mocks = vi.hoisted(() => ({
   openBrowserTab: vi.fn(() => "browser:new"),
   openFilePreview: vi.fn(() => Promise.resolve("/abs/path")),
   openFileDialog: vi.fn(() => Promise.resolve<string | string[] | null>(null)),
+  browserListServices: vi.fn(() => Promise.resolve<DetectedService[]>([])),
   fileTabs: [] as FileWorkspaceTab[],
   previewFileTabIds: new Set<string>(),
   browserState: null as { url: string; title: string } | null,
@@ -57,6 +59,9 @@ vi.mock("@/lib/transport", () => ({
   isRemoteDesktopMode: () => remoteDesktop,
 }))
 vi.mock("@/lib/platform", () => ({ openFileDialog: mocks.openFileDialog }))
+vi.mock("@/lib/browser/browser-api", () => ({
+  browserListServices: mocks.browserListServices,
+}))
 vi.mock("@/lib/browser/use-browser-capabilities", () => ({
   useBrowserCapabilities: () => ({ available: browserAvailable }),
 }))
@@ -163,7 +168,22 @@ beforeEach(() => {
   mocks.browserState = null
   vi.clearAllMocks()
   mocks.openFileDialog.mockResolvedValue(null)
+  mocks.browserListServices.mockResolvedValue([])
 })
+
+function detectedService(
+  url: string,
+  source: DetectedService["source"] = "terminal"
+): DetectedService {
+  return {
+    url,
+    origin: new URL(url).origin,
+    authority: new URL(url).host,
+    ownerWindow: "main",
+    source,
+    terminalId: "t1",
+  }
+}
 
 describe("FileWorkspaceTabBar — the add-tab '+'", () => {
   it("opens an empty browser tab", async () => {
@@ -214,6 +234,41 @@ describe("FileWorkspaceTabBar — the add-tab '+'", () => {
     expect(
       screen.getByRole("menuitem", { name: "Browser tab" })
     ).toBeInTheDocument()
+  })
+
+  it("lists the local servers running now, and opens one", async () => {
+    mocks.browserListServices.mockResolvedValue([
+      detectedService("http://localhost:5173/"),
+      detectedService("http://127.0.0.1:8000/", "agent"),
+    ])
+    renderStrip()
+    await openAddMenu()
+    // Asked when the menu opened, not held from an earlier answer: a server
+    // that has stopped is already out of what the backend returns.
+    expect(mocks.browserListServices).toHaveBeenCalledTimes(1)
+    const entry = screen.getByRole("menuitem", { name: /localhost:5173/ })
+    // Where it came from is on the row, so a server an agent started is not
+    // mistaken for one the person started.
+    expect(
+      screen.getByRole("menuitem", { name: /127\.0\.0\.1:8000/ })
+    ).toHaveTextContent("Agent")
+    await act(async () => {
+      entry.click()
+    })
+    expect(mocks.openBrowserTab).toHaveBeenCalledWith("http://localhost:5173/")
+  })
+
+  it("shows no local-server section when nothing is running", async () => {
+    renderStrip()
+    await openAddMenu()
+    expect(screen.queryByText("Local servers")).toBeNull()
+  })
+
+  it("does not ask for local servers where there is no browser to open them in", async () => {
+    browserAvailable = false
+    renderStrip()
+    await openAddMenu()
+    expect(mocks.browserListServices).not.toHaveBeenCalled()
   })
 
   it("hides itself entirely rather than opening an empty menu", () => {

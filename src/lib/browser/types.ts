@@ -465,6 +465,32 @@ export interface BrowserOpenRequestPayload {
   requestId?: string | null
 }
 
+/** Where a detected address was printed. */
+export type ServiceSource = "terminal" | "agent"
+
+/** A loopback address something codeg started printed, and that answered a
+ *  connection when the backend probed it.
+ *
+ *  Carried both by `browser://service-detected` (one, as it appears) and by
+ *  `browser_list_services` (all of this window's, minus the ones that have
+ *  stopped answering). Nothing has been opened at this point. */
+export interface DetectedService {
+  /** The full address to open: fragment dropped, query kept (a Jupyter
+   *  address without its `?token=` opens a login page nobody can pass). */
+  url: string
+  /** `scheme://host[:port]` — what the backend dedupes and lists by. */
+  origin: string
+  /** `host:port`, the socket the liveness probe connects to. */
+  authority: string
+  /** Window whose workspace this belongs to; `web` in server mode. */
+  ownerWindow: string
+  source: ServiceSource
+  /** The terminal that printed it. Not a title: the name a person sees on a
+   *  terminal tab only exists on this side, and this is what puts one to it. */
+  terminalId: string
+}
+
+export const BROWSER_SERVICE_DETECTED_EVENT = "browser://service-detected"
 export const BROWSER_OPEN_REQUEST_EVENT = "browser://open-request"
 export const BROWSER_STATE_EVENT = "browser://state"
 export const BROWSER_CLOSED_EVENT = "browser://closed"
