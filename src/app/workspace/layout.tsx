@@ -97,7 +97,9 @@ function WorkspaceDocumentTitle() {
   const { activeFolder } = useActiveFolder()
 
   useEffect(() => {
-    document.title = activeFolder ? `${activeFolder.name} - codeg` : "codeg"
+    document.title = activeFolder
+      ? `${activeFolder.name} - codeg-gameeditor`
+      : "codeg-gameeditor"
   }, [activeFolder])
 
   return null

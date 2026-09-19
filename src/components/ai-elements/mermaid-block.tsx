@@ -826,6 +826,6 @@ function MermaidAwarePre({ children }: { children?: ReactNode }) {
   })
 }
 
-export const mermaidComponents: Components = {
+export const mermaidComponents: Pick<Components, "pre"> = {
   pre: MermaidAwarePre as Components["pre"],
 }

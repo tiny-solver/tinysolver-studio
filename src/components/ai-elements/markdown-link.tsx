@@ -212,6 +212,6 @@ export function MarkdownLink({
 // every element override to accept `Record<string, unknown>` props, which is
 // incompatible with MarkdownLink's precise anchor props. The cast bridges that
 // gap — MarkdownLink receives exactly the props react-markdown passes for `a`.
-export const markdownLinkComponents: Components = {
+export const markdownLinkComponents: Pick<Components, "a"> = {
   a: MarkdownLink as Components["a"],
 }

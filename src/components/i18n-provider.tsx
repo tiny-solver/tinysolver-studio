@@ -10,6 +10,8 @@ import {
   useSyncExternalStore,
 } from "react"
 import { NextIntlClientProvider, type AbstractIntlMessages } from "next-intl"
+import { usePathname } from "next/navigation"
+import { isDesktop } from "@/lib/platform"
 import { getFallbackMessages, getMessagesForLocale } from "@/i18n/messages"
 import {
   fromIntlLocale,
@@ -97,6 +99,7 @@ export function AppI18nProvider({
   initialLocale = "en",
   initialMessages,
 }: AppI18nProviderProps) {
+  const browserStudio = usePathname() === "/studio" && !isDesktop()
   const initialAppLocale = fromIntlLocale(initialLocale)
   const [languageSettings, setLanguageSettingsState] =
     useState<SystemLanguageSettings>({
@@ -180,6 +183,22 @@ export function AppI18nProvider({
   }, [setLanguageSettings])
 
   useEffect(() => {
+    // Studio's first slice is browser-local and also runs without a Rust server.
+    // Re-enter the normal settings flow when navigating back to the workspace.
+    if (browserStudio) {
+      try {
+        const cached = window.localStorage.getItem(
+          LANGUAGE_SETTINGS_STORAGE_KEY
+        )
+        setLanguageSettings(
+          cached ? JSON.parse(cached) : { mode: "system", language: "en" }
+        )
+      } catch {
+        setLanguageSettings({ mode: "system", language: "en" })
+      }
+      setLanguageSettingsLoaded(true)
+      return
+    }
     let cancelled = false
 
     getSystemLanguageSettings()
@@ -199,7 +218,7 @@ export function AppI18nProvider({
     return () => {
       cancelled = true
     }
-  }, [setLanguageSettings])
+  }, [browserStudio, setLanguageSettings])
 
   const appLocale = useMemo(
     () => resolveAppLocale(languageSettings, systemLocaleCandidates),

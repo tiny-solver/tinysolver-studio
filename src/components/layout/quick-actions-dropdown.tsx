@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useState } from "react"
+import Link from "next/link"
 import {
   FolderGit2,
   FolderOpenDot,
@@ -67,6 +68,7 @@ export function QuickActionsDropdown() {
   const tSidebar = useTranslations("Folder.sidebar")
   const tRemote = useTranslations("RemoteWorkspace")
   const tPet = useTranslations("Pet.manager")
+  const tStudio = useTranslations("Studio")
 
   const { unseenFailures } = useAutomationsView()
   const { attentionCount } = useTasksView()
@@ -146,6 +148,12 @@ export function QuickActionsDropdown() {
           <DropdownMenuItem onSelect={handleProjectBoot}>
             <Rocket />
             {tFolderDropdown("projectBoot")}
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/studio">
+              <LayoutTemplate />
+              {tStudio("launch")}
+            </Link>
           </DropdownMenuItem>
           {desktop && (
             <DropdownMenuSub

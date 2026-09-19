@@ -22,7 +22,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "codeg",
+  title: "codeg-gameeditor",
   description: "AI Coding Agent Conversation Manager",
   icons: {
     icon: [
