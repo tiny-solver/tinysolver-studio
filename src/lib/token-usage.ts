@@ -299,6 +299,17 @@ export function cacheHitRate(totals: TokenUsageTotals): number | null {
   )
 }
 
+/**
+ * Decimal places every surface prints the cache hit rate with
+ * ({@link formatPercent}): the dashboard's ring, the share card's copy of it,
+ * and the composer popover's row. One number, one reading — a rounded `95%`
+ * beside a `94.6%` looks like two different measurements.
+ *
+ * Deliberately not applied to the archetype copy, whose `{percent}%` sentences
+ * are a family of five and read as a badge, not a meter.
+ */
+export const CACHE_HIT_RATE_DIGITS = 1
+
 export function averagePerConversation(totals: TokenUsageTotals): number {
   if (totals.conversation_count <= 0) return 0
   return totals.total_tokens / totals.conversation_count

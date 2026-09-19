@@ -8,7 +8,11 @@ import { useTabStore } from "@/contexts/tab-context"
 import { useConversationRuntimeStore } from "@/stores/conversation-runtime-store"
 import { formatTokenCount } from "@/lib/token-format"
 import { formatContextWindowPercent } from "@/lib/context-window"
-import { cacheHitRatio, formatPercent } from "@/lib/token-usage"
+import {
+  CACHE_HIT_RATE_DIGITS,
+  cacheHitRatio,
+  formatPercent,
+} from "@/lib/token-usage"
 import {
   Popover,
   PopoverContent,
@@ -257,7 +261,7 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
                   {t("cacheHit")}
                 </span>
                 <span className="tabular-nums font-medium">
-                  {formatPercent(cacheHit, 1)}
+                  {formatPercent(cacheHit, CACHE_HIT_RATE_DIGITS)}
                 </span>
               </div>
             ) : null}
