@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl"
 import { describe, expect, it, vi } from "vitest"
 
 import { AskQuestionCard } from "./ask-question-card"
+import { OverlayHostHiddenProvider } from "@/components/ui/overlay-host-hidden"
 import enMessages from "@/i18n/messages/en.json"
 import type { PendingQuestionState, QuestionAnswer } from "@/lib/types"
 
@@ -649,5 +650,137 @@ describe("AskQuestionCard collapse & floating", () => {
     expect(
       screen.queryByRole("button", { name: "Pop out" })
     ).not.toBeInTheDocument()
+  })
+})
+
+describe("AskQuestionCard floating containment", () => {
+  const liveCard = () =>
+    screen.getByRole("group", { name: "The agent needs your input" })
+
+  /** jsdom lays nothing out, so a card measures 0×0 and every clamp collapses
+   *  to the viewport edge. Give it a real box to clamp against. */
+  const sizeCard = (el: HTMLElement, width: number, height: number) => {
+    Object.defineProperty(el, "offsetWidth", {
+      value: width,
+      configurable: true,
+    })
+    Object.defineProperty(el, "offsetHeight", {
+      value: height,
+      configurable: true,
+    })
+  }
+
+  const dragTo = (x: number, y: number) => {
+    const handle = screen.getByTestId("ask-question-drag-handle")
+    const at = (type: string, cx: number, cy: number) =>
+      fireEvent(
+        handle,
+        new MouseEvent(type, { bubbles: true, clientX: cx, clientY: cy })
+      )
+    at("pointerdown", 0, 0)
+    at("pointermove", x, y)
+    at("pointerup", x, y)
+  }
+
+  it("clamps a sized card so its far edge, not its origin, stays onscreen", () => {
+    renderCard(single)
+    fireEvent.click(screen.getByRole("button", { name: "Pop out" }))
+    sizeCard(liveCard(), 352, 400)
+    // Shoved past the bottom-right: the card's own box has to come off the
+    // limit, or "clamped inside the viewport" only holds for a 0×0 card.
+    dragTo(5000, 5000)
+    expect(parseFloat(liveCard().style.left)).toBe(window.innerWidth - 352 - 8)
+    expect(parseFloat(liveCard().style.top)).toBe(window.innerHeight - 400 - 8)
+  })
+
+  it("re-clamps a dragged window when the viewport shrinks under it", () => {
+    renderCard(single)
+    fireEvent.click(screen.getByRole("button", { name: "Pop out" }))
+    sizeCard(liveCard(), 352, 400)
+    dragTo(5000, 5000)
+    const parked = parseFloat(liveCard().style.left)
+    expect(parked).toBe(window.innerWidth - 352 - 8)
+
+    // Half the window away. Without the re-clamp the card keeps its old
+    // coordinates and its footer — Submit/Skip — sits off the right edge, with
+    // no way to scroll a fixed element back.
+    const width = window.innerWidth
+    Object.defineProperty(window, "innerWidth", {
+      value: 600,
+      configurable: true,
+      writable: true,
+    })
+    fireEvent(window, new Event("resize"))
+    expect(parseFloat(liveCard().style.left)).toBe(600 - 352 - 8)
+    Object.defineProperty(window, "innerWidth", {
+      value: width,
+      configurable: true,
+      writable: true,
+    })
+  })
+
+  it("marks the drag handle touch-none only while floating", () => {
+    renderCard(single)
+    expect(screen.getByTestId("ask-question-drag-handle")).not.toHaveClass(
+      "touch-none"
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Pop out" }))
+    // Without this a touch drag is claimed by the scroller and cancelled.
+    expect(screen.getByTestId("ask-question-drag-handle")).toHaveClass(
+      "touch-none"
+    )
+  })
+
+  it("reports the collapsed state on the toggle", () => {
+    renderCard(single)
+    expect(screen.getByRole("button", { name: "Collapse" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }))
+    expect(screen.getByRole("button", { name: "Expand" })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    )
+  })
+
+  it("stops painting and stops taking clicks while its host surface is hidden", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <OverlayHostHiddenProvider hidden>
+          <AskQuestionCard question={single} onAnswer={vi.fn()} />
+        </OverlayHostHiddenProvider>
+      </NextIntlClientProvider>
+    )
+    // Docked, the card is inside the hidden subtree and inherits everything
+    // the host already does to it — it must not hide itself twice.
+    expect(liveCard()).not.toHaveClass("invisible")
+    expect(liveCard()).not.toHaveAttribute("inert")
+
+    // Floating portals to the body, right out of that subtree. A backgrounded
+    // conversation tab is kept mounted, so without this the popped-out card of
+    // a tab you are not looking at paints over the one you are — and answers
+    // the wrong conversation's blocking question.
+    fireEvent.click(screen.getByRole("button", { name: "Pop out" }))
+    expect(liveCard().parentElement).toBe(document.body)
+    expect(liveCard()).toHaveClass(
+      "conversation-tab-hidden",
+      "invisible",
+      "pointer-events-none"
+    )
+    expect(liveCard()).toHaveAttribute("inert")
+  })
+
+  it("leaves a floating card alone while its host surface is visible", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <OverlayHostHiddenProvider hidden={false}>
+          <AskQuestionCard question={single} onAnswer={vi.fn()} />
+        </OverlayHostHiddenProvider>
+      </NextIntlClientProvider>
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Pop out" }))
+    expect(liveCard()).not.toHaveClass("invisible")
+    expect(liveCard()).not.toHaveAttribute("inert")
   })
 })

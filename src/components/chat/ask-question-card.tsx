@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useTranslations } from "next-intl"
 import {
@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useOverlayHostHidden } from "@/components/ui/overlay-host-hidden"
 import { cn } from "@/lib/utils"
 import { splitRecommended } from "@/lib/ask-question"
 import type {
@@ -151,6 +152,13 @@ export function AskQuestionCard({
     left: number
     top: number
   } | null>(null)
+  // The host surface that owns this card is hidden-but-mounted (a backgrounded
+  // conversation tab, or the whole workspace under a full-page route). Floating
+  // portals to the body, so nothing the host does to its own subtree reaches us
+  // — see `overlay-host-hidden.tsx` and `KeptMountedSurface` in
+  // `app/workspace/layout.tsx`, which spells out that a layer portalling out
+  // has to carry the flag itself.
+  const hostHidden = useOverlayHostHidden()
 
   // How many questions are answered — drives the progress bar, the counter, and
   // the submit gate (every question must be answered).
@@ -168,7 +176,39 @@ export function AskQuestionCard({
     () => questions.reduce((m, q) => Math.max(m, q.options.length + 1), 1),
     [questions]
   )
-  const bodyHeight = `min(${maxRows * 4 + 1}rem, 50svh)`
+  // The body gets whatever the card's viewport cap leaves after the header,
+  // the tab strip and the footer — 38svh of chrome either way. Floating caps
+  // the card at 70svh instead of 88svh, so the reservation has to come down
+  // with it: a fixed-height body that outgrows its card pushes Submit/Skip
+  // under the options, which is the clipping the cap exists to prevent.
+  const bodyHeight = `min(${maxRows * 4 + 1}rem, ${floating ? "32svh" : "50svh"})`
+
+  // Keep the floating window onscreen when the box or the viewport changes
+  // under it: expanding a collapsed card grows it downward, and shrinking the
+  // window (or an app-zoom change) pulls the far edges inward. Either way the
+  // footer can end up past the edge, and a viewport-fixed card cannot be
+  // scrolled back into view. Only ever re-clamps a dragged position — the
+  // default anchor is a CSS right/bottom inset, which tracks the corner on its
+  // own.
+  useLayoutEffect(() => {
+    if (!floating) return
+    const reclamp = () =>
+      setFloatPos((prev) => {
+        if (!prev) return prev
+        const next = clampFloatingPos(
+          prev.left,
+          prev.top,
+          cardRef.current?.offsetWidth ?? 0,
+          cardRef.current?.offsetHeight ?? 0
+        )
+        // Same coordinates: hand back the identical object so a resize storm
+        // doesn't re-render on every tick.
+        return next.left === prev.left && next.top === prev.top ? prev : next
+      })
+    reclamp()
+    window.addEventListener("resize", reclamp)
+    return () => window.removeEventListener("resize", reclamp)
+  }, [floating, collapsed])
 
   if (question.question_id !== renderedId) {
     setRenderedId(question.question_id)
@@ -539,16 +579,34 @@ export function AskQuestionCard({
             : { right: 12, bottom: 12 }
           : undefined
       }
+      // Floating only: out of the tab order and deaf to clicks while the host
+      // surface is hidden. `invisible` alone would still leave it focusable.
+      inert={(floating && hostHidden) || undefined}
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border border-primary/30 bg-card ws-msg-card",
+        "flex flex-col overflow-hidden rounded-xl border border-primary/30 bg-card",
         floating
           ? cn(
-              "fixed z-50 border-primary/50 shadow-xl",
-              collapsed
-                ? "w-auto"
-                : "max-h-[70svh] w-[22rem] max-w-[calc(100vw-1rem)]"
+              // No `ws-msg-card`: that is the translucent message-stream tint,
+              // and a window floating OVER the transcript would show the text
+              // it covers straight through itself.
+              "fixed z-50 max-w-[calc(100vw-1rem)] border-primary/50 shadow-xl",
+              collapsed ? "w-auto" : "max-h-[70svh] w-[22rem]",
+              // Portalled to the body, so the host's own `invisible` /
+              // `pointer-events-none` / `inert` never reach us. Borrowed
+              // wholesale from what the host does to its subtree (and what
+              // `drawer.tsx` does for the same reason): keep it MOUNTED — the
+              // question is still pending and still blocking its agent — but
+              // stop it painting over, and stop it taking clicks meant for,
+              // whatever replaced its host. Answering the wrong conversation's
+              // question from a tab you are not looking at is the failure this
+              // prevents.
+              hostHidden &&
+                "conversation-tab-hidden invisible pointer-events-none"
             )
-          : cn("mb-2 max-h-[88svh]", readOnly ? "shadow-sm" : "shadow-lg")
+          : cn(
+              "ws-msg-card mb-2 max-h-[88svh]",
+              readOnly ? "shadow-sm" : "shadow-lg"
+            )
       )}
     >
       {isMulti && !collapsed && (
@@ -574,7 +632,12 @@ export function AskQuestionCard({
           className={cn(
             "flex shrink-0 gap-2.5",
             resolvedSubtitle && !collapsed ? "items-start" : "items-center",
-            floating && "cursor-grab select-none active:cursor-grabbing"
+            // `touch-none`: without it a touch drag is claimed by the
+            // scroller, which cancels the pointer stream mid-gesture and the
+            // window never moves. Same recipe as the other drag handles here
+            // (`message-queue-display`, `group-split-handle`).
+            floating &&
+              "cursor-grab touch-none select-none active:cursor-grabbing"
           )}
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
@@ -602,6 +665,7 @@ export function AskQuestionCard({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={collapsed ? t("expand") : t("collapse")}
+                aria-expanded={!collapsed}
                 title={collapsed ? t("expand") : t("collapse")}
                 onClick={() => setCollapsed((v) => !v)}
               >
