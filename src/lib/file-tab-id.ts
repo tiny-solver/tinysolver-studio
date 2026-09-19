@@ -39,6 +39,9 @@ export type FileTabIdParts =
     }
   | { kind: "diff-session"; folderId: number; groupLabel: string; path: string }
   | { kind: "diff-external-conflict"; path: string }
+  // Content Studio pane for one workspace folder (its project root). One per
+  // folder: the pane edits that folder's outputs/game/content/ scene.
+  | { kind: "studio"; folderId: number }
 
 export type FileTabIdKind = FileTabIdParts["kind"]
 
@@ -87,6 +90,8 @@ export function buildFileTabId(parts: FileTabIdParts): string {
       return `diff:session:${parts.folderId}:${encodeToken(parts.groupLabel)}:${encodeToken(parts.path)}`
     case "diff-external-conflict":
       return `diff:external-conflict:${encodeToken(parts.path)}`
+    case "studio":
+      return `studio:${parts.folderId}`
   }
 }
 
@@ -104,6 +109,13 @@ export function parseFileTabId(id: string): FileTabIdParts | null {
   if (head === "file") {
     if (segments.length !== 2 || segments[1] === "") return null
     return { kind: "file", path: decodeToken(segments[1]) }
+  }
+
+  if (head === "studio") {
+    const folderId = parseFolderIdSegment(segments[1])
+    return segments.length === 2 && folderId != null
+      ? { kind: "studio", folderId }
+      : null
   }
 
   if (head !== "diff") return null

@@ -62,7 +62,7 @@ pub async fn detect_package_manager(name: String) -> PackageManagerInfo {
 /// path segment: a `..`, a nested `a/b`, or an absolute path would make the CLI
 /// write OUTSIDE the chosen save directory and bypass the `target_dir` boundary
 /// (also reachable via the server HTTP API, not just the desktop picker).
-fn validate_project_name(name: &str) -> Result<(), AppCommandError> {
+pub(crate) fn validate_project_name(name: &str) -> Result<(), AppCommandError> {
     if name.is_empty() {
         return Err(AppCommandError::invalid_input("Project name is required"));
     }

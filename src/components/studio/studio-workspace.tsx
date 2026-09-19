@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import {
@@ -9,161 +8,371 @@ import {
   ArrowLeft,
   ArrowUp,
   BookOpen,
-  Circle,
-  Download,
-  ImagePlus,
+  Compass,
+  ExternalLink,
+  FilePlus2,
+  Hammer,
+  ImageIcon,
   Layers,
   MousePointer2,
   Play,
   Redo2,
+  RefreshCw,
   Square,
+  Type,
   Undo2,
-  Upload,
 } from "lucide-react"
 import {
+  ANCHORS,
   applyCommands,
-  createDemoDocument,
   createNode,
-  MAX_BUNDLE_BYTES,
-  parseDocument,
-  type StudioCommand,
-  type StudioDocument,
-  type StudioNode,
+  isVisible,
+  parseScene,
+  type SceneAnchor,
+  type SceneFile,
+  type SceneNode,
 } from "@/lib/studio/document"
 import {
-  downloadText,
-  exportBundle,
-  importBundle,
-  inspectImage,
-  loadDraft,
-  saveDraft,
-} from "@/lib/studio/storage"
+  affectsPreview,
+  createScene,
+  listScenes,
+  loadScene,
+  peekSceneEtag,
+  resolveProjectTarget,
+  saveScene,
+  scenePath,
+  type StudioProjectTarget,
+} from "@/lib/studio/project-storage"
+import {
+  buildContentProject,
+  getContentPreview,
+  listContentBuilds,
+} from "@/lib/api"
+import { toErrorMessage } from "@/lib/app-error"
+import { revealItemInDir, isLocalDesktop } from "@/lib/platform"
+import { BrowserLink } from "@/components/ui/browser-link"
+import { getServerBaseUrl } from "@/lib/transport"
+import { getWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
+import type { ContentBuild, ContentScene } from "@/lib/types"
+import { StudioStage } from "./studio-stage"
 import "./studio.css"
 
-const Viewport = dynamic(
-  () => import("./studio-viewport").then((m) => m.StudioViewport),
-  { ssr: false }
-)
 const EXAMPLE =
-  '[\n  { "type": "node.update", "id": "signal",\n    "patch": { "color": "#ffcc66", "width": 150, "height": 150 } }\n]'
+  '[\n  { "type": "node.update", "id": "title",\n    "transform": { "y": 260 }, "props": { "color": "#ffcc66" } }\n]'
 
-export function StudioWorkspace() {
+interface StudioWorkspaceProps {
+  /** Workspace folder whose `outputs/game/content/*.studio.json` is edited
+   *  and whose game is previewed. The /studio page reads it from `?path=`;
+   *  the workspace's file pane passes it in. */
+  projectRoot?: string | null
+  /** Rendered inside the workspace's file pane: fill the container and drop
+   *  the page-level back link. */
+  embedded?: boolean
+}
+
+interface Preview {
+  /** `<origin>/api/content-preview/<id>/` */
+  base: string
+  sameOrigin: boolean
+}
+
+export function StudioWorkspace({
+  projectRoot = null,
+  embedded = false,
+}: StudioWorkspaceProps = {}) {
   const t = useTranslations("Studio")
-  const [document, setDocument] = useState<StudioDocument>(createDemoDocument)
-  const current = useRef(document)
-  const [blobs, setBlobs] = useState<Map<string, Blob>>(new Map())
-  const [selectedId, setSelectedId] = useState<string | null>("switch")
+  const [target, setTarget] = useState<StudioProjectTarget | null>(null)
+  const [scenes, setScenes] = useState<ContentScene[]>([])
+  const [sceneId, setSceneId] = useState<string | null>(null)
+  const [scene, setScene] = useState<SceneFile | null>(null)
+  const current = useRef<SceneFile | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [ready, setReady] = useState(false)
   const [saved, setSaved] = useState("")
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
   const [storageFailed, setStorageFailed] = useState(false)
+  const [diskChanged, setDiskChanged] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [hot, setHot] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [builds, setBuilds] = useState<ContentBuild[]>([])
+  const [building, setBuilding] = useState(false)
   const [commands, setCommands] = useState(EXAMPLE)
   const [commandMessage, setCommandMessage] = useState("")
+  const [rawProps, setRawProps] = useState("")
   const [history, setHistory] = useState<{
-    past: StudioDocument[]
-    future: StudioDocument[]
-  }>({ past: [], future: [] })
-  const version = useRef(0)
+    past: SceneFile[]
+    future: SceneFile[]
+  }>({
+    past: [],
+    future: [],
+  })
+  const etag = useRef<string | null>(null)
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
   const failed = useRef(false)
-  const imageInput = useRef<HTMLInputElement>(null)
-  const bundleInput = useRef<HTMLInputElement>(null)
-  const selected = document.nodes.find((node) => node.id === selectedId)
-  const serialized = JSON.stringify(document)
+  const hotRef = useRef(false)
+  hotRef.current = hot
+
+  const selected =
+    scene?.document.nodes.find((n) => n.id === selectedId) ?? null
+  const serialized = scene ? JSON.stringify(scene) : ""
+
+  // ── Loading ──────────────────────────────────────────────────────
+
+  const loadOne = useCallback(
+    async (
+      resolved: StudioProjectTarget,
+      id: string,
+      cancelled: () => boolean
+    ) => {
+      const loaded = await loadScene(resolved, id)
+      if (cancelled()) return
+      if (!loaded) {
+        current.current = null
+        setScene(null)
+        etag.current = null
+        setSaved("")
+      } else {
+        current.current = loaded.scene
+        setScene(loaded.scene)
+        etag.current = loaded.etag
+        // A migrated file is saved back in the new schema on the first edit;
+        // until then it is "unsaved" so the note is honest.
+        setSaved(loaded.migrated ? "" : JSON.stringify(loaded.scene))
+        setNotice(loaded.migrated ? t("migrated") : "")
+      }
+      setSceneId(id)
+      setSelectedId(null)
+      setHistory({ past: [], future: [] })
+      failed.current = false
+      setStorageFailed(false)
+      setDiskChanged(false)
+      setError("")
+    },
+    [t]
+  )
+
+  const loadFromStore = useCallback(
+    async (cancelled: () => boolean, preferred?: string | null) => {
+      if (!projectRoot) return
+      try {
+        const resolved = await resolveProjectTarget(projectRoot)
+        const list = await listScenes(resolved)
+        if (cancelled()) return
+        setTarget(resolved)
+        setScenes(list)
+        const pick =
+          (preferred && list.some((s) => s.id === preferred) && preferred) ||
+          (list.some((s) => s.id === "main") ? "main" : list[0]?.id) ||
+          null
+        if (pick) await loadOne(resolved, pick, cancelled)
+        else {
+          current.current = null
+          setScene(null)
+          setSceneId(null)
+          etag.current = null
+        }
+        if (cancelled()) return
+        setReady(true)
+      } catch (reason) {
+        if (cancelled()) return
+        failed.current = true
+        setStorageFailed(true)
+        setError(toErrorMessage(reason))
+        setReady(true)
+      }
+    },
+    [projectRoot, loadOne]
+  )
 
   useEffect(() => {
     let cancelled = false
-    loadDraft()
-      .then((draft) => {
+    void loadFromStore(() => cancelled)
+    return () => {
+      cancelled = true
+    }
+  }, [loadFromStore])
+
+  // Preview server for the iframe. Desktop gets a loopback origin; web and
+  // remote-desktop windows go through the API origin they already use.
+  useEffect(() => {
+    if (!projectRoot) return
+    let cancelled = false
+    getContentPreview(projectRoot)
+      .then((info) => {
         if (cancelled) return
-        if (draft) {
-          current.current = draft.document
-          setDocument(draft.document)
-          setBlobs(draft.blobs)
-          version.current = draft.version
-          setSaved(JSON.stringify(draft.document))
-          setSelectedId(null)
-        }
-        setReady(true)
+        const origin = info.loopback ?? getServerBaseUrl()
+        setPreview({
+          base: `${origin}${info.path.replace(/\/+$/, "")}/`,
+          sameOrigin: Boolean(info.loopback) && isLocalDesktop(),
+        })
       })
       .catch((reason) => {
-        if (cancelled) return
-        failed.current = true
-        setStorageFailed(true)
-        setError(String(reason))
-        setReady(true)
+        if (!cancelled) setError(toErrorMessage(reason))
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [projectRoot])
 
   useEffect(() => {
-    if (!ready || storageFailed || serialized === saved) return
+    if (!target?.manifest?.engine) return
+    listContentBuilds(target.root)
+      .then(setBuilds)
+      .catch((reason) => console.warn("[studio] builds:", reason))
+  }, [target])
+
+  // ── File watching ─────────────────────────────────────────────────
+  // The same per-root stream the file tabs use. Our own saves echo back as
+  // events on the scene path; they are recognized by etag and ignored.
+  useEffect(() => {
+    if (!target || !ready) return
+    const store = getWorkspaceStateStore(target.root)
+    const token = store.acquire("paths")
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null
+    let disposed = false
+    const unsubscribe = store.subscribeEnvelopes((envelope) => {
+      const id = sceneId
+      const ownPath = id ? scenePath(target, id) : null
+      let previewChanged = false
+      let scenesChanged = false
+      for (const rel of envelope.changed_paths) {
+        const norm = rel.replace(/\\/g, "/").replace(/^\.?\//, "")
+        if (ownPath && norm === ownPath) {
+          peekSceneEtag(target, id!)
+            .then((onDisk) => {
+              if (disposed || onDisk === etag.current) return
+              if (
+                JSON.stringify(current.current) === saved ||
+                !current.current
+              ) {
+                void loadOne(target, id!, () => disposed).then(() => {
+                  if (!hotRef.current) setReloadToken((n) => n + 1)
+                })
+              } else setDiskChanged(true)
+            })
+            .catch((reason) =>
+              console.warn("[studio] etag check failed:", reason)
+            )
+          continue
+        }
+        if (
+          norm.startsWith(`${target.contentDir}/`) &&
+          norm.endsWith(".studio.json")
+        )
+          scenesChanged = true
+        if (affectsPreview(target, norm)) previewChanged = true
+      }
+      if (scenesChanged)
+        listScenes(target)
+          .then((list) => {
+            if (!disposed) setScenes(list)
+          })
+          .catch(() => {})
+      if (previewChanged) {
+        if (reloadTimer) clearTimeout(reloadTimer)
+        reloadTimer = setTimeout(() => setReloadToken((n) => n + 1), 300)
+      }
+    })
+    return () => {
+      disposed = true
+      if (reloadTimer) clearTimeout(reloadTimer)
+      unsubscribe()
+      store.release(token)
+    }
+  }, [target, ready, sceneId, saved, loadOne])
+
+  // ── Autosave ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!ready || storageFailed || !scene || !target || serialized === saved)
+      return
     const timer = setTimeout(() => {
-      const snapshot = document
+      const snapshot = scene
       saveQueue.current = saveQueue.current.then(async () => {
         if (failed.current) return
         try {
-          version.current = await saveDraft(snapshot, blobs, version.current)
+          etag.current = await saveScene(target, snapshot, etag.current)
           setSaved(JSON.stringify(snapshot))
+          setNotice("")
+          // An engine without hot reload sees the edit only after a reload.
+          if (!hotRef.current) setReloadToken((n) => n + 1)
         } catch (reason) {
           failed.current = true
           setStorageFailed(true)
-          setError(String(reason))
+          setError(toErrorMessage(reason))
         }
       })
     }, 450)
     return () => clearTimeout(timer)
-  }, [document, blobs, ready, saved, serialized, storageFailed])
+  }, [scene, ready, saved, serialized, storageFailed, target])
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (ready && serialized !== saved) {
+      if (ready && scene && serialized !== saved) {
         event.preventDefault()
         event.returnValue = ""
       }
     }
     window.addEventListener("beforeunload", warn)
     return () => window.removeEventListener("beforeunload", warn)
-  }, [ready, serialized, saved])
+  }, [ready, scene, serialized, saved])
 
-  const commit = useCallback((next: StudioDocument) => {
+  useEffect(() => {
+    setRawProps(selected ? JSON.stringify(selected.props, null, 2) : "")
+  }, [selected])
+
+  // ── Editing ───────────────────────────────────────────────────────
+  const commit = useCallback((next: SceneFile) => {
     const previous = current.current
-    const valid = parseDocument(next)
-    if (JSON.stringify(previous) === JSON.stringify(valid)) return
-    setHistory((h) => ({ past: [...h.past, previous].slice(-50), future: [] }))
+    const valid = parseScene(next)
+    if (previous && JSON.stringify(previous) === JSON.stringify(valid)) return
+    if (previous)
+      setHistory((h) => ({
+        past: [...h.past, previous].slice(-50),
+        future: [],
+      }))
     current.current = valid
-    setDocument(valid)
+    setScene(valid)
     setError("")
   }, [])
 
   const dispatch = useCallback(
     (batch: unknown) => {
+      if (!current.current) return false
       try {
         commit(applyCommands(current.current, batch))
         return true
       } catch (reason) {
-        setError(String(reason))
+        setError(toErrorMessage(reason))
         return false
       }
     },
     [commit]
   )
 
-  function updateNode(patch: Partial<StudioNode>) {
-    if (selected) dispatch([{ type: "node.update", id: selected.id, patch }])
+  const updateTransform = (patch: Partial<SceneNode["transform"]>) => {
+    if (selected)
+      dispatch([{ type: "node.update", id: selected.id, transform: patch }])
   }
-  function addShape(kind: "rectangle" | "ellipse") {
-    const node = createNode(kind, t(kind))
+  const updateProps = (patch: Record<string, unknown>) => {
+    if (selected)
+      dispatch([{ type: "node.update", id: selected.id, props: patch }])
+  }
+  function addNode(type: "rect" | "text" | "sprite") {
+    if (!current.current) return
+    const taken = new Set(current.current.document.nodes.map((n) => n.id))
+    let n = 1
+    while (taken.has(`${type}_${n}`)) n += 1
+    const node = createNode(type, `${type}_${n}`)
     if (dispatch([{ type: "node.add", node }])) setSelectedId(node.id)
   }
   function undo(redo = false) {
     const source = redo ? history.future : history.past
     const next = source[source.length - 1]
-    if (!next) return
+    if (!next || !current.current) return
     setHistory(
       redo
         ? {
@@ -176,89 +385,94 @@ export function StudioWorkspace() {
           }
     )
     current.current = next
-    setDocument(next)
+    setScene(next)
   }
-  async function addImage(file?: File) {
-    if (!file) return
+  async function newScene() {
+    if (!target) return
+    const id = window.prompt(t("newSceneId"), "")?.trim()
+    if (!id) return
     setBusy(true)
     try {
-      const asset = await inspectImage(file, file.name)
-      const previous = current.current
-      const next = {
-        ...previous,
-        assets: previous.assets.some((a) => a.id === asset.id)
-          ? previous.assets
-          : [...previous.assets, asset],
-      }
-      const scale = Math.min(1, 320 / asset.width, 240 / asset.height)
-      const node: StudioNode = {
-        ...createNode("rectangle", asset.name.slice(0, 120)),
-        kind: "image",
-        assetId: asset.id,
-        color: "#ffffff",
-        width: Math.max(1, Math.round(asset.width * scale)),
-        height: Math.max(1, Math.round(asset.height * scale)),
-      }
-      const valid = applyCommands(next, [{ type: "node.add", node }])
-      setBlobs((old) =>
-        new Map(old).set(asset.id, new Blob([file], { type: asset.mime }))
-      )
-      commit(valid)
-      setSelectedId(node.id)
+      await createScene(target, id)
+      await loadFromStore(() => false, id)
     } catch (reason) {
-      setError(String(reason))
+      setError(toErrorMessage(reason))
     } finally {
       setBusy(false)
     }
   }
-  async function openBundle(file?: File) {
-    if (!file) return
+  async function switchScene(id: string) {
+    if (!target || id === sceneId) return
     setBusy(true)
     try {
-      if (file.size > MAX_BUNDLE_BYTES) throw new Error(t("bundleTooLarge"))
-      const imported = await importBundle(await file.text())
-      // Keep bytes for undo history as well as the newly opened document.
-      setBlobs((old) => new Map([...old, ...imported.blobs]))
-      commit(imported.document)
-      setSelectedId(null)
-      setPlaying(false)
+      await loadOne(target, id, () => false)
     } catch (reason) {
-      setError(String(reason))
+      setError(toErrorMessage(reason))
     } finally {
       setBusy(false)
     }
   }
-  async function download() {
-    setBusy(true)
+  async function build() {
+    if (!target) return
+    setBuilding(true)
+    setError("")
     try {
-      downloadText(
-        await exportBundle(current.current, blobs),
-        `${current.current.id}.studio.json`
-      )
+      const result = await buildContentProject(target.root)
+      setBuilds((list) => [
+        result,
+        ...list.filter((b) => b.version !== result.version),
+      ])
+      setNotice(t("buildDone", { version: result.version }))
     } catch (reason) {
-      setError(String(reason))
+      setError(toErrorMessage(reason))
     } finally {
-      setBusy(false)
+      setBuilding(false)
     }
   }
-  const disabled = !ready || busy || playing
-  const updateDocument = (
-    patch: Extract<StudioCommand, { type: "document.update" }>["patch"]
-  ) => dispatch([{ type: "document.update", patch }])
+
+  const onReady = useCallback((isHot: boolean) => setHot(isHot), [])
+  const onMove = useCallback(
+    (id: string, x: number, y: number) =>
+      dispatch([{ type: "node.update", id, transform: { x, y } }]),
+    [dispatch]
+  )
+
+  const disabled = !ready || busy || playing || !scene
+  const src =
+    preview && target && sceneId
+      ? `${preview.base}${target.entry}?scene=${encodeURIComponent(sceneId)}`
+      : null
+  const hasEngine = Boolean(target?.manifest?.engine)
+
+  if (!projectRoot) {
+    return (
+      <main
+        className={embedded ? "studio-root studio-embedded" : "studio-root"}
+      >
+        <div className="studio-blank">
+          <Layers size={28} />
+          <p>{t("noProjectOpen")}</p>
+          {!embedded && <Link href="/workspace">{t("back")}</Link>}
+        </div>
+      </main>
+    )
+  }
 
   return (
-    <main className="studio-root">
+    <main className={embedded ? "studio-root studio-embedded" : "studio-root"}>
       <header className="studio-header">
         <div className="studio-brand">
-          <Link href="/workspace" aria-label={t("back")}>
-            <ArrowLeft size={18} />
-          </Link>
+          {!embedded && (
+            <Link href="/workspace" aria-label={t("back")}>
+              <ArrowLeft size={18} />
+            </Link>
+          )}
           <span className="studio-logo">
             <Layers size={19} />
           </span>
           <div>
             <strong>Content Studio</strong>
-            <span>{t("prototype")}</span>
+            <span>{target?.manifest?.name ?? projectRoot}</span>
           </div>
         </div>
         <div className="studio-header-actions">
@@ -266,146 +480,238 @@ export function StudioWorkspace() {
             <BookOpen size={16} />
             {t("plan")}
           </a>
+          <a href="/how-built.html">
+            <Compass size={16} />
+            {t("howBuilt")}
+          </a>
+          <label className="studio-scene-pick">
+            {t("scene")}
+            <select
+              aria-label={t("scene")}
+              value={sceneId ?? ""}
+              disabled={!ready || busy || scenes.length === 0}
+              onChange={(e) => void switchScene(e.target.value)}
+            >
+              {scenes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name === s.id ? s.id : `${s.name} · ${s.id}`}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
-            onClick={() => bundleInput.current?.click()}
-            disabled={!ready || busy}
+            onClick={() => void newScene()}
+            disabled={!ready || busy || !target}
           >
-            <Upload size={16} />
-            {t("open")}
+            <FilePlus2 size={16} />
+            {t("newScene")}
           </button>
-          <button onClick={download} disabled={!ready || busy}>
-            <Download size={16} />
-            {t("export")}
+          <button
+            onClick={() => void loadFromStore(() => false, sceneId)}
+            disabled={!ready || busy}
+            title={t("reload")}
+          >
+            <RefreshCw size={16} />
+            {t("reload")}
+          </button>
+          {src && (
+            <BrowserLink href={src}>
+              <ExternalLink size={16} />
+              {t("previewOpen")}
+            </BrowserLink>
+          )}
+          <button
+            onClick={() => void build()}
+            disabled={!ready || busy || building || !hasEngine}
+            title={hasEngine ? t("buildHint") : t("engineMissing")}
+          >
+            <Hammer size={16} />
+            {building ? t("building") : t("build")}
           </button>
           <button
             className="studio-primary"
             onClick={() => setPlaying(!playing)}
-            disabled={!ready || busy}
+            disabled={!ready || busy || !scene}
           >
             {playing ? <MousePointer2 size={16} /> : <Play size={16} />}
             {playing ? t("edit") : t("preview")}
           </button>
         </div>
       </header>
-      <input
-        ref={imageInput}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        hidden
-        onChange={(e) => {
-          void addImage(e.target.files?.[0])
-          e.target.value = ""
-        }}
-      />
-      <input
-        ref={bundleInput}
-        type="file"
-        accept=".json,application/json"
-        hidden
-        onChange={(e) => {
-          void openBundle(e.target.files?.[0])
-          e.target.value = ""
-        }}
-      />
       <div className="studio-context">
         <span>
-          <span className="studio-step">01</span>
-          {t("common")}
-          <span className="studio-divider">/</span>
-          <span className="studio-step">02</span>
-          {t("tool")}
-          <span className="studio-divider">/</span>
-          <span className="studio-step">03</span>Three.js
+          {target && (
+            <>
+              {t("projectMode", { path: target.manifest?.name ?? target.root })}
+              <span className="studio-divider">/</span>
+              {sceneId ? scenePath(target, sceneId) : t("noScenes")}
+              <span className="studio-divider">/</span>
+              {src
+                ? hot
+                  ? t("hotLive")
+                  : t("hotReload")
+                : t("previewStarting")}
+            </>
+          )}
         </span>
         <span role="status">
           {!ready
-            ? t("loading")
+            ? t("loadingProject")
             : storageFailed
-              ? t("saveFailed")
-              : serialized === saved
-                ? t("saved")
-                : t("saving")}
+              ? t("conflict")
+              : !scene
+                ? ""
+                : serialized === saved
+                  ? t("savedProject", { path: scenePath(target!, scene.id) })
+                  : t("saving")}
         </span>
       </div>
+      {diskChanged && (
+        <div className="studio-error" role="alert">
+          {t("diskChanged")}
+          <button onClick={() => void loadFromStore(() => false, sceneId)}>
+            {t("reload")}
+          </button>
+          <button onClick={() => setDiskChanged(false)}>{t("dismiss")}</button>
+        </div>
+      )}
       {error && (
         <div className="studio-error" role="alert">
           {error}
           <button onClick={() => setError("")}>{t("dismiss")}</button>
         </div>
       )}
+      {notice && (
+        <div className="studio-notice" role="status">
+          {notice}
+          <button onClick={() => setNotice("")}>{t("dismiss")}</button>
+        </div>
+      )}
       <div className="studio-body">
         <aside className="studio-sidebar">
           <div className="studio-section-title">
             <h2>{t("layers")}</h2>
-            <span>{document.nodes.length}</span>
+            <span>{scene?.document.nodes.length ?? 0}</span>
           </div>
           <div className="studio-add-tools">
-            <button disabled={disabled} onClick={() => addShape("rectangle")}>
+            <button disabled={disabled} onClick={() => addNode("rect")}>
               <Square size={16} />
-              {t("rectangle")}
+              {t("addRect")}
             </button>
-            <button disabled={disabled} onClick={() => addShape("ellipse")}>
-              <Circle size={16} />
-              {t("ellipse")}
+            <button disabled={disabled} onClick={() => addNode("text")}>
+              <Type size={16} />
+              {t("addText")}
             </button>
-            <button
-              disabled={disabled}
-              onClick={() => imageInput.current?.click()}
-            >
-              <ImagePlus size={16} />
-              {t("image")}
+            <button disabled={disabled} onClick={() => addNode("sprite")}>
+              <ImageIcon size={16} />
+              {t("addSprite")}
             </button>
           </div>
           <div className="studio-layer-list">
-            {[...document.nodes].reverse().map((node) => (
-              <button
-                key={node.id}
-                className={selectedId === node.id ? "is-selected" : ""}
-                aria-pressed={selectedId === node.id}
-                disabled={playing}
-                onClick={() => setSelectedId(node.id)}
-              >
-                <span
-                  className="studio-layer-swatch"
-                  style={{
-                    background: node.color,
-                    borderRadius: node.kind === "ellipse" ? "50%" : 3,
-                  }}
-                />
-                <span>{node.name}</span>
-                {!node.visible && <small>{t("hidden")}</small>}
-              </button>
-            ))}
+            {scene &&
+              [...scene.document.nodes]
+                .sort((a, b) => b.transform.z - a.transform.z)
+                .map((node) => (
+                  <button
+                    key={node.id}
+                    className={selectedId === node.id ? "is-selected" : ""}
+                    aria-pressed={selectedId === node.id}
+                    disabled={playing}
+                    onClick={() => setSelectedId(node.id)}
+                  >
+                    <span
+                      className="studio-layer-swatch"
+                      style={{
+                        background:
+                          typeof node.props.color === "string"
+                            ? node.props.color
+                            : typeof node.props.placeholder === "string"
+                              ? node.props.placeholder
+                              : "var(--muted-foreground)",
+                        borderRadius: node.type === "text" ? 0 : 3,
+                      }}
+                    />
+                    <span>{node.id}</span>
+                    <small>{!isVisible(node) ? t("hidden") : node.type}</small>
+                  </button>
+                ))}
+            {ready && !scene && (
+              <div className="studio-empty-assets">
+                {t("noScenes")}
+                <button onClick={() => void newScene()} disabled={!target}>
+                  {t("createScene")}
+                </button>
+              </div>
+            )}
           </div>
           <div className="studio-assets">
             <h2>{t("assets")}</h2>
             <p>{t("assetHint")}</p>
-            {document.assets.length === 0 ? (
+            {!scene || scene.document.assets.length === 0 ? (
               <div className="studio-empty-assets">{t("noAssets")}</div>
             ) : (
-              document.assets.map((asset) => (
+              scene.document.assets.map((asset) => (
                 <div key={asset.id} className="studio-asset-row">
-                  <ImagePlus size={16} />
+                  <ImageIcon size={16} />
                   <div>
-                    <strong>{asset.name}</strong>
+                    <strong>{asset.id}</strong>
                     <span>
-                      {asset.width} × {asset.height} ·{" "}
-                      {Math.ceil(asset.size / 1024)} KB
+                      {asset.file} · {asset.width}×{asset.height}
+                      {asset.missing ? ` · ${t("missingAsset")}` : ""}
                     </span>
                   </div>
                 </div>
               ))
             )}
           </div>
-          <div className="studio-local-note">{t("localNote")}</div>
+          {hasEngine && (
+            <div className="studio-builds">
+              <h2>{t("builds")}</h2>
+              {builds.length === 0 ? (
+                <p>{t("noBuilds")}</p>
+              ) : (
+                builds.slice(0, 5).map((b) => (
+                  <div key={b.version} className="studio-build-row">
+                    <strong>{b.version}</strong>
+                    <span>
+                      {new Date(b.built_at).toLocaleString()} ·{" "}
+                      {Math.ceil(b.size_bytes / 1024)} KB
+                    </span>
+                    <div>
+                      {isLocalDesktop() && (
+                        <button
+                          onClick={() => void revealItemInDir(b.zip ?? b.dir)}
+                        >
+                          {t("openBuildFolder")}
+                        </button>
+                      )}
+                      <code title={b.dir}>
+                        {b.zip ? t("buildZip") : b.entry}
+                      </code>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          <div className="studio-local-note">
+            {target
+              ? target.manifest
+                ? t("projectNote")
+                : t("notProject")
+              : ""}
+          </div>
         </aside>
         <section className="studio-canvas-panel">
           <div className="studio-canvas-toolbar">
             <div>
-              <strong>{document.name}</strong>
-              <span>
-                {document.width} × {document.height}
-              </span>
+              <strong>{scene?.name ?? ""}</strong>
+              {scene && (
+                <span>
+                  {scene.document.container.width} ×{" "}
+                  {scene.document.container.height}
+                </span>
+              )}
             </div>
             <div>
               <button
@@ -430,17 +736,17 @@ export function StudioWorkspace() {
             </div>
           </div>
           <div className="studio-canvas-area">
-            {ready && (
-              <Viewport
-                key={playing ? "play" : "edit"}
-                document={document}
-                blobs={blobs}
+            {ready && scene && (
+              <StudioStage
+                src={src}
+                scene={scene}
                 selectedId={selectedId}
                 playing={playing}
+                reloadToken={reloadToken}
                 onSelect={setSelectedId}
-                onMove={(id, x, y) =>
-                  dispatch([{ type: "node.update", id, patch: { x, y } }])
-                }
+                onMove={onMove}
+                onReady={onReady}
+                sameOrigin={preview?.sameOrigin ?? false}
               />
             )}
           </div>
@@ -467,7 +773,7 @@ export function StudioWorkspace() {
                       setSelectedId(null)
                     }
                   } catch (reason) {
-                    setError(String(reason))
+                    setError(toErrorMessage(reason))
                   }
                 }}
               >
@@ -480,73 +786,153 @@ export function StudioWorkspace() {
         <aside className="studio-inspector">
           <h2>{t("inspector")}</h2>
           <fieldset disabled={disabled}>
-            <label>
-              {t("sceneName")}
-              <input
-                value={document.name}
-                onChange={(e) => updateDocument({ name: e.target.value })}
-              />
-            </label>
-            <label className="studio-color-field">
-              {t("background")}
-              <input
-                aria-label={t("background")}
-                type="color"
-                value={document.background}
-                onChange={(e) => updateDocument({ background: e.target.value })}
-              />
-              <code>{document.background}</code>
-            </label>
+            {scene && (
+              <label>
+                {t("sceneName")}
+                <input
+                  value={scene.name}
+                  onChange={(e) =>
+                    dispatch([{ type: "scene.update", name: e.target.value }])
+                  }
+                />
+              </label>
+            )}
             <hr />
             {selected ? (
               <>
                 <div className="studio-object-type">
-                  {selected.kind}
+                  {selected.type}
                   <code>{selected.id}</code>
                 </div>
-                <label>
-                  {t("name")}
-                  <input
-                    value={selected.name}
-                    onChange={(e) => updateNode({ name: e.target.value })}
-                  />
-                </label>
                 <div className="studio-fields-grid">
-                  {(["x", "y", "width", "height"] as const).map((key) => (
+                  {(
+                    [
+                      ["x", "x"],
+                      ["y", "y"],
+                      ["w", "width"],
+                      ["h", "height"],
+                      ["z", "z"],
+                    ] as const
+                  ).map(([key, label]) => (
                     <label key={key}>
-                      {t(key)}
+                      {t(label)}
                       <input
-                        aria-label={t(key)}
+                        aria-label={t(label)}
                         type="number"
-                        min={key === "width" || key === "height" ? 1 : -8192}
-                        max={8192}
-                        value={selected[key]}
+                        min={key === "w" || key === "h" ? 1 : undefined}
+                        value={selected.transform[key]}
                         onChange={(e) => {
                           if (e.target.value !== "")
-                            updateNode({ [key]: Number(e.target.value) })
+                            updateTransform({ [key]: Number(e.target.value) })
                         }}
                       />
                     </label>
                   ))}
+                  <label>
+                    {t("anchor")}
+                    <select
+                      aria-label={t("anchor")}
+                      value={selected.transform.anchor}
+                      onChange={(e) =>
+                        updateTransform({
+                          anchor: e.target.value as SceneAnchor,
+                        })
+                      }
+                    >
+                      {ANCHORS.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
-                <label className="studio-color-field">
-                  {t("color")}
-                  <input
-                    aria-label={t("color")}
-                    type="color"
-                    value={selected.color}
-                    onChange={(e) => updateNode({ color: e.target.value })}
-                  />
-                  <code>{selected.color}</code>
-                </label>
                 <label className="studio-checkbox">
                   <input
                     type="checkbox"
-                    checked={selected.visible}
-                    onChange={(e) => updateNode({ visible: e.target.checked })}
+                    checked={isVisible(selected)}
+                    onChange={(e) => updateProps({ visible: e.target.checked })}
                   />
                   {t("visible")}
                 </label>
+                {selected.type === "sprite" && (
+                  <label>
+                    {t("asset")}
+                    <select
+                      aria-label={t("asset")}
+                      value={
+                        typeof selected.props.asset === "string"
+                          ? selected.props.asset
+                          : ""
+                      }
+                      onChange={(e) =>
+                        updateProps({ asset: e.target.value || null })
+                      }
+                    >
+                      <option value="">{t("noAsset")}</option>
+                      {scene!.document.assets.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.id}
+                          {a.missing ? ` (${t("missingAsset")})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {selected.type === "text" && (
+                  <>
+                    <label>
+                      {t("text")}
+                      <textarea
+                        aria-label={t("text")}
+                        rows={3}
+                        value={
+                          typeof selected.props.text === "string"
+                            ? selected.props.text
+                            : ""
+                        }
+                        onChange={(e) => updateProps({ text: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      {t("fontSize")}
+                      <input
+                        type="number"
+                        min={1}
+                        value={
+                          typeof selected.props.size === "number"
+                            ? selected.props.size
+                            : 44
+                        }
+                        onChange={(e) => {
+                          if (e.target.value !== "")
+                            updateProps({ size: Number(e.target.value) })
+                        }}
+                      />
+                    </label>
+                  </>
+                )}
+                {(selected.type === "text" || selected.type === "rect") && (
+                  <label className="studio-color-field">
+                    {t("color")}
+                    <input
+                      aria-label={t("color")}
+                      type="color"
+                      value={
+                        typeof selected.props.color === "string" &&
+                        /^#[0-9a-fA-F]{6}$/.test(selected.props.color)
+                          ? selected.props.color
+                          : "#ffffff"
+                      }
+                      onChange={(e) => updateProps({ color: e.target.value })}
+                    />
+                    <code>
+                      {typeof selected.props.color === "string"
+                        ? selected.props.color
+                        : ""}
+                    </code>
+                  </label>
+                )}
                 <div className="studio-layer-actions">
                   <button
                     onClick={() =>
@@ -579,25 +965,68 @@ export function StudioWorkspace() {
                 </div>
                 <hr />
                 <h3>{t("interaction")}</h3>
-                <label>
-                  {t("toggleTarget")}
-                  <select
-                    value={selected.toggleTarget ?? ""}
+                <label className="studio-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selected.props.interactive === true}
                     onChange={(e) =>
-                      updateNode({ toggleTarget: e.target.value })
+                      updateProps({ interactive: e.target.checked })
                     }
-                  >
-                    <option value="">{t("none")}</option>
-                    {document.nodes
-                      .filter((node) => node.id !== selected.id)
-                      .map((node) => (
-                        <option key={node.id} value={node.id}>
-                          {node.name}
-                        </option>
-                      ))}
-                  </select>
+                  />
+                  {t("interactive")}
                 </label>
-                <p className="studio-field-hint">{t("interactionHint")}</p>
+                <label>
+                  {t("onClick")}
+                  <input
+                    value={
+                      typeof selected.props.onClick === "string"
+                        ? selected.props.onClick
+                        : ""
+                    }
+                    onChange={(e) =>
+                      updateProps({ onClick: e.target.value || null })
+                    }
+                  />
+                </label>
+                <p className="studio-field-hint">{t("onClickHint")}</p>
+                <details>
+                  <summary>{t("rawProps")}</summary>
+                  <p className="studio-field-hint">{t("rawPropsHint")}</p>
+                  <textarea
+                    aria-label={t("rawProps")}
+                    rows={8}
+                    value={rawProps}
+                    spellCheck={false}
+                    onChange={(e) => setRawProps(e.target.value)}
+                  />
+                  <button
+                    onClick={() => {
+                      try {
+                        const parsed = JSON.parse(rawProps)
+                        if (
+                          !parsed ||
+                          typeof parsed !== "object" ||
+                          Array.isArray(parsed)
+                        )
+                          throw new Error("props: expected an object")
+                        if (current.current) {
+                          const next = structuredClone(current.current)
+                          const node = next.document.nodes.find(
+                            (n) => n.id === selected.id
+                          )
+                          if (node) {
+                            node.props = parsed
+                            commit(next)
+                          }
+                        }
+                      } catch (reason) {
+                        setError(toErrorMessage(reason))
+                      }
+                    }}
+                  >
+                    {t("applyProps")}
+                  </button>
+                </details>
                 <button
                   className="studio-delete"
                   onClick={() => {

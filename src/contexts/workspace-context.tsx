@@ -70,7 +70,10 @@ import { useOfficeAutoPreview } from "@/lib/office-preview-prefs"
 export type WorkspaceMode = "conversation" | "fusion"
 export type WorkspacePane = "conversation" | "files"
 
-type FileWorkspaceTabKind = "file" | "diff" | "rich-diff"
+// `studio`: the Content Studio pane for a folder — no file content of its
+// own (the editor persists into the folder itself), so every file-only path
+// (watcher, save, unload, dirty prompts) skips it like a diff tab.
+type FileWorkspaceTabKind = "file" | "diff" | "rich-diff" | "studio"
 type FileSaveState = "idle" | "saving" | "error"
 type LineEnding = "lf" | "crlf" | "mixed" | "none"
 
@@ -217,6 +220,8 @@ interface WorkspaceActionsValue {
   setFileTabComposing: (tabId: string, composing: boolean) => void
   reloadActiveFile: () => Promise<void>
   toggleFileTabPreview: (tabId: string) => void
+  /** Open (or focus) the Content Studio pane for a folder beside the chat. */
+  openStudioPane: (folderId: number, folderPath: string, title: string) => void
   toggleFilesMaximized: () => void
 }
 
@@ -2568,6 +2573,30 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     })
   }, [])
 
+  const openStudioPane = useCallback(
+    (folderId: number, folderPath: string, title: string) => {
+      const tabId = buildFileTabId({ kind: "studio", folderId })
+      if (fileTabsRef.current.some((tab) => tab.id === tabId)) {
+        activateTab(tabId, false)
+        return
+      }
+      // Nothing to fetch: the pane loads its own document from the folder.
+      seedLoadingTab({
+        ...loadingTab(
+          tabId,
+          folderId,
+          "studio",
+          title,
+          folderPath,
+          folderPath,
+          "studio"
+        ),
+        loading: false,
+      })
+    },
+    [activateTab, seedLoadingTab]
+  )
+
   // Stable for the provider's lifetime: every callback reads mutable state
   // through refs or functional updaters, never through render-scoped
   // closures, so this memo's inputs only change if a callback identity
@@ -2600,6 +2629,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       reloadActiveFile,
       toggleFileTabPreview,
       toggleFilesMaximized,
+      openStudioPane,
     }),
     [
       setActivePane,
@@ -2628,6 +2658,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       reloadActiveFile,
       toggleFileTabPreview,
       toggleFilesMaximized,
+      openStudioPane,
     ]
   )
 

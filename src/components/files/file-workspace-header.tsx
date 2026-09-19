@@ -29,8 +29,8 @@ export function FileWorkspaceHeader() {
 
   if (!activeFileTab) return null
 
-  const isDiff =
-    activeFileTab.kind === "diff" || activeFileTab.kind === "rich-diff"
+  // Diff and studio tabs have no single navigable file — plain title.
+  const isDiff = activeFileTab.kind !== "file"
   const isDirty =
     activeFileTab.kind === "file" && Boolean(activeFileTab.isDirty)
   // Mirror the gating the file tab strip used (file-workspace-tab-bar.tsx):

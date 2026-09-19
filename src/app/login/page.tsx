@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { getWebApiOrigin } from "@/lib/transport"
 import { isDesktop } from "@/lib/platform"
 
 export default function LoginPage() {
@@ -29,7 +30,7 @@ export default function LoginPage() {
 
     try {
       // Validate token by calling a lightweight API endpoint
-      const res = await fetch("/api/health", {
+      const res = await fetch(`${getWebApiOrigin()}/api/health`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

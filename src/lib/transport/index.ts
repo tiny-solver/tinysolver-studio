@@ -24,13 +24,27 @@ function createWebTransport(baseUrl: string): Transport {
   return new WebTransport(baseUrl)
 }
 
+/**
+ * Origin the web transport talks to. Normally this page's own origin (the
+ * server serves both the static app and `/api`). During development the
+ * app runs on the Next dev server for hot reload, which has no `/api`, so
+ * `NEXT_PUBLIC_CODEG_API_URL` points it at a separately running
+ * `codeg-server` (CORS on the server is open, and WebSocket upgrades are
+ * not origin-restricted). Inlined at build time; unset in production builds.
+ */
+export function getWebApiOrigin(): string {
+  const override = process.env.NEXT_PUBLIC_CODEG_API_URL?.replace(/\/+$/, "")
+  if (override) return override
+  return typeof window !== "undefined" ? window.location.origin : ""
+}
+
 export function getShellTransport(): Transport {
   if (!_shellTransport) {
     const env = detectEnvironment()
     _shellTransport =
       env === "tauri"
         ? createTauriTransport()
-        : createWebTransport(window.location.origin)
+        : createWebTransport(getWebApiOrigin())
   }
   return _shellTransport
 }
@@ -81,7 +95,7 @@ export function isRemoteDesktopMode(): boolean {
 /// the local origin only as a harmless fallback.
 export function getServerBaseUrl(): string {
   if (_remoteConfig) return _remoteConfig.baseUrl.replace(/\/+$/, "")
-  return typeof window !== "undefined" ? window.location.origin : ""
+  return getWebApiOrigin()
 }
 
 /// Surface a remote-server 401 to the same UI the transport uses for its

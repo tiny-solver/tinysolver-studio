@@ -13,11 +13,19 @@ import { toast } from "sonner"
 import { ChevronLeft, ChevronRight, Lock, type LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { openSettingsWindow, type SettingsSection } from "@/lib/api"
+import {
+  openProjectBootWindow,
+  openSettingsWindow,
+  type SettingsSection,
+} from "@/lib/api"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
 import { useEnabledSkillIds } from "@/hooks/use-enabled-skill-ids"
 import { useWelcomeQuickActions } from "@/hooks/use-appearance"
+import { useContentProject } from "@/hooks/use-content-project"
+import { useWorkspaceActions } from "@/contexts/workspace-context"
+import { useActiveFolder } from "@/contexts/active-folder-context"
+import { WorkspaceFolderDialog } from "@/components/layout/workspace-folder-dialog"
 import { getExpertIcon, pickLocalized } from "@/lib/expert-presentation"
 import {
   OFFICE_ACTIONS,
@@ -30,6 +38,12 @@ import {
   type ResearchAction,
 } from "@/lib/research-actions"
 import {
+  CONTENT_ACTIONS,
+  CONTENT_FEATURED_ACCENTS,
+  type ContentAction,
+} from "@/lib/content-actions"
+import {
+  isQuickActionsTab,
   loadQuickActionsTab,
   saveQuickActionsTab,
   type QuickActionsTab,
@@ -61,6 +75,15 @@ const RESEARCH_FIXED: (ResearchAction & { accent: string })[] =
 // Remaining research skills — de-colored bars in the skill rail.
 const RESEARCH_SCROLL: ResearchAction[] = RESEARCH_ACTIONS.filter(
   (action) => !(action.id in RESEARCH_FEATURED_ACCENTS)
+)
+
+// Three featured creative actions — prominent fixed cards; the rest scroll.
+const CONTENT_FIXED: (ContentAction & { accent: string })[] =
+  CONTENT_ACTIONS.filter((action) => action.id in CONTENT_FEATURED_ACCENTS).map(
+    (action) => ({ ...action, accent: CONTENT_FEATURED_ACCENTS[action.id] })
+  )
+const CONTENT_SCROLL: ContentAction[] = CONTENT_ACTIONS.filter(
+  (action) => !(action.id in CONTENT_FEATURED_ACCENTS)
 )
 
 // Three featured coding experts get prominent fixed cards (color + curated
@@ -379,6 +402,14 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
   const { showWelcomeQuickActions } = useWelcomeQuickActions()
   const lockHint = t("notEnabled.hint")
 
+  // Creative tab context: is the active folder a content project? Drives the
+  // one-line project summary above the cards and nothing else — every card
+  // stays clickable so a user can start the bible before the folder is one.
+  const { activeFolder } = useActiveFolder()
+  const project = useContentProject(activeFolder?.path)
+  const { openStudioPane } = useWorkspaceActions()
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false)
+
   // A skill card is locked when we know which agent will run (welcome mode
   // always does) and — after the status snapshot has loaded — that skill is not
   // linked to it. Before `ready` we optimistically treat everything as usable
@@ -419,15 +450,43 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
   // conversation shows the previous choice.
   const [tab, setTab] = useState<QuickActionsTab>(() => loadQuickActionsTab())
   const handleTabChange = useCallback((value: string) => {
-    const next: QuickActionsTab =
-      value === "office"
-        ? "office"
-        : value === "research"
-          ? "research"
-          : "coding"
+    const next: QuickActionsTab = isQuickActionsTab(value) ? value : "coding"
     setTab(next)
     saveQuickActionsTab(next)
   }, [])
+
+  const handleContent = useCallback(
+    (action: ContentAction) => {
+      if (action.kind === "open-launcher") {
+        openProjectBootWindow("welcome-creative").catch((err) =>
+          console.error("[QuickActions] failed to open project boot:", err)
+        )
+        return
+      }
+      if (action.kind === "open-folder") {
+        setFolderDialogOpen(true)
+        return
+      }
+      if (action.kind === "open-studio") {
+        // Studio is a full page, not a workbench route: it saves into the
+        // active folder's outputs/game/content/, so it needs a folder.
+        if (!activeFolder) {
+          toast.warning(t("creative.studioNeedsFolder"))
+          return
+        }
+        openStudioPane(
+          activeFolder.id,
+          activeFolder.path,
+          t("creative.studioTabTitle")
+        )
+        return
+      }
+      onSelect({
+        text: t(`creative.prompts.${action.id}` as Parameters<typeof t>[0]),
+      })
+    },
+    [onSelect, t, activeFolder, openStudioPane]
+  )
 
   const handleOffice = useCallback(
     (action: OfficeAction) => {
@@ -548,6 +607,12 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
         >
           {t("tabs.research")}
         </TabsTrigger>
+        <TabsTrigger
+          value="creative"
+          className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border/50 data-[state=active]:focus-visible:ring-[3px] data-[state=active]:focus-visible:ring-ring/50"
+        >
+          {t("tabs.creative")}
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="coding" className="flex flex-col gap-2">
@@ -648,6 +713,52 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
           ))}
         </SkillRail>
       </TabsContent>
+
+      <TabsContent value="creative" className="flex flex-col gap-2">
+        <p className="text-center text-xs text-muted-foreground">
+          {project
+            ? t("creative.projectLine", {
+                name: project.name,
+                outputs: project.outputs
+                  .map((kind) =>
+                    t(`creative.kinds.${kind}` as Parameters<typeof t>[0])
+                  )
+                  .join(" · "),
+              })
+            : t("creative.noProjectHint")}
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {CONTENT_FIXED.map((action) => (
+            <BigCard
+              key={action.id}
+              icon={action.icon}
+              accent={action.accent}
+              title={t(`creative.${action.id}` as Parameters<typeof t>[0])}
+              description={t(
+                `creative.${action.id}Desc` as Parameters<typeof t>[0]
+              )}
+              onClick={() => handleContent(action)}
+            />
+          ))}
+        </div>
+        <SkillRail itemCount={CONTENT_SCROLL.length}>
+          {CONTENT_SCROLL.map((action) => (
+            <SkillBar
+              key={action.id}
+              icon={action.icon}
+              label={t(`creative.${action.id}` as Parameters<typeof t>[0])}
+              title={t(`creative.${action.id}Desc` as Parameters<typeof t>[0])}
+              onClick={() => handleContent(action)}
+            />
+          ))}
+        </SkillRail>
+      </TabsContent>
+      {/* Rendered inside the Tabs (a plain div) rather than as a sibling so the
+          rest of this file keeps its indentation; the dialog portals anyway. */}
+      <WorkspaceFolderDialog
+        open={folderDialogOpen}
+        onOpenChange={setFolderDialogOpen}
+      />
     </Tabs>
   )
 }

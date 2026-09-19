@@ -35,6 +35,9 @@ vi.mock("@/lib/remote-workspace", () => ({
   openRemoteWorkspace: mocks.openRemoteWorkspace,
 }))
 
+vi.mock("@/contexts/workspace-context", () => ({
+  useWorkspaceActions: () => ({ openStudioPane: vi.fn() }),
+}))
 vi.mock("@/contexts/automations-view-context", () => ({
   useAutomationsView: () => ({ unseenFailures: 2 }),
 }))

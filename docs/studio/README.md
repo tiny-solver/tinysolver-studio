@@ -6,11 +6,12 @@
 
 게임·인터랙티브 웹·강의 콘텐츠에 사용할 제작 기반을 검증한다.
 
-| 층 | 첫 구현 | 경계 |
+| 층 | 현재 구현 | 경계 |
 | --- | --- | --- |
-| 공통 | 엔진 독립 문서, 이미지 Blob, 검증된 명령, 저장·번들 교환 | 브라우저 초안 하나 |
-| 도구 | 2D 도형·이미지 배치와 클릭 동작 | 타일맵·지형·타임라인은 후속 |
-| 엔진 | Three.js + React Three Fiber | 정사영 렌더링, 별도 실행 상태 |
+| 문서 | 엔진과 편집기가 공유하는 장면 파일 `outputs/game/content/<scene>.studio.json`, 검증된 명령, etag 저장 | 프로젝트 폴더 안에서만 |
+| 도구 | iframe 위 오버레이로 선택·드래그, 인스펙터(transform·props), 장면 추가·전환 | 이미지 업로드·타일맵·타임라인은 후속 |
+| 엔진 | 게임 자체(`outputs/game/index.html`)를 백엔드가 서빙, 편집기는 별도 렌더러 없음 | `codeg:ready` / `codeg:scene` 계약을 지키는 엔진 |
+| 배포 | 빌드 버튼 → `build/game/<version>/` + zip | 정적 호스팅에 올리는 것은 사용자 |
 
 ## 실행 — 전체 빌드 없이 미리보기
 
@@ -19,84 +20,94 @@ pnpm install
 pnpm dev
 ```
 
-- 편집기: `http://localhost:3100/studio`
+- 편집기: 작업공간에서 프로젝트 폴더를 열고 빠른 작업 → 콘텐츠 스튜디오. `?path` 없는 `/studio`는 안내만 보여 준다(브라우저 초안 모드는 없어졌다).
 - 시각 계획: `http://localhost:3100/studio-plan.html`
-- 기존 앱: 작업공간 하단 빠른 작업 메뉴 → 콘텐츠 스튜디오
+- 어떻게 만들었나(인터랙티브): `http://localhost:3100/how-built.html` — 편집기 헤더와 빠른 작업 메뉴의 버튼. 원본은 `docs/studio/how-built.json`.
+- 기존 앱: 작업공간 하단 빠른 작업 메뉴 → 콘텐츠 스튜디오, 또는 창작 스튜디오 탭 → Studio 열기. 활성 폴더가 있으면 대화 옆 파일 창에 파인으로 열리고 그 폴더의 `outputs/game/content/`에 저장한다. 폴더가 없으면 `/studio` 단독 페이지.
 - 편집기 안의 변경은 즉시 렌더링한다. 코드 변경은 Next 개발 서버가 반영한다.
 - 배포할 때 `pnpm build`로 정적 파일을 생성한다. Studio는 Next 서버 API를 사용하지 않는다.
 
+## 개발 루프 — 빌드 없이 변경을 바로 본다
+
+| 목적 | 명령 | 반영 속도 |
+| --- | --- | --- |
+| 프런트엔드만 (시작 화면 UI, /studio 안내 화면) | `pnpm dev` → `http://localhost:3100` | 저장 즉시 HMR |
+| 프런트엔드 + 실제 백엔드 (장면 저장, 게임 미리보기, 빌드) | 터미널 1: `pnpm server:dev` (또는 `CODEG_TOKEN=dev ./src-tauri/target/debug/codeg-server`) · 터미널 2: `pnpm dev:web` → `http://localhost:3100/login`에서 토큰 입력 | 프런트 즉시, Rust는 `cargo run` 재실행(증분 컴파일) |
+| 데스크톱 창 그대로 | `pnpm tauri dev` | 프런트 즉시(HMR), Rust 변경 시 자동 재빌드 |
+
+`pnpm dev:web`은 `NEXT_PUBLIC_CODEG_API_URL=http://127.0.0.1:3081`로 웹 트랜스포트를 별도 서버에 붙인다(서버 CORS 허용, WebSocket은 origin 제한 없음). 배포 빌드에는 이 변수를 넣지 않는다. `pnpm build` + 바이너리 실행은 배포 전 최종 확인용이다.
+
 ## 확인 흐름
 
-1. 샘플의 Switch를 선택하고 드래그하거나 위치·색·크기를 변경한다.
-2. 미리보기를 누른 뒤 보라색 Switch를 눌러 Signal 표시를 전환한다.
-3. 편집으로 돌아오면 원본 표시 상태가 유지된다.
-4. PNG/JPEG/WebP 이미지를 추가하고 자동 저장 완료를 기다린다.
-5. 새로고침하여 이미지와 배치를 확인한다.
-6. 번들을 내보내고 다시 가져온다. 객체 삭제·가져오기도 실행 취소할 수 있다.
-7. 명령 작업공간에서 JSON 명령을 적용하고 한 번에 실행 취소한다.
+1. 창작 스튜디오 탭 → 새 콘텐츠 프로젝트(web-three) → 작업공간이 열리면 빠른 작업 → 콘텐츠 스튜디오.
+2. 스캐폴드된 `main` 장면이 게임 iframe에 그려진다. `hero`를 드래그하면 즉시 움직이고 0.5초 뒤 파일에 저장된다.
+3. 미리보기를 누르고 주인공을 클릭하면 `logic.actions.act_hero`가 실행돼 힌트 텍스트가 토글된다. 편집으로 돌아오면 원본은 그대로다.
+4. 대화창에서 에이전트에게 장면을 고치게 한다. 저장되는 순간 편집기가 다시 읽고 iframe이 갱신된다. 편집 중이었다면 배너가 뜬다.
+5. 빌드를 누르면 `build/game/v1-…/`와 zip이 생기고 사이드바에 버전이 보인다.
+6. 명령 작업공간에서 JSON 명령을 적용하고 한 번에 실행 취소한다.
 
-## 저장과 교환
+## 저장
 
-- IndexedDB `codeg-content-studio-v1`: `drafts`는 현재 문서와 저장 버전, `blobs`는 SHA-256 ID별 이미지 원본이다.
-- 문서 변경과 필요한 Blob은 한 트랜잭션으로 저장된다. 다른 탭이 먼저 저장하면 자동 저장을 중단하고 내보내기를 안내한다.
-- 저장 실패 시 메모리의 편집 결과는 유지된다. 번들로 내보낸 뒤 새로고침한다.
-- 실행 취소는 메모리에 최대 50단계를 보관한다. 영속 버전 이력이 아니다.
-- `.studio.json` 번들은 문서와 Base64 이미지 원본을 담는다. 렌더링 중에는 Blob을 사용하며, Base64는 파일 교환에만 사용한다.
-- 가져올 때 문서 스키마, 참조, 이미지 시그니처·크기·SHA-256을 검증한다. 임의 스크립트·URL·HTML을 실행하지 않는다.
-- 저장소는 서버나 프로젝트 폴더와 연결되지 않는다. 에셋 삭제·미사용 Blob 회수는 후속 단계다.
+- 장면은 프로젝트 폴더의 `outputs/game/content/<scene>.studio.json` 하나뿐이다. 브라우저 저장소(IndexedDB)와 번들 내보내기는 없어졌다. git이 이력이다.
+- 저장은 백엔드 etag를 싣는다. 디스크가 바뀌었으면 거부되고 메모리의 편집은 유지된다. 감시 스트림이 그 변경을 알리면 편집 중이 아닐 때는 자동으로 다시 읽는다.
+- 실행 취소는 메모리에 최대 50단계다.
+- 편집기는 자기가 아는 필드만 검증하고 나머지는 보존한다. 임의 스크립트·함수는 문서에 들어갈 수 없다.
 
 ## 에이전트와 공통 명령
 
-이번 단계에는 실시간 MCP 연결이 없다. 에이전트는 내보낸 번들의 문서를 편집하거나 아래 명령 배치를 작성할 수 있다. 사용자가 번들을 가져오거나 명령 작업공간에 적용한다.
+에이전트는 장면 파일을 직접 편집하면 된다. 스키마는 생성된 `outputs/game/content/README.md`와 [project-layout.md](./project-layout.md)에 있다. 편집기 안의 명령 작업공간은 같은 검증기를 거치는 JSON 배치다.
 
 ```json
 [
-  { "type": "node.update", "id": "signal", "patch": { "color": "#ffcc66" } },
-  { "type": "node.update", "id": "switch", "patch": { "toggleTarget": "signal" } }
+  { "type": "node.update", "id": "title", "transform": { "y": 260 }, "props": { "color": "#ffcc66" } },
+  { "type": "node.add", "node": { "id": "sign", "parent": "root", "type": "rect",
+      "transform": { "x": 100, "y": 100, "w": 300, "h": 200, "anchor": "top-left", "z": 5 },
+      "props": { "color": "#6d7a8c" } } }
 ]
 ```
 
 | 명령 | 내용 |
 | --- | --- |
-| `document.update` | `patch`: name, background |
-| `node.add` | `node`: StudioNode 전체 필드 |
-| `node.update` | `id`, `patch`: name, x, y, width, height, color, visible, toggleTarget |
-| `node.remove` | `id`; 관련 클릭 참조도 제거 |
-| `node.reorder` | `id`, `direction`: forward 또는 backward |
+| `scene.update` | `name` |
+| `node.add` | `node`: SceneNode 전체 |
+| `node.update` | `id`, `transform`(부분), `props`(얕은 병합) |
+| `node.remove` | `id`; 자식 노드도 함께 |
+| `node.reorder` | `id`, `direction`: forward(맨 앞 z) 또는 backward(맨 뒤 z) |
 
-- 좌표는 좌측 상단 기준 픽셀이다. nodes 배열 뒤쪽이 앞 레이어다.
 - 명령은 전체 배치가 검증된 경우에만 적용된다. 실패하면 원본을 유지한다.
-- renderer 객체, 임의 JS 함수, 코드 문자열은 문서에 포함하지 않는다.
-- `toggleTarget`은 대상의 표시 여부를 실행 상태에서만 반전한다.
-- 이미지 원본을 바꾸면 새 해시와 메타데이터를 함께 만들어야 한다. 원본 이미지 가져오기를 사용한다.
+- 실시간 MCP 도구 노출은 아직 없다. 에이전트는 파일을 쓰고, 편집기는 파일 변경을 본다.
 
 ## 구조
 
 ```mermaid
 flowchart LR
-    UI[배치 UI] --> Commands[공통 명령·검증]
-    JSON[에이전트가 작성한 JSON] --> Commands
-    Commands --> Doc[편집 문서]
-    Doc --> DB[IndexedDB + 이미지 Blob]
-    Doc --> Render[Three.js 미리보기]
-    Doc --> Bundle[휴대용 번들]
-    Render --> State[일시적인 실행 상태]
+    Agent[에이전트가 쓴 파일] --> File[outputs/game/content/scene.studio.json]
+    UI[오버레이·인스펙터] --> Commands[검증된 명령] --> File
+    File --> Engine[게임 iframe · 백엔드가 폴더 서빙]
+    Commands -- codeg:scene --> Engine
+    Watch[작업공간 감시 스트림] --> UI
+    Watch --> Engine
+    Build[빌드 버튼] --> Out[build/game/version + zip]
 ```
 
-- `src/lib/studio/document.ts`: 스키마 검증·명령, 렌더러·브라우저 저장에 독립적.
-- `src/lib/studio/storage.ts`: Blob 저장, 교환 파일, 이미지 검증.
-- `src/components/studio/`: 배치 도구와 렌더러.
-- `src/app/studio/page.tsx`: 정적 라우트.
+- `src/lib/studio/document.ts`: 장면 스키마 검증·명령·좌표 계산, 프로토타입 파일 변환.
+- `src/lib/studio/project-storage.ts`: 장면 목록·읽기·저장·etag.
+- `src/components/studio/studio-stage.tsx`: iframe + 드래그 오버레이 + 엔진 핸드셰이크.
+- `src/components/studio/studio-workspace.tsx`: 편집기 화면, 감시 구독, 자동 저장, 빌드.
+- `src-tauri/src/content_preview.rs`: 프로젝트 폴더 HTTP 서빙(공개 라우트 + 데스크톱 루프백).
+- `src-tauri/src/commands/content_project.rs`: 스캐폴드, 매니페스트, 장면 목록, 빌드 패키징. `content_project_three_main.js`가 스캐폴드되는 러너.
+- `src/components/studio/game-preview.tsx`, `studio-pane.tsx`: 작업공간 파일 창의 게임 보기/장면 편집 전환.
 
 ## 검증과 계획 유지관리
 
 ```sh
 pnpm studio:plan
 pnpm studio:plan:check
-pnpm exec vitest run src/lib/studio
+pnpm exec vitest run src/lib/studio src/i18n
 pnpm lint src/app/studio src/components/studio src/lib/studio scripts/build-studio-plan.mjs
+(cd src-tauri && cargo test --features test-utils content_)
 pnpm exec tsc --noEmit
-pnpm studio:test  # 별도 터미널에서 pnpm dev 실행 필요
+pnpm studio:test  # 별도 터미널에서 pnpm dev 실행 필요 (안내 화면만; 실제 루프는 codeg-server + 프로젝트로 확인)
 pnpm build
 ```
 
@@ -117,9 +128,17 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 
 2026-09-19 기준 전체 린트, TypeScript, 정적 빌드가 통과했다. Vitest 456개 파일 / 6,632개 테스트와 실제 Chrome 브라우저 시나리오 3개가 통과했다. 브라우저 시나리오는 렌더 픽셀, 클릭 동작, 드래그·명령·실행 취소, 이미지 번들과 새로고침 복원, 모바일 및 한국어·어두운 테마를 확인한다. 상세 기록은 시각 계획의 검증 기록을 참조한다.
 
+## 콘텐츠 프로젝트
+
+새 게임·새 웹툰이 아니라 **콘텐츠 프로젝트** 하나를 만든다. 세계관·캐릭터·스토리(`bible/`)를 정본으로 두고 `outputs/` 아래 game·webtoon·instatoon·novel·video를 선택해 생성한다. 폴더 규칙과 매니페스트는 [project-layout.md](./project-layout.md)에 있다.
+
+- 시작 화면 → 창작 스튜디오 탭: 새 프로젝트·프로젝트 열기·세계관·캐릭터·스토리·스토리보드·인스타툰·웹툰·소설·게임 장면 프롬프트. 활성 폴더에 `codeg-project.json`이 있으면 프로젝트 이름과 결과물을 표시한다.
+- Project Boot → 콘텐츠 탭: 이름·위치·템플릿·결과물을 고르면 스캐폴드하고 작업공간으로 연다.
+- 생성된 `AGENTS.md`/`CLAUDE.md`가 폴더 규칙이다. Claude Code, Codex, Gemini CLI 등 어떤 에이전트로 열어도 같은 규칙을 읽는다.
+
 ## 다음 제작 흐름과 데스크톱
 
-새 게임 → 템플릿을 독립 폴더로 복제 → 기존 AI 작업공간 연결 → 필요한 도구 호출 → 산출물을 게임에 적용 → 즉시 미리보기 순으로 확장한다. 이 흐름은 현재 계획 단계이며 브라우저 초안 편집과 구분한다.
+새 프로젝트 → 작업공간 → 대화로 게임 수정 → 편집기·iframe 즉시 반영 → 빌드 버튼 → `build/game/<version>/` + zip. 이 루프는 구현됐다. 남은 것은 에셋 업로드, 호스팅 연동, 에이전트 역할 반영이다.
 
 데스크톱 앱 이름은 `Codeg Studio`이며 `pnpm tauri build --bundles app`으로 빌드한다. 로컬 개발용 빌드에서는 업스트림 자동 업데이트 대상과 서명 업데이트 산출물을 비활성화한다.
 

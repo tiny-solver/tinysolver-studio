@@ -187,6 +187,12 @@ import type {
   TokenUsageReport,
   TokenUsageSyncResult,
   TokenUsageSyncStatus,
+  ContentOutputKind,
+  ContentProjectManifest,
+  ContentScene,
+  ContentBuild,
+  ContentPreviewInfo,
+  ContentTemplate,
 } from "./types"
 
 export async function listConversations(params?: {
@@ -3261,6 +3267,69 @@ export async function createShadcnProject(params: {
   })
 }
 
+/** Change signal for the preview's auto-reload. */
+export async function gamePreviewFingerprint(
+  rootPath: string,
+  dir: string
+): Promise<string> {
+  return getTransport().call("game_preview_fingerprint", { rootPath, dir })
+}
+
+export async function listContentTemplates(): Promise<ContentTemplate[]> {
+  return getTransport().call("list_content_templates", {})
+}
+
+/** Scaffold a content project folder; resolves to the new project path. */
+export async function createContentProject(params: {
+  projectName: string
+  targetDir: string
+  template: string
+  outputs: ContentOutputKind[]
+}): Promise<string> {
+  return getTransport().call("create_content_project", {
+    projectName: params.projectName,
+    targetDir: params.targetDir,
+    template: params.template,
+    outputs: params.outputs,
+  })
+}
+
+/** `null` when the folder has no `codeg-project.json`. */
+export async function readContentProject(
+  path: string
+): Promise<ContentProjectManifest | null> {
+  return getTransport().call("read_content_project", { path })
+}
+
+/** Scenes under the game output's content directory, sorted by id. */
+export async function listContentScenes(root: string): Promise<ContentScene[]> {
+  return getTransport().call("list_content_scenes", { root })
+}
+
+/** Packaged builds of the game output, newest first. */
+export async function listContentBuilds(root: string): Promise<ContentBuild[]> {
+  return getTransport().call("list_content_builds", { root })
+}
+
+/** Package `outputs/game` + `assets` into `build/game/<version>/` and a zip.
+ *  Runs `engine.build` first when the manifest declares one. */
+export async function buildContentProject(root: string): Promise<ContentBuild> {
+  return getTransport().call(
+    "build_content_project",
+    { root },
+    {
+      timeoutMs: 10 * 60 * 1000,
+    }
+  )
+}
+
+/** Register the folder for iframe preview and get its URL parts. */
+export async function getContentPreview(
+  root: string
+): Promise<ContentPreviewInfo> {
+  return getTransport().call("get_content_preview", { root })
+}
+
 /**
  * Detect, per codeg-supported agent, whether the HyperFrames skills are already
  * installed globally. Cheap filesystem check, so no long timeout is needed.
@@ -4562,6 +4631,26 @@ export async function saveFileContent(
     rootPath,
     path,
     content,
+    expectedEtag: expectedEtag ?? null,
+  })
+}
+
+/**
+ * Workspace-confined write of raw bytes. Creates the file (and parent
+ * directories inside the workspace) when missing; with `expectedEtag` set
+ * it refuses to overwrite a file that changed since that etag was read.
+ * Used by Studio to persist a scene and its images into the project folder.
+ */
+export async function writeWorkspaceFileBase64(
+  rootPath: string,
+  path: string,
+  dataBase64: string,
+  expectedEtag?: string | null
+): Promise<FileSaveResult> {
+  return getTransport().call("write_workspace_file_base64", {
+    rootPath,
+    path,
+    dataBase64,
     expectedEtag: expectedEtag ?? null,
   })
 }

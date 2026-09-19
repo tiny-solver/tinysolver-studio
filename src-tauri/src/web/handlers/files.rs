@@ -63,6 +63,15 @@ pub struct SaveFileContentParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WriteWorkspaceFileBase64Params {
+    pub root_path: String,
+    pub path: String,
+    pub data_base64: String,
+    pub expected_etag: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveFileCopyParams {
     pub root_path: String,
     pub path: String,
@@ -145,6 +154,19 @@ pub async fn save_file_content(
         params.root_path,
         params.path,
         params.content,
+        params.expected_etag,
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+pub async fn write_workspace_file_base64(
+    Json(params): Json<WriteWorkspaceFileBase64Params>,
+) -> Result<Json<folder_commands::FileSaveResult>, AppCommandError> {
+    let result = folder_commands::write_workspace_file_base64(
+        params.root_path,
+        params.path,
+        params.data_base64,
         params.expected_etag,
     )
     .await?;
