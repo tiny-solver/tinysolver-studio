@@ -3282,6 +3282,16 @@ mod tests {
             Some(folder_id),
             "the worktree is still reused"
         );
+        // …and `started_at` outlives the requeue, unlike `finished_at` beside
+        // it. `compose_prompt`'s fresh arm reads exactly this column to decide
+        // whether to warn the new session that the worktree already holds an
+        // earlier run's work: clearing it here for symmetry would silently send
+        // a re-queued task back in reading like a first run.
+        assert!(
+            row.started_at.is_some(),
+            "the fresh arm's 'this worktree is not empty' warning keys off it"
+        );
+        assert!(row.finished_at.is_none());
 
         // Retry (failed -> queued) is the path that DOES continue the same
         // session, and it is untouched.
