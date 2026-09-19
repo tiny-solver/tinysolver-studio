@@ -244,6 +244,20 @@ pub struct BrokerCreateWorkTaskRequest {
     pub spec: NewWorkTaskSpec,
 }
 
+/// `studio_list_scenes` / `studio_read_scene` / `studio_apply_scene_commands`
+/// / `studio_build`: read or edit the scenes of the caller's content project.
+/// The listener resolves `project` (or, when absent, the token's working
+/// directory) and runs the operation against the filesystem — see
+/// [`crate::studio_tools`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerStudioRequest {
+    pub token: String,
+    /// Absolute project root. `None` → the caller session's working directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    pub op: crate::studio_tools::StudioOp,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -263,6 +277,7 @@ pub enum BrokerMessage {
     TaskComplete(BrokerTaskCompleteRequest),
     CreateAutomation(BrokerCreateAutomationRequest),
     CreateWorkTask(BrokerCreateWorkTaskRequest),
+    Studio(BrokerStudioRequest),
     /// Liveness probe. Unlike every other variant this one is NOT sent by a
     /// companion — it comes from codeg's own service-status check
     /// (`acp::delegation::service`), which is why it carries no `token`: a
@@ -428,6 +443,15 @@ pub async fn client_session_round_trip(
     req: &BrokerSessionRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::SessionInfo(req.clone())).await
+}
+
+/// Dispatch a `studio_*` request and read back its `{ ok, note?, ... }`
+/// outcome (see [`crate::studio_tools::run`]).
+pub async fn client_studio_round_trip(
+    socket_path: &str,
+    req: &BrokerStudioRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::Studio(req.clone())).await
 }
 
 /// Dispatch a `task_progress` report and read back the `{ recorded }` ack.

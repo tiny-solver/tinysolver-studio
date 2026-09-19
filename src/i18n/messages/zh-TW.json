@@ -6246,6 +6246,11 @@
     "hotReload": "儲存後重新載入",
     "noProjectOpen": "請從專案資料夾開啟 Studio。場景編輯器讀寫該資料夾的 outputs/game/content/。",
     "missingAsset": "檔案缺失",
-    "migrated": "此場景為第一個原型的格式，已轉換。下次編輯將以目前結構儲存。"
+    "migrated": "此場景為第一個原型的格式，已轉換。下次編輯將以目前結構儲存。",
+    "sendToChat": "傳送到對話",
+    "sendToChatHint": "將場景、選取的物件和預覽錯誤放入對話輸入框,接著輸入你的需求。",
+    "sendToChatNoSession": "在 Studio 旁開啟一個對話即可傳送脈絡。",
+    "contextSent": "已將脈絡加入對話輸入框。輸入需求後送出。",
+    "engineErrors": "預覽錯誤 {count} 個"
   }
 }

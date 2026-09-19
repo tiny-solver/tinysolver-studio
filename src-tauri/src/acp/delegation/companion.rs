@@ -48,14 +48,16 @@ use crate::acp::delegation::transport::{
     client_ask_round_trip, client_cancel, client_cancel_task_round_trip, client_commit_feedback,
     client_create_automation_round_trip, client_create_work_task_round_trip,
     client_feedback_round_trip, client_resume_task_round_trip, client_round_trip,
-    client_session_round_trip, client_status_round_trip, client_task_complete_round_trip,
+    client_session_round_trip, client_status_round_trip, client_studio_round_trip,
+    client_task_complete_round_trip,
     client_task_progress_round_trip, BrokerAskRequest, BrokerCancelRequest,
     BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerCreateAutomationRequest,
     BrokerCreateWorkTaskRequest, BrokerFeedbackRequest, BrokerRequest, BrokerResponse,
-    BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest,
+    BrokerResumeTaskRequest, BrokerSessionRequest, BrokerStatusRequest, BrokerStudioRequest,
     BrokerTaskCompleteRequest, BrokerTaskProgressRequest,
 };
 use crate::acp::question::parse_questions;
+use crate::studio_tools::StudioOp;
 use crate::acp::session_info::MAX_SESSION_MESSAGES;
 use crate::models::AutomationAction;
 
@@ -153,6 +155,10 @@ pub struct CompanionFeatures {
     pub automations: bool,
     /// `create_work_task` — queue a card on the work-task board from chat.
     pub taskboard: bool,
+    /// `studio_*` — list/read/edit/build the scenes of the content project the
+    /// session runs in. Per-launch (the parent turns it on when the working
+    /// directory is a content project), not a settings toggle.
+    pub studio: bool,
 }
 
 impl CompanionFeatures {
@@ -172,6 +178,7 @@ impl CompanionFeatures {
                 tasks: false,
                 automations: false,
                 taskboard: false,
+                studio: false,
             };
         };
         let mut f = Self {
@@ -182,6 +189,7 @@ impl CompanionFeatures {
             tasks: false,
             automations: false,
             taskboard: false,
+            studio: false,
         };
         for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match tok {
@@ -192,6 +200,7 @@ impl CompanionFeatures {
                 "tasks" => f.tasks = true,
                 "automations" => f.automations = true,
                 "taskboard" => f.taskboard = true,
+                "studio" => f.studio = true,
                 _ => {}
             }
         }
@@ -207,6 +216,8 @@ impl CompanionFeatures {
             "task_progress" | "task_complete" => self.tasks,
             "create_automation" => self.automations,
             "create_work_task" => self.taskboard,
+            "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
+            | "studio_build" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -684,6 +695,23 @@ async fn build_tools_call_spawn(
             let round_trip =
                 Box::pin(async move { client_session_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_session_result).await
+        }
+        "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
+        | "studio_build" => {
+            let op = match parse_studio_op(&name, &arguments) {
+                Ok(op) => op,
+                Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
+            };
+            let req = BrokerStudioRequest {
+                token: ctx.token.clone(),
+                project: parse_studio_project(&arguments),
+                op,
+            };
+            // No external_handle: a bounded file read/write has nothing to
+            // cancel broker-side — canceling only suppresses the response.
+            let round_trip =
+                Box::pin(async move { client_studio_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_studio_result).await
         }
         "task_progress" => {
             let message = arguments
@@ -1375,6 +1403,151 @@ pub fn render_session_result(outcome: &Value) -> Value {
     })
 }
 
+/// The optional `project` override of the `studio_*` tools: an absolute
+/// project root, else the listener falls back to the session's working dir.
+fn parse_studio_project(arguments: &Value) -> Option<String> {
+    arguments
+        .get("project")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn studio_scene_arg(tool: &str, arguments: &Value) -> Result<String, String> {
+    arguments
+        .get("scene")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            format!("{tool} requires a non-empty `scene` id (call studio_list_scenes for the ids)")
+        })
+}
+
+/// Turn a `studio_*` tool call into the operation the listener runs. Argument
+/// shape problems come back as the `-32602` message so the LLM can fix them;
+/// everything about the project itself (missing scene, invalid command) is
+/// resolved broker-side and reported as a readable outcome.
+pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String> {
+    match tool {
+        "studio_list_scenes" => Ok(StudioOp::ListScenes),
+        "studio_build" => Ok(StudioOp::Build),
+        "studio_read_scene" => Ok(StudioOp::ReadScene {
+            scene: studio_scene_arg(tool, arguments)?,
+        }),
+        "studio_apply_scene_commands" => {
+            let scene = studio_scene_arg(tool, arguments)?;
+            let commands = arguments
+                .get("commands")
+                .filter(|c| c.as_array().is_some_and(|a| !a.is_empty()))
+                .cloned()
+                .ok_or_else(|| {
+                    "studio_apply_scene_commands requires a non-empty `commands` array".to_string()
+                })?;
+            Ok(StudioOp::ApplyCommands { scene, commands })
+        }
+        other => Err(format!("unknown tool: {other}")),
+    }
+}
+
+/// Map a `studio_*` round-trip outcome (`{ ok, note?, ... }`, see
+/// [`crate::studio_tools::run`]) into an MCP `tools/call` result. A domain
+/// failure (no such scene, batch rejected) is readable text with
+/// `isError: false` — the agent reads the note and adjusts. The structured
+/// outcome rides along for hosts that keep it.
+pub fn render_studio_result(outcome: &Value) -> Value {
+    let ok = outcome.get("ok").and_then(Value::as_bool).unwrap_or(false);
+    let text = if ok {
+        render_studio_ok_text(outcome)
+    } else {
+        outcome
+            .get("note")
+            .and_then(Value::as_str)
+            .unwrap_or("The studio operation did not complete.")
+            .to_string()
+    };
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": false,
+        "structuredContent": outcome.clone(),
+    })
+}
+
+fn render_studio_ok_text(outcome: &Value) -> String {
+    let str_of = |key: &str| outcome.get(key).and_then(Value::as_str).unwrap_or("");
+    if let Some(scenes) = outcome.get("scenes").and_then(Value::as_array) {
+        let mut lines = Vec::new();
+        let name = str_of("name");
+        let head = if name.is_empty() {
+            format!("Folder {} (no codeg-project.json)", str_of("project"))
+        } else {
+            format!("Project {name} at {}", str_of("project"))
+        };
+        let engine = match outcome.get("engine").filter(|e| e.is_object()) {
+            Some(e) => format!(
+                " · engine {} {} ({})",
+                e.get("id").and_then(Value::as_str).unwrap_or("?"),
+                e.get("version").and_then(Value::as_str).unwrap_or(""),
+                e.get("entry").and_then(Value::as_str).unwrap_or("")
+            ),
+            None => " · no game engine".to_string(),
+        };
+        lines.push(format!("{head}{engine}"));
+        lines.push(format!("Scenes in {}/:", str_of("content_dir")));
+        for scene in scenes {
+            let id = scene.get("id").and_then(Value::as_str).unwrap_or("?");
+            let name = scene.get("name").and_then(Value::as_str).unwrap_or(id);
+            let path = scene.get("path").and_then(Value::as_str).unwrap_or("");
+            if name == id {
+                lines.push(format!("- {id} ({path})"));
+            } else {
+                lines.push(format!("- {id} — {name} ({path})"));
+            }
+        }
+        let note = str_of("note");
+        if !note.is_empty() {
+            lines.push(note.to_string());
+        }
+        return lines.join("\n");
+    }
+    if let Some(file) = outcome.get("file") {
+        return format!(
+            "Scene `{}` ({}):\n{}",
+            str_of("scene"),
+            str_of("path"),
+            serde_json::to_string_pretty(file).unwrap_or_default()
+        );
+    }
+    if let Some(build) = outcome.get("build") {
+        let field = |key: &str| build.get(key).and_then(Value::as_str).unwrap_or("");
+        let zip = match build.get("zip").and_then(Value::as_str) {
+            Some(z) => format!(" · zip {z}"),
+            None => String::new(),
+        };
+        return format!("Build {} is ready: {}{zip}", field("version"), field("dir"));
+    }
+    let changed = outcome
+        .get("changed")
+        .and_then(Value::as_array)
+        .map(|c| {
+            c.iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    format!(
+        "Applied to scene `{}` ({}) · {} nodes · changed: {}. {}",
+        str_of("scene"),
+        str_of("path"),
+        outcome.get("nodes").and_then(Value::as_u64).unwrap_or(0),
+        if changed.is_empty() { "-".to_string() } else { changed },
+        str_of("note")
+    )
+}
+
 /// Map a `task_progress` / `task_complete` round-trip outcome (a
 /// `{ recorded, note? }` ack) into an MCP `tools/call` result. A report that
 /// could not be attributed (no active work task for this session) is readable
@@ -1583,6 +1756,7 @@ mod tests {
             tasks: false,
             automations: false,
             taskboard: false,
+            studio: false,
         })
     }
 
@@ -2174,6 +2348,7 @@ mod tests {
         tasks: false,
         automations: false,
         taskboard: false,
+        studio: false,
     };
     const BOTH: CompanionFeatures = CompanionFeatures {
         delegation: true,
@@ -2183,6 +2358,7 @@ mod tests {
         tasks: false,
         automations: false,
         taskboard: false,
+        studio: false,
     };
     const ASK_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -2192,6 +2368,7 @@ mod tests {
         tasks: false,
         automations: false,
         taskboard: false,
+        studio: false,
     };
     const SESSIONS_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -2201,6 +2378,7 @@ mod tests {
         tasks: false,
         automations: false,
         taskboard: false,
+        studio: false,
     };
 
     fn list_tool_names(action: LineAction) -> Vec<String> {
@@ -2529,6 +2707,176 @@ mod tests {
         assert!(e.message.contains("unknown tool"));
     }
 
+    // -- studio_* tools: feature gating + parsing + rendering ---------------
+
+    const STUDIO_ONLY: CompanionFeatures = CompanionFeatures {
+        delegation: false,
+        feedback: false,
+        ask: false,
+        sessions: false,
+        tasks: false,
+        automations: false,
+        taskboard: false,
+        studio: true,
+    };
+
+    const STUDIO_TOOLS: [&str; 4] = [
+        "studio_list_scenes",
+        "studio_read_scene",
+        "studio_apply_scene_commands",
+        "studio_build",
+    ];
+
+    #[tokio::test]
+    async fn tools_list_includes_studio_only_when_enabled() {
+        let names = list_tool_names(
+            dispatch_for_test(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await,
+        );
+        assert!(STUDIO_TOOLS.iter().all(|t| !names.contains(&t.to_string())));
+        let names = list_tool_names(
+            dispatch_with_features(
+                STUDIO_ONLY,
+                r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+            )
+            .await,
+        );
+        assert_eq!(names, STUDIO_TOOLS.map(String::from).to_vec());
+        assert!(CompanionFeatures::parse(Some("sessions,studio")).studio);
+        assert!(!CompanionFeatures::parse(Some("sessions")).studio);
+    }
+
+    #[tokio::test]
+    async fn studio_tools_spawn_when_valid_and_enabled() {
+        for (name, args) in [
+            ("studio_list_scenes", json!({})),
+            ("studio_read_scene", json!({ "scene": "main" })),
+            (
+                "studio_apply_scene_commands",
+                json!({ "scene": "main", "commands": [{ "type": "node.remove", "id": "x" }] }),
+            ),
+            ("studio_build", json!({ "project": "/tmp/p" })),
+        ] {
+            let line = json!({
+                "jsonrpc": "2.0", "id": 40, "method": "tools/call",
+                "params": { "name": name, "arguments": args }
+            })
+            .to_string();
+            assert!(
+                matches!(
+                    dispatch_with_features(STUDIO_ONLY, &line).await,
+                    LineAction::Spawn(_)
+                ),
+                "{name} should spawn"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn studio_bad_args_rejected_synchronously() {
+        for (name, args, needle) in [
+            ("studio_read_scene", json!({}), "scene"),
+            ("studio_read_scene", json!({ "scene": "  " }), "scene"),
+            ("studio_apply_scene_commands", json!({ "commands": [{}] }), "scene"),
+            ("studio_apply_scene_commands", json!({ "scene": "main" }), "commands"),
+            (
+                "studio_apply_scene_commands",
+                json!({ "scene": "main", "commands": [] }),
+                "commands",
+            ),
+            (
+                "studio_apply_scene_commands",
+                json!({ "scene": "main", "commands": "move hero" }),
+                "commands",
+            ),
+        ] {
+            let line = json!({
+                "jsonrpc": "2.0", "id": 41, "method": "tools/call",
+                "params": { "name": name, "arguments": args }
+            })
+            .to_string();
+            let resp = unwrap_respond(dispatch_with_features(STUDIO_ONLY, &line).await);
+            let e = resp.error.expect("bad studio args must be rejected");
+            assert_eq!(e.code, -32602);
+            assert!(e.message.contains(needle), "{}", e.message);
+        }
+    }
+
+    #[tokio::test]
+    async fn studio_rejected_as_unknown_when_feature_off() {
+        let line = json!({
+            "jsonrpc": "2.0", "id": 42, "method": "tools/call",
+            "params": { "name": "studio_list_scenes", "arguments": {} }
+        })
+        .to_string();
+        let resp = unwrap_respond(dispatch_for_test(&line).await);
+        let e = resp.error.unwrap();
+        assert_eq!(e.code, -32602);
+        assert!(e.message.contains("unknown tool"));
+    }
+
+    #[test]
+    fn studio_op_parsing_carries_the_project_override() {
+        assert_eq!(
+            parse_studio_op("studio_read_scene", &json!({ "scene": " main " })).unwrap(),
+            StudioOp::ReadScene { scene: "main".into() }
+        );
+        assert_eq!(
+            parse_studio_project(&json!({ "project": " /work/game " })).as_deref(),
+            Some("/work/game")
+        );
+        assert_eq!(parse_studio_project(&json!({ "project": "" })), None);
+        assert_eq!(parse_studio_project(&json!({})), None);
+    }
+
+    #[test]
+    fn studio_results_render_as_readable_text_never_as_errors() {
+        let listed = render_studio_result(&json!({
+            "ok": true, "project": "/work/game", "name": "my-story",
+            "engine": { "id": "three-web", "version": "0.2.1", "entry": "outputs/game/index.html" },
+            "content_dir": "outputs/game/content",
+            "scenes": [
+                { "id": "main", "name": "첫 장면", "path": "outputs/game/content/main.studio.json" },
+                { "id": "room", "name": "room", "path": "outputs/game/content/room.studio.json" }
+            ],
+            "note": ""
+        }));
+        let text = listed["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Project my-story at /work/game · engine three-web 0.2.1"));
+        assert!(text.contains("- main — 첫 장면 (outputs/game/content/main.studio.json)"));
+        assert!(text.contains("- room (outputs/game/content/room.studio.json)"));
+        assert_eq!(listed["isError"], false);
+
+        let applied = render_studio_result(&json!({
+            "ok": true, "scene": "main", "path": "outputs/game/content/main.studio.json",
+            "nodes": 5, "changed": ["hero", "sign"], "note": "Written."
+        }));
+        let text = applied["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("5 nodes · changed: hero, sign. Written."));
+
+        let read = render_studio_result(&json!({
+            "ok": true, "scene": "main", "path": "p", "file": { "id": "main" }
+        }));
+        assert!(read["content"][0]["text"].as_str().unwrap().contains("\"id\": \"main\""));
+
+        let built = render_studio_result(&json!({
+            "ok": true, "build": { "version": "v2-20260920-0101", "dir": "/b/v2", "zip": "/b/v2.zip" }
+        }));
+        assert!(built["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Build v2-20260920-0101 is ready: /b/v2 · zip /b/v2.zip"));
+
+        let rejected = render_studio_result(&json!({
+            "ok": false, "note": "Batch rejected, nothing written: Node not found: ghost"
+        }));
+        assert_eq!(rejected["isError"], false);
+        assert!(rejected["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Node not found: ghost"));
+        assert_eq!(rejected["structuredContent"]["ok"], false);
+    }
+
     // -- chat authoring: feature gating + parsing + rendering ---------------
 
     const AUTOMATIONS_ONLY: CompanionFeatures = CompanionFeatures {
@@ -2539,6 +2887,7 @@ mod tests {
         tasks: false,
         automations: true,
         taskboard: false,
+        studio: false,
     };
     const TASKBOARD_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -2548,6 +2897,7 @@ mod tests {
         tasks: false,
         automations: false,
         taskboard: true,
+        studio: false,
     };
 
     /// The two authoring groups gate independently: enabling one must not

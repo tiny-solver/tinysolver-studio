@@ -6246,6 +6246,11 @@
     "hotReload": "Recharge après l’enregistrement",
     "noProjectOpen": "Ouvrez le Studio depuis un dossier de projet. L’éditeur de scène lit et écrit outputs/game/content/ de ce dossier.",
     "missingAsset": "fichier manquant",
-    "migrated": "Cette scène était au format du premier prototype et a été convertie. La prochaine modification l’enregistrera avec le schéma actuel."
+    "migrated": "Cette scène était au format du premier prototype et a été convertie. La prochaine modification l’enregistrera avec le schéma actuel.",
+    "sendToChat": "Envoyer au chat",
+    "sendToChatHint": "Place la scène, l’objet sélectionné et les erreurs de l’aperçu dans la zone de saisie du chat ; saisissez ensuite votre demande.",
+    "sendToChatNoSession": "Ouvrez une conversation à côté du Studio pour lui envoyer le contexte.",
+    "contextSent": "Contexte ajouté à la zone de saisie du chat. Saisissez votre demande et envoyez.",
+    "engineErrors": "Erreurs de l’aperçu : {count}"
   }
 }

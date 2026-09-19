@@ -91,6 +91,33 @@ test("drag, autosave, agent edit, reload, build", async ({ page, baseURL }) => {
     }
   )
 
+  // An agent breaks the engine: the preview server's injected reporter posts
+  // the exception and the editor shows it, ready to hand to the chat. The
+  // standalone page has no conversation beside it, so the button is off.
+  const mainJs = path.join(root, "outputs/game/src/main.js")
+  const engine = await fs.readFile(mainJs, "utf8").catch(() => null)
+  if (engine !== null) {
+    try {
+      await fs.writeFile(
+        mainJs,
+        `${engine}\nsetTimeout(() => { throw new Error("boom-from-test") }, 0)\n`
+      )
+      await expect(page.locator(".studio-engine-error")).toContainText(
+        "boom-from-test",
+        { timeout: 30_000 }
+      )
+      await expect(
+        page.getByRole("button", { name: "Send to chat" }).first()
+      ).toBeDisabled()
+    } finally {
+      await fs.writeFile(mainJs, engine)
+    }
+    // Fixed again: the reload clears the strip.
+    await expect(page.locator(".studio-engine-error")).toHaveCount(0, {
+      timeout: 30_000,
+    })
+  }
+
   // Build.
   await page.getByRole("button", { name: "Build", exact: true }).click()
   await expect(page.locator(".studio-notice")).toContainText("is ready", {
@@ -110,6 +137,10 @@ test("drag, autosave, agent edit, reload, build", async ({ page, baseURL }) => {
     path: "test-results/studio/project-loop.png",
     fullPage: true,
   })
-  expect(errors.filter((e) => !e.includes("asset missing"))).toEqual([])
+  expect(
+    errors.filter(
+      (e) => !e.includes("asset missing") && !e.includes("boom-from-test")
+    )
+  ).toEqual([])
   void baseURL
 })

@@ -2,16 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
-import { ExternalLink, Loader2, RefreshCw, TriangleAlert } from "lucide-react"
+import {
+  ExternalLink,
+  Loader2,
+  MessageSquarePlus,
+  RefreshCw,
+  TriangleAlert,
+} from "lucide-react"
 
 import { gamePreviewFingerprint, getContentPreview } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { openPath } from "@/lib/platform"
+import { buildAgentContext } from "@/lib/studio/agent-context"
 import {
   getServerBaseUrl,
   isDesktop,
   isRemoteDesktopMode,
 } from "@/lib/transport"
+
+import { useChatBridge, useEngineErrors } from "./use-chat-bridge"
 
 const POLL_MS = 1500
 
@@ -30,12 +39,20 @@ const POLL_MS = 1500
  * Reload is driven by polling a directory fingerprint: the agent writes
  * files, the fingerprint changes, the iframe reloads. Polling pauses while
  * the document is hidden.
+ *
+ * Runtime errors the preview server's injected reporter posts are shown in
+ * a strip and can be handed to the conversation beside the pane — the game
+ * here is whatever the agent last wrote, so its errors are the agent's to
+ * fix.
  */
 export function GamePreview({
   root,
   dir,
   entryFile,
+  projectName = null,
 }: {
+  /** Manifest name, for the context handed to the agent. */
+  projectName?: string | null
   root: string
   /** Directory under the project root that holds the game. */
   dir: string
@@ -51,6 +68,19 @@ export function GamePreview({
   const [reloadKey, setReloadKey] = useState(0)
   const [retryKey, setRetryKey] = useState(0)
   const fingerprint = useRef<string | null>(null)
+  const frame = useRef<HTMLIFrameElement>(null)
+  const [engineErrors, clearEngineErrors] = useEngineErrors(frame, reloadKey)
+  const chat = useChatBridge()
+  // "Sent" holds only for the list it was sent with; a new error flips the
+  // strip back to showing the error.
+  const [sentFor, setSentFor] = useState<string[] | null>(null)
+  const sent = sentFor === engineErrors
+  const sendToChat = () => {
+    if (
+      chat.send(buildAgentContext({ projectName, gameDir: dir, engineErrors }))
+    )
+      setSentFor(engineErrors)
+  }
 
   const loopbackDirect = isDesktop() && !isRemoteDesktopMode()
   const remoteDesktop = isDesktop() && isRemoteDesktopMode()
@@ -143,6 +173,18 @@ export function GamePreview({
           <>
             <button
               type="button"
+              onClick={sendToChat}
+              disabled={!chat.canSend}
+              aria-label={t("sendToChat")}
+              title={
+                chat.canSend ? t("sendToChatHint") : t("sendToChatNoSession")
+              }
+              className="flex h-6 w-6 items-center justify-center rounded hover:bg-primary/8 disabled:opacity-40"
+            >
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
               onClick={() => setReloadKey((k) => k + 1)}
               disabled={!url}
               aria-label={t("previewReload")}
@@ -164,8 +206,43 @@ export function GamePreview({
           </>
         )}
       </div>
+      {engineErrors.length > 0 && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive"
+        >
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+          <span
+            className="min-w-0 flex-1 truncate"
+            title={engineErrors.join("\n\n")}
+          >
+            {sent
+              ? t("contextSent")
+              : `${t("engineErrors", { count: engineErrors.length })} · ${
+                  engineErrors[engineErrors.length - 1].split("\n")[0]
+                }`}
+          </span>
+          <button
+            type="button"
+            onClick={sendToChat}
+            disabled={!chat.canSend}
+            title={chat.canSend ? undefined : t("sendToChatNoSession")}
+            className="shrink-0 rounded px-2 py-0.5 hover:bg-destructive/15 disabled:opacity-50"
+          >
+            {t("sendToChat")}
+          </button>
+          <button
+            type="button"
+            onClick={clearEngineErrors}
+            className="shrink-0 rounded px-2 py-0.5 hover:bg-destructive/15"
+          >
+            {t("dismiss")}
+          </button>
+        </div>
+      )}
       {url ? (
         <iframe
+          ref={frame}
           key={reloadKey}
           src={url}
           title={t("gameView")}

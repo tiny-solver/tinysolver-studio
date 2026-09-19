@@ -6246,6 +6246,11 @@
     "hotReload": "Recarrega após salvar",
     "noProjectOpen": "Abra o Studio a partir de uma pasta de projeto. O editor de cenas lê e escreve outputs/game/content/ dessa pasta.",
     "missingAsset": "arquivo ausente",
-    "migrated": "Esta cena estava no formato do primeiro protótipo e foi convertida. A próxima edição a salvará no esquema atual."
+    "migrated": "Esta cena estava no formato do primeiro protótipo e foi convertida. A próxima edição a salvará no esquema atual.",
+    "sendToChat": "Enviar ao chat",
+    "sendToChatHint": "Coloca a cena, o objeto selecionado e os erros da pré-visualização na caixa do chat; depois escreva o seu pedido.",
+    "sendToChatNoSession": "Abra uma conversa ao lado do Studio para enviar contexto.",
+    "contextSent": "Contexto adicionado à caixa do chat. Escreva o seu pedido e envie.",
+    "engineErrors": "Erros da pré-visualização: {count}"
   }
 }

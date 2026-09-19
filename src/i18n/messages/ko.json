@@ -6246,6 +6246,11 @@
     "hotReload": "저장 후 다시 불러옴",
     "noProjectOpen": "프로젝트 폴더에서 스튜디오를 여세요. 장면 편집기는 그 폴더의 outputs/game/content/를 읽고 씁니다.",
     "missingAsset": "파일 없음",
-    "migrated": "첫 프로토타입 형식의 장면이라 변환했습니다. 다음 편집부터 현재 스키마로 저장됩니다."
+    "migrated": "첫 프로토타입 형식의 장면이라 변환했습니다. 다음 편집부터 현재 스키마로 저장됩니다.",
+    "sendToChat": "대화로 보내기",
+    "sendToChatHint": "장면, 선택한 객체, 미리보기 오류를 대화 입력창에 넣습니다. 이어서 요청을 입력하세요.",
+    "sendToChatNoSession": "Studio 옆에 대화를 열면 컨텍스트를 보낼 수 있습니다.",
+    "contextSent": "대화 입력창에 컨텍스트를 넣었습니다. 요청을 입력하고 보내세요.",
+    "engineErrors": "미리보기 오류 {count}건"
   }
 }
