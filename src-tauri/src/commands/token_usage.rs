@@ -104,14 +104,13 @@ const TOP_CONVERSATIONS: usize = 8;
 ///   counted via cumulative-counter deltas; Claude `Task` sub-agent transcripts
 ///   counted against the session that launched them; and facts anchored at the
 ///   turn's own timestamp instead of its last tool result.
-/// * `3` — Pi sessions now take the context window from the `contextWindow` the
-///   provider declares in `~/.pi/agent/models.json` before falling back to
-///   guessing by model name. Models served by a self-hosted OpenAI-compatible
-///   endpoint are in no built-in name table, so their stored
-///   `context_window_max_tokens` was written as absent and the context meter
-///   silently disappeared from those sessions — previously wrong rows must be
-///   rewritten, not just left to age out.
-const FACT_SCHEMA_VERSION: &str = "3";
+///
+/// Only the accounting stored in `token_usage_turn` counts: the four token
+/// counters, the duration and the timestamp. A conversation's context WINDOW is
+/// not stored here (nor anywhere else — `SessionStats` is recomputed by the
+/// parser on every read), so changing how a window is inferred needs no bump;
+/// it reaches every existing session the moment it ships.
+const FACT_SCHEMA_VERSION: &str = "2";
 
 const FACT_SCHEMA_VERSION_KEY: &str = "token_usage_fact_schema_version";
 

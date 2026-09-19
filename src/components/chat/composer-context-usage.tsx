@@ -8,6 +8,7 @@ import { useTabStore } from "@/contexts/tab-context"
 import { useConversationRuntimeStore } from "@/stores/conversation-runtime-store"
 import { formatTokenCount } from "@/lib/token-format"
 import { formatContextWindowPercent } from "@/lib/context-window"
+import { cacheHitRatio, formatPercent } from "@/lib/token-usage"
 import {
   Popover,
   PopoverContent,
@@ -118,19 +119,26 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
 
   const hasTokenSection = rows.length > 0
 
-  // Cache hit rate: cache reads over everything the request actually sent,
-  // i.e. cacheRead / (input + cacheRead + cacheWrite). cacheWrite belongs in
-  // the denominator — dropping it treats repeated writes as free and inflates
-  // the ratio.
-  const cacheDenom = hasUsage
-    ? usage.input_tokens +
-      usage.cache_read_input_tokens +
-      usage.cache_creation_input_tokens
-    : 0
-  const cacheHitRatio =
-    hasUsage && cacheDenom > 0
-      ? usage.cache_read_input_tokens / cacheDenom
-      : null
+  // Cache hit rate, by the dashboard's definition (one shared `cacheHitRatio`,
+  // so the popover and the Token Usage page can never disagree about what the
+  // number means): cache reads over everything that entered as context.
+  //
+  // Gated on the session having ANY cache activity. Plenty of backends — a
+  // self-hosted OpenAI-compatible endpoint above all — report no cache counters
+  // at all, and codeg cannot tell "the cache did nothing" from "nobody said".
+  // Rendering a confident `0.0%` for the latter is worse than rendering
+  // nothing. A session with writes but no reads yet is genuinely 0% and still
+  // shows.
+  const hasCacheActivity =
+    hasUsage &&
+    usage.cache_read_input_tokens + usage.cache_creation_input_tokens > 0
+  const cacheHit = hasCacheActivity
+    ? cacheHitRatio(
+        usage.input_tokens,
+        usage.cache_creation_input_tokens,
+        usage.cache_read_input_tokens
+      )
+    : null
 
   if (!hasContext && !hasTokenSection) return null
 
@@ -243,13 +251,13 @@ export function ComposerContextUsage({ tabId }: { tabId: string | null }) {
                 </div>
               ))}
             </div>
-            {cacheHitRatio != null ? (
+            {cacheHit != null ? (
               <div className="mt-1 flex items-center justify-between gap-2 border-t border-border pt-1 text-xs leading-none">
                 <span className="text-muted-foreground whitespace-nowrap">
                   {t("cacheHit")}
                 </span>
                 <span className="tabular-nums font-medium">
-                  {(cacheHitRatio * 100).toFixed(1)}%
+                  {formatPercent(cacheHit, 1)}
                 </span>
               </div>
             ) : null}

@@ -274,14 +274,29 @@ export function buildHeatMatrix(cells: TokenUsageHeatCell[]): HeatMatrix {
  * input, cache writes, and cache reads — so the ratio answers "how much of what
  * I sent did I not pay full price for". Output tokens are excluded on purpose:
  * they were never cacheable.
+ *
+ * Counter-shaped rather than totals-shaped so the dashboard (`TokenUsageTotals`)
+ * and a single session's live counters (`TurnUsage`, whose fields are named
+ * differently) share ONE definition of the ratio instead of each carrying its
+ * own division.
  */
-export function cacheHitRate(totals: TokenUsageTotals): number | null {
-  const denominator =
-    totals.input_tokens +
-    totals.cache_creation_tokens +
-    totals.cache_read_tokens
+export function cacheHitRatio(
+  inputTokens: number,
+  cacheCreationTokens: number,
+  cacheReadTokens: number
+): number | null {
+  const denominator = inputTokens + cacheCreationTokens + cacheReadTokens
   if (denominator <= 0) return null
-  return totals.cache_read_tokens / denominator
+  return cacheReadTokens / denominator
+}
+
+/** {@link cacheHitRatio} over a dashboard totals row. */
+export function cacheHitRate(totals: TokenUsageTotals): number | null {
+  return cacheHitRatio(
+    totals.input_tokens,
+    totals.cache_creation_tokens,
+    totals.cache_read_tokens
+  )
 }
 
 export function averagePerConversation(totals: TokenUsageTotals): number {

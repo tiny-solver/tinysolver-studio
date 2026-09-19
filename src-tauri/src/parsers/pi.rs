@@ -52,21 +52,31 @@ pub(crate) fn resolve_pi_sessions_dir() -> PathBuf {
     )
 }
 
-/// Pi's agent directory: `PI_CODING_AGENT_DIR`, else `~/.pi/agent`.
-fn resolve_pi_agent_dir() -> PathBuf {
-    match std::env::var_os("PI_CODING_AGENT_DIR")
+/// Pi's agent directory: `PI_CODING_AGENT_DIR` (through pi's tilde rule), else
+/// `~/.pi/agent`. The same rule [`resolve_pi_sessions_dir_from`] applies before
+/// it looks for `sessions`, kept in one place so the two can't drift.
+fn resolve_pi_agent_dir_from(agent_dir_env: Option<OsString>, home_dir: Option<&Path>) -> PathBuf {
+    match agent_dir_env
         .filter(|value| !value.is_empty())
         .and_then(|value| value.into_string().ok())
     {
-        Some(dir) => expand_pi_tilde(&dir, dirs::home_dir().as_deref()),
-        None => dirs::home_dir()
+        Some(dir) => expand_pi_tilde(&dir, home_dir),
+        None => home_dir
+            .map(Path::to_path_buf)
             .unwrap_or_default()
             .join(".pi")
             .join("agent"),
     }
 }
 
-/// The `contextWindow` a model declares in Pi's own `models.json`.
+fn resolve_pi_agent_dir() -> PathBuf {
+    resolve_pi_agent_dir_from(
+        std::env::var_os("PI_CODING_AGENT_DIR"),
+        dirs::home_dir().as_deref(),
+    )
+}
+
+/// The `contextWindow` a model declares in `<agent_dir>/models.json`.
 ///
 /// Why this is needed: `infer_context_window_max_tokens` guesses from a table of
 /// known model names — Claude / Gemini / Gemma / Kimi / Grok / OpenAI — and
@@ -79,27 +89,23 @@ fn resolve_pi_agent_dir() -> PathBuf {
 /// keeps working when the model changes. Any read failure (file absent, bad
 /// JSON, model not listed) yields `None` and falls back to the existing
 /// name-based guess, so behaviour is never worse than before.
-pub(crate) fn pi_declared_context_window(model: Option<&str>) -> Option<u64> {
+///
+/// Takes the directory rather than resolving it, mirroring
+/// `grok::grok_catalog_context_window(home, model)`: the lookup stays a function
+/// of its inputs, so a test drives it from a fixture instead of whatever
+/// `models.json` the machine running the suite happens to have.
+pub(crate) fn pi_declared_context_window(agent_dir: &Path, model: Option<&str>) -> Option<u64> {
     let model = model?.trim();
     if model.is_empty() {
         return None;
     }
-    pi_declared_context_window_from(
-        &read_pi_models_json().ok()?,
-        model,
-    )
-}
-
-fn read_pi_models_json() -> Result<String, std::io::Error> {
-    std::fs::read_to_string(resolve_pi_agent_dir().join("models.json"))
+    let raw = fs::read_to_string(agent_dir.join("models.json")).ok()?;
+    pi_declared_context_window_from(&raw, model)
 }
 
 /// Pure over the file contents so it can be tested without touching the disk.
 /// When the same id appears under several providers, the largest window wins.
-pub(crate) fn pi_declared_context_window_from(
-    raw: &str,
-    model: &str,
-) -> Option<u64> {
+fn pi_declared_context_window_from(raw: &str, model: &str) -> Option<u64> {
     let value: serde_json::Value = serde_json::from_str(raw).ok()?;
     let providers = value.get("providers")?.as_object()?;
     let mut best: Option<u64> = None;
@@ -133,17 +139,7 @@ fn resolve_pi_sessions_dir_from(
     {
         return expand_pi_tilde(&session_dir, home_dir.as_deref());
     }
-    let agent_dir = match agent_dir_env
-        .filter(|value| !value.is_empty())
-        .and_then(|value| value.into_string().ok())
-    {
-        Some(dir) => expand_pi_tilde(&dir, home_dir.as_deref()),
-        None => home_dir
-            .clone()
-            .unwrap_or_default()
-            .join(".pi")
-            .join("agent"),
-    };
+    let agent_dir = resolve_pi_agent_dir_from(agent_dir_env, home_dir.as_deref());
     session_dir_from_settings(&agent_dir, home_dir.as_deref())
         .unwrap_or_else(|| agent_dir.join("sessions"))
 }
@@ -269,20 +265,34 @@ fn session_dir_from_settings(agent_dir: &Path, home_dir: Option<&Path>) -> Optio
 /// partially-written log is read robustly rather than panicking.
 pub struct PiParser {
     base_dir: PathBuf,
+    /// Where `models.json` lives. Resolved separately from `base_dir` because a
+    /// custom `sessionDir` moves the sessions OUT of the agent dir, so the one
+    /// cannot be derived from the other.
+    agent_dir: PathBuf,
 }
 
 impl PiParser {
     pub fn new() -> Self {
         Self {
             base_dir: resolve_pi_sessions_dir(),
+            agent_dir: resolve_pi_agent_dir(),
         }
     }
 
     /// Construct a parser pointed at an explicit `sessions` directory (test
-    /// fixtures).
+    /// fixtures). The agent dir is taken to be its parent — pi's default
+    /// `<agent dir>/sessions` layout — so a fixture can place `models.json`
+    /// next to the sessions folder and nothing reaches the real `~/.pi`.
     #[cfg(any(test, feature = "test-utils"))]
     pub fn with_base_dir(base_dir: PathBuf) -> Self {
-        Self { base_dir }
+        let agent_dir = base_dir
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| base_dir.clone());
+        Self {
+            base_dir,
+            agent_dir,
+        }
     }
 
     fn parse_summary(&self, path: &Path) -> Option<ConversationSummary> {
@@ -330,7 +340,7 @@ impl PiParser {
         // Ask Pi what the provider declared first; only then guess by name.
         // Self-hosted model ids are absent from the built-in table, so guessing
         // alone drops the context meter entirely.
-        let max_tokens = pi_declared_context_window(parsed.model.as_deref())
+        let max_tokens = pi_declared_context_window(&self.agent_dir, parsed.model.as_deref())
             .or_else(|| infer_context_window_max_tokens(parsed.model.as_deref()));
         let session_stats =
             merge_context_window_stats(compute_session_stats(&turns), used_tokens, max_tokens);
@@ -1436,7 +1446,10 @@ mod tests {
           }
         }"#;
         // Same id under several providers takes the largest, not the first hit.
-        assert_eq!(pi_declared_context_window_from(raw, "qwen-flash"), Some(262144));
+        assert_eq!(
+            pi_declared_context_window_from(raw, "qwen-flash"),
+            Some(262144)
+        );
         // An id the file does not list → None, so the name-based guess still runs.
         assert_eq!(pi_declared_context_window_from(raw, "nope"), None);
     }
@@ -1445,7 +1458,10 @@ mod tests {
     fn declared_context_window_declines_junk_without_panicking() {
         // Unreadable, not JSON, missing fields or a zero window must be None, never a panic.
         assert_eq!(pi_declared_context_window_from("", "qwen-flash"), None);
-        assert_eq!(pi_declared_context_window_from("not json", "qwen-flash"), None);
+        assert_eq!(
+            pi_declared_context_window_from("not json", "qwen-flash"),
+            None
+        );
         assert_eq!(
             pi_declared_context_window_from(r#"{"providers": "wrong"}"#, "qwen-flash"),
             None
@@ -1458,12 +1474,49 @@ mod tests {
             None
         );
         assert_eq!(
-            pi_declared_context_window_from(
-                r#"{"providers":{"p":{"models":[{"id":"m"}]}}}"#,
-                "m"
-            ),
+            pi_declared_context_window_from(r#"{"providers":{"p":{"models":[{"id":"m"}]}}}"#, "m"),
             None
         );
+    }
+
+    /// The lookup only pays off if `get_conversation` actually consults it —
+    /// and only if the declaration OUTRANKS the name table, which is the whole
+    /// point (a proxy in front of a known model id serves a window the table
+    /// cannot know). `sample_records` runs `claude-sonnet-4-6`, which the table
+    /// answers with 200K, so the two readings are distinguishable.
+    #[test]
+    fn a_declared_window_outranks_the_name_table_through_get_conversation() {
+        let dir = tempdir().expect("tempdir");
+        let agent_dir = dir.path().join("agent");
+        let sessions = agent_dir.join("sessions");
+        let id = "0f3c1d2e-1111-2222-3333-444455556666";
+        write_session(
+            &sessions,
+            "--Users-demo-my-app--",
+            "2026-06-27T10-00-00_0f3c1d2e.jsonl",
+            &sample_records(id),
+        );
+
+        let window = |sessions: &Path| {
+            PiParser::with_base_dir(sessions.to_path_buf())
+                .get_conversation(id)
+                .expect("detail")
+                .session_stats
+                .expect("session stats")
+                .context_window_max_tokens
+        };
+
+        // No models.json at all: unchanged behaviour, the name table answers.
+        assert_eq!(window(&sessions), Some(200_000));
+
+        std::fs::write(
+            agent_dir.join("models.json"),
+            r#"{"providers":{"proxy":{"baseUrl":"http://localhost:8080/v1","models":[
+                 {"id":"claude-sonnet-4-6","contextWindow":314000}
+               ]}}}"#,
+        )
+        .expect("write models.json");
+        assert_eq!(window(&sessions), Some(314_000));
     }
 
     /// Same fixture — and same reason — as `acp::file_system_runtime`'s tests: a
