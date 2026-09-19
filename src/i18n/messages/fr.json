@@ -3709,7 +3709,9 @@
         "skip": "Ignorer",
         "next": "Suivant",
         "submit": "Envoyer",
-        "submitError": "Échec de l'envoi. Veuillez réessayer."
+        "submitError": "Échec de l'envoi. Veuillez réessayer.",
+        "collapse": "Replier",
+        "expand": "Déplier"
       },
       "planApproval": {
         "title": "L'agent a un plan — à vérifier",

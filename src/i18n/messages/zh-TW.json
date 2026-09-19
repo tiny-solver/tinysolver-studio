@@ -3709,7 +3709,9 @@
         "skip": "略過",
         "next": "下一題",
         "submit": "提交",
-        "submitError": "提交失敗，請重試。"
+        "submitError": "提交失敗，請重試。",
+        "collapse": "摺疊",
+        "expand": "展開"
       },
       "planApproval": {
         "title": "智慧代理已提出計畫——請審閱",

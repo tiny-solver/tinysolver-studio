@@ -3709,7 +3709,9 @@
         "skip": "Pular",
         "next": "Próxima",
         "submit": "Enviar",
-        "submitError": "Falha ao enviar. Tente novamente."
+        "submitError": "Falha ao enviar. Tente novamente.",
+        "collapse": "Recolher",
+        "expand": "Expandir"
       },
       "planApproval": {
         "title": "O agente tem um plano — revise",
