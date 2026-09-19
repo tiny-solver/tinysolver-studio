@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 문서 | 엔진과 편집기가 공유하는 장면 파일 `outputs/game/content/<scene>.studio.json`, 검증된 명령, etag 저장 | 프로젝트 폴더 안에서만 |
 | 도구 | iframe 위 오버레이로 선택·드래그, 인스펙터(transform·props), 장면 추가·전환 | 이미지 업로드·타일맵·타임라인은 후속 |
-| 엔진 | 게임 자체(`outputs/game/index.html`)를 백엔드가 서빙, 편집기는 별도 렌더러 없음 | `codeg:ready` / `codeg:scene` 계약을 지키는 엔진 |
+| 엔진 | Studio가 제공하는 관리형 런타임 `codeg-engine`(three-web 0.3.0). 프로젝트에는 장면과 스크립트만 있고, 미리보기 서버가 `__codeg/`로 서빙하며 빌드가 같은 경로에 넣는다 | 편집/플레이 모드, 스크립트, 트윈, 입력. 3D·물리·타일맵은 없다 |
 | 배포 | 빌드 버튼 → `build/game/<version>/` + zip | 정적 호스팅에 올리는 것은 사용자 |
 
 ## 실행 — 전체 빌드 없이 미리보기
@@ -41,7 +41,7 @@ pnpm dev
 
 1. 창작 스튜디오 탭 → 새 콘텐츠 프로젝트(web-three) → 작업공간이 열리면 빠른 작업 → 콘텐츠 스튜디오.
 2. 스캐폴드된 `main` 장면이 게임 iframe에 그려진다. `hero`를 드래그하면 즉시 움직이고 0.5초 뒤 파일에 저장된다.
-3. 미리보기를 누르고 주인공을 클릭하면 `logic.actions.act_hero`가 실행돼 힌트 텍스트가 토글된다. 편집으로 돌아오면 원본은 그대로다.
+3. 편집 중에는 주인공이 가만히 있다. 미리보기를 누르면 `float` 스크립트가 돌아 둥실거리고, 클릭하면 `logic.actions.act_hero`가 힌트를 토글하고 `shake` 연산(프로젝트의 `src/main.js`)이 흔든다. 편집으로 돌아오면 게임 상태가 문서 기준으로 초기화된다.
 4. 대화창에서 에이전트에게 장면을 고치게 한다. 저장되는 순간 편집기가 다시 읽고 iframe이 갱신된다. 편집 중이었다면 배너가 뜬다.
 5. 빌드를 누르면 `build/game/v1-…/`와 zip이 생기고 사이드바에 버전이 보인다.
 6. 명령 작업공간에서 JSON 명령을 적용하고 한 번에 실행 취소한다.
@@ -99,7 +99,8 @@ flowchart LR
 - `src-tauri/src/content_preview.rs`: 프로젝트 폴더 HTTP 서빙(공개 라우트 + 데스크톱 루프백), HTML에 오류 보고 스크립트 주입.
 - `src-tauri/src/studio_scene.rs`, `studio_tools.rs`: 장면 검증·명령의 Rust 쌍둥이와 `studio_*` MCP 도구 구현. `acp/delegation/`의 companion·listener·transport가 연결한다.
 - `src/lib/studio/agent-context.ts`, `src/components/studio/use-chat-bridge.ts`: 대화로 보내는 컨텍스트와 대화 입력창 연결.
-- `src-tauri/src/commands/content_project.rs`: 스캐폴드, 매니페스트, 장면 목록, 빌드 패키징. `content_project_three_main.js`가 스캐폴드되는 러너.
+- `src-tauri/src/commands/content_project.rs`: 스캐폴드, 매니페스트, 장면 목록, 빌드 패키징. `content_project_game_main.js`·`content_project_game_scripts.js`가 스캐폴드되는 게임 코드.
+- `src-tauri/engines/three-web/runtime.js`·`ENGINE.md`, `engines/vendor/`: 관리형 런타임과 벤더링된 Three.js. `src-tauri/src/content_engine.rs`가 내장해 미리보기와 빌드에 제공한다.
 - `src/components/studio/game-preview.tsx`, `studio-pane.tsx`: 작업공간 파일 창의 게임 보기/장면 편집 전환.
 
 ## 검증과 계획 유지관리
@@ -142,7 +143,7 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 
 ## 다음 제작 흐름과 데스크톱
 
-새 프로젝트 → 작업공간 → 대화로 게임 수정 → 편집기·iframe 즉시 반영 → 빌드 버튼 → `build/game/<version>/` + zip. 이 루프는 구현됐고 에이전트는 MCP 도구와 편집기 컨텍스트로 루프 안에 있다. 남은 것은 엔진 런타임 분리, 출시(벤더링·호스팅), 에셋 업로드, 에이전트 역할 반영이다.
+새 프로젝트 → 작업공간 → 대화로 게임 수정 → 편집기·iframe 즉시 반영 → 빌드 버튼 → `build/game/<version>/` + zip. 이 루프는 구현됐고 에이전트는 MCP 도구와 편집기 컨텍스트로 루프 안에 있다. 엔진은 프로젝트 밖의 관리형 런타임이고 빌드는 CDN 없이 단독 실행된다. 남은 것은 출시(호스팅), 편집기의 엔진 개념(스크립트·애니메이션 UI), 에셋 업로드, 에이전트 역할 반영이다.
 
 데스크톱 앱 이름은 `Codeg Studio`이며 `pnpm tauri build --bundles app`으로 빌드한다. 로컬 개발용 빌드에서는 업스트림 자동 업데이트 대상과 서명 업데이트 산출물을 비활성화한다.
 

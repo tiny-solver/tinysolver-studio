@@ -199,6 +199,20 @@ pub async fn serve(id: &str, rel: &str) -> Response {
     let Some(root) = root_for(id) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    // The managed engine: answered from the binary, never from the folder, so
+    // a project cannot shadow (or be asked to carry) the runtime.
+    if crate::content_engine::is_reserved(rel) {
+        return match crate::content_engine::lookup(rel) {
+            Some(file) => {
+                let mut response = Response::new(Body::from(file.bytes));
+                let headers = response.headers_mut();
+                headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(file.content_type));
+                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                response
+            }
+            None => StatusCode::NOT_FOUND.into_response(),
+        };
+    }
     let Some(path) = resolve(&root, rel) else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -333,6 +347,19 @@ mod tests {
             assert_eq!(serve(&id, bad).await.status(), StatusCode::NOT_FOUND, "{bad}");
         }
         assert_eq!(serve("nope", "outputs/game/index.html").await.status(), StatusCode::NOT_FOUND);
+
+        // The managed engine is served from the binary, even when the folder
+        // has a file at that path.
+        std::fs::create_dir_all(root.join("__codeg/engine/three-web")).unwrap();
+        std::fs::write(root.join("__codeg/engine/three-web/runtime.js"), "shadow").unwrap();
+        let runtime = serve(&id, "__codeg/engine/three-web/runtime.js").await;
+        assert_eq!(runtime.status(), StatusCode::OK);
+        assert_eq!(runtime.headers().get(header::CONTENT_TYPE).unwrap(), "text/javascript; charset=utf-8");
+        let body = axum::body::to_bytes(runtime.into_body(), usize::MAX).await.unwrap();
+        assert!(body.starts_with(b"// codeg-engine"));
+        assert_eq!(serve(&id, "__codeg/vendor/three.module.min.js").await.status(), StatusCode::OK);
+        assert_eq!(serve(&id, "__codeg/other.js").await.status(), StatusCode::NOT_FOUND);
+        assert_eq!(serve("nope", "__codeg/vendor/three.module.min.js").await.status(), StatusCode::NOT_FOUND);
         assert_eq!(serve(&id, "outputs/game/missing.png").await.status(), StatusCode::NOT_FOUND);
     }
 

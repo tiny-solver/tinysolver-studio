@@ -21,6 +21,7 @@ pub mod backgrounds;
 pub mod brand;
 pub mod chat_channel;
 pub mod commands;
+pub mod content_engine;
 pub mod content_preview;
 pub mod studio_scene;
 pub mod studio_tools;
