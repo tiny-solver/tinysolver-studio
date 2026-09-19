@@ -22,7 +22,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "codeg-gameeditor",
+  title: "Codeg Studio",
   description: "AI Coding Agent Conversation Manager",
   icons: {
     icon: [

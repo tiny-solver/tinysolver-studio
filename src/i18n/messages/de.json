@@ -1732,7 +1732,7 @@
   },
   "LoginPage": {
     "documentTitle": "Anmelden - codeg",
-    "brand": "Codeg",
+    "brand": "Codeg Studio",
     "subtitle": "Gib dein Zugriffstoken ein, um dich mit der Desktop-App zu verbinden",
     "tokenPlaceholder": "Zugriffstoken",
     "connect": "Verbinden",
@@ -4956,7 +4956,7 @@
     "openSystemSettings": "Systemeinstellungen öffnen",
     "openSystemSettingsFailed": "Die Benachrichtigungseinstellungen des Systems konnten nicht geöffnet werden.",
     "sendTest": "Test senden",
-    "testTitle": "Codeg",
+    "testTitle": "Codeg Studio",
     "testBody": "Desktop-Benachrichtigungen funktionieren.",
     "testSent": "Testbenachrichtigung gesendet.",
     "testFailed": "Die Testbenachrichtigung konnte nicht gesendet werden.",

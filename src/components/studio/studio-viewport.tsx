@@ -82,17 +82,23 @@ function ImageMaterial({ blob, color }: { blob?: Blob; color: string }) {
 
 class RenderBoundary extends Component<
   { children: ReactNode; message: string },
-  { failed: boolean }
+  { failed: boolean; detail: string }
 > {
-  state = { failed: false }
-  static getDerivedStateFromError() {
-    return { failed: true }
+  state = { failed: false, detail: "" }
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      failed: true,
+      detail: error instanceof Error ? error.message : String(error),
+    }
   }
   render() {
     if (this.state.failed)
       return (
         <div className="studio-render-error" role="alert">
           {this.props.message}
+          <pre className="mt-2 whitespace-pre-wrap text-xs">
+            {this.state.detail}
+          </pre>
         </div>
       )
     return this.props.children

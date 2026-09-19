@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!--
+    Codeg Studio — deliberately NOT upstream codeg's dark-navy `< ••• >` mark.
+    This build is meant to sit next to codeg in the Dock / taskbar, so the two
+    have to be told apart at 32px: warm amber field vs dark navy field, mesh
+    triangle vs angle brackets. Change the hue and the glyph together if this
+    is ever redrawn — either one alone stops being a one-glance difference.
+
     Full-bleed on purpose: the web favicon, the Windows .ico and the Linux PNGs
     all want the canvas filled. macOS is the exception — it needs an 824/1024
     safe-area inset — and that inset is applied when building icon.icns:
@@ -9,37 +15,34 @@
     Re-run it after changing anything below, or the Dock icon keeps the old art.
   -->
   <defs>
-    <!-- 代码符号渐变 -->
-    <linearGradient id="code" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#dcdfe9"/>
-      <stop offset="100%" style="stop-color:#cdd1e2"/>
-    </linearGradient>
-    <!-- 色料三元色 -->
-    <linearGradient id="bubble1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ff4081"/>
-      <stop offset="100%" style="stop-color:#e91e63"/>
-    </linearGradient>
-    <linearGradient id="bubble2" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffeb3b"/>
-      <stop offset="100%" style="stop-color:#fdd835"/>
-    </linearGradient>
-    <linearGradient id="bubble3" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#29b6f6"/>
-      <stop offset="100%" style="stop-color:#03a9f4"/>
+    <linearGradient id="field" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffb647"/>
+      <stop offset="55%" style="stop-color:#fb8c24"/>
+      <stop offset="100%" style="stop-color:#ef5c1a"/>
     </linearGradient>
   </defs>
 
   <!-- 圆角矩形背景 -->
-  <rect x="0" y="0" width="512" height="512" rx="90" ry="90" fill="#1a1a2e"/>
+  <rect x="0" y="0" width="512" height="512" rx="90" ry="90" fill="url(#field)"/>
 
-  <!-- 代码尖括号 < > -->
-  <polyline points="180,186 100,256 180,326"
-    fill="none" stroke="url(#code)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="332,186 412,256 332,326"
-    fill="none" stroke="url(#code)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 视口取景框角标 -->
+  <g fill="none" stroke="#3b1703" stroke-width="20" stroke-linecap="round"
+     stroke-linejoin="round" opacity="0.45">
+    <polyline points="96,150 96,96 150,96"/>
+    <polyline points="362,96 416,96 416,150"/>
+    <polyline points="416,362 416,416 362,416"/>
+    <polyline points="150,416 96,416 96,362"/>
+  </g>
 
-  <!-- 中间三个圆点（横排） -->
-  <circle cx="206" cy="256" r="30" fill="url(#bubble1)" opacity="0.95"/>
-  <circle cx="256" cy="256" r="36" fill="url(#bubble2)" opacity="0.95"/>
-  <circle cx="306" cy="256" r="30" fill="url(#bubble3)" opacity="0.95"/>
+  <!-- 网格三角面（编辑中的多边形） -->
+  <polygon points="256,158 364,344 148,344"
+    fill="#fff4e2" fill-opacity="0.18"
+    stroke="#fffaf2" stroke-width="26" stroke-linejoin="round"/>
+
+  <!-- 三个顶点控制柄 -->
+  <g fill="#3b1703" stroke="#fffaf2" stroke-width="14">
+    <circle cx="256" cy="158" r="27"/>
+    <circle cx="364" cy="344" r="27"/>
+    <circle cx="148" cy="344" r="27"/>
+  </g>
 </svg>

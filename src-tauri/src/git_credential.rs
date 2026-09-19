@@ -277,21 +277,15 @@ fn parse_data_dir_arg<I: IntoIterator<Item = String>>(args: I) -> Option<std::pa
 
 /// Resolve the app data directory (same path Tauri uses).
 fn resolve_app_data_dir() -> Option<std::path::PathBuf> {
-    // On macOS: ~/Library/Application Support/app.codeg
-    // On Linux: ~/.local/share/app.codeg
-    // On Windows: %APPDATA%/app.codeg
-    #[cfg(target_os = "macos")]
-    {
-        dirs::data_dir().map(|d| d.join("app.codeg"))
-    }
-    #[cfg(target_os = "linux")]
-    {
-        dirs::data_dir().map(|d| d.join("app.codeg"))
-    }
-    #[cfg(target_os = "windows")]
-    {
-        dirs::data_dir().map(|d| d.join("app.codeg"))
-    }
+    // On macOS: ~/Library/Application Support/<identifier>
+    // On Linux: ~/.local/share/<identifier>
+    // On Windows: %APPDATA%/<identifier>
+    //
+    // The identifier comes from `brand::BUNDLE_IDENTIFIER` rather than a
+    // literal: this helper runs as a *subprocess* with no Tauri handle, so a
+    // stale literal would silently point it at another codeg build's database
+    // and tokens.
+    dirs::data_dir().map(|d| d.join(crate::brand::BUNDLE_IDENTIFIER))
 }
 
 /// Ensure the GIT_ASKPASS helper script exists in the app data directory.

@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "codeg-gameeditor",
+  "productName": "Codeg Studio",
   "version": "0.30.10",
   "identifier": "app.codeg.gameeditor",
   "build": {
     "beforeDevCommand": "pnpm tauri:before-dev",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:3100",
     "beforeBuildCommand": "pnpm tauri:before-build",
     "frontendDist": "../out"
   },

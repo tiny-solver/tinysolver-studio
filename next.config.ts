@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  assetPrefix: isProd ? undefined : `http://${internalHost}:3000`,
+  assetPrefix: isProd ? undefined : `http://${internalHost}:3100`,
 }
 
 export default withNextIntl(nextConfig)

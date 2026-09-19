@@ -61,7 +61,7 @@
       "id": "S4b",
       "title": "데스크톱 실행",
       "status": "done",
-      "detail": "Rust 1.98.1로 Apple Silicon 릴리스 앱을 빌드했다. codeg-gameeditor.app 실행 및 프로세스, 앱 식별자 확인 완료.",
+      "detail": "Rust 1.98.1로 Apple Silicon 릴리스 앱을 빌드했다. 실행 및 프로세스, 앱 식별자 확인 완료. 이름 변경 후 산출물은 Codeg Studio.app이다.",
       "acceptance": "앱 번들 생성 및 실행 프로세스 확인."
     },
     {
@@ -125,7 +125,10 @@
     "2026-09-19 · Chrome 브라우저 검증 3개 통과: 실제 렌더 픽셀, 클릭 표시 전환, 드래그, 명령 배치·실행 취소, 이미지 번들·새로고침 복원.",
     "2026-09-19 · 390px 모바일 가로 넘침 없음, 한국어·어두운 테마 확인, Studio 진입 시 백엔드 API 요청 없음.",
     "2026-09-19 · 데스크톱·모바일·시각 계획표 스크린샷 검수. 명령 적용·저장·미리보기 간 동작 확인.",
-    "2026-09-19 · macOS arm64 릴리스 앱 빌드·실행 완료. 이름 codeg-gameeditor, 식별자 app.codeg.gameeditor. 브라우저 회귀 검증 3개 재통과. 네이티브 창의 시각 검수는 자동화 환경 제약으로 미확인."
+    "2026-09-19 · macOS arm64 릴리스 앱 빌드·실행 완료. 이름 codeg-gameeditor, 식별자 app.codeg.gameeditor. 브라우저 회귀 검증 3개 재통과. 네이티브 창의 시각 검수는 자동화 환경 제약으로 미확인.",
+    "2026-09-19 · 데스크톱 실사용에서 Monaco 리소스 누락 확인. 빌드 전 복사 단계 추가. Studio WebView 렌더 오류 진단 및 재검증 진행 중.",
+    "2026-09-19 · 기존 Codeg와 동시 실행 격리 적용. 홈 디렉터리 ~/.codeg-studio, 키체인 서비스 codeg-studio, 웹 서비스 기본 포트 3081, 개발 서버 3100. 구분되는 이름은 src-tauri/src/brand.rs에 모았다. cargo test 3,961개 통과, clippy 3종(desktop·server·mcp) 통과, pnpm lint·pnpm build 통과. Vitest 456개 파일 / 6,632개 테스트 통과(Node 26에서 --no-experimental-webstorage 사용). 알림 테스트가 브랜드 문자열을 하드코딩하고 있어 함께 갱신했다. 두 앱을 실제로 동시에 띄워 본 검수는 하지 않았다.",
+    "2026-09-19 · 이름·아이콘 변경 후 macOS arm64 릴리스 앱 재빌드 성공. 산출물 Codeg Studio.app, CFBundleName Codeg Studio, 식별자 app.codeg.gameeditor. Dock 아이콘 아트워크 교체와 824/1024 세이프에어리어 유지를 번들의 icon.icns에서 확인했다. 이번에는 앱을 실행해 보지 않았다."
   ],
   "maintenance": "기능 변경 시 roadmap.json의 상태·완료 기준·검증 결과를 갱신하고 pnpm studio:plan을 실행한다. HTML을 직접 수정하지 않는다.",
   "sources": [

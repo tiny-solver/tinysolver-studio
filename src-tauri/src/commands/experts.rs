@@ -47,7 +47,7 @@ use crate::models::agent::AgentType;
 
 static EXPERTS_BUNDLE: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/experts");
 
-const CENTRAL_DIR_NAME: &str = ".codeg";
+const CENTRAL_DIR_NAME: &str = crate::brand::HOME_DIR_NAME;
 const CENTRAL_SKILLS_SUBDIR: &str = "skills";
 const MANIFEST_FILE: &str = ".manifest.json";
 const EXPERTS_TOML: &str = "experts.toml";
