@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 const PREFERENCES_FILE_NAME: &str = "preferences.json";
-const CODEG_DIR_NAME: &str = ".codeg";
+const CODEG_DIR_NAME: &str = crate::brand::HOME_DIR_NAME;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]

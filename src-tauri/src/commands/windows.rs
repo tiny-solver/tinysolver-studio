@@ -2421,7 +2421,7 @@ pub fn install_tray_icon(
         .build()?;
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ICON_ID)
-        .tooltip("Codeg")
+        .tooltip(crate::brand::APP_NAME)
         .menu(&menu)
         // `false` is required for `on_tray_icon_event::Click` to fire on
         // every platform we ship: the default `true` causes the OS to

@@ -186,7 +186,7 @@ test("Korean browser locale works without a backend", async ({ browser }) => {
   page.on("request", (request) => {
     if (request.url().includes("/api/")) apiRequests.push(request.url())
   })
-  await page.goto(`${process.env.STUDIO_URL ?? "http://localhost:3000"}/studio`)
+  await page.goto(`${process.env.STUDIO_URL ?? "http://localhost:3100"}/studio`)
   await expect(
     page.getByText("이 브라우저에 저장됨", { exact: true })
   ).toBeVisible()

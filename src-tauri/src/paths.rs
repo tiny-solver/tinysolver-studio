@@ -1,13 +1,16 @@
 //! Centralized resolution of codeg-owned filesystem paths.
 //!
-//! Mirrors the conventions already used by `preferences.rs` (`~/.codeg/`)
-//! and `experts.rs` (`~/.codeg/skills/`). New features that need a
-//! user-scoped persistent directory should call into this module instead of
-//! re-deriving `dirs::home_dir().join(".codeg")` themselves.
+//! Mirrors the conventions already used by `preferences.rs` and
+//! `experts.rs`. New features that need a user-scoped persistent directory
+//! should call into this module instead of re-deriving
+//! `dirs::home_dir().join(crate::brand::HOME_DIR_NAME)` themselves.
+//!
+//! The basename comes from [`crate::brand::HOME_DIR_NAME`] so this fork does
+//! not share `~/.codeg/` with an upstream codeg running alongside it.
 
 use std::path::{Path, PathBuf};
 
-const CODEG_DIR_NAME: &str = ".codeg";
+const CODEG_DIR_NAME: &str = crate::brand::HOME_DIR_NAME;
 const PETS_DIR_NAME: &str = "pets";
 const UPLOADS_DIR_NAME: &str = "uploads";
 const LOGS_DIR_NAME: &str = "logs";

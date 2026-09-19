@@ -39,7 +39,9 @@ import {
   type WebServicePortProbe,
 } from "@/lib/api"
 
-const DEFAULT_PORT = 3080
+// Upstream codeg defaults to 3080. This fork is expected to run alongside it,
+// so it claims the next port instead of fighting for the same bind.
+const DEFAULT_PORT = 3081
 import { openUrl } from "@/lib/platform"
 import { copyTextToClipboard } from "@/lib/utils"
 import { useCopiedFlag } from "@/hooks/use-copied-flag"

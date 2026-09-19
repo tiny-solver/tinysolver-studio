@@ -626,7 +626,10 @@ async fn async_main() -> ExitCode {
 }
 
 fn default_data_dir() -> PathBuf {
+    // Must stay in lock-step with `keyring_store::tokens_file_path_for`, which
+    // derives the server-mode `tokens.json` location the same way: a divergence
+    // here puts the database and the tokens in two different roots.
     dirs::data_dir()
-        .map(|d| d.join("codeg"))
+        .map(|d| d.join(codeg_lib::brand::DATA_DIR_NAME))
         .unwrap_or_else(|| PathBuf::from(".codeg-data"))
 }

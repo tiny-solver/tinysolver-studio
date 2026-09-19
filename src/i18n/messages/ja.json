@@ -1732,7 +1732,7 @@
   },
   "LoginPage": {
     "documentTitle": "ログイン - codeg",
-    "brand": "Codeg",
+    "brand": "Codeg Studio",
     "subtitle": "デスクトップアプリに接続するためのアクセストークンを入力してください",
     "tokenPlaceholder": "アクセストークン",
     "connect": "接続",
@@ -4956,7 +4956,7 @@
     "openSystemSettings": "システム設定を開く",
     "openSystemSettingsFailed": "システムの通知設定を開けませんでした。",
     "sendTest": "テスト送信",
-    "testTitle": "Codeg",
+    "testTitle": "Codeg Studio",
     "testBody": "デスクトップ通知は正常に動作しています。",
     "testSent": "テスト通知を送信しました。",
     "testFailed": "テスト通知を送信できませんでした。",

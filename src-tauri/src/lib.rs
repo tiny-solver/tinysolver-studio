@@ -18,6 +18,7 @@ mod app_error;
 pub mod app_state;
 pub mod automation;
 pub mod backgrounds;
+pub mod brand;
 pub mod chat_channel;
 pub mod commands;
 pub mod db;
@@ -1215,7 +1216,7 @@ mod tauri_app {
                 if app.get_webview_window("main").is_none() {
                     let url = tauri::WebviewUrl::App(workspace_path.into());
                     let builder = tauri::WebviewWindowBuilder::new(app, "main", url)
-                        .title("codeg-gameeditor")
+                        .title(crate::brand::APP_NAME)
                         .inner_size(1260.0, 860.0)
                         .min_inner_size(400.0, 600.0);
                     let builder = windows::apply_platform_window_style(builder);

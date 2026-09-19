@@ -19,8 +19,8 @@ pnpm install
 pnpm dev
 ```
 
-- 편집기: `http://localhost:3000/studio`
-- 시각 계획: `http://localhost:3000/studio-plan.html`
+- 편집기: `http://localhost:3100/studio`
+- 시각 계획: `http://localhost:3100/studio-plan.html`
 - 기존 앱: 작업공간 하단 빠른 작업 메뉴 → 콘텐츠 스튜디오
 - 편집기 안의 변경은 즉시 렌더링한다. 코드 변경은 Next 개발 서버가 반영한다.
 - 배포할 때 `pnpm build`로 정적 파일을 생성한다. Studio는 Next 서버 API를 사용하지 않는다.
@@ -121,7 +121,7 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 
 새 게임 → 템플릿을 독립 폴더로 복제 → 기존 AI 작업공간 연결 → 필요한 도구 호출 → 산출물을 게임에 적용 → 즉시 미리보기 순으로 확장한다. 이 흐름은 현재 계획 단계이며 브라우저 초안 편집과 구분한다.
 
-데스크톱 앱 이름은 `codeg-gameeditor`이며 `pnpm tauri build --bundles app`으로 빌드한다. 로컬 개발용 빌드에서는 업스트림 자동 업데이트 대상과 서명 업데이트 산출물을 비활성화한다.
+데스크톱 앱 이름은 `Codeg Studio`이며 `pnpm tauri build --bundles app`으로 빌드한다. 로컬 개발용 빌드에서는 업스트림 자동 업데이트 대상과 서명 업데이트 산출물을 비활성화한다.
 
 ### 프로젝트 연결의 구현 기준
 
@@ -133,6 +133,24 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 
 로컬 macOS 앱은 기존 Codeg와 별도의 식별자 `app.codeg.gameeditor`를 사용한다. 기존 `codeg://` 연결을 차지하지 않도록 OS 딥링크 등록도 비활성화한다.
 
+두 앱을 동시에 켜도 서로의 상태를 건드리지 않는다. 구분되는 이름은 `src-tauri/src/brand.rs`에 상수로 모여 있고, 무엇을 일부러 공유하는지도 같은 파일에 적었다.
+
+| 자원 | 이 앱 | 기존 Codeg |
+| --- | --- | --- |
+| 홈 디렉터리 | `~/.codeg-studio/` | `~/.codeg/` |
+| 앱 데이터·DB | `app.codeg.gameeditor` | `app.codeg` |
+| 키체인 서비스 | `codeg-studio` | `codeg` |
+| 웹 서비스 기본 포트 | 3081 | 3080 |
+| 개발 서버 포트 | 3100 | 3000 |
+
+단일 인스턴스 잠금은 식별자에서 파생되고(`/tmp/app_codeg_gameeditor_si.sock`), ACP 스크래치 디렉터리와 위임 소켓은 원래부터 PID 단위라 그대로 둔다. `~/.codeg/npm-global`은 에이전트 CLI 설치 경로여서 일부러 공유한다 — 분리하면 같은 CLI를 두 벌 받게 되고 격리 이득은 없다.
+
+홈 디렉터리가 갈렸으므로 이 앱의 설정·스킬·업로드는 빈 상태로 시작한다. 기존 것을 쓰려면 필요한 하위 디렉터리만 복사한다.
+
 네이티브 빌드 환경: Rust 1.88은 기존 코드의 `std::fs::File::try_lock` 때문에 실패했다. 이 환경은 `rustup update stable`로 Rust 1.98.1로 갱신했다. 프런트엔드 정적 파일을 이미 빌드한 경우 `pnpm tauri build --bundles app --config '{"build":{"beforeBuildCommand":"pnpm tauri:prepare-sidecars"}}'`로 웹 빌드를 반복하지 않고 패키징할 수 있다.
 
-데스크톱 검증 결과: macOS arm64 릴리스 빌드 및 `open` 실행 성공, 실행 프로세스와 번들 이름·식별자를 확인했다. 산출물은 `src-tauri/target/release/bundle/macos/codeg-gameeditor.app`이다. 브라우저 검증 3개도 다시 통과했다. 네이티브 창의 시각 검수는 자동화 도구의 심볼릭 링크 경로 제약으로 확인하지 못했다. 앱에 포함된 계획표는 빌드 시점 스냅샷이며 최신 상태는 저장소의 생성 문서를 기준으로 한다.
+데스크톱 검증 결과: macOS arm64 릴리스 빌드 및 `open` 실행 성공, 실행 프로세스와 번들 이름·식별자를 확인했다. 당시 산출물은 `src-tauri/target/release/bundle/macos/codeg-gameeditor.app`이었고, 이름 변경 후의 산출물은 `Codeg Studio.app`이다. 브라우저 검증 3개도 다시 통과했다. 네이티브 창의 시각 검수는 자동화 도구의 심볼릭 링크 경로 제약으로 확인하지 못했다. 앱에 포함된 계획표는 빌드 시점 스냅샷이며 최신 상태는 저장소의 생성 문서를 기준으로 한다.
+
+### 데스크톱 로딩 회귀 수정
+
+`/vs` Monaco 정적 리소스가 없는 앱은 파일 탭에서 로딩이 끝나지 않는다. `pnpm dev`와 `pnpm build`는 이제 `prepare:monaco`를 먼저 실행한다. 설치 시 postinstall 실행 여부에 의존하지 않는다. 렌더러 오류는 실제 오류 메시지를 함께 표시하여 WebGL 환경 오류와 초기화 오류를 구분한다. macOS 네이티브 재검증 진행 중.

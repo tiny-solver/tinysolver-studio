@@ -1732,7 +1732,7 @@
   },
   "LoginPage": {
     "documentTitle": "Login - codeg",
-    "brand": "Codeg",
+    "brand": "Codeg Studio",
     "subtitle": "Enter your access token to connect to the desktop app",
     "tokenPlaceholder": "Access Token",
     "connect": "Connect",
@@ -4956,7 +4956,7 @@
     "openSystemSettings": "Open system settings",
     "openSystemSettingsFailed": "Could not open the system notification settings.",
     "sendTest": "Send a test",
-    "testTitle": "Codeg",
+    "testTitle": "Codeg Studio",
     "testBody": "Desktop notifications are working.",
     "testSent": "Test notification sent.",
     "testFailed": "The test notification could not be sent.",
