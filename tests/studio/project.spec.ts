@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
-import { promises as fs } from "node:fs"
+import { createReadStream, promises as fs } from "node:fs"
+import { createServer } from "node:http"
+import type { AddressInfo } from "node:net"
 import path from "node:path"
 
 // The whole loop against a real backend: drag → autosave → an "agent" edits
@@ -91,6 +93,51 @@ test("drag, autosave, agent edit, reload, build", async ({ page, baseURL }) => {
     }
   )
 
+  // Edit vs play, for the managed engine: scripts stand still while editing
+  // (so the overlay matches the picture) and run in preview.
+  const game = () =>
+    page.frames().find((f) => f.url().includes("/content-preview/"))!
+  const engineInfo = () =>
+    game().evaluate(() => {
+      const engine = (
+        window as unknown as {
+          codegEngine?: {
+            mode: string
+            VERSION: string
+            node(id: string): { y: number } | null
+          }
+        }
+      ).codegEngine
+      return engine
+        ? {
+            mode: engine.mode,
+            version: engine.VERSION,
+            y: engine.node("hero")?.y ?? null,
+          }
+        : null
+    })
+  const usesManagedEngine = (
+    await fs.readFile(path.join(root, "outputs/game/index.html"), "utf8")
+  ).includes("__codeg/")
+  const managed = await engineInfo()
+  if (usesManagedEngine) expect(managed?.y).not.toBeNull()
+  if (managed && managed.y !== null) {
+    expect(managed.mode).toBe("edit")
+    const still = managed.y
+    await page.waitForTimeout(400)
+    expect((await engineInfo())!.y).toBe(still)
+
+    await page.getByRole("button", { name: "Preview", exact: true }).click()
+    await expect.poll(async () => (await engineInfo())!.mode).toBe("play")
+    await expect
+      .poll(async () => (await engineInfo())!.y, { timeout: 10_000 })
+      .not.toBe(still)
+
+    await page.getByRole("button", { name: "Edit", exact: true }).click()
+    await expect.poll(async () => (await engineInfo())!.mode).toBe("edit")
+    expect((await engineInfo())!.y).toBe(still)
+  }
+
   // An agent breaks the engine: the preview server's injected reporter posts
   // the exception and the editor shows it, ready to hand to the chat. The
   // standalone page has no conversation beside it, so the button is off.
@@ -132,6 +179,61 @@ test("drag, autosave, agent edit, reload, build", async ({ page, baseURL }) => {
   const latest = sorted[sorted.length - 1]
   await fs.access(path.join(buildsDir, latest, "outputs/game/index.html"))
   await fs.access(path.join(buildsDir, `${latest}.zip`))
+
+  // The build is the release: served by any static host, with no Studio and
+  // nothing fetched from another origin.
+  if (usesManagedEngine) {
+    const buildRoot = path.join(buildsDir, latest)
+    const types: Record<string, string> = {
+      ".html": "text/html",
+      ".js": "text/javascript",
+      ".json": "application/json",
+      ".png": "image/png",
+    }
+    const server = createServer((req, res) => {
+      const rel = decodeURIComponent((req.url ?? "/").split("?")[0])
+      const file = path.join(
+        buildRoot,
+        rel.endsWith("/") ? `${rel}index.html` : rel
+      )
+      if (!file.startsWith(buildRoot)) return void res.writeHead(403).end()
+      res.setHeader("content-type", types[path.extname(file)] ?? "text/plain")
+      createReadStream(file)
+        .on("error", () => res.writeHead(404).end())
+        .pipe(res)
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const release = await page.context().newPage()
+    const offHost: string[] = []
+    release.on("request", (request) => {
+      if (
+        !request.url().startsWith(origin) &&
+        !request.url().startsWith("data:")
+      )
+        offHost.push(request.url())
+    })
+    const releaseErrors: string[] = []
+    release.on("pageerror", (error) => releaseErrors.push(error.message))
+    try {
+      await release.goto(`${origin}/outputs/game/index.html`)
+      await expect(release.locator("canvas")).toBeVisible({ timeout: 30_000 })
+      await expect
+        .poll(() =>
+          release.evaluate(
+            () =>
+              (window as unknown as { codegEngine?: { mode: string } })
+                .codegEngine?.mode ?? null
+          )
+        )
+        .toBe("play")
+      expect(offHost).toEqual([])
+      expect(releaseErrors).toEqual([])
+    } finally {
+      await release.close()
+      server.close()
+    }
+  }
 
   await page.screenshot({
     path: "test-results/studio/project-loop.png",

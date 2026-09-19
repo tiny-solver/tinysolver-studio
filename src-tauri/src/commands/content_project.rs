@@ -133,19 +133,21 @@ pub struct ContentTemplate {
     pub engine: Option<EngineInfo>,
 }
 
-/// The engine files the `web-three` template scaffolds. Bump `version`
-/// together with `THREE_MAIN_JS`; the Studio reads `engine.id` to decide
-/// which preview contract applies.
-pub const THREE_WEB_ENGINE_VERSION: &str = "0.2.0";
+/// Version of the managed `three-web` runtime a new project is created
+/// against. The runtime itself is not scaffolded — see
+/// [`crate::content_engine`]: the preview serves it and a build embeds it. A
+/// project made with 0.2.x carries its own `src/main.js` runner and keeps
+/// working; it just does not get engine upgrades.
+pub const THREE_WEB_ENGINE_VERSION: &str = crate::content_engine::THREE_WEB_VERSION;
 
 fn three_web_engine() -> EngineInfo {
     EngineInfo {
         id: "three-web".into(),
         version: THREE_WEB_ENGINE_VERSION.into(),
         entry: "outputs/game/index.html".into(),
-        // Served from the project root: the game resolves `assets/` relative
-        // to itself, so serving only `outputs/game` would 404 every asset.
-        start: "npx serve . -l 4173  # http://localhost:4173/outputs/game/".into(),
+        // The runtime lives in Codeg Studio, not in the project, so the way to
+        // run the game outside the Studio is a build.
+        start: "Codeg Studio preview, or serve a build: npx serve build/game/<version>".into(),
         build: None,
     }
 }
@@ -507,6 +509,20 @@ fn package_build(
         // A top-level index.html so the folder (or zip) opens straight into
         // the game from any static host.
         let entry = engine.entry.trim_start_matches("./").to_string();
+        // The managed runtime and the vendored Three.js are not in the
+        // project; the entry page import-maps them to `../../__codeg/…`. Write
+        // them at that path so the build runs with no Studio and no CDN.
+        let entry_html = fs::read_to_string(root.join(&entry)).unwrap_or_default();
+        if crate::content_engine::page_uses_managed_engine(&entry_html) {
+            for file in crate::content_engine::files() {
+                let dest = staging.join(file.path);
+                if let Some(parent) = dest.parent() {
+                    fs::create_dir_all(parent).map_err(AppCommandError::io)?;
+                }
+                fs::write(&dest, file.bytes).map_err(AppCommandError::io)?;
+                size += file.bytes.len() as u64;
+            }
+        }
         fs::write(
             staging.join("index.html"),
             format!(
@@ -677,7 +693,9 @@ fn scaffold(root: &Path, manifest: &ContentProjectManifest) -> Result<(), AppCom
                 if let Some(engine) = &manifest.engine {
                     if engine.id == "three-web" {
                         write(root, &format!("{dir}/index.html"), THREE_INDEX_HTML)?;
-                        write(root, &format!("{dir}/src/main.js"), THREE_MAIN_JS)?;
+                        write(root, &format!("{dir}/src/main.js"), GAME_MAIN_JS)?;
+                        write(root, &format!("{dir}/src/scripts/index.js"), GAME_SCRIPTS_JS)?;
+                        write(root, &format!("{dir}/ENGINE.md"), crate::content_engine::engine_doc())?;
                     }
                 }
             }
@@ -827,9 +845,9 @@ const ASSETS_README: &str = "# assets — 원본 에셋\n\n이미지·오디오�
 
 const ASSETS_MANIFEST: &str = "{\n  \"schema\": 1,\n  \"container\": \"1080x1920\",\n  \"assets\": []\n}\n";
 
-const GAME_README: &str = "# game\n\n- `GDD.md`: 게임 디자인 문서. 규칙·수치·화면 크기의 정본.\n- `content/`: Codeg Studio 장면 문서(`*.studio.json`). 엔진과 무관한 편집 데이터.\n- `src/`: 엔진 코드.\n- `index.html`: 미리보기 진입점.\n\nGDD 안의 수치와 코드가 다르면 GDD가 우선한다. 코드를 GDD에 맞춘다.\n";
+const GAME_README: &str = "# game\n\n- `GDD.md`: 게임 디자인 문서. 규칙·수치·화면 크기의 정본.\n- `content/`: Codeg Studio 장면 문서(`*.studio.json`). 엔진과 무관한 편집 데이터.\n- `src/`: 이 게임의 규칙(`main.js`, `scripts/`). 엔진은 Codeg Studio가 제공하며 여기에 없다 — `ENGINE.md` 참고.\n- `ENGINE.md`: 엔진 API.\n- `index.html`: 미리보기 진입점.\n\nGDD 안의 수치와 코드가 다르면 GDD가 우선한다. 코드를 GDD에 맞춘다.\n";
 
-const GAME_CONTENT_README: &str = "# content — 장면 문서\n\n장면마다 `<scene>.studio.json` 하나. 엔진(`src/main.js`)과 Codeg Studio 편집기가 **같은 파일**을 읽는다. 편집기에서 고치면 자동 저장되고, 에이전트가 파일을 고치면 편집기와 미리보기가 다시 읽는다.\n\n```json\n{\n  \"schema\": 1,\n  \"id\": \"main\",\n  \"name\": \"첫 장면\",\n  \"document\": {\n    \"container\": { \"width\": 1080, \"height\": 1920 },\n    \"assets\": [{ \"id\": \"hero_idle\", \"file\": \"characters/hero/hero_idle_120x180.png\", \"width\": 120, \"height\": 180 }],\n    \"nodes\": [\n      { \"id\": \"hero\", \"parent\": \"root\", \"type\": \"sprite\",\n        \"transform\": { \"x\": 540, \"y\": 1500, \"w\": 120, \"h\": 180, \"anchor\": \"bottom-center\", \"z\": 10 },\n        \"props\": { \"asset\": \"hero_idle\", \"interactive\": true, \"onClick\": \"act_hero\", \"placeholder\": \"#e8d5a3\" } }\n    ]\n  },\n  \"logic\": { \"actions\": { \"act_hero\": [{ \"op\": \"say\", \"text\": \"안녕\" }] } }\n}\n```\n\n- 좌표: 컨테이너 픽셀, 원점 좌상단, y 아래 방향. `anchor`는 `top-left`·`center`·`bottom-center`.\n- `parent`: 다른 노드 id면 그 노드의 좌상단 기준 상대 좌표. 없는 id(`root`, `ui`)는 화면 원점.\n- `z`: 클수록 앞. `props.visible: false`면 숨김.\n- `type`: `sprite`(에셋 또는 `placeholder` 색), `rect`(`props.color`), `text`(`props.text`·`size`·`color`).\n- `assets[].file`: `assets/` 기준 상대 경로. 파일이 아직 없으면 `\"missing\": true`로 두면 엔진이 플레이스홀더를 그린다.\n- `logic`은 엔진의 것이다. 편집기는 그대로 보존한다.\n\n편집기가 실제로 다루는 필드는 `transform`·`props.visible`·`props.asset`·`props.text`뿐이고, 나머지 필드는 손대지 않고 보존한다.\n";
+const GAME_CONTENT_README: &str = "# content — 장면 문서\n\n장면마다 `<scene>.studio.json` 하나. 엔진(`codeg-engine`)과 Codeg Studio 편집기가 **같은 파일**을 읽는다. 편집기에서 고치면 자동 저장되고, 에이전트가 파일을 고치면 편집기와 미리보기가 다시 읽는다.\n\n```json\n{\n  \"schema\": 1,\n  \"id\": \"main\",\n  \"name\": \"첫 장면\",\n  \"document\": {\n    \"container\": { \"width\": 1080, \"height\": 1920 },\n    \"assets\": [{ \"id\": \"hero_idle\", \"file\": \"characters/hero/hero_idle_120x180.png\", \"width\": 120, \"height\": 180 }],\n    \"nodes\": [\n      { \"id\": \"hero\", \"parent\": \"root\", \"type\": \"sprite\",\n        \"transform\": { \"x\": 540, \"y\": 1500, \"w\": 120, \"h\": 180, \"anchor\": \"bottom-center\", \"z\": 10 },\n        \"props\": { \"asset\": \"hero_idle\", \"interactive\": true, \"onClick\": \"act_hero\", \"placeholder\": \"#e8d5a3\" } }\n    ]\n  },\n  \"logic\": { \"actions\": { \"act_hero\": [{ \"op\": \"say\", \"text\": \"안녕\" }] } }\n}\n```\n\n- 좌표: 컨테이너 픽셀, 원점 좌상단, y 아래 방향. `anchor`는 `top-left`·`center`·`bottom-center`.\n- `parent`: 다른 노드 id면 그 노드의 좌상단 기준 상대 좌표. 없는 id(`root`, `ui`)는 화면 원점.\n- `z`: 클수록 앞. `props.visible: false`면 숨김.\n- `type`: `sprite`(에셋 또는 `placeholder` 색), `rect`(`props.color`), `text`(`props.text`·`size`·`color`).\n- `assets[].file`: `assets/` 기준 상대 경로. 파일이 아직 없으면 `\"missing\": true`로 두면 엔진이 플레이스홀더를 그린다.\n- `logic`은 엔진의 것이다. 편집기는 그대로 보존한다.\n\n편집기가 실제로 다루는 필드는 `transform`·`props.visible`·`props.asset`·`props.text`뿐이고, 나머지 필드는 손대지 않고 보존한다.\n";
 
 const GDD_MD: &str = "# GDD\n\n## 개요\n\n- 장르: \n- 플랫폼: 웹\n- 화면: 1080×1920 (세로) — 한 값만 쓴다\n\n## 핵심 루프\n\n## 규칙과 수치\n\n| 항목 | 값 | 근거 |\n| --- | --- | --- |\n\n## 화면 목록\n\n## 필요한 에셋\n\n`assets/manifest.json`과 일치해야 한다.\n";
 
@@ -852,7 +870,7 @@ const STARTER_SCENE: &str = r##"{
         "props": { "text": "새 장면", "size": 96, "color": "#f2efe6", "align": "center" } },
       { "id": "hero", "parent": "root", "type": "sprite",
         "transform": { "x": 540, "y": 1500, "w": 120, "h": 180, "anchor": "bottom-center", "z": 20 },
-        "props": { "asset": null, "placeholder": "#ffb347", "interactive": true, "onClick": "act_hero" } },
+        "props": { "asset": null, "placeholder": "#ffb347", "interactive": true, "onClick": "act_hero", "script": "float" } },
       { "id": "hint", "parent": "root", "type": "text",
         "transform": { "x": 90, "y": 1600, "w": 900, "h": 80, "anchor": "top-left", "z": 10 },
         "props": { "text": "주인공을 눌러 보세요", "size": 44, "color": "#9aa4c7", "align": "center", "visible": false } }
@@ -860,13 +878,13 @@ const STARTER_SCENE: &str = r##"{
   },
   "logic": {
     "actions": {
-      "act_hero": [{ "op": "toggle", "id": "hint" }]
+      "act_hero": [{ "op": "toggle", "id": "hint" }, { "op": "shake", "id": "hero" }]
     }
   }
 }
 "##;
 
-const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 `?scene=<id>`로 장면을 고르고(기본 `main`), 로드되면 `parent.postMessage({ type: \"codeg:ready\", hot: true|false })`를 보낸다. `hot: true`면 `codeg:scene` 메시지로 받은 문서를 다시 그릴 수 있다는 뜻이다. 엔진 코드를 새로 쓰더라도 이 두 가지는 유지한다.\n- Codeg Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 zip을 만든다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
+const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Codeg Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Codeg Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 엔진(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
 
 const THREE_INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ko">
@@ -881,7 +899,8 @@ const THREE_INDEX_HTML: &str = r#"<!doctype html>
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.170.0/build/three.module.js"
+          "three": "../../__codeg/vendor/three.module.min.js",
+          "codeg-engine": "../../__codeg/engine/three-web/runtime.js"
         }
       }
     </script>
@@ -892,7 +911,8 @@ const THREE_INDEX_HTML: &str = r#"<!doctype html>
 </html>
 "#;
 
-const THREE_MAIN_JS: &str = include_str!("content_project_three_main.js");
+const GAME_MAIN_JS: &str = include_str!("content_project_game_main.js");
+const GAME_SCRIPTS_JS: &str = include_str!("content_project_game_scripts.js");
 
 const WEBTOON_README: &str = "# webtoon\n\n세로 스크롤 웹툰. 회차마다 `episodes/NN-<slug>/` 폴더.\n\n- `script.md`: 대사와 지문. 컷 번호로 나눈다.\n- `cuts.md`: 컷 목록 — 컷마다 구도, 등장인물, 배경, 이미지 생성 프롬프트.\n- 완성 이미지는 `build/webtoon/NN/`에 생성한다.\n\n캔버스: 폭 800px 기준, 컷 사이 여백으로 호흡을 조절한다.\n";
 
@@ -939,6 +959,8 @@ mod tests {
             "build/.gitkeep",
             "outputs/game/index.html",
             "outputs/game/src/main.js",
+            "outputs/game/src/scripts/index.js",
+            "outputs/game/ENGINE.md",
             "outputs/game/GDD.md",
             "outputs/game/content/README.md",
             "outputs/video/storyboards/_template.md",
@@ -1105,6 +1127,14 @@ mod tests {
         assert!(out.join("outputs/game/index.html").is_file());
         assert!(out.join("outputs/game/src/main.js").is_file());
         assert!(out.join("outputs/game/content/main.studio.json").is_file());
+        // Self-contained: the managed runtime and Three.js ride along, and the
+        // entry page references nothing off-host.
+        assert!(out.join("__codeg/engine/three-web/runtime.js").is_file());
+        assert!(out.join("__codeg/vendor/three.module.min.js").is_file());
+        let page = fs::read_to_string(out.join("outputs/game/index.html")).unwrap();
+        assert!(page.contains("../../__codeg/vendor/three.module.min.js"));
+        assert!(!page.contains("http://") && !page.contains("https://"));
+        assert!(!root.join("__codeg").exists(), "never written into the project");
         assert!(out.join("assets/backgrounds/bg_1x1.png").is_file());
         assert!(!out.join("outputs/game/node_modules").exists());
         assert!(out.join("index.html").is_file());

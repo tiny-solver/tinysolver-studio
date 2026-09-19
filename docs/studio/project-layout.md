@@ -32,7 +32,7 @@
 │   ├── backgrounds/
 │   └── ui/
 ├── outputs/                결과물별 소스 (선택한 것만 생성)
-│   ├── game/               GDD.md, content/<scene>.studio.json, src/main.js, index.html
+│   ├── game/               GDD.md, ENGINE.md, content/<scene>.studio.json, src/main.js, src/scripts/, index.html
 │   ├── webtoon/episodes/   NN-<slug>/script.md, cuts.md
 │   ├── instatoon/posts/    NN-<slug>/post.md
 │   ├── novel/chapters/     NN-<slug>.md
@@ -59,9 +59,9 @@
   "outputs": ["game", "video"],
   "engine": {
     "id": "three-web",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "entry": "outputs/game/index.html",
-    "start": "npx serve . -l 4173  # http://localhost:4173/outputs/game/",
+    "start": "Codeg Studio preview, or serve a build: npx serve build/game/<version>",
     "build": null
   },
   "paths": { "bible": "bible", "assets": "assets", "outputs": "outputs", "build": "build" },
@@ -71,7 +71,7 @@
 
 - `schema`: 읽는 쪽은 자기보다 큰 값을 거부한다.
 - `outputs`: 정렬·중복 제거된 kebab-case. 없는 결과물 폴더는 만들지 않는다.
-- `engine`: game 결과물이 있고 템플릿이 엔진을 제공할 때만 존재. `build`는 패키징 전 실행할 셸 명령(선택). `start`는 프로젝트 루트에서 서빙해야 에셋 상대 경로가 맞는다.
+- `engine`: game 결과물이 있고 템플릿이 엔진을 제공할 때만 존재. `build`는 패키징 전 실행할 셸 명령(선택). `start`는 사람이 읽는 실행 방법이다. 엔진이 프로젝트 밖에 있으므로 Studio 밖에서 돌리려면 빌드를 서빙한다.
 - `paths`: 레이어 위치 선언. 도구는 하드코딩 대신 이 값을 읽는다.
 - `agents`: 역할별 선호 에이전트. `null`이면 사용자가 고른 에이전트. 매니페스트에 두는 이유는 프로젝트와 함께 이동하기 위해서다.
 
@@ -80,7 +80,7 @@
 | id | 엔진 | 기본 결과물 |
 | --- | --- | --- |
 | `story` | 없음 | webtoon, novel |
-| `web-three` | `three-web` 0.2.0 (importmap으로 Three.js 로드, 빌드 없음, 장면 러너 + 편집기 계약) | game, video |
+| `web-three` | `three-web` 0.3.0 (Studio가 제공하는 관리형 런타임 + 벤더링된 Three.js r170, 빌드 단계 없음) | game, video |
 
 ## 장면 문서: 엔진과 편집기가 같은 파일
 
@@ -109,14 +109,26 @@
 - `assets[].file`은 `<assets>/` 기준 상대 경로. `..`나 절대 경로는 거부한다.
 - 첫 프로토타입의 `codeg-studio-project` 파일은 읽을 때 변환되고 다음 저장에서 현재 스키마로 바뀐다. 그 이미지는 `content/blobs/`에 있었으므로 `missing`으로 표시된다.
 
-## 엔진 계약 (`three-web` 0.2.0)
+## 엔진: 프로젝트 밖의 관리형 런타임 (`three-web` 0.3.0)
 
-편집기는 게임을 **iframe으로 그대로** 띄우고 그 위에 선택·드래그 오버레이를 얹는다. 그러려면 엔진이 두 가지를 지켜야 한다. 스캐폴드된 러너는 지키고, 에이전트가 엔진을 새로 쓰더라도 유지하도록 `AGENTS.md`에 적혀 있다.
+프로젝트에는 엔진 코드가 없다. `outputs/game/index.html`의 importmap이 `three`와 `codeg-engine`을 `../../__codeg/…`로 연결하고, 그 예약 경로는 앱에 내장된 파일(`src-tauri/engines/`, `src-tauri/src/content_engine.rs`)이 답한다.
 
-1. `?scene=<id>`로 장면을 고른다(기본 `main`).
-2. 로드되면 `parent.postMessage({ type: "codeg:ready", hot, scene })`를 보낸다. `hot: true`면 `{ type: "codeg:scene", scene }` 메시지로 받은 문서를 즉시 다시 그린다. 편집기는 hot 엔진에는 편집마다 문서를 보내고, `hot: false` 엔진은 저장 뒤 iframe을 다시 불러온다.
+| 상황 | `__codeg/`를 누가 주나 |
+| --- | --- |
+| 미리보기 | 미리보기 서버가 바이너리에서 서빙한다. 폴더에 같은 경로의 파일이 있어도 무시한다 |
+| 빌드 | 진입 HTML이 `__codeg/`를 참조하면 빌드 폴더의 같은 상대 경로에 런타임과 Three.js를 써 넣는다. CDN 요청이 없다 |
 
-러너가 이해하는 `logic.actions` 연산: `toggle {id}`, `setVisible {id,value}`, `say {text}`, `swapAsset {id,asset}`, `goto {scene}`.
+그래서 Studio가 엔진을 올리면 모든 프로젝트가 같이 올라간다. 프로젝트가 갖는 것은 장면(`content/`), 이 게임의 규칙(`src/main.js`의 `ops`·`setup`, `src/scripts/index.js`), 그리고 API 설명 사본(`ENGINE.md`)이다. 에이전트용 규칙은 스캐폴드된 `AGENTS.md`에 있다: 엔진을 복사해 고치지 말고 스크립트를 쓴다.
+
+편집기와 엔진 사이의 계약:
+
+1. `?scene=<id>`로 장면을 고른다(기본 `main`). `?codeg=edit`면 편집 모드로 시작한다.
+2. 로드되면 `parent.postMessage({ type: "codeg:ready", hot, modes, scene })`. `hot: true`면 `codeg:scene`으로 받은 문서를 즉시 다시 그리고, `modes: true`면 `codeg:mode { mode: "edit" | "play" }`를 받는다.
+3. **편집 모드**에서는 스크립트·트윈·입력이 멈추고 장면이 문서 그대로 그려진다(선택 상자와 그림이 일치). **플레이 모드**로 가거나 돌아오면 게임 상태가 문서 기준으로 초기화된다. 편집기의 미리보기 토글이 이 메시지를 보낸다.
+
+런타임이 제공하는 것: 노드 핸들(`x` `y` `visible` `rect` `moveBy` `set` `overlaps` `tween`), `engine.state`, 입력(`input.down` `axisX/Y` `pointer`), 이벤트(`update` `pointerdown` `keydown` …), `spawn/despawn`, 내장 스크립트(`float` `spin` `pulse` `blink` `frames` `mover`), `logic.actions` 연산(`toggle` `setVisible` `say` `swapAsset` `setText` `move` `set` `add` `goto` `run` + `if` 조건). 전체는 `src-tauri/engines/three-web/ENGINE.md`.
+
+0.2.x로 만든 프로젝트(자체 `src/main.js` 러너, unpkg의 Three.js)는 그대로 동작한다. 엔진 업그레이드를 받지 않을 뿐이다. 자동 이전 도구는 없다.
 
 ## 미리보기 서빙
 

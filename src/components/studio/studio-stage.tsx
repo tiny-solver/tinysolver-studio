@@ -29,6 +29,13 @@ import {
  * `codeg:scene`; the stage then posts every edit immediately. An engine
  * without hot reload (`hot: false`) is reloaded by the parent after each
  * save through `reloadToken`.
+ *
+ * Edit vs play: the iframe always loads with `?codeg=edit`, and an engine
+ * that announces `modes: true` (the managed `codeg-engine`) is told
+ * `codeg:mode` whenever the toolbar toggles. In edit mode it pauses scripts
+ * and input and draws the document as written, so the overlay boxes match
+ * what is on screen; play mode restarts the game from the document. Engines
+ * without modes simply keep running underneath the overlay.
  */
 export interface StudioStageProps {
   /** Full URL of the game entry with `?scene=` already applied. `null`
@@ -68,6 +75,9 @@ export function StudioStage({
   const frame = useRef<HTMLIFrameElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const hot = useRef(false)
+  const modes = useRef(false)
+  const playingRef = useRef(playing)
+  playingRef.current = playing
   const { width: W, height: H } = scene.document.container
 
   // Fit the container's aspect into the available area.
@@ -100,6 +110,7 @@ export function StudioStage({
       const data = event.data as {
         type?: string
         hot?: boolean
+        modes?: boolean
         message?: unknown
       } | null
       if (data?.type === "codeg:error") {
@@ -109,7 +120,13 @@ export function StudioStage({
       }
       if (data?.type !== "codeg:ready") return
       hot.current = data.hot === true
+      modes.current = data.modes === true
       onReady(hot.current)
+      if (modes.current)
+        post({
+          type: "codeg:mode",
+          mode: playingRef.current ? "play" : "edit",
+        })
       if (hot.current) post({ type: "codeg:scene", scene })
     }
     window.addEventListener("message", listen)
@@ -124,9 +141,17 @@ export function StudioStage({
     if (hot.current) post({ type: "codeg:scene", scene })
   }, [scene, post])
 
+  // Toolbar toggle → engine mode. Leaving play mode also resets the game to
+  // the document, which is what "back to editing" should look like.
+  useEffect(() => {
+    if (modes.current)
+      post({ type: "codeg:mode", mode: playing ? "play" : "edit" })
+  }, [playing, post])
+
   // A reload invalidates the handshake until the engine announces again.
   useEffect(() => {
     hot.current = false
+    modes.current = false
   }, [reloadToken, src])
 
   // Drag: pointer capture on the node box; deltas in container pixels.
@@ -141,7 +166,7 @@ export function StudioStage({
   const scale = size.w / W
 
   const url = src
-    ? `${src}${src.includes("?") ? "&" : "?"}r=${reloadToken}`
+    ? `${src}${src.includes("?") ? "&" : "?"}codeg=edit&r=${reloadToken}`
     : null
   const nodes = [...scene.document.nodes].sort(
     (a, b) => a.transform.z - b.transform.z
