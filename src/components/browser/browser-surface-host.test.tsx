@@ -207,7 +207,7 @@ describe("BrowserSurfaceHost", () => {
 
     unmount()
     await flush()
-    expect(api.browserClose).toHaveBeenCalledWith("doc-1")
+    expect(api.browserClose).toHaveBeenCalledWith("doc-1", undefined)
     expect(getBrowserTabState("browser:doc-1")).toBeNull()
     expect(api.browserSetVisible).not.toHaveBeenCalledWith(
       "doc-1",

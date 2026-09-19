@@ -33,6 +33,7 @@ import {
   setBrowserTabNotice,
   setBrowserTabState,
   setDocGuestState,
+  takeSuspendCloseRequest,
 } from "@/lib/browser/browser-tab-store"
 import {
   BROWSER_AGENT_ACTIVITY_EVENT,
@@ -200,11 +201,22 @@ export function BrowserEventsBridge() {
         transport.subscribe<BrowserClosedPayload>(
           BROWSER_CLOSED_EVENT,
           (closed) => {
+            // The answer to a close this side asked for to SUSPEND a tab: the
+            // surface goes and the tab stays. Every close arrives as this one
+            // event, so a suspend looks exactly like a page closing its own
+            // popup — and acted on it would take the tab off the strip and
+            // forget what its sites were shared at, the whole of what a
+            // suspend must not do. Matched on the request id and not on the
+            // tab, because only one close event is ever emitted per tab: a
+            // real close that overtakes a suspend is the only one there will
+            // be, and must still be acted on.
+            if (takeSuspendCloseRequest(closed.requestId)) return
             const tabId = browserWorkspaceTabId(closed.tabId)
             removeBrowserTabState(tabId)
-            // This path does not go through `releaseBrowserTab` (the surface
-            // is already gone), so the sharing memory is dropped here too —
-            // a backend tab id is handed out again.
+            // The tab is over: this side closed it (and has already taken it
+            // off the strip), an agent closed it, its profile was deleted, or
+            // the window it lived in went away. Its sites are nobody's
+            // answers now.
             forgetDefaultAgentGrant(closed.tabId)
             closeFileTab(tabId)
           }

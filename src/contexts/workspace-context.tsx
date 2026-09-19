@@ -1092,7 +1092,10 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       })
       return next
     })
-    releaseBrowserTab(tabId)
+    // The surface goes, the tab stays — so what the person answered for the
+    // sites it has been on stays with it, and the `browser://closed` the
+    // backend emits for this is about the surface. Only a close ends a tab.
+    releaseBrowserTab(tabId, { suspending: true })
     return true
   }, [])
 

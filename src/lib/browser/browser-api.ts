@@ -178,8 +178,10 @@ export function browserDocState(tabId: string): Promise<DocGuestState> {
   return getTransport().call<DocGuestState>("browser_doc_state", { tabId })
 }
 
-export function browserClose(tabId: string): Promise<void> {
-  return getTransport().call<void>("browser_close", { tabId })
+/** `requestId` comes back on the `browser://closed` this produces, so the
+ *  caller can tell it from a close of the same tab it did not ask for. */
+export function browserClose(tabId: string, requestId?: string): Promise<void> {
+  return getTransport().call<void>("browser_close", { tabId, requestId })
 }
 
 export function browserSetBounds(tabId: string, bounds: Bounds): Promise<void> {

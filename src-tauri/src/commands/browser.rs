@@ -665,7 +665,7 @@ pub async fn remove_profile_core(
         if let Some(guests) = app.try_state::<DocGuests>() {
             guests.unbind(&tab_id);
         }
-        events::emit_closed(app, &tab_id, &tab.state.owner_window);
+        events::emit_closed(app, &tab_id, &tab.state.owner_window, None);
     }
     // A moment for the engine to let go of views that were just closed —
     // here or by a close that was still running when the tabs were listed.
@@ -758,13 +758,22 @@ fn surface_of(registry: &BrowserRegistry, tab_id: &str) -> Result<BrowserSurface
         .ok_or_else(|| AppCommandError::not_found(format!("browser tab {tab_id} not found")))
 }
 
-pub fn close_core(app: &AppHandle, registry: &BrowserRegistry, tab_id: &str) -> Result<(), AppCommandError> {
+/// `request_id` is echoed back on `browser://closed` so the caller can tell
+/// that event from one it did not ask for — see [`BrowserClosedPayload`].
+/// Nothing is emitted when the tab was already gone: the registry removal is
+/// what earns the right to announce a close, and somebody else has earned it.
+pub fn close_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+    request_id: Option<&str>,
+) -> Result<(), AppCommandError> {
     if let Some(tab) = registry.remove(tab_id) {
         let _ = tab.surface.close();
         if let Some(guests) = app.try_state::<DocGuests>() {
             guests.unbind(tab_id);
         }
-        events::emit_closed(app, tab_id, &tab.state.owner_window);
+        events::emit_closed(app, tab_id, &tab.state.owner_window, request_id);
     }
     Ok(())
 }
@@ -2699,7 +2708,7 @@ pub async fn agent_close_tab_core(
         }
         return Err(err);
     }
-    close_core(app, registry, tab_id)
+    close_core(app, registry, tab_id, None)
 }
 
 // ---- page → conversation -------------------------------------------------
@@ -3471,13 +3480,17 @@ pub async fn browser_remove_profile(
     remove_profile_core(&app, &registry, &profile).await
 }
 
+/// `request_id` is optional and echoed back on `browser://closed`; the
+/// workspace passes one so it can tell the close it asked for from a close of
+/// the same tab it did not (see [`BrowserClosedPayload`]).
 #[tauri::command]
 pub async fn browser_close(
     app: AppHandle,
     registry: State<'_, BrowserRegistry>,
     tab_id: String,
+    request_id: Option<String>,
 ) -> Result<(), AppCommandError> {
-    close_core(&app, &registry, &tab_id)
+    close_core(&app, &registry, &tab_id, request_id.as_deref())
 }
 
 #[tauri::command]

@@ -184,7 +184,7 @@ fn build(
                 platform::forget(&label);
                 if let Some(registry) = app.try_state::<BrowserRegistry>() {
                     if let Some(tab) = registry.remove(&tab_id) {
-                        events::emit_closed(&app, &tab_id, &tab.state.owner_window);
+                        events::emit_closed(&app, &tab_id, &tab.state.owner_window, None);
                     }
                 }
             }

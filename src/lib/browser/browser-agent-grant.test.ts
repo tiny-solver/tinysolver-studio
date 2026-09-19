@@ -121,6 +121,27 @@ describe("the standing sharing default", () => {
     expect(asked()).toEqual(["control", "control"])
   })
 
+  // …nor by filling what this tab remembers. The levels have a budget, and
+  // under one shared budget the page chose who fell out of it: 65 origins it
+  // controls, each recorded as it was auto-shared, and the press was off the
+  // front by the time the tab came back. Revocations have a budget of their
+  // own now, and nothing a page can do writes one.
+  it("does not re-share a site whose revocation a page tried to crowd out", () => {
+    applyDefaultAgentGrant(state())
+    applyDefaultAgentGrant(shared("control"))
+    applyDefaultAgentGrant(state())
+    const asksBefore = mocks.browserAgentGrant.mock.calls.length
+    for (let i = 0; i < 65; i++) {
+      const origin = `https://s${i}.evil.test`
+      applyDefaultAgentGrant(on(origin))
+      applyDefaultAgentGrant(shared("control", origin))
+    }
+    applyDefaultAgentGrant(state({ url: "about:blank", origin: null }))
+    applyDefaultAgentGrant(state())
+    // The tour's own 65, and not one more for the site it was hiding.
+    expect(mocks.browserAgentGrant).toHaveBeenCalledTimes(asksBefore + 65)
+  })
+
   // The same rule from the other direction: a grant the BACKEND took back
   // because the program behind a loopback port changed hands is not re-made
   // on the way back either. The alarm bar that reported it offers reading,
@@ -192,10 +213,10 @@ describe("the standing sharing default", () => {
     expect(mocks.browserAgentGrant).not.toHaveBeenCalled()
   })
 
-  // A backend tab id comes back: a suspended tab is released and built again
-  // under the one it had. What the tab before it was left at is not this
-  // one's answer.
-  it("starts a tab over once its surface has gone", () => {
+  // A CLOSED tab's answers are nobody's. (A suspended one keeps its own —
+  // it comes back under the same id, on the same page, so it is the same
+  // tab; `browser-tab-store` is where that distinction is made and pinned.)
+  it("starts a tab over once the tab itself has gone", () => {
     applyDefaultAgentGrant(state())
     applyDefaultAgentGrant(shared("control"))
     applyDefaultAgentGrant(state())

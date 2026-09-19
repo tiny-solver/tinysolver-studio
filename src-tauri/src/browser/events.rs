@@ -23,13 +23,21 @@ pub fn emit_state(app: &AppHandle, state: &BrowserTabState) {
     emit_event(&EventEmitter::Tauri(app.clone()), STATE_EVENT, state);
 }
 
-pub fn emit_closed(app: &AppHandle, tab_id: &str, owner_window: &str) {
+/// `request_id` names the `browser_close` call this is the answer to, and is
+/// `None` for a close nobody asked for — see [`BrowserClosedPayload`].
+pub fn emit_closed(
+    app: &AppHandle,
+    tab_id: &str,
+    owner_window: &str,
+    request_id: Option<&str>,
+) {
     emit_event(
         &EventEmitter::Tauri(app.clone()),
         CLOSED_EVENT,
         BrowserClosedPayload {
             tab_id: tab_id.to_string(),
             owner_window: owner_window.to_string(),
+            request_id: request_id.map(str::to_string),
         },
     );
 }

@@ -47,7 +47,11 @@ const mocks = vi.hoisted(() => {
       () => "browser:new"
     ),
     browserAnswerOpenRequest: vi.fn(() => Promise.resolve(true)),
-    browserClose: vi.fn(() => Promise.resolve()),
+    // Typed by its real signature, so `mock.calls[n][1]` is the request id
+    // and not an out-of-range index.
+    browserClose: vi.fn<(tabId: string, requestId?: string) => Promise<void>>(
+      () => Promise.resolve()
+    ),
     browserListTabs: vi.fn(() =>
       Promise.resolve([{ tabId: "stale-1" }, { tabId: "stale-2" }])
     ),
@@ -97,6 +101,7 @@ import {
 } from "@/lib/browser/browser-prefs"
 import {
   getBrowserTabState,
+  releaseBrowserTab,
   resetBrowserTabStoreForTests,
   setBrowserTabState,
   useBrowserAgentActivity,
@@ -377,6 +382,37 @@ describe("BrowserEventsBridge", () => {
     })
     expect(getBrowserTabState("browser:abc-p1")).toBeNull()
     expect(mocks.closeFileTab).toHaveBeenCalledWith("browser:abc-p1")
+
+    // …but a close THIS SIDE asked for, to suspend a background tab, is the
+    // surface going and the tab staying. The backend emits the same event for
+    // it, and acting on that would take the tab off the strip — the suspend
+    // feature would be a close with extra steps. It is told apart by the
+    // request id the close was made under, which comes back on the event.
+    mocks.closeFileTab.mockClear()
+    releaseBrowserTab("browser:abc-s1", { suspending: true })
+    const closeCalls = mocks.browserClose.mock.calls
+    const suspendRequest = closeCalls[closeCalls.length - 1]?.[1]
+    expect(typeof suspendRequest).toBe("string")
+    mocks.handlers.get("browser://closed")!({
+      tabId: "abc-s1",
+      ownerWindow: "main",
+      requestId: suspendRequest,
+    })
+    expect(mocks.closeFileTab).not.toHaveBeenCalled()
+
+    // A REAL close of a tab a suspend is in flight for is still acted on.
+    // Only one close event is ever emitted per tab — whoever wins the
+    // registry removal emits it — so if the user closes the owned window in
+    // that moment, the window's event is the only one there will be. Matching
+    // on the tab id would have swallowed it and left a dead row on the strip.
+    mocks.closeFileTab.mockClear()
+    releaseBrowserTab("browser:abc-s2", { suspending: true })
+    mocks.handlers.get("browser://closed")!({
+      tabId: "abc-s2",
+      ownerWindow: "main",
+      requestId: null,
+    })
+    expect(mocks.closeFileTab).toHaveBeenCalledWith("browser:abc-s2")
 
     unmount()
     expect(mocks.unsubscribed.sort()).toEqual([

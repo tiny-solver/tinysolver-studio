@@ -352,7 +352,8 @@ describe("DocGuestPreview", () => {
     const id = openedId()
     first.unmount()
     await flush()
-    expect(api.browserClose).toHaveBeenCalledWith(id)
+    // No request id: a document guest is torn down, not suspended.
+    expect(api.browserClose).toHaveBeenCalledWith(id, undefined)
 
     renderPreview()
     await flush()

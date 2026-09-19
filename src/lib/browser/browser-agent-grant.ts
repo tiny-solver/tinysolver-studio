@@ -55,9 +55,31 @@ interface TabMemory {
   levels: Map<string, GrantLevel | null>
 }
 
-/** How many sites one tab remembers. Oldest dropped first — a tab that has
- *  browsed all day should not carry every origin it has ever touched. */
+/** How many sites one tab remembers a LEVEL for. Oldest dropped first — a tab
+ *  that has browsed all day should not carry every origin it has ever
+ *  touched. Forgetting one of these costs nothing: the site is answered with
+ *  the standing default again, which is what it was answered with before. */
 const ORIGIN_MEMORY_LIMIT = 64
+
+/**
+ * …and how many REVOCATIONS, which are counted apart from the levels above
+ * rather than sharing one budget with them.
+ *
+ * Forgetting a revocation is not free: it hands the site back to agents on
+ * the next visit, which is the one thing this whole map exists to prevent.
+ * Under a single budget the page decided who was forgotten — it walks its own
+ * tab through 65 origins it controls, each of them recorded as it is
+ * auto-shared, and the revocation the person made is off the front of the map
+ * by the time the tab comes back. Any one budget a page can fill is a budget
+ * a page can empty of what it does not like.
+ *
+ * A revocation is only written when a grant that was there ends: the person
+ * pressing "stop sharing", or the backend taking a loopback grant back
+ * because the port changed hands. Neither is something a page can drive, so
+ * this budget is generous — reaching it would take hundreds of presses in one
+ * tab — and it is still a bound.
+ */
+const REVOKED_MEMORY_LIMIT = 256
 
 const memories = new Map<string, TabMemory>()
 
@@ -70,10 +92,25 @@ function remember(
   // `Map` iterates in insertion order, and the eviction below takes the front.
   memory.levels.delete(origin)
   memory.levels.set(origin, level)
-  while (memory.levels.size > ORIGIN_MEMORY_LIMIT) {
-    const oldest = memory.levels.keys().next().value
-    if (oldest === undefined) break
-    memory.levels.delete(oldest)
+  evict(memory, (entry) => entry !== null, ORIGIN_MEMORY_LIMIT)
+  evict(memory, (entry) => entry === null, REVOKED_MEMORY_LIMIT)
+}
+
+/** Drop the oldest entries of one class until it is within `limit`. Deleting
+ *  from a `Map` while iterating it is defined: an entry removed before the
+ *  walk reaches it is simply not visited. */
+function evict(
+  memory: TabMemory,
+  matches: (level: GrantLevel | null) => boolean,
+  limit: number
+): void {
+  let over = -limit
+  for (const level of memory.levels.values()) if (matches(level)) over++
+  if (over <= 0) return
+  for (const [origin, level] of memory.levels) {
+    if (!matches(level)) continue
+    memory.levels.delete(origin)
+    if (--over === 0) return
   }
 }
 
@@ -151,10 +188,11 @@ export function applyDefaultAgentGrant(state: BrowserTabState): void {
 }
 
 /**
- * Forget everything about a tab. Its surface is gone — closed, or released
- * because the tab has been in the background long enough — and a backend tab
- * id is reused when a suspended tab is built again, so a memory left behind
- * would answer for a tab that no longer exists.
+ * Forget everything about a tab, because the TAB is gone — not merely its
+ * surface. A suspended tab is released and built again under the id it had,
+ * on the page it was on: it is the same tab, and the sites it has been to are
+ * still its own answers, so `releaseBrowserTab` keeps them across that one
+ * (`keepSharingMemory`). Only a close comes here.
  */
 export function forgetDefaultAgentGrant(backendTabId: string): void {
   memories.delete(backendTabId)

@@ -361,7 +361,7 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
         "browser_close" => {
-            browser_commands::close_core(app, &registry, &str_arg(cmd, "tab_id")?)
+            browser_commands::close_core(app, &registry, &str_arg(cmd, "tab_id")?, None)
                 .map_err(err_string)?;
             Ok(Value::Null)
         }

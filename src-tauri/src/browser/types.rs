@@ -292,6 +292,19 @@ pub struct BrowserPopupPayload {
 pub struct BrowserClosedPayload {
     pub tab_id: String,
     pub owner_window: String,
+    /// Echoes the `request_id` the caller of `browser_close` passed, so that
+    /// caller can tell this event from one it did not ask for.
+    ///
+    /// A tab is closed by four different things — the workspace, an agent's
+    /// `browser_close_tab`, a profile being deleted, and the user closing an
+    /// owned window — and all four arrive at the frontend as this one event.
+    /// The workspace releases a surface without ending the tab when it
+    /// SUSPENDS one, and has to ignore its own close without ignoring a real
+    /// one for the same tab that overtook it. Which close this is cannot be
+    /// inferred from the tab id: exactly one event is emitted per tab
+    /// (whoever wins the registry removal emits it), so "the next one" may
+    /// well belong to somebody else. Absent for all three of the others.
+    pub request_id: Option<String>,
 }
 
 #[cfg(test)]

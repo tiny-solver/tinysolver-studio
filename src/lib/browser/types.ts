@@ -398,6 +398,13 @@ export type SurfaceChoice = "auto" | "child" | "window"
 export interface BrowserClosedPayload {
   tabId: string
   ownerWindow: string
+  /** Echoes the id passed to `browserClose`, so the caller can tell this
+   *  event from one it did not ask for. Four different things close a tab —
+   *  the workspace, an agent's `browser_close_tab`, a profile being deleted,
+   *  the user closing an owned window — and exactly one event is emitted per
+   *  tab, so the tab id alone cannot say which of them this is. Absent for
+   *  the three nobody here asked for. */
+  requestId: string | null
 }
 
 export type PopupPresentation = "adopted" | "denied"

@@ -20,6 +20,7 @@ import type {
 } from "./types"
 import { buildFileTabId } from "@/lib/file-tab-id"
 import { isDesktop } from "@/lib/transport"
+import { randomUUID } from "@/lib/utils"
 
 type Listener = () => void
 
@@ -262,25 +263,64 @@ export function useBrowserTabState(
 }
 
 /**
+ * Ids of the `browser_close` calls made to SUSPEND a tab — to let its surface
+ * go while keeping the tab. The `browser://closed` that carries one back is
+ * about the surface and must not be read as the tab ending.
+ *
+ * The backend emits that event from `close_core` for every close, ours
+ * included, so a suspend arrives at the events bridge looking exactly like a
+ * page closing its own popup. Acted on, it takes the tab off the strip and
+ * forgets what its sites were shared at — the whole of what a suspend must
+ * not do.
+ *
+ * Keyed by the REQUEST, not by the tab: exactly one close event is emitted per
+ * tab (whoever wins the registry removal emits it), so "the next close of this
+ * tab" may well be somebody else's. If the user closes an owned browser window
+ * in the moment between a suspend arming and its command arriving, the window
+ * teardown wins that removal, its event is the only one there will be, and
+ * swallowing it would leave the tab on the strip after a real close.
+ */
+const suspendCloseRequests = new Set<string>()
+
+/** Whether this `browser://closed` is a suspend of ours — and spends the id. */
+export function takeSuspendCloseRequest(requestId: string | null): boolean {
+  return requestId !== null && suspendCloseRequests.delete(requestId)
+}
+
+/**
  * Tear down a tab's native surface and forget its state. Idempotent on the
  * backend side, so calling it for a tab that never got a surface is fine.
  * Afterwards the tab record is back to "not loaded": a surface host mounting
  * for it creates a fresh surface (that is how a suspended tab resumes).
+ *
+ * `suspending` separates the two things this is called for. Closing a tab
+ * ends it: the sites it visited are nobody's answers afterwards, and the
+ * `browser://closed` that follows is the backend agreeing. SUSPENDING it
+ * releases the surface and KEEPS the tab — same id, same page, back on screen
+ * when the user switches to it — so what they answered for those sites is
+ * still theirs (dropping it would re-share, on the standing default, a site
+ * they had taken the share back on), and the close event that comes back
+ * under this request's id is about the surface, not the tab.
  */
-export function releaseBrowserTab(workspaceTabId: string): void {
+export function releaseBrowserTab(
+  workspaceTabId: string,
+  { suspending = false }: { suspending?: boolean } = {}
+): void {
   removeBrowserTabState(workspaceTabId)
   const backendId = workspaceTabId.startsWith("browser:")
     ? decodeURIComponent(workspaceTabId.slice("browser:".length))
     : null
   if (!backendId) return
   forgetSurfaceCreation(backendId)
-  // Including what its pages were shared at: the id comes back when a
-  // suspended tab is built again, and the sites the last one visited are not
-  // this one's answers.
-  forgetDefaultAgentGrant(backendId)
+  if (!suspending) forgetDefaultAgentGrant(backendId)
   if (isDesktop()) {
-    void runSurfaceOp(backendId, () => browserClose(backendId)).catch(() => {
-      /* already gone */
+    const requestId = suspending ? randomUUID() : undefined
+    if (requestId) suspendCloseRequests.add(requestId)
+    void runSurfaceOp(backendId, () =>
+      browserClose(backendId, requestId)
+    ).catch(() => {
+      // The call never landed, so no event is coming under this id.
+      if (requestId) suspendCloseRequests.delete(requestId)
     })
   }
 }
@@ -460,6 +500,7 @@ export function resetBrowserTabStoreForTests(): void {
   findRequests.clear()
   agentActivity.clear()
   consoleErrors.clear()
+  suspendCloseRequests.clear()
 }
 
 function shallowEqualState(a: BrowserTabState, b: BrowserTabState): boolean {

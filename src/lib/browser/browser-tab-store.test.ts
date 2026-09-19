@@ -3,9 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const api = vi.hoisted(() => ({
   browserClose: vi.fn(() => Promise.resolve()),
+  browserAgentGrant: vi.fn(() => Promise.resolve({})),
   isDesktop: vi.fn(() => true),
 }))
-vi.mock("./browser-api", () => ({ browserClose: api.browserClose }))
+vi.mock("./browser-api", () => ({
+  browserClose: api.browserClose,
+  browserAgentGrant: api.browserAgentGrant,
+}))
 vi.mock("@/lib/transport", () => ({ isDesktop: api.isDesktop }))
 
 import {
@@ -31,6 +35,11 @@ import {
   useBrowserConsoleErrors,
   useBrowserTabState,
 } from "./browser-tab-store"
+import {
+  applyDefaultAgentGrant,
+  resetDefaultAgentGrantForTests,
+} from "./browser-agent-grant"
+import { resetBrowserPrefsForTests } from "./browser-prefs"
 import type { AgentActivityPayload, AgentGrant, BrowserTabState } from "./types"
 
 function state(over: Partial<BrowserTabState> = {}): BrowserTabState {
@@ -132,12 +141,60 @@ describe("browser tab store", () => {
     setBrowserTabState(state())
     releaseBrowserTab("browser:abc")
     expect(getBrowserTabState("browser:abc")).toBeNull()
-    expect(api.browserClose).toHaveBeenCalledWith("abc")
+    // No request id: a close is not a suspend, and there is nothing to tell
+    // its `browser://closed` apart from.
+    expect(api.browserClose).toHaveBeenCalledWith("abc", undefined)
     api.isDesktop.mockReturnValue(false)
     releaseBrowserTab("browser:abc")
     expect(api.browserClose).toHaveBeenCalledTimes(1)
     releaseBrowserTab("file:%2Fx")
     expect(api.browserClose).toHaveBeenCalledTimes(1)
+  })
+
+  // Closing a tab ends it; SUSPENDING it releases the surface and keeps the
+  // tab, on the same id and the same page. So a share the person took back
+  // has to survive the second and not the first — dropping it on a suspend
+  // would hand the site to agents again, on the standing default, the moment
+  // the tab is switched back to.
+  describe("what a release does to the sharing answers", () => {
+    /** The person shares (the standing default), then takes it back. */
+    function sharedThenRevoked() {
+      const page = state({ origin: "https://example.com" })
+      applyDefaultAgentGrant(page)
+      applyDefaultAgentGrant(
+        state({
+          origin: "https://example.com",
+          agentGrant: {
+            level: "control",
+            origin: "https://example.com",
+            grantedAt: 1,
+          },
+        })
+      )
+      applyDefaultAgentGrant(page)
+      api.browserAgentGrant.mockClear()
+      return page
+    }
+
+    beforeEach(() => {
+      resetDefaultAgentGrantForTests()
+      resetBrowserPrefsForTests()
+      api.browserAgentGrant.mockClear()
+    })
+
+    it("keeps them when the tab is only suspended", () => {
+      const page = sharedThenRevoked()
+      releaseBrowserTab("browser:abc", { suspending: true })
+      applyDefaultAgentGrant(page)
+      expect(api.browserAgentGrant).not.toHaveBeenCalled()
+    })
+
+    it("drops them when the tab is closed", () => {
+      const page = sharedThenRevoked()
+      releaseBrowserTab("browser:abc")
+      applyDefaultAgentGrant(page)
+      expect(api.browserAgentGrant).toHaveBeenCalledWith("abc", "control")
+    })
   })
 
   // The ledger is what stops a StrictMode double effect (or a re-mounted
