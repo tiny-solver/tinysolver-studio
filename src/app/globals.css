@@ -1325,8 +1325,10 @@
    典型），半透明线在缝上会亮一档，整条线读成「两条竖线中间夹一道缝」（用户反馈「顶部有两个边框
    竖线重叠」）。实色取「40%/60% foreground 压在 --background 上」的同一个合成值：页面底色上与
    原来逐像素一致（`in srgb` 而非 oklab——alpha 合成就是在 sRGB 分量上线性插值，oklab 混出来会
-   暗一档），换到标签条那种别的底色上也不再变调，缝随之消失。随主题走（var() 在使用处按元素的
-   --foreground/--background 解析，深色主题、强调色主题自动跟随）。
+   暗一档），换到标签条那种别的底色上也不再变调，缝随之消失。随主题走：自定义属性里的 var() 是在
+   **声明它的那个元素**上代入的（不是使用处），而主题的 --foreground/--background 正是由
+   `[data-theme=…]` / `.dark` 写在根元素上的（见 appearance-provider 的 documentElement），
+   和这条 :root 同一个元素 ⇒ 深色主题、强调色主题自动跟随。要把主题挪到子树上，这两行得跟着挪。
    color-mix 不是新依赖——Tailwind v4 的 `/40` 透明度修饰符本身就是 color-mix。 */
 :root {
   --resize-handle-hover: color-mix(
@@ -2819,8 +2821,7 @@ div.monaco-diff-editor.side-by-side .editor.modified {
   0%,
   100% {
     box-shadow:
-      var(--tw-ring-offset-shadow, 0 0 #0000),
-      var(--tw-ring-shadow, 0 0 #0000);
+      var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000);
   }
   50% {
     box-shadow:
