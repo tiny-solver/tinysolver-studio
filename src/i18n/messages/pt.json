@@ -5029,7 +5029,7 @@
     "targetBuiltin": "Navegador integrado",
     "targetSystem": "Navegador do sistema",
     "devtoolsTitle": "Inspetor web",
-    "devtoolsHint": "Permite Inspecionar elemento nas abas do navegador. Vale para abas abertas a partir de agora.",
+    "devtoolsHint": "Oferece “Abrir o inspetor” no menu Mais de uma aba, e permite Inspecionar elemento na página. Ligado por padrão. Vale para as abas abertas a partir de agora.",
     "surfaceTitle": "Superfície das abas",
     "surfaceHint": "Como as páginas são hospedadas. Mantenha Automático, a menos que as abas incorporadas apresentem problemas neste sistema. Vale para abas abertas a partir de agora.",
     "surfaceAuto": "Automático",
@@ -6204,6 +6204,8 @@
       "more": "Mais",
       "copyUrl": "Copiar link",
       "copied": "Link copiado",
+      "openInspector": "Abrir o inspetor",
+      "inspectorFailed": "Não foi possível abrir o inspetor",
       "addressPlaceholder": "Digite um endereço",
       "invalidUrl": "Endereço inválido",
       "profile": "Perfil: {name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "Esta aba não foi compartilhada com um agente. Compartilhe-a para que o agente possa ler a página."
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "Esta aba foi aberta com o inspetor web desligado. Ligue-o nas configurações do navegador e abra a página novamente."
       }
     }
   }

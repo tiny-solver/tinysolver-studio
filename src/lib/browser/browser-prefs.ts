@@ -82,6 +82,11 @@ export function mintBrowserProfileId(): string {
 
 export interface BrowserPrefsSnapshot {
   defaultTarget: Readonly<Record<LinkSource, LinkTarget>>
+  /** Build a tab's surface with the web inspector available, and offer it in
+   *  that tab's "More" menu. On by default: this is a workbench for people
+   *  who read pages for a living, and every engine takes the inspector as a
+   *  creation-time attribute — off by default meant the answer to "can I look
+   *  at this page" was always "reopen it first". */
   devtools: boolean
   surfaceOverride: SurfaceOverride
   firstOpenSeen: boolean
@@ -138,7 +143,7 @@ export const DEFAULT_BROWSER_PREFS: BrowserPrefsSnapshot = Object.freeze({
     editor: "builtin",
     notification: "builtin",
   }),
-  devtools: false,
+  devtools: true,
   surfaceOverride: "auto",
   firstOpenSeen: false,
   suspendBackgroundTabs: false,
@@ -258,7 +263,7 @@ function read(): BrowserPrefsSnapshot {
       : DEFAULT_BROWSER_PROFILE_ID
   return {
     defaultTarget,
-    devtools: readRaw(DEVTOOLS_KEY) === "true",
+    devtools: readRaw(DEVTOOLS_KEY) !== "false",
     surfaceOverride:
       parseSurface(readRaw(SURFACE_KEY)) ??
       DEFAULT_BROWSER_PREFS.surfaceOverride,

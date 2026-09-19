@@ -46,15 +46,19 @@ import type { BrowserWorkspaceTab } from "@/contexts/workspace-context"
 import enMessages from "@/i18n/messages/en.json"
 import {
   browserNavigate,
+  browserOpenDevtools,
   browserReload,
   browserStop,
 } from "@/lib/browser/browser-api"
 import {
   resetBrowserPrefsForTests,
+  setBrowserDevtools,
   setBrowserProfiles,
 } from "@/lib/browser/browser-prefs"
 import {
   recordBrowserAgentActivity,
+  recordDockedInspector,
+  releaseDockedInspector,
   resetBrowserTabStoreForTests,
 } from "@/lib/browser/browser-tab-store"
 import type { BrowserTabState } from "@/lib/browser/types"
@@ -65,13 +69,21 @@ import { BrowserToolbar } from "./browser-toolbar"
 
 const toolbarMocks = vi.hoisted(() => ({
   openBrowserTab: vi.fn(() => "browser:new"),
+  setFilesMaximized: vi.fn(),
   workspaceActions: null as null | {
     openBrowserTab: (...a: unknown[]) => unknown
+    setFilesMaximized: (v: boolean) => void
   },
+  filesMaximized: false,
 }))
 
 vi.mock("@/contexts/workspace-context", () => ({
   useOptionalWorkspaceActions: () => toolbarMocks.workspaceActions,
+  useOptionalWorkspaceView: () => ({
+    mode: "fusion",
+    activePane: "files",
+    filesMaximized: toolbarMocks.filesMaximized,
+  }),
 }))
 vi.mock("@/lib/browser/browser-api", () => ({
   // The toolbar also carries the agent share control.
@@ -79,6 +91,7 @@ vi.mock("@/lib/browser/browser-api", () => ({
   browserGoBack: vi.fn(),
   browserGoForward: vi.fn(),
   browserNavigate: vi.fn(() => Promise.resolve()),
+  browserOpenDevtools: vi.fn(() => Promise.resolve()),
   browserReload: vi.fn(() => Promise.resolve()),
   browserStop: vi.fn(() => Promise.resolve()),
   // …and the hand-off control, which asks the tab for its console when its
@@ -172,10 +185,17 @@ async function openMenu(trigger: Element) {
 describe("BrowserToolbar profile chip", () => {
   beforeEach(() => {
     resetBrowserPrefsForTests()
+    // The docked-inspector bookkeeping is module state in the store: without
+    // this, one case's open leaves the pane "maximized for an inspector" for
+    // the next one.
+    resetBrowserTabStoreForTests()
     toolbarMocks.openBrowserTab.mockClear()
     toolbarMocks.workspaceActions = {
       openBrowserTab: toolbarMocks.openBrowserTab,
+      setFilesMaximized: toolbarMocks.setFilesMaximized,
     }
+    toolbarMocks.setFilesMaximized.mockClear()
+    toolbarMocks.filesMaximized = false
   })
 
   it("stays out of the way while only the default profile exists", () => {
@@ -244,6 +264,88 @@ describe("BrowserToolbar profile chip", () => {
     expect(vi.mocked(openUrl)).toHaveBeenCalledWith("https://example.com/")
   })
 
+  // The inspector is on by default, so the item is there without anyone
+  // having gone looking for a setting — which is the point of the default.
+  it("opens the inspector from the More menu", async () => {
+    renderToolbar("default")
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Open inspector" }))
+    })
+    expect(vi.mocked(browserOpenDevtools)).toHaveBeenCalledWith("abc")
+  })
+
+  // On macOS the inspector docks into this very window and the page is
+  // resized to fill it, so the workspace maximizes the file pane to agree
+  // with that instead of being hidden behind it. The backend says which kind
+  // it opened; Windows opens its own window and answers false.
+  it("makes room for an inspector that docked into the window", async () => {
+    vi.mocked(browserOpenDevtools).mockResolvedValueOnce(true)
+    renderToolbar("default")
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Open inspector" }))
+    })
+    expect(toolbarMocks.setFilesMaximized).toHaveBeenCalledWith(true)
+  })
+
+  it("leaves the layout alone for one that opened its own window", async () => {
+    vi.mocked(browserOpenDevtools).mockResolvedValueOnce(false)
+    renderToolbar("default")
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Open inspector" }))
+    })
+    expect(toolbarMocks.setFilesMaximized).not.toHaveBeenCalled()
+  })
+
+  // …nor a pane the person had already maximized: that is their layout, and
+  // closing the inspector must not put it back to something they did not ask
+  // for.
+  it("leaves a pane the person already maximized where they put it", async () => {
+    toolbarMocks.filesMaximized = true
+    vi.mocked(browserOpenDevtools).mockResolvedValueOnce(true)
+    renderToolbar("default")
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Open inspector" }))
+    })
+    expect(toolbarMocks.setFilesMaximized).not.toHaveBeenCalled()
+  })
+
+  // A second tab's inspector is still counted, even though the pane is
+  // already maximized by the first — otherwise the first one closing would
+  // give the pane back while the second is still docked in the window.
+  it("counts a second docked inspector without maximizing twice", async () => {
+    vi.mocked(browserOpenDevtools).mockResolvedValue(true)
+    renderToolbar("default")
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Open inspector" }))
+    })
+    expect(toolbarMocks.setFilesMaximized).toHaveBeenCalledWith(true)
+    // The pane is maximized now, as the second tab's toolbar would see it.
+    toolbarMocks.filesMaximized = true
+    expect(recordDockedInspector("browser-2", true)).toBe(false)
+    // The first closing is not the last: the pane stays.
+    expect(releaseDockedInspector("abc")).toBe(false)
+    expect(releaseDockedInspector("browser-2")).toBe(true)
+  })
+
+  // Hidden rather than disabled: somebody who switched the inspector off said
+  // they do not want it, and a greyed row repeating that is not agreement.
+  it("leaves the inspector out of the menu when the switch is off", async () => {
+    act(() => setBrowserDevtools(false))
+    renderToolbar("default")
+    await openMenu(screen.getByRole("button", { name: "More" }))
+    expect(
+      await screen.findByRole("menuitem", { name: "Copy link" })
+    ).toBeVisible()
+    expect(
+      screen.queryByRole("menuitem", { name: "Open inspector" })
+    ).toBeNull()
+  })
+
   it("shows the chip for a tab whose profile is gone, and cannot open elsewhere without a workspace", async () => {
     toolbarMocks.workspaceActions = null
     renderToolbar("p-gone")
@@ -271,7 +373,10 @@ describe("BrowserToolbar address selection", () => {
     resetBrowserPrefsForTests()
     toolbarMocks.workspaceActions = {
       openBrowserTab: toolbarMocks.openBrowserTab,
+      setFilesMaximized: toolbarMocks.setFilesMaximized,
     }
+    toolbarMocks.setFilesMaximized.mockClear()
+    toolbarMocks.filesMaximized = false
   })
 
   function addressBar(): HTMLInputElement {
@@ -369,7 +474,10 @@ describe("BrowserToolbar and the agent activity record", () => {
     vi.mocked(browserNavigate).mockClear()
     toolbarMocks.workspaceActions = {
       openBrowserTab: toolbarMocks.openBrowserTab,
+      setFilesMaximized: toolbarMocks.setFilesMaximized,
     }
+    toolbarMocks.setFilesMaximized.mockClear()
+    toolbarMocks.filesMaximized = false
   })
   afterEach(() => resetBrowserTabStoreForTests())
 

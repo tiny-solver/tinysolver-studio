@@ -1459,6 +1459,7 @@ mod tauri_app {
                 browser_commands::browser_go_back,
                 browser_commands::browser_go_forward,
                 browser_commands::browser_stop,
+                browser_commands::browser_open_devtools,
                 browser_commands::browser_get_state,
                 browser_commands::browser_list_tabs,
                 browser_commands::browser_clear_data,

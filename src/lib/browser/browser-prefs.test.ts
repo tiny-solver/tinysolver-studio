@@ -78,6 +78,20 @@ describe("browser prefs", () => {
     })
   })
 
+  // Flipped from off in 2026-09: every engine takes the inspector as a
+  // creation-time attribute, so off by default meant "reopen the tab first"
+  // was the answer to every look at a page. An unset key, and anything in it
+  // that is not the word off, mean on.
+  it("has the web inspector on until it is explicitly switched off", () => {
+    expect(getBrowserPrefs().devtools).toBe(true)
+    localStorage.setItem("browser:devtools", "false")
+    resetCacheOnly()
+    expect(getBrowserPrefs().devtools).toBe(false)
+    localStorage.setItem("browser:devtools", "yes please")
+    resetCacheOnly()
+    expect(getBrowserPrefs().devtools).toBe(true)
+  })
+
   it("removes the surface override key when set back to auto", () => {
     setBrowserSurfaceOverride("child")
     setBrowserSurfaceOverride("auto")

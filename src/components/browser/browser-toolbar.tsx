@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import {
   ArrowLeft,
   ArrowRight,
+  Bug,
   Copy,
   ExternalLink,
   MoreVertical,
@@ -16,6 +17,7 @@ import { toast } from "sonner"
 
 import {
   useOptionalWorkspaceActions,
+  useOptionalWorkspaceView,
   type BrowserWorkspaceTab,
 } from "@/contexts/workspace-context"
 import {
@@ -32,14 +34,22 @@ import {
   browserGoBack,
   browserGoForward,
   browserNavigate,
+  browserOpenDevtools,
   browserReload,
   browserStop,
 } from "@/lib/browser/browser-api"
 import {
+  toLocalizedErrorMessage,
+  type AppErrorTranslator,
+} from "@/lib/app-error"
+import {
   DEFAULT_BROWSER_PROFILE_ID,
   useBrowserPrefs,
 } from "@/lib/browser/browser-prefs"
-import { clearBrowserAgentActivity } from "@/lib/browser/browser-tab-store"
+import {
+  clearBrowserAgentActivity,
+  recordDockedInspector,
+} from "@/lib/browser/browser-tab-store"
 import { isBlankPageUrl } from "@/lib/browser/browser-url"
 import type { BrowserTabState } from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
@@ -173,6 +183,18 @@ export function BrowserToolbar({
   state: BrowserTabState | null
 }) {
   const t = useTranslations("Browser.toolbar")
+  // Root translator alongside it, for the keys the BACKEND stamps on its
+  // errors (`browser.inspector.error.*`); unknown keys fall back to the
+  // English message the error already carries.
+  const tRoot = useTranslations()
+  const inspectorEnabled = useBrowserPrefs().devtools
+  // The inspector docks into this window on macOS and the page is resized to
+  // fill it; maximizing the file pane is how the workspace agrees with that
+  // instead of being hidden behind it. Read here so the decision is made with
+  // the pane's state as it is when the item is pressed.
+  const filesMaximized = useOptionalWorkspaceView()?.filesMaximized ?? false
+  const setFilesMaximized =
+    useOptionalWorkspaceActions()?.setFilesMaximized ?? null
   const backendId = browserTabBackendId(tab.id)
   const currentUrl = state?.url || state?.requestedUrl || tab.browser.initialUrl
   // The blank page is the absence of an address, so the bar shows its
@@ -384,12 +406,12 @@ export function BrowserToolbar({
         <BrowserSendToChatControl tab={tab} state={state} />
       </div>
       <ProfileMenu tab={tab} currentUrl={currentUrl} />
-      {/* The address's own actions, folded into one control. They act on the
+      {/* This page's own actions, folded into one control. They act on the
           page rather than on the browsing — nobody reaches for them mid-scroll
           — so they cost a click here and give the row back to the address bar
           and to the controls that do belong in reach. Disabled whole on an
-          empty tab: there is no address to copy or hand to another browser,
-          which is every item it holds. */}
+          empty tab: `about:blank` is no address to copy or hand to another
+          browser, and no page to inspect either. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -417,6 +439,43 @@ export function BrowserToolbar({
             <ExternalLink />
             {t("openInSystem")}
           </DropdownMenuItem>
+          {/* Hidden, not disabled, when the person switched the inspector
+              off: they said they do not want it, and a greyed row saying so
+              every time they open this menu is the wrong way to agree. */}
+          {inspectorEnabled ? (
+            <DropdownMenuItem
+              disabled={!backendId}
+              onSelect={() => {
+                if (!backendId) return
+                // A tab opened while the switch was off has no inspector to
+                // show and the engine cannot be told otherwise now, so the
+                // backend refuses rather than doing nothing — say which.
+                void browserOpenDevtools(backendId).then(
+                  (docked) => {
+                    // Docked = it took this window. Make room by maximizing
+                    // the file pane — unless the person already had it that
+                    // way, which is their layout and not ours to put back, or
+                    // another tab's inspector already did it.
+                    if (!docked || !setFilesMaximized) return
+                    if (recordDockedInspector(backendId, filesMaximized)) {
+                      setFilesMaximized(true)
+                    }
+                  },
+                  (error: unknown) => {
+                    toast.error(t("inspectorFailed"), {
+                      description: toLocalizedErrorMessage(
+                        error,
+                        tRoot as unknown as AppErrorTranslator
+                      ),
+                    })
+                  }
+                )
+              }}
+            >
+              <Bug />
+              {t("openInspector")}
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
       {loading ? (

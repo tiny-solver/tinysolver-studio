@@ -204,6 +204,22 @@ pub const DOC_STATE_EVENT: &str = "browser://doc-state";
 /// the "send to chat" control cannot drift from what the tab actually holds.
 pub const CONSOLE_ERRORS_EVENT: &str = "browser://console-errors";
 
+/// A web inspector that had DOCKED into a tab's host window is gone.
+///
+/// Only ever raised for the docking kind (macOS, embedded surface), because
+/// only that one takes the workspace window over: the page is resized to fill
+/// it and stays that way after the inspector closes, so the workspace both
+/// lays itself out around the inspector while it is up and has to put the page
+/// back when it is not. WebKit announces none of this — the host polls the
+/// inspector while it is open and says so here once.
+pub const DEVTOOLS_CLOSED_EVENT: &str = "browser://devtools-closed";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserDevtoolsClosedPayload {
+    pub tab_id: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum NavigationBlockReason {

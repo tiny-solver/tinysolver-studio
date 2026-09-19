@@ -196,6 +196,20 @@ pub fn engine_webview(webview: &wry::WebView) -> ICoreWebView2 {
     core(webview)
 }
 
+/// Show the DevTools for this page. `false`: WebView2 opens them in a window
+/// of their own and leaves the page where it is, so nothing here takes the
+/// workspace window — unlike macOS, where the inspector docks into it and the
+/// workspace has to lay itself out around that (see `shim/macos.rs`).
+pub fn open_devtools(webview: &wry::WebView) -> bool {
+    webview.open_devtools();
+    false
+}
+
+/// Never asked: nothing was docked, so there is nothing to wait for.
+pub fn devtools_visible(_webview: &wry::WebView) -> bool {
+    false
+}
+
 /// Identity of the platform webview behind a wry `WebView`, matching the
 /// `source` a message sink receives.
 pub fn webview_pointer(webview: &wry::WebView) -> usize {

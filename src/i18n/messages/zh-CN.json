@@ -5029,7 +5029,7 @@
     "targetBuiltin": "内置浏览器",
     "targetSystem": "系统浏览器",
     "devtoolsTitle": "网页检查器",
-    "devtoolsHint": "允许在浏览器标签页中使用「检查元素」。对此后打开的标签页生效。",
+    "devtoolsHint": "在标签页的「更多」菜单里提供「打开检查器」，并允许页面上的「检查元素」。默认开启。对此后打开的标签页生效。",
     "surfaceTitle": "标签页承载方式",
     "surfaceHint": "网页以何种方式承载。除非嵌入式标签页在本机表现异常，否则保持「自动」。对此后打开的标签页生效。",
     "surfaceAuto": "自动",
@@ -6204,6 +6204,8 @@
       "more": "更多",
       "copyUrl": "复制链接",
       "copied": "链接已复制",
+      "openInspector": "打开检查器",
+      "inspectorFailed": "打不开检查器",
       "addressPlaceholder": "输入地址",
       "invalidUrl": "不是有效的地址",
       "profile": "配置文件：{name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "这个标签页还没有共享给智能体。共享后智能体才能读取页面。"
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "这个标签页是在网页检查器关闭时打开的。请在浏览器设置里打开它，然后重新打开该页面。"
       }
     }
   }

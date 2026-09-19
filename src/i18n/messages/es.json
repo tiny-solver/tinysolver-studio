@@ -5029,7 +5029,7 @@
     "targetBuiltin": "Navegador integrado",
     "targetSystem": "Navegador del sistema",
     "devtoolsTitle": "Inspector web",
-    "devtoolsHint": "Permite Inspeccionar elemento en las pestañas del navegador. Se aplica a las pestañas abiertas a partir de ahora.",
+    "devtoolsHint": "Ofrece «Abrir el inspector» en el menú Más de una pestaña, y permite Inspeccionar elemento en la página. Activado por defecto. Se aplica a las pestañas que abras a partir de ahora.",
     "surfaceTitle": "Superficie de las pestañas",
     "surfaceHint": "Cómo se alojan las páginas. Mantén Automático salvo que las pestañas incrustadas fallen en este sistema. Se aplica a las pestañas abiertas a partir de ahora.",
     "surfaceAuto": "Automático",
@@ -6204,6 +6204,8 @@
       "more": "Más",
       "copyUrl": "Copiar enlace",
       "copied": "Enlace copiado",
+      "openInspector": "Abrir el inspector",
+      "inspectorFailed": "No se pudo abrir el inspector",
       "addressPlaceholder": "Escribe una dirección",
       "invalidUrl": "No es una dirección válida",
       "profile": "Perfil: {name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "Esta pestaña no se ha compartido con un agente. Compártela para que el agente pueda leer la página."
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "Esta pestaña se abrió con el inspector web desactivado. Actívalo en la configuración del navegador y vuelve a abrir la página."
       }
     }
   }

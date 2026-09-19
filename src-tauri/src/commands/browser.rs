@@ -1107,6 +1107,95 @@ pub fn stop_core(app: &AppHandle, registry: &BrowserRegistry, tab_id: &str) -> R
     Ok(())
 }
 
+/// Whether this tab's page can be inspected, from the one bit the registry
+/// keeps about how its surface was BUILT (`BrowserTab::devtools`).
+///
+/// It has to be answered here rather than by the surface: all three engines
+/// take the inspector as a creation-time webview attribute and none of them
+/// can be asked afterwards, so `open_devtools` on a surface built without it
+/// succeeds and shows nothing. A menu item that silently does nothing is
+/// worse than one that says why.
+///
+/// `None` is "no such tab" — the surface has gone, or never existed.
+fn devtools_refusal(built_with: Option<bool>, tab_id: &str) -> Option<AppCommandError> {
+    match built_with {
+        Some(true) => None,
+        Some(false) => Some(
+            AppCommandError::invalid_input(
+                "this tab was opened with the web inspector switched off; turn it on in the \
+                 browser settings and open the page again"
+                    .to_string(),
+            )
+            .with_i18n(BROWSER_I18N_KEY_INSPECTOR_OFF, std::collections::BTreeMap::new()),
+        ),
+        None => Some(AppCommandError::not_found(format!("browser tab {tab_id} not found"))),
+    }
+}
+
+/// How often a docked inspector is asked whether it is still there. WebKit
+/// announces its closing no other way, and the workspace is laid out around it
+/// until it does, so the poll is what ends that. One private selector per
+/// tick, on the main thread, and only while one is open.
+const DEVTOOLS_POLL: Duration = Duration::from_millis(700);
+
+/// Show the web inspector for a tab's page. `true` when it DOCKED into the
+/// workspace window, which the frontend lays itself out around until
+/// `browser://devtools-closed` says it is gone.
+pub fn open_devtools_core(
+    app: &AppHandle,
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<bool, AppCommandError> {
+    let surface = devtools_target(registry, tab_id)?;
+    let docked = surface
+        .open_devtools()
+        .map_err(|e| window_err("Failed to open the web inspector", e))?;
+    if docked {
+        watch_docked_devtools(app.clone(), surface, tab_id.to_string());
+    }
+    Ok(docked)
+}
+
+/// The surface to show an inspector on, or why not. Apart from
+/// `open_devtools_core` so that every refusal is reachable from a test —
+/// opening one needs an `AppHandle`, and deciding whether to does not.
+fn devtools_target(
+    registry: &BrowserRegistry,
+    tab_id: &str,
+) -> Result<BrowserSurface, AppCommandError> {
+    if let Some(err) = devtools_refusal(registry.update(tab_id, |tab| tab.devtools), tab_id) {
+        return Err(err);
+    }
+    surface_of(registry, tab_id)
+}
+
+/// Say when the docked inspector on `surface` has gone, once.
+///
+/// Stops the moment the answer is no — including when the surface has gone
+/// with the tab, which answers the same way and needs the same thing done
+/// about it. Deliberately UNBOUNDED otherwise: the tab is what bounds it, and
+/// a cap would have to either give the workspace its layout back while the
+/// inspector is still docked, or stop watching and never give it back at all.
+/// The handle it holds is an id and an `AppHandle`, not the webview.
+///
+/// A second open while one is already being watched starts a second watcher;
+/// both see the same close, and the frontend counts inspectors rather than
+/// events, so the extra one changes nothing.
+fn watch_docked_devtools(app: AppHandle, surface: BrowserSurface, tab_id: String) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(DEVTOOLS_POLL).await;
+            // An error is "no inspector to be found", which is the answer that
+            // ends this either way.
+            if !surface.devtools_visible().unwrap_or(false) {
+                tracing::debug!("[browser] tab {tab_id}: the web inspector closed");
+                events::emit_devtools_closed(&app, &tab_id);
+                return;
+            }
+        }
+    });
+}
+
 pub fn state_core(registry: &BrowserRegistry, tab_id: &str) -> Result<BrowserTabState, AppCommandError> {
     registry
         .state(tab_id)
@@ -1158,6 +1247,11 @@ pub const BROWSER_I18N_KEY_BLOCKED: &str = "browser.agent.error.blocked";
 
 /// The workspace was asked for a tab and none arrived.
 pub const BROWSER_I18N_KEY_OPEN_FAILED: &str = "browser.agent.error.openFailed";
+
+/// This tab's surface was built without the inspector. Not an agent error —
+/// only a person opens one — but it travels the same `AppCommandError` i18n
+/// channel, so it is named beside the others.
+pub const BROWSER_I18N_KEY_INSPECTOR_OFF: &str = "browser.inspector.error.switchedOff";
 
 fn open_failed(detail: &str) -> AppCommandError {
     AppCommandError::window("Failed to open a browser tab".to_string(), detail.to_string())
@@ -3574,6 +3668,18 @@ pub async fn browser_stop(
     stop_core(&app, &registry, &tab_id)
 }
 
+/// Show the engine's web inspector for a tab's page. Refuses, rather than
+/// doing nothing, when that tab was opened with the inspector switched off —
+/// see [`devtools_refusal`]. `true` = it docked into the workspace window.
+#[tauri::command]
+pub async fn browser_open_devtools(
+    app: AppHandle,
+    registry: State<'_, BrowserRegistry>,
+    tab_id: String,
+) -> Result<bool, AppCommandError> {
+    open_devtools_core(&app, &registry, &tab_id)
+}
+
 #[tauri::command]
 pub async fn browser_find(
     registry: State<'_, BrowserRegistry>,
@@ -3922,6 +4028,41 @@ mod tests {
             s.loading = true;
             s.requested_url = "https://elsewhere.example/".into();
         }));
+    }
+
+    /// The inspector is a creation-time attribute of the webview and no engine
+    /// reports it back, so a tab built without it would take the call and show
+    /// nothing. The three answers, and which of them is actionable.
+    #[test]
+    fn a_tab_opened_without_the_inspector_is_told_so_rather_than_ignored() {
+        assert!(devtools_refusal(Some(true), "t1").is_none());
+
+        let off = devtools_refusal(Some(false), "t1").expect("refused");
+        // Invalid input, not not-found: the tab is right there, and the person
+        // has something to do about it — which the key carries to the toast.
+        assert!(matches!(off.code, crate::app_error::AppErrorCode::InvalidInput));
+        assert_eq!(off.i18n_key.as_deref(), Some(BROWSER_I18N_KEY_INSPECTOR_OFF));
+
+        let gone = devtools_refusal(None, "t1").expect("no such tab");
+        assert!(matches!(gone.code, crate::app_error::AppErrorCode::NotFound));
+        // …and nothing for a person to act on, so no key.
+        assert!(gone.i18n_key.is_none());
+    }
+
+    /// And the wiring reaches it: a tab that is not there never gets as far as
+    /// asking a surface for an inspector.
+    ///
+    /// Only that branch is reachable from here — a tab with `devtools: false`
+    /// needs a real surface to put in the registry, and `surface_of` answers
+    /// the same not-found for a ghost either way, so taking the gate out of
+    /// `open_devtools_core` leaves both of these green. The refusal's wiring
+    /// is exercised on a real engine through the `browser_open_devtools`
+    /// puppet op (`browser/smoke.rs`).
+    #[test]
+    fn opening_the_inspector_on_a_tab_that_is_not_there_says_so() {
+        let registry = BrowserRegistry::default();
+        let err = devtools_target(&registry, "ghost").err().expect("no such tab");
+        assert!(matches!(err.code, crate::app_error::AppErrorCode::NotFound));
     }
 
     /// The gate itself: an unshared page is refused, a read-only one is told

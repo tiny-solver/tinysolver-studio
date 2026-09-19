@@ -5029,7 +5029,7 @@
     "targetBuiltin": "Built-in browser",
     "targetSystem": "System browser",
     "devtoolsTitle": "Web inspector",
-    "devtoolsHint": "Allow Inspect Element in browser tabs. Applies to tabs opened from now on.",
+    "devtoolsHint": "Offer “Open inspector” in a tab’s More menu, and Inspect Element on the page. On by default. Applies to tabs opened from now on.",
     "surfaceTitle": "Tab surface",
     "surfaceHint": "How pages are hosted. Keep Automatic unless embedded tabs misbehave on this system. Applies to tabs opened from now on.",
     "surfaceAuto": "Automatic",
@@ -6204,6 +6204,8 @@
       "more": "More",
       "copyUrl": "Copy link",
       "copied": "Link copied",
+      "openInspector": "Open inspector",
+      "inspectorFailed": "Couldn't open the inspector",
       "addressPlaceholder": "Enter an address",
       "invalidUrl": "Not a valid address",
       "profile": "Profile: {name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "This tab has not been shared with an agent. Share it to let the agent read the page."
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "This tab was opened with the web inspector switched off. Turn it on in the browser settings, then open the page again."
       }
     }
   }

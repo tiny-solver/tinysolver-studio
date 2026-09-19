@@ -5029,7 +5029,7 @@
     "targetBuiltin": "Integrierter Browser",
     "targetSystem": "Systembrowser",
     "devtoolsTitle": "Web-Inspektor",
-    "devtoolsHint": "Erlaubt „Element untersuchen“ in Browser-Tabs. Gilt für ab jetzt geöffnete Tabs.",
+    "devtoolsHint": "Zeigt „Inspektor öffnen“ im Menü „Mehr“ eines Tabs und erlaubt „Element untersuchen“ auf der Seite. Standardmäßig aktiviert. Gilt für ab jetzt geöffnete Tabs.",
     "surfaceTitle": "Tab-Darstellung",
     "surfaceHint": "Wie Seiten eingebettet werden. Auf „Automatisch“ belassen, außer eingebettete Tabs verhalten sich auf diesem System fehlerhaft. Gilt für ab jetzt geöffnete Tabs.",
     "surfaceAuto": "Automatisch",
@@ -6204,6 +6204,8 @@
       "more": "Mehr",
       "copyUrl": "Link kopieren",
       "copied": "Link kopiert",
+      "openInspector": "Inspektor öffnen",
+      "inspectorFailed": "Inspektor konnte nicht geöffnet werden",
       "addressPlaceholder": "Adresse eingeben",
       "invalidUrl": "Keine gültige Adresse",
       "profile": "Profil: {name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "Dieser Tab wurde nicht für einen Agenten freigegeben. Gib ihn frei, damit der Agent die Seite lesen kann."
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "Dieser Tab wurde bei ausgeschaltetem Web-Inspektor geöffnet. Schalte ihn in den Browser-Einstellungen ein und öffne die Seite erneut."
       }
     }
   }

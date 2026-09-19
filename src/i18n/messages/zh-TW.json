@@ -5029,7 +5029,7 @@
     "targetBuiltin": "內建瀏覽器",
     "targetSystem": "系統瀏覽器",
     "devtoolsTitle": "網頁檢閱器",
-    "devtoolsHint": "允許在瀏覽器分頁中使用「檢閱元素」。對之後開啟的分頁生效。",
+    "devtoolsHint": "在分頁的「更多」選單中提供「開啟檢查器」，並允許頁面上的「檢查元素」。預設開啟。對此後開啟的分頁生效。",
     "surfaceTitle": "分頁承載方式",
     "surfaceHint": "網頁以何種方式承載。除非內嵌分頁在本機運作異常，否則請保持「自動」。對之後開啟的分頁生效。",
     "surfaceAuto": "自動",
@@ -6204,6 +6204,8 @@
       "more": "更多",
       "copyUrl": "複製連結",
       "copied": "已複製連結",
+      "openInspector": "開啟檢查器",
+      "inspectorFailed": "無法開啟檢查器",
       "addressPlaceholder": "輸入網址",
       "invalidUrl": "不是有效的網址",
       "profile": "設定檔：{name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "這個分頁尚未共享給智慧體。共享後智慧體才能讀取頁面。"
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "這個分頁是在網頁檢查器關閉時開啟的。請到瀏覽器設定中開啟它，然後重新開啟該頁面。"
       }
     }
   }

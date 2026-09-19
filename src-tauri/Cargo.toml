@@ -76,7 +76,21 @@ required-features = []
 tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2.11", features = ["macos-private-api", "tray-icon"], optional = true }
+# `devtools` is what makes the web inspector exist in a RELEASE build — in a
+# debug one `debug_assertions` already does. It reaches wry through
+# tauri-runtime-wry, which is where a browser tab's child webview is built, and
+# it is what `browser_open_devtools` needs: `WebView::open_devtools` and
+# `WebviewWindow::open_devtools` are both compiled under
+# `any(debug_assertions, feature = "devtools")` of THEIR crate, which nothing
+# on this side can test with `cfg!`. On for every target so that one call
+# site works everywhere instead of three.
+#
+# It also gives the app's OWN windows an inspector in release: tauri-runtime-wry
+# resolves an unset `devtools` attribute as `unwrap_or(true)`, and none of this
+# app's window builders sets one. Turn that off by giving them
+# `.devtools(cfg!(debug_assertions))`, not by taking this feature away — the
+# browser tabs need it.
+tauri = { version = "2.11", features = ["macos-private-api", "tray-icon", "devtools"], optional = true }
 # Only for its `wry` re-export (version-locked to the runtime tauri uses).
 tauri-runtime-wry = { version = "2.11", optional = true, default-features = false }
 tauri-plugin-opener = { version = "2", optional = true }
@@ -179,12 +193,6 @@ tauri-plugin-deep-link = { version = "2", optional = true }
 # "Launch at login" toggle. Desktop-only: registry Run key on Windows, a
 # LaunchAgent plist on macOS, an XDG autostart .desktop entry on Linux.
 tauri-plugin-autostart = { version = "2", optional = true }
-
-# Feature unification is per target: `devtools` (release-build web inspector
-# for browser tabs, via tauri-runtime-wry → wry) only where the embedded
-# browser surface exists.
-[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-tauri = { version = "2.11", features = ["devtools"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6"

@@ -43,6 +43,7 @@ vi.mock("@/components/ui/overlay-host-hidden", () => ({
 import { BrowserSurfaceHost, NativeSurfaceHost } from "./browser-surface-host"
 import {
   getBrowserTabState,
+  requestBrowserBoundsResync,
   resetBrowserTabStoreForTests,
 } from "@/lib/browser/browser-tab-store"
 import {
@@ -265,6 +266,34 @@ describe("BrowserSurfaceHost", () => {
       height: 600,
     })
     expect(api.browserSetVisible).toHaveBeenLastCalledWith("host2", true, false)
+  })
+
+  // Bounds are pushed only when they change, which is right while this host
+  // is the only thing that moves a surface. macOS's docked web inspector is
+  // not: it resizes the page to fill the window and leaves it there, and the
+  // placeholder never moved — so the page would stay full-window until some
+  // unrelated layout change. A resync request is what says "push them again
+  // even though they look the same".
+  it("pushes unchanged bounds again when a resync is asked for", async () => {
+    api.browserOpenTab.mockImplementation(() => Promise.resolve(state("host9")))
+    render(<BrowserSurfaceHost tab={tab("host9")} />)
+    await flush()
+    const pushed = api.browserSetBounds.mock.calls.length
+    expect(pushed).toBeGreaterThan(0)
+
+    // Nothing moved, so nothing is pushed again on its own.
+    await flush()
+    expect(api.browserSetBounds.mock.calls.length).toBe(pushed)
+
+    act(() => requestBrowserBoundsResync("host9"))
+    await flush()
+    expect(api.browserSetBounds.mock.calls.length).toBe(pushed + 1)
+    expect(api.browserSetBounds).toHaveBeenLastCalledWith("host9", {
+      x: 100,
+      y: 50,
+      width: 800,
+      height: 600,
+    })
   })
 
   // The whole point of the order: the still goes up while the native view is

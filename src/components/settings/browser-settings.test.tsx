@@ -105,7 +105,10 @@ describe("BrowserSettingsSection", () => {
         "Built-in browser"
       )
     }
-    expect(screen.getByLabelText("Web inspector")).not.toBeChecked()
+    // On out of the box: every engine takes the inspector as a creation-time
+    // attribute, so off by default made "reopen the tab first" the answer to
+    // every look at a page.
+    expect(screen.getByLabelText("Web inspector")).toBeChecked()
     expect(
       screen.getByRole("combobox", { name: "Tab surface" })
     ).toHaveTextContent("Automatic")
@@ -257,6 +260,11 @@ describe("BrowserSettingsSection", () => {
     renderSection()
     expandSection()
 
+    // It starts on, so the press turns it off — and that is the state worth
+    // persisting: it is the one that differs from the default.
+    fireEvent.click(screen.getByLabelText("Web inspector"))
+    expect(getBrowserPrefs().devtools).toBe(false)
+    expect(screen.getByLabelText("Web inspector")).not.toBeChecked()
     fireEvent.click(screen.getByLabelText("Web inspector"))
     expect(getBrowserPrefs().devtools).toBe(true)
     expect(screen.getByLabelText("Web inspector")).toBeChecked()

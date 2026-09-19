@@ -419,6 +419,73 @@ pub fn is_loading(webview: &wry::WebView) -> bool {
     unsafe { wk.isLoading() }
 }
 
+/// Show the Web Inspector for this page. `true` when it is now DOCKED into
+/// the window the page lives in, which the caller has to deal with.
+///
+/// WebKit gives no choice about that. `_WKInspector` attaches by default, and
+/// attaching resizes the inspected view to fill its window with the inspector
+/// below it — measured here: a tab in a 900×620 slot became 2560×933 across
+/// the whole workspace window, tab strip, sidebar and address bar hidden
+/// behind it. Its private `detach` is a no-op on macOS 27 whether it is sent
+/// before `show` or after; re-sending the view's frame while the inspector is
+/// up is ignored too, and closing the inspector leaves the view full-window
+/// until somebody sets its frame again. So the honest answer is to say that
+/// the host window is taken and let the workspace lay itself out to match
+/// (`browser://devtools-closed` undoes it) rather than to pretend otherwise.
+///
+/// The selectors are private — `_inspector` is a `_WKInspector`, the same one
+/// wry's own `open_devtools` uses — and each is checked for before it is sent,
+/// so a WebKit that renames them opens nothing instead of doing something
+/// undefined. `isInspectable` is set by wry at build time from
+/// `with_devtools`; without it the inspector is nil.
+pub fn open_devtools(webview: &wry::WebView) -> bool {
+    with_inspector(webview, |inspector| unsafe {
+        let can_show: bool = objc2::msg_send![inspector, respondsToSelector: objc2::sel!(show)];
+        if !can_show {
+            return false;
+        }
+        let _: () = objc2::msg_send![inspector, show];
+        true
+    })
+    .unwrap_or(false)
+}
+
+/// Whether the inspector for this page is on screen. Polled while one is
+/// docked, because WebKit reports its closing no other way.
+pub fn devtools_visible(webview: &wry::WebView) -> bool {
+    with_inspector(webview, |inspector| unsafe {
+        let can_ask: bool =
+            objc2::msg_send![inspector, respondsToSelector: objc2::sel!(isVisible)];
+        can_ask && objc2::msg_send![inspector, isVisible]
+    })
+    .unwrap_or(false)
+}
+
+/// Run `f` against this view's `_WKInspector`, or `None` where WebKit has no
+/// such thing to hand out.
+fn with_inspector<R>(
+    webview: &wry::WebView,
+    f: impl FnOnce(*mut objc2::runtime::AnyObject) -> R,
+) -> Option<R> {
+    use objc2::runtime::AnyObject;
+
+    let wk = WebViewExtMacOS::webview(webview);
+    // SAFETY: main thread, live view; the selector is checked for and the
+    // inspector is null-checked before anything is sent to it.
+    unsafe {
+        let view: &AnyObject = &*(Retained::as_ptr(&wk) as *const AnyObject);
+        let has: bool = objc2::msg_send![view, respondsToSelector: objc2::sel!(_inspector)];
+        if !has {
+            return None;
+        }
+        let inspector: *mut AnyObject = objc2::msg_send![view, _inspector];
+        if inspector.is_null() {
+            return None;
+        }
+        Some(f(inspector))
+    }
+}
+
 pub fn webview_pointer(webview: &wry::WebView) -> usize {
     Retained::as_ptr(&webview.webview()) as usize
 }

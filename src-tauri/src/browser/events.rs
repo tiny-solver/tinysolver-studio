@@ -15,12 +15,25 @@ use super::downloads::{BrowserDownload, DOWNLOAD_EVENT};
 use super::types::{
     BrowserClosedPayload, BrowserConsoleErrorsPayload, BrowserNavigationBlockedPayload,
     BrowserOpenRequestPayload, BrowserPopupPayload, BrowserShortcutPayload, BrowserTabState,
-    NavigationBlockReason, CLOSED_EVENT, CONSOLE_ERRORS_EVENT, DOC_STATE_EVENT,
+    BrowserDevtoolsClosedPayload, NavigationBlockReason, CLOSED_EVENT, CONSOLE_ERRORS_EVENT,
+    DEVTOOLS_CLOSED_EVENT, DOC_STATE_EVENT,
     NAVIGATION_BLOCKED_EVENT, OPEN_REQUEST_EVENT, POPUP_EVENT, SHORTCUT_EVENT, STATE_EVENT,
 };
 
 pub fn emit_state(app: &AppHandle, state: &BrowserTabState) {
     emit_event(&EventEmitter::Tauri(app.clone()), STATE_EVENT, state);
+}
+
+/// A docked inspector for `tab_id` has gone; the workspace can have its
+/// layout back. See [`DEVTOOLS_CLOSED_EVENT`].
+pub fn emit_devtools_closed(app: &AppHandle, tab_id: &str) {
+    emit_event(
+        &EventEmitter::Tauri(app.clone()),
+        DEVTOOLS_CLOSED_EVENT,
+        BrowserDevtoolsClosedPayload {
+            tab_id: tab_id.to_string(),
+        },
+    );
 }
 
 /// `request_id` names the `browser_close` call this is the answer to, and is

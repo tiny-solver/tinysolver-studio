@@ -29,6 +29,7 @@ import {
   runSurfaceOp,
   setBrowserTabState,
   surfaceClaimIsCurrent,
+  useBrowserBoundsResync,
   useBrowserTabState,
 } from "@/lib/browser/browser-tab-store"
 import {
@@ -401,6 +402,21 @@ export function NativeSurfaceHost({
   useEffect(() => {
     sync()
   }, [sync, view.mode, view.activePane, view.filesMaximized, routeVisible])
+
+  // Something OTHER than this host moved the surface, so the bounds it last
+  // pushed are no longer where the page is — and since the placeholder has
+  // not moved, nothing it measures says so. Forget what was pushed and push
+  // again. Raised when a docked web inspector closes: macOS leaves the page
+  // filling the window afterwards (see `shim/macos.rs::open_devtools`), and
+  // the layout it was making room for may not change at all on the way back.
+  const boundsResync = useBrowserBoundsResync(storeKey)
+  const seenResyncRef = useRef(boundsResync)
+  useEffect(() => {
+    if (seenResyncRef.current === boundsResync) return
+    seenResyncRef.current = boundsResync
+    lastBoundsRef.current = null
+    sync()
+  }, [boundsResync, sync])
 
   // Mount = the tab is on screen; unmount = it is no longer (another tab took
   // the pane, the drawer closed, the panel went away). A browser tab's

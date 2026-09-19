@@ -395,6 +395,21 @@ export interface BrowserDownload {
 
 export type SurfaceChoice = "auto" | "child" | "window"
 
+/**
+ * A docked web inspector closed.
+ *
+ * Only raised for the docking kind — macOS, embedded surface — because only
+ * that one takes the workspace window: WebKit resizes the page to fill it with
+ * the inspector below, ignores any bounds set while it is up, and leaves the
+ * page full-window after it goes. So the workspace maximizes the file pane to
+ * match while one is open, and this is what tells it to put the layout back
+ * (which also re-asserts the page's bounds, the only way it returns to its
+ * slot). Windows opens DevTools in a window of their own and never sends this.
+ */
+export interface BrowserDevtoolsClosedPayload {
+  tabId: string
+}
+
 export interface BrowserClosedPayload {
   tabId: string
   ownerWindow: string
@@ -462,6 +477,9 @@ export const BROWSER_AGENT_GRANT_EVENT = "browser://agent-grant"
 export const BROWSER_AGENT_ACTIVITY_EVENT = "browser://agent-activity"
 export const BROWSER_CONSOLE_ERRORS_EVENT = "browser://console-errors"
 export const BROWSER_EVAL_REQUEST_EVENT = "browser://eval-request"
+/** A web inspector that had DOCKED into the workspace window is gone; see
+ *  `BrowserDevtoolsClosedPayload`. */
+export const BROWSER_DEVTOOLS_CLOSED_EVENT = "browser://devtools-closed"
 
 /** `browser://eval-request`: one `browser_eval` snippet, waiting on a person.
  *

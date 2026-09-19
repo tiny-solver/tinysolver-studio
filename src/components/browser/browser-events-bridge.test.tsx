@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     }),
     adoptBrowserTab: vi.fn(() => "browser:opener-p1"),
     closeFileTab: vi.fn(),
+    setFilesMaximized: vi.fn(),
     // `string | null` like the real one: a workspace that opened no tab
     // (an address it would not take) is one of the cases below.
     openBrowserTab: vi.fn<(...args: unknown[]) => string | null>(
@@ -89,6 +90,7 @@ vi.mock("@/contexts/workspace-context", () => ({
     adoptBrowserTab: mocks.adoptBrowserTab,
     closeFileTab: mocks.closeFileTab,
     openBrowserTab: mocks.openBrowserTab,
+    setFilesMaximized: mocks.setFilesMaximized,
   }),
 }))
 
@@ -101,10 +103,12 @@ import {
 } from "@/lib/browser/browser-prefs"
 import {
   getBrowserTabState,
+  recordDockedInspector,
   releaseBrowserTab,
   resetBrowserTabStoreForTests,
   setBrowserTabState,
   useBrowserAgentActivity,
+  useBrowserBoundsResync,
   useBrowserFindRequest,
   useBrowserTabNotice,
 } from "@/lib/browser/browser-tab-store"
@@ -113,6 +117,14 @@ import {
   resetBrowserDownloadsForTests,
 } from "@/lib/browser/browser-downloads-store"
 import { BrowserEventsBridge } from "./browser-events-bridge"
+
+/** The store's bounds-resync counter for a tab, read as a component would. */
+function boundsResyncOf(workspaceTabId: string): number {
+  const view = renderHook(() => useBrowserBoundsResync(workspaceTabId))
+  const seen = view.result.current
+  view.unmount()
+  return seen
+}
 
 /** The store's find counter, read the way a component would. */
 function findRequestOf(workspaceTabId: string): number {
@@ -136,6 +148,7 @@ describe("BrowserEventsBridge", () => {
     mocks.subscribe.mockClear()
     mocks.adoptBrowserTab.mockClear()
     mocks.closeFileTab.mockClear()
+    mocks.setFilesMaximized.mockClear()
     mocks.openBrowserTab.mockClear()
     mocks.browserClose.mockClear()
     mocks.browserListDownloads.mockClear()
@@ -165,6 +178,7 @@ describe("BrowserEventsBridge", () => {
       "browser://agent-grant",
       "browser://closed",
       "browser://console-errors",
+      "browser://devtools-closed",
       "browser://doc-state",
       "browser://download",
       "browser://navigation-blocked",
@@ -383,6 +397,32 @@ describe("BrowserEventsBridge", () => {
     expect(getBrowserTabState("browser:abc-p1")).toBeNull()
     expect(mocks.closeFileTab).toHaveBeenCalledWith("browser:abc-p1")
 
+    // Every docked-inspector close asks the surface for a bounds resync,
+    // whatever it does to the layout: WebKit left the page filling the window
+    // and the placeholder never moved, so nothing else would notice.
+    expect(boundsResyncOf("browser:insp-a")).toBe(0)
+
+    // A docked inspector closing gives the layout back — the LAST one, and
+    // only if the pane was maximized for them. A tab nobody recorded changes
+    // nothing.
+    mocks.handlers.get("browser://devtools-closed")!({ tabId: "not-ours" })
+    expect(mocks.setFilesMaximized).not.toHaveBeenCalled()
+    // Two tabs, each with one docked; the pane was maximized for the first.
+    expect(recordDockedInspector("insp-a", false)).toBe(true)
+    expect(recordDockedInspector("insp-b", true)).toBe(false)
+    mocks.handlers.get("browser://devtools-closed")!({ tabId: "insp-a" })
+    // Still one open: the pane stays where it is.
+    expect(mocks.setFilesMaximized).not.toHaveBeenCalled()
+    mocks.handlers.get("browser://devtools-closed")!({ tabId: "insp-b" })
+    expect(mocks.setFilesMaximized.mock.calls).toEqual([[false]])
+    // Spent: a second close of the same tab does not ask for the layout
+    // again — but it does ask for the bounds again, which is free and is the
+    // only thing that puts the page back when the layout does not change.
+    mocks.handlers.get("browser://devtools-closed")!({ tabId: "insp-b" })
+    expect(mocks.setFilesMaximized.mock.calls).toEqual([[false]])
+    expect(boundsResyncOf("browser:insp-a")).toBe(1)
+    expect(boundsResyncOf("browser:insp-b")).toBe(2)
+
     // …but a close THIS SIDE asked for, to suspend a background tab, is the
     // surface going and the tab staying. The backend emits the same event for
     // it, and acting on that would take the tab off the strip — the suspend
@@ -420,6 +460,7 @@ describe("BrowserEventsBridge", () => {
       "browser://agent-grant",
       "browser://closed",
       "browser://console-errors",
+      "browser://devtools-closed",
       "browser://doc-state",
       "browser://download",
       "browser://navigation-blocked",

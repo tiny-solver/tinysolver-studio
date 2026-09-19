@@ -185,6 +185,35 @@ impl BrowserSurface {
         per_surface!(self, child: |c| Ok(c.close()?), window: |w| Ok(w.close()?))
     }
 
+    /// Show the engine's web inspector for this page. `true` when it DOCKED
+    /// into this surface's host window and the workspace has to lay itself
+    /// out around it until [`Self::devtools_visible`] says it is gone.
+    ///
+    /// Only does anything on a surface that was BUILT with the inspector
+    /// available: all three engines take it as a webview attribute at creation
+    /// (`developerExtrasEnabled`, `SetAreDevToolsEnabled`,
+    /// `enable-developer-extras`) and none of them lets it be turned on
+    /// afterwards. Neither engine reports back either, so the caller answers
+    /// that question from the registry rather than from here — see
+    /// `commands::browser::devtools_refusal`.
+    ///
+    /// Never `true` for an owned window: its host window holds the page and
+    /// nothing else, so an inspector docked into it is the ordinary browser
+    /// layout rather than something covering a workbench.
+    pub fn open_devtools(&self) -> Result<bool, SurfaceError> {
+        per_surface!(self,
+            child: |c| Ok(c.open_devtools()?),
+            window: |w| { w.open_devtools(); Ok(false) })
+    }
+
+    /// Whether a docked inspector is still up. Only ever asked of the surface
+    /// that said it docked one.
+    pub fn devtools_visible(&self) -> Result<bool, SurfaceError> {
+        per_surface!(self,
+            child: |c| Ok(c.devtools_visible()?),
+            window: |_w| Ok(false))
+    }
+
     /// Only meaningful for embedded surfaces; an owned window keeps whatever
     /// size and position the user gave it.
     pub fn set_bounds(&self, bounds: Bounds) -> Result<(), SurfaceError> {

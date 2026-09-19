@@ -365,6 +365,15 @@ async fn execute(app: &AppHandle, cmd: &Value) -> Result<Value, String> {
                 .map_err(err_string)?;
             Ok(Value::Null)
         }
+        // Whether the inspector actually appears is for a person to see; what
+        // this op pins is the half a test can: the refusal on a tab opened
+        // with it switched off, and no error on one opened with it on.
+        "browser_open_devtools" => {
+            let docked =
+                browser_commands::open_devtools_core(app, &registry, &str_arg(cmd, "tab_id")?)
+                    .map_err(err_string)?;
+            Ok(json!({ "docked": docked }))
+        }
         "browser_state" => {
             let state = browser_commands::state_core(&registry, &str_arg(cmd, "tab_id")?)
                 .map_err(err_string)?;

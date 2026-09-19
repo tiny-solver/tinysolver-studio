@@ -184,6 +184,20 @@ export function browserClose(tabId: string, requestId?: string): Promise<void> {
   return getTransport().call<void>("browser_close", { tabId, requestId })
 }
 
+/**
+ * Show the engine's web inspector for a tab's page. Resolves `true` when it
+ * DOCKED into the workspace window, which the caller lays the workspace out
+ * around until `browser://devtools-closed`.
+ *
+ * Rejects when that tab was opened with the inspector switched off — every
+ * engine takes it as a creation-time webview attribute, so there is nothing
+ * to turn on now, and saying so beats a menu item that does nothing. The
+ * error carries `browser.inspector.error.switchedOff`.
+ */
+export function browserOpenDevtools(tabId: string): Promise<boolean> {
+  return getTransport().call<boolean>("browser_open_devtools", { tabId })
+}
+
 export function browserSetBounds(tabId: string, bounds: Bounds): Promise<void> {
   return getTransport().call<void>("browser_set_bounds", { tabId, bounds })
 }

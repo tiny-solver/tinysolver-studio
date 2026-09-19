@@ -5029,7 +5029,7 @@
     "targetBuiltin": "내장 브라우저",
     "targetSystem": "시스템 브라우저",
     "devtoolsTitle": "웹 인스펙터",
-    "devtoolsHint": "브라우저 탭에서 요소 검사를 허용합니다. 이후에 여는 탭부터 적용됩니다.",
+    "devtoolsHint": "탭의 ‘더 보기’ 메뉴에 ‘검사기 열기’를 표시하고 페이지에서 요소 검사를 허용합니다. 기본값은 켜짐. 이후 여는 탭부터 적용됩니다.",
     "surfaceTitle": "탭 표시 방식",
     "surfaceHint": "페이지를 표시하는 방식입니다. 이 시스템에서 내장 탭이 비정상적으로 동작하지 않는 한 「자동」을 유지하세요. 이후에 여는 탭부터 적용됩니다.",
     "surfaceAuto": "자동",
@@ -6204,6 +6204,8 @@
       "more": "더 보기",
       "copyUrl": "링크 복사",
       "copied": "링크를 복사했습니다",
+      "openInspector": "검사기 열기",
+      "inspectorFailed": "검사기를 열 수 없습니다",
       "addressPlaceholder": "주소 입력",
       "invalidUrl": "올바른 주소가 아닙니다",
       "profile": "프로필: {name}",
@@ -6426,6 +6428,11 @@
     "agent": {
       "error": {
         "grantRequired": "이 탭은 에이전트와 공유되지 않았습니다. 공유하면 에이전트가 페이지를 읽을 수 있습니다."
+      }
+    },
+    "inspector": {
+      "error": {
+        "switchedOff": "이 탭은 웹 검사기가 꺼진 상태에서 열렸습니다. 브라우저 설정에서 켠 다음 페이지를 다시 여세요."
       }
     }
   }
