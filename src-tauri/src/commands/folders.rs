@@ -5378,6 +5378,94 @@ pub async fn save_file_content(
     .await
 }
 
+/// Workspace-confined write of raw bytes, creating the file and any missing
+/// parent directories under the root. This is what Studio uses to persist a
+/// scene document and its images into a content project.
+///
+/// Concurrency mirrors `save_file_content`: with `expected_etag` set, the
+/// write is refused when the file on disk no longer has that etag (or was
+/// removed), so an agent's edit is never silently overwritten. Without it,
+/// an existing file is replaced — that path is only used for content-
+/// addressed blobs, where identical bytes make the overwrite harmless.
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn write_workspace_file_base64(
+    root_path: String,
+    path: String,
+    data_base64: String,
+    expected_etag: Option<String>,
+) -> Result<FileSaveResult, AppCommandError> {
+    let root = PathBuf::from(&root_path);
+    if !root.exists() || !root.is_dir() {
+        return Err(AppCommandError::not_found("Folder does not exist"));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| AppCommandError::invalid_input(format!("invalid base64 payload: {e}")))?;
+    if bytes.len() > FILE_SAVE_HARD_LIMIT {
+        return Err(
+            AppCommandError::invalid_input("File is too large to save")
+                .with_detail(format!("max_bytes={FILE_SAVE_HARD_LIMIT}")),
+        );
+    }
+
+    let target = resolve_tree_path(&root, &path)?;
+    let path_for_response = path.clone();
+
+    run_file_io(move || {
+        ensure_user_navigable_path(&root, &target)?;
+
+        let exists = match std::fs::symlink_metadata(&target) {
+            Ok(meta) => {
+                if meta.file_type().is_symlink() {
+                    return Err(AppCommandError::invalid_input(
+                        "Saving symlink targets is not supported",
+                    ));
+                }
+                if !meta.is_file() {
+                    return Err(AppCommandError::invalid_input("Path is not a file"));
+                }
+                if meta.permissions().readonly() {
+                    return Err(AppCommandError::permission_denied("File is read-only"));
+                }
+                true
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+            Err(e) => return Err(AppCommandError::io(e)),
+        };
+
+        if let Some(expected) = expected_etag {
+            if !exists {
+                return Err(AppCommandError::invalid_input(
+                    "File was removed on disk. Reload before saving.",
+                ));
+            }
+            let before_meta = std::fs::metadata(&target).map_err(AppCommandError::io)?;
+            let current_bytes = std::fs::read(&target).map_err(AppCommandError::io)?;
+            if expected != compute_etag(&current_bytes, &before_meta) {
+                return Err(AppCommandError::invalid_input(
+                    "File has changed on disk. Reload the file before saving.",
+                ));
+            }
+        }
+
+        if let Some(parent) = target.parent() {
+            // `resolve_tree_path` rejected `..`, so every parent is under root.
+            std::fs::create_dir_all(parent).map_err(AppCommandError::io)?;
+        }
+        atomic_write_text(&target, &bytes)?;
+
+        let after_meta = std::fs::metadata(&target).map_err(AppCommandError::io)?;
+        Ok(FileSaveResult {
+            path: path_for_response,
+            etag: compute_etag(&bytes, &after_meta),
+            mtime_ms: file_mtime_ms(&after_meta),
+            readonly: after_meta.permissions().readonly(),
+            line_ending: detect_line_ending(&bytes),
+        })
+    })
+    .await
+}
+
 fn build_local_copy_file_name(original_name: &str, attempt: usize) -> String {
     let original = Path::new(original_name);
     let stem = original

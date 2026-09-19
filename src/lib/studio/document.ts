@@ -1,284 +1,500 @@
-/** Engine-independent authoring data. Keep renderer objects out of this schema. */
-export interface StudioAsset {
-  id: string
-  name: string
-  mime: "image/png" | "image/jpeg" | "image/webp"
-  width: number
-  height: number
-  size: number
-}
+/**
+ * The scene document the engine runs and the Studio edits — one file, one
+ * schema: `outputs/game/content/<scene>.studio.json`.
+ *
+ * The editor understands a small core (container, assets, node transforms,
+ * a few props) and preserves everything else byte-for-byte: `logic`, engine
+ * specific props, grids, whatever an agent adds. That is the contract that
+ * lets an agent extend the game without the editor rejecting the file.
+ */
 
-export interface StudioNode {
-  id: string
-  name: string
-  kind: "rectangle" | "ellipse" | "image"
+export type SceneAnchor = "top-left" | "center" | "bottom-center"
+
+export interface SceneTransform {
   x: number
   y: number
-  width: number
-  height: number
-  color: string
-  visible: boolean
-  assetId?: string
-  toggleTarget?: string
+  w: number
+  h: number
+  anchor: SceneAnchor
+  z: number
 }
 
-export interface StudioDocument {
-  schemaVersion: 1
+export interface SceneNode {
+  id: string
+  /** Another node's id for relative placement; anything else means the
+   *  container origin (`root` by convention). */
+  parent: string
+  /** `sprite`, `rect`, `text` are what the editor and the scaffolded engine
+   *  know; other strings are kept and shown as plain boxes. */
+  type: string
+  transform: SceneTransform
+  /** Engine-owned bag. The editor edits `visible`, `asset`, `text`, `size`,
+   *  `color`, `interactive`, `onClick` and leaves the rest alone. */
+  props: Record<string, unknown>
+}
+
+export interface SceneAsset {
+  id: string
+  /** Relative to the project's `assets/` directory. */
+  file: string
+  width: number
+  height: number
+  missing?: boolean
+  [key: string]: unknown
+}
+
+export interface SceneDocument {
+  container: { width: number; height: number }
+  assets: SceneAsset[]
+  nodes: SceneNode[]
+  [key: string]: unknown
+}
+
+export interface SceneFile {
+  schema: 1
   id: string
   name: string
-  width: number
-  height: number
-  background: string
-  assets: StudioAsset[]
-  nodes: StudioNode[]
+  document: SceneDocument
+  [key: string]: unknown
 }
 
-export type StudioCommand =
-  | { type: "node.add"; node: StudioNode }
+export type SceneCommand =
+  | { type: "node.add"; node: SceneNode }
   | {
       type: "node.update"
       id: string
-      patch: Partial<Omit<StudioNode, "id" | "kind" | "assetId">>
+      transform?: Partial<SceneTransform>
+      props?: Record<string, unknown>
     }
   | { type: "node.remove"; id: string }
   | { type: "node.reorder"; id: string; direction: "forward" | "backward" }
-  | {
-      type: "document.update"
-      patch: Partial<Pick<StudioDocument, "name" | "background">>
-    }
+  | { type: "scene.update"; name?: string }
 
-export const MAX_ASSET_BYTES = 10 * 1024 * 1024
-export const MAX_BUNDLE_BYTES = 32 * 1024 * 1024
+export const MAX_NODES = 1000
+export const MAX_ASSETS = 500
 const ID = /^[a-zA-Z0-9_-]{1,100}$/
-const COLOR = /^#[0-9a-fA-F]{6}$/
-function object(value: unknown): Record<string, unknown> {
+export const ANCHORS: SceneAnchor[] = ["top-left", "center", "bottom-center"]
+const COORD = 1_000_000
+
+function object(value: unknown, what: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Expected an object")
+    throw new Error(`${what}: expected an object`)
   return value as Record<string, unknown>
 }
-function string(value: unknown, max = 120): string {
+function string(value: unknown, what: string, max = 200): string {
   if (typeof value !== "string" || value.length === 0 || value.length > max)
-    throw new Error("Invalid text value")
+    throw new Error(`${what}: expected text (1–${max} chars)`)
   return value
 }
-function id(value: unknown): string {
-  const result = string(value)
-  if (!ID.test(result)) throw new Error("Invalid identifier")
+function id(value: unknown, what: string): string {
+  const result = string(value, what)
+  if (!ID.test(result))
+    throw new Error(`${what}: ids use letters, digits, - and _ (max 100)`)
   return result
 }
-function number(value: unknown, min: number, max: number): number {
+function number(
+  value: unknown,
+  what: string,
+  min: number,
+  max: number
+): number {
   if (
     typeof value !== "number" ||
     !Number.isFinite(value) ||
     value < min ||
     value > max
   )
-    throw new Error(`Expected a number between ${min} and ${max}`)
+    throw new Error(`${what}: expected a number between ${min} and ${max}`)
   return value
 }
-function color(value: unknown): string {
-  const result = string(value)
-  if (!COLOR.test(result)) throw new Error("Expected a #RRGGBB color")
-  return result
+function optionalNumber(
+  value: unknown,
+  fallback: number,
+  what: string,
+  min: number,
+  max: number
+): number {
+  return value === undefined ? fallback : number(value, what, min, max)
 }
 
-export function parseDocument(value: unknown): StudioDocument {
-  const raw = object(value)
-  if (raw.schemaVersion !== 1) throw new Error("Unsupported document version")
-  if (!Array.isArray(raw.nodes) || raw.nodes.length > 200)
-    throw new Error("A scene supports up to 200 nodes")
-  if (!Array.isArray(raw.assets) || raw.assets.length > 40)
-    throw new Error("A scene supports up to 40 assets")
-  const assets: StudioAsset[] = raw.assets.map((value) => {
-    const a = object(value)
-    if (
-      a.mime !== "image/png" &&
-      a.mime !== "image/jpeg" &&
-      a.mime !== "image/webp"
-    )
-      throw new Error("Unsupported image format")
-    return {
-      id: id(a.id),
-      name: string(a.name, 255),
-      mime: a.mime,
-      width: number(a.width, 1, 8192),
-      height: number(a.height, 1, 8192),
-      size: number(a.size, 1, MAX_ASSET_BYTES),
-    }
-  })
-  if (new Set(assets.map((a) => a.id)).size !== assets.length)
-    throw new Error("Duplicate asset ID")
-  if (assets.reduce((sum, a) => sum + a.size, 0) > 20 * 1024 * 1024)
-    throw new Error("Scene images exceed 20 MB")
-  const nodes: StudioNode[] = raw.nodes.map((value) => {
-    const n = object(value)
-    if (n.kind !== "rectangle" && n.kind !== "ellipse" && n.kind !== "image")
-      throw new Error("Unsupported node kind")
-    if (typeof n.visible !== "boolean") throw new Error("Invalid visibility")
-    const node: StudioNode = {
-      id: id(n.id),
-      name: string(n.name),
-      kind: n.kind,
-      x: number(n.x, -8192, 8192),
-      y: number(n.y, -8192, 8192),
-      width: number(n.width, 1, 8192),
-      height: number(n.height, 1, 8192),
-      color: color(n.color),
-      visible: n.visible,
-    }
-    if (n.kind === "image") {
-      node.assetId = id(n.assetId)
-      if (!assets.some((a) => a.id === node.assetId))
-        throw new Error("Missing image asset")
-    }
-    if (n.toggleTarget !== undefined && n.toggleTarget !== "")
-      node.toggleTarget = id(n.toggleTarget)
-    return node
-  })
-  if (new Set(nodes.map((n) => n.id)).size !== nodes.length)
-    throw new Error("Duplicate node ID")
-  for (const node of nodes) {
-    if (node.toggleTarget && !nodes.some((n) => n.id === node.toggleTarget))
-      throw new Error("Missing interaction target")
+export function parseTransform(value: unknown, what: string): SceneTransform {
+  const t = object(value, what)
+  const anchor = t.anchor === undefined ? "top-left" : t.anchor
+  if (!ANCHORS.includes(anchor as SceneAnchor))
+    throw new Error(`${what}.anchor: expected ${ANCHORS.join(", ")}`)
+  return {
+    x: number(t.x, `${what}.x`, -COORD, COORD),
+    y: number(t.y, `${what}.y`, -COORD, COORD),
+    w: number(t.w, `${what}.w`, 1, COORD),
+    h: number(t.h, `${what}.h`, 1, COORD),
+    anchor: anchor as SceneAnchor,
+    z: optionalNumber(t.z, 0, `${what}.z`, -COORD, COORD),
+  }
+}
+
+function parseAsset(value: unknown, index: number): SceneAsset {
+  const what = `assets[${index}]`
+  const a = object(value, what)
+  const file = string(a.file, `${what}.file`, 500)
+  if (file.startsWith("/") || file.split(/[\\/]/).includes(".."))
+    throw new Error(`${what}.file: must be relative to assets/`)
+  return {
+    ...a,
+    id: id(a.id, `${what}.id`),
+    file,
+    width: number(a.width, `${what}.width`, 1, 16384),
+    height: number(a.height, `${what}.height`, 1, 16384),
+    ...(a.missing === undefined ? {} : { missing: Boolean(a.missing) }),
+  }
+}
+
+function parseNode(value: unknown, index: number): SceneNode {
+  const what = `nodes[${index}]`
+  const n = object(value, what)
+  const props = n.props === undefined ? {} : object(n.props, `${what}.props`)
+  for (const key of Object.keys(props)) {
+    if (typeof props[key] === "function")
+      throw new Error(`${what}.props.${key}: functions are not allowed`)
   }
   return {
-    schemaVersion: 1,
-    id: id(raw.id),
-    name: string(raw.name),
-    width: number(raw.width, 100, 4096),
-    height: number(raw.height, 100, 4096),
-    background: color(raw.background),
-    assets,
-    nodes,
+    id: id(n.id, `${what}.id`),
+    parent:
+      n.parent === undefined ? "root" : string(n.parent, `${what}.parent`),
+    type: string(n.type, `${what}.type`, 40),
+    transform: parseTransform(n.transform, `${what}.transform`),
+    props: structuredClone(props),
   }
 }
 
-/** All UI and imported command edits cross the same validation/transaction boundary. */
-export function applyCommands(
-  document: StudioDocument,
-  commands: unknown
-): StudioDocument {
+/** Validate and normalize a scene file. Unknown top-level and document
+ *  fields are preserved; core fields are checked and defaulted. */
+export function parseScene(value: unknown): SceneFile {
+  const raw = object(value, "scene")
+  if (raw.schema !== undefined && raw.schema !== 1)
+    throw new Error(`Unsupported scene schema ${String(raw.schema)}`)
+  const sceneId = id(raw.id, "scene.id")
+  const doc = object(raw.document, "scene.document")
+  const container = object(doc.container, "scene.document.container")
+  if (!Array.isArray(doc.nodes))
+    throw new Error("scene.document.nodes: expected a list")
+  if (doc.nodes.length > MAX_NODES)
+    throw new Error(`A scene supports up to ${MAX_NODES} nodes`)
+  const assetsRaw = doc.assets === undefined ? [] : doc.assets
+  if (!Array.isArray(assetsRaw))
+    throw new Error("scene.document.assets: expected a list")
+  if (assetsRaw.length > MAX_ASSETS)
+    throw new Error(`A scene supports up to ${MAX_ASSETS} assets`)
+
+  const assets = assetsRaw.map(parseAsset)
+  if (new Set(assets.map((a) => a.id)).size !== assets.length)
+    throw new Error("Duplicate asset id")
+  const nodes = doc.nodes.map(parseNode)
+  if (new Set(nodes.map((n) => n.id)).size !== nodes.length)
+    throw new Error("Duplicate node id")
+
+  const name = raw.name
+  const restTop = Object.fromEntries(
+    Object.entries(raw).filter(
+      ([key]) => !["schema", "id", "name", "document"].includes(key)
+    )
+  )
+  const restDoc = Object.fromEntries(
+    Object.entries(doc).filter(
+      ([key]) => !["container", "assets", "nodes"].includes(key)
+    )
+  )
+  return {
+    ...structuredClone(restTop),
+    schema: 1,
+    id: sceneId,
+    name:
+      typeof name === "string" && name.trim().length > 0
+        ? name.slice(0, 200)
+        : sceneId,
+    document: {
+      ...structuredClone(restDoc),
+      container: {
+        width: number(container.width, "container.width", 16, 16384),
+        height: number(container.height, "container.height", 16, 16384),
+      },
+      assets,
+      nodes,
+    },
+  }
+}
+
+/** Absolute top-left box of a node in container pixels, following the
+ *  parent chain (cycle-safe: a loop falls back to the container origin). */
+export function nodeRect(
+  document: SceneDocument,
+  node: SceneNode
+): { x: number; y: number; w: number; h: number } {
+  const byId = new Map(document.nodes.map((n) => [n.id, n]))
+  const seen = new Set<string>()
+  const walk = (n: SceneNode): { x: number; y: number } => {
+    const t = n.transform
+    let x = t.x
+    let y = t.y
+    if (t.anchor === "bottom-center") {
+      x -= t.w / 2
+      y -= t.h
+    } else if (t.anchor === "center") {
+      x -= t.w / 2
+      y -= t.h / 2
+    }
+    seen.add(n.id)
+    const parent = byId.get(n.parent)
+    if (parent && !seen.has(parent.id)) {
+      const p = walk(parent)
+      x += p.x
+      y += p.y
+    }
+    return { x, y }
+  }
+  const { x, y } = walk(node)
+  return { x, y, w: node.transform.w, h: node.transform.h }
+}
+
+export function isVisible(node: SceneNode): boolean {
+  return node.props.visible !== false
+}
+
+const TRANSFORM_KEYS: (keyof SceneTransform)[] = [
+  "x",
+  "y",
+  "w",
+  "h",
+  "anchor",
+  "z",
+]
+
+/** Apply a batch atomically: any invalid command leaves the input untouched. */
+export function applyCommands(scene: SceneFile, commands: unknown): SceneFile {
   if (
     !Array.isArray(commands) ||
     commands.length === 0 ||
-    commands.length > 100
+    commands.length > 200
   )
-    throw new Error("Provide between 1 and 100 commands")
-  let next = structuredClone(document)
+    throw new Error("Provide between 1 and 200 commands")
+  const next = structuredClone(scene)
+  const nodes = next.document.nodes
   for (const input of commands) {
-    const command = object(input)
-    if (command.type === "document.update") {
-      const patch = object(command.patch)
-      const allowed = ["name", "background"]
-      if (Object.keys(patch).some((key) => !allowed.includes(key)))
-        throw new Error("Unsupported document field")
-      next = { ...next, ...patch } as StudioDocument
-    } else if (command.type === "node.add") {
-      next.nodes.push(command.node as StudioNode)
-    } else {
-      const index = next.nodes.findIndex((n) => n.id === command.id)
-      if (index < 0) throw new Error("Node not found")
-      if (command.type === "node.update") {
-        const patch = object(command.patch)
-        const allowed = [
-          "name",
-          "x",
-          "y",
-          "width",
-          "height",
-          "color",
-          "visible",
-          "toggleTarget",
-        ]
-        if (Object.keys(patch).some((key) => !allowed.includes(key)))
-          throw new Error("Unsupported node field")
-        next.nodes[index] = { ...next.nodes[index], ...patch }
-      } else if (command.type === "node.remove") {
-        next.nodes.splice(index, 1)
-        next.nodes = next.nodes.map((node) =>
-          node.toggleTarget === command.id
-            ? { ...node, toggleTarget: undefined }
-            : node
-        )
-      } else if (command.type === "node.reorder") {
-        if (command.direction !== "forward" && command.direction !== "backward")
-          throw new Error("Invalid layer direction")
-        const target = Math.max(
-          0,
-          Math.min(
-            next.nodes.length - 1,
-            index + (command.direction === "forward" ? 1 : -1)
-          )
-        )
-        const [node] = next.nodes.splice(index, 1)
-        next.nodes.splice(target, 0, node)
-      } else throw new Error("Unknown command")
+    const command = object(input, "command")
+    if (command.type === "scene.update") {
+      if (command.name !== undefined) next.name = string(command.name, "name")
+      continue
     }
+    if (command.type === "node.add") {
+      nodes.push(parseNode(command.node, nodes.length))
+      continue
+    }
+    const targetId = string(command.id, "command.id")
+    const index = nodes.findIndex((n) => n.id === targetId)
+    if (index < 0) throw new Error(`Node not found: ${targetId}`)
+    const node = nodes[index]
+    if (command.type === "node.update") {
+      if (command.transform !== undefined) {
+        const patch = object(command.transform, "transform")
+        for (const key of Object.keys(patch)) {
+          if (!TRANSFORM_KEYS.includes(key as keyof SceneTransform))
+            throw new Error(`transform.${key}: unknown field`)
+        }
+        node.transform = parseTransform(
+          { ...node.transform, ...patch },
+          "transform"
+        )
+      }
+      if (command.props !== undefined) {
+        const patch = object(command.props, "props")
+        for (const [key, value] of Object.entries(patch)) {
+          if (typeof value === "function")
+            throw new Error(`props.${key}: functions are not allowed`)
+          node.props[key] = structuredClone(value)
+        }
+      }
+    } else if (command.type === "node.remove") {
+      const doomed = new Set([targetId])
+      let grew = true
+      while (grew) {
+        grew = false
+        for (const n of nodes) {
+          if (!doomed.has(n.id) && doomed.has(n.parent)) {
+            doomed.add(n.id)
+            grew = true
+          }
+        }
+      }
+      next.document.nodes = nodes.filter((n) => !doomed.has(n.id))
+    } else if (command.type === "node.reorder") {
+      const zs = nodes.map((n) => n.transform.z)
+      if (command.direction === "forward")
+        node.transform.z = Math.max(...zs) + 1
+      else if (command.direction === "backward")
+        node.transform.z = Math.min(...zs) - 1
+      else throw new Error("direction: expected forward or backward")
+    } else throw new Error(`Unknown command: ${String(command.type)}`)
   }
-  return parseDocument(next)
+  return parseScene(next)
 }
 
 export function createNode(
-  kind: "rectangle" | "ellipse",
-  name: string
-): StudioNode {
+  type: "rect" | "text" | "sprite",
+  id: string
+): SceneNode {
+  const base = { id, parent: "root", type }
+  if (type === "text")
+    return {
+      ...base,
+      transform: { x: 90, y: 200, w: 900, h: 120, anchor: "top-left", z: 10 },
+      props: { text: id, size: 48, color: "#f2efe6", align: "left" },
+    }
+  if (type === "sprite")
+    return {
+      ...base,
+      transform: {
+        x: 540,
+        y: 960,
+        w: 120,
+        h: 180,
+        anchor: "bottom-center",
+        z: 20,
+      },
+      props: { asset: null, placeholder: "#ffb347", interactive: false },
+    }
   return {
-    id: crypto.randomUUID(),
-    name,
-    kind,
-    x: 360,
-    y: 210,
-    width: 180,
-    height: 120,
-    color: "#8b9cf7",
-    visible: true,
+    ...base,
+    transform: { x: 100, y: 100, w: 300, h: 200, anchor: "top-left", z: 1 },
+    props: { color: "#8b9cf7" },
   }
 }
 
-export function createDemoDocument(): StudioDocument {
+/** A new scene as the scaffold writes it, with the ids an engine expects. */
+export function createStarterScene(sceneId: string, name = sceneId): SceneFile {
   return {
-    schemaVersion: 1,
-    id: "first-scene",
-    name: "Signal lab",
-    width: 960,
-    height: 540,
-    background: "#161d2d",
-    assets: [],
-    nodes: [
-      {
-        id: "panel",
-        name: "Panel",
-        kind: "rectangle",
-        x: 190,
-        y: 100,
-        width: 580,
-        height: 340,
-        color: "#243149",
-        visible: true,
-      },
-      {
-        id: "signal",
-        name: "Signal",
-        kind: "ellipse",
-        x: 420,
-        y: 145,
-        width: 120,
-        height: 120,
-        color: "#c6f28b",
-        visible: true,
-      },
-      {
-        id: "switch",
-        name: "Switch · click in preview",
-        kind: "rectangle",
-        x: 365,
-        y: 320,
-        width: 230,
-        height: 64,
-        color: "#8b9cf7",
-        visible: true,
-        toggleTarget: "signal",
-      },
-    ],
+    schema: 1,
+    id: sceneId,
+    name,
+    document: {
+      container: { width: 1080, height: 1920 },
+      assets: [],
+      nodes: [
+        {
+          id: "bg",
+          parent: "root",
+          type: "rect",
+          transform: { x: 0, y: 0, w: 1080, h: 1920, anchor: "top-left", z: 0 },
+          props: { color: "#1b1b2f", interactive: false },
+        },
+        {
+          id: "title",
+          parent: "root",
+          type: "text",
+          transform: {
+            x: 90,
+            y: 200,
+            w: 900,
+            h: 160,
+            anchor: "top-left",
+            z: 10,
+          },
+          props: { text: name, size: 96, color: "#f2efe6", align: "center" },
+        },
+      ],
+    },
+    logic: { actions: {} },
   }
+}
+
+/**
+ * The first Studio prototype saved `{ format: "codeg-studio-project",
+ * document: { schemaVersion: 1, nodes: [...rectangle/ellipse/image] } }` with
+ * images under `content/blobs/`. Convert it so an old file still opens; the
+ * next save writes the current schema.
+ */
+export function fromLegacyProjectFile(input: unknown): SceneFile | null {
+  const raw = input as Record<string, unknown> | null
+  if (!raw || raw.format !== "codeg-studio-project") return null
+  const doc = object(raw.document, "document")
+  const legacyAssets = (Array.isArray(doc.assets) ? doc.assets : []) as Array<
+    Record<string, unknown>
+  >
+  const ext: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+  }
+  // Prototype images lived under content/blobs/, outside assets/. They are
+  // declared as missing so the engine draws placeholders; copy the file into
+  // assets/ and clear the flag to restore it.
+  const assets: SceneAsset[] = legacyAssets.map((a) => ({
+    id: String(a.id),
+    file: `legacy/${String(a.id)}.${ext[String(a.mime)] ?? "png"}`,
+    width: Number(a.width) || 1,
+    height: Number(a.height) || 1,
+    missing: true,
+  }))
+  const legacyNodes = (Array.isArray(doc.nodes) ? doc.nodes : []) as Array<
+    Record<string, unknown>
+  >
+  const actions: Record<string, unknown[]> = {}
+  const nodes: SceneNode[] = [
+    {
+      id: "background",
+      parent: "root",
+      type: "rect",
+      transform: {
+        x: 0,
+        y: 0,
+        w: Number(doc.width) || 960,
+        h: Number(doc.height) || 540,
+        anchor: "top-left",
+        z: -1,
+      },
+      props: {
+        color: typeof doc.background === "string" ? doc.background : "#161d2d",
+      },
+    },
+    ...legacyNodes.map((n, index): SceneNode => {
+      const props: Record<string, unknown> = { visible: n.visible !== false }
+      if (n.kind === "image") props.asset = n.assetId
+      else {
+        props.color = n.color
+        if (n.kind === "ellipse") props.shape = "ellipse"
+      }
+      if (typeof n.toggleTarget === "string" && n.toggleTarget) {
+        const action = `toggle_${String(n.id)}`
+        actions[action] = [{ op: "toggle", id: n.toggleTarget }]
+        props.interactive = true
+        props.onClick = action
+      }
+      return {
+        id: String(n.id),
+        parent: "root",
+        type: n.kind === "image" ? "sprite" : "rect",
+        transform: {
+          x: Number(n.x) || 0,
+          y: Number(n.y) || 0,
+          w: Number(n.width) || 1,
+          h: Number(n.height) || 1,
+          anchor: "top-left",
+          z: index,
+        },
+        props,
+      }
+    }),
+  ]
+  return parseScene({
+    schema: 1,
+    id: typeof doc.id === "string" ? doc.id : "main",
+    name: typeof doc.name === "string" ? doc.name : "main",
+    document: {
+      container: {
+        width: Number(doc.width) || 960,
+        height: Number(doc.height) || 540,
+      },
+      assets,
+      nodes,
+    },
+    logic: { actions },
+  })
 }

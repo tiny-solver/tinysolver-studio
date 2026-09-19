@@ -496,6 +496,10 @@ pub fn build_router(
             "/save_file_content",
             post(handlers::files::save_file_content),
         )
+        .route(
+            "/write_workspace_file_base64",
+            post(handlers::files::write_workspace_file_base64),
+        )
         .route("/save_file_copy", post(handlers::files::save_file_copy))
         .route(
             "/rename_file_tree_entry",
@@ -1235,6 +1239,39 @@ pub fn build_router(
             "/create_hyperframes_project",
             post(handlers::project_boot::create_hyperframes_project),
         )
+        // ─── Content projects ───
+        .route(
+            "/list_content_templates",
+            post(handlers::content_project::list_content_templates),
+        )
+        .route(
+            "/create_content_project",
+            post(handlers::content_project::create_content_project),
+        )
+        .route(
+            "/read_content_project",
+            post(handlers::content_project::read_content_project),
+        )
+        .route(
+            "/list_content_scenes",
+            post(handlers::content_project::list_content_scenes),
+        )
+        .route(
+            "/list_content_builds",
+            post(handlers::content_project::list_content_builds),
+        )
+        .route(
+            "/build_content_project",
+            post(handlers::content_project::build_content_project),
+        )
+        .route(
+            "/get_content_preview",
+            post(handlers::content_project::get_content_preview),
+        )
+        .route(
+            "/game_preview_fingerprint",
+            post(handlers::game_preview::game_preview_fingerprint),
+        )
         // ─── Web Server ───
         .route(
             "/get_web_server_status",
@@ -1777,7 +1814,12 @@ pub fn build_router(
         .route(
             "/office-watch-proxy/{port}/{*rest}",
             any(handlers::office_watch_proxy::proxy),
-        );
+        )
+        // Content project preview (the game iframe). Same reasoning as the
+        // office proxy: an iframe can't carry a Bearer header, so the
+        // per-folder id in the path is the capability. Must stay in this
+        // public router — under the Bearer layer the iframe gets a 401.
+        .merge(content_preview_routes());
 
     // Wrap every API request in an `http` span (method, path, request id) so a
     // single request's logs — including auth rejections — are correlatable in
@@ -1880,4 +1922,15 @@ async fn api_not_found(uri: axum::http::Uri) -> impl IntoResponse {
             "message": format!("API endpoint '{}' is not available in web mode", command),
         })),
     )
+}
+
+/// `content_preview::routes()` declares full `/api/content-preview/...`
+/// paths (the desktop loopback listener serves them un-nested). Under the
+/// `/api` nest, re-declare them without the prefix.
+fn content_preview_routes() -> Router {
+    use crate::content_preview::{handle, handle_root};
+    Router::new()
+        .route("/content-preview/{id}", get(handle_root))
+        .route("/content-preview/{id}/", get(handle_root))
+        .route("/content-preview/{id}/{*rest}", get(handle))
 }

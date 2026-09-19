@@ -1,8 +1,8 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import Link from "next/link"
 import {
+  Compass,
   FolderGit2,
   FolderOpenDot,
   GamepadDirectional,
@@ -33,6 +33,8 @@ import { useAutomationsView } from "@/contexts/automations-view-context"
 import { useTasksView } from "@/contexts/tasks-view-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useRemoteWorkspaceConnections } from "@/hooks/use-remote-workspace-connections"
+import { useActiveFolder } from "@/contexts/active-folder-context"
+import { useWorkspaceActions } from "@/contexts/workspace-context"
 import { openProjectBootWindow } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { openPetWindow } from "@/lib/pet/api"
@@ -77,6 +79,19 @@ export function QuickActionsDropdown() {
   const [folderDialogOpen, setFolderDialogOpen] = useState(false)
   const [cloneOpen, setCloneOpen] = useState(false)
   const [remoteManageOpen, setRemoteManageOpen] = useState(false)
+
+  // With a folder active, Studio opens as a pane beside the chat and saves
+  // into that folder's `outputs/game/content/`; with none, the standalone
+  // page with its browser-only draft.
+  const { activeFolder } = useActiveFolder()
+  const { openStudioPane } = useWorkspaceActions()
+  const handleStudio = useCallback(() => {
+    if (activeFolder) {
+      openStudioPane(activeFolder.id, activeFolder.path, tStudio("launch"))
+    } else {
+      window.location.assign("/studio")
+    }
+  }, [activeFolder, openStudioPane, tStudio])
 
   // Remote connections are only reachable on the desktop runtime (a web client
   // can't spawn another window bound to a different server), so the whole
@@ -149,11 +164,17 @@ export function QuickActionsDropdown() {
             <Rocket />
             {tFolderDropdown("projectBoot")}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleStudio}>
+            <LayoutTemplate />
+            {tStudio("launch")}
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/studio">
-              <LayoutTemplate />
-              {tStudio("launch")}
-            </Link>
+            {/* A generated static page (public/how-built.html), not a Next
+                route, so a plain anchor. */}
+            <a href="/how-built.html">
+              <Compass />
+              {tStudio("howBuilt")}
+            </a>
           </DropdownMenuItem>
           {desktop && (
             <DropdownMenuSub

@@ -9,6 +9,10 @@
   display: flex;
   flex-direction: column;
 }
+.studio-root.studio-embedded {
+  height: 100%;
+  min-height: 0;
+}
 .studio-root button,
 .studio-root a {
   transition: background 120ms ease;
@@ -512,4 +516,252 @@
   .studio-root a {
     transition: none;
   }
+}
+
+/* Embedded in the workspace's file pane: the pane can be far narrower than
+   the viewport, so lay out by container width, not by media queries. The
+   pane tab already names the editor, so the brand block goes. */
+.studio-root.studio-embedded {
+  container-type: inline-size;
+}
+.studio-embedded .studio-brand {
+  display: none;
+}
+.studio-embedded .studio-header {
+  padding: 8px 12px;
+  justify-content: flex-end;
+}
+.studio-embedded .studio-header-actions {
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.studio-embedded .studio-header-actions > * {
+  white-space: nowrap;
+}
+.studio-embedded .studio-context {
+  padding: 8px 12px;
+}
+@container (max-width: 1050px) {
+  .studio-embedded .studio-body {
+    grid-template-columns: 175px minmax(260px, 1fr) 210px;
+  }
+  .studio-embedded .studio-canvas-area {
+    padding: 16px;
+  }
+}
+@container (max-width: 760px) {
+  .studio-embedded .studio-context > span:first-child {
+    flex-wrap: wrap;
+  }
+  .studio-embedded .studio-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .studio-embedded .studio-sidebar {
+    border-right: 0;
+    order: 2;
+  }
+  .studio-embedded .studio-inspector {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    order: 3;
+  }
+  .studio-embedded .studio-canvas-panel {
+    order: 1;
+  }
+  .studio-embedded .studio-canvas-area {
+    min-height: 250px;
+    padding: 16px;
+  }
+  .studio-embedded .studio-canvas-caption {
+    flex-direction: column;
+  }
+  .studio-embedded .studio-local-note {
+    padding-top: 16px;
+  }
+}
+
+/* ── Stage: the game iframe with the edit overlay ─────────────────── */
+.studio-stage-area {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.studio-stage {
+  position: relative;
+  background: #0b0d14;
+  box-shadow: 0 12px 40px #00000040;
+  overflow: hidden;
+}
+.studio-stage-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+.studio-stage-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #9aa4c7;
+  font-size: 12px;
+}
+.studio-overlay {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: default;
+}
+.studio-overlay-node {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #ffffff55;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.studio-overlay-node:hover {
+  border-color: #ffffffaa;
+}
+.studio-overlay-node[data-hidden] {
+  border-style: dashed;
+  opacity: 0.55;
+}
+.studio-overlay-node[data-selected] {
+  border: 2px solid var(--studio-accent);
+  box-shadow: 0 0 0 1px #00000080;
+  cursor: grabbing;
+  z-index: 1;
+}
+.studio-overlay-node:focus-visible {
+  border-color: var(--studio-accent);
+}
+.studio-overlay-label {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  transform: translateY(-100%);
+  padding: 1px 5px;
+  background: #000000aa;
+  color: #fff;
+  font-size: 10px;
+  font-family: monospace;
+  white-space: nowrap;
+  display: none;
+}
+.studio-overlay-node:hover .studio-overlay-label,
+.studio-overlay-node[data-selected] .studio-overlay-label {
+  display: block;
+}
+.studio-root .studio-canvas-area {
+  padding: 16px;
+}
+.studio-blank {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 12px;
+}
+.studio-scene-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.studio-scene-pick select {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+  max-width: 180px;
+}
+.studio-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 22px;
+  background: var(--muted);
+  font-size: 12px;
+}
+.studio-builds {
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.studio-builds > p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin: 8px 0 0;
+}
+.studio-build-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.studio-build-row > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.studio-build-row > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.studio-build-row code {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-root .studio-build-row button {
+  padding: 3px 7px;
+  font-size: 10px;
+}
+.studio-empty-assets button {
+  margin-top: 10px;
+}
+.studio-inspector textarea {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px;
+  width: 100%;
+  color: var(--foreground);
+  background: var(--background);
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+.studio-inspector details {
+  margin-bottom: 12px;
+}
+.studio-inspector details summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-bottom: 8px;
+}
+.studio-inspector details textarea {
+  font-family: monospace;
+  font-size: 11px;
+  margin-bottom: 8px;
 }

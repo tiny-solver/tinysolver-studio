@@ -2,23 +2,23 @@
   "title": "Content Studio",
   "subtitle": "재료를 만들고, 가공하고, 바로 확인하는 웹 제작 작업공간",
   "updated": "2026-09-19",
-  "version": "0.1 · first slice",
-  "goal": "공통 기반 + 제작 도구 하나 + 렌더러를 연결해 실제 편집 흐름을 검증한다.",
+  "version": "0.2 · one file, one loop",
+  "goal": "대화로 게임을 고치고, 편집기와 미리보기에서 바로 보고, 빌드 버튼으로 배포 산출물을 만든다.",
   "firstSlice": [
     {
-      "label": "공통 기반",
-      "title": "에셋 · 문서 · 명령",
-      "description": "이미지 Blob과 편집 문서를 분리하고, 사용자와 에이전트용 명령에 같은 검증을 적용한다."
+      "label": "문서",
+      "title": "엔진과 편집기가 같은 파일",
+      "description": "outputs/game/content/<scene>.studio.json 하나. 편집기는 아는 필드만 검증하고 나머지는 보존한다."
     },
     {
-      "label": "첫 도구",
-      "title": "2D 장면 배치",
-      "description": "이미지·도형의 위치, 크기, 순서, 색상과 클릭 동작을 편집한다."
+      "label": "미리보기",
+      "title": "게임 iframe + 오버레이",
+      "description": "백엔드가 프로젝트 폴더를 서빙하고, 편집기는 그 위에 드래그 오버레이를 얹는다. 별도 렌더러가 없다."
     },
     {
-      "label": "렌더링",
-      "title": "Three.js + R3F",
-      "description": "같은 문서를 편집 화면과 실행 미리보기에서 렌더링한다. 변경 즉시 반영한다."
+      "label": "배포",
+      "title": "빌드 버튼",
+      "description": "outputs/game + assets를 build/game/<version>/과 zip으로 묶는다."
     }
   ],
   "phases": [
@@ -31,9 +31,9 @@
     },
     {
       "id": "S1",
-      "title": "공통 저장과 교환",
+      "title": "공통 저장과 교환 (대체됨)",
       "status": "done",
-      "detail": "SHA-256 이미지 식별, IndexedDB 원자적 저장, 다른 탭의 덮어쓰기 감지, 이미지 포함 번들 가져오기·내보내기.",
+      "detail": "IndexedDB 초안·번들 교환은 프로젝트 폴더 저장으로 대체되어 제거됐다. 남은 것은 etag 저장과 실행 취소.",
       "acceptance": "새로고침과 번들 재가져오기 후 장면과 이미지가 유지된다."
     },
     {
@@ -45,9 +45,9 @@
     },
     {
       "id": "S3",
-      "title": "렌더링과 상호작용",
+      "title": "렌더링과 상호작용 (대체됨)",
       "status": "done",
-      "detail": "Three.js 정사영 장면, 이미지 텍스처, 클릭 시 대상 표시 전환, 편집/실행 상태 분리.",
+      "detail": "R3F 렌더러는 제거됐다. 미리보기는 게임 자체(iframe)이며 편집 상태와 실행 상태는 엔진의 codeg:scene 핫 적용과 다시 불러오기로 구분한다.",
       "acceptance": "빌드 없이 변경이 보이며, 미리보기 동작이 저장된 원본을 바꾸지 않는다."
     },
     {
@@ -66,17 +66,17 @@
     },
     {
       "id": "S4c",
-      "title": "새 게임과 동적 제작 도구",
-      "status": "planned",
-      "detail": "새 게임에서 템플릿을 독립 폴더로 복제하고 기존 에이전트 작업공간에 연결한다. 필요한 도구를 호출해 산출물을 게임 문서에 적용한다.",
-      "acceptance": "템플릿 복제 → AI 제작 → 도구 호출 → 결과 적용 → 미리보기 흐름을 실제 프로젝트로 검증한다."
+      "title": "새 프로젝트와 폴더 계약",
+      "status": "done",
+      "detail": "콘텐츠 프로젝트 매니페스트와 레이어, AGENTS.md 스캐폴드, Project Boot 콘텐츠 탭, 창작 스튜디오 탭. 결과물 game·webtoon·instatoon·novel·video, 템플릿 story/web-three.",
+      "acceptance": "템플릿 생성 → 작업공간 열기 → 창작 탭에서 프로젝트 인식 → 프롬프트로 bible·결과물 작성 → 게임 미리보기 흐름. 스캐폴드와 매니페스트 읽기는 Rust 테스트 6개로 검증."
     },
     {
       "id": "S5",
-      "title": "서버 저장과 에이전트 연결",
-      "status": "planned",
-      "detail": "워크스페이스별 Blob 저장, 영속 버전, 파일 감지, MCP 명령 연결, 다중 사용자 충돌 처리.",
-      "acceptance": "에이전트의 변경을 사용자가 즉시 확인하고 같은 이력에서 되돌릴 수 있다."
+      "title": "한 파일 · 한 루프: 편집기 ↔ 엔진 ↔ 에이전트 ↔ 빌드",
+      "status": "active",
+      "detail": "장면 스키마를 엔진의 것으로 통일(sprite/rect/text, transform, props, logic 보존). content_preview.rs가 프로젝트 폴더를 서빙하고 편집기는 iframe 위 오버레이로 드래그한다. 엔진 계약: ?scene=, codeg:ready(hot), codeg:scene. 작업공간 감시 스트림으로 에이전트 편집을 즉시 반영. build_content_project가 build/game/<version>/과 zip을 만든다. 남은 것: MCP 도구 노출, 에셋 업로드.",
+      "acceptance": "드래그 → 즉시 반영 → 자동 저장 → 에이전트가 파일 수정 → 편집기·iframe 갱신 → 빌드 버튼 → 버전 폴더와 zip. 브라우저(codeg-server)에서 실제로 확인."
     },
     {
       "id": "S6",
@@ -87,13 +87,14 @@
     }
   ],
   "boundaries": [
-    "이번 저장 범위는 이 브라우저·origin의 초안 하나다. 서버·폴더별 저장과 공동 편집은 아직 없다.",
-    "실행 취소 이력은 현재 세션의 최대 50단계다. 영속 에셋 버전·공정 이력은 후속 단계다.",
-    "에이전트는 번들과 명령 JSON을 편집할 수 있다. 실시간 MCP 도구 노출은 아직 없다.",
-    "미리보기는 실제 Three.js 렌더링이다. 독립 배포용 콘텐츠 플레이어 내보내기는 후속 단계다.",
-    "이미지당 10 MB, 장면 이미지 합계 20 MB, 객체 200개로 첫 검증 범위를 제한한다.",
-    "UI는 한국어와 영어를 제공한다. 다른 앱 언어에서는 이번 기능만 영어로 표시한다.",
-    "새 게임 템플릿 복제·AI 자동 제작·동적 도구 호출은 아직 구현 전이다."
+    "편집기는 프로젝트 폴더가 있어야 한다. ?path 없는 /studio는 안내만 보여 준다. 브라우저 초안·번들 내보내기는 제거됐다.",
+    "실행 취소 이력은 현재 세션의 최대 50단계다. 파일 이력은 git이다.",
+    "에이전트는 장면 파일을 직접 쓴다. 실시간 MCP 도구 노출은 아직 없다.",
+    "편집기가 편집하는 필드는 transform·visible·asset·text·size·color·interactive·onClick이다. 나머지 props와 logic은 보존만 한다.",
+    "미리보기는 게임 자체다. 엔진이 codeg:ready(hot:true)를 보내지 않으면 저장 뒤 iframe을 다시 불러온다.",
+    "빌드는 outputs/game과 assets를 복사·압축하는 것이다. 호스팅에 올리는 단계는 없다. engine.build가 있으면 먼저 실행한다.",
+    "이미지 업로드 UI가 없다. 에셋은 assets/에 두고 장면 파일에 선언한다.",
+    "UI는 10개 언어 문자열이 있다. ko·en 외는 기계적 번역 수준이다."
   ],
   "decisions": [
     {
@@ -115,6 +116,21 @@
       "id": "D04",
       "decision": "편집 문서와 런타임 객체 분리",
       "reason": "렌더러 교체, 에이전트 편집, 데이터 검증, 실행 취소의 기준을 문서와 명령으로 유지한다."
+    },
+    {
+      "id": "D05",
+      "decision": "게임 전용이 아니라 세계관 정본에서 여러 결과물을 만드는 콘텐츠 프로젝트",
+      "reason": "웹툰·인스타툰·소설·영상 스토리보드가 같은 캐릭터와 설정을 공유해야 하며, 어떤 에이전트 CLI든 같은 폴더 규칙(AGENTS.md)을 읽게 하는 것이 다중 에이전트 협업의 최소 조건이다."
+    },
+    {
+      "id": "D06",
+      "decision": "편집기 문서 = 엔진 장면 파일, 미리보기 = 게임 iframe",
+      "reason": "두 포맷과 두 렌더러가 있으면 대화로 고친 게임이 편집기에 보이지 않는다. 에이전트가 자연스럽게 쓴 스키마를 정본으로 삼고 편집기가 거기 맞춘다."
+    },
+    {
+      "id": "D07",
+      "decision": "백엔드가 프로젝트 폴더를 HTTP로 서빙",
+      "reason": "module script·importmap·상대 fetch는 진짜 HTTP가 필요하다. 사용자가 npx serve를 띄우게 하지 않는다. iframe은 헤더를 못 실으므로 폴더 id가 자격이다."
     }
   ],
   "checks": [
@@ -128,7 +144,16 @@
     "2026-09-19 · macOS arm64 릴리스 앱 빌드·실행 완료. 이름 codeg-gameeditor, 식별자 app.codeg.gameeditor. 브라우저 회귀 검증 3개 재통과. 네이티브 창의 시각 검수는 자동화 환경 제약으로 미확인.",
     "2026-09-19 · 데스크톱 실사용에서 Monaco 리소스 누락 확인. 빌드 전 복사 단계 추가. Studio WebView 렌더 오류 진단 및 재검증 진행 중.",
     "2026-09-19 · 기존 Codeg와 동시 실행 격리 적용. 홈 디렉터리 ~/.codeg-studio, 키체인 서비스 codeg-studio, 웹 서비스 기본 포트 3081, 개발 서버 3100. 구분되는 이름은 src-tauri/src/brand.rs에 모았다. cargo test 3,961개 통과, clippy 3종(desktop·server·mcp) 통과, pnpm lint·pnpm build 통과. Vitest 456개 파일 / 6,632개 테스트 통과(Node 26에서 --no-experimental-webstorage 사용). 알림 테스트가 브랜드 문자열을 하드코딩하고 있어 함께 갱신했다. 두 앱을 실제로 동시에 띄워 본 검수는 하지 않았다.",
-    "2026-09-19 · 이름·아이콘 변경 후 macOS arm64 릴리스 앱 재빌드 성공. 산출물 Codeg Studio.app, CFBundleName Codeg Studio, 식별자 app.codeg.gameeditor. Dock 아이콘 아트워크 교체와 824/1024 세이프에어리어 유지를 번들의 icon.icns에서 확인했다. 이번에는 앱을 실행해 보지 않았다."
+    "2026-09-19 · 이름·아이콘 변경 후 macOS arm64 릴리스 앱 재빌드 성공. 산출물 Codeg Studio.app, CFBundleName Codeg Studio, 식별자 app.codeg.gameeditor. Dock 아이콘 아트워크 교체와 824/1024 세이프에어리어 유지를 번들의 icon.icns에서 확인했다. 이번에는 앱을 실행해 보지 않았다.",
+    "2026-09-19 · 콘텐츠 프로젝트 스캐폴드·매니페스트 읽기 Rust 테스트 6개 통과(cargo test --features test-utils content_project). i18n 키 패리티·ICU 테스트 10개 로케일 통과. 창작 탭·콘텐츠 런처는 정적 검사만 했고 실제 창을 띄워 본 검수는 하지 않았다.",
+    "2026-09-19 · Studio 프로젝트 저장: write_workspace_file_base64 Rust 테스트(생성·부모 디렉터리·etag 충돌·경로 제한) 통과, project-storage Vitest 통과. ",
+    "2026-09-19 · how-built.html(어떻게 만들었나) 생성기 추가. Chrome에서 층 클릭·흐름 스텝퍼(버튼·방향키)·탭·해시 동작 확인, 콘솔 오류 없음. 편집기 헤더와 빠른 작업 메뉴에 버튼.",
+    "2026-09-19 · 실제 실행 검증: pnpm build 정적 export + codeg-server(debug) 기동 후 Chrome으로 API 프로젝트 생성 → /studio?path= 열기 → 자동 저장으로 outputs/game/content/main.studio.json 생성 → 디스크 편집 후 포커스 재로드 → 로컬 편집 중 디스크 변경 시 자동 저장 중지·다시 불러오기까지 통과. 이 과정에서 충돌 배너가 [object Object]로 나오던 버그를 잡아 toErrorMessage로 고쳤다. 데스크톱(Tauri) 번들은 이번에 빌드하지 않았다.",
+    "2026-09-19 · Studio를 작업공간 파일 창의 탭 종류(studio:<folderId>)로 추가. 창작 탭 \"Studio 열기\"와 빠른 작업 메뉴가 전체 페이지 이동 대신 대화 옆 파인을 연다. 개발 서버에서 Chrome으로 파인 열림·프로젝트 저장 상태·컨테이너 쿼리 레이아웃 확인, 콘솔 오류 없음. file-tab-id·workspace-context·files 테스트 152개 통과.",
+    "2026-09-19 · 우측 파인에 게임 뷰(실제 outputs/game 실행, content-preview 서빙, 디렉터리 fingerprint 폴링으로 자동 재로드)와 장면 편집 토글 추가. 개발 서버(Next 3100 + codeg-server 3081)에서 Chrome으로 my-story의 탑다운 방 장면이 파인 안 iframe에 렌더링되는 것을 확인, 콘솔 오류 없음. 서버 모드에서 content-preview 라우트가 인증 라우터 아래에 있어 401이 나던 문제는 동시 작업 중이던 다른 세션이 public_api로 옮겨 해결.",
+    "2026-09-19 · 장면 스키마 통일·iframe 오버레이·감시·빌드: Vitest src/lib/studio 15개·i18n 20개 통과, cargo test content_ (스캐폴드·장면 목록·빌드 패키징·미리보기 경로 제한) 통과, tsc·eslint 통과. Three.js/R3F 의존성 제거.",
+    "2026-09-19 · 실제 루프 검증(codeg-server 3082 + 정적 export + Chrome): 새 web-three 프로젝트에서 iframe 게임 렌더 → 오버레이 드래그 → 자동 저장(파일 x 변경 확인) → 디스크에서 name 수정 → 편집기 자동 반영 → 빌드 버튼 → build/game/v1-…/ + zip. my-story(01-room, hot:false 엔진)에서도 드래그·저장·logic/grid 보존·디스크 복원 반영·미리보기 통과, 콘솔 오류 없음. tests/studio/project.spec.ts로 재현 가능. 전체 lint·tsc·Vitest 6,631·clippy 3종·pnpm build 통과.",
+    "2026-09-19 · 동시 세션 정리 후 재검증: tests/studio/project.spec.ts의 Array.at(-1)이 tsconfig lib ES2020과 충돌해 tsc가 실패하던 것을 인덱스 접근으로 고쳤다. 두 세션이 cargo를 동시에 돌려 src-tauri/target/debug가 34GB(incremental 11GB + codeg 자체 산출물 15GB)로 커져 디스크가 가득 찼고, 그 산출물만 지워 26GB를 확보했다. 이후 tsc·eslint·pnpm build·Vitest 456/6,631·cargo check 3종·clippy 3종·cargo test content_ 통과. 정적 export + codeg-server(3082)로 새 web-three 프로젝트를 API로 만들고 Playwright 루프(드래그→자동 저장→디스크 편집→재로드→빌드 v1 + zip) 통과."
   ],
   "maintenance": "기능 변경 시 roadmap.json의 상태·완료 기준·검증 결과를 갱신하고 pnpm studio:plan을 실행한다. HTML을 직접 수정하지 않는다.",
   "sources": [

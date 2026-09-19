@@ -28,6 +28,12 @@ import {
 } from "@/contexts/workspace-context"
 import { ImagePreview } from "@/components/files/image-preview"
 import { HtmlPreview } from "@/components/files/html-preview"
+
+// Content Studio pulls in Three.js; load it only when a studio tab is shown.
+const StudioPane = dynamic(
+  () => import("@/components/studio/studio-pane").then((m) => m.StudioPane),
+  { ssr: false }
+)
 import { MarkdownDocumentPreview } from "@/components/files/markdown-document-preview"
 import { OfficePreview } from "@/components/files/office-preview"
 import { isHtmlPreviewable, isOfficePreviewable } from "@/lib/language-detect"
@@ -1707,6 +1713,14 @@ export function FileWorkspacePanel() {
         <FileCode2 className="h-8 w-8 text-muted-foreground/60 mb-3" />
         <p className="text-sm text-muted-foreground">{t("openFileOrDiff")}</p>
       </div>
+    )
+  }
+
+  // Content Studio pane: the tab's path is the project root. Shows the
+  // running game (served from the folder) or the scene editor.
+  if (activeFileTab.kind === "studio" && activeFileTab.path) {
+    return (
+      <StudioPane key={activeFileTab.id} projectRoot={activeFileTab.path} />
     )
   }
 

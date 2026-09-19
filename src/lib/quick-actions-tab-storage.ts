@@ -3,7 +3,20 @@
 const QUICK_ACTIONS_TAB_KEY = "workspace:quick-actions-tab"
 
 /** Which skill group the welcome-page quick actions show. */
-export type QuickActionsTab = "office" | "coding" | "research"
+export type QuickActionsTab = "office" | "coding" | "research" | "creative"
+
+const TABS: readonly QuickActionsTab[] = [
+  "office",
+  "coding",
+  "research",
+  "creative",
+]
+
+export function isQuickActionsTab(value: unknown): value is QuickActionsTab {
+  return (
+    typeof value === "string" && (TABS as readonly string[]).includes(value)
+  )
+}
 
 /**
  * Last-picked quick-actions tab, restored when a new conversation opens.
@@ -14,7 +27,7 @@ export function loadQuickActionsTab(): QuickActionsTab {
   if (typeof window === "undefined") return "coding"
   try {
     const raw = localStorage.getItem(QUICK_ACTIONS_TAB_KEY)
-    if (raw === "office" || raw === "coding" || raw === "research") return raw
+    if (isQuickActionsTab(raw)) return raw
   } catch {
     /* ignore */
   }

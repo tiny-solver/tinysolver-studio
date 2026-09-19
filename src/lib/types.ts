@@ -3856,6 +3856,83 @@ export interface HyperframesSkillAgent {
   installed: boolean
 }
 
+/** Output forms a content project can target (`outputs/<kind>/`). */
+export type ContentOutputKind =
+  | "game"
+  | "webtoon"
+  | "instatoon"
+  | "novel"
+  | "video"
+
+export const CONTENT_OUTPUT_KINDS: ContentOutputKind[] = [
+  "game",
+  "webtoon",
+  "instatoon",
+  "novel",
+  "video",
+]
+
+/** Runtime the `game` output runs on; mirrors `EngineInfo` in Rust. */
+export interface ContentEngineInfo {
+  id: string
+  version: string
+  entry: string
+  start: string
+  /** Optional shell command run from the project root before packaging. */
+  build?: string | null
+}
+
+/** One `<scene>.studio.json` of the game output. */
+export interface ContentScene {
+  id: string
+  name: string
+  /** Project-relative path. */
+  path: string
+}
+
+/** A packaged build under `<build>/game/<version>/`. */
+export interface ContentBuild {
+  version: string
+  built_at: string
+  engine: string
+  engine_version: string
+  entry: string
+  dir: string
+  zip?: string | null
+  size_bytes: number
+  log: string
+}
+
+/** Where the game iframe loads from; see `content_preview.rs`. */
+export interface ContentPreviewInfo {
+  id: string
+  /** `/api/content-preview/<id>/` on the API origin. */
+  path: string
+  /** Desktop only: loopback origin the webview loads directly. */
+  loopback?: string
+}
+
+/** A project template offered by the content launcher. */
+export interface ContentTemplate {
+  id: string
+  /** i18n key suffix under `ProjectBoot.content.templates`. */
+  label_key: string
+  default_outputs: ContentOutputKind[]
+  engine: ContentEngineInfo | null
+}
+
+/** The `codeg-project.json` at a content project's root. */
+export interface ContentProjectManifest {
+  schema: number
+  name: string
+  created_at: string
+  template: string
+  outputs: ContentOutputKind[]
+  engine?: ContentEngineInfo | null
+  paths: { bible: string; assets: string; outputs: string; build: string }
+  agents: Record<string, string | null>
+}
+
 export interface GitSettings {
   custom_path: string | null
 }

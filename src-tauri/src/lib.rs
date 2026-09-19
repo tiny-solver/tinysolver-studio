@@ -21,6 +21,7 @@ pub mod backgrounds;
 pub mod brand;
 pub mod chat_channel;
 pub mod commands;
+pub mod content_preview;
 pub mod db;
 pub mod deep_link;
 pub mod folder_links;
@@ -91,6 +92,7 @@ mod tauri_app {
         folder_links, office_tools as office_tools_commands, open_in,
         folders, logging as logging_commands, mcp as mcp_commands,
         model_provider as model_provider_commands, notification, pet as pet_commands, project_boot,
+        content_project, game_preview,
         question as question_commands, quick_messages as quick_messages_commands,
         remote_proxy as remote_proxy_commands,
         remote_workspace as remote_workspace_commands, science as science_commands,
@@ -1543,6 +1545,7 @@ mod tauri_app {
                 folders::read_file_preview,
                 folders::read_file_for_edit,
                 folders::save_file_content,
+                folders::write_workspace_file_base64,
                 folders::save_file_copy,
                 folders::rename_file_tree_entry,
                 folders::move_file_tree_entry,
@@ -1624,6 +1627,14 @@ mod tauri_app {
                 project_boot::detect_hyperframes_skills,
                 project_boot::install_hyperframes_skills,
                 project_boot::create_hyperframes_project,
+                content_project::list_content_templates,
+                content_project::create_content_project,
+                content_project::read_content_project,
+                content_project::list_content_scenes,
+                content_project::list_content_builds,
+                content_project::build_content_project,
+                content_project::get_content_preview,
+                game_preview::game_preview_fingerprint,
                 system_settings::get_system_proxy_settings,
                 system_settings::update_system_proxy_settings,
                 system_settings::get_system_language_settings,

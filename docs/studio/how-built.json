@@ -1,0 +1,204 @@
+{
+  "title": "Codeg Studio는 이렇게 만들었다",
+  "updated": "2026-09-19",
+  "conclusion": "업스트림 codeg(멀티 에이전트 코딩 워크벤치)를 포크해 그 위에 다섯 층을 얹었다. 격리된 데스크톱 브랜드, 세계관 정본에서 여러 결과물을 만드는 콘텐츠 프로젝트 폴더 계약, 그 흐름을 시작 화면에 노출하는 창작 탭, 엔진과 편집기가 같은 장면 파일을 쓰는 계약, 그리고 게임을 그대로 띄우는 미리보기와 빌드. 업스트림 코드는 건드리지 않고 옆에 붙였기 때문에 codeg와 동시에 실행되고 업스트림 갱신을 계속 받을 수 있다.",
+  "numbers": [
+    {
+      "value": "5",
+      "label": "codeg 위에 얹은 층"
+    },
+    {
+      "value": "12",
+      "label": "추가한 백엔드 명령"
+    },
+    {
+      "value": "1",
+      "label": "장면 포맷 (엔진 = 편집기 = 에이전트)"
+    },
+    {
+      "value": "0",
+      "label": "수정한 업스트림 동작 (브랜드 상수 제외)"
+    }
+  ],
+  "layers": [
+    {
+      "id": "upstream",
+      "name": "codeg 업스트림",
+      "role": "기반",
+      "summary": "Tauri 2 데스크톱 + Axum 서버 이중 모드. Claude Code·Codex·Gemini CLI 등 에이전트 세션을 한 작업공간에 모으고, 폴더·대화·터미널·MCP 위임을 제공한다.",
+      "why": "에이전트 오케스트레이션, 파일 API, 창 관리, 국제화를 새로 만들 이유가 없다. 포크는 이 위에 얹기만 한다.",
+      "files": [
+        "src-tauri/src/app_state.rs",
+        "src-tauri/src/web/router.rs",
+        "src/components/conversations/conversation-detail-panel.tsx"
+      ],
+      "adds": []
+    },
+    {
+      "id": "brand",
+      "name": "격리된 브랜드",
+      "role": "1층",
+      "summary": "이름·아이콘·홈 디렉터리(~/.codeg-studio)·키체인·포트(3081/3100)·번들 식별자(app.codeg.gameeditor)를 분리했다. 구분되는 이름은 brand.rs 한 곳에 모았다.",
+      "why": "codeg와 나란히 켜도 로그·설정·토큰이 섞이지 않아야 한다. 무엇을 일부러 공유하는지(npm-global)도 같은 파일에 적었다.",
+      "files": [
+        "src-tauri/src/brand.rs",
+        "src-tauri/tauri.conf.json",
+        "public/icon.svg"
+      ],
+      "adds": [
+        "커밋 89df4945"
+      ]
+    },
+    {
+      "id": "studio",
+      "name": "장면 편집기",
+      "role": "2층",
+      "summary": "엔진이 읽는 장면 파일을 그대로 편집한다. 미리보기는 게임 iframe이고 그 위에 드래그 오버레이를 얹는다. 편집은 codeg:scene 메시지로 즉시 반영되고, 파일 변경은 감시 스트림으로 되돌아온다.",
+      "why": "포맷이 둘이면 대화로 고친 게임이 편집기에 안 보인다. 렌더러가 둘이면 편집기와 게임이 다르게 보인다. 하나로 줄였다.",
+      "files": [
+        "src/lib/studio/document.ts",
+        "src/lib/studio/project-storage.ts",
+        "src/components/studio/studio-stage.tsx",
+        "src/components/studio/studio-workspace.tsx"
+      ],
+      "adds": [
+        "list_content_scenes",
+        "codeg:ready / codeg:scene 엔진 계약"
+      ]
+    },
+    {
+      "id": "project",
+      "name": "콘텐츠 프로젝트 폴더 계약",
+      "role": "3층",
+      "summary": "codeg-project.json 매니페스트 + bible/assets/outputs/build 레이어 + 생성된 AGENTS.md·CLAUDE.md. 게임·웹툰·인스타툰·소설·영상이 같은 세계관을 공유한다.",
+      "why": "여러 에이전트 CLI가 같은 폴더를 다루려면 규칙이 코드가 아니라 폴더 안 문서로 있어야 한다. Studio 장면도 outputs/game/content/에 저장되어 git과 에이전트가 같은 파일을 본다.",
+      "files": [
+        "src-tauri/src/commands/content_project.rs",
+        "docs/studio/project-layout.md"
+      ],
+      "adds": [
+        "list_content_templates",
+        "create_content_project",
+        "read_content_project"
+      ]
+    },
+    {
+      "id": "entry",
+      "name": "진입점: 창작 탭과 콘텐츠 런처",
+      "role": "4층",
+      "summary": "시작 화면 '오늘은 무엇을 해볼까요'에 창작 스튜디오 탭, Project Boot 창에 콘텐츠 탭. 타일은 스킬 잠금 없이 어떤 에이전트에서도 같은 프롬프트를 넣는다.",
+      "why": "폴더 규칙을 만들어도 시작 화면에서 보이지 않으면 쓰이지 않는다. 프롬프트는 먼저 AGENTS.md와 bible을 읽도록 강제한다.",
+      "files": [
+        "src/lib/content-actions.ts",
+        "src/components/chat/quick-actions.tsx",
+        "src/components/project-boot/content/content-launcher.tsx"
+      ],
+      "adds": [
+        "10개 언어 문자열 (ko·en 번역, 나머지는 영어)"
+      ]
+    },
+    {
+      "id": "loop",
+      "name": "미리보기 서빙과 빌드",
+      "role": "5층",
+      "summary": "content_preview.rs가 프로젝트 폴더를 HTTP로 서빙한다(공개 라우트 + 데스크톱 루프백, 폴더 id가 자격). build_content_project가 outputs/game과 assets를 build/game/<version>/과 zip으로 묶는다.",
+      "why": "module script와 importmap은 진짜 HTTP가 필요하고, 배포는 버튼 하나여야 한다.",
+      "files": [
+        "src-tauri/src/content_preview.rs",
+        "src-tauri/src/commands/content_project.rs",
+        "src-tauri/src/commands/content_project_three_main.js"
+      ],
+      "adds": [
+        "get_content_preview",
+        "build_content_project",
+        "list_content_builds"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "title": "시작 화면",
+      "detail": "창작 스튜디오 탭 → 새 콘텐츠 프로젝트",
+      "layer": "entry"
+    },
+    {
+      "title": "Project Boot",
+      "detail": "이름·위치·템플릿(story / web-three)·결과물 선택",
+      "layer": "entry"
+    },
+    {
+      "title": "스캐폴드",
+      "detail": "create_content_project가 매니페스트·bible·assets·outputs·AGENTS.md를 쓰고 git init",
+      "layer": "project"
+    },
+    {
+      "title": "작업공간 열기",
+      "detail": "open_folder_in_workspace로 폴더가 사이드바에 등록되고 대화가 시작된다",
+      "layer": "upstream"
+    },
+    {
+      "title": "에이전트 작업",
+      "detail": "어떤 CLI든 AGENTS.md를 읽고 bible → outputs/<kind>/ 순으로 쓴다",
+      "layer": "project"
+    },
+    {
+      "title": "편집기",
+      "detail": "게임 iframe 위에서 드래그 → codeg:scene 즉시 반영 → outputs/game/content/<scene>.studio.json 자동 저장",
+      "layer": "studio"
+    },
+    {
+      "title": "에이전트 편집",
+      "detail": "파일을 고치면 감시 스트림이 편집기와 iframe을 다시 읽는다",
+      "layer": "loop"
+    },
+    {
+      "title": "빌드",
+      "detail": "빌드 버튼 → build/game/v<N>-<날짜>/ + zip",
+      "layer": "loop"
+    }
+  ],
+  "timeline": [
+    {
+      "date": "2026-09-19",
+      "ref": "385eb4f3",
+      "title": "업스트림 codeg 기준점",
+      "detail": "포크 시점의 마지막 업스트림 머지. 이 아래는 전부 업스트림 히스토리(2,700여 커밋)."
+    },
+    {
+      "date": "2026-09-19",
+      "ref": "1040a6bd",
+      "title": "콘텐츠 스튜디오 프로토타입",
+      "detail": "문서·명령·IndexedDB 저장·Three.js 미리보기, 로드맵 JSON과 시각 계획 생성기."
+    },
+    {
+      "date": "2026-09-19",
+      "ref": "89df4945",
+      "title": "Codeg Studio로 리브랜딩·격리",
+      "detail": "홈 디렉터리·키체인·포트·아이콘 분리. 자격 증명 헬퍼가 업스트림 DB를 읽던 버그 수정."
+    },
+    {
+      "date": "2026-09-19",
+      "ref": "작업 트리",
+      "title": "콘텐츠 프로젝트 폴더 계약",
+      "detail": "매니페스트·레이어·AGENTS.md 스캐폴드, 창작 탭, 콘텐츠 런처. Rust 테스트 6개."
+    },
+    {
+      "date": "2026-09-19",
+      "ref": "작업 트리",
+      "title": "Studio 저장을 프로젝트 폴더로",
+      "detail": "main.studio.json + blobs/, etag 충돌 감지, 포커스 시 재로드. 이 문서와 버튼도 함께."
+    },
+    {
+      "date": "2026-09-19",
+      "ref": "작업 트리",
+      "title": "한 파일 · 한 루프",
+      "detail": "장면 스키마를 엔진의 것으로 통일, R3F 제거, iframe 오버레이 편집, 폴더 서빙, 감시, 빌드 버튼."
+    }
+  ],
+  "next": [
+    "에이전트 MCP 도구로 장면 명령 노출",
+    "편집기에서 이미지 업로드 → assets/ 등록",
+    "빌드 zip 호스팅 연동",
+    "매니페스트 agents 역할을 실제 에이전트 선택에 반영"
+  ]
+}
