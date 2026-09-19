@@ -110,9 +110,8 @@ export function AskQuestionCard({
 
   // Panel-presence state (live card only): shrink the card to its header row
   // so a long set stops squeezing the message list, while the question stays
-  // pending and visible. Intentionally survives a question-set swap — the
-  // user's chosen layout must not reset just because a new set renders into
-  // this instance.
+  // pending and visible. Reset alongside the rest whenever a different set
+  // renders into this instance — see the swap guard below.
   const [collapsed, setCollapsed] = useState(false)
 
   // How many questions are answered — drives the progress bar, the counter, and
@@ -139,6 +138,12 @@ export function AskQuestionCard({
     setActiveId(questions[0]?.id ?? "")
     setSubmitting(false)
     setError(false)
+    // Collapsed too, and this one is not housekeeping. A replacement set is a
+    // NEW blocking request; left collapsed it renders as the same header row
+    // the user already dismissed from view — identical title, and an
+    // identically-sized set even shows the same counter — so they can miss it
+    // entirely and leave the agent stalled.
+    setCollapsed(false)
     // `inFlight` is intentionally not reset here — refs must not be written
     // during render. `run` clears it whenever the round-trip resolves (both the
     // success and failure paths), so it is already idle by the time a replacement

@@ -597,6 +597,26 @@ describe("AskQuestionCard collapse", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("re-opens when a different question set renders into the same card", () => {
+    const { rerender } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AskQuestionCard question={single} onAnswer={vi.fn()} />
+      </NextIntlClientProvider>
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }))
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument()
+    // A replacement set is a NEW blocking request. Left collapsed it renders
+    // as the same header row the user already put away, so they would never
+    // see it and the agent would sit stalled.
+    rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AskQuestionCard question={multi} onAnswer={vi.fn()} />
+      </NextIntlClientProvider>
+    )
+    expect(screen.getByRole("checkbox", { name: "auth" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Collapse" })).toBeInTheDocument()
+  })
+
   it("re-opens itself when an answer collapsed mid-flight comes back failed", async () => {
     const onAnswer = vi.fn().mockRejectedValueOnce(new Error("boom"))
     renderWith(single, onAnswer)
