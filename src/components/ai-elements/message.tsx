@@ -552,12 +552,13 @@ function MessageResponseImpl({
       // Merge after spreading props so a caller can still override other
       // elements, but the link icon + safety routing on `a` — and the diagram
       // block on `pre` — always win.
-      components={{
-        ...props.components,
-        ...markdownLinkComponents,
-        ...markdownLocalImageComponents,
-        ...mermaidComponents,
-      }}
+      components={Object.assign(
+        {},
+        props.components,
+        markdownLinkComponents,
+        markdownLocalImageComponents,
+        mermaidComponents
+      )}
     >
       {normalized}
     </Streamdown>

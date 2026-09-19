@@ -790,8 +790,12 @@ function AutomationListItem({
 
   // Render the shared actions into either menu's item/separator components.
   const renderActions = (
-    Item: React.ElementType,
-    Separator: React.ElementType
+    Item: React.ComponentType<{
+      variant?: "default" | "destructive"
+      onSelect: () => void
+      children: React.ReactNode
+    }>,
+    Separator: React.ComponentType
   ) =>
     actions.map((a) => (
       <Fragment key={a.key}>

@@ -119,3 +119,14 @@ INSTA_UPDATE=auto cargo test --features test-utils     # 自动写新 .snap
 - ESLint：next/core-web-vitals + typescript + prettier
 - TypeScript：strict 模式，启用 `noUnusedLocals` 和 `noUnusedParameters`
 - Rust：2021 edition，使用 `thiserror` 定义错误类型
+
+## Content Studio living plan
+
+When changing Content Studio (`src/lib/studio/`, `src/components/studio/`, or
+`src/app/studio/`), update `docs/studio/roadmap.json` and relevant instructions in
+`docs/studio/README.md` in the same change. Record actual verification results and
+keep prototype limits explicit. Generate `public/studio-plan.html` with
+`pnpm studio:plan`; do not edit the generated HTML directly. Run
+`pnpm studio:plan:check` before completing the work. Browser verification uses
+`pnpm studio:test` with the dev server running. Keep the shared document/command
+layer independent of Three.js and other renderers.

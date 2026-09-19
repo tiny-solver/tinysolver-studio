@@ -199,6 +199,6 @@ function MarkdownImageSpan({
   return <span {...props}>{children}</span>
 }
 
-export const markdownLocalImageComponents: Components = {
+export const markdownLocalImageComponents: Pick<Components, "span"> = {
   span: MarkdownImageSpan as Components["span"],
 }
