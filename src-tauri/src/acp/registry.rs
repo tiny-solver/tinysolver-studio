@@ -1731,8 +1731,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "CodeBuddy",
             description: "Tencent Cloud's official AI coding assistant (ACP)",
             distribution: AgentDistribution::Npx {
-                version: "2.151.0",
-                package: "@tencent-ai/codebuddy-code@2.151.0",
+                version: "2.155.0",
+                package: "@tencent-ai/codebuddy-code@2.155.0",
                 cmd: "codebuddy",
                 args: &["--acp"],
                 env: &[],
@@ -1871,9 +1871,28 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // `transcript`'s `groupTurns`, which the ACP replay does not use
             // (`replay.ts` projects the raw context history), so they do not
             // reach codeg.
+            //
+            // 2.0.1 is a patch release and reads like one. The mandated check
+            // passes verbatim — the converter's absent-`type` arm is
+            // byte-identical (`{transport: "stdio", command, args, env,
+            // runtime_id: "local"}`), the same three entry points
+            // (`newSession` / `loadSession` / `resumeSession`) still route
+            // through it while `session/fork` still ignores `mcpServers`, and
+            // neither `acpMcpServersToConfigs` nor the "does not declare a
+            // runtime identity" throw is anywhere in the bundle.
+            // `engines.node` is unmoved at >=22.19.0. Region-by-region, 109 of
+            // the 121 changed regions differ only by bundler renumbering; the
+            // 12 real ones are all TUI/CLI (a `kimi provider` custom-registry
+            // import refactor, the survey controller, editor keyboard, TUI
+            // session-event handler, `catalog-fetch`) plus a rename of the
+            // `install-app` subcommand region to `install-desktop`. Nothing
+            // under the ACP server path moved: the regions holding the
+            // converter, `max_context_size`, `skillRoots`, `availableCommands`
+            // and `protocol_version` are byte-identical, so no live run was
+            // needed this time.
             distribution: AgentDistribution::Npx {
-                version: "2.0.0",
-                package: "@moonshot-ai/kimi-code@2.0.0",
+                version: "2.0.1",
+                package: "@moonshot-ai/kimi-code@2.0.1",
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
@@ -1991,39 +2010,39 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // (downloads.cursor.com/lab/<version>/<os>/<arch>/...); custom
             // versions substitute into the same pattern.
             distribution: AgentDistribution::Binary {
-                version: "2026.09.10-fd3934a",
+                version: "2026.09.15-d2fe57e",
                 cmd: "cursor-agent",
                 args: &["acp"],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://downloads.cursor.com/lab/2026.09.10-fd3934a/darwin/arm64/agent-cli-package.tar.gz",
+                        url: "https://downloads.cursor.com/lab/2026.09.15-d2fe57e/darwin/arm64/agent-cli-package.tar.gz",
                         sha256: None,
                     },
                     PlatformBinary {
                         platform: "darwin-x86_64",
-                        url: "https://downloads.cursor.com/lab/2026.09.10-fd3934a/darwin/x64/agent-cli-package.tar.gz",
+                        url: "https://downloads.cursor.com/lab/2026.09.15-d2fe57e/darwin/x64/agent-cli-package.tar.gz",
                         sha256: None,
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://downloads.cursor.com/lab/2026.09.10-fd3934a/linux/arm64/agent-cli-package.tar.gz",
+                        url: "https://downloads.cursor.com/lab/2026.09.15-d2fe57e/linux/arm64/agent-cli-package.tar.gz",
                         sha256: None,
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://downloads.cursor.com/lab/2026.09.10-fd3934a/linux/x64/agent-cli-package.tar.gz",
+                        url: "https://downloads.cursor.com/lab/2026.09.15-d2fe57e/linux/x64/agent-cli-package.tar.gz",
                         sha256: None,
                     },
                     PlatformBinary {
                         platform: "windows-aarch64",
-                        url: "https://downloads.cursor.com/lab/2026.09.10-fd3934a/windows/arm64/agent-cli-package.zip",
+                        url: "https://downloads.cursor.com/lab/2026.09.15-d2fe57e/windows/arm64/agent-cli-package.zip",
                         sha256: None,
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://downloads.cursor.com/lab/2026.09.10-fd3934a/windows/x64/agent-cli-package.zip",
+                        url: "https://downloads.cursor.com/lab/2026.09.15-d2fe57e/windows/x64/agent-cli-package.zip",
                         sha256: None,
                     },
                 ],
@@ -2224,8 +2243,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // own copy AES-GCM-encrypted under the machine key, so it is not
             // the source). `engines.node: ">=20"`.
             distribution: AgentDistribution::Npx {
-                version: "1.1.54",
-                package: "@qoder-ai/qodercli@1.1.54",
+                version: "1.1.57",
+                package: "@qoder-ai/qodercli@1.1.57",
                 cmd: "qoder",
                 args: &["--acp"],
                 env: &[],
@@ -2554,8 +2573,8 @@ mod tests {
         let meta = get_agent_meta(AgentType::Cursor);
         assert_binary_version(
             AgentType::Cursor,
-            "2026.09.10-fd3934a",
-            "/lab/2026.09.10-fd3934a/",
+            "2026.09.15-d2fe57e",
+            "/lab/2026.09.15-d2fe57e/",
         );
         match meta.distribution {
             AgentDistribution::Binary {
@@ -2660,16 +2679,16 @@ mod tests {
         );
         assert_npx_version(
             AgentType::CodeBuddy,
-            "2.151.0",
-            "@tencent-ai/codebuddy-code@2.151.0",
+            "2.155.0",
+            "@tencent-ai/codebuddy-code@2.155.0",
             Some("22.0.0"),
         );
         // Kimi Code must never land on 0.37.0–0.38.0: every session in that
         // range dies on the codeg-mcp stdio entry (see the registry entry).
         assert_npx_version(
             AgentType::KimiCode,
-            "2.0.0",
-            "@moonshot-ai/kimi-code@2.0.0",
+            "2.0.1",
+            "@moonshot-ai/kimi-code@2.0.1",
             Some("22.19.0"),
         );
         assert_npx_version(
@@ -2693,8 +2712,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Qoder,
-            "1.1.54",
-            "@qoder-ai/qodercli@1.1.54",
+            "1.1.57",
+            "@qoder-ai/qodercli@1.1.57",
             Some("20.0.0"),
         );
         assert_binary_version(AgentType::OpenCode, "1.18.31", "/releases/download/v1.18.31/");
