@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useMessageScroll } from "@/components/message/message-scroll-context"
+import { useModelLabel } from "@/components/message/model-label-context"
 import { useCreateTaskFromMessage } from "./use-create-task-from-message"
 import { formatTokenCount } from "@/lib/token-format"
 import { cn, copyTextToClipboard } from "@/lib/utils"
@@ -67,6 +68,7 @@ export function TurnStats({
   const t = useTranslations("Folder.chat.messageList")
   const tTasks = useTranslations("Tasks")
   const scroll = useMessageScroll()
+  const modelLabel = useModelLabel()
   const [isCopied, setIsCopied] = useState(false)
   const timeoutRef = useRef<number>(0)
   const shortTimeFormatter = useMemo(
@@ -100,7 +102,13 @@ export function TurnStats({
     ? fullTimeFormatter.format(completedAtDate)
     : null
 
-  const displayModels = models?.length ? models : model ? [model] : []
+  // The transcript records whatever id the agent's backend used, which for some
+  // agents is an account-internal key (qoder writes `qfmodel` for the model its
+  // own picker calls `Qwen3.8-Flash`). Show the picker's name so this row and
+  // the composer's selector can't disagree; unknown ids pass through unchanged.
+  const displayModels = (models?.length ? models : model ? [model] : []).map(
+    (id) => modelLabel(id) ?? id
+  )
   const hasCopy = copyText.trim().length > 0
   const hasUsage = Boolean(usage)
   // The duration itself is shown by the reply's fold header
