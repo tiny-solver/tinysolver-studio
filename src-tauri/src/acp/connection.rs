@@ -8439,7 +8439,12 @@ fn normalize_grok_image_blocks(blocks: Vec<PromptInputBlock>) -> Vec<PromptInput
         .collect()
 }
 
-fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
+/// `pub(crate)` for one reader beyond this module: the ACP-native history
+/// parser's parity test, which needs the EXACT wire bytes `record_prompt`
+/// writes in order to assert its projection equals the live one
+/// ([`crate::acp::types::user_blocks_from_prompt`]). Rebuilding those bytes by
+/// hand in the test would let the two drift without failing anything.
+pub(crate) fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
     blocks
         .into_iter()
         .map(|block| match block {

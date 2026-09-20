@@ -411,6 +411,13 @@ pub fn project_turns(entries: &[TranscriptEntry]) -> Vec<MessageTurn> {
     // time-to-first-token is part of how long the agent took, and this matches
     // what `turn_timings` records for built-ins.
     let mut turn_start_hint: Option<u64> = None;
+    // True when the last block of the open user turn is PROSE — text a
+    // `user_message_chunk` streamed — so the next text chunk may be appended to
+    // it. False after an attachment marker or an image, which are one block per
+    // prompt block in the live projection and must stay that way here: gluing
+    // the next chunk's prose onto `[uri](uri)` would render one run-on
+    // paragraph where the live path renders two.
+    let mut user_prose_open = false;
     let mut seq = 0usize;
 
     for entry in entries {
@@ -432,6 +439,9 @@ pub fn project_turns(entries: &[TranscriptEntry]) -> Vec<MessageTurn> {
                 seq += 1;
                 prompt_just_recorded = true;
                 turn_start_hint = Some(entry.t);
+                // A recorded prompt is a COMPLETE message, never a half-streamed
+                // one, so nothing may be appended to its trailing block.
+                user_prose_open = false;
             }
             EntryKind::TurnEnd => {
                 if let Some(p) = pending.as_mut() {
@@ -441,6 +451,7 @@ pub fn project_turns(entries: &[TranscriptEntry]) -> Vec<MessageTurn> {
                 flush(&mut pending, &mut turns, &mut seq);
                 prompt_just_recorded = false;
                 turn_start_hint = None;
+                user_prose_open = false;
             }
             EntryKind::Update => {
                 // Deserialized from a BORROWED `&Value`, not a cloned one: this
@@ -463,6 +474,7 @@ pub fn project_turns(entries: &[TranscriptEntry]) -> Vec<MessageTurn> {
                     &mut seq,
                     &mut prompt_just_recorded,
                     &mut turn_start_hint,
+                    &mut user_prose_open,
                 );
             }
         }
@@ -542,6 +554,7 @@ fn apply_update(
     seq: &mut usize,
     prompt_just_recorded: &mut bool,
     turn_start_hint: &mut Option<u64>,
+    user_prose_open: &mut bool,
 ) {
     // Opening a turn consumes the prompt's timestamp, so the turn's span covers
     // time-to-first-token; without a recorded prompt (replay) it starts here.
@@ -566,8 +579,12 @@ fn apply_update(
                 return;
             };
             // Resource/image chunks append in order to the same user turn;
-            // incoming text chunks retain the existing text-coalescing behavior.
+            // incoming text chunks retain the existing text-coalescing behavior,
+            // but only onto prose — an attachment marker is one block per prompt
+            // block in the live projection, and appending to it would glue the
+            // next sentence onto the end of a markdown link.
             let is_text = matches!(chunk.content, sacp::schema::ContentBlock::Text(_));
+            let coalesce = is_text && *user_prose_open;
             flush(pending, turns, seq);
             *turn_start_hint = Some(at_ms);
             match turns.last_mut() {
@@ -577,7 +594,7 @@ fn apply_update(
                         true,
                         Some(ContentBlock::Text { text: existing }),
                         ContentBlock::Text { text },
-                    ) = (is_text, last.blocks.last_mut(), &block)
+                    ) = (coalesce, last.blocks.last_mut(), &block)
                     {
                         existing.push_str(text);
                     } else {
@@ -599,6 +616,7 @@ fn apply_update(
                     *seq += 1;
                 }
             }
+            *user_prose_open = is_text;
         }
         SessionUpdate::AgentMessageChunk(chunk) => {
             *prompt_just_recorded = false;
@@ -978,6 +996,147 @@ mod tests {
         let turns = project_turns(&entries);
         assert_eq!(turns.len(), 2);
         assert_eq!(turns[0].blocks.len(), 6);
+    }
+
+    /// A replay whose user message puts the attachment BEFORE the prose (the
+    /// order an agent that front-loads file context stores it in). The marker is
+    /// a whole block, so the sentence after it must not be glued onto the end of
+    /// its markdown link — the live projection emits one block per prompt block,
+    /// and the transcript has to read the same way.
+    #[test]
+    fn replayed_prose_after_an_attachment_marker_stays_its_own_block() {
+        let entries = vec![
+            update(
+                1,
+                serde_json::json!({
+                    "sessionUpdate":"user_message_chunk",
+                    "content":{"type":"resource", "resource":{
+                        "uri":"file:///tmp/note.txt", "mimeType":"text/plain", "text":"body"
+                    }}
+                }),
+            ),
+            update(2, text_chunk("user_message_chunk", "what does ")),
+            update(3, text_chunk("user_message_chunk", "this do?")),
+            update(4, text_chunk("agent_message_chunk", "reading it")),
+        ];
+        let turns = project_turns(&entries);
+        assert_eq!(turns.len(), 2);
+        assert_eq!(turns[0].blocks.len(), 2);
+        assert!(
+            matches!(&turns[0].blocks[0], ContentBlock::Text { text } if text == "[file:///tmp/note.txt](file:///tmp/note.txt)")
+        );
+        // The two prose chunks still coalesce with each other.
+        assert!(
+            matches!(&turns[0].blocks[1], ContentBlock::Text { text } if text == "what does this do?")
+        );
+    }
+
+    /// The regression the attachment fix turns on: a user message carrying only
+    /// an attachment used to project to nothing, so it neither ended the
+    /// previous assistant turn nor appeared at all — the next reply merged into
+    /// the previous one.
+    #[test]
+    fn an_attachment_only_replayed_chunk_ends_the_previous_assistant_turn() {
+        let entries = vec![
+            update(1, text_chunk("agent_message_chunk", "first reply")),
+            update(
+                2,
+                serde_json::json!({
+                    "sessionUpdate":"user_message_chunk",
+                    "content":{"type":"resource", "resource":{
+                        "uri":"file:///tmp/data.bin",
+                        "mimeType":"application/octet-stream",
+                        "blob":"c2VjcmV0"
+                    }}
+                }),
+            ),
+            update(3, text_chunk("agent_message_chunk", "second reply")),
+        ];
+        let turns = project_turns(&entries);
+        assert_eq!(turns.len(), 3);
+        assert!(matches!(turns[0].role, TurnRole::Assistant));
+        assert!(matches!(turns[1].role, TurnRole::User));
+        assert_eq!(turns[1].blocks.len(), 1);
+        assert!(matches!(turns[2].role, TurnRole::Assistant));
+        assert!(
+            matches!(&turns[2].blocks[0], ContentBlock::Text { text } if text == "second reply")
+        );
+    }
+
+    /// The live user turn is projected by `acp::types::user_blocks_from_prompt`;
+    /// this parser re-derives the same mapping from the recorded wire bytes.
+    /// They are two implementations of one contract — a viewer watching live and
+    /// a reader after a refresh must see the same message — so pin them
+    /// together over the block shapes codeg's composer actually sends.
+    #[test]
+    fn history_projection_matches_the_live_user_message_projection() {
+        use crate::acp::types::{user_blocks_from_prompt, PromptInputBlock, UserMessageBlock};
+
+        let sent = vec![
+            PromptInputBlock::Text {
+                text: "Review these files".into(),
+            },
+            PromptInputBlock::ResourceLink {
+                uri: "file:///tmp/report.pdf".into(),
+                name: "report.pdf".into(),
+                mime_type: Some("application/pdf".into()),
+                description: None,
+            },
+            // A path-less pasted text file: embedded body, synthetic uri.
+            PromptInputBlock::Resource {
+                uri: "clipboard://note.txt-1".into(),
+                mime_type: Some("text/plain".into()),
+                text: Some("private file contents".into()),
+                blob: None,
+            },
+            PromptInputBlock::Resource {
+                uri: "clipboard://data.bin-2".into(),
+                mime_type: Some("application/octet-stream".into()),
+                text: None,
+                blob: Some("c2VjcmV0".into()),
+            },
+            // How an `image: false` / `embedded_context: true` agent carries an
+            // image — promoted back to a thumbnail on BOTH sides.
+            PromptInputBlock::Resource {
+                uri: "clipboard://plot.png-3".into(),
+                mime_type: Some("image/png".into()),
+                text: None,
+                blob: Some("aW1hZ2U=".into()),
+            },
+            PromptInputBlock::Image {
+                data: "bmF0aXZl".into(),
+                mime_type: "image/jpeg".into(),
+                uri: Some("file:///tmp/photo.jpg".into()),
+            },
+        ];
+        // Exactly what `record_prompt` writes: the wire blocks `session/prompt`
+        // carried, serialized.
+        let recorded =
+            serde_json::to_value(crate::acp::connection::map_prompt_blocks(sent.clone()))
+                .expect("wire blocks serialize");
+
+        // `uri` is dropped on both sides: the broadcast carries an image by its
+        // bytes alone, so it is not a projection difference to compare.
+        let live: Vec<(&str, String, String)> = user_blocks_from_prompt(&sent)
+            .iter()
+            .map(|b| match b {
+                UserMessageBlock::Text { text } => ("text", text.clone(), String::new()),
+                UserMessageBlock::Image { data, mime_type } => {
+                    ("image", data.clone(), mime_type.clone())
+                }
+            })
+            .collect();
+        let history: Vec<(&str, String, String)> = prompt_blocks(&recorded)
+            .iter()
+            .map(|b| match b {
+                ContentBlock::Text { text } => ("text", text.clone(), String::new()),
+                ContentBlock::Image {
+                    data, mime_type, ..
+                } => ("image", data.clone(), mime_type.clone()),
+                other => panic!("a user turn may only hold text and images, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(history, live);
     }
 
     #[test]
