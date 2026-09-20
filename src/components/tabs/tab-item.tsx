@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from "react"
 import { Reorder } from "motion/react"
 import type { PanInfo } from "motion/react"
-import { X } from "lucide-react"
+import { Gamepad2, Layers, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { cn, handleMiddleClickClose } from "@/lib/utils"
 import {
@@ -22,6 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import type { ContentFolderKind } from "@/hooks/use-content-project-index"
 import { useLongPressDrag } from "@/hooks/use-long-press-drag"
 import type { TabItem as TabItemData } from "@/contexts/tab-context"
 import type { SplitDirection } from "@/lib/tab-group-layout"
@@ -48,6 +49,9 @@ interface TabItemProps {
   adjacentActive?: "before" | "after"
   folderName: string | null
   folderBranch: string | null
+  /** The tab's folder is a content project: a small glyph ahead of the title
+   *  tells a Studio conversation from a code one in a mixed strip. */
+  contentKind?: ContentFolderKind | null
   /** More than one split group exists — shows the group-management items. */
   isSplit: boolean
   /** This tab's group has ≥ 2 tabs, so "Split and Move" leaves a non-empty
@@ -97,6 +101,7 @@ export const TabItem = memo(function TabItem({
   adjacentActive,
   folderName,
   folderBranch,
+  contentKind = null,
   isSplit,
   canSplitMove,
   canMoveToGroup,
@@ -329,6 +334,17 @@ export const TabItem = memo(function TabItem({
             <ConversationStatusDot
               status={tab.status as ConversationStatus | undefined}
             />
+            {contentKind === "game" ? (
+              <Gamepad2
+                aria-hidden
+                className="h-3 w-3 shrink-0 text-violet-600 dark:text-violet-400"
+              />
+            ) : contentKind === "content" ? (
+              <Layers
+                aria-hidden
+                className="h-3 w-3 shrink-0 text-violet-600 dark:text-violet-400"
+              />
+            ) : null}
             <span
               className={cn(
                 // Embedded: grow + shrink as the tab tightens, but instead of an

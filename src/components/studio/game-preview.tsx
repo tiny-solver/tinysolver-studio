@@ -14,11 +14,8 @@ import { gamePreviewFingerprint, getContentPreview } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { openPath } from "@/lib/platform"
 import { buildAgentContext } from "@/lib/studio/agent-context"
-import {
-  getServerBaseUrl,
-  isDesktop,
-  isRemoteDesktopMode,
-} from "@/lib/transport"
+import { previewBase } from "@/lib/studio/game-url"
+import { isDesktop, isRemoteDesktopMode } from "@/lib/transport"
 
 import { useChatBridge, useEngineErrors } from "./use-chat-bridge"
 
@@ -60,10 +57,7 @@ export function GamePreview({
   entryFile: string
 }) {
   const t = useTranslations("Studio")
-  const [server, setServer] = useState<{
-    origin: string
-    path: string
-  } | null>(null)
+  const [server, setServer] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [retryKey, setRetryKey] = useState(0)
@@ -91,12 +85,7 @@ export function GamePreview({
     getContentPreview(root)
       .then((info) => {
         if (cancelled) return
-        // Desktop: the loopback listener; web: the API origin the transport
-        // already talks to (which may differ from the page origin in dev).
-        setServer({
-          origin: info.loopback ?? getServerBaseUrl(),
-          path: info.path.replace(/\/+$/, ""),
-        })
+        setServer(previewBase(info))
         setError(null)
       })
       .catch((err) => {
@@ -132,9 +121,7 @@ export function GamePreview({
     }
   }, [server, root, dir])
 
-  const url = server
-    ? `${server.origin}${server.path}/${dir}/${entryFile}`
-    : null
+  const url = server ? `${server}/${dir}/${entryFile}` : null
 
   const openExternal = useCallback(() => {
     if (!url) return

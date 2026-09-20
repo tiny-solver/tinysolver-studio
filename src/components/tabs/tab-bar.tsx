@@ -21,6 +21,7 @@ import {
   dropIndexFromMidpoints,
 } from "@/lib/tab-drag-drop"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
+import { useContentProjectIndex } from "@/hooks/use-content-project-index"
 import { useIsCoarsePointer } from "@/hooks/use-is-coarse-pointer"
 import { TabItem, type TabMoveTarget } from "./tab-item"
 
@@ -242,10 +243,12 @@ export function TabBar({ groupId }: TabBarProps) {
   ])
 
   const folderIndex = useMemo(() => {
-    const map = new Map<number, { name: string }>()
-    for (const f of allFolders) map.set(f.id, { name: f.name })
+    const map = new Map<number, { name: string; path: string }>()
+    for (const f of allFolders) map.set(f.id, { name: f.name, path: f.path })
     return map
   }, [allFolders])
+  const folderPaths = useMemo(() => allFolders.map((f) => f.path), [allFolders])
+  const contentIndex = useContentProjectIndex(folderPaths)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const isCoarsePointer = useIsCoarsePointer()
@@ -341,6 +344,9 @@ export function TabBar({ groupId }: TabBarProps) {
             embedded
             adjacentActive={adjacentActive}
             folderName={folderInfo?.name ?? null}
+            contentKind={
+              folderInfo ? (contentIndex.get(folderInfo.path) ?? null) : null
+            }
             folderBranch={branches.get(tab.folderId) ?? null}
             isSplit={isSplit}
             canSplitMove={canSplitMove && !isDraft}
