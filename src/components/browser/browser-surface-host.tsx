@@ -449,46 +449,44 @@ export function NativeSurfaceHost({
     noticeOnly && !shouldShow ? () => requestNativeSurfaceReclaim() : undefined
 
   return (
-    // 2px of padding, so the measured element below — and with it the native
-    // view — stops short of its slot's edges. A resize divider is a 1px box
-    // whose line thickens to 5px CENTRED on it (`ui/resizable.tsx`), so it
-    // paints (5-1)/2 = 2px into each neighbour. Where that neighbour is a
-    // native view the overhang is painted over, and the divider reads thinner
-    // beside a page than beside a file — and thinner below the header band,
-    // which is plain DOM, than through it. The page yields the 2px because it
-    // is the only side that can: a native view always paints above the DOM.
+    // No inset: the page fills its slot to the edge, so nothing of the pane
+    // behind it shows as a frame around it. A resize divider is a 1px box
+    // whose line thickens to 5px CENTRED on it (`ui/resizable.tsx`), painting
+    // (5-1)/2 = 2px into each neighbour — which a native view paints back
+    // over, since it always paints above the DOM. So while a divider is
+    // hovered or dragged its line reads 3px beside a page and 5px beside the
+    // plain DOM above it. That is the whole cost, it lasts only as long as
+    // the pointer is on the divider, and the resting 1px hairline — the state
+    // it is in the rest of the time — covers its box exactly and never
+    // overhung anything.
     <div
+      ref={ref}
+      data-browser-surface={backendId}
+      onPointerDown={reclaim}
+      onWheel={reclaim}
       className={cn(
-        "relative h-full w-full min-h-0 min-w-0 p-[2px]",
+        "relative h-full w-full min-h-0 min-w-0 bg-background",
         className
       )}
       aria-hidden
     >
-      <div
-        ref={ref}
-        data-browser-surface={backendId}
-        onPointerDown={reclaim}
-        onWheel={reclaim}
-        className="relative h-full w-full bg-background"
-      >
-        {frozen ? (
-          // A data URL the backend just produced, shown for the life of an
-          // overlay: nothing for next/image to optimise, load or cache.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={frozen}
-            alt=""
-            draggable={false}
-            data-browser-frozen-frame=""
-            className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-left-top"
-          />
-        ) : null}
-        {createError ? (
-          <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-destructive">
-            {createError}
-          </div>
-        ) : null}
-      </div>
+      {frozen ? (
+        // A data URL the backend just produced, shown for the life of an
+        // overlay: nothing for next/image to optimise, load or cache.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={frozen}
+          alt=""
+          draggable={false}
+          data-browser-frozen-frame=""
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-left-top"
+        />
+      ) : null}
+      {createError ? (
+        <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-destructive">
+          {createError}
+        </div>
+      ) : null}
     </div>
   )
 }
