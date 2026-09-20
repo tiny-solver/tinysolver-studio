@@ -1,3 +1,5 @@
+> **Tinysolver Studio** is a content-production studio — writing, webtoons, video and animation, games, books, courses — built on [Codeg](https://github.com/xintaofei/codeg) by [xintaofei](https://github.com/xintaofei), used under the [Apache License 2.0](./LICENSE). It is an independent fork and is not affiliated with or endorsed by the Codeg project. What this fork adds is the Studio ([docs/studio](./docs/studio/README.md)); the files it touches carry the change history in git. Everything below this note is upstream's README, kept as is.
+
 # Codeg
 
 [![Release](https://img.shields.io/github/v/release/xintaofei/codeg)](https://github.com/xintaofei/codeg/releases)

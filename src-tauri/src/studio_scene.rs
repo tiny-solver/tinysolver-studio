@@ -1,5 +1,5 @@
 //! Rust twin of `src/lib/studio/document.ts`: validation and command
-//! application for a Codeg Studio scene file
+//! application for a Tinysolver Studio scene file
 //! (`outputs/game/content/<scene>.studio.json`).
 //!
 //! The editor, the engine and the agent share one file, and the agent's MCP

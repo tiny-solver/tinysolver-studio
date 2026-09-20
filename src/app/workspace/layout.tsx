@@ -103,8 +103,8 @@ function WorkspaceDocumentTitle() {
 
   useEffect(() => {
     document.title = activeFolder
-      ? `${activeFolder.name} - codeg-gameeditor`
-      : "codeg-gameeditor"
+      ? `${activeFolder.name} - Tinysolver Studio`
+      : "Tinysolver Studio"
   }, [activeFolder])
 
   return null

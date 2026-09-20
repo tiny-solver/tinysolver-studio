@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!--
-    Codeg Studio — deliberately NOT upstream codeg's dark-navy `< ••• >` mark.
+    Tinysolver Studio — deliberately NOT upstream codeg's dark-navy `< ••• >` mark.
     This build is meant to sit next to codeg in the Dock / taskbar, so the two
     have to be told apart at 32px: warm amber field vs dark navy field, mesh
     triangle vs angle brackets. Change the hue and the glyph together if this

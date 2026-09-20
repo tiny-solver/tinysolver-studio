@@ -1,6 +1,6 @@
 // 이 게임의 진입점.
 //
-// 엔진은 Codeg Studio 가 제공한다(`codeg-engine`, 설명은 ../ENGINE.md). 이 폴더에는
+// 엔진은 Tinysolver Studio 가 제공한다(`codeg-engine`, 설명은 ../ENGINE.md). 이 폴더에는
 // 엔진 코드가 없고 복사해 오지도 않는다. 여기에는 이 게임만의 규칙을 쓴다:
 //   - scripts: 노드에 붙는 행동 (./scripts/index.js)
 //   - ops: logic.actions 에서 쓸 연산

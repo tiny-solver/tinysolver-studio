@@ -1,7 +1,7 @@
 //! The companion's `studio_*` MCP tools, backed by the project folder.
 //!
 //! An agent working in a content project gets four verbs over the scenes the
-//! Codeg Studio editor edits and the game engine runs:
+//! Tinysolver Studio editor edits and the game engine runs:
 //! list, read, apply a validated command batch, build. Everything goes through
 //! [`crate::studio_scene`] so an agent batch obeys the same rules as a drag in
 //! the editor, and the file is written in place — the editor and the preview

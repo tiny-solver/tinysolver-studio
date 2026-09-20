@@ -1,4 +1,4 @@
-//! The game runtime Codeg Studio provides to content projects.
+//! The game runtime Tinysolver Studio provides to content projects.
 //!
 //! A project does not carry engine code. Its `index.html` import-maps
 //! `codeg-engine` and `three` to `../../__codeg/…`, and that reserved prefix

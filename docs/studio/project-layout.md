@@ -61,7 +61,7 @@
     "id": "three-web",
     "version": "0.3.0",
     "entry": "outputs/game/index.html",
-    "start": "Codeg Studio preview, or serve a build: npx serve build/game/<version>",
+    "start": "Tinysolver Studio preview, or serve a build: npx serve build/game/<version>",
     "build": null
   },
   "paths": { "bible": "bible", "assets": "assets", "outputs": "outputs", "build": "build" },
@@ -84,7 +84,7 @@
 
 ## 장면 문서: 엔진과 편집기가 같은 파일
 
-게임의 장면은 `<outputs>/game/content/<scene>.studio.json`이다. 엔진(`src/main.js`)이 이 파일을 읽어 그리고, Codeg Studio 편집기가 같은 파일을 편집하며, 에이전트도 같은 파일을 고친다. 별도 렌더러나 별도 포맷은 없다.
+게임의 장면은 `<outputs>/game/content/<scene>.studio.json`이다. 엔진(`src/main.js`)이 이 파일을 읽어 그리고, Tinysolver Studio 편집기가 같은 파일을 편집하며, 에이전트도 같은 파일을 고친다. 별도 렌더러나 별도 포맷은 없다.
 
 ```json
 {
@@ -148,7 +148,7 @@
   | `studio_publish` | `publish_content_build` (`local` 기본, `command`) |
 
   검증기는 `src-tauri/src/studio_scene.rs`이고 `src/lib/studio/document.ts`와 규칙이 같아야 한다(한쪽을 고치면 다른 쪽도). 도구는 파일만 쓴다. 편집기·미리보기는 아래 변경 감시로 알아챈다. `project` 인자를 생략하면 세션의 작업 폴더가 대상이다.
-- **컨텍스트**: 편집기의 "대화로 보내기"는 옆 대화 입력창에 장면 파일 배지와 `[Codeg Studio] Scene … Selected node … Runtime errors …` 텍스트를 넣는다(`src/lib/studio/agent-context.ts`). 자동 전송은 없다.
+- **컨텍스트**: 편집기의 "대화로 보내기"는 옆 대화 입력창에 장면 파일 배지와 `[Tinysolver Studio] Scene … Selected node … Runtime errors …` 텍스트를 넣는다(`src/lib/studio/agent-context.ts`). 자동 전송은 없다.
 - **오류**: 미리보기 서버가 HTML `<head>` 맨 앞에 보고 스크립트를 주입해 `{ type: "codeg:error", kind, message }`를 parent로 올린다. 엔진의 협조가 필요 없다. 패키징된 빌드는 파일 복사라서 포함되지 않는다.
 
 ## 변경 감시
