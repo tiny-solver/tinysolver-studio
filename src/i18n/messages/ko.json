@@ -6206,6 +6206,8 @@
     "sceneView": "장면 편집",
     "previewReload": "새로고침",
     "previewOpen": "브라우저에서 열기",
+    "openGameInBrowser": "브라우저에서 게임 열기",
+    "openGameInBrowserFailed": "브라우저에서 게임을 열지 못했습니다",
     "previewStarting": "미리보기 서버 시작 중…",
     "previewFailed": "미리보기 실패: {message}",
     "previewAutoReload": "실시간 · {dir}/ 가 바뀌면 다시 불러옴",

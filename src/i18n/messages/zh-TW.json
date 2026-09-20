@@ -6206,6 +6206,8 @@
     "sceneView": "Scene editor",
     "previewReload": "Reload",
     "previewOpen": "Open in browser",
+    "openGameInBrowser": "在瀏覽器中開啟遊戲",
+    "openGameInBrowserFailed": "無法在瀏覽器中開啟遊戲",
     "previewStarting": "Starting preview server…",
     "previewFailed": "Preview failed: {message}",
     "previewAutoReload": "Live · reloads when {dir}/ changes",

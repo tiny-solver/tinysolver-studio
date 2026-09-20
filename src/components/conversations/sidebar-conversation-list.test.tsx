@@ -239,6 +239,17 @@ vi.mock("@/contexts/workbench-route-context", () => {
 
 // These only mount when their state opens (never in these tests); stub to keep
 // the import graph light.
+// Stable singletons, same reasoning as the route mock above: the folder
+// headers are memoized on callback identity.
+vi.mock("@/contexts/workspace-context", () => {
+  const value = { openStudioPane: () => {} }
+  return { useWorkspaceActions: () => value }
+})
+vi.mock("@/hooks/use-content-project-index", () => {
+  const index = new Map<string, "game" | "content">()
+  return { useContentProjectIndex: () => index }
+})
+
 vi.mock("./conversation-manage-dialog", () => ({
   ConversationManageDialog: () => null,
 }))

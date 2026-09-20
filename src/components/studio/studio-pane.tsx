@@ -5,19 +5,12 @@ import { useTranslations } from "next-intl"
 import { Gamepad2, Layers } from "lucide-react"
 
 import { useContentProject } from "@/hooks/use-content-project"
+import { splitEntry } from "@/lib/studio/game-url"
 import { cn } from "@/lib/utils"
 import { GamePreview } from "./game-preview"
 import { StudioWorkspace } from "./studio-workspace"
 
 type View = "game" | "scene"
-
-function splitEntry(entry: string): { dir: string; file: string } {
-  const normalized = entry.replace(/\\/g, "/").replace(/^\/+/, "")
-  const slash = normalized.lastIndexOf("/")
-  return slash < 0
-    ? { dir: ".", file: normalized }
-    : { dir: normalized.slice(0, slash), file: normalized.slice(slash + 1) }
-}
 
 /**
  * The Content Studio pane beside the chat: the running game first, the scene

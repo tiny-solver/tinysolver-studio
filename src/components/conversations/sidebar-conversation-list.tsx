@@ -27,6 +27,7 @@ import {
   FolderOpen,
   FolderOpenDot,
   FolderRoot,
+  Gamepad2,
   Layers,
   LayersPlus,
   Link2,
@@ -49,6 +50,12 @@ import { useTerminalContext } from "@/contexts/terminal-context"
 import { useThemeColor, useZoomLevel } from "@/hooks/use-appearance"
 import { useSortedAvailableAgents } from "@/hooks/use-sorted-available-agents"
 import { useImeGuard } from "@/hooks/use-ime-guard"
+import {
+  useContentProjectIndex,
+  type ContentFolderKind,
+} from "@/hooks/use-content-project-index"
+import { useWorkspaceActions } from "@/contexts/workspace-context"
+import { openGameInBrowser } from "@/lib/studio/game-url"
 import { OpenInSubContent } from "@/components/layout/open-in-menu"
 import {
   openImportSessionsWindow,
@@ -219,6 +226,9 @@ const FolderHeader = memo(function FolderHeader({
   onOpenInSystemExplorer,
   onOpenInTerminal,
   onOpenInCode,
+  contentKind = null,
+  onOpenInStudio,
+  onOpenGameInBrowser,
   folderGroups,
   currentGroupId,
   onMoveToGroup,
@@ -269,6 +279,14 @@ const FolderHeader = memo(function FolderHeader({
   onOpenInSystemExplorer: (folderId: number) => void
   onOpenInTerminal: (folderId: number) => void
   onOpenInCode: (folderId: number) => void
+  /**
+   * Set when the folder holds a `codeg-project.json`. Swaps the folder glyph
+   * for the content-project one so these read apart from code repos at a
+   * glance; `game` additionally offers Studio in the "Open in" submenu.
+   */
+  contentKind?: ContentFolderKind | null
+  onOpenInStudio?: (folderId: number) => void
+  onOpenGameInBrowser?: (folderId: number) => void
   /**
    * Every folder group, for the "Move to group" submenu. Omitted on the header
    * variants that can't move on their own (worktree sub-groups and the "root"
@@ -341,6 +359,7 @@ const FolderHeader = memo(function FolderHeader({
     currentDefaultAgent !== null &&
     !availableAgents.includes(currentDefaultAgent)
   const tFileTree = useTranslations("Folder.fileTreeTab")
+  const tStudio = useTranslations("Studio")
   const systemExplorerLabel =
     typeof navigator === "undefined"
       ? tFileTree("openInFileManager")
@@ -424,7 +443,13 @@ const FolderHeader = memo(function FolderHeader({
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute flex items-center justify-center text-muted-foreground/75"
+                    "pointer-events-none absolute flex items-center justify-center",
+                    // A content project trades the muted folder grey for the
+                    // creative accent — the glyph alone is easy to miss in a
+                    // long column of folder icons.
+                    contentKind && variant === "repo"
+                      ? "text-violet-600 dark:text-violet-400"
+                      : "text-muted-foreground/75"
                   )}
                   style={{
                     top: "50%",
@@ -438,6 +463,10 @@ const FolderHeader = memo(function FolderHeader({
                     <FolderGit2 className="h-[0.875rem] w-[0.875rem]" />
                   ) : variant === "root" ? (
                     <FolderRoot className="h-[0.875rem] w-[0.875rem]" />
+                  ) : contentKind === "game" ? (
+                    <Gamepad2 className="h-[0.875rem] w-[0.875rem]" />
+                  ) : contentKind === "content" ? (
+                    <Layers className="h-[0.875rem] w-[0.875rem]" />
                   ) : expanded ? (
                     <FolderOpen className="h-[0.875rem] w-[0.875rem]" />
                   ) : (
@@ -624,6 +653,20 @@ const FolderHeader = memo(function FolderHeader({
               onOpenExplorer={() => onOpenInSystemExplorer(folderId)}
               onOpenTerminal={() => onOpenInTerminal(folderId)}
               onOpenCode={() => onOpenInCode(folderId)}
+              studioLabel={
+                contentKind === "game" && onOpenInStudio
+                  ? tStudio("launch")
+                  : undefined
+              }
+              onOpenStudio={
+                onOpenInStudio ? () => onOpenInStudio(folderId) : undefined
+              }
+              browserLabel={tStudio("openGameInBrowser")}
+              onOpenBrowser={
+                onOpenGameInBrowser
+                  ? () => onOpenGameInBrowser(folderId)
+                  : undefined
+              }
             />
           </ContextMenuSub>
           <ContextMenuSeparator />
@@ -934,6 +977,8 @@ export function SidebarConversationList({
     openChatModeTab,
   } = useTabActions()
   const { openConversations } = useWorkbenchRoute()
+  const { openStudioPane } = useWorkspaceActions()
+  const tStudio = useTranslations("Studio")
 
   const folderIndex = useMemo(() => {
     const map = new Map<
@@ -958,6 +1003,9 @@ export function SidebarConversationList({
       })
     return map
   }, [allFolders])
+
+  const folderPaths = useMemo(() => allFolders.map((f) => f.path), [allFolders])
+  const contentIndex = useContentProjectIndex(folderPaths)
 
   // `tabs` gets a fresh array reference on every `conversations` change (the tab
   // context re-derives titles/status), so these two derivations would otherwise
@@ -1267,6 +1315,34 @@ export function SidebarConversationList({
       })
     },
     [folderIndex, tFileTree]
+  )
+
+  // Studio is a file-pane tab keyed by folder, so it opens for the folder
+  // whose menu was used — not necessarily the active one.
+  const handleOpenFolderInStudio = useCallback(
+    (folderId: number) => {
+      const folder = folderIndex.get(folderId)
+      if (!folder) return
+      openStudioPane(folderId, folder.path, tStudio("launch"))
+    },
+    [folderIndex, openStudioPane, tStudio]
+  )
+
+  const handleOpenFolderGameInBrowser = useCallback(
+    (folderId: number) => {
+      const folder = folderIndex.get(folderId)
+      if (!folder) return
+      openGameInBrowser(folder.path)
+        .then((opened) => {
+          if (!opened) toast.error(tStudio("noGameEntry"))
+        })
+        .catch((error) => {
+          toast.error(tStudio("openGameInBrowserFailed"), {
+            description: toErrorMessage(error),
+          })
+        })
+    },
+    [folderIndex, tStudio]
   )
 
   // virtua binds to the real OverlayScrollbars viewport element (surfaced via
@@ -2698,6 +2774,11 @@ export function SidebarConversationList({
         onOpenInSystemExplorer={handleOpenFolderInSystemExplorer}
         onOpenInTerminal={handleOpenFolderInTerminal}
         onOpenInCode={handleOpenFolderInCode}
+        contentKind={
+          folderEntry ? (contentIndex.get(folderEntry.path) ?? null) : null
+        }
+        onOpenInStudio={handleOpenFolderInStudio}
+        onOpenGameInBrowser={handleOpenFolderGameInBrowser}
         // "Move to group" only on real, reorderable folder headers. A worktree
         // sub-group and a container's "root" sub-group follow their repo and
         // can't be grouped on their own, so they get no submenu at all rather
