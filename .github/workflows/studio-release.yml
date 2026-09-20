@@ -49,7 +49,7 @@ jobs:
         run: |
           gh release view "$TAG" >/dev/null 2>&1 || \
             gh release create "$TAG" --draft --title "Tinysolver Studio ${TAG#studio-v}" \
-              --notes "Built from $(git rev-parse --short HEAD). Install on macOS: \`curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/studio-install-macos.sh | bash\`"
+              --notes "Built from $(git rev-parse --short HEAD). Install on macOS: \`curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/studio-install-macos.sh | bash\`"
 
   desktop-macos:
     needs: create-release
@@ -158,6 +158,17 @@ jobs:
     needs: [desktop-macos, server]
     runs-on: ubuntu-22.04
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      # Ship the installer with the release. raw.githubusercontent.com caches
+      # main for minutes, so a one-liner pointing there can hand out the
+      # previous installer right after a fix; a release asset is immutable and
+      # /releases/latest/download always tracks the newest published release.
+      - name: Attach the installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" scripts/studio-install-macos.sh --clobber
       - name: Publish the draft
         env:
           GH_TOKEN: ${{ github.token }}

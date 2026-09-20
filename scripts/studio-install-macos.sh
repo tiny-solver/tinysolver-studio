@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install or update Tinysolver Studio on an Apple Silicon Mac from the latest GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/tiny-solver/tinysolver-studio/main/scripts/studio-install-macos.sh | bash
+#   curl -fsSL https://github.com/tiny-solver/tinysolver-studio/releases/latest/download/studio-install-macos.sh | bash
 #   ... | bash -s -- --check          # compare installed vs latest, change nothing
 #   ... | bash -s -- --tag studio-v0.31.0-20260921.1
 #
