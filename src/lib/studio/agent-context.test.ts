@@ -43,7 +43,9 @@ describe("buildAgentContext", () => {
       hot: true,
       engineErrors: [],
     })
-    expect(text).toContain("[Tinysolver Studio · project my-story] Scene `main`")
+    expect(text).toContain(
+      "[Tinysolver Studio · project my-story] Scene `main`"
+    )
     expect(text).toContain(
       "outputs/game/content/main.studio.json (1080×1920, 1 nodes)"
     )

@@ -66,6 +66,9 @@ jobs:
           node-version: 24
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Lint
+        # 이름을 갈면 문자열 길이가 바뀌어 prettier 줄바꿈 규칙이 걸린다 — 실제로 밟았다.
+        run: pnpm eslint .
       - name: Typecheck
         run: pnpm exec tsc --noEmit
       - name: Unit tests
