@@ -38,7 +38,6 @@ import {
   useNativeSurfaceOccluded,
   useNativeSurfaceOcclusionPassive,
 } from "@/lib/browser/native-surface-occlusion"
-import { isBlankPageUrl } from "@/lib/browser/browser-url"
 import type { Bounds, BrowserTabState } from "@/lib/browser/types"
 import { browserTabBackendId } from "@/lib/file-tab-id"
 import { cn } from "@/lib/utils"
@@ -194,13 +193,15 @@ export function NativeSurfaceHost({
   // The whole workspace surface is CSS-hidden under a full-page route.
   const hostHidden = useOverlayHostHidden()
   // Whether this tab has a page to leave a still of. A surface that has never
-  // committed a document — just created, or sitting on the blank page — has
-  // nothing to freeze, and hiding it would put an empty pane under the toast
-  // that asked for it. An overlay the user opened still gets its way (they
-  // are looking at the overlay, not at the pane); a notice does not.
+  // committed a document — just created, or still on its way to its first
+  // page — has nothing to freeze, and hiding it would put an empty pane under
+  // the toast that asked for it. A COMMITTED blank page is not one of those:
+  // the empty tab's own page is a document like any other (the backend paints
+  // it in the app's colours — see `browser::blank_page`), and so is the one a
+  // popup's opener writes into. An overlay the user opened still gets its way
+  // (they are looking at the overlay, not at the pane); a notice does not.
   const state = useBrowserTabState(storeKey)
-  const showsDocument =
-    state !== null && !state.error && !!state.url && !isBlankPageUrl(state.url)
+  const showsDocument = state !== null && !state.error && !!state.url
   const noticeOnly = occluded && passiveOcclusion && !fallbackOverlay
   const occludedNow = occluded && (!noticeOnly || showsDocument)
   const onScreen = !hidden && routeVisible && !hostHidden
