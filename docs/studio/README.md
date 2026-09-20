@@ -160,7 +160,9 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 4. 도구 결과는 검증 후 하나의 변경으로 적용한다. 실패 시 현재 문서를 유지하며 적용 이력에서 되돌릴 수 있어야 한다.
 5. 파일 변경 감지로 미리보기를 갱신한다. 에셋 재가공과 배포 빌드는 구분하고, 원본 해시·도구 버전·옵션을 기준으로 필요한 산출물만 다시 만든다.
 
-로컬 macOS 앱은 기존 Codeg와 별도의 식별자 `me.tinysolver.studio`를 사용한다. 기존 `codeg://` 연결을 차지하지 않도록 OS 딥링크 등록도 비활성화한다.
+2026-09-20에 이름을 Tinysolver Studio로 확정하고 저장소를 `tiny-solver/tinysolver-studio`(작업 머신 linux-1)로 옮겼다. 식별자·홈 디렉터리·키체인 이름도 이때 함께 바꿨고, 머신을 옮겼으므로 이전 상태는 이어 오지 않는다. 새 이름으로 데스크톱 앱을 다시 빌드·실행한 검증은 아직 없다.
+
+데스크톱 앱은 기존 Codeg와 별도의 식별자 `me.tinysolver.studio`를 사용한다. 기존 `codeg://` 연결을 차지하지 않도록 OS 딥링크 등록도 비활성화한다.
 
 두 앱을 동시에 켜도 서로의 상태를 건드리지 않는다. 구분되는 이름은 `src-tauri/src/brand.rs`에 상수로 모여 있고, 무엇을 일부러 공유하는지도 같은 파일에 적었다.
 
@@ -178,7 +180,7 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 
 네이티브 빌드 환경: Rust 1.88은 기존 코드의 `std::fs::File::try_lock` 때문에 실패했다. 이 환경은 `rustup update stable`로 Rust 1.98.1로 갱신했다. 프런트엔드 정적 파일을 이미 빌드한 경우 `pnpm tauri build --bundles app --config '{"build":{"beforeBuildCommand":"pnpm tauri:prepare-sidecars"}}'`로 웹 빌드를 반복하지 않고 패키징할 수 있다.
 
-데스크톱 검증 결과: macOS arm64 릴리스 빌드 및 `open` 실행 성공, 실행 프로세스와 번들 이름·식별자를 확인했다. 당시 산출물은 `src-tauri/target/release/bundle/macos/Tinysolver Studio.app`이었고, 이름 변경 후의 산출물은 `Tinysolver Studio.app`이다. 브라우저 검증 3개도 다시 통과했다. 네이티브 창의 시각 검수는 자동화 도구의 심볼릭 링크 경로 제약으로 확인하지 못했다. 앱에 포함된 계획표는 빌드 시점 스냅샷이며 최신 상태는 저장소의 생성 문서를 기준으로 한다.
+데스크톱 검증 결과: macOS arm64 릴리스 빌드 및 `open` 실행 성공, 실행 프로세스와 번들 이름·식별자를 확인했다. 당시(2026-09-19, 이름이 Codeg Studio이던 때) 산출물은 `src-tauri/target/release/bundle/macos/Codeg Studio.app`이었고, 이름 변경 후의 산출물은 `Tinysolver Studio.app`이다. 브라우저 검증 3개도 다시 통과했다. 네이티브 창의 시각 검수는 자동화 도구의 심볼릭 링크 경로 제약으로 확인하지 못했다. 앱에 포함된 계획표는 빌드 시점 스냅샷이며 최신 상태는 저장소의 생성 문서를 기준으로 한다.
 
 ### 데스크톱 로딩 회귀 수정
 
