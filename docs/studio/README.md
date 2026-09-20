@@ -1,5 +1,12 @@
 # Content Studio — 첫 구현
 
+> **기반은 [codeg](https://github.com/xintaofei/codeg)(xintaofei, Apache-2.0)다. 고맙다는 말을 먼저 적어 둔다.**
+> 어려운 쪽은 이미 풀려 있었다 — 여러 코딩 에이전트를 한 작업공간에 모으고, 세션을 묶어 두고,
+> 에이전트가 다른 에이전트에게 일을 넘기는 부분. 이 fork 가 얹은 것은 그 위의 콘텐츠 층(이 문서)이고
+> 아래쪽은 거의 그대로 쓴다. 이름을 Tinysolver Studio 로 바꾼 것은 만드는 것이 코드가 아니라
+> 콘텐츠라서다 — codeg 를 지우려는 뜻이 아니다(→ 왜 페이지 `tinysolver-studio-name`).
+
+
 이 문서는 기능 변경과 함께 유지관리한다. 시각 계획의 정본은 [roadmap.json](./roadmap.json)이며, [시각 계획표](../../public/studio-plan.html)는 자동 생성 결과다.
 
 ## 목적과 첫 세트
