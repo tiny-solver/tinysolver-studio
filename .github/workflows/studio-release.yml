@@ -1,0 +1,162 @@
+# Tinysolver Studio release — this fork's own pipeline.
+#
+# Upstream's release.yml (tags `v*.*.*`) needs Apple Developer ID secrets and
+# builds six platforms; it is left untouched so upstream merges stay clean, and
+# it never fires here because this fork never pushes `v*` tags to origin.
+# Cut a release with `scripts/studio-release.sh` (tags `studio-v*`).
+#
+# Why GitHub-hosted runners: the work machine is Linux, and a macOS binary
+# cannot be produced there — Tauri bundling and the Apple frameworks the app
+# links need a macOS host.
+#
+# The macOS app is ad-hoc signed (no Developer ID): fine when fetched with curl
+# (no quarantine flag), but macOS treats every build as a new app for privacy
+# permissions, so folder/network prompts reappear after each update.
+name: Studio Release
+
+on:
+  push:
+    tags:
+      - "studio-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing studio-v* tag to (re)build"
+        required: true
+
+env:
+  RUST_BACKTRACE: short
+  HUSKY: 0
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+concurrency:
+  group: studio-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Create draft release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --draft --title "Tinysolver Studio ${TAG#studio-v}" \
+              --notes "Built from $(git rev-parse --short HEAD). Install on macOS: \`curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/studio-install-macos.sh | bash\`"
+
+  desktop-macos:
+    needs: create-release
+    name: Desktop macOS arm64
+    runs-on: macos-14
+    env:
+      ARTIFACT: tinysolver-studio-desktop-darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: studio-desktop-aarch64-apple-darwin
+      - run: pnpm install --frozen-lockfile
+      - name: Build app bundle (ad-hoc signed)
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: pnpm tauri build --bundles app
+      - name: Seal, verify, package
+        run: |
+          set -euo pipefail
+          app="$(ls -d src-tauri/target/release/bundle/macos/*.app | head -n1)"
+          echo "bundle: $app"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist"
+          test -x "$app/Contents/MacOS/codeg-mcp"
+          mkdir -p dist
+          # tar keeps symlinks and the signature intact; zip via the web UI would not.
+          tar -C "$(dirname "$app")" -czf "dist/$ARTIFACT.tar.gz" "$(basename "$app")"
+          (cd dist && shasum -a 256 "$ARTIFACT.tar.gz" > "$ARTIFACT.tar.gz.sha256")
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber
+
+  server:
+    needs: create-release
+    name: Server ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Linux x64"
+            runner: "ubuntu-22.04"
+            artifact: "tinysolver-studio-server-linux-x64"
+          - name: "macOS arm64"
+            runner: "macos-14"
+            artifact: "tinysolver-studio-server-darwin-arm64"
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: studio-server-${{ matrix.artifact }}
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+      - name: Build frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Build server + codeg-mcp companion
+        working-directory: src-tauri
+        run: |
+          cargo build --release --bin codeg-server --no-default-features
+          cargo build --release --bin codeg-mcp --no-default-features
+      - name: Package and smoke test
+        run: |
+          set -euo pipefail
+          a="${{ matrix.artifact }}"
+          mkdir -p "dist/$a"
+          cp src-tauri/target/release/codeg-server src-tauri/target/release/codeg-mcp "dist/$a/"
+          chmod +x "dist/$a/codeg-server" "dist/$a/codeg-mcp"
+          cp -r out "dist/$a/web"
+          "dist/$a/codeg-server" --version
+          cd dist && tar czf "$a.tar.gz" "$a" && rm -rf "$a"
+          if command -v sha256sum >/dev/null; then sha256sum "$a.tar.gz" > "$a.tar.gz.sha256"; else shasum -a 256 "$a.tar.gz" > "$a.tar.gz.sha256"; fi
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber
+
+  publish:
+    needs: [desktop-macos, server]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$TAG" --draft=false --latest
