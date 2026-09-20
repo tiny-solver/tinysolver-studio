@@ -22,6 +22,12 @@ MODE="${1:-}"
 WT_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/tinysolver-studio-upstream"
 NOTIFY="$HOME/k-codepoet/my-devops/scripts/notify.sh"
 TOPIC="tinysolver.studio.upstream"
+# 우리가 전부 우리 이름으로 갈아 놓은 문자열(업스트림 제품명 + Studio).
+# 붙여서 적지 않고 조각으로 둔다 — 붙여 적으면 아래 git grep 이 **이 스크립트 자신**을
+# 잡아 "브랜드 되돌림"으로 오판한다 (CLAUDE.md 의 `pkill -f` 자기매치와 같은 함정,
+# 첫 실행에서 실제로 밟았다).
+BRAND_UP="Codeg"
+NEEDLE="$BRAND_UP Studio"
 
 say() { printf '%s\n' "$*"; }
 notify() { # notify <level> <title> <body>
@@ -67,7 +73,7 @@ cleanup() { cd "$REPO_DIR"; git worktree remove --force "$wt" 2>/dev/null || rm 
 merge_msg="Merge upstream $tag
 
 업스트림 codeg $tag 를 가져온다. scripts/studio-upstream-sync.sh 가 자동으로 만든 머지다 —
-검사는 이 PR 의 Test 워크플로가 돌린다. 브랜드 불변식(Codeg Studio 문자열 0)은 통과한 상태."
+검사는 이 PR 의 Test 워크플로가 돌린다. 브랜드 불변식(업스트림 제품명 잔존 0)은 통과한 상태."
 
 if ! git -C "$wt" "${IDENT[@]}" merge --no-edit -m "$merge_msg" "$tag" >/dev/null 2>&1; then
   conflicts="$(git -C "$wt" diff --name-only --diff-filter=U)"
@@ -109,10 +115,10 @@ if [ -n "${conflicts:-}" ]; then
 fi
 
 # ── 5. 브랜드 불변식: 우리 이름을 되돌리거나 새 Codeg 문자열을 들여왔는지 ──
-# 문서·생성 HTML 은 지난 기록(이름이 Codeg Studio 이던 때)이라 제외한다.
-drift="$(git -C "$wt" grep -n "Codeg Studio" -- . ':!docs' ':!public' 2>/dev/null | head -n 20 || true)"
+# 문서·생성 HTML 은 지난 기록(이름을 바꾸기 전)이라 제외한다.
+drift="$(git -C "$wt" grep -n "$NEEDLE" -- . ':!docs' ':!public' 2>/dev/null | head -n 20 || true)"
 bad=""
-[ -n "$drift" ] && bad="새 'Codeg Studio' 문자열:\n$drift\n"
+[ -n "$drift" ] && bad="되돌아온 업스트림 제품명:\n$drift\n"
 for pair in \
   'src-tauri/src/brand.rs:Tinysolver Studio' \
   'src-tauri/src/brand.rs:me.tinysolver.studio' \
@@ -136,7 +142,7 @@ if GH_TOKEN="$(gh auth token -u tiny-solver 2>/dev/null)" && [ -n "${GH_TOKEN:-}
   export GH_TOKEN
   pr="$(gh pr create -R tiny-solver/tinysolver-studio --base main --head "$branch" \
         --title "Merge upstream $tag" \
-        --body "$(printf '업스트림 codeg **%s** 자동 머지 (scripts/studio-upstream-sync.sh).\n\n- 충돌 없음 · 브랜드 불변식 통과(Codeg Studio 문자열 0 · brand.rs · tauri.conf · package.json)\n- 검사는 이 PR 의 Test 워크플로가 돌린다\n- 초록이면 land, 그 뒤 릴리스는 `scripts/studio-release.sh`\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)' "$tag")" 2>&1 | tail -n1)" || pr="PR 생성 실패: $pr"
+        --body "$(printf '업스트림 codeg **%s** 자동 머지 (scripts/studio-upstream-sync.sh).\n\n- 충돌 없음 · 브랜드 불변식 통과(업스트림 제품명 잔존 0 · brand.rs · tauri.conf · package.json)\n- 검사는 이 PR 의 Test 워크플로가 돌린다\n- 초록이면 land, 그 뒤 릴리스는 `scripts/studio-release.sh`\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)' "$tag")" 2>&1 | tail -n1)" || pr="PR 생성 실패: $pr"
 fi
 
 notify info "studio: 업스트림 $tag 머지 준비됨" "$(printf '충돌 없음 · 브랜드 불변식 통과\n%s\n\nland:\n  git switch main && git merge --ff-only %s && git push\n그 뒤 릴리스: scripts/studio-release.sh' "${pr:-브랜치 $branch}" "$branch")"
