@@ -81,7 +81,10 @@ jobs:
       - name: Seal, verify, package
         run: |
           set -euo pipefail
-          app="$(ls -d src-tauri/target/release/bundle/macos/*.app | head -n1)"
+          # Glob, never `ls` — see the note in scripts/studio-install-macos.sh.
+          apps=(src-tauri/target/release/bundle/macos/*.app)
+          app="${apps[0]}"
+          test -d "$app"
           echo "bundle: $app"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict "$app"

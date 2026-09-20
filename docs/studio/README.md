@@ -134,6 +134,20 @@ pnpm build
 
 Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NODE_OPTIONS=--no-experimental-webstorage pnpm test`를 사용한다. 제품 코드 변경 없이 테스트 런타임의 중복 Web Storage를 비활성화한다.
 
+## 릴리스와 설치 — 만드는 곳과 쓰는 곳이 다르다
+
+작업 머신은 linux-1이고, 앱을 쓰는 곳은 맥이다. 리눅스에서는 macOS 바이너리를 만들 수 없다(Tauri 번들링과 앱이 링크하는 Apple 프레임워크가 macOS 호스트를 요구한다). 그래서 **릴리스는 linux-1에서 끊고, 빌드는 GitHub 러너가 하고, 맥은 결과물만 받는다.**
+
+| 단계 | 어디서 | 무엇을 |
+| --- | --- | --- |
+| 릴리스 끊기 | linux-1 | `scripts/studio-release.sh` — main이 깨끗하고 push된 상태인지 확인하고 `studio-v<앱 버전>-<날짜>.<순번>` 태그 하나만 push (`--check`는 보기만) |
+| 빌드 | GitHub Actions | `.github/workflows/studio-release.yml` — macOS arm64 데스크톱 앱, 서버 tarball(linux-x64 · darwin-arm64), sha256. 전부 성공해야 릴리스가 공개된다 |
+| 설치·업데이트 | 맥 | `curl -fsSL https://raw.githubusercontent.com/tiny-solver/tinysolver-studio/main/scripts/studio-install-macos.sh \| bash` — 최신 릴리스를 받아 체크섬·서명 확인 후 `/Applications/Tinysolver Studio.app` 교체 (`--check`는 비교만) |
+
+- 업스트림의 `release.yml`(`v*.*.*` 태그, Apple Developer ID 필요)은 병합 충돌을 피하려고 그대로 뒀다. 이 저장소에는 `v*` 태그를 push하지 않으므로 돌지 않는다. **`git push --tags`는 쓰지 않는다** — upstream에서 받아 온 `v*` 태그가 같이 올라가 그 워크플로를 깨운다.
+- 앱은 Developer ID 없이 ad-hoc 서명이다. curl로 받으면 격리 플래그가 붙지 않아 Gatekeeper는 조용하지만, macOS가 빌드마다 다른 앱으로 보기 때문에 업데이트 뒤 폴더·로컬 네트워크 권한을 다시 물을 수 있다.
+- 앱 버전(`tauri.conf.json`)은 업스트림을 따라간다. 어느 빌드인지는 태그로 구분하고, 맥에는 `~/.tinysolver-studio/installed-release`에 설치된 태그가 남는다.
+
 ## 현재 검증 상태
 
 2026-09-19 기준 전체 린트, TypeScript, 정적 빌드가 통과했다. Vitest 456개 파일 / 6,632개 테스트와 실제 Chrome 브라우저 시나리오 3개가 통과했다. 브라우저 시나리오는 렌더 픽셀, 클릭 동작, 드래그·명령·실행 취소, 이미지 번들과 새로고침 복원, 모바일 및 한국어·어두운 테마를 확인한다. 상세 기록은 시각 계획의 검증 기록을 참조한다.
