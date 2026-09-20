@@ -70,7 +70,38 @@ merge_msg="Merge upstream $tag
 검사는 이 PR 의 Test 워크플로가 돌린다. 브랜드 불변식(Codeg Studio 문자열 0)은 통과한 상태."
 
 if ! git -C "$wt" "${IDENT[@]}" merge --no-edit -m "$merge_msg" "$tag" >/dev/null 2>&1; then
-  conflicts="$(git -C "$wt" diff --name-only --diff-filter=U | head -n 40)"
+  conflicts="$(git -C "$wt" diff --name-only --diff-filter=U)"
+
+  # 매 릴리스마다 똑같이 나는 충돌 하나는 스스로 푼다 —
+  # tauri.conf.json 은 우리가 고친 productName(3행)·identifier(5행) 사이에 업스트림이
+  # 매번 올리는 version(4행)이 끼어 있어 항상 부딪힌다. 해소는 늘 같다: 우리 것 + 업스트림 버전.
+  # `--theirs` 로 파일째 받으면 안 된다 — 이 파일에는 브랜드 말고도 지켜야 할 게 있다:
+  # updater endpoints [] (업스트림 릴리스로 자동 업데이트되는 것을 막는다) · deep-link schemes []
+  # (codeg:// 를 빼앗지 않는다) · devUrl 3100 · createUpdaterArtifacts false.
+  if [ "$conflicts" = "src-tauri/tauri.conf.json" ]; then
+    up_ver="$(git -C "$wt" show "$tag:src-tauri/tauri.conf.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')"
+    git -C "$wt" checkout --ours -- src-tauri/tauri.conf.json
+    python3 - "$wt/src-tauri/tauri.conf.json" "$up_ver" <<'PY'
+import json, re, sys
+path, ver = sys.argv[1], sys.argv[2]
+s = open(path).read()
+s2, n = re.subn(r'^(\s*"version":\s*")[^"]*(")', lambda m: m.group(1) + ver + m.group(2), s, count=1, flags=re.M)
+assert n == 1, "version 줄을 못 찾았다"
+json.loads(s2)                                  # 형식이 깨졌으면 여기서 멈춘다
+open(path, "w").write(s2)
+PY
+    git -C "$wt" add src-tauri/tauri.conf.json
+    git -C "$wt" "${IDENT[@]}" commit -q --no-edit -m "$merge_msg
+
+tauri.conf.json 충돌은 스스로 풀었다 — version 만 업스트림($up_ver), 나머지는 우리 것
+(productName · identifier · updater endpoints [] · deep-link schemes [] · devUrl 3100)."
+    say "tauri.conf.json 충돌 자동 해소 (version → $up_ver)"
+    conflicts=""
+  fi
+fi
+
+if [ -n "${conflicts:-}" ]; then
+  conflicts="$(printf '%s' "$conflicts" | head -n 40)"
   git -C "$wt" merge --abort 2>/dev/null || true
   cleanup; git branch -D "$branch" 2>/dev/null || true
   notify warning "studio: 업스트림 $tag 머지 충돌" "$(printf '충돌 파일:\n%s\n\n손으로:\n  cd ~/tinysolver.me/tinysolver-studio\n  git fetch upstream --tags\n  git switch -c %s origin/main && git merge %s' "$conflicts" "$branch" "$tag")"
