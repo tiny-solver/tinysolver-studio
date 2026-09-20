@@ -1,0 +1,100 @@
+# 업스트림 머지 브랜치 검사 — 이 fork 가 가진 워크플로.
+#
+# 왜 별도 파일인가: 업스트림 test.yml 은 `pull_request` 에도 걸려 있지만 **이 저장소는 fork 라
+# PR 이벤트로 런이 만들어지지 않는다**(2026-09-21 실측: PR #1 에 check-run 0). push 는 돈다.
+# 그래서 upstream-sync/** 브랜치 push 에 걸어 PR 에 초록/빨강이 뜨게 한다.
+# 업스트림 파일을 고치지 않으므로 다음 머지에서 충돌하지 않는다.
+#
+# scripts/studio-upstream-sync.sh 가 그 브랜치를 만든다 → 이 검사가 돈다 → 초록이면 land.
+name: Studio Check
+
+on:
+  push:
+    branches: ["upstream-sync/**"]
+  workflow_dispatch:
+
+env:
+  RUST_BACKTRACE: short
+  HUSKY: 0
+  INSTA_UPDATE: "no"
+
+concurrency:
+  group: studio-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  brand:
+    name: Brand invariants
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Our name survived the merge
+        # 업스트림이 같은 줄을 건드리면 깨끗한 머지여도 이름이 되돌아올 수 있다.
+        # 패턴은 조각으로 둔다 — 붙여 적으면 grep 이 이 워크플로 파일 자신을 잡는다.
+        run: |
+          set -euo pipefail
+          up="Codeg"; needle="$up Studio"
+          # 문서·생성 HTML 은 이름을 바꾸기 전의 기록이라 제외한다.
+          if git grep -n "$needle" -- . ':!docs' ':!public' ':!.github' ':!scripts/studio-upstream-sync.sh'; then
+            echo "::error::업스트림 제품명이 되돌아왔다 — 위 줄을 우리 이름으로 고친다"; exit 1
+          fi
+          grep -qF 'Tinysolver Studio' src-tauri/src/brand.rs
+          grep -qF 'me.tinysolver.studio' src-tauri/src/brand.rs
+          grep -qF 'me.tinysolver.studio' src-tauri/tauri.conf.json
+          grep -qF '"name": "tinysolver-studio"' package.json
+          # 업스트림 릴리스로 자동 업데이트되지 않는다 · codeg:// 를 빼앗지 않는다
+          python3 - <<'PY'
+          import json
+          c = json.load(open("src-tauri/tauri.conf.json"))
+          assert c["plugins"]["updater"]["endpoints"] == [], "updater endpoints 가 비어 있지 않다"
+          assert c["plugins"]["deep-link"]["desktop"]["schemes"] == [], "deep-link schemes 가 비어 있지 않다"
+          assert c["bundle"]["createUpdaterArtifacts"] is False
+          print("tauri.conf 불변식 ok · version", c["version"])
+          PY
+          echo "브랜드 불변식 통과"
+
+  frontend:
+    name: Frontend (typecheck + vitest + build)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+      - name: Unit tests
+        run: pnpm test
+      - name: Generated studio pages match their sources
+        run: pnpm studio:plan:check
+      - name: Static export build
+        run: pnpm build
+
+  rust:
+    name: Rust (server + desktop check)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: studio-check
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Prepare Tauri frontendDist placeholder
+        # Tauri 빌드 스크립트가 frontendDist 경로 존재를 확인한다. 정적 산출물은 frontend 잡이 만든다.
+        run: mkdir -p out
+      - name: Check server profile
+        working-directory: src-tauri
+        run: cargo check --no-default-features --bins --lib
+      - name: Check desktop profile
+        working-directory: src-tauri
+        run: cargo check --lib
