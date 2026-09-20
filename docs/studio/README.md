@@ -142,7 +142,7 @@ Node 26에서 jsdom 테스트가 전역 localStorage 충돌로 실패하면 `NOD
 | --- | --- | --- |
 | 릴리스 끊기 | linux-1 | `scripts/studio-release.sh` — main이 깨끗하고 push된 상태인지 확인하고 `studio-v<앱 버전>-<날짜>.<순번>` 태그 하나만 push (`--check`는 보기만) |
 | 빌드 | GitHub Actions | `.github/workflows/studio-release.yml` — macOS arm64 데스크톱 앱, 서버 tarball(linux-x64 · darwin-arm64), sha256. 전부 성공해야 릴리스가 공개된다 |
-| 설치·업데이트 | 맥 | `curl -fsSL https://raw.githubusercontent.com/tiny-solver/tinysolver-studio/main/scripts/studio-install-macos.sh \| bash` — 최신 릴리스를 받아 체크섬·서명 확인 후 `/Applications/Tinysolver Studio.app` 교체 (`--check`는 비교만) |
+| 설치·업데이트 | 맥 | `curl -fsSL https://github.com/tiny-solver/tinysolver-studio/releases/latest/download/studio-install-macos.sh \| bash` — 최신 릴리스를 받아 체크섬·서명 확인 후 `/Applications/Tinysolver Studio.app` 교체 (`--check`는 비교만) |
 
 - 업스트림의 `release.yml`(`v*.*.*` 태그, Apple Developer ID 필요)은 병합 충돌을 피하려고 그대로 뒀다. 이 저장소에는 `v*` 태그를 push하지 않으므로 돌지 않는다. **`git push --tags`는 쓰지 않는다** — upstream에서 받아 온 `v*` 태그가 같이 올라가 그 워크플로를 깨운다.
 - 앱은 Developer ID 없이 ad-hoc 서명이다. curl로 받으면 격리 플래그가 붙지 않아 Gatekeeper는 조용하지만, macOS가 빌드마다 다른 앱으로 보기 때문에 업데이트 뒤 폴더·로컬 네트워크 권한을 다시 물을 수 있다.

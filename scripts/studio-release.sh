@@ -37,4 +37,4 @@ repo="$(git remote get-url origin | sed -E 's#(git@github.com:|https://github.co
 echo
 echo "building: https://github.com/$repo/actions/workflows/studio-release.yml"
 echo "watch:    gh run watch -R $repo \$(gh run list -R $repo -w studio-release.yml -L1 --json databaseId -q '.[0].databaseId')"
-echo "install (macOS, after it turns green): curl -fsSL https://raw.githubusercontent.com/$repo/main/scripts/studio-install-macos.sh | bash"
+echo "install (macOS, after it turns green): curl -fsSL https://github.com/$repo/releases/latest/download/studio-install-macos.sh | bash"
