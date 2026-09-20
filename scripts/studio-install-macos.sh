@@ -40,7 +40,11 @@ curl -fSL --progress-bar -o "$tmp/$ASSET" "$base/$ASSET"
 curl -fsSL -o "$tmp/$ASSET.sha256" "$base/$ASSET.sha256"
 (cd "$tmp" && shasum -a 256 -c "$ASSET.sha256")
 tar -C "$tmp" -xzf "$tmp/$ASSET"
-new="$(ls -d "$tmp"/*.app | head -n1)"
+# Glob, never `ls`: with CLICOLOR_FORCE=1 (set on some of our Macs) `ls` emits
+# ANSI colour codes even into a pipe, and the captured path stops resolving.
+apps=("$tmp"/*.app)
+[ -d "${apps[0]}" ] || { echo "✗ no .app inside $ASSET"; exit 1; }
+new="${apps[0]}"
 codesign --verify --deep --strict "$new"
 
 if pgrep -f "$APP/Contents/MacOS/" >/dev/null 2>&1; then
