@@ -1,4 +1,8 @@
-> **Tinysolver Studio** is a content-production studio — writing, webtoons, video and animation, games, books, courses — built on [Codeg](https://github.com/xintaofei/codeg) by [xintaofei](https://github.com/xintaofei), used under the [Apache License 2.0](./LICENSE). Thank you, [xintaofei](https://github.com/xintaofei) and everyone who has contributed to Codeg. The hard part was already solved here — running many coding agents in one workspace, keeping their sessions together, and letting one agent hand work to another. This fork adds a content layer on top of that work and changes very little underneath. It is an independent fork and is not affiliated with or endorsed by the Codeg project. What this fork adds is the Studio ([docs/studio](./docs/studio/README.md)); the files it touches carry the change history in git. Everything below this note is upstream's README, kept as is.
+> **Tinysolver Studio** is a content-production studio — writing, webtoons, video and animation, games, books, courses — built on [Codeg](https://github.com/xintaofei/codeg) by [xintaofei](https://github.com/xintaofei), used under the [Apache License 2.0](./LICENSE).
+>
+> Thank you to xintaofei and everyone who has contributed to Codeg. The hard part was already solved here: running many coding agents in one workspace, keeping their sessions together, and letting one agent hand work to another. This fork adds a content layer on top — the Studio ([docs/studio](./docs/studio/README.md)) — and changes little underneath; the files it touches carry the change history in git.
+>
+> It is an independent fork, not affiliated with or endorsed by the Codeg project. Everything below this note is upstream's README, kept as is.
 
 # Codeg
 
