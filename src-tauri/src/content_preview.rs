@@ -318,9 +318,13 @@ mod tests {
         std::fs::write(root.join("outputs/game/index.html"), "<h1>hi</h1>").unwrap();
         std::fs::write(root.join("outputs/game/src/main.js"), "export {}").unwrap();
         std::fs::write(root.join(".secret"), "no").unwrap();
-        let outside = tempfile::NamedTempFile::new().unwrap();
+        // 이름 앞의 `_` 는 Windows 용이다 — 심링크를 만드는 쪽이 cfg(unix) 라 거기서는
+        // 이 바인딩이 안 쓰이고, CI 의 `clippy -D warnings` 가 unused_variables 로 떨어진다.
+        // 파일은 테스트가 끝날 때까지 살아 있어야 한다(심링크 대상이 유효해야 하므로) —
+        // 그래서 cfg 블록 안으로 옮기지 않고 바인딩만 밑줄로 둔다.
+        let _outside = tempfile::NamedTempFile::new().unwrap();
         #[cfg(unix)]
-        std::os::unix::fs::symlink(outside.path(), root.join("outputs/link")).unwrap();
+        std::os::unix::fs::symlink(_outside.path(), root.join("outputs/link")).unwrap();
 
         let id = register_root(root).unwrap();
         assert_eq!(register_root(root).unwrap(), id, "idempotent");
