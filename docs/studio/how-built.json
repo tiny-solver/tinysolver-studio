@@ -211,10 +211,16 @@
       "ref": "작업 트리",
       "title": "출시",
       "detail": "빌드를 Studio가 /play/<slug>/ 공개 링크로 직접 서빙하거나 매니페스트의 publish.command로 외부 호스트에 올린다. 결과는 build-info.json에 기록되고 빌드 목록에 링크로 보인다. 에이전트 도구 studio_publish."
+    },
+    {
+      "date": "2026-09-20",
+      "ref": "작업 트리",
+      "title": "편집기의 엔진 개념",
+      "detail": "인스펙터에 행동(스크립트와 설정), 그리기 속성, 액션 단계 편집, 플레이 중 게임 변수와 다시 시작. 목록은 엔진이 codeg:ready로 알려 준다. 명령 action.set/remove를 TypeScript와 Rust 검증기에 추가."
     }
   ],
   "next": [
-    "편집기에 스크립트·애니메이션 UI",
+    "타임라인·타일맵·오디오 같은 더 큰 엔진 개념",
     "편집기에서 이미지 업로드 → assets/ 등록",
     "빌드 zip 호스팅 연동",
     "매니페스트 agents 역할을 실제 에이전트 선택에 반영"

@@ -6258,6 +6258,26 @@
     "publishCommand": "배포",
     "publishDone": "출시됨: {url}",
     "publishNoUrl": "배포했습니다. 배포 명령이 URL을 출력하지 않았습니다.",
-    "unpublish": "내리기"
+    "unpublish": "내리기",
+    "behaviors": "행동",
+    "behaviorsHint": "스크립트를 붙이면 이 객체가 움직이거나 반응합니다. 스크립트는 편집 중이 아니라 미리보기에서 실행됩니다.",
+    "behaviorUnknown": "등록되지 않음",
+    "behaviorRemove": "{name} 제거",
+    "behaviorAdd": "스크립트 이름",
+    "opacity": "불투명도",
+    "rotation": "회전(°)",
+    "scale": "배율",
+    "flipX": "좌우 반전",
+    "actions": "액션",
+    "actionsHint": "클릭했을 때 실행되는 것. 각 단계는 엔진 연산입니다:",
+    "actionUnused": "미사용",
+    "actionNew": "새 액션 이름",
+    "actionSteps": "{name}의 단계(JSON)",
+    "actionApply": "단계 적용",
+    "actionRemove": "액션 삭제",
+    "gameState": "게임 변수",
+    "gameStateEmpty": "아직 없음",
+    "gameReset": "다시 시작",
+    "gameResetHint": "저장된 장면에서 게임을 다시 시작하고 변수를 지웁니다."
   }
 }

@@ -795,3 +795,90 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Engine concepts in the inspector: behaviors, actions, live state. */
+.studio-behavior {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--border, rgb(0 0 0 / 0.12));
+  border-radius: 8px;
+}
+
+.studio-behavior-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.studio-behavior-head code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-behavior-unknown {
+  font-size: 11px;
+  color: var(--destructive, #c0392b);
+}
+
+.studio-behavior-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.studio-behavior-add input {
+  flex: 1;
+  min-width: 0;
+}
+
+.studio-actions summary span,
+.studio-action-list button span {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.studio-action-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.studio-action-list button.is-active {
+  outline: 2px solid var(--primary, #6d5dfc);
+}
+
+.studio-action-editor textarea {
+  width: 100%;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.studio-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-top: 1px solid var(--border, rgb(0 0 0 / 0.12));
+}
+
+.studio-state code {
+  margin-right: 4px;
+  opacity: 0.7;
+}
+
+.studio-state-empty {
+  opacity: 0.6;
+}
+
+.studio-state button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}

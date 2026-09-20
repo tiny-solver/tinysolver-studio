@@ -69,9 +69,19 @@ export type SceneCommand =
   | { type: "node.remove"; id: string }
   | { type: "node.reorder"; id: string; direction: "forward" | "backward" }
   | { type: "scene.update"; name?: string }
+  /** `logic.actions[name] = steps` — what a click (`props.onClick`) runs. */
+  | { type: "action.set"; name: string; steps: ActionStep[] }
+  | { type: "action.remove"; name: string }
+
+/** One step of a `logic.actions` entry: an engine op plus its arguments. */
+export interface ActionStep {
+  op: string
+  [key: string]: unknown
+}
 
 export const MAX_NODES = 1000
 export const MAX_ASSETS = 500
+export const MAX_ACTION_STEPS = 100
 const ID = /^[a-zA-Z0-9_-]{1,100}$/
 export const ANCHORS: SceneAnchor[] = ["top-left", "center", "bottom-center"]
 const COORD = 1_000_000
@@ -268,6 +278,30 @@ const TRANSFORM_KEYS: (keyof SceneTransform)[] = [
   "z",
 ]
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function parseSteps(value: unknown): ActionStep[] {
+  if (!Array.isArray(value) || value.length > MAX_ACTION_STEPS)
+    throw new Error(`steps: expected a list of up to ${MAX_ACTION_STEPS}`)
+  return value.map((raw, index) => {
+    const step = object(raw, `steps[${index}]`)
+    string(step.op, `steps[${index}].op`, 40)
+    return structuredClone(step) as ActionStep
+  })
+}
+
+/** Names and steps of `logic.actions`, tolerant of a missing or odd `logic`. */
+export function sceneActions(scene: SceneFile): Record<string, ActionStep[]> {
+  const logic = scene.logic
+  if (!isRecord(logic) || !isRecord(logic.actions)) return {}
+  const out: Record<string, ActionStep[]> = {}
+  for (const [name, steps] of Object.entries(logic.actions))
+    if (Array.isArray(steps)) out[name] = steps as ActionStep[]
+  return out
+}
+
 /** Apply a batch atomically: any invalid command leaves the input untouched. */
 export function applyCommands(scene: SceneFile, commands: unknown): SceneFile {
   if (
@@ -286,6 +320,16 @@ export function applyCommands(scene: SceneFile, commands: unknown): SceneFile {
     }
     if (command.type === "node.add") {
       nodes.push(parseNode(command.node, nodes.length))
+      continue
+    }
+    if (command.type === "action.set" || command.type === "action.remove") {
+      const name = id(command.name, "action name")
+      const logic = isRecord(next.logic) ? next.logic : {}
+      const actions = isRecord(logic.actions) ? logic.actions : {}
+      if (command.type === "action.remove") delete actions[name]
+      else actions[name] = parseSteps(command.steps)
+      logic.actions = actions
+      next.logic = logic
       continue
     }
     const targetId = string(command.id, "command.id")

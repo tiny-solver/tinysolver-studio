@@ -6258,6 +6258,26 @@
     "publishCommand": "デプロイ",
     "publishDone": "公開しました: {url}",
     "publishNoUrl": "デプロイしました。コマンドは URL を出力しませんでした。",
-    "unpublish": "取り下げる"
+    "unpublish": "取り下げる",
+    "behaviors": "ビヘイビア",
+    "behaviorsHint": "スクリプトを付けると、このオブジェクトが動いたり反応したりします。スクリプトは編集中ではなくプレビューで実行されます。",
+    "behaviorUnknown": "未登録",
+    "behaviorRemove": "{name} を削除",
+    "behaviorAdd": "スクリプト名",
+    "opacity": "不透明度",
+    "rotation": "回転 (°)",
+    "scale": "スケール",
+    "flipX": "左右反転",
+    "actions": "アクション",
+    "actionsHint": "クリックで実行される内容。各ステップはエンジンの操作です:",
+    "actionUnused": "未使用",
+    "actionNew": "新しいアクション名",
+    "actionSteps": "{name} のステップ (JSON)",
+    "actionApply": "ステップを適用",
+    "actionRemove": "アクションを削除",
+    "gameState": "ゲーム変数",
+    "gameStateEmpty": "まだありません",
+    "gameReset": "リスタート",
+    "gameResetHint": "保存済みのシーンからゲームをやり直し、変数を消去します。"
   }
 }

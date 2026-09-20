@@ -2,7 +2,7 @@
   "title": "Content Studio",
   "subtitle": "재료를 만들고, 가공하고, 바로 확인하는 웹 제작 작업공간",
   "updated": "2026-09-19",
-  "version": "0.4 · release",
+  "version": "0.5 · engine concepts in the editor",
   "goal": "대화로 게임을 고치고, 편집기와 미리보기에서 바로 보고, 빌드하고, 링크로 출시한다.",
   "firstSlice": [
     {
@@ -74,15 +74,15 @@
     {
       "id": "S5",
       "title": "한 파일 · 한 루프: 편집기 ↔ 엔진 ↔ 에이전트 ↔ 빌드",
-      "status": "active",
-      "detail": "장면 스키마를 엔진의 것으로 통일(sprite/rect/text, transform, props, logic 보존). content_preview.rs가 프로젝트 폴더를 서빙하고 편집기는 iframe 위 오버레이로 드래그한다. 엔진 계약: ?scene=, codeg:ready(hot), codeg:scene. 작업공간 감시 스트림으로 에이전트 편집을 즉시 반영. build_content_project가 build/game/<version>/과 zip을 만든다. 에이전트는 studio_* MCP 도구(목록·읽기·검증된 명령 적용·빌드)와 편집기의 '대화로 보내기'(장면·선택·런타임 오류)로 루프 안에 있다. 미리보기 서버가 HTML에 오류 보고 스크립트를 주입한다. 엔진은 프로젝트 밖의 관리형 런타임(codeg-engine three-web 0.3.0, Three.js r170 벤더링)이며 편집/플레이 모드·스크립트·트윈·입력을 제공한다. 빌드는 __codeg/를 실체화해 단독 실행된다. 출시: 빌드마다 Studio의 /play/<slug>/ 공개 링크(설정 없음, 버전이 바뀌어도 같은 주소) 또는 매니페스트 publish.command 실행 후 URL 기록. 남은 것: 편집기의 엔진 개념 UI, 에셋 업로드.",
+      "status": "done",
+      "detail": "장면 스키마를 엔진의 것으로 통일(sprite/rect/text, transform, props, logic 보존). content_preview.rs가 프로젝트 폴더를 서빙하고 편집기는 iframe 위 오버레이로 드래그한다. 엔진 계약: ?scene=, codeg:ready(hot), codeg:scene. 작업공간 감시 스트림으로 에이전트 편집을 즉시 반영. build_content_project가 build/game/<version>/과 zip을 만든다. 에이전트는 studio_* MCP 도구(목록·읽기·검증된 명령 적용·빌드)와 편집기의 '대화로 보내기'(장면·선택·런타임 오류)로 루프 안에 있다. 미리보기 서버가 HTML에 오류 보고 스크립트를 주입한다. 엔진은 프로젝트 밖의 관리형 런타임(codeg-engine three-web 0.3.0, Three.js r170 벤더링)이며 편집/플레이 모드·스크립트·트윈·입력을 제공한다. 빌드는 __codeg/를 실체화해 단독 실행된다. 출시: 빌드마다 Studio의 /play/<slug>/ 공개 링크(설정 없음, 버전이 바뀌어도 같은 주소) 또는 매니페스트 publish.command 실행 후 URL 기록. 편집기는 행동(props.script, 엔진이 알려 준 목록과 기본 설정), 그리기 속성(opacity·rotation·scale·flipX), 액션 단계(action.set/remove), 플레이 중 게임 변수와 다시 시작을 다룬다.",
       "acceptance": "드래그 → 즉시 반영 → 자동 저장 → 에이전트가 파일 수정 → 편집기·iframe 갱신 → 빌드 → 출시 링크에서 로그인 없이 실행. 브라우저(codeg-server)에서 실제로 확인."
     },
     {
       "id": "S6",
       "title": "제작 공정과 분야별 확장",
       "status": "planned",
-      "detail": "가공 작업·의존성·캐시·재생성, 타일맵, 3D 지형·재질·내비게이션, 타임라인·강의 단계.",
+      "detail": "에셋 업로드(편집기 → assets/), 타임라인·애니메이션 클립, 타일맵, 오디오, 3D 지형·재질·내비게이션, 가공 작업·의존성·캐시·재생성, 0.2.x 프로젝트 이전 도구, publish 프리셋 UI, 매니페스트 agents 역할 반영.",
       "acceptance": "원본 변경의 영향을 추적하고 필요한 산출물만 재생성한다."
     }
   ],
@@ -90,7 +90,7 @@
     "편집기는 프로젝트 폴더가 있어야 한다. ?path 없는 /studio는 안내만 보여 준다. 브라우저 초안·번들 내보내기는 제거됐다.",
     "실행 취소 이력은 현재 세션의 최대 50단계다. 파일 이력은 git이다.",
     "에이전트는 장면 파일을 직접 쓰거나 studio_* MCP 도구를 쓴다. 도구는 콘텐츠 프로젝트 폴더에서 연 세션에만 노출된다. 편집기의 선택 상태는 사용자가 '대화로 보내기'를 눌러야 에이전트에 전달된다.",
-    "편집기가 편집하는 필드는 transform·visible·asset·text·size·color·interactive·onClick이다. 나머지 props와 logic은 보존만 한다.",
+    "편집기가 편집하는 필드는 transform, props의 visible·asset·text·size·color·interactive·onClick·opacity·rotation·scale·flipX·script, logic.actions다. 액션 단계와 목록·객체형 스크립트 설정은 JSON으로 편집한다. 나머지 props와 logic은 보존만 한다.",
     "이미지 업로드 UI가 없다. 에셋은 assets/에 두고 장면 파일에 선언한다.",
     "UI는 10개 언어 문자열이 있다. ko·en 외는 기계적 번역 수준이다.",
     "장면 검증기가 TypeScript(document.ts)와 Rust(studio_scene.rs) 두 벌이다. 규칙을 바꾸면 둘 다 고친다. Rust 쪽은 첫 프로토타입 포맷을 변환하지 않고 거부한다.",
@@ -98,7 +98,8 @@
     "엔진은 2D 장면 런타임이다. 3D·물리·타일맵·오디오·파티클이 없다. 필요하면 스크립트에서 engine.THREE로 직접 그린다.",
     "0.2.x 프로젝트를 관리형 엔진으로 옮기는 자동 도구가 없다. index.html의 importmap과 src/main.js를 새 스캐폴드처럼 바꾸면 된다.",
     "빌드는 outputs/game·assets 복사 + 엔진(__codeg/) 실체화 + zip이다. engine.build가 있으면 먼저 실행하지만, 미리보기 전에 자동으로 돌리지는 않는다.",
-    "/play/<slug>/ 링크는 인증이 없고 Studio 서버만큼만 공개된다. 데스크톱에서는 이 기기와 LAN용이다. 외부 호스트는 publish.command가 부르는 CLI와 그 계정에 달려 있고, 프리셋 UI는 없다."
+    "/play/<slug>/ 링크는 인증이 없고 Studio 서버만큼만 공개된다. 데스크톱에서는 이 기기와 LAN용이다. 외부 호스트는 publish.command가 부르는 CLI와 그 계정에 달려 있고, 프리셋 UI는 없다.",
+    "행동 선택 목록과 액션 연산 안내는 실행 중인 엔진이 알려 준 것이다. 모드·목록을 알리지 않는 엔진(0.2.x, 직접 쓴 엔진)에서는 이름을 직접 입력해야 하고 게임 변수 패널이 나오지 않는다."
   ],
   "decisions": [
     {
@@ -160,6 +161,11 @@
       "id": "D12",
       "decision": "출시는 Studio가 직접 서빙하는 링크가 기본, 외부 호스트는 프로젝트의 명령",
       "reason": "호스트마다 연동을 만들면 계정·토큰을 Studio가 떠안는다. 빌드가 자족적인 정적 폴더이므로 서버 배포에서는 그 폴더를 공개 경로로 서빙하는 것만으로 출시가 되고, 그 밖의 호스트는 engine.build와 같은 방식(매니페스트의 셸 명령, 환경 변수로 경로 전달)이면 어떤 CLI든 쓸 수 있다."
+    },
+    {
+      "id": "D13",
+      "decision": "편집기의 엔진 개념은 엔진이 알려 준 것에서 나온다",
+      "reason": "행동·연산 목록을 편집기에 하드코딩하면 엔진과 어긋나고 프로젝트가 등록한 스크립트가 보이지 않는다. 엔진이 codeg:ready로 등록된 이름과 내장 스크립트의 기본 설정을 알리면 편집기는 그것으로 선택 목록과 입력란을 만들고, 저장은 기존 props·명령 경로를 그대로 쓴다."
     }
   ],
   "checks": [
@@ -185,7 +191,8 @@
     "2026-09-19 · 동시 세션 정리 후 재검증: tests/studio/project.spec.ts의 Array.at(-1)이 tsconfig lib ES2020과 충돌해 tsc가 실패하던 것을 인덱스 접근으로 고쳤다. 두 세션이 cargo를 동시에 돌려 src-tauri/target/debug가 34GB(incremental 11GB + codeg 자체 산출물 15GB)로 커져 디스크가 가득 찼고, 그 산출물만 지워 26GB를 확보했다. 이후 tsc·eslint·pnpm build·Vitest 456/6,631·cargo check 3종·clippy 3종·cargo test content_ 통과. 정적 export + codeg-server(3082)로 새 web-three 프로젝트를 API로 만들고 Playwright 루프(드래그→자동 저장→디스크 편집→재로드→빌드 v1 + zip) 통과.",
     "2026-09-20 · 에이전트를 루프 안으로: studio_scene·studio_tools·companion·listener·content_preview Rust 테스트 16개 통과, agent-context Vitest 5개 통과, tsc·eslint 통과. 실제 codeg-mcp 바이너리를 --features studio로 띄워 tools/list에 4개 도구가 나오는 것 확인. Playwright 루프에 '엔진 코드가 예외를 던지면 편집기에 오류 띠가 뜨고, 고치면 사라진다' 단계를 추가해 codeg-server(3082)에서 통과. 확인하지 못한 것: 실제 에이전트 세션이 studio_* 도구를 호출하는 것, 작업공간 안에서 '대화로 보내기'가 입력창에 들어가는 것(단독 /studio 페이지에는 대화가 없어 버튼이 비활성인 것만 확인).",
     "2026-09-20 · 관리형 엔진: content_engine·content_preview·content_project Rust 테스트 통과(예약 경로는 바이너리에서 서빙되고 폴더가 가릴 수 없음, 빌드에 __codeg/ 실체화, 진입 HTML에 외부 URL 없음, 프로젝트 폴더에는 쓰지 않음). Playwright 루프(codeg-server 3082, 새 web-three 프로젝트): 편집 모드에서 hero.y 고정 → 미리보기에서 float로 변함 → 편집으로 돌아오면 원래 값. 빌드 폴더를 별도 정적 서버로 띄워 캔버스 렌더·플레이 모드·타 출처 요청 0건·페이지 오류 0건 확인.",
-    "2026-09-20 · 출시: content_publish(slug, 등록·재지정·내리기, 경로 제한, 미리보기 스크립트 없음)·publish_content_build(local 기록, publish.command 없을 때 거절, 자리표시자·환경 변수·마지막 URL 추출, 비정상 종료 실패, 링크 재지정 시 이전 빌드 기록 이동) Rust 테스트 통과, companion studio_publish 테스트 통과. Playwright 루프(codeg-server 3082): 빌드 → 출시 → 새 브라우저 컨텍스트(토큰 없음)에서 /play/loop-check/ 200·캔버스 렌더·주입 스크립트 없음 → 내리기 → 404. publish.command는 가짜 명령으로만 검증했고 실제 Cloudflare/Netlify/itch.io 배포는 해 보지 않았다."
+    "2026-09-20 · 출시: content_publish(slug, 등록·재지정·내리기, 경로 제한, 미리보기 스크립트 없음)·publish_content_build(local 기록, publish.command 없을 때 거절, 자리표시자·환경 변수·마지막 URL 추출, 비정상 종료 실패, 링크 재지정 시 이전 빌드 기록 이동) Rust 테스트 통과, companion studio_publish 테스트 통과. Playwright 루프(codeg-server 3082): 빌드 → 출시 → 새 브라우저 컨텍스트(토큰 없음)에서 /play/loop-check/ 200·캔버스 렌더·주입 스크립트 없음 → 내리기 → 404. publish.command는 가짜 명령으로만 검증했고 실제 Cloudflare/Netlify/itch.io 배포는 해 보지 않았다.",
+    "2026-09-20 · 편집기의 엔진 개념: behaviors·document(action.set/remove) Vitest, studio_scene Rust 테스트 통과. Playwright 루프(codeg-server 3082): hero 선택 → float의 amplitude 12→40이 파일에 { name, amplitude }로 저장 → pulse 추가로 배열 저장 → 액션 act_count 생성·단계 적용·onClick 연결이 파일에 반영 → 미리보기에서 게임 변수 패널에 setup의 taps 표시 → 캔버스의 hero 클릭으로 score 5·taps 1 → 다시 시작으로 score 사라지고 taps 0 → 편집으로 돌아오면 패널 없음. 이 과정에서 setup이 한 번만 실행돼 재시작 후 변수 초기값이 사라지는 엔진 결함을 찾아, 재시작마다 state·리스너를 비우고 setup을 다시 돌리도록 고쳤다."
   ],
   "maintenance": "기능 변경 시 roadmap.json의 상태·완료 기준·검증 결과를 갱신하고 pnpm studio:plan을 실행한다. HTML을 직접 수정하지 않는다.",
   "sources": [

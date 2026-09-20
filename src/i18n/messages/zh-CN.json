@@ -6258,6 +6258,26 @@
     "publishCommand": "部署",
     "publishDone": "已发布: {url}",
     "publishNoUrl": "已部署。部署命令没有输出 URL。",
-    "unpublish": "下线"
+    "unpublish": "下线",
+    "behaviors": "行为",
+    "behaviorsHint": "附加脚本可让此对象移动或做出反应。脚本在预览时运行,编辑时不运行。",
+    "behaviorUnknown": "未注册",
+    "behaviorRemove": "移除 {name}",
+    "behaviorAdd": "脚本名称",
+    "opacity": "不透明度",
+    "rotation": "旋转 (°)",
+    "scale": "缩放",
+    "flipX": "水平翻转",
+    "actions": "动作",
+    "actionsHint": "点击时执行的内容。每一步都是一个引擎操作:",
+    "actionUnused": "未使用",
+    "actionNew": "新动作名称",
+    "actionSteps": "{name} 的步骤 (JSON)",
+    "actionApply": "应用步骤",
+    "actionRemove": "删除动作",
+    "gameState": "游戏变量",
+    "gameStateEmpty": "暂无",
+    "gameReset": "重新开始",
+    "gameResetHint": "从已保存的场景重新开始游戏并清除变量。"
   }
 }

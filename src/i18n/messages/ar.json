@@ -6258,6 +6258,26 @@
     "publishCommand": "نشر خارجي",
     "publishDone": "منشور على {url}",
     "publishNoUrl": "تم النشر. لم يطبع أمر النشر أي رابط.",
-    "unpublish": "إيقاف النشر"
+    "unpublish": "إيقاف النشر",
+    "behaviors": "السلوكيات",
+    "behaviorsHint": "أرفق سكربتًا ليتحرك هذا العنصر أو يتفاعل. تعمل السكربتات في المعاينة لا أثناء التحرير.",
+    "behaviorUnknown": "غير مسجَّل",
+    "behaviorRemove": "إزالة {name}",
+    "behaviorAdd": "اسم السكربت",
+    "opacity": "العتامة",
+    "rotation": "الدوران (°)",
+    "scale": "المقياس",
+    "flipX": "قلب أفقي",
+    "actions": "الإجراءات",
+    "actionsHint": "ما ينفّذه النقر. كل خطوة هي عملية من عمليات المحرك:",
+    "actionUnused": "غير مستخدم",
+    "actionNew": "اسم الإجراء الجديد",
+    "actionSteps": "خطوات {name} (JSON)",
+    "actionApply": "تطبيق الخطوات",
+    "actionRemove": "حذف الإجراء",
+    "gameState": "متغيرات اللعبة",
+    "gameStateEmpty": "لا شيء بعد",
+    "gameReset": "إعادة التشغيل",
+    "gameResetHint": "يعيد تشغيل اللعبة من المشهد المحفوظ ويمسح متغيراتها."
   }
 }

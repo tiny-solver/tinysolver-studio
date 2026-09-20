@@ -30,6 +30,7 @@ import {
   createNode,
   isVisible,
   parseScene,
+  sceneActions,
   type SceneAnchor,
   type SceneFile,
   type SceneNode,
@@ -55,11 +56,18 @@ import {
 import { toErrorMessage } from "@/lib/app-error"
 import { joinFsPath } from "@/lib/path-utils"
 import { buildAgentContext } from "@/lib/studio/agent-context"
+import { NO_ENGINE_INFO, type EngineInfo } from "@/lib/studio/behaviors"
 import { revealItemInDir, isLocalDesktop } from "@/lib/platform"
 import { BrowserLink } from "@/components/ui/browser-link"
 import { getServerBaseUrl } from "@/lib/transport"
 import { getWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
 import type { ContentBuild, ContentScene } from "@/lib/types"
+import {
+  ActionsSection,
+  BehaviorsSection,
+  DrawSection,
+  StatePanel,
+} from "./studio-engine-panels"
 import { StudioStage } from "./studio-stage"
 import { useChatBridge, useEngineErrorList } from "./use-chat-bridge"
 import "./studio.css"
@@ -106,6 +114,9 @@ export function StudioWorkspace({
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [hot, setHot] = useState(false)
+  const [engineInfo, setEngineInfo] = useState<EngineInfo>(NO_ENGINE_INFO)
+  const [engineState, setEngineState] = useState<Record<string, unknown>>({})
+  const [resetToken, setResetToken] = useState(0)
   const [reloadToken, setReloadToken] = useState(0)
   const chat = useChatBridge()
   const [builds, setBuilds] = useState<ContentBuild[]>([])
@@ -480,7 +491,11 @@ export function StudioWorkspace({
   const publicUrl = (url: string) =>
     url.startsWith("/") ? `${preview?.origin ?? ""}${url}` : url
 
-  const onReady = useCallback((isHot: boolean) => setHot(isHot), [])
+  const onReady = useCallback((isHot: boolean, info: EngineInfo) => {
+    setHot(isHot)
+    setEngineInfo(info)
+    setEngineState({})
+  }, [])
   // Scoped to the running engine: a reload or another scene starts over.
   const {
     errors: engineErrors,
@@ -889,10 +904,18 @@ export function StudioWorkspace({
                 onMove={onMove}
                 onReady={onReady}
                 onEngineError={onEngineError}
+                onEngineState={setEngineState}
+                resetToken={resetToken}
                 sameOrigin={preview?.sameOrigin ?? false}
               />
             )}
           </div>
+          {playing && engineInfo.modes && (
+            <StatePanel
+              state={engineState}
+              onReset={() => setResetToken((n) => n + 1)}
+            />
+          )}
           <div className="studio-canvas-caption">
             <span>{playing ? t("playHint") : t("dragHint")}</span>
             <span>{t("instant")}</span>
@@ -998,6 +1021,7 @@ export function StudioWorkspace({
                   />
                   {t("visible")}
                 </label>
+                <DrawSection node={selected} onProps={updateProps} />
                 {selected.type === "sprite" && (
                   <label>
                     {t("asset")}
@@ -1121,6 +1145,7 @@ export function StudioWorkspace({
                 <label>
                   {t("onClick")}
                   <input
+                    list="studio-action-names"
                     value={
                       typeof selected.props.onClick === "string"
                         ? selected.props.onClick
@@ -1131,7 +1156,18 @@ export function StudioWorkspace({
                     }
                   />
                 </label>
+                <datalist id="studio-action-names">
+                  {Object.keys(sceneActions(scene!)).map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
                 <p className="studio-field-hint">{t("onClickHint")}</p>
+                <hr />
+                <BehaviorsSection
+                  node={selected}
+                  info={engineInfo}
+                  dispatch={dispatch}
+                />
                 <details>
                   <summary>{t("rawProps")}</summary>
                   <p className="studio-field-hint">{t("rawPropsHint")}</p>
@@ -1182,6 +1218,17 @@ export function StudioWorkspace({
               </>
             ) : (
               <p className="studio-field-hint">{t("selectHint")}</p>
+            )}
+            {scene && (
+              <>
+                <hr />
+                <ActionsSection
+                  scene={scene}
+                  info={engineInfo}
+                  dispatch={dispatch}
+                  onError={setError}
+                />
+              </>
             )}
           </fieldset>
         </aside>

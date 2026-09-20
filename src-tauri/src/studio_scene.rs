@@ -17,6 +17,7 @@ use serde_json::{json, Map, Value};
 pub const MAX_NODES: usize = 1000;
 pub const MAX_ASSETS: usize = 500;
 pub const MAX_COMMANDS: usize = 200;
+pub const MAX_ACTION_STEPS: usize = 100;
 const COORD: f64 = 1_000_000.0;
 pub const ANCHORS: [&str; 3] = ["top-left", "center", "bottom-center"];
 const TRANSFORM_KEYS: [&str; 6] = ["x", "y", "w", "h", "anchor", "z"];
@@ -286,6 +287,22 @@ fn has_duplicate_ids(items: &[Value]) -> bool {
         .any(|id| !seen.insert(id))
 }
 
+fn parse_steps(value: &Value) -> SceneResult<Value> {
+    let list = value
+        .as_array()
+        .filter(|l| l.len() <= MAX_ACTION_STEPS)
+        .ok_or_else(|| format!("steps: expected a list of up to {MAX_ACTION_STEPS}"))?;
+    for (index, raw) in list.iter().enumerate() {
+        let step = object(raw, &format!("steps[{index}]"))?;
+        string(
+            step.get("op").unwrap_or(&Value::Null),
+            &format!("steps[{index}].op"),
+            40,
+        )?;
+    }
+    Ok(value.clone())
+}
+
 fn node_id(node: &Value) -> &str {
     node.get("id").and_then(Value::as_str).unwrap_or("")
 }
@@ -341,6 +358,40 @@ pub fn apply_commands(scene: &Value, commands: &Value) -> SceneResult<Value> {
                     next.as_object_mut()
                         .expect("scene is an object")
                         .insert("name".into(), Value::String(name));
+                }
+            }
+            "action.set" | "action.remove" => {
+                let name = id(command.get("name").unwrap_or(&Value::Null), "action name")?;
+                let steps = if kind == "action.set" {
+                    Some(parse_steps(command.get("steps").unwrap_or(&Value::Null))?)
+                } else {
+                    None
+                };
+                // `logic` is engine-owned and may be absent or oddly shaped;
+                // anything that is not an object is replaced, the rest kept.
+                let scene = next.as_object_mut().expect("scene is an object");
+                let logic = scene
+                    .entry("logic")
+                    .or_insert_with(|| Value::Object(Map::new()));
+                if !logic.is_object() {
+                    *logic = Value::Object(Map::new());
+                }
+                let actions = logic
+                    .as_object_mut()
+                    .expect("logic is an object")
+                    .entry("actions")
+                    .or_insert_with(|| Value::Object(Map::new()));
+                if !actions.is_object() {
+                    *actions = Value::Object(Map::new());
+                }
+                let actions = actions.as_object_mut().expect("actions is an object");
+                match steps {
+                    Some(steps) => {
+                        actions.insert(name, steps);
+                    }
+                    None => {
+                        actions.remove(&name);
+                    }
                 }
             }
             "node.add" => {
@@ -526,6 +577,45 @@ mod tests {
         assert!(apply_commands(&scene, &json!([{ "type": "node.explode", "id": "hero" }]))
             .unwrap_err()
             .contains("Unknown command: node.explode"));
+    }
+
+    #[test]
+    fn action_commands_edit_logic_and_keep_the_rest() {
+        let mut raw = sample();
+        raw["logic"]["flags"] = json!({ "intro": true });
+        let scene = parse_scene(&raw).unwrap();
+        let next = apply_commands(
+            &scene,
+            &json!([
+                { "type": "action.set", "name": "act_open", "steps": [
+                    { "op": "swapAsset", "id": "hero", "asset": "hero_idle" },
+                    { "op": "add", "key": "coins", "value": 3, "if": { "key": "hasKey" } }
+                ] },
+                { "type": "action.remove", "name": "act_hero" }
+            ]),
+        )
+        .unwrap();
+        assert_eq!(next["logic"]["actions"]["act_open"][1]["if"]["key"], "hasKey");
+        assert!(next["logic"]["actions"].get("act_hero").is_none());
+        assert_eq!(next["logic"]["flags"]["intro"], true, "other logic fields stay");
+        assert_eq!(scene["logic"]["actions"]["act_hero"][0]["op"], "say", "input untouched");
+
+        // A scene with no logic (or a broken one) gets a fresh object.
+        let mut bare = sample();
+        bare.as_object_mut().unwrap().remove("logic");
+        let bare = parse_scene(&bare).unwrap();
+        let made = apply_commands(&bare, &json!([{ "type": "action.set", "name": "hi", "steps": [{ "op": "say", "text": "hi" }] }])).unwrap();
+        assert_eq!(made["logic"]["actions"]["hi"][0]["text"], "hi");
+
+        for (bad, needle) in [
+            (json!([{ "type": "action.set", "name": "bad name", "steps": [] }]), "action name"),
+            (json!([{ "type": "action.set", "name": "a", "steps": [{ "id": "x" }] }]), "steps[0].op"),
+            (json!([{ "type": "action.set", "name": "a", "steps": "say hi" }]), "steps"),
+            (json!([{ "type": "action.set", "name": "a" }]), "steps"),
+        ] {
+            let err = apply_commands(&scene, &bad).unwrap_err();
+            assert!(err.contains(needle), "{err}");
+        }
     }
 
     #[test]

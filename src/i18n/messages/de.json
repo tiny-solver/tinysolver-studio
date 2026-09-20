@@ -6258,6 +6258,26 @@
     "publishCommand": "Bereitstellen",
     "publishDone": "Live unter {url}",
     "publishNoUrl": "Bereitgestellt. Der Befehl hat keine URL ausgegeben.",
-    "unpublish": "Offline nehmen"
+    "unpublish": "Offline nehmen",
+    "behaviors": "Verhalten",
+    "behaviorsHint": "Hänge ein Skript an, damit sich dieses Objekt bewegt oder reagiert. Skripte laufen in der Vorschau, nicht beim Bearbeiten.",
+    "behaviorUnknown": "nicht registriert",
+    "behaviorRemove": "{name} entfernen",
+    "behaviorAdd": "Skriptname",
+    "opacity": "Deckkraft",
+    "rotation": "Drehung (°)",
+    "scale": "Skalierung",
+    "flipX": "Horizontal spiegeln",
+    "actions": "Aktionen",
+    "actionsHint": "Was ein Klick ausführt. Jeder Schritt ist eine Engine-Operation:",
+    "actionUnused": "unbenutzt",
+    "actionNew": "Name der neuen Aktion",
+    "actionSteps": "Schritte von {name} (JSON)",
+    "actionApply": "Schritte anwenden",
+    "actionRemove": "Aktion löschen",
+    "gameState": "Spielvariablen",
+    "gameStateEmpty": "noch keine",
+    "gameReset": "Neu starten",
+    "gameResetHint": "Startet das Spiel aus der gespeicherten Szene neu und löscht seine Variablen."
   }
 }

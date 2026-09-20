@@ -6258,6 +6258,26 @@
     "publishCommand": "Implementar",
     "publishDone": "Publicado em {url}",
     "publishNoUrl": "Implementado. O comando não mostrou nenhum URL.",
-    "unpublish": "Retirar"
+    "unpublish": "Retirar",
+    "behaviors": "Comportamentos",
+    "behaviorsHint": "Anexe um script para que este objeto se mova ou reaja. Os scripts correm na pré-visualização, não durante a edição.",
+    "behaviorUnknown": "não registado",
+    "behaviorRemove": "Remover {name}",
+    "behaviorAdd": "Nome do script",
+    "opacity": "Opacidade",
+    "rotation": "Rotação (°)",
+    "scale": "Escala",
+    "flipX": "Inverter na horizontal",
+    "actions": "Ações",
+    "actionsHint": "O que um clique executa. Cada passo é uma operação do motor:",
+    "actionUnused": "não usada",
+    "actionNew": "Nome da nova ação",
+    "actionSteps": "Passos de {name} (JSON)",
+    "actionApply": "Aplicar passos",
+    "actionRemove": "Remover ação",
+    "gameState": "Variáveis do jogo",
+    "gameStateEmpty": "nenhuma ainda",
+    "gameReset": "Reiniciar",
+    "gameResetHint": "Reinicia o jogo a partir da cena guardada e limpa as variáveis."
   }
 }

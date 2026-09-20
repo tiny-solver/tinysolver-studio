@@ -6258,6 +6258,26 @@
     "publishCommand": "Déployer",
     "publishDone": "En ligne : {url}",
     "publishNoUrl": "Déployé. La commande n’a affiché aucune URL.",
-    "unpublish": "Retirer"
+    "unpublish": "Retirer",
+    "behaviors": "Comportements",
+    "behaviorsHint": "Attachez un script pour que cet objet bouge ou réagisse. Les scripts s’exécutent dans l’aperçu, pas pendant l’édition.",
+    "behaviorUnknown": "non enregistré",
+    "behaviorRemove": "Retirer {name}",
+    "behaviorAdd": "Nom du script",
+    "opacity": "Opacité",
+    "rotation": "Rotation (°)",
+    "scale": "Échelle",
+    "flipX": "Retourner horizontalement",
+    "actions": "Actions",
+    "actionsHint": "Ce qu’un clic exécute. Chaque étape est une opération du moteur :",
+    "actionUnused": "inutilisée",
+    "actionNew": "Nom de la nouvelle action",
+    "actionSteps": "Étapes de {name} (JSON)",
+    "actionApply": "Appliquer les étapes",
+    "actionRemove": "Supprimer l’action",
+    "gameState": "Variables du jeu",
+    "gameStateEmpty": "aucune pour l’instant",
+    "gameReset": "Redémarrer",
+    "gameResetHint": "Redémarre le jeu depuis la scène enregistrée et efface ses variables."
   }
 }
