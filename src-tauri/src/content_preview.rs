@@ -94,7 +94,7 @@ fn root_for(id: &str) -> Option<PathBuf> {
 /// Resolve `rel` inside `root`, refusing traversal, absolute paths, dot
 /// segments, and symlinks that escape. A directory resolves to its
 /// `index.html`.
-fn resolve(root: &Path, rel: &str) -> Option<PathBuf> {
+pub(crate) fn resolve(root: &Path, rel: &str) -> Option<PathBuf> {
     let rel = rel.trim_start_matches('/');
     let mut path = root.to_path_buf();
     for component in Path::new(rel).components() {
@@ -119,7 +119,7 @@ fn resolve(root: &Path, rel: &str) -> Option<PathBuf> {
     Some(canonical)
 }
 
-fn content_type(path: &Path) -> &'static str {
+pub(crate) fn content_type(path: &Path) -> &'static str {
     match path
         .extension()
         .and_then(|e| e.to_str())
@@ -262,7 +262,9 @@ pub async fn loopback_port() -> Result<u16, AppCommandError> {
                 .await
                 .map_err(AppCommandError::io)?;
             let port = listener.local_addr().map_err(AppCommandError::io)?.port();
-            let router = routes().layer(
+            // Published games ride on the same listener, so a desktop with
+            // the web service off still has a working `/play/<slug>/` link.
+            let router = routes().merge(crate::content_publish::routes()).layer(
                 tower_http::cors::CorsLayer::new()
                     .allow_origin(tower_http::cors::Any)
                     .allow_methods(tower_http::cors::Any),

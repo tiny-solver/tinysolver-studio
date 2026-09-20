@@ -3901,6 +3901,17 @@ export interface ContentBuild {
   zip?: string | null
   size_bytes: number
   log: string
+  /** Where this build has been released; at most one record per target. */
+  published?: ContentPublishRecord[]
+}
+
+/** `local`: served by the Studio at `url` (a path, `/play/<slug>/`).
+ *  `command`: the manifest's `publish.command` ran; `url` is what it printed. */
+export interface ContentPublishRecord {
+  target: "local" | "command"
+  url?: string | null
+  at: string
+  log?: string
 }
 
 /** Where the game iframe loads from; see `content_preview.rs`. */
@@ -3931,6 +3942,8 @@ export interface ContentProjectManifest {
   engine?: ContentEngineInfo | null
   paths: { bible: string; assets: string; outputs: string; build: string }
   agents: Record<string, string | null>
+  /** Shell command that deploys a build to an outside host. */
+  publish?: { command: string } | null
 }
 
 export interface GitSettings {

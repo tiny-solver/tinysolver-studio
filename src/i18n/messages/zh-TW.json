@@ -6251,6 +6251,13 @@
     "sendToChatHint": "將場景、選取的物件和預覽錯誤放入對話輸入框,接著輸入你的需求。",
     "sendToChatNoSession": "在 Studio 旁開啟一個對話即可傳送脈絡。",
     "contextSent": "已將脈絡加入對話輸入框。輸入需求後送出。",
-    "engineErrors": "預覽錯誤 {count} 個"
+    "engineErrors": "預覽錯誤 {count} 個",
+    "publishLocal": "發佈",
+    "publishing": "發佈中…",
+    "publishLocalHint": "由此 Codeg Studio 在 /play/(專案)/ 提供此建置。發佈新建置時連結不變。",
+    "publishCommand": "部署",
+    "publishDone": "已發佈: {url}",
+    "publishNoUrl": "已部署。部署指令沒有輸出 URL。",
+    "unpublish": "下架"
   }
 }

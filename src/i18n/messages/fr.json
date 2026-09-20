@@ -6251,6 +6251,13 @@
     "sendToChatHint": "Place la scène, l’objet sélectionné et les erreurs de l’aperçu dans la zone de saisie du chat ; saisissez ensuite votre demande.",
     "sendToChatNoSession": "Ouvrez une conversation à côté du Studio pour lui envoyer le contexte.",
     "contextSent": "Contexte ajouté à la zone de saisie du chat. Saisissez votre demande et envoyez.",
-    "engineErrors": "Erreurs de l’aperçu : {count}"
+    "engineErrors": "Erreurs de l’aperçu : {count}",
+    "publishLocal": "Publier",
+    "publishing": "Publication…",
+    "publishLocalHint": "Ce Codeg Studio sert ce build à l’adresse /play/(projet)/. Le lien reste le même pour les builds suivants.",
+    "publishCommand": "Déployer",
+    "publishDone": "En ligne : {url}",
+    "publishNoUrl": "Déployé. La commande n’a affiché aucune URL.",
+    "unpublish": "Retirer"
   }
 }

@@ -6251,6 +6251,13 @@
     "sendToChatHint": "将场景、选中的对象和预览错误放入对话输入框,然后输入你的请求。",
     "sendToChatNoSession": "在 Studio 旁打开一个对话即可发送上下文。",
     "contextSent": "已将上下文加入对话输入框。输入请求后发送。",
-    "engineErrors": "预览错误 {count} 个"
+    "engineErrors": "预览错误 {count} 个",
+    "publishLocal": "发布",
+    "publishing": "发布中…",
+    "publishLocalHint": "由此 Codeg Studio 在 /play/(项目)/ 提供此构建。发布新构建时链接不变。",
+    "publishCommand": "部署",
+    "publishDone": "已发布: {url}",
+    "publishNoUrl": "已部署。部署命令没有输出 URL。",
+    "unpublish": "下线"
   }
 }

@@ -217,7 +217,7 @@ impl CompanionFeatures {
             "create_automation" => self.automations,
             "create_work_task" => self.taskboard,
             "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
-            | "studio_build" => self.studio,
+            | "studio_build" | "studio_publish" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -697,7 +697,7 @@ async fn build_tools_call_spawn(
             register_and_spawn(inflight, id, None, round_trip, render_session_result).await
         }
         "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
-        | "studio_build" => {
+        | "studio_build" | "studio_publish" => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
@@ -1434,6 +1434,28 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
     match tool {
         "studio_list_scenes" => Ok(StudioOp::ListScenes),
         "studio_build" => Ok(StudioOp::Build),
+        "studio_publish" => {
+            let target = arguments
+                .get("target")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .unwrap_or("local");
+            if target != "local" && target != "command" {
+                return Err(
+                    "studio_publish `target` must be \"local\" or \"command\"".to_string()
+                );
+            }
+            let version = arguments
+                .get("version")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string);
+            Ok(StudioOp::Publish {
+                version,
+                target: target.to_string(),
+            })
+        }
         "studio_read_scene" => Ok(StudioOp::ReadScene {
             scene: studio_scene_arg(tool, arguments)?,
         }),
@@ -1519,6 +1541,20 @@ fn render_studio_ok_text(outcome: &Value) -> String {
             str_of("path"),
             serde_json::to_string_pretty(file).unwrap_or_default()
         );
+    }
+    if let Some(record) = outcome.get("published").filter(|r| r.is_object()) {
+        let target = record.get("target").and_then(Value::as_str).unwrap_or("");
+        let version = str_of("version");
+        return match (target, record.get("url").and_then(Value::as_str)) {
+            ("local", Some(path)) => format!(
+                "Build {version} is live on this Codeg Studio at {path} (a path on the Studio's own address; the user opens it from the Builds list). The link stays the same for later versions."
+            ),
+            (_, Some(url)) => format!("Build {version} deployed: {url}"),
+            _ => format!(
+                "Build {version}: publish.command finished but printed no URL. Its output:\n{}",
+                record.get("log").and_then(Value::as_str).unwrap_or("")
+            ),
+        };
     }
     if let Some(build) = outcome.get("build") {
         let field = |key: &str| build.get(key).and_then(Value::as_str).unwrap_or("");
@@ -2720,11 +2756,12 @@ mod tests {
         studio: true,
     };
 
-    const STUDIO_TOOLS: [&str; 4] = [
+    const STUDIO_TOOLS: [&str; 5] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
         "studio_build",
+        "studio_publish",
     ];
 
     #[tokio::test]
@@ -2755,6 +2792,8 @@ mod tests {
                 json!({ "scene": "main", "commands": [{ "type": "node.remove", "id": "x" }] }),
             ),
             ("studio_build", json!({ "project": "/tmp/p" })),
+            ("studio_publish", json!({})),
+            ("studio_publish", json!({ "target": "command", "version": "v2-20260920-0101" })),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 40, "method": "tools/call",
@@ -2788,6 +2827,7 @@ mod tests {
                 json!({ "scene": "main", "commands": "move hero" }),
                 "commands",
             ),
+            ("studio_publish", json!({ "target": "itch" }), "target"),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 41, "method": "tools/call",
@@ -2826,6 +2866,14 @@ mod tests {
         );
         assert_eq!(parse_studio_project(&json!({ "project": "" })), None);
         assert_eq!(parse_studio_project(&json!({})), None);
+        assert_eq!(
+            parse_studio_op("studio_publish", &json!({})).unwrap(),
+            StudioOp::Publish { version: None, target: "local".into() }
+        );
+        assert_eq!(
+            parse_studio_op("studio_publish", &json!({ "target": "command", "version": " v3 " })).unwrap(),
+            StudioOp::Publish { version: Some("v3".into()), target: "command".into() }
+        );
     }
 
     #[test]
@@ -2865,6 +2913,15 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Build v2-20260920-0101 is ready: /b/v2 · zip /b/v2.zip"));
+
+        let live = render_studio_result(&json!({
+            "ok": true, "version": "v2", "published": { "target": "local", "url": "/play/my-story/", "at": "t" }
+        }));
+        assert!(live["content"][0]["text"].as_str().unwrap().contains("live on this Codeg Studio at /play/my-story/"));
+        let deployed = render_studio_result(&json!({
+            "ok": true, "version": "v2", "published": { "target": "command", "url": "https://x.pages.dev", "at": "t" }
+        }));
+        assert!(deployed["content"][0]["text"].as_str().unwrap().contains("deployed: https://x.pages.dev"));
 
         let rejected = render_studio_result(&json!({
             "ok": false, "note": "Batch rejected, nothing written: Node not found: ghost"

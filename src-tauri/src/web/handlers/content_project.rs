@@ -65,6 +65,28 @@ pub async fn build_content_project(
     Ok(Json(cp_commands::build_content_project(params.root).await?))
 }
 
+#[derive(Deserialize)]
+pub struct PublishBuildParams {
+    pub root: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    pub target: String,
+}
+
+pub async fn publish_content_build(
+    Json(params): Json<PublishBuildParams>,
+) -> Result<Json<cp_commands::ContentBuild>, AppCommandError> {
+    Ok(Json(
+        cp_commands::publish_content_build(params.root, params.version, params.target).await?,
+    ))
+}
+
+pub async fn unpublish_content_game(
+    Json(params): Json<ProjectRootParams>,
+) -> Result<Json<bool>, AppCommandError> {
+    Ok(Json(cp_commands::unpublish_content_game(params.root).await?))
+}
+
 pub async fn get_content_preview(
     Json(params): Json<ProjectRootParams>,
 ) -> Result<Json<crate::content_preview::ContentPreviewInfo>, AppCommandError> {

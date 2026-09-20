@@ -765,3 +765,33 @@
   font-size: 11px;
   margin-bottom: 8px;
 }
+
+/* Release controls under a build row. */
+.studio-build-publish,
+.studio-build-published {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.studio-build-publish button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-build-published a {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.studio-engine-error {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

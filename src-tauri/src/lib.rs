@@ -23,6 +23,7 @@ pub mod chat_channel;
 pub mod commands;
 pub mod content_engine;
 pub mod content_preview;
+pub mod content_publish;
 pub mod studio_scene;
 pub mod studio_tools;
 pub mod db;
@@ -1636,6 +1637,8 @@ mod tauri_app {
                 content_project::list_content_scenes,
                 content_project::list_content_builds,
                 content_project::build_content_project,
+                content_project::publish_content_build,
+                content_project::unpublish_content_game,
                 content_project::get_content_preview,
                 game_preview::game_preview_fingerprint,
                 system_settings::get_system_proxy_settings,

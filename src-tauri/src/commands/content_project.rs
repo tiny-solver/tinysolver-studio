@@ -121,6 +121,21 @@ pub struct ContentProjectManifest {
     /// manifest so the choice travels with the project, not the machine.
     #[serde(default)]
     pub agents: BTreeMap<String, Option<String>>,
+    /// How to deploy a build to an outside host. Absent on a new project:
+    /// the Studio's own `/play/<slug>/` link needs no configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publish: Option<PublishConfig>,
+}
+
+/// `publish` in the manifest: one shell command, run from the project root,
+/// that uploads a build directory somewhere and prints the resulting URL.
+/// `{dir}` `{zip}` `{version}` `{name}` are substituted, and the same values
+/// are exported as `CODEG_BUILD_DIR` `CODEG_BUILD_ZIP` `CODEG_BUILD_VERSION`
+/// `CODEG_PROJECT_NAME` (prefer those in scripts: no quoting surprises).
+/// Credentials stay with the CLI being called (wrangler, netlify, butler…).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishConfig {
+    pub command: String,
 }
 
 /// A project template the launcher can offer.
@@ -246,6 +261,7 @@ pub async fn create_content_project(
             .into_iter()
             .map(|role| (role.to_string(), None))
             .collect(),
+        publish: None,
     };
 
     let root_for_task = root.clone();
@@ -369,6 +385,24 @@ pub struct ContentBuild {
     /// Captured stdout/stderr of `engine.build`, empty when there was none.
     #[serde(default)]
     pub log: String,
+    /// Where this build has been released, at most one record per target.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub published: Vec<PublishRecord>,
+}
+
+/// One release of a build.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishRecord {
+    /// `local` — the Studio's `/play/<slug>/`; `command` — `publish.command`.
+    pub target: String,
+    /// `local`: a path on the Studio's origin (`/play/<slug>/`).
+    /// `command`: the last http(s) URL the command printed, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    pub at: String,
+    /// Output of the deploy command.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub log: String,
 }
 
 const BUILD_INFO_FILE: &str = "build-info.json";
@@ -456,6 +490,182 @@ pub async fn build_content_project(root: String) -> Result<ContentBuild, AppComm
         .map_err(|e| AppCommandError::io_error(format!("Build task failed: {e}")))?
 }
 
+/// Release a build. `version` defaults to the newest build.
+///
+/// - `local`: the Studio serves the build at `/play/<slug>/` (see
+///   [`crate::content_publish`]). The link is stable across versions.
+/// - `command`: runs the manifest's `publish.command` from the project root
+///   and records the last URL it printed.
+///
+/// The outcome is written into the build's `build-info.json` so the list of
+/// builds shows where each one went.
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn publish_content_build(
+    root: String,
+    version: Option<String>,
+    target: String,
+) -> Result<ContentBuild, AppCommandError> {
+    publish_content_build_in(&crate::content_publish::registry_path(), root, version, target).await
+}
+
+pub(crate) async fn publish_content_build_in(
+    registry: &Path,
+    root: String,
+    version: Option<String>,
+    target: String,
+) -> Result<ContentBuild, AppCommandError> {
+    let root_path = PathBuf::from(root.trim());
+    let manifest = read_content_project(root.clone())
+        .await?
+        .ok_or_else(|| AppCommandError::not_found("This folder is not a content project"))?;
+    let builds = read_builds(&builds_dir(&root_path, &manifest));
+    let wanted = version.as_deref().map(str::trim).filter(|v| !v.is_empty());
+    let mut build = match wanted {
+        Some(v) => builds
+            .into_iter()
+            .find(|b| b.version == v)
+            .ok_or_else(|| AppCommandError::not_found(format!("No build named {v}")))?,
+        None => builds
+            .into_iter()
+            .next()
+            .ok_or_else(|| AppCommandError::not_found("No build yet. Build the game first."))?,
+    };
+    let at = chrono::Local::now().to_rfc3339();
+
+    let record = match target.trim() {
+        "local" => {
+            // Canonical root: the desktop and the server may spell it differently.
+            let key = root_path
+                .canonicalize()
+                .unwrap_or_else(|_| root_path.clone())
+                .to_string_lossy()
+                .to_string();
+            let game = crate::content_publish::publish_in(
+                registry,
+                &key,
+                &manifest.name,
+                &build.version,
+                &build.dir,
+            )
+            .map_err(AppCommandError::io)?;
+            // One project, one link: the other builds no longer hold it.
+            clear_published(&root_path, &manifest, "local", Some(&build.version));
+            PublishRecord {
+                target: "local".into(),
+                url: Some(crate::content_publish::play_path(&game.slug)),
+                at,
+                log: String::new(),
+            }
+        }
+        "command" => {
+            let template = manifest
+                .publish
+                .as_ref()
+                .map(|p| p.command.trim())
+                .filter(|c| !c.is_empty())
+                .ok_or_else(|| {
+                    AppCommandError::invalid_input(
+                        "codeg-project.json has no publish.command. Add one, e.g. \"publish\": { \"command\": \"npx wrangler pages deploy $CODEG_BUILD_DIR --project-name my-game\" }",
+                    )
+                })?;
+            let zip = build.zip.clone().unwrap_or_default();
+            let line = template
+                .replace("{dir}", &build.dir)
+                .replace("{zip}", &zip)
+                .replace("{version}", &build.version)
+                .replace("{name}", &manifest.name);
+            let output = shell_command(&line, &root_path)
+                .env("CODEG_BUILD_DIR", &build.dir)
+                .env("CODEG_BUILD_ZIP", &zip)
+                .env("CODEG_BUILD_VERSION", &build.version)
+                .env("CODEG_PROJECT_NAME", &manifest.name)
+                .output()
+                .await
+                .map_err(|e| {
+                    AppCommandError::external_command("publish.command failed to start", e.to_string())
+                })?;
+            let mut log = String::from_utf8_lossy(&output.stdout).to_string();
+            log.push_str(&String::from_utf8_lossy(&output.stderr));
+            if !output.status.success() {
+                return Err(AppCommandError::external_command(
+                    format!("publish.command exited with {}", output.status),
+                    log,
+                ));
+            }
+            PublishRecord {
+                target: "command".into(),
+                url: last_url(&log),
+                at,
+                log,
+            }
+        }
+        other => {
+            return Err(AppCommandError::invalid_input(format!(
+                "Unknown publish target {other:?}; expected \"local\" or \"command\""
+            )))
+        }
+    };
+
+    build.published.retain(|r| r.target != record.target);
+    build.published.push(record);
+    write_build_info(&build)?;
+    Ok(build)
+}
+
+/// Take the project's `/play/<slug>/` link down.
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn unpublish_content_game(root: String) -> Result<bool, AppCommandError> {
+    unpublish_content_game_in(&crate::content_publish::registry_path(), root).await
+}
+
+pub(crate) async fn unpublish_content_game_in(
+    registry: &Path,
+    root: String,
+) -> Result<bool, AppCommandError> {
+    let root_path = PathBuf::from(root.trim());
+    let key = root_path
+        .canonicalize()
+        .unwrap_or_else(|_| root_path.clone())
+        .to_string_lossy()
+        .to_string();
+    let removed = crate::content_publish::unpublish_in(registry, &key).map_err(AppCommandError::io)?;
+    if let Some(manifest) = read_content_project(root).await? {
+        clear_published(&root_path, &manifest, "local", None);
+    }
+    Ok(removed)
+}
+
+/// Drop `target` records from every build except `keep`.
+fn clear_published(root: &Path, manifest: &ContentProjectManifest, target: &str, keep: Option<&str>) {
+    for mut build in read_builds(&builds_dir(root, manifest)) {
+        if Some(build.version.as_str()) == keep {
+            continue;
+        }
+        let before = build.published.len();
+        build.published.retain(|r| r.target != target);
+        if build.published.len() != before {
+            let _ = write_build_info(&build);
+        }
+    }
+}
+
+fn write_build_info(build: &ContentBuild) -> Result<(), AppCommandError> {
+    fs::write(
+        Path::new(&build.dir).join(BUILD_INFO_FILE),
+        serde_json::to_string_pretty(build).map_err(|e| AppCommandError::io_error(e.to_string()))?,
+    )
+    .map_err(AppCommandError::io)
+}
+
+/// The last http(s) URL in a deploy tool's output — CLIs print progress
+/// links first and the final address last.
+fn last_url(log: &str) -> Option<String> {
+    log.split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '<' | '>' | '(' | ')'))
+        .filter(|w| w.starts_with("https://") || w.starts_with("http://"))
+        .map(|w| w.trim_end_matches(['.', ',', ';', ':']).to_string())
+        .rfind(|w| w.len() > "https://".len())
+}
+
 fn shell_command(line: &str, cwd: &Path) -> tokio::process::Command {
     #[cfg(not(windows))]
     let mut command = {
@@ -541,6 +751,7 @@ fn package_build(
             zip: None,
             size_bytes: size,
             log: log.clone(),
+            published: Vec::new(),
         };
         fs::write(
             staging.join(BUILD_INFO_FILE),
@@ -884,7 +1095,7 @@ const STARTER_SCENE: &str = r##"{
 }
 "##;
 
-const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Codeg Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Codeg Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 엔진(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
+const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Codeg Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Codeg Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 엔진(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Codeg Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
 
 const THREE_INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ko">
@@ -1147,12 +1358,74 @@ mod tests {
             .by_name(&format!("{}/outputs/game/index.html", build.version))
             .is_ok());
 
+        // Release it on the Studio's own link; the record lands in build-info.
+        let registry = dir.path().join("data/published-games.json");
+        let released = publish_content_build_in(&registry, path.clone(), None, "local".into())
+            .await
+            .unwrap();
+        assert_eq!(released.version, build.version);
+        assert_eq!(released.published[0].target, "local");
+        assert_eq!(released.published[0].url.as_deref(), Some("/play/game/"));
+        let served = crate::content_publish::serve_in(&registry, "game", "outputs/game/index.html").await;
+        assert_eq!(served.status(), axum::http::StatusCode::OK);
+
+        // No publish.command yet: a readable refusal, nothing recorded.
+        let refused = publish_content_build_in(&registry, path.clone(), None, "command".into())
+            .await
+            .unwrap_err();
+        assert!(refused.message.contains("publish.command"));
+
+        // With one: placeholders and env vars reach the command, the last
+        // URL it prints is the release address.
+        let manifest_path = root.join(MANIFEST_FILE);
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+        #[cfg(not(windows))]
+        let command = "test -f \"$CODEG_BUILD_DIR/index.html\" && echo uploading https://example.test/progress && echo Published {name} {version} at https://example.test/game.";
+        #[cfg(windows)]
+        let command = "echo Published {name} {version} at https://example.test/game.";
+        manifest["publish"] = serde_json::json!({ "command": command });
+        fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+        let deployed = publish_content_build_in(&registry, path.clone(), Some(build.version.clone()), "command".into())
+            .await
+            .unwrap();
+        assert_eq!(deployed.published.len(), 2, "local + command");
+        let record = deployed.published.iter().find(|r| r.target == "command").unwrap();
+        assert_eq!(record.url.as_deref(), Some("https://example.test/game"));
+        assert!(record.log.contains(&format!("Published game {}", build.version)));
+
+        manifest["publish"] = serde_json::json!({ "command": "echo nope && exit 3" });
+        fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+        let failed = publish_content_build_in(&registry, path.clone(), None, "command".into())
+            .await
+            .unwrap_err();
+        assert!(failed.message.contains("publish.command exited"));
+
         // Second build gets the next counter; listing is newest first.
         let second = build_content_project(path.clone()).await.unwrap();
         assert!(second.version.starts_with("v2-"));
         let listed = list_content_builds(path.clone()).await.unwrap();
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].version, second.version);
+
+        // Re-pointing the link moves the `local` record to the new build.
+        publish_content_build_in(&registry, path.clone(), None, "local".into())
+            .await
+            .unwrap();
+        let listed = list_content_builds(path.clone()).await.unwrap();
+        assert!(listed[0].published.iter().any(|r| r.target == "local"));
+        assert!(!listed[1].published.iter().any(|r| r.target == "local"));
+        assert!(listed[1].published.iter().any(|r| r.target == "command"), "other targets stay");
+        assert!(unpublish_content_game_in(&registry, path.clone()).await.unwrap());
+        let listed = list_content_builds(path.clone()).await.unwrap();
+        assert!(listed.iter().all(|b| b.published.iter().all(|r| r.target != "local")));
+        assert_eq!(
+            crate::content_publish::serve_in(&registry, "game", "").await.status(),
+            axum::http::StatusCode::NOT_FOUND
+        );
+
+        assert_eq!(last_url("see (https://a.test/x), then \"https://b.test/y\"."), Some("https://b.test/y".into()));
+        assert_eq!(last_url("no links here"), None);
 
         // A failing engine.build leaves no directory behind.
         let mut manifest = read_content_project(path.clone()).await.unwrap().unwrap();

@@ -6251,6 +6251,13 @@
     "sendToChatHint": "Put the scene, the selected object and any preview errors into the chat composer, then type your request.",
     "sendToChatNoSession": "Open a conversation beside the Studio to send context to it.",
     "contextSent": "Context added to the chat composer. Type your request and send.",
-    "engineErrors": "Preview errors: {count}"
+    "engineErrors": "Preview errors: {count}",
+    "publishLocal": "Publish",
+    "publishing": "Publishing…",
+    "publishLocalHint": "Serve this build from this Codeg Studio at /play/(project)/. The link stays the same when you publish a newer build.",
+    "publishCommand": "Deploy",
+    "publishDone": "Live at {url}",
+    "publishNoUrl": "Deployed. The deploy command printed no URL.",
+    "unpublish": "Take down"
   }
 }

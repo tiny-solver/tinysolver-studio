@@ -6251,6 +6251,13 @@
     "sendToChatHint": "シーン、選択中のオブジェクト、プレビューのエラーをチャット入力欄に入れます。続けて依頼を入力してください。",
     "sendToChatNoSession": "Studio の横で会話を開くと、コンテキストを送れます。",
     "contextSent": "チャット入力欄にコンテキストを追加しました。依頼を入力して送信してください。",
-    "engineErrors": "プレビューのエラー {count} 件"
+    "engineErrors": "プレビューのエラー {count} 件",
+    "publishLocal": "公開",
+    "publishing": "公開中…",
+    "publishLocalHint": "このビルドをこの Codeg Studio が /play/(プロジェクト)/ で配信します。新しいビルドを公開してもリンクは変わりません。",
+    "publishCommand": "デプロイ",
+    "publishDone": "公開しました: {url}",
+    "publishNoUrl": "デプロイしました。コマンドは URL を出力しませんでした。",
+    "unpublish": "取り下げる"
   }
 }

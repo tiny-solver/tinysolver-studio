@@ -28,6 +28,13 @@ pub enum StudioOp {
     ReadScene { scene: String },
     ApplyCommands { scene: String, commands: Value },
     Build,
+    /// Release a build: `local` (the Studio's `/play/<slug>/`) or `command`
+    /// (the manifest's `publish.command`). `version: None` → newest build.
+    Publish {
+        #[serde(default)]
+        version: Option<String>,
+        target: String,
+    },
 }
 
 /// Whether a folder is (or is shaped like) a content project, i.e. whether
@@ -114,6 +121,18 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
             Ok(build) => json!({ "ok": true, "build": build }),
             Err(e) => fail(e.message),
         },
+        StudioOp::Publish { version, target } => {
+            match cp::publish_content_build(root_str, version, target.clone()).await {
+                Ok(build) => {
+                    let record = build.published.iter().find(|r| r.target == target).cloned();
+                    json!({ "ok": true, "published": record, "version": build.version })
+                }
+                Err(e) => fail(match e.detail.as_deref() {
+                    Some(detail) if !detail.trim().is_empty() => format!("{}\n{}", e.message, detail),
+                    _ => e.message,
+                }),
+            }
+        }
     }
 }
 
