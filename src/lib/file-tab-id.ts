@@ -42,6 +42,10 @@ export type FileTabIdParts =
   // Content Studio pane for one workspace folder (its project root). One per
   // folder: the pane edits that folder's outputs/game/content/ scene.
   | { kind: "studio"; folderId: number }
+  // Built-in browser tab. `id` is the backend's tab id (a uuid, or
+  // `<opener-uuid>-p<n>` for a popup adopted from another tab); it never
+  // contains ":" so it needs no encoding, but goes through the encoder anyway.
+  | { kind: "browser"; id: string }
 
 export type FileTabIdKind = FileTabIdParts["kind"]
 
@@ -92,7 +96,15 @@ export function buildFileTabId(parts: FileTabIdParts): string {
       return `diff:external-conflict:${encodeToken(parts.path)}`
     case "studio":
       return `studio:${parts.folderId}`
+    case "browser":
+      return `browser:${encodeToken(parts.id)}`
   }
+}
+
+/** The backend tab id of a browser tab, or null for any other tab. */
+export function browserTabBackendId(tabId: string): string | null {
+  const parts = parseFileTabId(tabId)
+  return parts?.kind === "browser" ? parts.id : null
 }
 
 // Strict numeric-only folder segment: rejects "", "1x", "-1" so a malformed
@@ -116,6 +128,11 @@ export function parseFileTabId(id: string): FileTabIdParts | null {
     return segments.length === 2 && folderId != null
       ? { kind: "studio", folderId }
       : null
+  }
+
+  if (head === "browser") {
+    if (segments.length !== 2 || segments[1] === "") return null
+    return { kind: "browser", id: decodeToken(segments[1]) }
   }
 
   if (head !== "diff") return null

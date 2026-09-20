@@ -24,17 +24,30 @@ export function previewBase(info: ContentPreviewInfo): string {
 }
 
 /**
- * Open a content project's game in the system browser (a new tab in web
- * mode) — the same URL the Studio pane's iframe loads, so it needs no build
- * and follows the files on disk. Resolves `false` when the manifest names no
- * engine entry, i.e. there is no game to open.
+ * The URL a content project's running game answers at — the same one the
+ * Studio pane's iframe loads, so it needs no build and follows the files on
+ * disk. Resolves `null` when the manifest names no engine entry, i.e. there
+ * is no game to open.
  */
-export async function openGameInBrowser(root: string): Promise<boolean> {
+export async function resolveGameUrl(root: string): Promise<string | null> {
   const manifest = await readContentProject(root)
   const entry = manifest?.engine?.entry
-  if (!entry) return false
+  if (!entry) return null
   const { dir, file } = splitEntry(entry)
   const info = await getContentPreview(root)
-  await openUrl(`${previewBase(info)}/${dir}/${file}`)
+  return `${previewBase(info)}/${dir}/${file}`
+}
+
+/**
+ * Open a content project's game in the system browser (a new tab in web
+ * mode). The fallback for a runtime without the built-in browser; where one
+ * exists, callers hand [`resolveGameUrl`] to `openBrowserTab` instead, so the
+ * game lands in a tab an agent can read and act on. Resolves `false` when
+ * there is no game to open.
+ */
+export async function openGameInBrowser(root: string): Promise<boolean> {
+  const url = await resolveGameUrl(root)
+  if (!url) return false
+  await openUrl(url)
   return true
 }

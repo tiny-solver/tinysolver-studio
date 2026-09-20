@@ -55,7 +55,8 @@ import {
   type ContentFolderKind,
 } from "@/hooks/use-content-project-index"
 import { useWorkspaceActions } from "@/contexts/workspace-context"
-import { openGameInBrowser } from "@/lib/studio/game-url"
+import { openGameInBrowser, resolveGameUrl } from "@/lib/studio/game-url"
+import { useBrowserCapabilities } from "@/lib/browser/use-browser-capabilities"
 import { OpenInSubContent } from "@/components/layout/open-in-menu"
 import {
   openImportSessionsWindow,
@@ -977,7 +978,11 @@ export function SidebarConversationList({
     openChatModeTab,
   } = useTabActions()
   const { openConversations } = useWorkbenchRoute()
-  const { openStudioPane } = useWorkspaceActions()
+  const { openStudioPane, openBrowserTab } = useWorkspaceActions()
+  // Whether this runtime has the built-in browser (a native webview on
+  // desktop, the port bridge on web). Web mode answers without a round trip.
+  const browserCapabilities = useBrowserCapabilities()
+  const hasBuiltInBrowser = browserCapabilities?.available ?? false
   const tStudio = useTranslations("Studio")
 
   const folderIndex = useMemo(() => {
@@ -1328,11 +1333,23 @@ export function SidebarConversationList({
     [folderIndex, openStudioPane, tStudio]
   )
 
+  // The running game goes into a built-in browser tab when there is one:
+  // that is the surface an agent can snapshot, read the console of and act
+  // on through its browser_* tools, which a page in Chrome or Safari is not.
+  // Without the built-in browser (a runtime with no webview to host it) the
+  // system browser is the fallback, as before.
   const handleOpenFolderGameInBrowser = useCallback(
     (folderId: number) => {
       const folder = folderIndex.get(folderId)
       if (!folder) return
-      openGameInBrowser(folder.path)
+      const open = hasBuiltInBrowser
+        ? resolveGameUrl(folder.path).then((url) => {
+            if (!url) return false
+            openBrowserTab(url, { folderId })
+            return true
+          })
+        : openGameInBrowser(folder.path)
+      open
         .then((opened) => {
           if (!opened) toast.error(tStudio("noGameEntry"))
         })
@@ -1342,7 +1359,7 @@ export function SidebarConversationList({
           })
         })
     },
-    [folderIndex, tStudio]
+    [folderIndex, hasBuiltInBrowser, openBrowserTab, tStudio]
   )
 
   // virtua binds to the real OverlayScrollbars viewport element (surfaced via
