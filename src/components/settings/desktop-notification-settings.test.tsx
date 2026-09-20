@@ -273,7 +273,7 @@ describe("the permission card", () => {
 
     await waitFor(() =>
       expect(sendTest).toHaveBeenCalledWith(
-        "Codeg Studio",
+        "Tinysolver Studio",
         "Desktop notifications are working."
       )
     )

@@ -49,7 +49,7 @@ export function buildAgentContext(input: AgentContextInput): string {
   if (input.scene && input.scenePath) {
     const { width, height } = input.scene.document.container
     lines.push(
-      `[Codeg Studio${project}] Scene \`${input.scene.id}\` — ` +
+      `[Tinysolver Studio${project}] Scene \`${input.scene.id}\` — ` +
         `${input.scenePath} (${width}×${height}, ` +
         `${input.scene.document.nodes.length} nodes). Preview: ` +
         (input.hot ? "live (edits render instantly)" : "reloads after save") +
@@ -64,7 +64,7 @@ export function buildAgentContext(input: AgentContextInput): string {
     )
   } else {
     lines.push(
-      `[Codeg Studio${project}] Game preview of ` +
+      `[Tinysolver Studio${project}] Game preview of ` +
         `${input.gameDir ?? "outputs/game"}/ (reloads when its files change).`
     )
   }

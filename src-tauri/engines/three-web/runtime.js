@@ -1,6 +1,6 @@
 // codeg-engine · three-web runtime v0.3.0
 //
-// Codeg Studio 가 제공하는 2D 장면 런타임이다. 프로젝트에 복사되지 않는다.
+// Tinysolver Studio 가 제공하는 2D 장면 런타임이다. 프로젝트에 복사되지 않는다.
 // 미리보기 서버가 `__codeg/engine/three-web/runtime.js` 로 서빙하고, 빌드가
 // 같은 상대 경로에 넣어 준다. 프로젝트의 index.html 은 importmap 으로
 // `codeg-engine` 을 이 파일에 연결한다. API 설명은 같은 폴더의 ENGINE.md.

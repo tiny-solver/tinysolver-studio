@@ -43,7 +43,7 @@ pub struct PublishedGame {
 
 type Registry = BTreeMap<String, PublishedGame>;
 
-/// `$CODEG_HOME`, else `$CODEG_DATA_DIR`, else `~/.codeg-studio` — the same
+/// `$CODEG_HOME`, else `$CODEG_DATA_DIR`, else `~/.tinysolver-studio` — the same
 /// precedence the other per-installation stores use.
 pub fn registry_path() -> PathBuf {
     if std::env::var_os("CODEG_HOME").filter(|s| !s.is_empty()).is_none() {

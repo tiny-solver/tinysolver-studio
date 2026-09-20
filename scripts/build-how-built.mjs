@@ -1,5 +1,5 @@
 // Generates public/how-built.html — an interactive, conclusion-first view of
-// how Codeg Studio was built on top of upstream codeg. Data lives in
+// how Tinysolver Studio was built on top of upstream codeg. Data lives in
 // docs/studio/how-built.json (layers, flow, timeline) and decisions/checks
 // are pulled from docs/studio/roadmap.json so the two pages never disagree.
 // No external scripts: the page embeds its data and a small vanilla-JS

@@ -160,9 +160,9 @@ fn three_web_engine() -> EngineInfo {
         id: "three-web".into(),
         version: THREE_WEB_ENGINE_VERSION.into(),
         entry: "outputs/game/index.html".into(),
-        // The runtime lives in Codeg Studio, not in the project, so the way to
+        // The runtime lives in Tinysolver Studio, not in the project, so the way to
         // run the game outside the Studio is a build.
-        start: "Codeg Studio preview, or serve a build: npx serve build/game/<version>".into(),
+        start: "Tinysolver Studio preview, or serve a build: npx serve build/game/<version>".into(),
         build: None,
     }
 }
@@ -958,7 +958,7 @@ fn outputs_list(manifest: &ContentProjectManifest) -> String {
 
 fn project_readme(manifest: &ContentProjectManifest) -> String {
     let mut out = format!(
-        "# {name}\n\nCodeg Studio 콘텐츠 프로젝트. 세계관·캐릭터·스토리(`{bible}/`)를 한 곳에 두고, 그로부터 여러 형태의 결과물을 만든다.\n\n결과물: {outputs}\n\n",
+        "# {name}\n\nTinysolver Studio 콘텐츠 프로젝트. 세계관·캐릭터·스토리(`{bible}/`)를 한 곳에 두고, 그로부터 여러 형태의 결과물을 만든다.\n\n결과물: {outputs}\n\n",
         name = manifest.name,
         bible = manifest.paths.bible,
         outputs = outputs_list(manifest),
@@ -977,7 +977,7 @@ fn agent_rules(manifest: &ContentProjectManifest) -> String {
     let p = &manifest.paths;
     let mut out = String::new();
     out.push_str("# AGENTS.md — 콘텐츠 프로젝트 규칙\n\n");
-    out.push_str("이 폴더는 Codeg Studio 콘텐츠 프로젝트다. 루트의 `codeg-project.json`이 정본이며, 이 문서는 그 규칙을 사람과 에이전트가 읽는 형태로 적은 것이다. 어떤 에이전트 CLI로 작업하든 같은 규칙을 따른다.\n\n");
+    out.push_str("이 폴더는 Tinysolver Studio 콘텐츠 프로젝트다. 루트의 `codeg-project.json`이 정본이며, 이 문서는 그 규칙을 사람과 에이전트가 읽는 형태로 적은 것이다. 어떤 에이전트 CLI로 작업하든 같은 규칙을 따른다.\n\n");
 
     out.push_str("## 레이어\n\n");
     out.push_str("| 폴더 | 역할 | 규칙 |\n| --- | --- | --- |\n");
@@ -1056,9 +1056,9 @@ const ASSETS_README: &str = "# assets — 원본 에셋\n\n이미지·오디오�
 
 const ASSETS_MANIFEST: &str = "{\n  \"schema\": 1,\n  \"container\": \"1080x1920\",\n  \"assets\": []\n}\n";
 
-const GAME_README: &str = "# game\n\n- `GDD.md`: 게임 디자인 문서. 규칙·수치·화면 크기의 정본.\n- `content/`: Codeg Studio 장면 문서(`*.studio.json`). 엔진과 무관한 편집 데이터.\n- `src/`: 이 게임의 규칙(`main.js`, `scripts/`). 엔진은 Codeg Studio가 제공하며 여기에 없다 — `ENGINE.md` 참고.\n- `ENGINE.md`: 엔진 API.\n- `index.html`: 미리보기 진입점.\n\nGDD 안의 수치와 코드가 다르면 GDD가 우선한다. 코드를 GDD에 맞춘다.\n";
+const GAME_README: &str = "# game\n\n- `GDD.md`: 게임 디자인 문서. 규칙·수치·화면 크기의 정본.\n- `content/`: Tinysolver Studio 장면 문서(`*.studio.json`). 엔진과 무관한 편집 데이터.\n- `src/`: 이 게임의 규칙(`main.js`, `scripts/`). 엔진은 Tinysolver Studio가 제공하며 여기에 없다 — `ENGINE.md` 참고.\n- `ENGINE.md`: 엔진 API.\n- `index.html`: 미리보기 진입점.\n\nGDD 안의 수치와 코드가 다르면 GDD가 우선한다. 코드를 GDD에 맞춘다.\n";
 
-const GAME_CONTENT_README: &str = "# content — 장면 문서\n\n장면마다 `<scene>.studio.json` 하나. 엔진(`codeg-engine`)과 Codeg Studio 편집기가 **같은 파일**을 읽는다. 편집기에서 고치면 자동 저장되고, 에이전트가 파일을 고치면 편집기와 미리보기가 다시 읽는다.\n\n```json\n{\n  \"schema\": 1,\n  \"id\": \"main\",\n  \"name\": \"첫 장면\",\n  \"document\": {\n    \"container\": { \"width\": 1080, \"height\": 1920 },\n    \"assets\": [{ \"id\": \"hero_idle\", \"file\": \"characters/hero/hero_idle_120x180.png\", \"width\": 120, \"height\": 180 }],\n    \"nodes\": [\n      { \"id\": \"hero\", \"parent\": \"root\", \"type\": \"sprite\",\n        \"transform\": { \"x\": 540, \"y\": 1500, \"w\": 120, \"h\": 180, \"anchor\": \"bottom-center\", \"z\": 10 },\n        \"props\": { \"asset\": \"hero_idle\", \"interactive\": true, \"onClick\": \"act_hero\", \"placeholder\": \"#e8d5a3\" } }\n    ]\n  },\n  \"logic\": { \"actions\": { \"act_hero\": [{ \"op\": \"say\", \"text\": \"안녕\" }] } }\n}\n```\n\n- 좌표: 컨테이너 픽셀, 원점 좌상단, y 아래 방향. `anchor`는 `top-left`·`center`·`bottom-center`.\n- `parent`: 다른 노드 id면 그 노드의 좌상단 기준 상대 좌표. 없는 id(`root`, `ui`)는 화면 원점.\n- `z`: 클수록 앞. `props.visible: false`면 숨김.\n- `type`: `sprite`(에셋 또는 `placeholder` 색), `rect`(`props.color`), `text`(`props.text`·`size`·`color`).\n- `assets[].file`: `assets/` 기준 상대 경로. 파일이 아직 없으면 `\"missing\": true`로 두면 엔진이 플레이스홀더를 그린다.\n- `logic`은 엔진의 것이다. 편집기는 그대로 보존한다.\n\n편집기가 다루는 것: `transform`, `props`의 `visible`·`asset`·`text`·`size`·`color`·`interactive`·`onClick`·`opacity`·`rotation`·`scale`·`flipX`·`script`(행동), 그리고 `logic.actions`(액션 단계). 그 밖의 필드는 손대지 않고 보존한다. 행동과 액션에 쓸 수 있는 이름은 `../ENGINE.md`에 있다.\n";
+const GAME_CONTENT_README: &str = "# content — 장면 문서\n\n장면마다 `<scene>.studio.json` 하나. 엔진(`codeg-engine`)과 Tinysolver Studio 편집기가 **같은 파일**을 읽는다. 편집기에서 고치면 자동 저장되고, 에이전트가 파일을 고치면 편집기와 미리보기가 다시 읽는다.\n\n```json\n{\n  \"schema\": 1,\n  \"id\": \"main\",\n  \"name\": \"첫 장면\",\n  \"document\": {\n    \"container\": { \"width\": 1080, \"height\": 1920 },\n    \"assets\": [{ \"id\": \"hero_idle\", \"file\": \"characters/hero/hero_idle_120x180.png\", \"width\": 120, \"height\": 180 }],\n    \"nodes\": [\n      { \"id\": \"hero\", \"parent\": \"root\", \"type\": \"sprite\",\n        \"transform\": { \"x\": 540, \"y\": 1500, \"w\": 120, \"h\": 180, \"anchor\": \"bottom-center\", \"z\": 10 },\n        \"props\": { \"asset\": \"hero_idle\", \"interactive\": true, \"onClick\": \"act_hero\", \"placeholder\": \"#e8d5a3\" } }\n    ]\n  },\n  \"logic\": { \"actions\": { \"act_hero\": [{ \"op\": \"say\", \"text\": \"안녕\" }] } }\n}\n```\n\n- 좌표: 컨테이너 픽셀, 원점 좌상단, y 아래 방향. `anchor`는 `top-left`·`center`·`bottom-center`.\n- `parent`: 다른 노드 id면 그 노드의 좌상단 기준 상대 좌표. 없는 id(`root`, `ui`)는 화면 원점.\n- `z`: 클수록 앞. `props.visible: false`면 숨김.\n- `type`: `sprite`(에셋 또는 `placeholder` 색), `rect`(`props.color`), `text`(`props.text`·`size`·`color`).\n- `assets[].file`: `assets/` 기준 상대 경로. 파일이 아직 없으면 `\"missing\": true`로 두면 엔진이 플레이스홀더를 그린다.\n- `logic`은 엔진의 것이다. 편집기는 그대로 보존한다.\n\n편집기가 다루는 것: `transform`, `props`의 `visible`·`asset`·`text`·`size`·`color`·`interactive`·`onClick`·`opacity`·`rotation`·`scale`·`flipX`·`script`(행동), 그리고 `logic.actions`(액션 단계). 그 밖의 필드는 손대지 않고 보존한다. 행동과 액션에 쓸 수 있는 이름은 `../ENGINE.md`에 있다.\n";
 
 const GDD_MD: &str = "# GDD\n\n## 개요\n\n- 장르: \n- 플랫폼: 웹\n- 화면: 1080×1920 (세로) — 한 값만 쓴다\n\n## 핵심 루프\n\n## 규칙과 수치\n\n| 항목 | 값 | 근거 |\n| --- | --- | --- |\n\n## 화면 목록\n\n## 필요한 에셋\n\n`assets/manifest.json`과 일치해야 한다.\n";
 
@@ -1095,7 +1095,7 @@ const STARTER_SCENE: &str = r##"{
 }
 "##;
 
-const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Codeg Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Codeg Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Codeg Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Codeg Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 엔진(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Codeg Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
+const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Tinysolver Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Tinysolver Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Tinysolver Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Tinysolver Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 엔진(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Tinysolver Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
 
 const THREE_INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ko">

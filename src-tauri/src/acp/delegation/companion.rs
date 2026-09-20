@@ -2742,7 +2742,7 @@ fn render_studio_ok_text(outcome: &Value) -> String {
         let version = str_of("version");
         return match (target, record.get("url").and_then(Value::as_str)) {
             ("local", Some(path)) => format!(
-                "Build {version} is live on this Codeg Studio at {path} (a path on the Studio's own address; the user opens it from the Builds list). The link stays the same for later versions."
+                "Build {version} is live on this Tinysolver Studio at {path} (a path on the Studio's own address; the user opens it from the Builds list). The link stays the same for later versions."
             ),
             (_, Some(url)) => format!("Build {version} deployed: {url}"),
             _ => format!(
@@ -3931,7 +3931,7 @@ mod tests {
         let live = render_studio_result(&json!({
             "ok": true, "version": "v2", "published": { "target": "local", "url": "/play/my-story/", "at": "t" }
         }));
-        assert!(live["content"][0]["text"].as_str().unwrap().contains("live on this Codeg Studio at /play/my-story/"));
+        assert!(live["content"][0]["text"].as_str().unwrap().contains("live on this Tinysolver Studio at /play/my-story/"));
         let deployed = render_studio_result(&json!({
             "ok": true, "version": "v2", "published": { "target": "command", "url": "https://x.pages.dev", "at": "t" }
         }));

@@ -1,6 +1,6 @@
 // 이 게임의 스크립트. 장면 노드의 `props.script` 에 이름으로 붙인다:
 //   "script": "follow"  또는  "script": { "name": "follow", "speed": 400 }
-// Codeg Studio 의 인스펙터에서도 붙일 수 있다. 내장 스크립트(float, spin, pulse,
+// Tinysolver Studio 의 인스펙터에서도 붙일 수 있다. 내장 스크립트(float, spin, pulse,
 // blink, frames, mover)는 등록하지 않아도 된다. API 는 ../../ENGINE.md.
 //
 // (node, engine, config) => { update?(dt), onClick?(), dispose?() }

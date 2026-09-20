@@ -317,7 +317,7 @@
   },
   {
     "name": "studio_list_scenes",
-    "description": "List the game scenes of the Codeg Studio content project you are working in: the project name, its engine (id, version, entry html), the content directory, and every scene id/name/path under outputs/game/content/*.studio.json. Call this first whenever the user talks about the game, a scene, an object on screen, placement, or the Studio editor, so you address scenes by their real ids. Read-only.",
+    "description": "List the game scenes of the Tinysolver Studio content project you are working in: the project name, its engine (id, version, entry html), the content directory, and every scene id/name/path under outputs/game/content/*.studio.json. Call this first whenever the user talks about the game, a scene, an object on screen, placement, or the Studio editor, so you address scenes by their real ids. Read-only.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -393,7 +393,7 @@
   },
   {
     "name": "studio_publish",
-    "description": "Release a build of the game. `target: \"local\"` (default) publishes it on this Codeg Studio's own web address at /play/<project-slug>/ — no setup, the link stays the same across versions, and it is as public as the Studio's server is. `target: \"command\"` runs the project's `publish.command` from codeg-project.json (e.g. `npx wrangler pages deploy $CODEG_BUILD_DIR --project-name my-game`, `netlify deploy --prod --dir $CODEG_BUILD_DIR`, `butler push $CODEG_BUILD_ZIP user/game:html5`) and returns the URL that command printed; if the manifest has no publish.command the result says so — add one to the manifest (ask the user which host and account) rather than guessing. Publishes the newest build unless `version` is given; call studio_build first when the game changed since the last build. Use when the user asks to publish, release, deploy, ship or share the game.",
+    "description": "Release a build of the game. `target: \"local\"` (default) publishes it on this Tinysolver Studio's own web address at /play/<project-slug>/ — no setup, the link stays the same across versions, and it is as public as the Studio's server is. `target: \"command\"` runs the project's `publish.command` from codeg-project.json (e.g. `npx wrangler pages deploy $CODEG_BUILD_DIR --project-name my-game`, `netlify deploy --prod --dir $CODEG_BUILD_DIR`, `butler push $CODEG_BUILD_ZIP user/game:html5`) and returns the URL that command printed; if the manifest has no publish.command the result says so — add one to the manifest (ask the user which host and account) rather than guessing. Publishes the newest build unless `version` is given; call studio_build first when the game changed since the last build. Use when the user asks to publish, release, deploy, ship or share the game.",
     "inputSchema": {
       "type": "object",
       "properties": {

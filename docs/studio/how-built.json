@@ -1,5 +1,5 @@
 {
-  "title": "Codeg Studio는 이렇게 만들었다",
+  "title": "Tinysolver Studio는 이렇게 만들었다",
   "updated": "2026-09-19",
   "conclusion": "업스트림 codeg(멀티 에이전트 코딩 워크벤치)를 포크해 그 위에 다섯 층을 얹었다. 격리된 데스크톱 브랜드, 세계관 정본에서 여러 결과물을 만드는 콘텐츠 프로젝트 폴더 계약, 그 흐름을 시작 화면에 노출하는 창작 탭, 엔진과 편집기가 같은 장면 파일을 쓰는 계약, 그리고 게임을 그대로 띄우는 미리보기와 빌드. 업스트림 코드는 건드리지 않고 옆에 붙였기 때문에 codeg와 동시에 실행되고 업스트림 갱신을 계속 받을 수 있다.",
   "numbers": [
@@ -38,7 +38,7 @@
       "id": "brand",
       "name": "격리된 브랜드",
       "role": "1층",
-      "summary": "이름·아이콘·홈 디렉터리(~/.codeg-studio)·키체인·포트(3081/3100)·번들 식별자(app.codeg.gameeditor)를 분리했다. 구분되는 이름은 brand.rs 한 곳에 모았다.",
+      "summary": "이름·아이콘·홈 디렉터리(~/.tinysolver-studio)·키체인·포트(3081/3100)·번들 식별자(me.tinysolver.studio)를 분리했다. 구분되는 이름은 brand.rs 한 곳에 모았다.",
       "why": "codeg와 나란히 켜도 로그·설정·토큰이 섞이지 않아야 한다. 무엇을 일부러 공유하는지(npm-global)도 같은 파일에 적었다.",
       "files": [
         "src-tauri/src/brand.rs",
@@ -173,7 +173,7 @@
     {
       "date": "2026-09-19",
       "ref": "89df4945",
-      "title": "Codeg Studio로 리브랜딩·격리",
+      "title": "Tinysolver Studio로 리브랜딩·격리",
       "detail": "홈 디렉터리·키체인·포트·아이콘 분리. 자격 증명 헬퍼가 업스트림 DB를 읽던 버그 수정."
     },
     {

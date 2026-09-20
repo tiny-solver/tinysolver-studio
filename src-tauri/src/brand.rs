@@ -22,7 +22,7 @@
 //!   defaults move.
 
 /// Display name: window title, tray tooltip, bundle `productName`.
-pub const APP_NAME: &str = "Codeg Studio";
+pub const APP_NAME: &str = "Tinysolver Studio";
 
 /// Bundle identifier, mirroring `tauri.conf.json`. Determines the OS app-data
 /// directory (`~/Library/Application Support/<id>` on macOS), so the SQLite
@@ -31,18 +31,18 @@ pub const APP_NAME: &str = "Codeg Studio";
 /// Kept in sync manually: the credential-helper subprocess re-derives this path
 /// without a Tauri handle (see `git_credential::resolve_app_data_dir`) and must
 /// not land in upstream codeg's directory.
-pub const BUNDLE_IDENTIFIER: &str = "app.codeg.gameeditor";
+pub const BUNDLE_IDENTIFIER: &str = "me.tinysolver.studio";
 
 /// Home-directory state root — preferences, logs, uploads, pets, skills,
 /// transcripts. Upstream uses `.codeg`; sharing it would have two processes
 /// appending to one rotating log file and racing on `preferences.json`.
-pub const HOME_DIR_NAME: &str = ".codeg-studio";
+pub const HOME_DIR_NAME: &str = ".tinysolver-studio";
 
 /// OS keyring service. Upstream uses `codeg`; sharing it would let either app
 /// overwrite the other's GitHub tokens and channel secrets under identical
 /// account keys.
-pub const KEYRING_SERVICE: &str = "codeg-studio";
+pub const KEYRING_SERVICE: &str = "tinysolver-studio";
 
 /// Server-mode data directory basename, used when neither `CODEG_DATA_DIR` nor
 /// a Tauri app-data path is available.
-pub const DATA_DIR_NAME: &str = "codeg-studio";
+pub const DATA_DIR_NAME: &str = "tinysolver-studio";
