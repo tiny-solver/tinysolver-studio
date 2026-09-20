@@ -22,7 +22,7 @@ import { scripts } from "./scripts/index.js"
 start({
   scripts,                       // 노드에 붙는 행동
   ops: { shake(step, engine) {} }, // logic.actions 에서 쓸 연산 추가
-  setup(engine) {},              // 첫 장면이 뜬 뒤 한 번
+  setup(engine) {},              // 게임이 (다시) 시작할 때마다
 })
 ```
 
@@ -64,6 +64,7 @@ export const scripts = {
 
 장면 쪽: `"props": { "script": { "name": "patrol", "to": 700 } }`. 편집기의 인스펙터에서도 붙인다.
 
+- 게임은 플레이 모드 진입, `engine.reset()`, 장면 갱신 때마다 **처음부터 다시 시작한다**: `engine.state`와 `engine.on` 리스너가 비워지고 `setup`과 스크립트가 다시 돈다. 그래서 변수 초기값과 리스너 등록은 `setup` 안에 둔다.
 - 스크립트는 **플레이 모드에서만** 돈다. 편집 모드에서는 장면이 문서 그대로 그려져서 편집기의 선택 상자와 어긋나지 않는다.
 - `update` 에서 예외가 나면 그 스크립트만 멈추고 오류가 편집기에 뜬다. 오류를 삼키지 않는다.
 
@@ -91,5 +92,6 @@ export const scripts = {
 엔진이 지킨다. 직접 엔진을 쓰는 경우에만 신경 쓴다.
 
 1. `?scene=<id>`, `?codeg=edit`.
-2. `parent.postMessage({ type: "codeg:ready", hot: true, modes: true })`.
-3. 받는 메시지: `codeg:scene { scene }`, `codeg:mode { mode }`, `codeg:reload`.
+2. `parent.postMessage({ type: "codeg:ready", hot: true, modes: true, scripts, ops, builtins })`. `scripts`·`ops`는 등록된 이름 목록이고 편집기의 선택 목록이 된다.
+3. 받는 메시지: `codeg:scene { scene }`, `codeg:mode { mode }`, `codeg:reset`, `codeg:reload`.
+4. 플레이 중 `engine.state`가 바뀌면 `codeg:state { mode, state }`를 보낸다. 편집기가 게임 변수를 보여 준다.

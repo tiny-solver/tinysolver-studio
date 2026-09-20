@@ -33,7 +33,9 @@ export const ease = {
  *   scripts  { name: (node, engine) => ({ update(dt), onClick(), dispose() }) }
  *            attached to nodes whose `props.script` names them (string or list)
  *   ops      { name: (step, engine) => void }  extra `logic.actions` operations
- *   setup    (engine) => void  called once the first scene is up (play mode too)
+ *   setup    (engine) => void  called every time the game (re)starts in play
+ *            mode: first load, entering play, reset(), a hot scene update.
+ *            `engine.state` and `engine.on` listeners are cleared before it.
  *   scene, contentBase, assetBase  overrides for unusual layouts
  */
 export async function start(options = {}) {
@@ -252,6 +254,25 @@ export async function start(options = {}) {
       if (child.parent === id && child.id !== id) sync(child.id)
   }
 
+  // 플레이 중의 게임 변수를 편집기에 보여 준다. 스크립트가 engine.state 를 직접
+  // 고쳐도 잡히도록 주기적으로 비교한다.
+  let sentState = null
+  function reportState() {
+    if (!embedded) return
+    let text
+    try {
+      text = JSON.stringify(engine.state)
+    } catch {
+      return
+    }
+    if (text === sentState || text.length > 20000) return
+    sentState = text
+    parent.postMessage(
+      { type: "codeg:state", mode, state: JSON.parse(text) },
+      "*"
+    )
+  }
+
   // ── 스크립트 ────────────────────────────────────────────────────
   const scripts = { ...builtinScripts, ...(options.scripts || {}) }
 
@@ -314,8 +335,20 @@ export async function start(options = {}) {
     nodes = new Map((D.nodes || []).map((n) => [n.id, n]))
     assets = new Map((D.assets || []).map((a) => [a.id, a]))
     for (const node of nodes.values()) buildNode(node)
-    if (mode === "play") startScripts()
+    // 게임이 (다시) 시작한다: 변수와 리스너를 비우고, 플레이 모드면 setup 과
+    // 스크립트를 처음부터 돌린다. 편집 모드에서는 아무것도 돌지 않는다.
+    engine.state = {}
+    listeners.clear()
+    if (mode === "play") {
+      try {
+        options.setup?.(engine)
+      } catch (err) {
+        console.error("[engine] setup 오류:", err)
+      }
+      startScripts()
+    }
     emit("scene", doc)
+    reportState()
   }
 
   // ── 노드 핸들 ───────────────────────────────────────────────────
@@ -681,7 +714,6 @@ export async function start(options = {}) {
     },
     /** Back to the document as loaded: state cleared, scripts restarted. */
     reset() {
-      engine.state = {}
       if (source) applyScene(source)
     },
   }
@@ -733,9 +765,9 @@ export async function start(options = {}) {
     if (value === mode) return
     mode = value
     pressed.clear()
-    engine.state = {}
     if (source) applyScene(source)
     emit("mode", mode)
+    reportState()
   }
 
   addEventListener("message", (e) => {
@@ -743,6 +775,7 @@ export async function start(options = {}) {
     if (!m || typeof m !== "object") return
     if (m.type === "codeg:scene" && m.scene?.document) applyScene(m.scene)
     else if (m.type === "codeg:mode") setMode(m.mode)
+    else if (m.type === "codeg:reset") engine.reset()
     else if (m.type === "codeg:reload") location.reload()
   })
 
@@ -757,12 +790,7 @@ export async function start(options = {}) {
     say(`장면을 읽지 못했다: ${err.message}`, 6000)
   }
 
-  try {
-    options.setup?.(engine)
-  } catch (err) {
-    console.error("[engine] setup 오류:", err)
-  }
-
+  // 편집기가 고를 수 있게 등록된 스크립트·연산 이름과 내장 스크립트의 기본 설정을 알린다.
   if (embedded)
     parent.postMessage(
       {
@@ -772,9 +800,14 @@ export async function start(options = {}) {
         scene: sceneId,
         engine: "three-web",
         version: VERSION,
+        scripts: Object.keys(scripts),
+        ops: Object.keys(ops),
+        builtins: builtinScriptDefaults,
       },
       "*"
     )
+
+  setInterval(reportState, 400)
 
   // 콘솔과 테스트에서 들여다볼 수 있게 둔다: `codegEngine.node("hero").rect`
   window.codegEngine = engine
@@ -803,6 +836,16 @@ export async function start(options = {}) {
   })
 
   return engine
+}
+
+/** 내장 스크립트의 설정 키와 기본값. 편집기의 인스펙터가 이걸로 입력란을 만든다. */
+export const builtinScriptDefaults = {
+  float: { amplitude: 12, period: 2 },
+  spin: { speed: 90 },
+  pulse: { amount: 0.08, period: 1.2 },
+  blink: { period: 1 },
+  frames: { frames: [], fps: 8 },
+  mover: { speed: 320, bounds: true },
 }
 
 // ── 내장 행동 ─────────────────────────────────────────────────────

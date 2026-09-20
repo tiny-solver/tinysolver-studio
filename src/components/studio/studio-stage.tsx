@@ -14,6 +14,7 @@ import {
   type SceneFile,
   type SceneNode,
 } from "@/lib/studio/document"
+import { readEngineInfo, type EngineInfo } from "@/lib/studio/behaviors"
 
 /**
  * The game itself, in an iframe, with the editor's selection and drag
@@ -48,8 +49,13 @@ export interface StudioStageProps {
   reloadToken: number
   onSelect: (id: string | null) => void
   onMove: (id: string, x: number, y: number) => void
-  /** Engine announced itself; `hot` says whether it accepts `codeg:scene`. */
-  onReady: (hot: boolean) => void
+  /** Engine announced itself; `hot` says whether it accepts `codeg:scene`,
+   *  `info` what it offers (scripts, ops, modes). */
+  onReady: (hot: boolean, info: EngineInfo) => void
+  /** Live `engine.state` while the game plays (`codeg:state`). */
+  onEngineState?: (state: Record<string, unknown>) => void
+  /** Bump to restart the running game from the document (`codeg:reset`). */
+  resetToken?: number
   /** The engine reported a runtime problem (`codeg:error`): an exception, a
    *  rejected promise, a `console.error`. Collected so it can be handed to
    *  the agent. */
@@ -68,6 +74,8 @@ export function StudioStage({
   onMove,
   onReady,
   onEngineError,
+  onEngineState,
+  resetToken = 0,
   sameOrigin,
 }: StudioStageProps) {
   const t = useTranslations("Studio")
@@ -112,16 +120,26 @@ export function StudioStage({
         hot?: boolean
         modes?: boolean
         message?: unknown
+        state?: unknown
       } | null
       if (data?.type === "codeg:error") {
         if (typeof data.message === "string" && data.message.trim())
           onEngineError?.(data.message.slice(0, 2000))
         return
       }
+      if (data?.type === "codeg:state") {
+        if (
+          data.state &&
+          typeof data.state === "object" &&
+          !Array.isArray(data.state)
+        )
+          onEngineState?.(data.state as Record<string, unknown>)
+        return
+      }
       if (data?.type !== "codeg:ready") return
       hot.current = data.hot === true
       modes.current = data.modes === true
-      onReady(hot.current)
+      onReady(hot.current, readEngineInfo(data))
       if (modes.current)
         post({
           type: "codeg:mode",
@@ -134,7 +152,7 @@ export function StudioStage({
     // `scene` is read at handshake time only; later edits go through the
     // effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onReady, onEngineError, post])
+  }, [onReady, onEngineError, onEngineState, post])
 
   // Every edit, straight into the running engine.
   useEffect(() => {
@@ -147,6 +165,11 @@ export function StudioStage({
     if (modes.current)
       post({ type: "codeg:mode", mode: playing ? "play" : "edit" })
   }, [playing, post])
+
+  // "Restart" in the state panel.
+  useEffect(() => {
+    if (resetToken > 0) post({ type: "codeg:reset" })
+  }, [resetToken, post])
 
   // A reload invalidates the handshake until the engine announces again.
   useEffect(() => {

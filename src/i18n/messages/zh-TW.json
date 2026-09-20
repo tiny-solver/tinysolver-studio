@@ -6258,6 +6258,26 @@
     "publishCommand": "部署",
     "publishDone": "已發佈: {url}",
     "publishNoUrl": "已部署。部署指令沒有輸出 URL。",
-    "unpublish": "下架"
+    "unpublish": "下架",
+    "behaviors": "行為",
+    "behaviorsHint": "附加腳本可讓此物件移動或做出反應。腳本在預覽時執行,編輯時不執行。",
+    "behaviorUnknown": "未註冊",
+    "behaviorRemove": "移除 {name}",
+    "behaviorAdd": "腳本名稱",
+    "opacity": "不透明度",
+    "rotation": "旋轉 (°)",
+    "scale": "縮放",
+    "flipX": "水平翻轉",
+    "actions": "動作",
+    "actionsHint": "點擊時執行的內容。每一步都是一個引擎操作:",
+    "actionUnused": "未使用",
+    "actionNew": "新動作名稱",
+    "actionSteps": "{name} 的步驟 (JSON)",
+    "actionApply": "套用步驟",
+    "actionRemove": "刪除動作",
+    "gameState": "遊戲變數",
+    "gameStateEmpty": "尚無",
+    "gameReset": "重新開始",
+    "gameResetHint": "從已儲存的場景重新開始遊戲並清除變數。"
   }
 }

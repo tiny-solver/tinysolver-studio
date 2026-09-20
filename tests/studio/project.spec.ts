@@ -138,6 +138,92 @@ test("drag, autosave, agent edit, reload, build", async ({ page, baseURL }) => {
     expect((await engineInfo())!.y).toBe(still)
   }
 
+  // Engine concepts in the inspector: behaviors, actions, live variables.
+  if (usesManagedEngine) {
+    const readScene = async () =>
+      JSON.parse(await fs.readFile(scenePath, "utf8"))
+    const heroOnDisk = async () =>
+      (await readScene()).document.nodes.find(
+        (n: { id: string }) => n.id === "hero"
+      )
+    const inspector = page.locator(".studio-inspector")
+
+    await page.locator('.studio-overlay-node[aria-label="hero"]').click()
+    // The scaffold attached `float`; its defaults show as editable fields.
+    await expect(inspector.locator(".studio-behavior code")).toHaveText("float")
+    const amplitude = inspector.getByLabel("amplitude")
+    await expect(amplitude).toHaveValue("12")
+    await amplitude.fill("40")
+    await expect
+      .poll(async () => (await heroOnDisk()).props.script)
+      .toEqual({ name: "float", amplitude: 40 })
+
+    // A second behavior offered by the engine's own list.
+    await inspector.getByLabel("Script name").fill("pulse")
+    await inspector.locator(".studio-behavior-add button").first().click()
+    await expect
+      .poll(async () => (await heroOnDisk()).props.script)
+      .toEqual([{ name: "float", amplitude: 40 }, "pulse"])
+
+    // A new action, wired to the click, that counts in a game variable.
+    await inspector.locator(".studio-actions summary").click()
+    await inspector.getByLabel("New action name").fill("act_count")
+    await inspector
+      .locator(".studio-actions .studio-behavior-add button")
+      .click()
+    const steps = inspector.getByLabel("Steps of act_count (JSON)")
+    await steps.fill('[{ "op": "add", "key": "score", "value": 5 }]')
+    await inspector.getByRole("button", { name: "Apply steps" }).click()
+    await expect
+      .poll(async () => (await readScene()).logic.actions.act_count)
+      .toEqual([{ op: "add", key: "score", value: 5 }])
+    await inspector.getByLabel("Action on click").fill("act_count")
+    await expect
+      .poll(async () => (await heroOnDisk()).props.onClick)
+      .toBe("act_count")
+    await expect(page.getByRole("status").first()).toContainText("Saved to", {
+      timeout: 15_000,
+    })
+
+    // Play: `setup` seeds its variable, a click runs the action, Restart
+    // goes back to the start.
+    await page.getByRole("button", { name: "Preview", exact: true }).click()
+    const state = page.locator(".studio-state")
+    await expect(state).toContainText("taps", { timeout: 15_000 })
+    const hero = await game().evaluate(() => {
+      const engine = (
+        window as unknown as {
+          codegEngine: {
+            node(id: string): {
+              rect: { x: number; y: number; w: number; h: number }
+            }
+            container: { width: number; height: number }
+          }
+        }
+      ).codegEngine
+      const r = engine.node("hero").rect
+      return {
+        fx: (r.x + r.w / 2) / engine.container.width,
+        fy: (r.y + r.h / 2) / engine.container.height,
+      }
+    })
+    const canvasBox = (await page
+      .frameLocator(".studio-stage-frame")
+      .locator("canvas")
+      .boundingBox())!
+    await page.mouse.click(
+      canvasBox.x + canvasBox.width * hero.fx,
+      canvasBox.y + canvasBox.height * hero.fy
+    )
+    await expect(state).toContainText("score5", { timeout: 15_000 })
+    await expect(state).toContainText("taps1")
+    await state.getByRole("button", { name: "Restart" }).click()
+    await expect(state).not.toContainText("score", { timeout: 15_000 })
+    await expect(state).toContainText("taps0")
+    await page.getByRole("button", { name: "Edit", exact: true }).click()
+    await expect(state).toHaveCount(0)
+  }
+
   // An agent breaks the engine: the preview server's injected reporter posts
   // the exception and the editor shows it, ready to hand to the chat. The
   // standalone page has no conversation beside it, so the button is off.

@@ -6258,6 +6258,26 @@
     "publishCommand": "Deploy",
     "publishDone": "Live at {url}",
     "publishNoUrl": "Deployed. The deploy command printed no URL.",
-    "unpublish": "Take down"
+    "unpublish": "Take down",
+    "behaviors": "Behaviors",
+    "behaviorsHint": "Attach a script to make this object move or react. Scripts run in preview, not while editing.",
+    "behaviorUnknown": "not registered",
+    "behaviorRemove": "Remove {name}",
+    "behaviorAdd": "Script name",
+    "opacity": "Opacity",
+    "rotation": "Rotation (°)",
+    "scale": "Scale",
+    "flipX": "Flip horizontally",
+    "actions": "Actions",
+    "actionsHint": "What a click runs. Each step is an engine operation:",
+    "actionUnused": "unused",
+    "actionNew": "New action name",
+    "actionSteps": "Steps of {name} (JSON)",
+    "actionApply": "Apply steps",
+    "actionRemove": "Remove action",
+    "gameState": "Game variables",
+    "gameStateEmpty": "none yet",
+    "gameReset": "Restart",
+    "gameResetHint": "Restart the game from the saved scene and clear its variables."
   }
 }

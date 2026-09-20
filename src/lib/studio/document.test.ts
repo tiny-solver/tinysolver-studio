@@ -5,6 +5,7 @@ import {
   fromLegacyProjectFile,
   nodeRect,
   parseScene,
+  sceneActions,
 } from "./document"
 
 // A scene the way an agent writes one: engine-owned fields everywhere.
@@ -286,5 +287,60 @@ describe("scene document contract", () => {
   it("starter scene validates", () => {
     const scene = createStarterScene("main", "첫 장면")
     expect(parseScene(scene)).toEqual(scene)
+  })
+})
+
+describe("action commands", () => {
+  it("sets and removes logic.actions entries atomically", () => {
+    const scene = parseScene(agentScene())
+    const before = JSON.stringify(scene)
+    const next = applyCommands(scene, [
+      {
+        type: "action.set",
+        name: "act_open",
+        steps: [
+          { op: "swapAsset", id: "chest", asset: "chest_open" },
+          { op: "add", key: "coins", value: 3, if: { key: "hasKey" } },
+        ],
+      },
+    ])
+    expect(sceneActions(next).act_open).toHaveLength(2)
+    expect(sceneActions(next).act_open[1].if).toEqual({ key: "hasKey" })
+    // Whatever else lived under logic is still there.
+    expect(Object.keys(sceneActions(next))).toEqual(
+      expect.arrayContaining(Object.keys(sceneActions(scene)))
+    )
+    expect(JSON.stringify(scene)).toBe(before)
+
+    const removed = applyCommands(next, [
+      { type: "action.remove", name: "act_open" },
+    ])
+    expect(sceneActions(removed).act_open).toBeUndefined()
+
+    expect(() =>
+      applyCommands(scene, [
+        { type: "action.set", name: "bad name", steps: [] },
+      ])
+    ).toThrow(/action name/)
+    expect(() =>
+      applyCommands(scene, [
+        { type: "action.set", name: "a", steps: [{ id: "chest" }] },
+      ])
+    ).toThrow(/steps\[0\]\.op/)
+    expect(() =>
+      applyCommands(scene, [{ type: "action.set", name: "a", steps: "say hi" }])
+    ).toThrow(/steps/)
+  })
+
+  it("creates logic when the scene has none", () => {
+    const bare = parseScene({
+      id: "bare",
+      document: { container: { width: 100, height: 100 }, nodes: [] },
+    })
+    const next = applyCommands(bare, [
+      { type: "action.set", name: "hi", steps: [{ op: "say", text: "hi" }] },
+    ])
+    expect(sceneActions(next)).toEqual({ hi: [{ op: "say", text: "hi" }] })
+    expect(sceneActions(bare)).toEqual({})
   })
 })

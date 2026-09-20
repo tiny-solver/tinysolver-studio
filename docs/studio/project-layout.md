@@ -104,7 +104,7 @@
 }
 ```
 
-- 편집기가 검증·편집하는 핵심: `container`, `assets[].{id,file,width,height,missing}`, `nodes[].{id,parent,type,transform}`, `props.visible/asset/text/size/color/interactive/onClick`. 그 밖의 필드(`logic`, `grid`, 엔진 전용 props)는 그대로 보존한다.
+- 편집기가 검증·편집하는 핵심: `container`, `assets[].{id,file,width,height,missing}`, `nodes[].{id,parent,type,transform}`, `props.visible/asset/text/size/color/interactive/onClick/opacity/rotation/scale/flipX/script`, `logic.actions`(명령 `action.set`·`action.remove`). 그 밖의 필드(`grid`, 다른 `logic` 키, 엔진 전용 props)는 그대로 보존한다.
 - 좌표는 컨테이너 픽셀, 원점 좌상단, y 아래. `anchor`는 `top-left`·`center`·`bottom-center`. `parent`가 다른 노드 id면 그 노드 좌상단 기준 상대 좌표, 없는 id(`root`, `ui`)는 화면 원점.
 - `assets[].file`은 `<assets>/` 기준 상대 경로. `..`나 절대 경로는 거부한다.
 - 첫 프로토타입의 `codeg-studio-project` 파일은 읽을 때 변환되고 다음 저장에서 현재 스키마로 바뀐다. 그 이미지는 `content/blobs/`에 있었으므로 `missing`으로 표시된다.
@@ -124,7 +124,8 @@
 
 1. `?scene=<id>`로 장면을 고른다(기본 `main`). `?codeg=edit`면 편집 모드로 시작한다.
 2. 로드되면 `parent.postMessage({ type: "codeg:ready", hot, modes, scene })`. `hot: true`면 `codeg:scene`으로 받은 문서를 즉시 다시 그리고, `modes: true`면 `codeg:mode { mode: "edit" | "play" }`를 받는다.
-3. **편집 모드**에서는 스크립트·트윈·입력이 멈추고 장면이 문서 그대로 그려진다(선택 상자와 그림이 일치). **플레이 모드**로 가거나 돌아오면 게임 상태가 문서 기준으로 초기화된다. 편집기의 미리보기 토글이 이 메시지를 보낸다.
+3. `codeg:ready`의 `scripts`·`ops`·`builtins`가 인스펙터의 행동 선택 목록, 액션 연산 안내, 내장 스크립트 설정 입력란이 된다. 플레이 중 `codeg:state { state }`가 게임 변수 패널을 채우고, 패널의 다시 시작은 `codeg:reset`을 보낸다.
+4. **편집 모드**에서는 스크립트·트윈·입력이 멈추고 장면이 문서 그대로 그려진다(선택 상자와 그림이 일치). 게임은 플레이 모드 진입·`reset`·장면 갱신 때마다 처음부터 다시 시작한다(`engine.state`와 리스너를 비우고 `setup`과 스크립트를 다시 돌린다). 편집기의 미리보기 토글이 이 메시지를 보낸다.
 
 런타임이 제공하는 것: 노드 핸들(`x` `y` `visible` `rect` `moveBy` `set` `overlaps` `tween`), `engine.state`, 입력(`input.down` `axisX/Y` `pointer`), 이벤트(`update` `pointerdown` `keydown` …), `spawn/despawn`, 내장 스크립트(`float` `spin` `pulse` `blink` `frames` `mover`), `logic.actions` 연산(`toggle` `setVisible` `say` `swapAsset` `setText` `move` `set` `add` `goto` `run` + `if` 조건). 전체는 `src-tauri/engines/three-web/ENGINE.md`.
 
