@@ -12,7 +12,7 @@
 | 사이드바 `+` → 새 프로젝트 / 상태바 빠른 작업 → 새 프로젝트 | 같은 Project Boot 창 |
 | 창작 스튜디오 탭 → Studio 열기 / 상태바 빠른 작업 → 콘텐츠 스튜디오 | 활성 폴더를 대상으로 Studio가 대화 옆 파일 창(퓨전 모드)에 열린다. 폴더가 없으면 `/studio` 전체 페이지(브라우저 초안) |
 
-백엔드 명령: `list_content_templates`, `create_content_project`, `read_content_project`, `list_content_scenes`, `build_content_project`, `list_content_builds`, `get_content_preview`. 데스크톱(Tauri)과 서버(Axum) 모두 같은 `_core` 없는 단일 구현을 쓴다.
+백엔드 명령: `list_content_templates`, `create_content_project`, `read_content_project`, `list_content_scenes`, `build_content_project`, `list_content_builds`, `publish_content_build`, `unpublish_content_game`, `get_content_preview`. 데스크톱(Tauri)과 서버(Axum) 모두 같은 `_core` 없는 단일 구현을 쓴다.
 
 ## 폴더
 
@@ -144,6 +144,7 @@
   | `studio_read_scene` | 장면 파일 JSON |
   | `studio_apply_scene_commands` | 편집기와 같은 명령 배치를 검증해 원자적으로 파일에 쓴다. 하나라도 틀리면 아무것도 쓰지 않는다 |
   | `studio_build` | `build_content_project` |
+  | `studio_publish` | `publish_content_build` (`local` 기본, `command`) |
 
   검증기는 `src-tauri/src/studio_scene.rs`이고 `src/lib/studio/document.ts`와 규칙이 같아야 한다(한쪽을 고치면 다른 쪽도). 도구는 파일만 쓴다. 편집기·미리보기는 아래 변경 감시로 알아챈다. `project` 인자를 생략하면 세션의 작업 폴더가 대상이다.
 - **컨텍스트**: 편집기의 "대화로 보내기"는 옆 대화 입력창에 장면 파일 배지와 `[Codeg Studio] Scene … Selected node … Runtime errors …` 텍스트를 넣는다(`src/lib/studio/agent-context.ts`). 자동 전송은 없다.
@@ -163,10 +164,30 @@
 
 `list_content_builds(root)`가 `build-info.json`을 읽어 최신순으로 돌려주고, 편집기 사이드바에 보인다. 데스크톱에서는 zip을 Finder에서 보여 준다.
 
+## 출시
+
+빌드는 자족적인 정적 사이트다. 출시는 그것을 어딘가에서 서빙하는 것이고, 두 경로가 있다. 결과는 빌드의 `build-info.json`에 `published` 기록으로 남아 빌드 목록에 링크로 보인다.
+
+| 대상 | 동작 | 설정 |
+| --- | --- | --- |
+| `local` | Studio의 웹 서버가 `/play/<slug>/`로 빌드 폴더를 서빙한다. 인증이 없고(출시니까) 미리보기의 오류 보고 스크립트도 없다. slug는 프로젝트 이름에서 만들고 프로젝트마다 하나이며, 새 빌드를 출시하면 같은 주소가 새 빌드를 가리킨다. "내리기"로 404가 된다 | 없음 |
+| `command` | 매니페스트의 `publish.command`를 프로젝트 루트에서 실행하고 출력의 마지막 http(s) URL을 기록한다. 종료 코드가 0이 아니면 실패다 | `codeg-project.json` |
+
+```json
+"publish": { "command": "npx wrangler pages deploy $CODEG_BUILD_DIR --project-name my-story" }
+```
+
+명령에는 `CODEG_BUILD_DIR` `CODEG_BUILD_ZIP` `CODEG_BUILD_VERSION` `CODEG_PROJECT_NAME` 환경 변수가 주어지고, `{dir}` `{zip}` `{version}` `{name}` 자리표시자도 치환된다. 예: `netlify deploy --prod --dir $CODEG_BUILD_DIR`, `butler push $CODEG_BUILD_ZIP user/game:html5`, `rsync -a $CODEG_BUILD_DIR/ host:/var/www/game/`. 계정과 자격 증명은 호출되는 CLI의 것이다. Studio는 저장하지 않는다.
+
+`local`의 공개 범위는 Studio 서버의 공개 범위와 같다. `codeg-server` 배포에서는 그 서버의 주소로 누구나 열 수 있고, 데스크톱에서는 루프백 리스너(와 켜져 있다면 내장 웹 서비스)가 답하므로 이 기기와 LAN용 링크다. 등록부는 프로젝트가 아니라 데이터 디렉터리의 `published-games.json`에 있어서 프로젝트를 복제해도 출시되지 않는다. 명시적으로 출시한 빌드 폴더만, 미리보기와 같은 경로 제한(점 파일·심링크 탈출 거부)으로 서빙한다.
+
+백엔드 명령: `publish_content_build(root, version?, target)`, `unpublish_content_game(root)`. 에이전트 도구: `studio_publish`.
+
 ## 아직 없는 것
 
 - 매니페스트를 읽어 사이드바 폴더를 구분하지 않는다. `FolderDetail.kind` 확장은 DB 마이그레이션을 수반하므로 보류.
 - 결과물 추가/제거 UI가 없다. 매니페스트와 폴더를 직접 고친다.
 - `agents` 역할을 실제 에이전트 선택에 반영하지 않는다.
 - 편집기에서 이미지를 업로드해 `assets/`에 넣는 기능이 없다. 에셋은 에이전트나 사용자가 `assets/`에 두고 장면 파일에 선언한다.
-- 배포는 zip을 사용자가 정적 호스트에 올리는 것까지다. 호스팅 연동은 없다.
+- 외부 호스트용 프리셋 UI가 없다. `publish.command`는 매니페스트에 직접(또는 에이전트가) 적는다.
+- 번들러가 필요한 엔진(`engine.build`)은 빌드 버튼에서만 빌드된다. 미리보기 전에 자동으로 돌리지 않는다. 관리형 엔진은 빌드 단계가 없어 해당 없다.

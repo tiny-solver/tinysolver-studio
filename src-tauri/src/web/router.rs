@@ -1265,6 +1265,14 @@ pub fn build_router(
             post(handlers::content_project::build_content_project),
         )
         .route(
+            "/publish_content_build",
+            post(handlers::content_project::publish_content_build),
+        )
+        .route(
+            "/unpublish_content_game",
+            post(handlers::content_project::unpublish_content_game),
+        )
+        .route(
             "/get_content_preview",
             post(handlers::content_project::get_content_preview),
         )
@@ -1864,6 +1872,7 @@ pub fn build_router(
                 && !path.contains('.')
                 && !path.starts_with("/api")
                 && !path.starts_with("/ws")
+                && !path.starts_with("/play/")
             {
                 let html_path = format!("{}.html", path.trim_end_matches('/'));
                 let html_file = dir.join(html_path.trim_start_matches('/'));
@@ -1889,6 +1898,9 @@ pub fn build_router(
     Router::new()
         .nest("/api", api)
         .merge(ws_route)
+        // Published games: `/play/<slug>/`, public by design (a release), and
+        // limited to build directories the user explicitly published.
+        .merge(crate::content_publish::routes())
         .fallback_service(fallback)
         .layer(html_rewrite)
         .layer(cors)

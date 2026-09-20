@@ -6251,6 +6251,13 @@
     "sendToChatHint": "يضع المشهد والعنصر المحدد وأخطاء المعاينة في مربع كتابة المحادثة، ثم اكتب طلبك.",
     "sendToChatNoSession": "افتح محادثة بجانب Studio لإرسال السياق إليها.",
     "contextSent": "تمت إضافة السياق إلى مربع كتابة المحادثة. اكتب طلبك ثم أرسل.",
-    "engineErrors": "أخطاء المعاينة: {count}"
+    "engineErrors": "أخطاء المعاينة: {count}",
+    "publishLocal": "نشر",
+    "publishing": "جارٍ النشر…",
+    "publishLocalHint": "يقدّم Codeg Studio هذا البناء على العنوان /play/(المشروع)/. يبقى الرابط نفسه عند نشر بناء أحدث.",
+    "publishCommand": "نشر خارجي",
+    "publishDone": "منشور على {url}",
+    "publishNoUrl": "تم النشر. لم يطبع أمر النشر أي رابط.",
+    "unpublish": "إيقاف النشر"
   }
 }

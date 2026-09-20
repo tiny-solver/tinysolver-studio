@@ -235,6 +235,35 @@ test("drag, autosave, agent edit, reload, build", async ({ page, baseURL }) => {
     }
   }
 
+  // Release: the Studio serves the build at a stable public link, with no
+  // token and no preview reporter; taking it down makes the link 404.
+  await page
+    .getByRole("button", { name: "Publish", exact: true })
+    .first()
+    .click()
+  await expect(page.locator(".studio-notice")).toContainText("Live at", {
+    timeout: 30_000,
+  })
+  const link = page.locator(".studio-build-published a").first()
+  const playUrl = (await link.getAttribute("href"))!
+  expect(new URL(playUrl).pathname).toMatch(/^\/play\/[a-z0-9-]+\/$/)
+  const anonymous = await page.context().browser()!.newContext()
+  try {
+    const player = await anonymous.newPage()
+    const response = await player.goto(playUrl)
+    expect(response?.status()).toBe(200)
+    await expect(player.locator("canvas")).toBeVisible({ timeout: 30_000 })
+    expect(await player.content()).not.toContain("data-codeg-preview")
+    await page.getByRole("button", { name: "Take down" }).first().click()
+    await expect(page.locator(".studio-build-published")).toHaveCount(0, {
+      timeout: 15_000,
+    })
+    // An empty 404 makes a page navigation throw; ask over plain HTTP.
+    expect((await anonymous.request.get(playUrl)).status()).toBe(404)
+  } finally {
+    await anonymous.close()
+  }
+
   await page.screenshot({
     path: "test-results/studio/project-loop.png",
     fullPage: true,

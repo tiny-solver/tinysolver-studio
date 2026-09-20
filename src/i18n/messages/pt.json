@@ -6251,6 +6251,13 @@
     "sendToChatHint": "Coloca a cena, o objeto selecionado e os erros da pré-visualização na caixa do chat; depois escreva o seu pedido.",
     "sendToChatNoSession": "Abra uma conversa ao lado do Studio para enviar contexto.",
     "contextSent": "Contexto adicionado à caixa do chat. Escreva o seu pedido e envie.",
-    "engineErrors": "Erros da pré-visualização: {count}"
+    "engineErrors": "Erros da pré-visualização: {count}",
+    "publishLocal": "Publicar",
+    "publishing": "A publicar…",
+    "publishLocalHint": "Este Codeg Studio serve esta build em /play/(projeto)/. A ligação mantém-se ao publicar uma build mais recente.",
+    "publishCommand": "Implementar",
+    "publishDone": "Publicado em {url}",
+    "publishNoUrl": "Implementado. O comando não mostrou nenhum URL.",
+    "unpublish": "Retirar"
   }
 }

@@ -6251,6 +6251,13 @@
     "sendToChatHint": "Legt Szene, ausgewähltes Objekt und Vorschaufehler in das Chat-Eingabefeld. Danach die Anfrage eingeben.",
     "sendToChatNoSession": "Öffne neben dem Studio eine Unterhaltung, um Kontext zu senden.",
     "contextSent": "Kontext zum Chat-Eingabefeld hinzugefügt. Anfrage eingeben und senden.",
-    "engineErrors": "Vorschaufehler: {count}"
+    "engineErrors": "Vorschaufehler: {count}",
+    "publishLocal": "Veröffentlichen",
+    "publishing": "Wird veröffentlicht…",
+    "publishLocalHint": "Dieses Codeg Studio liefert den Build unter /play/(Projekt)/ aus. Der Link bleibt bei neueren Builds gleich.",
+    "publishCommand": "Bereitstellen",
+    "publishDone": "Live unter {url}",
+    "publishNoUrl": "Bereitgestellt. Der Befehl hat keine URL ausgegeben.",
+    "unpublish": "Offline nehmen"
   }
 }

@@ -19,6 +19,7 @@ import {
   Play,
   Redo2,
   RefreshCw,
+  Rocket,
   Square,
   Type,
   Undo2,
@@ -48,6 +49,8 @@ import {
   buildContentProject,
   getContentPreview,
   listContentBuilds,
+  publishContentBuild,
+  unpublishContentGame,
 } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { joinFsPath } from "@/lib/path-utils"
@@ -77,6 +80,8 @@ interface StudioWorkspaceProps {
 interface Preview {
   /** `<origin>/api/content-preview/<id>/` */
   base: string
+  /** Origin that serves previews and published games (`/play/<slug>/`). */
+  origin: string
   sameOrigin: boolean
 }
 
@@ -105,6 +110,7 @@ export function StudioWorkspace({
   const chat = useChatBridge()
   const [builds, setBuilds] = useState<ContentBuild[]>([])
   const [building, setBuilding] = useState(false)
+  const [publishing, setPublishing] = useState<string | null>(null)
   const [commands, setCommands] = useState(EXAMPLE)
   const [commandMessage, setCommandMessage] = useState("")
   const [rawProps, setRawProps] = useState("")
@@ -211,6 +217,7 @@ export function StudioWorkspace({
         if (cancelled) return
         const origin = info.loopback ?? getServerBaseUrl()
         setPreview({
+          origin,
           base: `${origin}${info.path.replace(/\/+$/, "")}/`,
           sameOrigin: Boolean(info.loopback) && isLocalDesktop(),
         })
@@ -434,6 +441,44 @@ export function StudioWorkspace({
       setBuilding(false)
     }
   }
+
+  // Release: `local` is this Studio's own /play/<slug>/ link, `command` the
+  // project's deploy command. Either way the builds list is re-read, because
+  // re-pointing the local link edits another build's record too.
+  async function publish(version: string, where: "local" | "command") {
+    if (!target) return
+    setPublishing(`${version}:${where}`)
+    setError("")
+    try {
+      const result = await publishContentBuild(target.root, where, version)
+      setBuilds(await listContentBuilds(target.root))
+      const record = result.published?.find((r) => r.target === where)
+      setNotice(
+        record?.url
+          ? t("publishDone", { url: publicUrl(record.url) })
+          : t("publishNoUrl")
+      )
+    } catch (reason) {
+      setError(toErrorMessage(reason))
+    } finally {
+      setPublishing(null)
+    }
+  }
+
+  async function unpublish() {
+    if (!target) return
+    setError("")
+    try {
+      await unpublishContentGame(target.root)
+      setBuilds(await listContentBuilds(target.root))
+    } catch (reason) {
+      setError(toErrorMessage(reason))
+    }
+  }
+
+  /** A `local` record holds a path on the Studio's origin. */
+  const publicUrl = (url: string) =>
+    url.startsWith("/") ? `${preview?.origin ?? ""}${url}` : url
 
   const onReady = useCallback((isHot: boolean) => setHot(isHot), [])
   // Scoped to the running engine: a reload or another scene starts over.
@@ -743,6 +788,49 @@ export function StudioWorkspace({
                         {b.zip ? t("buildZip") : b.entry}
                       </code>
                     </div>
+                    <div className="studio-build-publish">
+                      <button
+                        onClick={() => void publish(b.version, "local")}
+                        disabled={publishing !== null}
+                        title={t("publishLocalHint")}
+                      >
+                        <Rocket size={14} />
+                        {publishing === `${b.version}:local`
+                          ? t("publishing")
+                          : t("publishLocal")}
+                      </button>
+                      {target?.manifest?.publish?.command && (
+                        <button
+                          onClick={() => void publish(b.version, "command")}
+                          disabled={publishing !== null}
+                          title={target.manifest.publish.command}
+                        >
+                          {publishing === `${b.version}:command`
+                            ? t("publishing")
+                            : t("publishCommand")}
+                        </button>
+                      )}
+                    </div>
+                    {(b.published ?? []).map((record) => (
+                      <div
+                        key={record.target}
+                        className="studio-build-published"
+                      >
+                        {record.url ? (
+                          <BrowserLink href={publicUrl(record.url)}>
+                            <ExternalLink size={13} />
+                            {publicUrl(record.url)}
+                          </BrowserLink>
+                        ) : (
+                          <span>{t("publishNoUrl")}</span>
+                        )}
+                        {record.target === "local" && (
+                          <button onClick={() => void unpublish()}>
+                            {t("unpublish")}
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ))
               )}

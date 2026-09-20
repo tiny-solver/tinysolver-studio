@@ -6251,6 +6251,13 @@
     "sendToChatHint": "장면, 선택한 객체, 미리보기 오류를 대화 입력창에 넣습니다. 이어서 요청을 입력하세요.",
     "sendToChatNoSession": "Studio 옆에 대화를 열면 컨텍스트를 보낼 수 있습니다.",
     "contextSent": "대화 입력창에 컨텍스트를 넣었습니다. 요청을 입력하고 보내세요.",
-    "engineErrors": "미리보기 오류 {count}건"
+    "engineErrors": "미리보기 오류 {count}건",
+    "publishLocal": "출시",
+    "publishing": "출시 중…",
+    "publishLocalHint": "이 빌드를 이 Codeg Studio가 /play/(프로젝트)/ 주소로 서빙합니다. 새 빌드를 출시해도 주소는 그대로입니다.",
+    "publishCommand": "배포",
+    "publishDone": "출시됨: {url}",
+    "publishNoUrl": "배포했습니다. 배포 명령이 URL을 출력하지 않았습니다.",
+    "unpublish": "내리기"
   }
 }

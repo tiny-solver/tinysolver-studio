@@ -205,10 +205,15 @@
       "ref": "작업 트리",
       "title": "엔진을 프로젝트 밖으로",
       "detail": "관리형 런타임 codeg-engine(three-web 0.3.0)과 벤더링된 Three.js를 앱에 내장. 미리보기는 __codeg/를 가상으로 서빙하고 빌드는 실체화한다. 편집/플레이 모드, 스크립트, 트윈, 입력."
+    },
+    {
+      "date": "2026-09-20",
+      "ref": "작업 트리",
+      "title": "출시",
+      "detail": "빌드를 Studio가 /play/<slug>/ 공개 링크로 직접 서빙하거나 매니페스트의 publish.command로 외부 호스트에 올린다. 결과는 build-info.json에 기록되고 빌드 목록에 링크로 보인다. 에이전트 도구 studio_publish."
     }
   ],
   "next": [
-    "출시: 빌드를 호스트에 올리고 URL을 돌려준다",
     "편집기에 스크립트·애니메이션 UI",
     "편집기에서 이미지 업로드 → assets/ 등록",
     "빌드 zip 호스팅 연동",

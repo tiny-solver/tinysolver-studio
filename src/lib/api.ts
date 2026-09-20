@@ -3313,6 +3313,26 @@ export async function listContentBuilds(root: string): Promise<ContentBuild[]> {
 
 /** Package `outputs/game` + `assets` into `build/game/<version>/` and a zip.
  *  Runs `engine.build` first when the manifest declares one. */
+/** Release a build (newest when `version` is omitted): `local` serves it at
+ *  `/play/<slug>/` on the Studio's origin, `command` runs the manifest's
+ *  `publish.command`. Resolves to the build with its `published` records. */
+export async function publishContentBuild(
+  root: string,
+  target: "local" | "command",
+  version?: string
+): Promise<ContentBuild> {
+  return getTransport().call(
+    "publish_content_build",
+    { root, version: version ?? null, target },
+    { timeoutMs: 15 * 60 * 1000 }
+  )
+}
+
+/** Take the project's `/play/<slug>/` link down. */
+export async function unpublishContentGame(root: string): Promise<boolean> {
+  return getTransport().call("unpublish_content_game", { root })
+}
+
 export async function buildContentProject(root: string): Promise<ContentBuild> {
   return getTransport().call(
     "build_content_project",
