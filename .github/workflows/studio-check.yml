@@ -101,3 +101,9 @@ jobs:
       - name: Check desktop profile
         working-directory: src-tauri
         run: cargo check --lib
+      - name: Clippy (업스트림 Test 와 같은 문턱)
+        # 업스트림 test.yml 이 `clippy --all-targets -- -D warnings` 를 돌린다.
+        # 우리 검사에 없으면 "우리 게이트는 초록인데 PR 은 빨강"이 된다 — 실제로 밟았다
+        # (Windows 전용 미사용 바인딩). Windows 는 러너를 아끼려고 여기서 돌리지 않는다.
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --features test-utils -- -D warnings
