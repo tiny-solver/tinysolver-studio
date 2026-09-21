@@ -620,6 +620,7 @@ fn supported_agents() -> Vec<AgentType> {
         AgentType::CodeBuddy,
         AgentType::KimiCode,
         AgentType::Pi,
+        AgentType::Antigravity,
     ];
     // Custom agents that declared the shared skills store join the built-in
     // set — the same `skill_storage_spec` gate every skills surface uses, so
@@ -974,6 +975,24 @@ mod tests {
             .expect("snapshot returns Ok");
         let expected = bundled_metadata().len() * supported_agents().len();
         assert_eq!(rows.len(), expected);
+    }
+
+    #[tokio::test]
+    async fn install_statuses_include_antigravity() {
+        let skill_id = bundled_metadata()
+            .first()
+            .expect("science bundle should be non-empty")
+            .id
+            .clone();
+        let rows = science_get_install_status(skill_id)
+            .await
+            .expect("status lookup returns Ok");
+
+        assert!(
+            rows.iter()
+                .any(|row| row.agent_type == AgentType::Antigravity),
+            "Antigravity must remain in the authoritative science status snapshot"
+        );
     }
 
     #[test]
