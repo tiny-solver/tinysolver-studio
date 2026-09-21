@@ -1056,13 +1056,19 @@ pub(crate) fn follow_clear_rollover_chain(
 
 /// How many leading JSONL lines to inspect for a `/clear` command tag.
 const CLEAR_ROLLOVER_PEEK_LINES: usize = 40;
-/// `/clear` writes the successor immediately — the measured gap between the
-/// old file's last record and the new file's `/clear` record is single-digit
-/// milliseconds. Every second of slack here is a second in which an UNRELATED
-/// session in the same project dir could clear and be mistaken for this one's
-/// successor, so the window is kept as small as the write pattern allows
-/// while still surviving a stalled disk.
-const CLEAR_ROLLOVER_MAX_GAP_SECS: i64 = 90;
+/// `/clear` writes the successor immediately. Measured against a live
+/// claude-agent-acp 0.77.0 session (CLI 2.1.270): 4ms from the predecessor's
+/// last record to the successor's `/clear` record, and 5ms with 70s of idle
+/// in front of the clear — the predecessor's last record is the
+/// `queue-operation` pair for the `/clear` prompt itself, so the two files
+/// stay adjacent no matter how long the session sat quiet first.
+///
+/// The window is therefore slack, not measurement: it is what a stalled disk
+/// or a frozen machine may take, and every second of it is also a second in
+/// which an UNRELATED session in the same project directory could clear and
+/// be mistaken for this one's successor. Five minutes covers the former
+/// without opening the latter to the hour the first draft allowed.
+pub(crate) const CLEAR_ROLLOVER_MAX_GAP_SECS: i64 = 300;
 /// How far BEFORE the predecessor's last record a successor's `/clear` record
 /// may be stamped. Non-zero because the two files are written by one process
 /// in one burst and the CLI's timestamps are not monotonic across them.

@@ -169,10 +169,12 @@ struct LedgerEntry {
 }
 
 /// How long after sending `/clear` the watcher keeps looking for the
-/// successor transcript. The CLI writes it within milliseconds; the window is
-/// this wide only to survive a stalled disk, and it is what bounds the time in
-/// which a sibling session's own rollover could be mistaken for ours.
-const CLEAR_ROLLOVER_EXPECT_WINDOW: Duration = Duration::from_secs(120);
+/// successor transcript. Deliberately the same span the detector itself
+/// allows between the two files (`CLEAR_ROLLOVER_MAX_GAP_SECS`): a gate that
+/// outlived the detector's window would leave a stretch where the watcher
+/// still hunts but can no longer accept the answer.
+const CLEAR_ROLLOVER_EXPECT_WINDOW: Duration =
+    Duration::from_secs(crate::parsers::claude::CLEAR_ROLLOVER_MAX_GAP_SECS as u64);
 
 impl PromptLedger {
     pub(crate) fn shared() -> Arc<Self> {
@@ -375,6 +377,14 @@ async fn run_watch(
             } else {
                 spawn_epoch
             };
+            if first_arm_done {
+                // A `/clear` whose successor never got adopted belonged to the
+                // session we are leaving. Carried into the new one it would
+                // authorize a rollover hunt against a transcript that never
+                // cleared — and the first plausible sibling would be adopted
+                // on the strength of an expectation from a different session.
+                ledger.consume_clear_request();
+            }
             first_arm_done = true;
             ws.rearm(session_id.clone(), epoch);
         }
@@ -2085,9 +2095,12 @@ mod tests {
 
         let (turns, ..) = unpack(event.expect("post-clear tail must produce activity"));
         let blob = serde_json::to_string(&turns).unwrap();
+        // Both halves of the post-clear exchange, not `a || b`: either one
+        // alone would also be satisfied by a watcher that adopted the file
+        // and then read only part of it.
         assert!(
-            blob.contains("autonomous after clear") || blob.contains("hi after"),
-            "post-clear records on the new file must be tailed: {blob}"
+            blob.contains("hello after") && blob.contains("hi after"),
+            "the whole post-clear tail must surface, not just one record: {blob}"
         );
         assert!(
             !blob.contains("hello before"),
