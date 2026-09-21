@@ -160,7 +160,13 @@ pub(crate) struct PromptLedger {
     /// transcript rollover attributable to THIS session rather than to any of
     /// the other transcripts sharing the project directory. See
     /// [`Self::clear_rollover_expected`].
-    clear_sent_at: Mutex<Option<Instant>>,
+    ///
+    /// Stamped twice over: the `Instant` ages the expectation out, the
+    /// `SystemTime` is what a re-arm compares against the session's own
+    /// change instant to tell a `/clear` sent for the session being left from
+    /// one sent for the session being entered (a connection outlives a fork,
+    /// and the watcher learns of the switch up to a poll late).
+    clear_sent_at: Mutex<Option<(Instant, std::time::SystemTime)>>,
 }
 
 struct LedgerEntry {
@@ -198,7 +204,7 @@ impl PromptLedger {
     /// keeps this session from adopting a stranger's transcript.
     fn clear_rollover_expected(&self) -> bool {
         let at = self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner());
-        at.is_some_and(|t| t.elapsed() < CLEAR_ROLLOVER_EXPECT_WINDOW)
+        at.is_some_and(|(t, _)| t.elapsed() < CLEAR_ROLLOVER_EXPECT_WINDOW)
     }
 
     /// Consume the expectation once its successor has been adopted, so a
@@ -207,9 +213,31 @@ impl PromptLedger {
         *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) = None;
     }
 
+    /// Drop an expectation that belongs to a session this connection has
+    /// LEFT. Called on a fork/re-resume re-arm: an unconsumed `/clear` from
+    /// the outgoing session would otherwise authorize a rollover hunt against
+    /// the incoming one's transcript, which never cleared.
+    ///
+    /// `changed_at` is when the session id actually changed. A `/clear`
+    /// recorded after it was typed into the NEW session — the watcher simply
+    /// had not polled yet — and must survive. Without a change instant to
+    /// compare against there is nothing to tell the two apart, so the
+    /// expectation is dropped: a missed adoption still recovers on reopen,
+    /// where adopting a stranger's transcript would not.
+    fn expire_clear_request_before(&self, changed_at: Option<std::time::SystemTime>) {
+        let mut slot = self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner());
+        let belongs_to_new_session = slot
+            .zip(changed_at)
+            .is_some_and(|((_, sent_at), changed_at)| sent_at >= changed_at);
+        if !belongs_to_new_session {
+            *slot = None;
+        }
+    }
+
     #[cfg(test)]
     fn note_clear_for_test(&self) {
-        *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+        *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) =
+            Some((Instant::now(), std::time::SystemTime::now()));
     }
 
     /// Record the fingerprint of a prompt codeg is about to send: the first
@@ -234,7 +262,8 @@ impl PromptLedger {
         // other prompt and Claude answers it by starting a new session on a
         // new transcript file. This is the only notice codeg gets.
         if fingerprint == "/clear" || fingerprint.starts_with("/clear ") {
-            *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+            *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) =
+                Some((Instant::now(), std::time::SystemTime::now()));
         }
         let mut entries = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         entries.push_back(LedgerEntry {
@@ -378,12 +407,12 @@ async fn run_watch(
                 spawn_epoch
             };
             if first_arm_done {
-                // A `/clear` whose successor never got adopted belonged to the
-                // session we are leaving. Carried into the new one it would
-                // authorize a rollover hunt against a transcript that never
-                // cleared — and the first plausible sibling would be adopted
-                // on the strength of an expectation from a different session.
-                ledger.consume_clear_request();
+                // An unconsumed `/clear` from the session being LEFT must not
+                // authorize a rollover hunt against the one being entered,
+                // which never cleared. One typed into the new session between
+                // the switch and this poll survives — same `session_changed_at`
+                // the epoch above is taken from.
+                ledger.expire_clear_request_before(session_changed_at);
             }
             first_arm_done = true;
             ws.rearm(session_id.clone(), epoch);
@@ -2150,6 +2179,38 @@ mod tests {
         assert!(
             event.is_none(),
             "and none of the stranger's records may surface as our activity"
+        );
+    }
+
+    /// One connection outlives a fork, and the watcher learns of the session
+    /// switch up to a poll late — so at re-arm time an unconsumed `/clear`
+    /// may belong to either side of it. The session's own change instant is
+    /// what separates them: a `/clear` typed into the new session before the
+    /// watcher noticed the switch still has a successor to adopt.
+    #[test]
+    fn clear_rollover_expectation_survives_a_rearm_it_postdates() {
+        let ledger = PromptLedger::shared();
+
+        let changed_a_second_ago = std::time::SystemTime::now() - Duration::from_secs(1);
+        ledger.note_clear_for_test();
+        ledger.expire_clear_request_before(Some(changed_a_second_ago));
+        assert!(
+            ledger.clear_rollover_expected(),
+            "a /clear typed after the session changed belongs to the new session"
+        );
+
+        let changes_in_a_second = std::time::SystemTime::now() + Duration::from_secs(1);
+        ledger.expire_clear_request_before(Some(changes_in_a_second));
+        assert!(
+            !ledger.clear_rollover_expected(),
+            "one that predates the switch belonged to the session being left"
+        );
+
+        ledger.note_clear_for_test();
+        ledger.expire_clear_request_before(None);
+        assert!(
+            !ledger.clear_rollover_expected(),
+            "with nothing to compare against, a missed adoption beats a wrong one"
         );
     }
 
