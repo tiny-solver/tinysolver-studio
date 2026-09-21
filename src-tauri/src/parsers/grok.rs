@@ -10,6 +10,7 @@ use crate::models::{
     AgentExecutionStats, AgentToolCall, AgentType, ContentBlock, ConversationDetail,
     ConversationSummary, MessageTurn, TurnRole, TurnUsage,
 };
+use crate::acp::types::PromptInputBlock;
 use crate::parsers::claude::BACKGROUND_TASK_MARKER;
 use crate::parsers::{
     backfill_turn_durations, compute_session_stats, folder_name_from_path,
@@ -736,11 +737,13 @@ fn parse_updates(path: &Path) -> ParsedUpdates {
 
         match kind {
             "user_message_chunk" => {
-                let block = user_chunk_to_block(update);
+                let input = user_chunk_to_input(update);
+                let block = input.as_ref().map(crate::parsers::user_turn_block);
                 out.content_events += 1;
-                // Title/first-prompt text comes only from prose chunks; an image
-                // chunk carries no text and must not overwrite it.
-                if let Some(ContentBlock::Text { text }) = &block {
+                // Title/first-prompt text comes only from PROSE chunks: an image
+                // chunk carries no text, and an attachment projects to a
+                // `[name](uri)` marker that would make a poor title.
+                if let Some(PromptInputBlock::Text { text }) = &input {
                     if out.first_user_text.is_none() && !text.trim().is_empty() {
                         out.first_user_text = Some(text.clone());
                     }
@@ -1034,10 +1037,15 @@ fn update_text(update: &Value) -> String {
 /// itself and had no `resource_link` case at all, which silently dropped
 /// plain file attachments from a reloaded grok turn.
 ///
+/// Returns the block the chunk was SENT as, so the caller can both render it
+/// (via [`crate::parsers::user_turn_block`]) and tell prose from an attachment
+/// — an attachment projects to a `Text` marker, and the conversation's title
+/// must not latch onto `[report.pdf](…)` when the prose follows it.
+///
 /// `None` for a chunk with nothing to render (empty prose, a malformed
 /// resource): the caller still opens the user turn, it just starts empty.
-fn user_chunk_to_block(update: &Value) -> Option<ContentBlock> {
-    crate::parsers::user_turn_block_from_wire(update.get("content")?)
+fn user_chunk_to_input(update: &Value) -> Option<PromptInputBlock> {
+    crate::acp::types::prompt_block_from_wire(update.get("content")?)
 }
 
 // ---------------------------------------------------------------------------

@@ -829,20 +829,20 @@ pub enum UserTurnBlock {
 /// Both image carriages therefore render identically, which is what keeps the
 /// user turn stable no matter which one the prompt ends up taking.
 ///
-/// Takes the block BY VALUE so the (potentially megabyte-sized base64) payload
-/// moves rather than being copied; callers holding a borrow clone once, which
-/// is what they did field-by-field before.
-pub fn project_user_prompt_block(block: PromptInputBlock) -> UserTurnBlock {
+/// Borrows, and clones only the fields the projection KEEPS — a non-image
+/// embedded resource becomes its uri, so its (potentially megabyte-sized)
+/// body is never copied just to be thrown away.
+pub fn project_user_prompt_block(block: &PromptInputBlock) -> UserTurnBlock {
     match block {
-        PromptInputBlock::Text { text } => UserTurnBlock::Text { text },
+        PromptInputBlock::Text { text } => UserTurnBlock::Text { text: text.clone() },
         PromptInputBlock::Image {
             data,
             mime_type,
             uri,
         } => UserTurnBlock::Image {
-            data,
-            mime_type,
-            uri,
+            data: data.clone(),
+            mime_type: mime_type.clone(),
+            uri: uri.clone(),
         },
         // An image-mime embedded resource carries a pasted image for agents
         // that reject native image blocks (an `image:false` +
@@ -856,20 +856,86 @@ pub fn project_user_prompt_block(block: PromptInputBlock) -> UserTurnBlock {
             ..
         } => match (mime_type, blob) {
             (Some(mt), Some(b)) if mt.starts_with("image/") => UserTurnBlock::Image {
-                data: b,
-                mime_type: mt,
+                data: b.clone(),
+                mime_type: mt.clone(),
                 // A pasted image has no path; `""` would read as a filename of
                 // nothing rather than as "unnamed".
-                uri: (!uri.is_empty()).then_some(uri),
+                uri: (!uri.is_empty()).then(|| uri.clone()),
             },
             _ => UserTurnBlock::Text {
-                text: attachment_marker(&uri, &uri),
+                text: attachment_marker(uri, uri),
             },
         },
         PromptInputBlock::ResourceLink { uri, name, .. } => UserTurnBlock::Text {
-            text: attachment_marker(&name, &uri),
+            text: attachment_marker(name, uri),
         },
     }
+}
+
+/// The human name of an attachment, for places that need to NAME it rather
+/// than render it — a conversation whose first message is one dropped-in file
+/// is titled after that file.
+///
+/// The uri's last path segment, percent-decoded. Falls back to the whole uri
+/// when there is no segment to take (a bare scheme), and to the empty string
+/// only for an empty uri — a pasted image travels with no path at all and
+/// simply has no name to give.
+pub fn attachment_display_name(uri: &str) -> String {
+    let trimmed = uri
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(uri)
+        .trim_end_matches('/');
+    let segment = trimmed.rsplit(['/', '\\']).next().unwrap_or("");
+    let candidate = if segment.is_empty() { trimmed } else { segment };
+    if candidate.is_empty() {
+        return uri.to_string();
+    }
+    percent_decode(candidate)
+}
+
+/// Decode `%XX` escapes, leaving any malformed escape exactly as written — a
+/// name is for reading, so a half-encoded one must not lose characters.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
+            if let Some(byte) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// Name a prompt after the files it carries, for a message that has no prose
+/// to be named after. `None` when it carries nothing nameable.
+///
+/// This is a SEED only — a last resort for a row that would otherwise read
+/// "Untitled" forever. It must never travel the authoritative
+/// `refresh_auto_title` path, where it would overwrite a title the agent
+/// itself published (see `acp::lifecycle`'s `NativeSessionTitle` arm).
+pub fn attachment_names_from_prompt(blocks: &[PromptInputBlock]) -> Option<String> {
+    let names: Vec<String> = blocks
+        .iter()
+        .filter_map(|b| match b {
+            PromptInputBlock::ResourceLink { name, .. } => Some(name.clone()),
+            PromptInputBlock::Resource { uri, .. } => Some(attachment_display_name(uri)),
+            PromptInputBlock::Image { uri, .. } => {
+                uri.as_deref().map(attachment_display_name)
+            }
+            PromptInputBlock::Text { .. } => None,
+        })
+        .filter(|name| !name.trim().is_empty())
+        .collect();
+    (!names.is_empty()).then(|| names.join(", "))
 }
 
 /// Render an attachment as the inline Markdown link the transcript renders back
@@ -891,11 +957,28 @@ fn attachment_marker(label: &str, uri: &str) -> String {
 
 /// Backslash-escape every inline-significant ASCII punctuation char, so a label
 /// cannot inject Markdown structure (a nested link, emphasis, a code span…).
-/// Mirrors `escapeMarkdownText` in `src/components/chat/composer/reference-text.ts`;
-/// GFM does not autolink inside link text, so escaping alone is enough here.
+/// Mirrors `collapseNewlines` + `escapeMarkdownText` in
+/// `src/components/chat/composer/reference-text.ts`: a newline run collapses to
+/// one space first, because a marker has to stay a single inline token. GFM
+/// does not autolink inside link text, so escaping alone is enough here.
 fn escape_markdown_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        // `\s*[\r\n]+\s*` → " ": only a run that CONTAINS a line break
+        // collapses, so ordinary spaces in a file name survive.
+        if ch.is_whitespace() {
+            let mut run = String::from(ch);
+            while chars.peek().is_some_and(|c| c.is_whitespace()) {
+                run.push(chars.next().expect("peeked"));
+            }
+            if run.contains(['\r', '\n']) {
+                out.push(' ');
+            } else {
+                out.push_str(&run);
+            }
+            continue;
+        }
         if matches!(
             ch,
             '\\' | '`' | '*' | '_' | '~' | '[' | ']' | '(' | ')' | '<' | '>'
@@ -955,18 +1038,21 @@ pub fn prompt_block_from_wire(item: &serde_json::Value) -> Option<PromptInputBlo
             .map(str::to_string)
             .filter(|s| !s.is_empty())
     };
+    // NOT filtered for emptiness: `mime_type` is a plain `Option<String>` here
+    // and the typed reader on the replay side keeps a `""` as `Some("")`, so
+    // dropping it would make the two readers disagree on the same content.
     let mime = |v: &serde_json::Value| {
         v.get("mimeType")
             .or_else(|| v.get("mime_type"))
             .and_then(|m| m.as_str())
             .map(str::to_string)
-            .filter(|s| !s.is_empty())
     };
     match item.get("type").and_then(|t| t.as_str()) {
         Some("image") => Some(PromptInputBlock::Image {
             data: string(item, "data")?,
-            // ACP requires `mimeType`; a record missing it is old enough that
-            // png was the only thing codeg ever pasted.
+            // ACP requires `mimeType`; a record MISSING it is old enough that
+            // png was the only thing codeg ever pasted. A record that carries
+            // an empty one keeps it, which is what the typed reader sees.
             mime_type: mime(item).unwrap_or_else(|| "image/png".to_string()),
             uri: string(item, "uri"),
         }),
@@ -1015,7 +1101,7 @@ pub fn prompt_block_from_wire(item: &serde_json::Value) -> Option<PromptInputBlo
 pub fn user_blocks_from_prompt(blocks: &[PromptInputBlock]) -> Vec<UserMessageBlock> {
     blocks
         .iter()
-        .map(|b| match project_user_prompt_block(b.clone()) {
+        .map(|b| match project_user_prompt_block(b) {
             UserTurnBlock::Text { text } => UserMessageBlock::Text { text },
             UserTurnBlock::Image {
                 data, mime_type, ..

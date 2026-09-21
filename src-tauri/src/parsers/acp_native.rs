@@ -41,7 +41,7 @@ use crate::acp::connection::{
     extract_tool_call_images, json_value_to_text, serialize_tool_call_content,
     synthesize_edit_input_from_diffs,
 };
-use crate::acp::types::{prompt_block_from_wire, PromptInputBlock};
+use crate::acp::types::PromptInputBlock;
 use crate::acp_transcript::{self, EntryKind, Transcript, TranscriptEntry};
 use crate::models::agent::AgentType;
 use crate::models::conversation::{ConversationDetail, ConversationSummary, SessionStats};
@@ -186,76 +186,26 @@ fn first_prompt_title(entries: &[TranscriptEntry]) -> Option<String> {
     Some(crate::parsers::truncate_str(trimmed, 80))
 }
 
-/// A title for a recorded `session/prompt` payload: its prose, or — when the
-/// user sent nothing but attachments — what they attached.
+/// Concatenate the text of a recorded `session/prompt` content-block array.
 ///
-/// ACP has no title channel, so this string is the only name the conversation
-/// will ever have (codeg's DB-side auto-title backfill reads it from here). A
-/// message that is one dropped-in file used to yield the empty string and leave
-/// the row permanently untitled, so the attachment names stand in — the file
-/// names, not the `[uri](uri)` markers the turn itself renders, which would be
-/// unreadable as a title.
+/// Prose ONLY. An attachment-only prompt yields nothing here on purpose: this
+/// string is the *authoritative* parsed title, and
+/// `commands::conversations` writes it over any unlocked title the row
+/// already has — including one the agent itself published over
+/// `session_info_update`. Naming such a conversation after its attachment is
+/// worth doing, but as a seed for a row that has no title at all; that lives
+/// in `acp::manager`'s first-prompt seed (`attachment_names_from_prompt`).
 fn prompt_text(payload: &serde_json::Value) -> String {
-    let Some(items) = payload.as_array() else {
-        return String::new();
-    };
-    let prose: String = items
-        .iter()
-        .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-        .collect();
-    if !prose.trim().is_empty() {
-        return prose;
-    }
-    items
-        .iter()
-        .filter_map(prompt_block_from_wire)
-        .filter_map(|b| match b {
-            PromptInputBlock::ResourceLink { name, .. } => Some(name),
-            PromptInputBlock::Resource { uri, .. } => Some(attachment_name(&uri)),
-            PromptInputBlock::Image { uri, .. } => uri.as_deref().map(attachment_name),
-            PromptInputBlock::Text { .. } => None,
+    payload
+        .as_array()
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join("")
         })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// The human name of an attachment uri: its last path segment, percent-decoded
-/// where that is unambiguous. Falls back to the whole uri when there is no
-/// segment to take (`clipboard://`, a bare scheme), which is still better than
-/// nothing in a conversation list.
-fn attachment_name(uri: &str) -> String {
-    let trimmed = uri
-        .split(['?', '#'])
-        .next()
-        .unwrap_or(uri)
-        .trim_end_matches('/');
-    let segment = trimmed.rsplit(['/', '\\']).next().unwrap_or("");
-    let candidate = if segment.is_empty() { trimmed } else { segment };
-    if candidate.is_empty() {
-        return uri.to_string();
-    }
-    percent_decode(candidate)
-}
-
-/// Decode `%XX` escapes, leaving any malformed escape exactly as written —
-/// a name is for reading, so a half-encoded one must not lose characters.
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
-            if let Some(byte) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+        .unwrap_or_default()
 }
 
 /// Blocks for a user turn recorded from a `session/prompt` payload.
@@ -266,7 +216,8 @@ fn prompt_blocks(payload: &serde_json::Value) -> Vec<ContentBlock> {
     items.iter().filter_map(user_turn_block_from_wire).collect()
 }
 
-/// The replayed counterpart of [`prompt_block_from_wire`]: a `session/load`
+/// The replayed counterpart of [`crate::acp::types::prompt_block_from_wire`]:
+/// a `session/load`
 /// chunk arrives already deserialized, so it is converted straight across
 /// rather than being serialized back to JSON only to be re-read. Consumes the
 /// block, so an embedded image's base64 moves instead of being copied twice.
@@ -612,7 +563,7 @@ fn apply_update(
             // block in the live projection, and appending to it would glue the
             // next sentence onto the end of a markdown link.
             let is_text = matches!(input, PromptInputBlock::Text { .. });
-            let block = user_turn_block(input);
+            let block = user_turn_block(&input);
             let coalesce = is_text && *user_prose_open;
             flush(pending, turns, seq);
             *turn_start_hint = Some(at_ms);
@@ -921,6 +872,7 @@ fn session_stats(turns: &[MessageTurn]) -> Option<SessionStats> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acp::types::prompt_block_from_wire;
     use crate::acp_transcript::{TranscriptEntry, TranscriptHeader};
 
     fn entry(t: u64, k: EntryKind, p: serde_json::Value) -> TranscriptEntry {
@@ -1027,34 +979,55 @@ mod tests {
         assert_eq!(turns[0].blocks.len(), 6);
     }
 
-    /// ACP has no title channel, so a message that is nothing but a dropped-in
-    /// file used to leave its conversation permanently untitled. The attachment
-    /// names stand in — readable, unlike the `[uri](uri)` markers the turn
-    /// itself renders.
+    /// A recorded prompt is read as raw JSON (it must survive bytes written by
+    /// older builds) while a `session/load` chunk arrives already typed. Two
+    /// readers, one meaning: the same content has to produce the same block
+    /// whichever door it comes through, or history would contradict itself
+    /// depending on whether codeg recorded the turn or the agent replayed it.
     #[test]
-    fn an_attachment_only_prompt_is_titled_after_what_was_attached() {
-        let named = serde_json::json!([
-            {"type":"resource_link", "name":"report.pdf", "uri":"file:///tmp/report.pdf"},
-            {"type":"resource", "resource":{
-                "uri":"clipboard://my%20notes.txt-9f2", "mimeType":"text/plain", "text":"body"
-            }}
-        ]);
-        let entries = [entry(1, EntryKind::Prompt, named)];
-        assert_eq!(
-            first_prompt_title(&entries).as_deref(),
-            Some("report.pdf, my notes.txt-9f2")
-        );
+    fn the_typed_and_raw_readers_agree_on_the_same_content() {
+        for item in attachment_prompt().as_array().expect("an array") {
+            let typed = sacp::schema::ContentBlock::deserialize(item)
+                .expect("every block in the fixture is valid ACP");
+            assert_eq!(
+                prompt_block_from_content(typed),
+                prompt_block_from_wire(item),
+                "{item}"
+            );
+        }
+        // And on content neither door should let through.
+        for junk in [
+            serde_json::json!({"type":"text", "text":""}),
+            serde_json::json!({"type":"image", "data":"", "mimeType":"image/png"}),
+            serde_json::json!({"type":"resource_link", "uri":"", "name":"x"}),
+            serde_json::json!({"type":"audio", "data":"QUJD", "mimeType":"audio/wav"}),
+        ] {
+            assert_eq!(prompt_block_from_wire(&junk), None, "{junk}");
+            if let Ok(typed) = sacp::schema::ContentBlock::deserialize(&junk) {
+                assert_eq!(prompt_block_from_content(typed), None, "{junk}");
+            }
+        }
+    }
 
-        // Prose still wins outright, attachments and all.
+    /// The parsed title is the AUTHORITATIVE one — `commands::conversations`
+    /// writes it over any unlocked title the row holds, including one the agent
+    /// published itself. So it stays prose-only: an attachment-only prompt
+    /// reports no title here and is named by the first-prompt SEED instead
+    /// (`acp::manager::delegation_child_title_seed`), which only ever fills a
+    /// row that has no title at all.
+    #[test]
+    fn the_parsed_title_is_prose_only_and_never_an_attachment_name() {
+        let attachments_only = serde_json::json!([
+            {"type":"resource_link", "name":"report.pdf", "uri":"file:///tmp/report.pdf"},
+            {"type":"image", "data":"aW1n", "mimeType":"image/png"}
+        ]);
+        assert_eq!(
+            first_prompt_title(&[entry(1, EntryKind::Prompt, attachments_only)]),
+            None
+        );
         assert_eq!(
             first_prompt_title(&[entry(1, EntryKind::Prompt, attachment_prompt())]).as_deref(),
             Some("Review these files")
-        );
-
-        // A prompt with neither is still untitled rather than named "".
-        assert_eq!(
-            first_prompt_title(&[entry(1, EntryKind::Prompt, serde_json::json!([])),]),
-            None
         );
     }
 
