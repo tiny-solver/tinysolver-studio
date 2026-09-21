@@ -41,11 +41,12 @@ use crate::acp::connection::{
     extract_tool_call_images, json_value_to_text, serialize_tool_call_content,
     synthesize_edit_input_from_diffs,
 };
+use crate::acp::types::{prompt_block_from_wire, PromptInputBlock};
 use crate::acp_transcript::{self, EntryKind, Transcript, TranscriptEntry};
 use crate::models::agent::AgentType;
 use crate::models::conversation::{ConversationDetail, ConversationSummary, SessionStats};
 use crate::models::message::{ContentBlock, ImageData, MessageTurn, TurnRole, TurnUsage};
-use crate::parsers::{AgentParser, ParseError};
+use crate::parsers::{user_turn_block, user_turn_block_from_wire, AgentParser, ParseError};
 
 pub struct AcpNativeParser {
     agent_type: AgentType,
@@ -185,103 +186,133 @@ fn first_prompt_title(entries: &[TranscriptEntry]) -> Option<String> {
     Some(crate::parsers::truncate_str(trimmed, 80))
 }
 
-/// Concatenate the text of a recorded `session/prompt` content-block array.
+/// A title for a recorded `session/prompt` payload: its prose, or — when the
+/// user sent nothing but attachments — what they attached.
+///
+/// ACP has no title channel, so this string is the only name the conversation
+/// will ever have (codeg's DB-side auto-title backfill reads it from here). A
+/// message that is one dropped-in file used to yield the empty string and leave
+/// the row permanently untitled, so the attachment names stand in — the file
+/// names, not the `[uri](uri)` markers the turn itself renders, which would be
+/// unreadable as a title.
 fn prompt_text(payload: &serde_json::Value) -> String {
-    payload
-        .as_array()
-        .map(|blocks| {
-            blocks
-                .iter()
-                .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-                .collect::<Vec<_>>()
-                .join("")
+    let Some(items) = payload.as_array() else {
+        return String::new();
+    };
+    let prose: String = items
+        .iter()
+        .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+        .collect();
+    if !prose.trim().is_empty() {
+        return prose;
+    }
+    items
+        .iter()
+        .filter_map(prompt_block_from_wire)
+        .filter_map(|b| match b {
+            PromptInputBlock::ResourceLink { name, .. } => Some(name),
+            PromptInputBlock::Resource { uri, .. } => Some(attachment_name(&uri)),
+            PromptInputBlock::Image { uri, .. } => uri.as_deref().map(attachment_name),
+            PromptInputBlock::Text { .. } => None,
         })
-        .unwrap_or_default()
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
-/// Blocks for a user turn recorded from a `session/prompt` payload. Text and
-/// images are kept; resources use the same lightweight attachment markers as
-/// the live user-message projection. The original bytes stay in the transcript.
+/// The human name of an attachment uri: its last path segment, percent-decoded
+/// where that is unambiguous. Falls back to the whole uri when there is no
+/// segment to take (`clipboard://`, a bare scheme), which is still better than
+/// nothing in a conversation list.
+fn attachment_name(uri: &str) -> String {
+    let trimmed = uri
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(uri)
+        .trim_end_matches('/');
+    let segment = trimmed.rsplit(['/', '\\']).next().unwrap_or("");
+    let candidate = if segment.is_empty() { trimmed } else { segment };
+    if candidate.is_empty() {
+        return uri.to_string();
+    }
+    percent_decode(candidate)
+}
+
+/// Decode `%XX` escapes, leaving any malformed escape exactly as written —
+/// a name is for reading, so a half-encoded one must not lose characters.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
+            if let Some(byte) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// Blocks for a user turn recorded from a `session/prompt` payload.
 fn prompt_blocks(payload: &serde_json::Value) -> Vec<ContentBlock> {
     let Some(items) = payload.as_array() else {
         return Vec::new();
     };
-    items.iter().filter_map(user_content_block).collect()
+    items.iter().filter_map(user_turn_block_from_wire).collect()
 }
 
-/// Shared by recorded prompts and session/load replay, whose ACP resources nest
-/// their URI/MIME/body under `resource` rather than a top-level `text` field.
-fn user_content_block(item: &serde_json::Value) -> Option<ContentBlock> {
-    match item.get("type").and_then(|t| t.as_str()) {
-        Some("image") => {
-            let data = item
-                .get("data")
-                .and_then(|d| d.as_str())
-                .unwrap_or_default();
-            let mime_type = item
-                .get("mimeType")
-                .or_else(|| item.get("mime_type"))
-                .and_then(|m| m.as_str())
-                .unwrap_or("image/png");
-            if !data.is_empty() {
-                return Some(ContentBlock::Image {
-                    data: data.to_string(),
-                    mime_type: mime_type.to_string(),
-                    uri: item.get("uri").and_then(|u| u.as_str()).map(str::to_string),
-                });
-            }
+/// The replayed counterpart of [`prompt_block_from_wire`]: a `session/load`
+/// chunk arrives already deserialized, so it is converted straight across
+/// rather than being serialized back to JSON only to be re-read. Consumes the
+/// block, so an embedded image's base64 moves instead of being copied twice.
+fn prompt_block_from_content(content: sacp::schema::ContentBlock) -> Option<PromptInputBlock> {
+    use sacp::schema::{ContentBlock as Wire, EmbeddedResourceResource as Res};
+    let non_empty = |s: String| (!s.is_empty()).then_some(s);
+    match content {
+        Wire::Text(t) => Some(PromptInputBlock::Text {
+            text: non_empty(t.text)?,
+        }),
+        Wire::Image(i) => Some(PromptInputBlock::Image {
+            data: non_empty(i.data)?,
+            mime_type: i.mime_type,
+            uri: i.uri.and_then(non_empty),
+        }),
+        Wire::ResourceLink(l) => {
+            let uri = non_empty(l.uri)?;
+            Some(PromptInputBlock::ResourceLink {
+                name: non_empty(l.name).unwrap_or_else(|| uri.clone()),
+                uri,
+                mime_type: l.mime_type,
+                description: l.description,
+            })
         }
-        Some("resource") => {
-            let resource = item.get("resource")?;
-            let uri = resource
-                .get("uri")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default();
-            let mime = resource
-                .get("mimeType")
-                .or_else(|| resource.get("mime_type"))
-                .and_then(|v| v.as_str());
-            let blob = resource.get("blob").and_then(|v| v.as_str());
-            if let (Some(mime), Some(blob)) = (mime, blob) {
-                if mime.starts_with("image/") && !blob.is_empty() {
-                    return Some(ContentBlock::Image {
-                        data: blob.to_string(),
-                        mime_type: mime.to_string(),
-                        uri: (!uri.is_empty()).then(|| uri.to_string()),
-                    });
-                }
+        Wire::Resource(r) => {
+            let (uri, mime_type, text, blob) = match r.resource {
+                Res::TextResourceContents(t) => (t.uri, t.mime_type, non_empty(t.text), None),
+                Res::BlobResourceContents(b) => (b.uri, b.mime_type, None, non_empty(b.blob)),
+                // A shape this build does not know: it has no uri to show and
+                // no bytes this can render.
+                _ => return None,
+            };
+            let is_image = mime_type.as_deref().is_some_and(|m| m.starts_with("image/"));
+            if uri.is_empty() && !(is_image && blob.is_some()) {
+                return None;
             }
-            if !uri.is_empty() {
-                return Some(ContentBlock::Text {
-                    text: format!("[{uri}]({uri})"),
-                });
-            }
+            Some(PromptInputBlock::Resource {
+                uri,
+                mime_type,
+                text,
+                blob,
+            })
         }
-        Some("resource_link") => {
-            let uri = item
-                .get("uri")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())?;
-            let name = item
-                .get("name")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or(uri);
-            return Some(ContentBlock::Text {
-                text: format!("[{name}]({uri})"),
-            });
-        }
-        _ => {
-            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                if !text.is_empty() {
-                    return Some(ContentBlock::Text {
-                        text: text.to_string(),
-                    });
-                }
-            }
-        }
+        // Audio, and any kind a newer schema adds: nothing to render.
+        _ => None,
     }
-    None
 }
 
 /// Accumulated state of one assistant turn under construction.
@@ -572,10 +603,7 @@ fn apply_update(
             if *prompt_just_recorded {
                 return;
             }
-            let Ok(content) = serde_json::to_value(&chunk.content) else {
-                return;
-            };
-            let Some(block) = user_content_block(&content) else {
+            let Some(input) = prompt_block_from_content(chunk.content) else {
                 return;
             };
             // Resource/image chunks append in order to the same user turn;
@@ -583,7 +611,8 @@ fn apply_update(
             // but only onto prose — an attachment marker is one block per prompt
             // block in the live projection, and appending to it would glue the
             // next sentence onto the end of a markdown link.
-            let is_text = matches!(chunk.content, sacp::schema::ContentBlock::Text(_));
+            let is_text = matches!(input, PromptInputBlock::Text { .. });
+            let block = user_turn_block(input);
             let coalesce = is_text && *user_prose_open;
             flush(pending, turns, seq);
             *turn_start_hint = Some(at_ms);
@@ -996,6 +1025,56 @@ mod tests {
         let turns = project_turns(&entries);
         assert_eq!(turns.len(), 2);
         assert_eq!(turns[0].blocks.len(), 6);
+    }
+
+    /// ACP has no title channel, so a message that is nothing but a dropped-in
+    /// file used to leave its conversation permanently untitled. The attachment
+    /// names stand in — readable, unlike the `[uri](uri)` markers the turn
+    /// itself renders.
+    #[test]
+    fn an_attachment_only_prompt_is_titled_after_what_was_attached() {
+        let named = serde_json::json!([
+            {"type":"resource_link", "name":"report.pdf", "uri":"file:///tmp/report.pdf"},
+            {"type":"resource", "resource":{
+                "uri":"clipboard://my%20notes.txt-9f2", "mimeType":"text/plain", "text":"body"
+            }}
+        ]);
+        let entries = [entry(1, EntryKind::Prompt, named)];
+        assert_eq!(
+            first_prompt_title(&entries).as_deref(),
+            Some("report.pdf, my notes.txt-9f2")
+        );
+
+        // Prose still wins outright, attachments and all.
+        assert_eq!(
+            first_prompt_title(&[entry(1, EntryKind::Prompt, attachment_prompt())]).as_deref(),
+            Some("Review these files")
+        );
+
+        // A prompt with neither is still untitled rather than named "".
+        assert_eq!(
+            first_prompt_title(&[entry(1, EntryKind::Prompt, serde_json::json!([])),]),
+            None
+        );
+    }
+
+    /// An everyday file name is not a safe Markdown fragment. The marker is
+    /// escaped the way the composer escapes its own `@`-file links, so the
+    /// frontend's reference-link parser recovers the real path instead of
+    /// showing raw `[…](…)` source with the link broken at the first space.
+    #[test]
+    fn markers_for_awkward_paths_stay_well_formed_links() {
+        let blocks = prompt_blocks(&serde_json::json!([
+            {"type":"resource_link", "name":"b (1).ts", "uri":"file:///a/b (1).ts"},
+            {"type":"resource", "resource":{"uri":"file:///a/c).ts", "mimeType":"text/plain"}}
+        ]));
+        assert_eq!(blocks.len(), 2);
+        assert!(
+            matches!(&blocks[0], ContentBlock::Text { text } if text == "[b \\(1\\).ts](<file:///a/b (1).ts>)")
+        );
+        assert!(
+            matches!(&blocks[1], ContentBlock::Text { text } if text == "[file:///a/c\\).ts](<file:///a/c).ts>)")
+        );
     }
 
     /// A replay whose user message puts the attachment BEFORE the prose (the

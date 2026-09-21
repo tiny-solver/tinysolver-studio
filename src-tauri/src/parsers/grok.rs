@@ -1025,59 +1025,19 @@ fn update_text(update: &Value) -> String {
 /// Grok sends prose as `{type:"text"}`. Current codeg prompts send a native
 /// `{type:"image"}` chunk (so grok's describe sidecar runs). Older transcripts
 /// still carry the embedded `{type:"resource", resource:{blob, mimeType, uri}}`
-/// shape from when we followed grok's `image:false` advertisement. Both
-/// image-mime forms become [`ContentBlock::Image`] so they render as a
-/// thumbnail; a non-image embedded resource folds to a `[uri](uri)` link
-/// (same as the live [`crate::acp::user_blocks_from_prompt`]). Anything else
-/// falls back to a (possibly empty) text block.
+/// shape from when we followed grok's `image:false` advertisement.
+///
+/// All of it goes through [`crate::parsers::user_turn_block_from_wire`], the
+/// one projection every surface uses for a user's own message — so both image
+/// carriages become a thumbnail, and an attached file becomes the same
+/// `[name](uri)` marker a viewer saw live. This parser used to fold resources
+/// itself and had no `resource_link` case at all, which silently dropped
+/// plain file attachments from a reloaded grok turn.
+///
+/// `None` for a chunk with nothing to render (empty prose, a malformed
+/// resource): the caller still opens the user turn, it just starts empty.
 fn user_chunk_to_block(update: &Value) -> Option<ContentBlock> {
-    let content = update.get("content")?;
-    match content.get("type").and_then(Value::as_str).unwrap_or("") {
-        "resource" => {
-            let resource = content.get("resource")?;
-            let mime = resource.get("mimeType").and_then(Value::as_str);
-            let blob = resource.get("blob").and_then(Value::as_str);
-            match (mime, blob) {
-                (Some(mime), Some(blob)) if mime.starts_with("image/") => {
-                    Some(ContentBlock::Image {
-                        data: blob.to_string(),
-                        mime_type: mime.to_string(),
-                        uri: resource
-                            .get("uri")
-                            .and_then(Value::as_str)
-                            .map(str::to_string),
-                    })
-                }
-                _ => {
-                    let uri = resource.get("uri").and_then(Value::as_str).unwrap_or("");
-                    Some(ContentBlock::Text {
-                        text: format!("[{uri}]({uri})"),
-                    })
-                }
-            }
-        }
-        // Native ACP image content — the live send path for every grok that
-        // decodes the format (see `normalize_grok_image_blocks`).
-        "image" => {
-            let data = content.get("data").and_then(Value::as_str)?;
-            Some(ContentBlock::Image {
-                data: data.to_string(),
-                mime_type: content
-                    .get("mimeType")
-                    .and_then(Value::as_str)
-                    .unwrap_or("image/png")
-                    .to_string(),
-                uri: content
-                    .get("uri")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
-            })
-        }
-        // "text" and unknown kinds: existing behavior (reads `/content/text`).
-        _ => Some(ContentBlock::Text {
-            text: update_text(update),
-        }),
-    }
+    crate::parsers::user_turn_block_from_wire(update.get("content")?)
 }
 
 // ---------------------------------------------------------------------------
@@ -2213,6 +2173,36 @@ mod tests {
                     && uri.as_deref() == Some("clipboard://image.png-abc")
         ));
         assert!(matches!(turns[1].role, TurnRole::Assistant));
+    }
+
+    /// A plain (non-image) file attachment. This parser folded resources
+    /// itself and had no `resource_link` case at all, so an attached file came
+    /// back from history as an empty block — the same gap `acp_native` had.
+    /// Both now go through the one projection a viewer saw live.
+    #[test]
+    fn plain_file_attachments_survive_a_reload_as_their_markers() {
+        let updates = concat!(
+            r#"{"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"看看"},"_meta":{"promptIndex":0}}},"timestamp":1783584019}"#, "\n",
+            r#"{"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"resource_link","name":"report.pdf","uri":"file:///tmp/report.pdf"},"_meta":{"promptIndex":0}}},"timestamp":1783584019}"#, "\n",
+            r#"{"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"resource","resource":{"text":"body","mimeType":"text/plain","uri":"clipboard://notes.txt-1"}},"_meta":{"promptIndex":0}}},"timestamp":1783584019}"#, "\n",
+            r#"{"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"读了"}}},"timestamp":1783584024}"#, "\n",
+            r#"{"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"turn_completed","stop_reason":"end_turn"}},"timestamp":1783584024}"#, "\n",
+        );
+        let (_tmp, sessions) = fixture(SUMMARY, updates);
+        let parser = GrokParser::with_base_dir(sessions);
+        let detail = parser
+            .get_conversation("019f45e3-e1ef-7690-a29f-fe2554382b49")
+            .unwrap();
+        let turns = &detail.turns;
+        assert_eq!(turns.len(), 2);
+        assert_eq!(turns[0].blocks.len(), 3);
+        assert!(matches!(&turns[0].blocks[0], ContentBlock::Text { text } if text == "看看"));
+        assert!(
+            matches!(&turns[0].blocks[1], ContentBlock::Text { text } if text == "[report.pdf](file:///tmp/report.pdf)")
+        );
+        assert!(
+            matches!(&turns[0].blocks[2], ContentBlock::Text { text } if text == "[clipboard://notes.txt-1](clipboard://notes.txt-1)")
+        );
     }
 
     /// One turn whose stats live where Grok really puts them: model in
