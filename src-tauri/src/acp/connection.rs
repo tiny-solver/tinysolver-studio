@@ -33,6 +33,10 @@ use tokio::sync::{mpsc, oneshot, RwLock};
 
 use crate::acp::agent_mentions::append_agent_routes;
 use crate::acp::background_watch;
+use crate::acp::cursor_ext::{
+    CursorAskQuestionRequest, CursorCreatePlanRequest, CursorGenerateImageRequest,
+    CursorTaskRequest, CursorUpdateTodosRequest,
+};
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{
     FileSystemRuntime, FileSystemRuntimeError, FsAccessPolicy, FS_POLICY_ENV,
@@ -5563,6 +5567,69 @@ async fn run_connection(
             },
             on_receive_request!(),
         )
+        .on_receive_request(
+            {
+                let access = native_ask_access.clone();
+                let conn_id = grok_ask_conn_id.clone();
+                let card_state = Arc::clone(&grok_ask_state);
+                let card_emitter = grok_ask_emitter.clone();
+                async move |req: CursorAskQuestionRequest,
+                            responder: Responder<serde_json::Value>,
+                            _cx: ConnectionTo<Agent>| {
+                    handle_cursor_ask_question(
+                        &access,
+                        &conn_id,
+                        &card_state,
+                        &card_emitter,
+                        req,
+                        responder,
+                    )
+                    .await;
+                    Ok(())
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let access = grok_plan_access.clone();
+                let conn_id = grok_plan_conn_id.clone();
+                async move |req: CursorCreatePlanRequest,
+                            responder: Responder<serde_json::Value>,
+                            _cx: ConnectionTo<Agent>| {
+                    handle_cursor_create_plan(&access, &conn_id, req, responder).await;
+                    Ok(())
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |req: CursorUpdateTodosRequest,
+                        responder: Responder<serde_json::Value>,
+                        _cx: ConnectionTo<Agent>| {
+                handle_cursor_update_todos(req, responder);
+                Ok(())
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |req: CursorTaskRequest,
+                        responder: Responder<serde_json::Value>,
+                        _cx: ConnectionTo<Agent>| {
+                handle_cursor_task(req, responder);
+                Ok(())
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |req: CursorGenerateImageRequest,
+                        responder: Responder<serde_json::Value>,
+                        _cx: ConnectionTo<Agent>| {
+                handle_cursor_generate_image(req, responder);
+                Ok(())
+            },
+            on_receive_request!(),
+        )
         .on_receive_notification(
             async move |notif: AuthStatusUpdateNotification, _cx: ConnectionTo<Agent>| {
                 handle_auth_status_update(agent_type, notif);
@@ -6959,6 +7026,185 @@ async fn handle_grok_exit_plan_mode(
 /// never puts a completed tool_call on the stream, so — like the grok bridge —
 /// the question path synthesizes the answered result card itself once the user
 /// submits (keyed by the elicitation's tool_call_id).
+/// Bridge Cursor's blocking `cursor/ask_question` into the shared ask card.
+/// Same path as [`handle_grok_ask_user_question`]: register, wait off the
+/// dispatch loop, reply in Cursor's option-id envelope. Early returns use
+/// `skipped` so the agent continues instead of hanging on `-32601`.
+async fn handle_cursor_ask_question(
+    access: &Option<(
+        Arc<dyn crate::acp::question::SessionQuestionAccess>,
+        crate::acp::question::QuestionRuntimeConfig,
+    )>,
+    connection_id: &str,
+    state: &Arc<RwLock<SessionState>>,
+    emitter: &EventEmitter,
+    req: CursorAskQuestionRequest,
+    responder: Responder<serde_json::Value>,
+) {
+    tracing::info!(
+        "[cursor ask] received cursor/ask_question: keys={:?}",
+        crate::acp::cursor_ext::param_keys(&req.0)
+    );
+    // Every early return is `skipped` WITH a reason: cursor's own `skipped`
+    // doubles as "the user dismissed the card", and an agent that can't tell
+    // that apart from "this host never showed it" will proceed as if the user
+    // had a say. The reason text is structural — never any of the payload.
+    let Some((questions, ask_cfg)) = access else {
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+            "the host's question bridge is unavailable; the user was not asked",
+        ));
+        return;
+    };
+    if !ask_cfg.is_enabled().await {
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+            "the host's interactive question card is disabled; the user was not asked",
+        ));
+        return;
+    }
+    let parsed = match crate::acp::cursor_ext::parse_cursor_ask_questions(&req.0) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            tracing::warn!("[cursor ask] rejecting malformed ext request: {e}");
+            let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+                &format!("the host could not render this ask: {e}"),
+            ));
+            return;
+        }
+    };
+    let tool_call_id = req
+        .0
+        .get("toolCallId")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let specs: Vec<_> = parsed.iter().map(|q| q.spec.clone()).collect();
+    let card_specs = specs.clone();
+    let Some(registered) = questions.register_question(connection_id, specs).await else {
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+            "the host could not open a question card (one is already pending, or the session is gone)",
+        ));
+        return;
+    };
+    let state = Arc::clone(state);
+    let emitter = emitter.clone();
+    tokio::spawn(async move {
+        match registered.answer_rx.await {
+            Ok(outcome) => {
+                if let Some(tool_call_id) = tool_call_id {
+                    emit_with_state(
+                        &state,
+                        &emitter,
+                        AcpEvent::ToolCall {
+                            tool_call_id,
+                            title: "ask_user_question".to_string(),
+                            kind: "other".to_string(),
+                            status: "completed".to_string(),
+                            content: None,
+                            raw_input: Some(
+                                crate::acp::question::grok_result_card_input(&card_specs)
+                                    .to_string(),
+                            ),
+                            raw_output: Some(
+                                crate::acp::question::grok_result_card_output(&outcome).to_string(),
+                            ),
+                            locations: None,
+                            meta: None,
+                            images: None,
+                        },
+                    )
+                    .await;
+                }
+                let _ = responder.respond(crate::acp::cursor_ext::build_cursor_ask_response(
+                    &parsed, &outcome,
+                ));
+            }
+            Err(_) => {
+                let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response());
+            }
+        }
+    });
+}
+
+/// Bridge Cursor's blocking `cursor/create_plan` into the shared plan-approval
+/// card. Disconnect / malformed → `cancelled`, never a silent `accepted`.
+async fn handle_cursor_create_plan(
+    access: &Option<Arc<dyn crate::acp::plan_approval::SessionPlanApprovalAccess>>,
+    connection_id: &str,
+    req: CursorCreatePlanRequest,
+    responder: Responder<serde_json::Value>,
+) {
+    tracing::info!(
+        "[cursor plan] received cursor/create_plan: keys={:?}",
+        crate::acp::cursor_ext::param_keys(&req.0)
+    );
+    let Some(access) = access else {
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_create_plan_disconnect_response());
+        return;
+    };
+    let (plan_markdown, tool_call_id) = match crate::acp::cursor_ext::parse_cursor_create_plan(&req.0)
+    {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            tracing::warn!("[cursor plan] rejecting malformed ext request: {e}");
+            let _ = responder.respond(crate::acp::cursor_ext::cursor_create_plan_disconnect_response());
+            return;
+        }
+    };
+    let Some(registered) = access
+        .register_plan_approval(connection_id, tool_call_id, plan_markdown)
+        .await
+    else {
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_create_plan_disconnect_response());
+        return;
+    };
+    tokio::spawn(async move {
+        match registered.answer_rx.await {
+            Ok(answer) => {
+                let _ = responder.respond(
+                    crate::acp::cursor_ext::build_cursor_create_plan_response(&answer),
+                );
+            }
+            Err(_) => {
+                let _ = responder
+                    .respond(crate::acp::cursor_ext::cursor_create_plan_disconnect_response());
+            }
+        }
+    });
+}
+
+fn handle_cursor_update_todos(
+    req: CursorUpdateTodosRequest,
+    responder: Responder<serde_json::Value>,
+) {
+    tracing::debug!(
+        "[cursor todos] cursor/update_todos keys={:?}",
+        crate::acp::cursor_ext::param_keys(&req.0)
+    );
+    let _ = responder.respond(crate::acp::cursor_ext::build_cursor_update_todos_response(
+        &req.0,
+    ));
+}
+
+fn handle_cursor_task(req: CursorTaskRequest, responder: Responder<serde_json::Value>) {
+    tracing::debug!(
+        "[cursor task] cursor/task keys={:?}",
+        crate::acp::cursor_ext::param_keys(&req.0)
+    );
+    let _ = responder.respond(crate::acp::cursor_ext::build_cursor_task_response(&req.0));
+}
+
+fn handle_cursor_generate_image(
+    req: CursorGenerateImageRequest,
+    responder: Responder<serde_json::Value>,
+) {
+    tracing::debug!(
+        "[cursor image] cursor/generate_image keys={:?}",
+        crate::acp::cursor_ext::param_keys(&req.0)
+    );
+    let _ = responder.respond(crate::acp::cursor_ext::build_cursor_generate_image_response(
+        &req.0,
+    ));
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn handle_elicitation_request(
     access: &Option<(
