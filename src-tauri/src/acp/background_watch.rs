@@ -182,6 +182,12 @@ struct LedgerEntry {
 const CLEAR_ROLLOVER_EXPECT_WINDOW: Duration =
     Duration::from_secs(crate::parsers::claude::CLEAR_ROLLOVER_MAX_GAP_SECS as u64);
 
+/// How far after a session change a `/clear` may still be one that was typed
+/// into the NEW session. Bounds a comparison that crosses the wall clock: the
+/// real gap is the watcher's poll lag (at most `POLL_IDLE` plus scheduling),
+/// so this is an order of magnitude of headroom and no more.
+const REARM_CLEAR_GRACE: Duration = Duration::from_secs(30);
+
 impl PromptLedger {
     pub(crate) fn shared() -> Arc<Self> {
         Arc::new(Self {
@@ -224,11 +230,21 @@ impl PromptLedger {
     /// compare against there is nothing to tell the two apart, so the
     /// expectation is dropped: a missed adoption still recovers on reopen,
     /// where adopting a stranger's transcript would not.
+    ///
+    /// The window is bounded rather than open-ended because the comparison
+    /// crosses the wall clock, which can step backwards under it. The gap
+    /// this admits is only ever the watcher's own poll lag (`POLL_IDLE` plus
+    /// scheduling), so anything further out is not a late-polled `/clear` —
+    /// it is a clock that moved, and it resolves to the safe answer.
     fn expire_clear_request_before(&self, changed_at: Option<std::time::SystemTime>) {
         let mut slot = self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner());
-        let belongs_to_new_session = slot
-            .zip(changed_at)
-            .is_some_and(|((_, sent_at), changed_at)| sent_at >= changed_at);
+        let belongs_to_new_session =
+            slot.zip(changed_at)
+                .is_some_and(|((_, sent_at), changed_at)| {
+                    sent_at
+                        .duration_since(changed_at)
+                        .is_ok_and(|since_change| since_change <= REARM_CLEAR_GRACE)
+                });
         if !belongs_to_new_session {
             *slot = None;
         }
@@ -2211,6 +2227,17 @@ mod tests {
         assert!(
             !ledger.clear_rollover_expected(),
             "with nothing to compare against, a missed adoption beats a wrong one"
+        );
+
+        // The comparison crosses the wall clock, and a backward step under it
+        // would otherwise make the OLD session's expectation look newer than
+        // the switch. A gap no poll lag can explain resolves the safe way.
+        ledger.note_clear_for_test();
+        let changed_long_before = std::time::SystemTime::now() - REARM_CLEAR_GRACE * 2;
+        ledger.expire_clear_request_before(Some(changed_long_before));
+        assert!(
+            !ledger.clear_rollover_expected(),
+            "a gap wider than the watcher's poll lag is a moved clock, not a late /clear"
         );
     }
 
