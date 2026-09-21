@@ -1888,6 +1888,10 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         if (isOfficeOwnerFile(changed)) continue
         const abs = joinRootRel(streamRoot, changed)
         if (autoOpened.has(abs) || pending.has(abs)) continue
+        // An already-open tab counts as a sighting, not just a skip: this
+        // feature exists to surface documents the user has NOT seen, so a tab
+        // they opened by hand must not become a fresh auto-open the moment
+        // they close it and the agent writes again.
         if (openPaths.has(abs)) {
           autoOpened.add(abs)
           continue
@@ -1919,7 +1923,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
             return openFilePreview(abs)
           })
           .catch(() => {
-            // A removed/unreadable parent is not a document to preview.
+            // Covers both halves of the chain: a removed/unreadable parent is
+            // not a document to preview, and `openFilePreview` already reports
+            // its own failures on the tab it seeded.
           })
           .finally(() => pending.delete(abs))
       }
