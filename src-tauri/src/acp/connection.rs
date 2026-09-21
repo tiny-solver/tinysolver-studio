@@ -7045,19 +7045,29 @@ async fn handle_cursor_ask_question(
         "[cursor ask] received cursor/ask_question: keys={:?}",
         crate::acp::cursor_ext::param_keys(&req.0)
     );
+    // Every early return is `skipped` WITH a reason: cursor's own `skipped`
+    // doubles as "the user dismissed the card", and an agent that can't tell
+    // that apart from "this host never showed it" will proceed as if the user
+    // had a say. The reason text is structural — never any of the payload.
     let Some((questions, ask_cfg)) = access else {
-        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response());
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+            "the host's question bridge is unavailable; the user was not asked",
+        ));
         return;
     };
     if !ask_cfg.is_enabled().await {
-        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response());
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+            "the host's interactive question card is disabled; the user was not asked",
+        ));
         return;
     }
     let parsed = match crate::acp::cursor_ext::parse_cursor_ask_questions(&req.0) {
         Ok(parsed) => parsed,
         Err(e) => {
             tracing::warn!("[cursor ask] rejecting malformed ext request: {e}");
-            let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response());
+            let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+                &format!("the host could not render this ask: {e}"),
+            ));
             return;
         }
     };
@@ -7069,7 +7079,9 @@ async fn handle_cursor_ask_question(
     let specs: Vec<_> = parsed.iter().map(|q| q.spec.clone()).collect();
     let card_specs = specs.clone();
     let Some(registered) = questions.register_question(connection_id, specs).await else {
-        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response());
+        let _ = responder.respond(crate::acp::cursor_ext::cursor_ask_skip_response_with_reason(
+            "the host could not open a question card (one is already pending, or the session is gone)",
+        ));
         return;
     };
     let state = Arc::clone(state);
@@ -7167,7 +7179,9 @@ fn handle_cursor_update_todos(
         "[cursor todos] cursor/update_todos keys={:?}",
         crate::acp::cursor_ext::param_keys(&req.0)
     );
-    let _ = responder.respond(crate::acp::cursor_ext::build_cursor_update_todos_response());
+    let _ = responder.respond(crate::acp::cursor_ext::build_cursor_update_todos_response(
+        &req.0,
+    ));
 }
 
 fn handle_cursor_task(req: CursorTaskRequest, responder: Responder<serde_json::Value>) {

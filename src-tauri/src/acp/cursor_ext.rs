@@ -26,7 +26,7 @@ use crate::acp::plan_approval::{
     PlanApprovalAnswer, PlanApprovalDecision, MAX_PLAN_MARKDOWN_CHARS,
 };
 use crate::acp::question::{
-    QuestionOption, QuestionOutcome, QuestionSpec, MAX_HEADER_CHARS, MAX_OPTIONS, MAX_QUESTIONS,
+    synthesize_header, QuestionOption, QuestionOutcome, QuestionSpec, MAX_OPTIONS, MAX_QUESTIONS,
     MAX_QUESTION_TEXT_CHARS, MIN_OPTIONS,
 };
 
@@ -175,11 +175,10 @@ pub fn parse_cursor_ask_questions(params: &Value) -> Result<Vec<CursorAskQuestio
                 "questions[{qi}] has fewer than {MIN_OPTIONS} usable options"
             ));
         }
-        let header: String = title
-            .unwrap_or("Cursor")
-            .chars()
-            .take(MAX_HEADER_CHARS)
-            .collect();
+        // Cursor's `title` is one banner for the whole ask; with none, fall back
+        // to the question itself the way the grok / pi bridges do rather than
+        // stamping a constant on every chip.
+        let header = synthesize_header(title.unwrap_or(prompt));
         out.push(CursorAskQuestion {
             spec: QuestionSpec {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -197,11 +196,23 @@ pub fn parse_cursor_ask_questions(params: &Value) -> Result<Vec<CursorAskQuestio
 }
 
 /// Map the card's outcome onto Cursor's `CursorAskQuestionResponse`.
+///
+/// The ask card ALWAYS offers a free-text "Other" row, and on a single-select
+/// question picking it CLEARS the real options — so a submitted label is very
+/// often not one of Cursor's options at all. Cursor's `answered` variant can
+/// only name option ids, so such an answer has no faithful encoding there:
+/// replying `answered` with an empty `selectedOptionIds` would tell the agent
+/// the user answered and chose nothing, and drop what they typed on the floor.
+/// [`crate::acp::question::pi_select_option_id`] refuses to fake an option for
+/// the same reason. So `answered` is used ONLY when every selected label maps;
+/// otherwise the reply is `skipped` and the documented `reason` carries what
+/// the user actually said, which is lossless in the direction that matters.
 pub fn build_cursor_ask_response(parsed: &[CursorAskQuestion], outcome: &QuestionOutcome) -> Value {
     if outcome.declined {
-        return cursor_outcome("skipped");
+        return cursor_ask_skip_response();
     }
     let mut answers = Vec::new();
+    let mut all_mapped = true;
     for q in parsed {
         let Some(item) = outcome
             .answers
@@ -210,20 +221,23 @@ pub fn build_cursor_ask_response(parsed: &[CursorAskQuestion], outcome: &Questio
         else {
             continue;
         };
-        let selected_option_ids: Vec<String> = item
-            .selected
-            .iter()
-            .filter_map(|label| {
-                q.option_ids
-                    .iter()
-                    .find(|(l, _)| l == label)
-                    .map(|(_, id)| id.clone())
-            })
-            .collect();
+        let mut selected_option_ids = Vec::with_capacity(item.selected.len());
+        for label in &item.selected {
+            match q.option_ids.iter().find(|(l, _)| l == label) {
+                Some((_, id)) => selected_option_ids.push(id.clone()),
+                None => all_mapped = false,
+            }
+        }
+        if selected_option_ids.is_empty() {
+            continue;
+        }
         answers.push(json!({
             "questionId": q.cursor_id,
             "selectedOptionIds": selected_option_ids,
         }));
+    }
+    if !all_mapped || answers.is_empty() {
+        return cursor_ask_skip_response_with_reason(&free_text_reason(outcome));
     }
     json!({
         "outcome": {
@@ -233,8 +247,41 @@ pub fn build_cursor_ask_response(parsed: &[CursorAskQuestion], outcome: &Questio
     })
 }
 
+/// Render a submitted [`QuestionOutcome`] as prose for the `skipped` reason —
+/// the only channel Cursor's response leaves for an answer its option ids can't
+/// express. Bounded like every other agent-facing field here.
+fn free_text_reason(outcome: &QuestionOutcome) -> String {
+    let said = outcome
+        .answers
+        .iter()
+        .filter(|a| !a.selected.is_empty())
+        .map(|a| format!("{}: {}", a.question, a.selected.join(", ")))
+        .collect::<Vec<_>>()
+        .join(" | ");
+    if said.is_empty() {
+        return String::new();
+    }
+    format!("the user answered in free text — {said}")
+        .chars()
+        .take(MAX_QUESTION_TEXT_CHARS)
+        .collect()
+}
+
 pub fn cursor_ask_skip_response() -> Value {
     cursor_outcome("skipped")
+}
+
+/// `skipped` plus the documented optional `reason`, so the agent can tell a
+/// user who dismissed the card from a host that could not present it at all.
+pub fn cursor_ask_skip_response_with_reason(reason: &str) -> Value {
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return cursor_ask_skip_response();
+    }
+    cursor_outcome_with(
+        "skipped",
+        json!({ "reason": reason.chars().take(MAX_QUESTION_TEXT_CHARS).collect::<String>() }),
+    )
 }
 
 /// Plan markdown + toolCallId for the shared approval card. Cursor puts the
@@ -289,8 +336,19 @@ pub fn cursor_create_plan_disconnect_response() -> Value {
 
 /// `cursor/update_todos` — accept the list. Live todo UI is a follow-up; the
 /// agent only needs the documented `accepted` outcome to stop retrying.
-pub fn build_cursor_update_todos_response() -> Value {
-    cursor_outcome("accepted")
+///
+/// The documented `accepted` variant is `{ outcome, todos }` — `todos` is NOT
+/// optional there — and it means "the list the client now holds". Codeg keeps
+/// no todo state, so echo back exactly what the request carried: correct for
+/// `merge: false` (replace) and the closest honest answer for `merge: true`.
+/// Bare `accepted` is only for a request that carried no `todos` array at all.
+pub fn build_cursor_update_todos_response(params: &Value) -> Value {
+    match params.get("todos") {
+        Some(todos @ Value::Array(_)) => {
+            cursor_outcome_with("accepted", json!({ "todos": todos.clone() }))
+        }
+        _ => cursor_outcome("accepted"),
+    }
 }
 
 /// `cursor/task` — Cursor already spawned the subagent; we acknowledge so the
@@ -336,6 +394,18 @@ pub fn param_keys(params: &Value) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // `matches_method` lives on the `JsonRpcMessage` supertrait, not on the
+    // `JsonRpcRequest` the derive is named after.
+    use sacp::JsonRpcMessage;
+
+    fn answered(question: &str, selected: &[&str]) -> crate::acp::question::QuestionAnsweredItem {
+        crate::acp::question::QuestionAnsweredItem {
+            question: question.into(),
+            header: "Cursor".into(),
+            multi_select: selected.len() > 1,
+            selected: selected.iter().map(|s| (*s).to_string()).collect(),
+        }
+    }
 
     #[test]
     fn request_types_match_cursor_docs_methods() {
@@ -425,6 +495,114 @@ mod tests {
             },
         );
         assert_eq!(v["outcome"]["outcome"], "skipped");
+        // A plain dismissal carries no reason — that field is for the cases the
+        // host itself could not ask, or could not encode the answer.
+        assert!(v["outcome"].get("reason").is_none());
+    }
+
+    /// The ask card always offers a free-text "Other" row, and single-select
+    /// REPLACES the picked option with it — so the reply must never claim
+    /// `answered` with an empty selection (the agent would read that as "asked
+    /// and chose nothing") and must not silently eat what the user typed.
+    #[test]
+    fn free_text_answer_is_skipped_with_the_users_words() {
+        let parsed = parse_cursor_ask_questions(&json!({
+            "questions": [{
+                "id": "q1",
+                "prompt": "Pick",
+                "options": [
+                    { "id": "agent", "label": "Agent" },
+                    { "id": "plan", "label": "Plan" }
+                ]
+            }]
+        }))
+        .unwrap();
+        let v = build_cursor_ask_response(
+            &parsed,
+            &QuestionOutcome {
+                answers: vec![answered("Pick", &["neither — use review mode"])],
+                declined: false,
+            },
+        );
+        assert_eq!(v["outcome"]["outcome"], "skipped");
+        assert_ne!(v["outcome"]["outcome"], "answered");
+        assert!(v["outcome"]["answers"].is_null());
+        assert!(v["outcome"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("neither — use review mode"));
+    }
+
+    /// A multi-select that mixes a real option with typed text has no faithful
+    /// `answered` encoding either: the typed half would vanish. Skip with the
+    /// whole submission in the reason rather than half-answer.
+    #[test]
+    fn partially_mapped_answer_does_not_drop_the_typed_half() {
+        let parsed = parse_cursor_ask_questions(&json!({
+            "questions": [{
+                "id": "q1",
+                "prompt": "Pick",
+                "allowMultiple": true,
+                "options": [
+                    { "id": "agent", "label": "Agent" },
+                    { "id": "plan", "label": "Plan" }
+                ]
+            }]
+        }))
+        .unwrap();
+        let v = build_cursor_ask_response(
+            &parsed,
+            &QuestionOutcome {
+                answers: vec![answered("Pick", &["Agent", "and also ship docs"])],
+                declined: false,
+            },
+        );
+        assert_eq!(v["outcome"]["outcome"], "skipped");
+        let reason = v["outcome"]["reason"].as_str().unwrap();
+        assert!(reason.contains("Agent"));
+        assert!(reason.contains("and also ship docs"));
+    }
+
+    #[test]
+    fn skip_reason_is_omitted_when_empty() {
+        assert!(cursor_ask_skip_response_with_reason("   ")["outcome"]
+            .get("reason")
+            .is_none());
+        assert_eq!(
+            cursor_ask_skip_response_with_reason("bridge unavailable")["outcome"]["reason"],
+            "bridge unavailable"
+        );
+    }
+
+    /// Without a `title`, every chip used to read "Cursor"; the grok / pi
+    /// bridges synthesize the chip from the question instead.
+    #[test]
+    fn header_falls_back_to_the_prompt_when_no_title() {
+        let parsed = parse_cursor_ask_questions(&json!({
+            "questions": [{
+                "id": "q1",
+                "prompt": "Which mode should I use?",
+                "options": [
+                    { "id": "a", "label": "A" },
+                    { "id": "b", "label": "B" }
+                ]
+            }]
+        }))
+        .unwrap();
+        assert_eq!(parsed[0].spec.header, "Which mode s");
+        let titled = parse_cursor_ask_questions(&json!({
+            "title": "Need input",
+            "questions": [{
+                "id": "q1",
+                "prompt": "Which mode should I use?",
+                "options": [
+                    { "id": "a", "label": "A" },
+                    { "id": "b", "label": "B" }
+                ]
+            }]
+        }))
+        .unwrap();
+        assert_eq!(titled[0].spec.header, "Need input");
     }
 
     #[test]
@@ -494,11 +672,24 @@ mod tests {
         assert_eq!(rejected["outcome"]["outcome"], "rejected");
     }
 
+    /// Cursor's documented `accepted` variant is `{ outcome, todos }` — the
+    /// list the client now holds — so the reply has to carry one back.
     #[test]
-    fn update_todos_accepted() {
-        assert_eq!(
-            build_cursor_update_todos_response()["outcome"]["outcome"],
-            "accepted"
-        );
+    fn update_todos_accepted_echoes_the_list() {
+        let todos = json!([
+            { "id": "t1", "content": "Read the parser", "status": "completed" },
+            { "id": "t2", "content": "Wire the card", "status": "in_progress" },
+        ]);
+        let v = build_cursor_update_todos_response(&json!({
+            "toolCallId": "call_127",
+            "merge": false,
+            "todos": todos,
+        }));
+        assert_eq!(v["outcome"]["outcome"], "accepted");
+        assert_eq!(v["outcome"]["todos"], todos);
+        // No list on the request → bare accepted, not a bogus empty list.
+        let bare = build_cursor_update_todos_response(&json!({ "toolCallId": "call_128" }));
+        assert_eq!(bare["outcome"]["outcome"], "accepted");
+        assert!(bare["outcome"].get("todos").is_none());
     }
 }
