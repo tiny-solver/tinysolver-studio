@@ -198,11 +198,32 @@ import type {
 } from "@/lib/types"
 
 import { MessageInput } from "./message-input"
+import {
+  composerBoxMinHeight,
+  composerEditableMinHeight,
+} from "./composer/composer-sizing"
 
 const CAPS: PromptCapabilitiesInfo = {
   image: true,
   audio: false,
   embedded_context: true,
+}
+
+/**
+ * Dispatch a pointer-driven event that actually names its `pointerType`. jsdom
+ * ships no `PointerEvent`, so `fireEvent.pointerDown(el, { pointerType })`
+ * silently drops the property and every event reads as an unnamed one; React
+ * takes `pointerType` straight off the native event, so setting it by hand on a
+ * MouseEvent is what the composer's handlers actually see in a browser.
+ */
+function firePointer(
+  element: Element,
+  type: "pointerdown" | "click",
+  pointerType: "mouse" | "touch" | "pen"
+): boolean {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, "pointerType", { value: pointerType })
+  return fireEvent(element, event)
 }
 
 function renderInput(
@@ -240,13 +261,13 @@ describe("MessageInput (RichComposer integration)", () => {
     expect(sendButton).toBeDisabled()
   })
 
-  it("claims a mousedown on the input's empty chrome (P8d focus wiring)", async () => {
+  it("claims a mouse press on the input's empty chrome (P8d focus wiring)", async () => {
     const { container } = renderInput({})
     await waitFor(() =>
       expect(container.querySelector('[role="textbox"]')).not.toBeNull()
     )
-    // The bordered card carries the chrome-focus handler; a mousedown on the
-    // card itself (not on the editor or a control) is claimed via preventDefault
+    // The bordered card carries the chrome-focus handler; a press on the card
+    // itself (not on the editor or a control) is claimed via preventDefault
     // before refocusing the editor. Asserting preventDefault (fireEvent returns
     // false when the event was canceled) avoids relying on jsdom focus.
     const card = container.querySelector('[class~="@container"]') as HTMLElement
@@ -254,7 +275,81 @@ describe("MessageInput (RichComposer integration)", () => {
     // The same box paints the text I-beam across its blank chrome (see the
     // `.codeg-composer-chrome` rule in globals.css).
     expect(card.className).toContain("codeg-composer-chrome")
+    expect(firePointer(card, "pointerdown", "mouse")).toBe(false)
+  })
+
+  // A tap's compatibility `mousedown` lands after the gesture has resolved, and
+  // cancelling it — which the mouse path above must do — is itself enough to
+  // stop the soft keyboard coming up. So touch must NOT go through the press
+  // path; it gets the caret from the `click` the tap produces instead.
+  it("leaves a touch press on the chrome alone and focuses on the tap", async () => {
+    const { container } = renderInput({})
+    await waitFor(() =>
+      expect(container.querySelector('[role="textbox"]')).not.toBeNull()
+    )
+    const card = container.querySelector('[class~="@container"]') as HTMLElement
+    const editor = container.querySelector('[role="textbox"]') as HTMLElement
+
+    // Not claimed: no preventDefault, so the browser's own tap handling runs.
+    expect(firePointer(card, "pointerdown", "touch")).toBe(true)
+    expect(document.activeElement).not.toBe(editor)
+
+    // The tap itself is what puts the caret in the editor.
+    firePointer(card, "click", "touch")
+    await waitFor(() => expect(document.activeElement).toBe(editor))
+  })
+
+  // The press already focused a mouse; focusing again on release would collapse
+  // a selection dragged out of the chrome.
+  it("ignores a mouse click on the chrome (the press owns it)", async () => {
+    const { container } = renderInput({})
+    await waitFor(() =>
+      expect(container.querySelector('[role="textbox"]')).not.toBeNull()
+    )
+    const card = container.querySelector('[class~="@container"]') as HTMLElement
+    const editor = container.querySelector('[role="textbox"]') as HTMLElement
+
+    firePointer(card, "click", "mouse")
+    expect(document.activeElement).not.toBe(editor)
+    // An event that names no pointer kind at all counts as a mouse too.
+    fireEvent.click(card)
+    expect(document.activeElement).not.toBe(editor)
+  })
+
+  // A browser with no Pointer Events dispatches no `pointerdown` and names no
+  // pointer kind on its clicks, so both paths above stand down and plain
+  // `mousedown` is all there is — jsdom is exactly such an environment, which
+  // is what lets this assert the fallback rather than describe it.
+  it("falls back to mousedown where the browser has no pointer events", async () => {
+    expect("PointerEvent" in window).toBe(false)
+    const { container } = renderInput({})
+    await waitFor(() =>
+      expect(container.querySelector('[role="textbox"]')).not.toBeNull()
+    )
+    const card = container.querySelector('[class~="@container"]') as HTMLElement
+    const editor = container.querySelector('[role="textbox"]') as HTMLElement
+
+    // Claimed (preventDefault) and focused, the way it behaved before the
+    // press/tap split.
     expect(fireEvent.mouseDown(card)).toBe(false)
+    await waitFor(() => expect(document.activeElement).toBe(editor))
+  })
+
+  // A tap on a control inside the box must reach the control, not be swallowed
+  // into "put the caret here" — same exclusion the mouse path has always had.
+  it("leaves a touch tap on a control inside the box to the control", async () => {
+    const { container } = renderInput({ isPrompting: true, onCancel: vi.fn() })
+    await waitFor(() =>
+      expect(container.querySelector('[role="textbox"]')).not.toBeNull()
+    )
+    const stop = container.querySelector(
+      `button[title="${enMessages.Folder.chat.messageInput.cancel}"]`
+    ) as HTMLElement
+    expect(stop).not.toBeNull()
+
+    const editor = container.querySelector('[role="textbox"]') as HTMLElement
+    firePointer(stop, "click", "touch")
+    expect(document.activeElement).not.toBe(editor)
   })
 })
 
@@ -1998,6 +2093,28 @@ describe("MessageInput composer box sizing (#746)", () => {
     expect(editorClasses).not.toContain("flex-1")
     expect(editorClasses).toContain("grow")
   })
+
+  // Both floors have to actually land, and on the right element: the box's on
+  // the box, the editable area's on the editor. Only then does the box reach
+  // its floor by summing its children, which is what makes the layout come out
+  // right on an engine that hands its flex-grow children no free space.
+  for (const tall of [false, true]) {
+    it(`states both height floors on the ${tall ? "tall" : "compact"} box`, async () => {
+      const { container } = renderInput({ tall })
+      await waitFor(() =>
+        expect(container.querySelector('[role="textbox"]')).not.toBeNull()
+      )
+
+      const chrome = container.querySelector(".codeg-composer-chrome")!
+      const editorRoot = chrome.querySelector(".codeg-composer")!
+      expect(chrome.className.split(/\s+/)).toContain(
+        composerBoxMinHeight(tall)
+      )
+      expect(editorRoot.className.split(/\s+/)).toContain(
+        composerEditableMinHeight(tall, false)
+      )
+    })
+  }
 
   it("keeps the action row a fixed-height last child, below the editor", async () => {
     const { container } = renderInput({ isPrompting: true, onCancel: vi.fn() })
