@@ -5344,9 +5344,16 @@ fn strip_agents_instructions_block(input: &str) -> String {
 }
 
 fn is_agents_instruction_message(input: &str) -> bool {
-    input
-        .trim_start()
-        .starts_with("# AGENTS.md instructions for ")
+    const HEADER: &str = "# AGENTS.md instructions";
+
+    let Some(suffix) = input.trim_start().strip_prefix(HEADER) else {
+        return false;
+    };
+
+    suffix.is_empty()
+        || suffix.starts_with('\n')
+        || suffix.starts_with("\r\n")
+        || suffix.starts_with(" for ")
 }
 
 fn is_environment_context_message(input: &str) -> bool {
@@ -6879,6 +6886,13 @@ mod tests {
     fn skips_agents_instructions_title_candidate() {
         let input =
             "# AGENTS.md instructions for /tmp/demo\n\n<INSTRUCTIONS>\nhello\n</INSTRUCTIONS>";
+        let got = extract_codex_title_candidate(input, true);
+        assert!(got.is_none());
+    }
+
+    #[test]
+    fn skips_pathless_agents_instructions_title_candidate() {
+        let input = "# AGENTS.md instructions\n\n<INSTRUCTIONS>\nhello\n</INSTRUCTIONS>";
         let got = extract_codex_title_candidate(input, true);
         assert!(got.is_none());
     }
@@ -13258,6 +13272,28 @@ mod tests {
         let mut lines = String::from(
             "{\"timestamp\":\"2026-03-01T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"deny-1\",\"cwd\":\"/tmp/demo\"}}\n",
         );
+        lines.push_str(
+            &serde_json::json!({
+                "timestamp": "2026-03-01T10:00:01Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "# AGENTS.md instructions\n\n<INSTRUCTIONS>\nhi\n</INSTRUCTIONS>"
+                        },
+                        {
+                            "type": "input_text",
+                            "text": "<environment_context>\n  <cwd>/tmp/demo</cwd>\n</environment_context>"
+                        }
+                    ]
+                }
+            })
+            .to_string(),
+        );
+        lines.push('\n');
         for (index, text) in [
             "# AGENTS.md instructions for /tmp/demo\n\n<INSTRUCTIONS>\nhi\n</INSTRUCTIONS>",
             "<environment_context>\n  <cwd>/tmp/demo</cwd>\n</environment_context>",
