@@ -3283,17 +3283,28 @@ function computeTimelinePrefix(
   // machines. When the new prompt isn't persisted yet the backend reports no
   // id, so an earlier completed round's reply is never mistaken for a partial.
   //
-  // A mid-turn message is the one thing that takes that id away. The backend
-  // finds the prompt at the transcript TAIL (`apply_in_flight_message_id`
-  // matches the trailing user turn, or the one before a single trailing
-  // assistant turn); once the agent has written a steered message the tail is
-  // that message, whose content is not the prompt's, so nothing is stamped and
-  // the suppression switched itself off in the middle of the round it exists
-  // for. Fall back to the last persisted turn this client can still prove
-  // opened the round: the newest user turn that is not one of those copies.
-  // Reachable only once a copy is actually in `detail.turns` — i.e. exactly in
-  // the shape that loses the stamp — and only while the live stream holds the
-  // round from before the interruption.
+  // A mid-turn message used to take that id away, and the fallback below is
+  // what is left of that. `apply_in_flight_message_id` matched the transcript
+  // TAIL, so once the agent had written a steered message the tail was that
+  // message, whose content is not the prompt's, and nothing was stamped — in
+  // the middle of the round the suppression exists for. That is fixed at the
+  // source now: the backend walks back over the turns of the running turn and
+  // stamps the earliest copy of the prompt, which is the only reading that also
+  // repairs `detailIsInFlight` (a mid-turn refetch clearing the live buffers)
+  // and `collectInFlightPersistedToolCalls` (unfinished tool calls painting as
+  // completed) — neither of which this file can reach.
+  //
+  // Kept as a BACKSTOP, and for grok as the only thing there is: `grok.rs`
+  // parses its per-line `timestamp` as whole UNIX SECONDS, so a prompt the
+  // agent persisted a few hundred milliseconds into the turn floors to an
+  // instant BEFORE the (millisecond-precision) turn start and the backend's
+  // recency gate refuses it. The stamp is therefore unreachable there however
+  // the backend locates the prompt, and this is grok's round anchor. Fall back
+  // to the
+  // last persisted turn this client can still prove opened the round: the
+  // newest user turn that is not one of those copies. Reachable only once a
+  // copy is actually in `detail.turns`, and only while the live stream holds
+  // the round from before the interruption.
   const inFlightPromptId = session.detail?.in_flight_user_turn_id ?? null
   // `liveShowsReply`, not `liveMessage !== null`: this hides a persisted
   // assistant turn because the live stream is showing that reply, so a live
