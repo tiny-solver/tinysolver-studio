@@ -2884,6 +2884,23 @@ function isLatestGeneration(
 // on completion, so a trailing user turn means the reply is still mid-flush).
 const VIEWER_DETAIL_SYNC_DELAYS_MS = [0, 300, 700, 1500, 2500] as const
 
+// ─── Post-turn metadata reparse ──────────────────────────────────────────
+// Backoff for `syncTurnMetadata`, which re-reads the agent's transcript after
+// a reply settles. It races the same flush the viewer sync above does — the
+// ACP turn-end arrives off the wire's stop-reason, while the agent's CLI
+// writes its own log afterwards, in batches (deepseek compresses one zstd
+// frame per batch, so a reply's `turn/end` — the record carrying its usage AND
+// its completion clock — can stay unreadable for several seconds; a longer
+// session makes the wait longer still). This used to be two attempts, 1.5s
+// then 3s: past 4.5s the reply's footer simply stayed empty (no model, no
+// tokens, no time) and every earlier reply of the session stayed unnameable —
+// `source_turn_id` is only placeable while the parse is 1:1 with what this
+// client streamed, so a parse that is still behind greys out their "fork from
+// here" as "not ready yet" for good. Both only recovered by reopening the
+// conversation, which re-renders straight from a fresh parse. So the poll now
+// backs off across ~30s and stops as soon as the transcript has caught up.
+const TURN_METADATA_SYNC_DELAYS_MS = [1500, 3000, 5000, 8000, 13000] as const
+
 // Active viewer-sync polls, keyed by conversationId, so a fresh nudge supersedes
 // an in-flight poll (never stacks) and `removeConversation` / store reset can
 // cancel a poll whose tab has closed.
@@ -3812,14 +3829,45 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
     const runtimeId = runtimeConversationId ?? dbConversationId
     let cancelled = false
     let timerId: ReturnType<typeof setTimeout> | null = null
+    // Highest attempt whose timer has been armed. Keeps the schedule a single
+    // chain: only the newest timer is held in `timerId`, so a second call for
+    // the same attempt (a throwing `then` handler reaching the `catch` after
+    // it already scheduled) would strand an uncancellable one.
+    let armed = -1
+    // Rounds spent waiting on a reply whose record IS on disk but whose usage
+    // is not (see the retry decision below). Counted separately from `armed`
+    // so the allowance is the same wherever in the schedule that state first
+    // shows up.
+    let usageOnlyRounds = 0
+
+    // Advance the backoff, unless this sync was cancelled, already moved on,
+    // or has run out of attempts. Hoisted so the attempt below can call it;
+    // `trySync` is initialized before the first timer is ever armed.
+    function scheduleNext(attempt: number): void {
+      if (cancelled) return
+      const next = attempt + 1
+      if (next >= TURN_METADATA_SYNC_DELAYS_MS.length) return
+      if (next <= armed) return
+      trySync(next)
+    }
 
     const trySync = (attempt: number) => {
-      const delay = attempt === 0 ? 1500 : 3000
+      armed = attempt
       timerId = setTimeout(() => {
         if (cancelled) return
         const session = get().byConversationId.get(runtimeId)
         if (!session || session.localTurns.length === 0) return
-        if (session.syncState === "awaiting_persist") return
+        // A prompt is in flight again — the user typed ahead inside our
+        // backoff, or the queue auto-flushed the moment the reply settled.
+        // Patching is unsafe mid-turn, but ABANDONING the schedule is worse:
+        // the reply that just finished may still be unflushed, and this poll
+        // is the only thing that would ever fill in its stats. Skip the
+        // roundtrip, keep the schedule. (A completion cancels this sync and
+        // starts a fresh one, so nothing double-runs.)
+        if (session.syncState === "awaiting_persist") {
+          scheduleNext(attempt)
+          return
+        }
 
         // Windowed fetch anchored at the batch boundary: the response then
         // holds exactly this batch's turns (plus anything appended after),
@@ -3835,7 +3883,10 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
             if (cancelled) return
             const cur = get().byConversationId.get(runtimeId)
             if (!cur || cur.localTurns.length === 0) return
-            if (cur.syncState === "awaiting_persist") return
+            if (cur.syncState === "awaiting_persist") {
+              scheduleNext(attempt)
+              return
+            }
 
             const localAssistantIndices: number[] = []
             for (let i = 0; i < cur.localTurns.length; i++) {
@@ -3887,6 +3938,18 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
                       parsed.turns[parsed.turns.length - 1]?.role ===
                       "assistant",
                   })
+            // An unverified window is worth another look ONLY when the
+            // transcript is behind: `fromIndex` clamps to the total, so an
+            // offset SHORT of the boundary means the batch has not reached
+            // disk yet and a later round can verify. Every other mismatch is
+            // permanent for this batch — the boundary hash is absent (captured
+            // under a legacy detail) or the prefix was rewritten at the same
+            // offset (compaction) — and patches stay `[]` however long we
+            // poll, so five reparses would buy nothing.
+            const windowUnverifiableForGood =
+              responseWindowed &&
+              !windowVerified &&
+              !(boundaryIndex != null && parsed.turns_offset < boundaryIndex)
 
             if (patches.length > 0 || parsed.session_stats) {
               dispatch({
@@ -3897,29 +3960,56 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
               })
             }
 
-            // Retry once if the MOST RECENT local assistant turn still lacks
-            // usage — its transcript may not have flushed yet. Keying on the
-            // last EMITTED patch is wrong when the latest local turn is the
-            // unflushed one: an earlier reply's patch (with usage) would
-            // suppress the retry the latest turn needs.
+            // How far behind the transcript still is, judged on the NEWEST
+            // local reply — read from the STORE, not from this round's
+            // patches, so a value an earlier round already pinned counts as
+            // covered (first-write-wins).
+            //
+            // NOTHING at all (no usage, no completion time): the parse either
+            // does not hold that reply yet, or holds it UNFINALIZED — deepseek
+            // attaches both from the single `turn/end` record, which can land
+            // several frames after the reply's text. That is also the state
+            // that withholds `source_turn_id` from EVERY reply of the batch
+            // (see `idIsPlaceable`), i.e. what leaves the earlier replies'
+            // "fork from here" greyed out as "not ready yet" — so it gets the
+            // whole schedule.
+            //
+            // Usage ALONE missing is a much shorter wait: the reply's own
+            // record is on disk (it carried the completion time) and only a
+            // trailing metering record is outstanding — codex writes
+            // `token_count` as the line after the agent message. One extra
+            // look covers that, and capping it there keeps an agent that never
+            // reports usage at all (Cursor) from polling out the full schedule
+            // on every single turn.
+            //
+            // A SURPLUS — the parser split the reply, or an out-of-turn record
+            // landed — is deliberately not a retry signal: it leaves turns
+            // unnamed for the rest of the session however long we poll, and it
+            // patches the newest reply, so it stops here.
+            const after = get().byConversationId.get(runtimeId)
             const lastLocalAssistantIndex =
               localAssistantIndices[localAssistantIndices.length - 1]
-            const latestCoverage =
+            const newest =
               lastLocalAssistantIndex === undefined
                 ? undefined
-                : patches.find((p) => p.index === lastLocalAssistantIndex)
-            if (
-              lastLocalAssistantIndex !== undefined &&
-              !latestCoverage?.usage &&
-              attempt < 1
-            ) {
-              trySync(attempt + 1)
+                : after?.localTurns[lastLocalAssistantIndex]
+            if (newest != null && newest.usage == null) {
+              if (newest.completed_at == null) {
+                if (!windowUnverifiableForGood) scheduleNext(attempt)
+              } else if (usageOnlyRounds < 1) {
+                usageOnlyRounds += 1
+                scheduleNext(attempt)
+              }
             }
           })
           .catch(() => {
-            // Silent — localTurns content remains visible
+            // A failed read is transient (the transcript may be mid-write, or
+            // the window fetch raced a compaction): stay on the schedule
+            // rather than dropping the reply's metadata for good. Never
+            // surfaces an error — localTurns content remains visible.
+            scheduleNext(attempt)
           })
-      }, delay)
+      }, TURN_METADATA_SYNC_DELAYS_MS[attempt])
     }
 
     trySync(0)
