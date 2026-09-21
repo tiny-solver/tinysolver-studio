@@ -67,7 +67,7 @@ use crate::models::agent::AgentType;
 use crate::models::message::MessageTurn;
 use crate::parsers::claude::{
     capture_tag, capture_title_record, find_clear_rollover_successor, find_session_file,
-    follow_clear_rollover_chain, group_into_turns, is_meta_message, slash_command_display,
+    group_into_turns, is_meta_message, slash_command_display,
     task_notification_result_regex, task_notification_status_regex,
     task_notification_summary_regex, task_notification_task_id_regex,
     task_notification_tool_use_id_regex, ClaudeRecordAccumulator, BACKGROUND_RESULT_MAX_CHARS,
@@ -156,6 +156,11 @@ fn reconstructed_slash_command_fingerprint(text: &str) -> Option<String> {
 /// from a blocking context.
 pub(crate) struct PromptLedger {
     entries: Mutex<VecDeque<LedgerEntry>>,
+    /// When this connection last sent `/clear` — the one thing that makes a
+    /// transcript rollover attributable to THIS session rather than to any of
+    /// the other transcripts sharing the project directory. See
+    /// [`Self::clear_rollover_expected`].
+    clear_sent_at: Mutex<Option<Instant>>,
 }
 
 struct LedgerEntry {
@@ -163,11 +168,46 @@ struct LedgerEntry {
     recorded_at: Instant,
 }
 
+/// How long after sending `/clear` the watcher keeps looking for the
+/// successor transcript. The CLI writes it within milliseconds; the window is
+/// this wide only to survive a stalled disk, and it is what bounds the time in
+/// which a sibling session's own rollover could be mistaken for ours.
+const CLEAR_ROLLOVER_EXPECT_WINDOW: Duration = Duration::from_secs(120);
+
 impl PromptLedger {
     pub(crate) fn shared() -> Arc<Self> {
         Arc::new(Self {
             entries: Mutex::new(VecDeque::new()),
+            clear_sent_at: Mutex::new(None),
         })
+    }
+
+    /// True while a `/clear` sent on this connection could still be followed
+    /// by its successor transcript appearing on disk.
+    ///
+    /// Nothing on disk links a rollover back to the session it came from (the
+    /// successor's first records carry a fresh uuid, `parentUuid: null`, and
+    /// no reference to the file it replaced), so without this the only
+    /// available evidence — "a sibling with a `/clear` head appeared right
+    /// about when our file went quiet" — is equally true of every OTHER
+    /// conversation open on the same folder. codeg is a multi-agent
+    /// workbench; two Claude sessions in one project directory is the normal
+    /// case, not the exotic one. Knowing that WE asked for the clear is what
+    /// keeps this session from adopting a stranger's transcript.
+    fn clear_rollover_expected(&self) -> bool {
+        let at = self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner());
+        at.is_some_and(|t| t.elapsed() < CLEAR_ROLLOVER_EXPECT_WINDOW)
+    }
+
+    /// Consume the expectation once its successor has been adopted, so a
+    /// later sibling rollover inside the same window is not also taken.
+    fn consume_clear_request(&self) {
+        *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
+
+    #[cfg(test)]
+    fn note_clear_for_test(&self) {
+        *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
     }
 
     /// Record the fingerprint of a prompt codeg is about to send: the first
@@ -188,6 +228,12 @@ impl PromptLedger {
             tracing::debug!("[bg-watch] prompt without text block — no fingerprint recorded");
             return;
         };
+        // `/clear` is a CLI-local command: the adapter forwards it like any
+        // other prompt and Claude answers it by starting a new session on a
+        // new transcript file. This is the only notice codeg gets.
+        if fingerprint == "/clear" || fingerprint.starts_with("/clear ") {
+            *self.clear_sent_at.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+        }
         let mut entries = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         entries.push_back(LedgerEntry {
             fingerprint,
@@ -575,6 +621,13 @@ pub(crate) struct WatchState {
     /// The ACP session id is unchanged, so this is the id `conversation.external_id`
     /// must be re-pointed at. Consumed by `run_watch` after the tick.
     pending_transcript_id: Option<String>,
+    /// Transcript uuid this watch rolled over ONTO, kept for as long as the
+    /// watch lives. `find_session_file` resolves the ACP session id, which
+    /// after a `/clear` names the abandoned file — so a re-locate (the stat
+    /// error path below nulls `file`) has to ask for this id instead, or the
+    /// watch would silently fall back onto the dead transcript. Cleared by
+    /// `rearm`: a fork/resume is a different session, not this chain.
+    rolled_over_id: Option<String>,
 }
 
 impl WatchState {
@@ -607,6 +660,7 @@ impl WatchState {
             ai_title: None,
             pending_title: None,
             pending_transcript_id: None,
+            rolled_over_id: None,
         }
     }
 
@@ -674,14 +728,24 @@ impl WatchState {
 
     /// Switch onto a `/clear` successor transcript without changing the ACP
     /// session id (the adapter keeps that id). The new file is a fresh
-    /// conversation, so accounting and overlay state reset; overlay events
+    /// conversation, so the episode/title/offset state resets; overlay events
     /// still carry the original session id so the frontend can map them.
-    fn adopt_rollover(&mut self, f: PathBuf) {
+    ///
+    /// Task accounting crosses over for the same reason it crosses a fork
+    /// (see `rearm`): `/clear` replaces Claude's context, it does not stop the
+    /// delegations and background shells already running — dropping them would
+    /// zero `outstanding`, release the frontend's sweep exemption, and let
+    /// closing the tab kill work that is still in flight.
+    fn adopt_rollover(&mut self, new_id: String, f: PathBuf) {
         let session_id = self.session_id.take();
-        let pending = self.pending_transcript_id.take();
+        let tasks = std::mem::take(&mut self.tasks);
+        let settled_ids = std::mem::take(&mut self.settled_ids);
         *self = Self::new();
         self.session_id = session_id;
-        self.pending_transcript_id = pending;
+        self.tasks = tasks;
+        self.settled_ids = settled_ids;
+        self.pending_transcript_id = Some(new_id.clone());
+        self.rolled_over_id = Some(new_id);
         self.epoch = Some(std::time::UNIX_EPOCH);
         self.adopt_file(f);
     }
@@ -773,26 +837,13 @@ impl WatchState {
         let expired_any = self.tasks.len() != before;
 
         // Locate the transcript (it may not exist yet for a brand-new
-        // session; retry every tick until it does). `/clear` leaves the
-        // original `{session_id}.jsonl` in place and writes a sibling uuid
-        // file — follow that chain so we never arm the frozen file.
+        // session; retry every tick until it does). After a `/clear` the ACP
+        // session id names the ABANDONED file, so the lookup asks for the id
+        // this watch rolled onto instead.
         if self.file.is_none() {
-            if let Some(f) = find_session_file(&session_id) {
-                let (resolved_id, resolved_path) =
-                    follow_clear_rollover_chain(&f, &session_id);
-                if resolved_id != session_id {
-                    tracing::info!(
-                        "[bg-watch] /clear rollover on arm connection={} from={} to={} file={}",
-                        conn_id,
-                        session_id,
-                        resolved_id,
-                        resolved_path.display()
-                    );
-                    self.pending_transcript_id = Some(resolved_id);
-                    self.adopt_rollover(resolved_path);
-                } else {
-                    self.adopt_file(f);
-                }
+            let lookup_id = self.rolled_over_id.clone().unwrap_or_else(|| session_id.clone());
+            if let Some(f) = find_session_file(&lookup_id) {
+                self.adopt_file(f);
             }
             if let Some(f) = &self.file {
                 if !self.armed_logged {
@@ -806,20 +857,31 @@ impl WatchState {
                     );
                 }
             }
-        } else if let Some(current) = self.file.clone() {
-            if let Some((new_id, new_path)) =
-                find_clear_rollover_successor(&current, &session_id)
-            {
-                if self.file.as_ref() != Some(&new_path) {
-                    tracing::info!(
-                        "[bg-watch] /clear rollover connection={} from={} to={} file={}",
-                        conn_id,
-                        session_id,
-                        new_id,
-                        new_path.display()
-                    );
-                    self.pending_transcript_id = Some(new_id);
-                    self.adopt_rollover(new_path);
+        }
+
+        // `/clear` leaves the original `{session_id}.jsonl` in place and
+        // writes a sibling uuid file. Look for that successor ONLY while a
+        // `/clear` this connection sent is still outstanding: the on-disk
+        // evidence alone cannot tell our own rollover from the rollover of
+        // any other conversation open on the same folder, and adopting a
+        // stranger's transcript would re-point this row's `external_id` at a
+        // session it does not own (see `PromptLedger::clear_rollover_expected`).
+        if ledger.clear_rollover_expected() {
+            if let Some(current) = self.file.clone() {
+                if let Some((new_id, new_path)) =
+                    find_clear_rollover_successor(&current, &session_id)
+                {
+                    if self.file.as_ref() != Some(&new_path) {
+                        tracing::info!(
+                            "[bg-watch] /clear rollover connection={} from={} to={} file={}",
+                            conn_id,
+                            session_id,
+                            new_id,
+                            new_path.display()
+                        );
+                        ledger.consume_clear_request();
+                        self.adopt_rollover(new_id, new_path);
+                    }
                 }
             }
         }
@@ -1999,6 +2061,11 @@ mod tests {
             ],
         );
 
+        // The rollover is only ours to take because THIS connection sent the
+        // `/clear` that caused it.
+        ledger.record_prompt_blocks(&[crate::acp::types::PromptInputBlock::Text {
+            text: "/clear".to_string(),
+        }]);
         let event = tick_now(&mut ws, &ledger);
         assert_eq!(
             ws.file.as_ref(),
@@ -2025,6 +2092,92 @@ mod tests {
         assert!(
             !blob.contains("hello before"),
             "pre-clear content stays on the abandoned file"
+        );
+    }
+
+    /// Every conversation opened on one folder shares a project directory, so
+    /// a `/clear` successor written by a DIFFERENT session sits right next to
+    /// ours and looks identical on disk: fresh uuid, `/clear` head, starting
+    /// when our own file happens to have gone quiet. Adopting it would tail a
+    /// stranger's transcript and re-point this row's `external_id` at a
+    /// session another row owns. The only thing that separates the two cases
+    /// is whether WE asked for the clear.
+    #[test]
+    fn clear_rollover_ignores_a_sibling_session_we_did_not_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old-sess.jsonl");
+        write_lines(
+            &old,
+            &[
+                &dated_user("old-sess", "u1", "2026-09-01T10:00:00Z", "hello before"),
+                &dated_assistant("old-sess", "a1", "2026-09-01T10:00:05Z", "hi before"),
+            ],
+        );
+        let ledger = PromptLedger::shared();
+        let mut ws = WatchState::with_file_for_test("old-sess", old.clone());
+        let _ = tick_now(&mut ws, &ledger);
+
+        // A neighbouring conversation clears six seconds later — well inside
+        // every timing tolerance the detector has.
+        write_lines(
+            &dir.path().join("other-sess.jsonl"),
+            &[
+                &clear_command("other-sess", "2026-09-01T10:00:06Z"),
+                &dated_user("other-sess", "u2", "2026-09-01T10:01:00Z", "not ours"),
+            ],
+        );
+
+        let event = tick_now(&mut ws, &ledger);
+        assert_eq!(
+            ws.file.as_ref(),
+            Some(&old),
+            "a rollover this connection never asked for is not ours to adopt"
+        );
+        assert!(ws.pending_transcript_id.is_none(), "no re-point may be emitted");
+        assert!(
+            event.is_none(),
+            "and none of the stranger's records may surface as our activity"
+        );
+    }
+
+    /// The successor's `/clear` record and the predecessor's last record are
+    /// written by one process milliseconds apart, and the CLI's timestamps are
+    /// not ordered across the two files (measured on 2.1.270: the successor's
+    /// caveat record is stamped 6ms BEFORE the command record that follows
+    /// it). A detector that demands `successor >= predecessor` to the
+    /// millisecond therefore drops real rollovers — and drops them for good,
+    /// since every later tick re-compares the same two files.
+    #[test]
+    fn clear_rollover_tolerates_a_successor_stamped_just_before_us() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old-sess.jsonl");
+        let new = dir.path().join("new-sess.jsonl");
+        write_lines(
+            &old,
+            &[
+                &dated_user("old-sess", "u1", "2026-09-01T10:00:00Z", "hello before"),
+                &dated_assistant("old-sess", "a1", "2026-09-01T10:00:05.900Z", "hi before"),
+            ],
+        );
+        let ledger = PromptLedger::shared();
+        let mut ws = WatchState::with_file_for_test("old-sess", old.clone());
+        let _ = tick_now(&mut ws, &ledger);
+
+        write_lines(
+            &new,
+            &[
+                // 400ms BEFORE the last record of the file it replaces.
+                &clear_command("new-sess", "2026-09-01T10:00:05.500Z"),
+                &dated_user("new-sess", "u2", "2026-09-01T10:01:00Z", "hello after"),
+            ],
+        );
+        ledger.note_clear_for_test();
+
+        let _ = tick_now(&mut ws, &ledger);
+        assert_eq!(
+            ws.file.as_ref(),
+            Some(&new),
+            "a few hundred ms of clock skew between the two files is normal"
         );
     }
 

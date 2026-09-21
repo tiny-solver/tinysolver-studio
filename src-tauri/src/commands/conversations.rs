@@ -1470,13 +1470,31 @@ pub async fn get_folder_conversation_core(
     if let Some(new_ext_id) = resolved_ext_id {
         if matches!(summary.agent_type, AgentType::ClaudeCode) {
             let continues: Vec<String> = summary.external_id.iter().cloned().collect();
-            let _ = conversation_service::bind_external_id(
+            // Refused when another row already holds the successor — the
+            // rollover's own file can have been imported as its own
+            // conversation. The summary must then keep the id this row
+            // actually owns: handing the caller an id it does not hold is
+            // what sends the next prompt into the HOLDER's transcript while
+            // every event names this row (see `bind_external_id`).
+            match conversation_service::bind_external_id(
                 conn,
                 conversation_id,
                 &new_ext_id,
                 &continues,
             )
-            .await;
+            .await
+            {
+                Ok(_) => summary.external_id = Some(new_ext_id),
+                Err(e) => {
+                    tracing::warn!(
+                        conversation_id,
+                        to_session = %new_ext_id,
+                        error = %e,
+                        "[conversations] could not follow the transcript rollover; \
+                         keeping the id this row holds"
+                    );
+                }
+            }
         } else {
             let _ = conversation_service::renormalize_external_id_alias(
                 conn,
@@ -1485,8 +1503,8 @@ pub async fn get_folder_conversation_core(
                 new_ext_id.clone(),
             )
             .await;
+            summary.external_id = Some(new_ext_id);
         }
-        summary.external_id = Some(new_ext_id);
     }
     summary.message_count = turns.len() as u32;
     // The transcript is the richer source for the session's model. Codex is

@@ -976,6 +976,14 @@ pub(crate) fn find_clear_rollover_successor(
 ) -> Option<(String, PathBuf)> {
     let dir = current_file.parent()?;
     let current_last = last_record_timestamp(current_file)?;
+    // Earliest a successor may have been written. A file whose LAST write
+    // predates it cannot hold a `/clear` record at/after `current_last`, so
+    // the stat alone rules it out — worth doing, because a busy project dir
+    // holds hundreds of transcripts and the alternative is opening and
+    // JSON-parsing the head of every one of them.
+    let earliest_write = std::time::SystemTime::from(
+        current_last - chrono::Duration::seconds(CLEAR_ROLLOVER_BACK_TOLERANCE_SECS),
+    );
     let mut best: Option<(DateTime<Utc>, String, PathBuf)> = None;
     for entry in fs::read_dir(dir).ok()?.flatten() {
         let path = entry.path();
@@ -991,10 +999,25 @@ pub(crate) fn find_clear_rollover_successor(
         if stem == current_session_id || !is_safe_subagent_id(stem) {
             continue;
         }
+        let too_old = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .is_some_and(|m| m < earliest_write);
+        if too_old {
+            continue;
+        }
         let Some(started) = clear_rollover_started_at(&path) else {
             continue;
         };
-        if started < current_last {
+        // The successor's `/clear` record lands within MILLISECONDS of the
+        // predecessor's last record (measured: 4ms), and neither file's
+        // timestamps are strictly monotonic — the CLI stamps the caveat
+        // record after the command record but with an earlier value. A hard
+        // `started < current_last` reject would therefore drop the real
+        // successor on a coin flip, permanently: the same two files are
+        // re-compared on every later tick with the same answer.
+        if (current_last - started).num_seconds() > CLEAR_ROLLOVER_BACK_TOLERANCE_SECS {
             continue;
         }
         if (started - current_last).num_seconds() > CLEAR_ROLLOVER_MAX_GAP_SECS {
@@ -1033,9 +1056,17 @@ pub(crate) fn follow_clear_rollover_chain(
 
 /// How many leading JSONL lines to inspect for a `/clear` command tag.
 const CLEAR_ROLLOVER_PEEK_LINES: usize = 40;
-/// `/clear` writes the successor immediately; a sibling that starts hours
-/// later is a different conversation in the same project dir.
-const CLEAR_ROLLOVER_MAX_GAP_SECS: i64 = 3600;
+/// `/clear` writes the successor immediately — the measured gap between the
+/// old file's last record and the new file's `/clear` record is single-digit
+/// milliseconds. Every second of slack here is a second in which an UNRELATED
+/// session in the same project dir could clear and be mistaken for this one's
+/// successor, so the window is kept as small as the write pattern allows
+/// while still surviving a stalled disk.
+const CLEAR_ROLLOVER_MAX_GAP_SECS: i64 = 90;
+/// How far BEFORE the predecessor's last record a successor's `/clear` record
+/// may be stamped. Non-zero because the two files are written by one process
+/// in one burst and the CLI's timestamps are not monotonic across them.
+const CLEAR_ROLLOVER_BACK_TOLERANCE_SECS: i64 = 5;
 const CLEAR_ROLLOVER_CHAIN_LIMIT: usize = 32;
 
 fn record_timestamp(value: &serde_json::Value) -> Option<DateTime<Utc>> {
@@ -1101,15 +1132,22 @@ fn clear_rollover_started_at(path: &Path) -> Option<DateTime<Utc>> {
 /// transcript is not fully scanned on every watcher tick.
 fn last_record_timestamp(path: &Path) -> Option<DateTime<Utc>> {
     let mut file = fs::File::open(path).ok()?;
-    let len = file.metadata().ok()?.len();
+    let meta = file.metadata().ok()?;
+    let len = meta.len();
     let start = len.saturating_sub(64 * 1024);
     file.seek(SeekFrom::Start(start)).ok()?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).ok()?;
+    // Bytes, not `read_to_string`: the window starts at a fixed offset, which
+    // lands mid-codepoint on any transcript whose tail holds non-ASCII text.
+    // `read_to_string` fails outright there (`InvalidData`), which would take
+    // the whole detector out on exactly the transcripts most likely to need
+    // it. The first partial line is dropped below anyway.
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).ok()?;
+    let buf = String::from_utf8_lossy(&bytes);
     let text = if start > 0 {
         buf.split_once('\n').map(|(_, rest)| rest).unwrap_or(&buf)
     } else {
-        buf.as_str()
+        buf.as_ref()
     };
     let mut last = None;
     for line in text.lines() {
@@ -1123,7 +1161,11 @@ fn last_record_timestamp(path: &Path) -> Option<DateTime<Utc>> {
             last = Some(ts);
         }
     }
-    last
+    // A tail window that holds no timestamped record at all (one record larger
+    // than the window; a metadata-only tail — `ai-title`/`mode`/`atis-latch`
+    // carry no timestamp) must not disable the search: fall back to the file's
+    // own mtime, which is the same quantity to within a write.
+    last.or_else(|| meta.modified().ok().map(DateTime::<Utc>::from))
 }
 
 impl ClaudeParser {
