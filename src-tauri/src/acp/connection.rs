@@ -26,7 +26,7 @@ use sacp::schema::{HttpHeader, McpServer, McpServerHttp, McpServerSse, McpServer
 use sacp::util::MatchDispatch;
 use sacp::{
     on_receive_notification, on_receive_request, Agent, Client, ConnectionTo, Dispatch,
-    JsonRpcRequest, Responder, SessionMessage, UntypedMessage,
+    HandleDispatchFrom, Handled, JsonRpcRequest, Responder, Role, SessionMessage, UntypedMessage,
 };
 use sacp_tokio::AcpAgent;
 use tokio::sync::{mpsc, oneshot, RwLock};
@@ -5310,6 +5310,9 @@ async fn run_connection(
     Client
         .builder()
         .name("codeg")
+        // First in the chain on purpose: it has to claim a null-`sessionId`
+        // notification before sacp can park it for retry. See the type docs.
+        .with_handler(DropNullSessionIdNotifications)
         .on_receive_request(
             {
                 let emitter_inner = emitter_clone.clone();
@@ -13785,6 +13788,75 @@ fn grok_ext_notification_is_alert(dispatch: &Dispatch, agent_type: AgentType) ->
     }
 }
 
+/// Claims — and drops — an agent notification whose `sessionId` is present but
+/// `null`, before sacp's session router can choke on it.
+///
+/// sacp routes an inbound message to the session it names, and decides a
+/// message is session-bound by FIELD PRESENCE alone (`Dispatch::has_session_id`
+/// → `params.get("sessionId").is_some()`). A `"sessionId": null` therefore
+/// looks session-bound, gets parked in the retry queue, and is replayed into
+/// `ActiveSessionHandler` the moment `attach_session` registers it — where
+/// `Dispatch::get_session_id` deserializes it into a `SessionId` and fails with
+/// `invalid type: null, expected a string`. A handler `Err` brings the whole
+/// connection down, so the user sees `ACP protocol error: Invalid params:
+/// "invalid type: null, expected a string"` instead of a session (issue #794).
+///
+/// grok 1.0.40 is what made this reachable: it narrates `session/new` progress
+/// on `_x.ai/session/setup`, and its first five phases (`auth`,
+/// `resolve_workspace`, `folder_trust`, `plugin_registry`, `mcp_merge`) run
+/// BEFORE the session id exists, so they carry `null`. 1.0.34 (the previous
+/// pin) sent no such notification at all. The guard is deliberately NOT gated
+/// on grok: no ACP notification legitimately carries a null session id, and
+/// every agent's connection dies the same way if one does.
+///
+/// This has to sit in the BUILDER chain, not among the session handlers: the
+/// static chain is the only thing that runs before a message can be parked for
+/// retry, and a parked message is replayed straight into the newly added
+/// dynamic handler without passing through this chain again.
+///
+/// Notifications only. A null session id means "not about a session yet", and
+/// nothing codeg renders rides on these. A REQUEST shaped this way would be the
+/// same protocol violation, but dropping one would leave the agent blocked on a
+/// reply that never comes — so it keeps the existing unhandled-request path.
+struct DropNullSessionIdNotifications;
+
+impl<Counterpart: Role> HandleDispatchFrom<Counterpart> for DropNullSessionIdNotifications {
+    async fn handle_dispatch_from(
+        &mut self,
+        message: Dispatch,
+        _connection: ConnectionTo<Counterpart>,
+    ) -> Result<Handled<Dispatch>, sacp::Error> {
+        if let Dispatch::Notification(notification) = &message {
+            if has_null_session_id(notification) {
+                tracing::debug!(
+                    method = %notification.method(),
+                    "[ACP] dropping notification with a null sessionId"
+                );
+                return Ok(Handled::Yes);
+            }
+        }
+        Ok(Handled::No {
+            message,
+            retry: false,
+        })
+    }
+
+    fn describe_chain(&self) -> impl std::fmt::Debug {
+        "DropNullSessionIdNotifications"
+    }
+}
+
+/// True when `params.sessionId` exists and is JSON `null` — the one shape
+/// [`DropNullSessionIdNotifications`] exists for. A MISSING `sessionId` is a
+/// perfectly ordinary connection-level notification (`_auth/status_update`,
+/// grok's `_x.ai/settings/update`) and must keep flowing.
+fn has_null_session_id(notification: &UntypedMessage) -> bool {
+    notification
+        .params()
+        .get("sessionId")
+        .is_some_and(serde_json::Value::is_null)
+}
+
 /// `_auth/status_update` — the agent reporting which identity IT is logged in
 /// with. Introduced by codex-acp 1.9.0; claude-agent-acp 0.75.0 adopted the
 /// same method with its own vocabulary.
@@ -18064,6 +18136,68 @@ mod tests {
         let missing_fields =
             UntypedMessage::new("_claude/sdkMessage", serde_json::json!({"sessionId": 1})).unwrap();
         assert!(map_claude_sdk_ext_notification(&missing_fields).is_none());
+    }
+
+    /// The five `_x.ai/session/setup` frames grok 1.0.40 emits BEFORE the
+    /// session id exists, captured verbatim off `grok agent stdio` during
+    /// `session/new`. Each carries `"sessionId": null`, which is what killed the
+    /// connection in #794 — sacp treats the present-but-null field as
+    /// session-bound and then fails to parse it into a `SessionId`.
+    #[test]
+    fn null_session_id_is_recognized_on_grok_setup_frames() {
+        for phase in [
+            "auth",
+            "resolve_workspace",
+            "folder_trust",
+            "plugin_registry",
+            "mcp_merge",
+        ] {
+            let raw = UntypedMessage::new(
+                "_x.ai/session/setup",
+                serde_json::json!({
+                    "method": "session/new",
+                    "phase": phase,
+                    "sessionId": serde_json::Value::Null
+                }),
+            )
+            .unwrap();
+            assert!(
+                has_null_session_id(&raw),
+                "phase {phase} should be recognized as a null sessionId"
+            );
+        }
+    }
+
+    /// The two shapes that must keep flowing: the LATER `_x.ai/session/setup`
+    /// phases, which carry a real session id and belong to the session channel,
+    /// and connection-level pushes that have no `sessionId` field at all
+    /// (`_auth/status_update`, grok's `_x.ai/settings/update`).
+    #[test]
+    fn null_session_id_leaves_real_and_absent_session_ids_alone() {
+        let with_id = UntypedMessage::new(
+            "_x.ai/session/setup",
+            serde_json::json!({
+                "method": "session/new",
+                "phase": "persistence_init",
+                "sessionId": "01a0c4fa-c78f-7bf1-9cc3-5c9f4e3e919a"
+            }),
+        )
+        .unwrap();
+        assert!(!has_null_session_id(&with_id));
+
+        let no_id = UntypedMessage::new(
+            "_auth/status_update",
+            serde_json::json!({"authStatus": {"kind": "authenticated"}}),
+        )
+        .unwrap();
+        assert!(!has_null_session_id(&no_id));
+
+        let settings = UntypedMessage::new(
+            "_x.ai/settings/update",
+            serde_json::json!({"sharing_enabled": false, "session_picker_grouped": null}),
+        )
+        .unwrap();
+        assert!(!has_null_session_id(&settings));
     }
 
     /// The exact `_x.ai/session_notification` envelope captured from grok 0.2.111
