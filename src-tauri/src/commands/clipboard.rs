@@ -61,7 +61,14 @@ pub fn resolve_clipboard_paths(paths: &[String]) -> Result<Vec<PathBuf>, AppComm
 /// `x-special/gnome-copied-files`); macOS takes `NSURL`s and Windows takes raw
 /// wide-char paths. It stays compiled — and tested — everywhere so the encoding
 /// rule is not a thing only a Linux CI run can check.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+///
+/// The one non-test caller therefore exists only in a Linux **desktop** build:
+/// `platform` is behind `tauri-runtime`, so a Linux `codeg-server` build has no
+/// caller at all and would otherwise trip `-D dead-code`.
+#[cfg_attr(
+    not(all(target_os = "linux", feature = "tauri-runtime")),
+    allow(dead_code)
+)]
 fn file_uri(path: &Path) -> String {
     const UNRESERVED_EXTRA: &[u8] = b"-._~/";
     let mut uri = String::from("file://");
