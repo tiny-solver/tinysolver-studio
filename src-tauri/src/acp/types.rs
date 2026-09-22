@@ -1660,6 +1660,27 @@ pub struct CursorAuthStatus {
     /// codeg's cache and is NOT on the user's PATH, so a bare `cursor-agent
     /// login` fails. `None` when no binary is installed.
     pub binary_path: Option<String>,
+    /// Whether the stored login credential actually WORKED against Cursor's
+    /// backend, as opposed to merely being on disk.
+    ///
+    /// `is_authenticated` alone is not that: `cursor-agent status` sets it from
+    /// nothing but the presence of an access token and a refresh token, and
+    /// never looks at the access token's expiry. The ACP path does
+    /// (`onboarding.h4`, which rejects a token whose `exp` is under five
+    /// minutes away) — and since the agent CLI has NO refresh-token grant at
+    /// all (its only refresh path re-logs-in with an API key), a browser login
+    /// that has aged out stays "authenticated" in `status` forever while every
+    /// `session/new` is refused with `Authentication required`. That mismatch
+    /// is what a panel reading only `is_authenticated` shows as a green
+    /// "signed in" next to a session that cannot start.
+    ///
+    /// Read off the same probe: `status` calls `getMe` with the stored token
+    /// and says `Logged in (unable to fetch user details)` when that call
+    /// failed. So `Some(false)` means the credential did not work *now* —
+    /// usually expired, possibly an unreachable backend, which is why the panel
+    /// words it as "could not be verified" rather than "expired". `None` when
+    /// there is no login to verify (or the probe never produced a status).
+    pub credential_verified: Option<bool>,
 }
 
 /// One entry from `cursor-agent models`, whose lines are `<id> - <label>

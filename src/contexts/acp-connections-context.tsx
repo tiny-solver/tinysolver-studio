@@ -4674,6 +4674,19 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
                   agent: agentLabel,
                   message: e.message,
                 })
+              // The agent refused to OPEN a session for want of a credential.
+              // Deliberately drops the agent's own wording: cursor-agent's
+              // says to run `agent login`, which is not a command that exists
+              // (the binary is `cursor-agent`, and codeg's managed copy is not
+              // on PATH) — so echoing it sends the user somewhere they cannot
+              // go. The agent's settings panel is where the real command, and
+              // the API-key alternative, live. The raw refusal is not lost —
+              // it is still `e.message` — so an agent whose text turns out to
+              // be worth showing can be surfaced here without a backend change.
+              case "agent_auth_required":
+                return t("backendErrors.agentAuthRequired", {
+                  agent: agentLabel,
+                })
               case "sdk_not_installed":
                 return t("blocked.sdkMissing", { agent: agentLabel })
               case "platform_not_supported":

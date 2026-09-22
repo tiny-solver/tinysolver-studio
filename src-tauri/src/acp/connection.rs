@@ -1249,6 +1249,33 @@ const INIT_TIMEOUT_SENTINEL: &str = "__codeg_init_timeout__";
 /// to `sacp::Error`, which has nowhere to carry a codeg error kind.
 const MCP_SUSPECT_SENTINEL: &str = "__codeg_mcp_suspect__";
 
+/// Sentinel appended to a `session/new` failure the agent answered with ACP's
+/// `authRequired`, so the outer `.map_err(...)` can raise
+/// `AcpError::AgentAuthRequired`. Same trick as [`INIT_TIMEOUT_SENTINEL`]: the
+/// typed error code does not survive the `sacp::Error` the inner future is
+/// typed to, and this is the one classification that has to be made while it
+/// is still there — the wire text alone is the agent's own wording, which for
+/// cursor-agent names a command that does not exist.
+const AUTH_REQUIRED_SENTINEL: &str = "__codeg_auth_required__";
+
+/// Classify a `session/new` failure while its typed code is still readable.
+///
+/// `authRequired` is checked first and returns on its own: it is a diagnosis
+/// (the agent says, in so many words, that it has no usable credential), where
+/// the MCP tag below is only a hint, and running both would leave a message
+/// carrying two markers and the weaker reading.
+fn tag_new_session_failure(
+    err: sacp::Error,
+    agent_type: AgentType,
+    mcp_servers: &[McpServer],
+) -> sacp::Error {
+    if matches!(err.code, sacp::schema::ErrorCode::AuthRequired) {
+        tracing::warn!("[ACP][{agent_type}] session/new refused with authRequired: {err}");
+        return sacp::util::internal_error(format!("{err}{AUTH_REQUIRED_SENTINEL}"));
+    }
+    tag_mcp_suspect(err, agent_type, mcp_servers)
+}
+
 /// Mark a `session/new` failure as possibly caused by the MCP servers codeg put
 /// on the wire.
 ///
@@ -6347,7 +6374,7 @@ async fn run_connection(
                             build_new_session_request(agent_type, &cwd, mcp_servers.clone()),
                         )
                         .await
-                        .map_err(|e| tag_mcp_suspect(e, agent_type, &mcp_servers))?;
+                        .map_err(|e| tag_new_session_failure(e, agent_type, &mcp_servers))?;
                         let fallback_sid = new_resp.session_id.0.to_string();
                         let initial_config_options = new_resp.config_options.clone();
                         let grok_meta = if agent_type == AgentType::Grok {
@@ -6447,7 +6474,7 @@ async fn run_connection(
                     build_new_session_request(agent_type, &cwd, mcp_servers.clone()),
                 )
                 .await
-                .map_err(|e| tag_mcp_suspect(e, agent_type, &mcp_servers))?;
+                .map_err(|e| tag_new_session_failure(e, agent_type, &mcp_servers))?;
                 let sid = new_resp.session_id.0.to_string();
                 let initial_config_options = new_resp.config_options.clone();
                 let grok_meta = if agent_type == AgentType::Grok {
@@ -6529,6 +6556,8 @@ async fn run_connection(
             let raw = e.to_string();
             if raw.contains(INIT_TIMEOUT_SENTINEL) {
                 AcpError::InitializeTimeout
+            } else if raw.contains(AUTH_REQUIRED_SENTINEL) {
+                AcpError::agent_auth_required(raw.replace(AUTH_REQUIRED_SENTINEL, ""))
             } else if raw.contains(MCP_SUSPECT_SENTINEL) {
                 // Strip the marker so the user sees the agent's own words, then
                 // let the frontend append the `supports_mcp` suggestion.
@@ -19974,6 +20003,57 @@ mod tests {
             !shown.contains(MCP_SUSPECT_SENTINEL),
             "the sentinel must never reach the user: {shown}"
         );
+    }
+
+    // The reported cursor-agent failure: `session/new` answered -32000 with
+    // `Please run 'agent login' first` — advice the user cannot take, since
+    // `agent` is not a command and codeg's managed `cursor-agent` is not on
+    // PATH. The typed code is the only place that reading is available, so it
+    // has to be classified here and not from the wire text.
+    #[test]
+    fn auth_required_beats_the_mcp_hint_and_carries_its_own_code() {
+        // The shape cursor-agent really answers with (wire capture from the
+        // report): code -32000, with its advice in `data`.
+        let refusal = sacp::Error::auth_required().data(serde_json::json!({
+            "message": "Authentication required. Please run 'agent login' first, \
+                        then call authenticate() with methodId 'cursor_login'."
+        }));
+        // A custom agent WITH servers attached is exactly the case the MCP hint
+        // fires on; the credential diagnosis has to win it.
+        let tagged = tag_new_session_failure(
+            refusal,
+            AgentType::Custom("my-agent"),
+            &[stdio_server("codeg")],
+        )
+        .to_string();
+        assert!(tagged.contains(AUTH_REQUIRED_SENTINEL));
+        assert!(
+            !tagged.contains(MCP_SUSPECT_SENTINEL),
+            "the weaker MCP reading must not ride along: {tagged}"
+        );
+
+        // Mirrors the `.map_err` in `run_connection`, which a unit test cannot
+        // call directly.
+        let err = AcpError::agent_auth_required(tagged.replace(AUTH_REQUIRED_SENTINEL, ""));
+        assert_eq!(err.code(), Some("agent_auth_required"));
+        assert!(
+            !err.to_string().contains(AUTH_REQUIRED_SENTINEL),
+            "the sentinel must never reach the user: {err}"
+        );
+    }
+
+    // Every other refusal keeps the behaviour it had: the auth branch must not
+    // swallow unrelated `session/new` failures.
+    #[test]
+    fn a_non_auth_refusal_still_takes_the_mcp_path() {
+        let tagged = tag_new_session_failure(
+            sacp::util::internal_error("session/new failed: unknown field `mcpServers`"),
+            AgentType::Custom("my-agent"),
+            &[stdio_server("codeg")],
+        )
+        .to_string();
+        assert!(tagged.contains(MCP_SUSPECT_SENTINEL));
+        assert!(!tagged.contains(AUTH_REQUIRED_SENTINEL));
     }
 
     #[test]
