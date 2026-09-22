@@ -1714,7 +1714,7 @@
     "sectionTitle": "一般",
     "sectionDescription": "デフォルトターミナル、レンダリング高速化、ウィンドウを閉じたときの動作、通知と通知音などの共通設定をここで一括管理します。",
     "terminalTitle": "デフォルトターミナル",
-    "terminalDescription": "ターミナルバーやファイルツリーから新しいターミナルタブを開くときに使用するシェルを選択します。エージェントが codeg にコマンドライン全体の実行を依頼するときにも使われます。",
+    "terminalDescription": "codeg が新しいターミナルタブを開くとき、およびエージェントに代わってコマンドライン全体を実行するときに使うシェルを選択します。独自のシェルを持つエージェント（Codex、Claude Code など）は自分のプロセス内でコマンドを実行するため、この設定は届きません。",
     "terminalSystemDefault": "システムデフォルト",
     "terminalPowerShell7": "PowerShell 7 (pwsh)",
     "terminalWindowsPowerShell": "Windows PowerShell",

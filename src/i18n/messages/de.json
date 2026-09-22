@@ -1714,7 +1714,7 @@
     "sectionTitle": "Allgemein",
     "sectionDescription": "Zentrale Einstellungen für das Standardterminal, die Rendering-Beschleunigung, das Verhalten beim Schließen des Fensters sowie Benachrichtigungen und Töne.",
     "terminalTitle": "Standardterminal",
-    "terminalDescription": "Wählen Sie die Shell, die beim Öffnen neuer Terminal-Tabs über die Terminalleiste oder den Dateibaum verwendet wird. Agenten nutzen sie ebenfalls, wenn sie codeg um die Ausführung einer vollständigen Befehlszeile bitten.",
+    "terminalDescription": "Wählen Sie die Shell, die codeg für neue Terminal-Tabs startet und für vollständige Befehlszeilen, deren Ausführung ein Agent bei codeg anfragt. Agenten mit einer eigenen Shell (Codex, Claude Code) führen Befehle im eigenen Prozess aus — dorthin reicht diese Einstellung nicht.",
     "terminalSystemDefault": "Systemstandard",
     "terminalPowerShell7": "PowerShell 7 (pwsh)",
     "terminalWindowsPowerShell": "Windows PowerShell",

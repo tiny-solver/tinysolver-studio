@@ -1714,7 +1714,7 @@
     "sectionTitle": "일반",
     "sectionDescription": "기본 터미널, 렌더링 가속, 창을 닫을 때의 동작, 알림과 알림음 등 공용 환경설정을 한곳에서 관리합니다.",
     "terminalTitle": "기본 터미널",
-    "terminalDescription": "터미널 바나 파일 트리에서 새 터미널 탭을 열 때 사용할 셸을 선택합니다. 에이전트가 codeg에 전체 명령줄 실행을 요청할 때도 사용됩니다.",
+    "terminalDescription": "codeg가 새 터미널 탭을 열 때와 에이전트를 대신해 전체 명령줄을 실행할 때 사용할 셸을 선택합니다. 자체 셸을 갖춘 에이전트(Codex, Claude Code)는 자기 프로세스 안에서 명령을 실행하므로 이 설정이 닿지 않습니다.",
     "terminalSystemDefault": "시스템 기본값",
     "terminalPowerShell7": "PowerShell 7 (pwsh)",
     "terminalWindowsPowerShell": "Windows PowerShell",

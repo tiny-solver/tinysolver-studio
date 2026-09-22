@@ -1714,7 +1714,7 @@
     "sectionTitle": "General",
     "sectionDescription": "Centralized preferences for the default terminal, rendering acceleration, window close behavior, notifications and sounds.",
     "terminalTitle": "Default Terminal",
-    "terminalDescription": "Choose the shell used when opening new terminal tabs from the terminal bar or file tree. Agents also use it when they ask codeg to run a whole command line for them.",
+    "terminalDescription": "Choose the shell codeg launches for new terminal tabs and for whole command lines an agent asks codeg to run. Agents with a shell of their own (Codex, Claude Code) run commands inside their own process, where this setting cannot reach them.",
     "terminalSystemDefault": "System default",
     "terminalPowerShell7": "PowerShell 7 (pwsh)",
     "terminalWindowsPowerShell": "Windows PowerShell",
