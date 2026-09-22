@@ -3512,6 +3512,7 @@
             "child_max_turn_requests": "Subagent: Anfragelimit",
             "child_empty": "Subagent ohne Ausgabe",
             "child_auth_required": "Subagent braucht Anmeldung",
+            "child_rejected": "Subagent lehnte Anfrage ab",
             "child_unknown": "Subagent: Fehler",
             "unknown": "unbekannte Aufgabe"
           }

@@ -3512,6 +3512,7 @@
             "child_max_turn_requests": "서브에이전트: 요청 한도",
             "child_empty": "서브에이전트 응답 없음",
             "child_auth_required": "서브에이전트 로그인 필요",
+            "child_rejected": "서브에이전트 요청 거부",
             "child_unknown": "서브에이전트: 오류",
             "unknown": "알 수 없는 작업"
           }

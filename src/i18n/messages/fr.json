@@ -3512,6 +3512,7 @@
             "child_max_turn_requests": "sous-agent : limite de requêtes",
             "child_empty": "sous-agent sans sortie",
             "child_auth_required": "sous-agent : connexion requise",
+            "child_rejected": "sous-agent : requête rejetée",
             "child_unknown": "sous-agent : erreur",
             "unknown": "tâche inconnue"
           }

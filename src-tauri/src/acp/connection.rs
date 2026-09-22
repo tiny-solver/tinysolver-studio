@@ -9186,17 +9186,76 @@ fn classify_session_load_failure(
     if message.contains("already has an active writer") {
         return Some("session_busy");
     }
-    // Upstream signals for an unrecoverable session (claude-agent-acp 0.58.1):
-    //  - "process exited"    → "Claude Code process exited with code 1",
-    //                          "The Claude Agent process exited unexpectedly…"
-    //  - "session has ended" → SESSION_ENDED_MESSAGE
-    //  - "Session not found" → a plain Error rethrown as an Internal error
-    const UNRECOVERABLE: &[&str] =
-        &["process exited", "session has ended", "Session not found"];
-    if UNRECOVERABLE.iter().any(|s| message.contains(s)) {
+    if SESSION_GONE_MARKERS.iter().any(|s| message.contains(s)) {
         return Some("session_unavailable");
     }
     None
+}
+
+/// Wire-message markers for "the session behind this request no longer exists"
+/// (claude-agent-acp 0.58.1):
+///  - "process exited" → "Claude Code process exited with code 1", "The Claude
+///    Agent process exited unexpectedly…"
+///  - "session has ended" → SESSION_ENDED_MESSAGE
+///  - "Session not found" → a plain Error rethrown as an Internal error
+///
+/// Matched on the message because the code that carries them is a generic
+/// -32603. Shared by the two places that must agree on the verdict:
+/// [`classify_session_load_failure`] (a `session/load` that can't be retried)
+/// and [`prompt_rejection_is_terminal`] (a `session/prompt` rejection that no
+/// later prompt on this connection could survive either).
+const SESSION_GONE_MARKERS: &[&str] =
+    &["process exited", "session has ended", "Session not found"];
+
+/// Whether a `session/prompt` rejection means the CONNECTION is dead, or only
+/// this turn.
+///
+/// This is the difference between the two exits in the prompt-response arm of
+/// [`run_conversation_loop`]: `true` propagates the error, which unwinds
+/// `run_connection` into a terminal `Error` → `Disconnected` (and the lifecycle
+/// worker flips the conversation row to `Cancelled`); `false` ends the TURN and
+/// leaves the session addressable, so the composer stays usable and the next
+/// prompt just works.
+///
+/// Turn-scoped is the DEFAULT, because an agent that answered at all is an
+/// agent that is still there. Every ACP agent codeg drives rejects some prompts
+/// it is perfectly healthy to keep talking to: qwen-code answers -32603
+/// `Slash command not supported in ACP integration: …` for a `/mcp` its ACP
+/// surface doesn't implement (issue #797) and keeps the session in its map;
+/// opencode wraps any provider-side turn error (rate limit, quota, invalid
+/// request) into -32603 and its very next prompt ends with `end_turn` (issue
+/// #659). Tearing the agent down for those is pure self-harm — the user waits
+/// out a full respawn for a turn that merely failed.
+///
+/// Only three families stay terminal:
+///  - `ResourceNotFound` — the agent has no record of the session id codeg
+///    just prompted on, so the handle this connection holds is void.
+///  - [`SESSION_GONE_MARKERS`] — the agent answered to say its session or
+///    process is gone. Keeping the connection would leave an entry whose every
+///    future prompt fails the same way.
+///  - sacp's own synthesized "response to … never received" — the response
+///    channel was dropped (`SentRequest::block_task`), i.e. no answer arrived
+///    at all and the transport actor, not the turn, is what died.
+///
+/// `AuthRequired` short-circuits ahead of all of them: it was unconditionally
+/// turn-scoped before this classifier existed, and the message checks below
+/// read an agent-controlled string (`Display` renders `data` too), so without
+/// the early return a sign-out prompt that happened to quote one of the markers
+/// would start tearing connections down.
+fn prompt_rejection_is_terminal(e: &sacp::Error) -> bool {
+    if matches!(e.code, sacp::schema::ErrorCode::AuthRequired) {
+        return false;
+    }
+    if matches!(e.code, sacp::schema::ErrorCode::ResourceNotFound) {
+        return true;
+    }
+    let text = e.to_string();
+    // Both halves of sacp's own sentence, so an agent quoting "never received"
+    // about its own upstream doesn't read as a dead transport.
+    if text.contains("response to ") && text.contains("never received") {
+        return true;
+    }
+    SESSION_GONE_MARKERS.iter().any(|s| text.contains(s))
 }
 
 /// Whether codeg can absorb a "the agent forgot this session" load failure by
@@ -10189,43 +10248,58 @@ async fn run_conversation_loop<'a>(
                             }
                         }
                         prompt_result = &mut prompt_response => {
-                            // ACP defines the `authRequired` rejection as the
-                            // signal that the CLIENT should run its auth flow
-                            // and come back — the session survives it, so this
-                            // one error code must not unwind the connection the
-                            // way `?` unwinds every other prompt failure
-                            // (terminal `Error` → `Disconnected`, and the
-                            // lifecycle worker flips the conversation row to
-                            // Cancelled). It is a TURN failure, so it takes the
-                            // turn-failure exit instead and the loop goes back
-                            // to idle with the session intact.
+                            // A rejected prompt is a TURN failure, not a dead
+                            // connection: the agent answered, so it is still
+                            // there, and the session it answered about is still
+                            // addressable. Propagating the error instead (`?`)
+                            // unwinds `run_connection` into a terminal `Error` →
+                            // `Disconnected`, which kills the agent process,
+                            // greys out the composer until a full respawn
+                            // finishes, and has the lifecycle worker flip the
+                            // conversation row to Cancelled — for a turn that
+                            // merely failed. Only the three families
+                            // `prompt_rejection_is_terminal` names (see there)
+                            // still take that exit.
                             //
-                            // claude-agent-acp 0.74.0 made this reachable in the
-                            // ordinary case: through 0.73.0 a mid-session
-                            // sign-out settled an AIR client's turn with a
-                            // disguised `end_turn` carrying the failure record,
-                            // and 0.74.0 publishes that record on the update
-                            // channel and rejects the prompt as well. The
-                            // adapter deliberately keeps the session addressable
-                            // across the refusal ("the client can sign in and
-                            // retry on the same session"), which is only true if
-                            // the client keeps its end too. Agent-agnostic on
-                            // purpose: every agent that answers -32000 here is
-                            // asking for credentials, not reporting a dead
-                            // process — which is why `session/load` already
-                            // treats "Authentication required" as an expected
-                            // outcome rather than an error to surface.
+                            // ACP's `authRequired` is the rejection with a
+                            // client-side answer, so it keeps its own stop
+                            // reason and its own localized message: the client
+                            // is expected to run its auth flow and come back on
+                            // the SAME session. claude-agent-acp 0.74.0 made it
+                            // reachable in the ordinary case (through 0.73.0 a
+                            // mid-session sign-out settled an AIR client's turn
+                            // with a disguised `end_turn` carrying the failure
+                            // record; 0.74.0 publishes that record on the update
+                            // channel and rejects the prompt as well).
+                            // Agent-agnostic on purpose: every agent that answers
+                            // -32000 here is asking for credentials, not
+                            // reporting a dead process — which is why
+                            // `session/load` already treats "Authentication
+                            // required" as an expected outcome rather than an
+                            // error to surface.
+                            //
+                            // Every other turn-scoped rejection reports the
+                            // agent's OWN words, because they are the actionable
+                            // part ("The command \"/mcp\" is not supported in
+                            // this mode.") and codeg has no vocabulary for them.
                             let response = match prompt_result {
                                 Ok(response) => response,
-                                Err(e)
-                                    if matches!(
+                                Err(e) if !prompt_rejection_is_terminal(&e) => {
+                                    let auth_required = matches!(
                                         e.code,
                                         sacp::schema::ErrorCode::AuthRequired
-                                    ) =>
-                                {
+                                    );
+                                    // Synthesized like `empty`: no `StopReason`
+                                    // ever arrives for a rejected prompt, so the
+                                    // turn needs a reason of its own.
+                                    let reason_str = if auth_required {
+                                        "auth_required"
+                                    } else {
+                                        "rejected"
+                                    };
                                     tracing::warn!(
-                                        "[ACP] session/prompt refused with authRequired ({e}); \
-                                         ending the turn and keeping the session"
+                                        "[ACP] session/prompt rejected ({e}); ending the turn \
+                                         as {reason_str} and keeping the session"
                                     );
                                     if !tracked_terminal_tool_calls.is_empty() {
                                         poll_tracked_terminal_tool_calls(
@@ -10237,20 +10311,41 @@ async fn run_conversation_loop<'a>(
                                         )
                                         .await;
                                     }
-                                    // Synthesized like `empty`: no `StopReason`
-                                    // ever arrives for a rejected prompt, so the
-                                    // turn needs a reason of its own. AIR-capable
-                                    // agents ALSO publish an `access` failure
-                                    // record with a `login` action, which the
-                                    // banner renders — the two are complementary
-                                    // (a transient alert plus a persistent strip
-                                    // with the way back in), and this Error is
-                                    // the only surface for agents with no AIR.
-                                    if let Some(err_event) = turn_failure_error_event(
-                                        "auth_required",
-                                        agent_type,
-                                        None,
-                                    ) {
+                                    // AIR-capable agents ALSO publish an `access`
+                                    // failure record with a `login` action, which
+                                    // the banner renders — the two are
+                                    // complementary (a transient alert plus a
+                                    // persistent strip with the way back in), and
+                                    // this Error is the only surface for agents
+                                    // with no AIR.
+                                    let err_event = if auth_required {
+                                        turn_failure_error_event(
+                                            reason_str,
+                                            agent_type,
+                                            None,
+                                        )
+                                    } else {
+                                        Some(AcpEvent::Error {
+                                            // Through `AcpError::protocol` for
+                                            // its sanitizer: an agent's rejection
+                                            // can quote a local path, and this
+                                            // string is rendered in the UI and
+                                            // pushed over the WebSocket.
+                                            message: AcpError::protocol(e.to_string())
+                                                .to_string(),
+                                            agent_type: agent_type.to_string(),
+                                            // No stable code: the payload IS the
+                                            // agent's message, so the frontend's
+                                            // fallback arm (show it verbatim) is
+                                            // the right renderer.
+                                            code: None,
+                                            details: None,
+                                            // The whole point: the connection
+                                            // outlives this turn.
+                                            terminal: false,
+                                        })
+                                    };
+                                    if let Some(err_event) = err_event {
                                         emit_with_state(state, emitter, err_event).await;
                                     }
                                     // Not journaled (that is `end_turn` only),
@@ -10261,7 +10356,7 @@ async fn run_conversation_loop<'a>(
                                     record_turn_end(
                                         agent_type,
                                         &sid.0,
-                                        "auth_required",
+                                        reason_str,
                                         turn_started_at_ms,
                                         current_session_model_id(state).await,
                                     )
@@ -10276,7 +10371,7 @@ async fn run_conversation_loop<'a>(
                                         emitter,
                                         AcpEvent::TurnComplete {
                                             session_id: sid.0.to_string(),
-                                            stop_reason: "auth_required".into(),
+                                            stop_reason: reason_str.into(),
                                             agent_type: agent_type.to_string(),
                                         },
                                     )
@@ -19683,6 +19778,72 @@ mod tests {
         assert_eq!(classify_session_load_failure(e.code, &text), None);
         assert!(text.contains("Method not found"), "{text}");
         assert!(!text.contains("Authentication required"), "{text}");
+    }
+
+    /// Issue #797, verbatim off the wire: qwen-code's ACP surface throws
+    /// `Slash command not supported in ACP integration: …` for a `/mcp` it does
+    /// not implement, and its SDK answers -32603 with the text under
+    /// `data.details`. The session stays in the agent's map — so this must
+    /// cost the user a turn, not the whole connection (which greyed out the
+    /// composer until a full agent respawn finished).
+    #[test]
+    fn an_unsupported_slash_command_costs_the_turn_not_the_connection() {
+        let e = sacp::Error::internal_error().data(serde_json::json!({
+            "details": "Slash command not supported in ACP integration: \
+                        The command \"/mcp\" is not supported in this mode.",
+        }));
+        assert!(!prompt_rejection_is_terminal(&e));
+        // What the user reads is the agent's own sentence, sanitized — the
+        // banner is the only place the reason exists.
+        let rendered = AcpError::protocol(e.to_string()).to_string();
+        assert!(rendered.contains("/mcp"), "{rendered}");
+    }
+
+    /// The other turn-scoped shapes that used to kill a healthy connection:
+    /// an adapter wrapping a provider-side turn error as -32603 (opencode,
+    /// issue #659) and ACP's own `authRequired` (which additionally keeps its
+    /// dedicated stop reason).
+    #[test]
+    fn an_agent_that_answers_at_all_keeps_its_connection() {
+        for e in [
+            sacp::Error::internal_error().data(serde_json::json!({
+                "service": "session",
+                "errorName": "APIError",
+            })),
+            sacp::Error::auth_required().data("Please sign in"),
+            sacp::Error::invalid_params().data("unknown model"),
+            // The message checks read an agent-controlled string, so a
+            // rejection that merely QUOTES one of the terminal markers about
+            // something else must not be mistaken for a dead session.
+            sacp::Error::auth_required()
+                .data("the helper process exited; sign in again to restart it"),
+            sacp::Error::internal_error()
+                .data("upstream response never received by the provider, retry"),
+        ] {
+            assert!(!prompt_rejection_is_terminal(&e), "{e}");
+        }
+    }
+
+    /// The three families that stay terminal. Anything looser here would leave
+    /// a connection whose every later prompt fails exactly the same way — the
+    /// user would sit on a dead session with no teardown to recover from.
+    #[test]
+    fn a_rejection_that_reports_a_dead_session_still_tears_the_connection_down() {
+        // The agent has no record of the id codeg just prompted on.
+        assert!(prompt_rejection_is_terminal(
+            &sacp::Error::resource_not_found(None)
+        ));
+        // The agent answered to say its session/process is gone.
+        for marker in SESSION_GONE_MARKERS {
+            let e = sacp::Error::internal_error().data(format!("Claude Code {marker} — sorry"));
+            assert!(prompt_rejection_is_terminal(&e), "{e}");
+        }
+        // sacp's own synthesized error: the response channel was dropped, so
+        // no answer ever arrived and the transport is what died.
+        let dropped = sacp::util::internal_error(
+            "response to `session/prompt` never received: channel closed",
+        );
+        assert!(prompt_rejection_is_terminal(&dropped), "{dropped}");
     }
 
     #[test]
