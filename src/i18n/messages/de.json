@@ -2804,6 +2804,11 @@
       "linkedFolder": "Verknüpfter Ordner",
       "moreActions": "Weitere Aktionen",
       "copyPath": "Pfad kopieren",
+      "copy": "Kopieren",
+      "copyRelativePath": "Relativer Pfad",
+      "copyAbsolutePath": "Absoluter Pfad",
+      "copyFileItself": "Datei",
+      "copyDirectoryItself": "Ordner",
       "upload": "Dateien/Ordner hochladen",
       "download": "Datei herunterladen",
       "downloadAsZip": "Als ZIP herunterladen",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "Herunterladen von {name} fehlgeschlagen",
         "downloadSaved": "{name} heruntergeladen",
         "pathCopied": "Pfad kopiert",
-        "copyPathFailed": "Pfad konnte nicht kopiert werden"
+        "copyPathFailed": "Pfad konnte nicht kopiert werden",
+        "fileCopied": "{name} kopiert",
+        "copyFileFailed": "{name} konnte nicht kopiert werden"
       },
       "createDialog": {
         "newFile": "Neue Datei",

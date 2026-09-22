@@ -2804,6 +2804,11 @@
       "linkedFolder": "연결된 폴더",
       "moreActions": "더 많은 작업",
       "copyPath": "경로 복사",
+      "copy": "복사",
+      "copyRelativePath": "상대 경로",
+      "copyAbsolutePath": "절대 경로",
+      "copyFileItself": "파일 자체",
+      "copyDirectoryItself": "폴더 자체",
       "upload": "파일/폴더 업로드",
       "download": "파일 다운로드",
       "downloadAsZip": "ZIP으로 다운로드",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "{name} 다운로드 실패",
         "downloadSaved": "{name} 다운로드 완료",
         "pathCopied": "경로가 복사되었습니다",
-        "copyPathFailed": "경로 복사에 실패했습니다"
+        "copyPathFailed": "경로 복사에 실패했습니다",
+        "fileCopied": "{name} 복사됨",
+        "copyFileFailed": "{name} 복사에 실패했습니다"
       },
       "createDialog": {
         "newFile": "새 파일",

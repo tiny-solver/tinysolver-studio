@@ -2804,6 +2804,11 @@
       "linkedFolder": "Linked folder",
       "moreActions": "More actions",
       "copyPath": "Copy path",
+      "copy": "Copy",
+      "copyRelativePath": "Relative path",
+      "copyAbsolutePath": "Absolute path",
+      "copyFileItself": "File",
+      "copyDirectoryItself": "Folder",
       "upload": "Upload files/folder",
       "download": "Download file",
       "downloadAsZip": "Download as ZIP",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "Failed to download {name}",
         "downloadSaved": "Downloaded {name}",
         "pathCopied": "Path copied",
-        "copyPathFailed": "Failed to copy path"
+        "copyPathFailed": "Failed to copy path",
+        "fileCopied": "Copied {name}",
+        "copyFileFailed": "Failed to copy {name}"
       },
       "createDialog": {
         "newFile": "New file",

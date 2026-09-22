@@ -2804,6 +2804,11 @@
       "linkedFolder": "Carpeta vinculada",
       "moreActions": "Más acciones",
       "copyPath": "Copiar ruta",
+      "copy": "Copiar",
+      "copyRelativePath": "Ruta relativa",
+      "copyAbsolutePath": "Ruta absoluta",
+      "copyFileItself": "Archivo",
+      "copyDirectoryItself": "Carpeta",
       "upload": "Subir archivos/carpeta",
       "download": "Descargar archivo",
       "downloadAsZip": "Descargar como ZIP",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "No se pudo descargar {name}",
         "downloadSaved": "{name} descargado",
         "pathCopied": "Ruta copiada",
-        "copyPathFailed": "No se pudo copiar la ruta"
+        "copyPathFailed": "No se pudo copiar la ruta",
+        "fileCopied": "{name} copiado",
+        "copyFileFailed": "No se pudo copiar {name}"
       },
       "createDialog": {
         "newFile": "Nuevo archivo",

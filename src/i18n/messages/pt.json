@@ -2804,6 +2804,11 @@
       "linkedFolder": "Pasta vinculada",
       "moreActions": "Mais ações",
       "copyPath": "Copiar caminho",
+      "copy": "Copiar",
+      "copyRelativePath": "Caminho relativo",
+      "copyAbsolutePath": "Caminho absoluto",
+      "copyFileItself": "Arquivo",
+      "copyDirectoryItself": "Pasta",
       "upload": "Enviar arquivos/pasta",
       "download": "Baixar arquivo",
       "downloadAsZip": "Baixar como ZIP",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "Falha ao baixar {name}",
         "downloadSaved": "{name} baixado",
         "pathCopied": "Caminho copiado",
-        "copyPathFailed": "Falha ao copiar o caminho"
+        "copyPathFailed": "Falha ao copiar o caminho",
+        "fileCopied": "{name} copiado",
+        "copyFileFailed": "Falha ao copiar {name}"
       },
       "createDialog": {
         "newFile": "Novo arquivo",

@@ -2804,6 +2804,11 @@
       "linkedFolder": "Dossier lié",
       "moreActions": "Plus d'actions",
       "copyPath": "Copier le chemin",
+      "copy": "Copier",
+      "copyRelativePath": "Chemin relatif",
+      "copyAbsolutePath": "Chemin absolu",
+      "copyFileItself": "Fichier",
+      "copyDirectoryItself": "Dossier",
       "upload": "Téléverser fichiers/dossier",
       "download": "Télécharger le fichier",
       "downloadAsZip": "Télécharger en ZIP",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "Échec du téléchargement de {name}",
         "downloadSaved": "{name} téléchargé",
         "pathCopied": "Chemin copié",
-        "copyPathFailed": "Échec de la copie du chemin"
+        "copyPathFailed": "Échec de la copie du chemin",
+        "fileCopied": "{name} copié",
+        "copyFileFailed": "Échec de la copie de {name}"
       },
       "createDialog": {
         "newFile": "Nouveau fichier",

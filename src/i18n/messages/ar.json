@@ -2804,6 +2804,11 @@
       "linkedFolder": "مجلد مرتبط",
       "moreActions": "المزيد من الإجراءات",
       "copyPath": "نسخ المسار",
+      "copy": "نسخ",
+      "copyRelativePath": "المسار النسبي",
+      "copyAbsolutePath": "المسار المطلق",
+      "copyFileItself": "الملف نفسه",
+      "copyDirectoryItself": "المجلد نفسه",
       "upload": "رفع ملفات/مجلد",
       "download": "تنزيل ملف",
       "downloadAsZip": "تنزيل كملف ZIP",
@@ -2841,7 +2846,9 @@
         "downloadFailed": "فشل تنزيل {name}",
         "downloadSaved": "تم تنزيل {name}",
         "pathCopied": "تم نسخ المسار",
-        "copyPathFailed": "فشل نسخ المسار"
+        "copyPathFailed": "فشل نسخ المسار",
+        "fileCopied": "تم نسخ {name}",
+        "copyFileFailed": "فشل نسخ {name}"
       },
       "createDialog": {
         "newFile": "ملف جديد",
