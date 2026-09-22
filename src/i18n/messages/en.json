@@ -52,6 +52,8 @@
       "science": "Science",
       "office_tools": "Office Tools",
       "skill_packs": "Skill Packs",
+      "collaboration": "Collaboration",
+      "browser": "Browser",
       "quick_messages": "Quick Messages",
       "logs": "Runtime Logs"
     }
@@ -1710,7 +1712,7 @@
   "GeneralSettings": {
     "loading": "Loading...",
     "sectionTitle": "General",
-    "sectionDescription": "Centralized preferences for the default terminal, rendering acceleration, notifications, and multi-agent delegation.",
+    "sectionDescription": "Centralized preferences for the default terminal, rendering acceleration, window close behavior, notifications and sounds.",
     "terminalTitle": "Default Terminal",
     "terminalDescription": "Choose the shell used when opening new terminal tabs from the terminal bar or file tree. Agents also use it when they ask codeg to run a whole command line for them.",
     "terminalSystemDefault": "System default",
@@ -1735,6 +1737,10 @@
     "restartNow": "Restart now",
     "restartFailed": "Failed to restart: {message}",
     "loadFailed": "Load failed: {message}"
+  },
+  "CollaborationSettings": {
+    "sectionTitle": "Collaboration",
+    "sectionDescription": "How agents work with each other, and which of codeg's own tools they can reach from inside a conversation."
   },
   "LoginPage": {
     "documentTitle": "Login - codeg",

@@ -52,6 +52,8 @@
       "science": "科学研究",
       "office_tools": "办公工具",
       "skill_packs": "技能包",
+      "collaboration": "协作",
+      "browser": "浏览器",
       "quick_messages": "快捷消息",
       "logs": "运行日志"
     }
@@ -1710,7 +1712,7 @@
   "GeneralSettings": {
     "loading": "加载中...",
     "sectionTitle": "常规",
-    "sectionDescription": "集中管理默认终端、渲染加速、通知与提示音以及多智能体协同等通用偏好。",
+    "sectionDescription": "集中管理默认终端、渲染加速、关闭行为、通知与提示音等通用偏好。",
     "terminalTitle": "默认终端",
     "terminalDescription": "选择从终端栏或文件树打开新终端标签页时使用的 Shell。智能体请求 codeg 代为执行整条命令行时也会使用它。",
     "terminalSystemDefault": "系统默认",
@@ -1735,6 +1737,10 @@
     "restartNow": "立即重启",
     "restartFailed": "重启失败：{message}",
     "loadFailed": "加载失败：{message}"
+  },
+  "CollaborationSettings": {
+    "sectionTitle": "协作",
+    "sectionDescription": "智能体之间如何协同，以及它们能在会话中动用 codeg 的哪些工具。"
   },
   "LoginPage": {
     "documentTitle": "登录 - codeg",

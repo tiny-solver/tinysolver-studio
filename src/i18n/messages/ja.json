@@ -52,6 +52,8 @@
       "science": "科学研究",
       "office_tools": "Officeツール",
       "skill_packs": "スキルパック",
+      "collaboration": "コラボレーション",
+      "browser": "ブラウザ",
       "quick_messages": "クイックメッセージ",
       "logs": "実行ログ"
     }
@@ -1710,7 +1712,7 @@
   "GeneralSettings": {
     "loading": "読み込み中...",
     "sectionTitle": "一般",
-    "sectionDescription": "デフォルトターミナル、レンダリング高速化、通知と通知音、マルチエージェント委譲などの共通設定をここで一括管理します。",
+    "sectionDescription": "デフォルトターミナル、レンダリング高速化、ウィンドウを閉じたときの動作、通知と通知音などの共通設定をここで一括管理します。",
     "terminalTitle": "デフォルトターミナル",
     "terminalDescription": "ターミナルバーやファイルツリーから新しいターミナルタブを開くときに使用するシェルを選択します。エージェントが codeg にコマンドライン全体の実行を依頼するときにも使われます。",
     "terminalSystemDefault": "システムデフォルト",
@@ -1735,6 +1737,10 @@
     "restartNow": "今すぐ再起動",
     "restartFailed": "再起動に失敗しました: {message}",
     "loadFailed": "読み込みに失敗しました: {message}"
+  },
+  "CollaborationSettings": {
+    "sectionTitle": "コラボレーション",
+    "sectionDescription": "エージェント同士の連携と、会話の中から使える codeg 自身のツールの範囲を設定します。"
   },
   "LoginPage": {
     "documentTitle": "ログイン - codeg",

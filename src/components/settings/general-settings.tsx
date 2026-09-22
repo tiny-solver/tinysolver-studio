@@ -45,9 +45,6 @@ import { toErrorMessage } from "@/lib/app-error"
 import { CloseBehaviorSettingsSection } from "@/components/settings/close-behavior-settings"
 import { DesktopNotificationSettingsSection } from "@/components/settings/desktop-notification-settings"
 import { NotificationSoundSettingsSection } from "@/components/settings/notification-sound-settings"
-import { DelegationSettingsSection } from "@/components/settings/delegation-settings"
-import { AgentToolsSettingsSection } from "@/components/settings/agent-tools-settings"
-import { BrowserSettingsSection } from "@/components/settings/browser-settings"
 
 const TERMINAL_SHELL_OPTION_SYSTEM = "system"
 const TERMINAL_SHELL_OPTION_CUSTOM = "custom"
@@ -501,12 +498,6 @@ export function GeneralSettings() {
         <DesktopNotificationSettingsSection />
 
         <NotificationSoundSettingsSection />
-
-        <DelegationSettingsSection />
-
-        <AgentToolsSettingsSection />
-
-        <BrowserSettingsSection />
       </div>
     </ScrollArea>
   )

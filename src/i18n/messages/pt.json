@@ -52,6 +52,8 @@
       "science": "Ciência",
       "office_tools": "Ferramentas de escritório",
       "skill_packs": "Pacotes de habilidades",
+      "collaboration": "Colaboração",
+      "browser": "Navegador",
       "quick_messages": "Mensagens rápidas",
       "logs": "Registros de execução"
     }
@@ -1710,7 +1712,7 @@
   "GeneralSettings": {
     "loading": "Carregando...",
     "sectionTitle": "Geral",
-    "sectionDescription": "Preferências centralizadas para o terminal padrão, aceleração de renderização, notificações e delegação multi-agente.",
+    "sectionDescription": "Preferências centralizadas para o terminal padrão, aceleração de renderização, comportamento ao fechar a janela, notificações e sons.",
     "terminalTitle": "Terminal padrão",
     "terminalDescription": "Escolha o shell usado ao abrir novas abas de terminal pela barra de terminal ou pela árvore de arquivos. Os agentes também o usam quando pedem ao codeg para executar uma linha de comando inteira.",
     "terminalSystemDefault": "Padrão do sistema",
@@ -1735,6 +1737,10 @@
     "restartNow": "Reiniciar agora",
     "restartFailed": "Falha ao reiniciar: {message}",
     "loadFailed": "Falha ao carregar: {message}"
+  },
+  "CollaborationSettings": {
+    "sectionTitle": "Colaboração",
+    "sectionDescription": "Como os agentes colaboram entre si e quais ferramentas do próprio codeg eles podem acessar dentro de uma conversa."
   },
   "LoginPage": {
     "documentTitle": "Entrar - codeg",

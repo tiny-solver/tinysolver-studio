@@ -52,6 +52,8 @@
       "science": "과학 연구",
       "office_tools": "오피스 도구",
       "skill_packs": "스킬 팩",
+      "collaboration": "협업",
+      "browser": "브라우저",
       "quick_messages": "빠른 메시지",
       "logs": "실행 로그"
     }
@@ -1710,7 +1712,7 @@
   "GeneralSettings": {
     "loading": "로딩 중...",
     "sectionTitle": "일반",
-    "sectionDescription": "기본 터미널, 렌더링 가속, 알림과 알림음, 다중 에이전트 위임 등 공용 환경설정을 한곳에서 관리합니다.",
+    "sectionDescription": "기본 터미널, 렌더링 가속, 창을 닫을 때의 동작, 알림과 알림음 등 공용 환경설정을 한곳에서 관리합니다.",
     "terminalTitle": "기본 터미널",
     "terminalDescription": "터미널 바나 파일 트리에서 새 터미널 탭을 열 때 사용할 셸을 선택합니다. 에이전트가 codeg에 전체 명령줄 실행을 요청할 때도 사용됩니다.",
     "terminalSystemDefault": "시스템 기본값",
@@ -1735,6 +1737,10 @@
     "restartNow": "지금 다시 시작",
     "restartFailed": "다시 시작 실패: {message}",
     "loadFailed": "불러오기 실패: {message}"
+  },
+  "CollaborationSettings": {
+    "sectionTitle": "협업",
+    "sectionDescription": "에이전트끼리 어떻게 협업하는지와, 대화 안에서 사용할 수 있는 codeg 자체 도구의 범위를 설정합니다."
   },
   "LoginPage": {
     "documentTitle": "로그인 - codeg",

@@ -52,6 +52,8 @@
       "science": "البحث العلمي",
       "office_tools": "أدوات المكتب",
       "skill_packs": "حزم المهارات",
+      "collaboration": "التعاون",
+      "browser": "المتصفح",
       "quick_messages": "رسائل سريعة",
       "logs": "سجلات التشغيل"
     }
@@ -1710,7 +1712,7 @@
   "GeneralSettings": {
     "loading": "جارٍ التحميل...",
     "sectionTitle": "عام",
-    "sectionDescription": "تفضيلات موحّدة للطرفية الافتراضية وتسريع العرض والإشعارات وتفويض الوكلاء المتعدّدين.",
+    "sectionDescription": "تفضيلات موحّدة للطرفية الافتراضية وتسريع العرض وسلوك إغلاق النافذة والإشعارات والأصوات.",
     "terminalTitle": "الطرفية الافتراضية",
     "terminalDescription": "اختر الصدفة المستخدمة عند فتح علامات تبويب طرفية جديدة من شريط الطرفية أو شجرة الملفات. تستخدمها الوكلاء أيضًا عندما تطلب من codeg تنفيذ سطر أوامر كامل نيابةً عنها.",
     "terminalSystemDefault": "افتراضي النظام",
@@ -1735,6 +1737,10 @@
     "restartNow": "إعادة التشغيل الآن",
     "restartFailed": "فشل إعادة التشغيل: {message}",
     "loadFailed": "فشل التحميل: {message}"
+  },
+  "CollaborationSettings": {
+    "sectionTitle": "التعاون",
+    "sectionDescription": "كيفية تعاون الوكلاء فيما بينهم، وأدوات codeg التي يمكنهم الوصول إليها داخل المحادثة."
   },
   "LoginPage": {
     "documentTitle": "تسجيل الدخول - codeg",
