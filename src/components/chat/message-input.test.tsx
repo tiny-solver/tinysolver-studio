@@ -454,6 +454,43 @@ describe("MessageInput attach-to-chat insertion position", () => {
     expect(text).toMatch(/\[button#export]\(codeg:\/\/embedded\//)
   })
 
+  // Nobody typed this badge, so taking it back has to be as cheap as one key.
+  // It used to take two: the insertion leaves a space after the badge, and the
+  // first Backspace went on that — an invisible change that reads as "Backspace
+  // cannot delete this".
+  it("takes a handed-over page back out on one Backspace", async () => {
+    const editor = await mountWithEditor()
+    act(() => {
+      emitAttachPageToSession({
+        tabId: "tab-1",
+        label: "button#export",
+        text: "Captured from a web page…\n\n- element: button#export",
+        uri: "https://example.com/orders",
+      })
+    })
+    await waitFor(() =>
+      expect(serializeDocToDisplayText(editor.state.doc)).toContain(
+        "button#export"
+      )
+    )
+
+    act(() => {
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Backspace",
+          keyCode: 8,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    })
+
+    expect(editor.isEmpty).toBe(true)
+    expect(serializeDocToDisplayText(editor.state.doc)).not.toContain(
+      "button#export"
+    )
+  })
+
   // The block quotes the page's own markup. `insertContent(string)` would
   // parse it as HTML — the tags would vanish and a `<span data-reference>` the
   // page wrote would become a real composer badge.
