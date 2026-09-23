@@ -648,8 +648,10 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // `messageFingerprint`/`messageOccurrence` (codex reads those), so
             // sending all three is forward-compatible. The `messageId` to send
             // is the top-level one `applyMessageId` stamps on message/thought
-            // chunks (present since ≤0.69.0; `ContentChunk::message_id` behind
-            // the schema's `unstable_message_id` feature).
+            // chunks (present since ≤0.69.0; typed as the stable
+            // `ContentChunk::message_id` in the 1.x schema). codeg derives it
+            // from the parsed transcript rather than the live chunks — see
+            // `acp::fork::ForkPoint`.
             //
             // (d) The AIR capability array grew to `["sessionFailure",
             // "agentFileChangeReport", "nativeSubagentSessions", "asyncTasks"]`
@@ -888,10 +890,11 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // (#1128, the tool-call-name RFD) — but the value is the same SDK
             // tool name `_meta.claudeCode.toolName` already carries, which
             // `inferLiveToolName` reads, and upstream explicitly keeps that key
-            // populated "for clients that key off it"; codeg's pinned
-            // `agent-client-protocol-schema` 0.11 has no `name` on `ToolCall`
-            // and drops it as an unknown field, so reading it would mean a raw
-            // pre-dispatch reader for information codeg already has. The
+            // populated "for clients that key off it". Schema 1.9 types it
+            // (`ToolCall::name`, stable), so reading it no longer needs a raw
+            // reader — it would simply be a second source for information codeg
+            // already has, and one the other agents fill differently (see the
+            // codex entry's (d)). The
             // multi-select custom-answer fix (#1031) lands in `elicitation.ts`,
             // which claude never reaches: codeg advertises
             // `elicitation.form` for Codex and DeepSeek only. The `TaskList`
@@ -1019,8 +1022,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // fallback (`oldText: originalFile`) — the one shape that could — is
             // the branch that deliberately emits no `_meta` at all.
             //
-            // Inert as received, which is why nothing had to change: `Diff` in
-            // schema 0.11.7 does carry `_meta`, but every consumer drops the
+            // Inert as received, which is why nothing had to change: the
+            // schema's `Diff` does carry `_meta`, but every consumer drops the
             // content-level block —`synthesize_edit_input_from_diffs` and
             // `serialize_tool_call_content` both ignore `Diff.meta`, live
             // (connection.rs) and on the `session/load` projection
@@ -1326,8 +1329,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // permission card — the contract claude-agent-acp joined in 0.64.1
             // (#930), so that rendering is no longer codex-only. The
             // `clientCapabilities.plan` path (structured
-            // `plan_update`s) does NOT apply: sacp 11.0.0's schema has neither
-            // the capability nor the session-update variant, so plans keep
+            // `plan_update`s) does NOT apply: codeg does not advertise that
+            // capability (see `build_client_capabilities`), so plans keep
             // arriving as `agent_message_chunk`s. That also makes 1.1.9 (#354,
             // which coalesces streamed plan snapshots to one `plan_update`
             // every 150ms and flushes them at item/turn/permission boundaries)
@@ -1374,8 +1377,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // switching). New in the bundle and fine on generic cards:
             // synthetic "Guardian Review" tool calls (kind "think") and
             // fuzzyFileSearch ids. Structured plan_update stays inert — its
-            // gate is a TOP-LEVEL `clientCapabilities.plan` field sacp 11.0.0
-            // cannot express. 1.3.0 still ships NO steering `promptRequired`
+            // gate is the TOP-LEVEL `clientCapabilities.plan`, which codeg does
+            // not advertise. 1.3.0 still ships NO steering `promptRequired`
             // opt-in (tarball grep: zero hits ⇒ the arm below stays None) and
             // still declares no `engines.node`, so the 20.0.0 floor is
             // retained.
@@ -1441,14 +1444,15 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // or AIR `nativeSubagentSessions` — and codeg advertises neither,
             // so the lifecycle stays the legacy `subAgentActivity` tool call
             // whose shape (`_meta.codex.subagent = {threadId, path, activity}`)
-            // is byte-identical to 1.4.0's. Opting in is not merely unhelpful,
-            // it is undeliverable: `agent-client-protocol-schema` 0.11.7 has no
-            // `subagents` field on `ClientCapabilities`, and its `SessionUpdate`
-            // is an internally-tagged enum with no catch-all arm, so the
-            // `subagent_spawned` / `subagent_state_update` notifications would
-            // fail to deserialize — child output would then stream to a child
-            // session id codeg never learned about and vanish from the
-            // timeline. Revisit only after the schema crate ships both.
+            // is byte-identical to 1.4.0's. This entry used to call opting in
+            // undeliverable because the schema crate could neither advertise
+            // the capability nor deserialize `subagent_spawned` /
+            // `subagent_state_update`. The v1 schema still carries neither (as
+            // of 1.9), but that was never the blocker — a raw pre-dispatch
+            // reader gets past it, as the AIR task frames show. What keeps it
+            // out is that advertising DELETES the tool call codeg anchors the
+            // sub-agent capsule on; `build_client_capabilities` records the
+            // whole trade.
             // Likewise still not adopted: `agentFileChangeReport` (unchanged
             // since 1.4.0). `compaction_update` / `compaction_summary_chunk`
             // appear in the bundle but come from the vendored
@@ -1713,11 +1717,11 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // `userShell` source stays unnamed), `view_image`,
             // `request_permissions`, and `<namespace><tool>` for dynamic tool
             // calls — on the live stream, the completion updates, the permission
-            // request and the `session/load` function-call replay alike. It is
-            // an UNSTABLE ACP field, absent from the schema crate codeg pins
-            // (0.11.x has no `unstable_tool_call_name`; 1.7.0 gates it), so it
-            // is dropped on deserialization and reading it would mean a raw
-            // pre-dispatch walk. Not worth it: every surface it names is one
+            // request and the `session/load` function-call replay alike. When
+            // this was written the schema crate codeg pinned (0.11.x) dropped
+            // the field; schema 1.9 types it as a stable `ToolCall::name`, so
+            // reading it no longer takes a raw reader — but it is still not
+            // read, because it adds nothing: every surface it names is one
             // codeg already classifies from `kind` + `title` — command
             // executions are `kind: "execute"` with the command as the title,
             // `view_image` is `kind: "read"` with a resource_link, and a dynamic
@@ -1753,13 +1757,13 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // both. `engines` is still absent, so the 20.0.0 floor stays.
             //
             // (f) Session Notices (#532) and ACP session compaction (#515) are
-            // both TAKEN, by the same two moves the claude entry's (aa) and (p)
-            // describe — `clientCapabilities.session.notices` / `.compaction`
-            // are typed fields the pinned struct cannot say, so they are
-            // grafted onto an untyped `initialize` and read back before the
-            // typed pipeline. Probed live over stdio against 1.13.0 alongside
-            // claude: handshake accepted, `initialize` response byte-identical
-            // to the withheld run.
+            // both TAKEN, the way the claude entry's (aa) and (p) describe —
+            // advertised through `clientCapabilities.session.notices` /
+            // `.compaction` (typed `ClientSessionCapabilities` members since
+            // schema 1.9; grafted onto an untyped `initialize` before that) and
+            // read back before the typed pipeline. Probed live over stdio
+            // against 1.13.0 alongside claude: handshake accepted, `initialize`
+            // response byte-identical to the withheld run.
             //
             // What codex adds to the claude-side note is the LIST of what
             // moves: with notices on, config warnings, deprecation notices,
@@ -2320,12 +2324,15 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // 1.0.40 DID add one thing that reaches codeg, and it needed a fix
             // on our side: it narrates `session/new` progress on the
             // `_x.ai/session/setup` notification, whose first five phases carry
-            // `"sessionId": null` because they run before the id exists. sacp
-            // routes on field PRESENCE and then fails to parse the null, which
-            // tore the connection down with `Invalid params: "invalid type:
-            // null, expected a string"` (#794). `DropNullSessionIdNotifications`
-            // in connection.rs claims those frames before the router sees them,
-            // so this bump is safe only together with that guard.
+            // `"sessionId": null` because they run before the id exists. The
+            // runtime routes on field PRESENCE, and under sacp 11 it then failed
+            // to parse the null, which tore the connection down with `Invalid
+            // params: "invalid type: null, expected a string"` (#794). The 2.x
+            // runtime survives the parse, but nothing would ever claim such a
+            // frame and it would sit in the retry queue for the connection's
+            // life. `ClaimNullSessionIds` in connection.rs claims
+            // those frames before they can be parked, so this bump is safe only
+            // together with that guard.
             distribution: AgentDistribution::Npx {
                 version: "1.0.40",
                 package: "@xai-official/grok@1.0.40",
@@ -2537,10 +2544,10 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             //   `sessionCapabilities`（含无条件的 `fork: {}`）与
             //   `promptCapabilities` 都没动，上面那串能力断言仍然成立。
             // * `agent_message_chunk` / `agent_thought_chunk` / `user_message_chunk`
-            //   现在带 `messageId`。对 codeg 是**惰性**的：schema crate 的
-            //   `message_id` 在没开的 `unstable_message_id` feature 后面，而整个
-            //   crate 没有 `deny_unknown_fields`，未知字段被 serde 丢掉。分叉点取
-            //   自解析出来的日志而不是 live 转写，所以也没有开它的理由。
+            //   现在带 `messageId`。对 codeg 是**惰性**的：1.x schema 里它是稳定的
+            //   `ContentChunk::message_id`（当年 pin 的 0.11 把它放在没开的
+            //   `unstable_message_id` feature 后面、被 serde 当未知字段丢掉），但
+            //   codeg 不读它——分叉点取自解析出来的日志而不是 live 转写。
             //
             // 0.9.0 唯一需要 codeg 跟着改的是**模型目录**，而它落在设置面板那条线上
             // （`commands::deepseek_settings`），不在协议层：
