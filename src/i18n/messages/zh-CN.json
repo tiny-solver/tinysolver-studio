@@ -4240,7 +4240,7 @@
     "agentTypeRequired": "请选择智能体类型。",
     "agentTypeImmutableHint": "智能体类型创建后不可修改。",
     "model": "模型",
-    "modelPlaceholderCodex": "gpt-5.6-sol / gpt-5.5",
+    "modelPlaceholderCodex": "gpt-6-sol / gpt-6-luna",
     "modelPlaceholderGemini": "gemini-3-pro-preview",
     "claudeMainModel": "主模型",
     "claudeReasoningModel": "推理模型（思考）",

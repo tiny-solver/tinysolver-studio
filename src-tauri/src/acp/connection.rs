@@ -8078,6 +8078,30 @@ fn config_option_rejects_value(option: &SessionConfigOption, value: &str) -> boo
     advertised.binary_search(&value.to_string()).is_err()
 }
 
+/// [`config_option_rejects_value`] for the mode channel: whether the session's
+/// OWN mode list proves a saved `preferred_mode_id` cannot be selected, so
+/// `session/set_mode` for it at connect is a guaranteed error.
+///
+/// claude-agent-acp 0.81.1 (#1165) is what makes this reachable: it withdraws
+/// `bypassPermissions` from `availableModes` whenever any settings tier sets
+/// `permissions.disableBypassPermissionsMode: "disable"` (the CLI refuses the
+/// mode then too), and answers a `set_mode` for it with `Mode bypassPermissions
+/// is not available in this session` — measured live, with the control run
+/// (setting absent) listing and accepting the mode. The same happens to a root
+/// user outside a sandbox and to any other mode an agent retires. A preference
+/// saved before would otherwise fail on every connect, for good.
+///
+/// Same judgment as for config options, and the same reasons: decided off the
+/// agent's answer rather than an agent id or the registry pin (an older adapter
+/// on PATH may still list the mode), and an EMPTY list proves nothing.
+fn session_modes_reject_id(modes: &SessionModeState, mode_id: &str) -> bool {
+    !modes.available_modes.is_empty()
+        && !modes
+            .available_modes
+            .iter()
+            .any(|mode| mode.id.to_string() == mode_id)
+}
+
 /// Whether an advertised option IS the agent's model selector. ACP reserves no
 /// id for it, so match either signal — the `category` every agent that has a
 /// model publishes it under (see [`current_model_id_from_opts`]) or the
@@ -8209,9 +8233,22 @@ async fn apply_preferred_session_options(
             .as_ref()
             .map(|m| m.current_mode_id.to_string() != pref_mode)
             .unwrap_or(false);
-        if needs_apply {
+        // Same rule as `config_option_rejects_value` below, for the mode
+        // channel: a saved mode the session no longer lists can only fail.
+        let withdrawn = session
+            .modes()
+            .as_ref()
+            .is_some_and(|m| session_modes_reject_id(m, pref_mode));
+        if needs_apply && withdrawn {
+            tracing::info!(
+                "[ACP] skipping preferred mode '{pref_mode}' on connect: \
+                 the agent no longer offers that mode"
+            );
+        } else if needs_apply {
             if let Err(e) = set_session_mode(session, state, emitter, pref_mode.to_string()).await {
-                tracing::error!("[ACP] failed to apply preferred mode '{pref_mode}' on connect: {e}");
+                tracing::error!(
+                    "[ACP] failed to apply preferred mode '{pref_mode}' on connect: {e}"
+                );
             }
         }
     }
@@ -13397,6 +13434,44 @@ fn claude_chunk_parent_tool_use_id(
         .map(str::to_owned)
 }
 
+/// `json_value_to_text` for a tool call's `rawInput`, with Claude Code's
+/// file-tool argument aliases settled first.
+///
+/// claude-agent-acp forwards the model's `tool_use.input` verbatim as
+/// `rawInput`, so a Write the model spelled `{path, file_text}` — which CLI
+/// 2.1.280 accepts and renames for itself — reaches the card, the live line
+/// stats and the file tally without the `file_path` / `content` every one of
+/// them reads. 0.81.1 (#1161) fixed only the adapter's own title and diff for
+/// it. This settles the input itself, with the renames the history parser
+/// applies to the same calls (`parsers::claude::canonical_file_tool_input`),
+/// so a live card and its history twin read the same arguments.
+///
+/// The tool is named by `_meta.claudeCode.toolName`, which rides every claude
+/// tool frame that carries input — the opening `tool_call`, the refining
+/// `tool_call_update` and the streamed-input refinements alike (the top-level
+/// ACP `name` is only on the first). A permission request needs nothing: the
+/// CLI coerces the input before it asks, so it already carries the canonical
+/// names.
+fn tool_call_raw_input_text(
+    agent_type: AgentType,
+    meta: Option<&serde_json::Map<String, serde_json::Value>>,
+    raw_input: &Option<serde_json::Value>,
+) -> Option<String> {
+    if agent_type == AgentType::ClaudeCode {
+        let tool_name = meta
+            .and_then(|m| m.get("claudeCode"))
+            .and_then(|c| c.get("toolName"))
+            .and_then(serde_json::Value::as_str);
+        let canonical = tool_name.zip(raw_input.as_ref()).and_then(|(name, input)| {
+            crate::parsers::claude::canonical_file_tool_input(name, input)
+        });
+        if canonical.is_some() {
+            return json_value_to_text(&canonical);
+        }
+    }
+    json_value_to_text(raw_input)
+}
+
 /// Maintain the set of OPEN CodeBuddy sub-agent tool calls (`open`). `is_agent`
 /// is true once `resolve_rewritten_title` classified this `tool_call_id` as a
 /// native sub-agent (`"agent"`). A non-final status opens the window; a final
@@ -15013,7 +15088,8 @@ async fn emit_conversation_update(
                 Some((_, inner)) => {
                     json_value_to_text(&Some(inner.clone())).filter(|t| !t.trim().is_empty())
                 }
-                None => json_value_to_text(&tc.raw_input).filter(|t| !t.trim().is_empty()),
+                None => tool_call_raw_input_text(agent_type, tc.meta.as_ref(), &tc.raw_input)
+                    .filter(|t| !t.trim().is_empty()),
             };
             let synthesized_edit = if own_raw_input.is_none() {
                 synthesize_edit_input_from_diffs(content_blocks)
@@ -15262,7 +15338,8 @@ async fn emit_conversation_update(
                     json_value_to_text(&Some(inner.clone())).filter(|t| !t.trim().is_empty())
                 }
                 None => {
-                    json_value_to_text(&tcu.fields.raw_input).filter(|t| !t.trim().is_empty())
+                    tool_call_raw_input_text(agent_type, tcu.meta.as_ref(), &tcu.fields.raw_input)
+                        .filter(|t| !t.trim().is_empty())
                 }
             };
             let synthesized_edit = if own_raw_input.is_none() {
@@ -22175,6 +22252,58 @@ mod tests {
         assert!(!config_option_rejects_value(&toggle, "true"));
     }
 
+    /// The `availableModes` claude-agent-acp 0.81.1 answered `session/new`
+    /// with, live, from a cwd whose `.claude/settings.json` sets
+    /// `permissions.disableBypassPermissionsMode: "disable"` — and, with
+    /// `bypass`, from the control run without it.
+    fn claude_modes(bypass: bool) -> SessionModeState {
+        let mut modes = vec![
+            serde_json::json!({"id": "default", "name": "Manual"}),
+            serde_json::json!({"id": "acceptEdits", "name": "Accept edits"}),
+            serde_json::json!({"id": "plan", "name": "Plan"}),
+            serde_json::json!({"id": "auto", "name": "Auto"}),
+        ];
+        if bypass {
+            modes
+                .push(serde_json::json!({"id": "bypassPermissions", "name": "Bypass permissions"}));
+        }
+        serde_json::from_value(serde_json::json!({
+            "currentModeId": "default",
+            "availableModes": modes,
+        }))
+        .expect("parses")
+    }
+
+    #[test]
+    fn a_saved_mode_the_session_withdrew_is_not_replayed() {
+        assert!(session_modes_reject_id(
+            &claude_modes(false),
+            "bypassPermissions"
+        ));
+        // Every mode still on offer replays as before — including on an
+        // adapter that never withdrew bypass.
+        for mode in ["default", "acceptEdits", "plan", "auto"] {
+            assert!(
+                !session_modes_reject_id(&claude_modes(false), mode),
+                "{mode}"
+            );
+        }
+        assert!(!session_modes_reject_id(
+            &claude_modes(true),
+            "bypassPermissions"
+        ));
+    }
+
+    #[test]
+    fn an_empty_mode_list_rejects_nothing() {
+        let empty: SessionModeState = serde_json::from_value(serde_json::json!({
+            "currentModeId": "",
+            "availableModes": [],
+        }))
+        .expect("parses");
+        assert!(!session_modes_reject_id(&empty, "bypassPermissions"));
+    }
+
     #[test]
     fn config_option_rejects_value_reads_a_grouped_select() {
         // Groups are one flat value namespace, the same way
@@ -23940,6 +24069,75 @@ mod tests {
             Some(r#"{"content":[{"type":"text","text":"ok"}]}"#),
             "non-pi agents keep the existing json_value_to_text behavior"
         );
+    }
+
+    // ---- claude file-tool argument aliases (CLI 2.1.280, adapter 0.81.1) ----
+
+    /// A Write the model spelled with the text-editor names reaches codeg as
+    /// raw `rawInput`; the card must still get `file_path` / `content`. Both
+    /// frame kinds carry input — the opening `tool_call` and the refining
+    /// `tool_call_update` the streamed `tool_use` produces — and the update
+    /// names its tool only through `_meta.claudeCode.toolName` (the ACP `name`
+    /// rides the opening frame alone), which is why that is the key read.
+    #[tokio::test]
+    async fn claude_write_aliases_reach_the_card_as_canonical_arguments() {
+        for session_update in ["tool_call", "tool_call_update"] {
+            let mut cache = ToolCallOutputCache::default();
+            let mut cb = CodeBuddyLiveState::default();
+            let mut wire = serde_json::json!({
+                "sessionUpdate": session_update,
+                "toolCallId": "toolu_w",
+                "rawInput": {"path": "/w/notes.md", "file_text": "# Notes\n"},
+                "_meta": {"claudeCode": {"toolName": "Write"}},
+            });
+            if session_update == "tool_call" {
+                wire["title"] = serde_json::json!("Write /w/notes.md");
+            }
+            let (_, raw_input, _, _) =
+                pi_emit(AgentType::ClaudeCode, &mut cache, &mut cb, wire).await;
+            let input: serde_json::Value =
+                serde_json::from_str(raw_input.as_deref().expect("raw_input")).unwrap();
+            assert_eq!(
+                input,
+                serde_json::json!({"file_path": "/w/notes.md", "content": "# Notes\n"}),
+                "{session_update}"
+            );
+        }
+    }
+
+    /// The renames are keyed on the claude tool's NAME: Grep's own `path`
+    /// argument is not a Write's `file_path`, and another agent's `_meta` that
+    /// happens to use the same key is not claude's.
+    #[tokio::test]
+    async fn claude_alias_settling_is_scoped_to_its_file_tools() {
+        let grep_input = serde_json::json!({"pattern": "TODO", "path": "/w/src"});
+        let cases = [
+            (AgentType::ClaudeCode, "Grep", grep_input.clone()),
+            (
+                AgentType::Codex,
+                "Write",
+                serde_json::json!({"path": "/w/a", "file_text": "x"}),
+            ),
+        ];
+        for (agent_type, tool_name, raw_input) in cases {
+            let mut cache = ToolCallOutputCache::default();
+            let mut cb = CodeBuddyLiveState::default();
+            let (_, emitted, _, _) = pi_emit(
+                agent_type,
+                &mut cache,
+                &mut cb,
+                serde_json::json!({
+                    "sessionUpdate": "tool_call_update",
+                    "toolCallId": "toolu_x",
+                    "rawInput": raw_input,
+                    "_meta": {"claudeCode": {"toolName": tool_name}},
+                }),
+            )
+            .await;
+            let emitted: serde_json::Value =
+                serde_json::from_str(emitted.as_deref().expect("raw_input")).unwrap();
+            assert_eq!(emitted, raw_input, "{agent_type:?} {tool_name}");
+        }
     }
 
     // ---- #525: pi's lifecycle announcements ride the prose channel ----------

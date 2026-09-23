@@ -1260,9 +1260,142 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             //   Auto-mode fallback, Fast mode turned off, hook block reasons,
             //   "Task stopped by user" — is currently a `**bold label:** …`
             //   agent message, which is the presentation worth replacing.
+            //
+            // 0.81.1 is fourteen upstream fixes (#968, #1032, #1035, #1055,
+            // #1097, #1103, #1104, #1132, #1146, #1161, #1163, #1164, #1165,
+            // #1166) and moves NO dependency: `@anthropic-ai/claude-agent-sdk`
+            // stays 0.3.280 (so the CLI is still 2.1.280), the ACP SDK stays
+            // 1.5.0, `engines.node` stays ">=22", and the `initialize` response
+            // to codeg's handshake matches 0.81.0's field for field apart from
+            // the version (both probed live over stdio). Two items cost
+            // codeg code, (bb) and (cc). The rest arrive free or are inert, and
+            // they are written down because three of them settle something
+            // codeg reported upstream or already works around.
+            //
+            // (bb) **File-tool argument aliases** (#1161). CLI 2.1.280 accepts
+            // `path` for Write's `file_path` and `file_text` / `file_content`
+            // for its `content`, and renames them for itself (`coerceInput`)
+            // — but only on the copy it executes. The streamed `tool_use`
+            // block, and with it `rawInput` and the JSONL, keeps the model's
+            // spelling. The adapter fixed only its OWN title, diff and
+            // locations (`normalizeWriteInput`); `rawInput` is still the raw
+            // clone, and every codeg card reads `rawInput`, so an aliased
+            // Write rendered with no path and no body. Edit has carried the
+            // same kind of renames for longer — `path`, `old_str`, `new_str`,
+            // `replace_name`, all already in the 2.1.274 binary — and the
+            // adapter has never handled those at all.
+            //
+            // `parsers::claude::canonical_file_tool_input` applies the CLI's
+            // renames for both tools (read out of the 2.1.280 binary, not the
+            // adapter) on the history path — `extract_assistant_content` and
+            // subagent transcripts — and live, in `tool_call_raw_input_text`,
+            // keyed on `_meta.claudeCode.toolName`. A permission request needs
+            // nothing: the CLI parses, and so coerces, the input before
+            // `canUseTool` sees it. Like (w), this is not gated on the adapter:
+            // any 2.1.280 CLI writes these spellings into the transcripts codeg
+            // reads. On success the CLI also appends a model-directed note to
+            // the Write result ("Note: Write's parameters are named `file_path`
+            // and `content`. …"); it is short and true, and stays visible.
+            //
+            // (cc) **`permissions.disableBypassPermissionsMode` is honoured**
+            // (#1165). `allowBypass` now also requires that no settings tier,
+            // project included, sets it to "disable" — the CLI refuses the mode
+            // then too — and that one value drives the mode catalog, the SDK's
+            // `allowDangerouslySkipPermissions` and the spawn-time mode clamp.
+            // Measured live: with the setting in the cwd's
+            // `.claude/settings.json`, `session/new` lists default /
+            // acceptEdits / plan / auto only, and `session/set_mode
+            // bypassPermissions` fails with `Mode bypassPermissions is not
+            // available in this session`; the control run without it lists
+            // and accepts the mode.
+            //
+            // The composer already falls back to the agent's current mode for
+            // a pick the agent no longer offers (`selectedModeId`), and a saved
+            // `mode` CONFIG value was already screened by
+            // `config_option_rejects_value` — but a saved `preferred_mode_id`
+            // was replayed blind, i.e. one failing `set_mode` on every connect,
+            // for good. `session_modes_reject_id` screens it off the session's
+            // own mode list, the same way.
+            //
+            // (dd) Plan approval: two of the three defects codeg reported as
+            // #1077 are fixed, and the third is not. #1163 — an allowed
+            // ExitPlanMode now publishes the mode it leaves the session in, as
+            // a `current_mode_update` plus a `mode` `config_option_update`, and
+            // publishes it AFTER `applyPermissionFallback`, so an Auto that
+            // fell back to acceptEdits reads as acceptEdits. Through 0.81.0
+            // only the clear-context options did, and the composer kept
+            // showing Plan while the session ran in Auto. Both frames land on
+            // paths codeg already has; claude's composer is driven by its
+            // `mode` config option, which is not re-asserted at send time, so
+            // the published mode holds for the rest of the connection. #1164 —
+            // bypass is offered NEXT TO Auto instead of being dead code behind
+            // it: Auto leads unless the session was in bypass before it
+            // entered plan (`prePlanMode`), and the clear-context row takes
+            // the same lead. The dialog renders options generically, in wire
+            // order, so the extra row needs nothing. Still open: clear-context
+            // still gives the Claude-side session a fresh uuid
+            // (`options.sessionId = publicSessionId ? randomUUID() :
+            // sessionId`), so a later `session/load` of the public id is
+            // silently truncated at the plan. codeg still does not work
+            // around it.
+            //
+            // (ee) A steered turn settles on the result that answers the steer
+            // (#1166). codeg steers claude natively
+            // (`steering_prompt_required_min_version`), and through 0.81.0 a
+            // steered turn settled only at an SDK `idle` after the steer's
+            // echo — so a steer the CLI never replayed, or an idle swallowed by
+            // the owed-idle debt of an aborted autonomous follow-up, left
+            // `session/prompt` parked until cancel or the next prompt (#1114).
+            // A result whose `user_message_uuids` names the steer now settles
+            // it, and the idle stays as the fallback. A free fix to exactly
+            // the turn boundary codeg's in-flight tracking keys on.
+            //
+            // (ff) Usage. #1132: the CLI's synthetic frames (spend limit,
+            // sign-in prompt, local command output — `model: "<synthetic>"`,
+            // all-zero usage) no longer overwrite the last real context
+            // measurement, and a turn with no real frame sends no
+            // `usage_update` at all; that used to drop the context ring to
+            // zero right as a quota ran out. `composer-context-usage.tsx`
+            // keeps reading a live `used: 0` as "no data" (an older adapter
+            // on PATH still sends one), and `parsers::claude` already keeps
+            // `<synthetic>` records out of turns and stats
+            // (`is_synthetic_assistant`). #1032: every `usage_update` now
+            // names the model it measured, as `_meta["_claude/model"]` — the
+            // PR text's top-level `model` field did not ship, since ACP's
+            // `usage_update` has none. Not consumed: the ring reads only
+            // `used` / `size`, and per-model token attribution comes from the
+            // transcript's own `message.model`, never from the live stream.
+            //
+            // (gg) Inert: a warm `session/load` / `session/resume` now rebuilds
+            // the query whenever ANY session-defining parameter changed
+            // (#968, #1097) — additionalDirectories, `_meta.additionalRoots` /
+            // `systemPrompt` / `disableBuiltInTools`,
+            // `_meta.claudeCode.emitRawSDKMessages` and every process-level
+            // `_meta.claudeCode.options` key, skills normalized as a set — not
+            // just cwd and MCP servers. codeg sends the same `_meta`
+            // (`emitRawSDKMessages: true`, nothing else) on new, load and
+            // resume, and the resume that follows a fork creates its session
+            // cold (`unstable_forkSession` never enters the adapter's session
+            // map, so there is no fingerprint to compare), so no codeg flow
+            // rebuilds a query it did not rebuild before.
+            //
+            // (hh) The rest need nothing. #1035: a marker-only custom slash-
+            // skill prompt (`<command-name>/skill</command-name>` plus
+            // `<command-args>`) now replays over `session/load` as `/skill
+            // args` instead of vanishing — what
+            // `parsers::claude::slash_command_display` has always shown on the
+            // history path, so the two paths now agree. #1055 tags the
+            // informational fallback line with `_meta.claudeCode.kind =
+            // "informational"`, which only a client WITHOUT the notices
+            // capability ever receives; codeg advertises it (see (aa)). #1103:
+            // a successful result that merely MENTIONS `Please run /login` no
+            // longer fails the turn as `auth_required`, nor rolls a goal back.
+            // #1104 touches only `providers/set`, which codeg never sends.
+            // #1146: an unreadable managed-policy tier no longer kills the
+            // adapter before it answers `initialize`.
             distribution: AgentDistribution::Npx {
-                version: "0.81.0",
-                package: "@agentclientprotocol/claude-agent-acp@0.81.0",
+                version: "0.81.1",
+                package: "@agentclientprotocol/claude-agent-acp@0.81.1",
                 cmd: "claude-agent-acp",
                 args: &[],
                 env: &[],
@@ -1845,9 +1978,68 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // the adapter itself maps to nothing (`return null`), and
             // `FeedbackUploadResponse.promptHash` belongs to a feedback upload
             // codeg does not drive.
+            //
+            // 1.13.1 is one upstream change (#541): `@openai/codex` ^0.155.1 →
+            // **^0.156.1** (a caret on a 0.x minor, so it stays inside
+            // 0.156.x). The adapter's own code moves by a single function (see
+            // (l)), and the `initialize` response to codeg's handshake matches
+            // 1.13.0's field for field apart from the version (both probed
+            // live over stdio). `engines` is still absent, so the 20.0.0 floor
+            // stays.
+            //
+            // (j) **GPT-6 Sol and GPT-6 Luna** (the 0.156.1 hotfix) take the
+            // catalog from 9 slugs to 11, and every GPT-5.x entry now points an
+            // `upgrade` block at one of them (5.6 Luna → gpt-6-luna, the rest →
+            // gpt-6-sol; 5.4's retirement stub aimed at 5.6 Terra before),
+            // which codex's TUI raises as a migration prompt. Live on a
+            // throwaway `CODEX_HOME`, the `model` option reads
+            // 6 Astra / 6 Sol / 6 Luna / 5.6 Sol / 5.6 Terra / 5.6 Luna / 5.5,
+            // and switching to gpt-6-sol re-derives the effort recommendation
+            // to `medium`. The offline snapshot is regenerated from the 0.156.1
+            // binary; a custom cloned from a GPT-5.x base still gets `upgrade:
+            // null`, which `expand_to_catalog` has always forced and which is
+            // now load-bearing (a test pins it). The model-provider placeholder
+            // moves to the new pair.
+            //
+            // Two catalog keys are new to the snapshot.
+            // `supports_reasoning_effort_updates` is a strict boolean on every
+            // entry, so it joins `BOOL_FIELDS` — a string or a `null` there
+            // takes the whole generated catalog down (probed on the binary,
+            // which also re-confirmed every enum set). `default_service_tier:
+            // "priority"` on the two GPT-6 models is the TUI's client-side
+            // default (`effective_service_tier` uses it only when the user
+            // configured no tier). codex-acp never reads `defaultServiceTier` —
+            // its Fast option follows the thread's `serviceTier` — and live,
+            // after switching to gpt-6-sol, `fast-mode` stays `off`. A custom
+            // cloned from either GPT-6 model inherits the key along with
+            // `service_tiers`; only the TUI would act on it.
+            //
+            // (k) Inert: codex 0.156 retires the `friendly` / `pragmatic`
+            // personality styles and removes the deprecated `thread/rollback`
+            // API (a legacy `thread_rolled_back` rollout record still parses).
+            // codeg exposes no personality, never calls the API, and
+            // `parsers::codex` has never read the record. `ThreadResumeResponse`
+            // gains `collaborationMode`, which 1.13.1 does not read: its
+            // `collaboration_mode` option still comes from the
+            // `thread/settings/updated` cache.
+            //
+            // (l) Rollout and replay shapes. A user image can now be a FILE
+            // reference — `input_image` with `file_id` instead of `image_url`,
+            // and `user_message` gains `file_ids` / `image_order` — which only
+            // a client uploading to the Files API produces; codeg sends inline
+            // and local images. `parsers::codex` skips an image with no inline
+            // data (an image-only turn still renders as "Attached resources").
+            // The adapter's one code change renders such an input as
+            // `image:<fileId>` text in `session/load` replay (and audio /
+            // mention inputs as nothing), which never reaches codeg: codex
+            // sessions are resumed without draining a replay. The other new
+            // fields (`root_turn_id`, MCP `turn_id` / `mcp_app_ui`,
+            // `disabledPluginIds`, `availableAccessPrograms`, MCP
+            // `serverCapabilities`) are additive, and the parser reads rollouts
+            // as untyped JSON.
             distribution: AgentDistribution::Npx {
-                version: "1.13.0",
-                package: "@agentclientprotocol/codex-acp@1.13.0",
+                version: "1.13.1",
+                package: "@agentclientprotocol/codex-acp@1.13.1",
                 cmd: "codex-acp",
                 args: &[],
                 env: &[],
@@ -3046,8 +3238,8 @@ mod tests {
     fn registry_pins_current_acp_agent_versions() {
         assert_npx_version(
             AgentType::ClaudeCode,
-            "0.81.0",
-            "@agentclientprotocol/claude-agent-acp@0.81.0",
+            "0.81.1",
+            "@agentclientprotocol/claude-agent-acp@0.81.1",
             Some("22.0.0"),
         );
         assert_npx_version(
@@ -3088,8 +3280,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Codex,
-            "1.13.0",
-            "@agentclientprotocol/codex-acp@1.13.0",
+            "1.13.1",
+            "@agentclientprotocol/codex-acp@1.13.1",
             Some("20.0.0"),
         );
         assert_npx_version(AgentType::Pi, "0.0.33", "pi-acp@0.0.33", Some("22.0.0"));
