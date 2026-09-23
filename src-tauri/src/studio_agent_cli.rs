@@ -118,6 +118,12 @@ mod tests {
         p
     }
 
+    /// Built component by component: a `"/"` inside a `join` would not match
+    /// the `\`-separated path the code builds on Windows.
+    fn native_dir(home: &Path) -> PathBuf {
+        home.join(".local").join("bin")
+    }
+
     fn get(env: &[(String, String)]) -> Option<&str> {
         env.iter()
             .find(|(k, _)| k == EXECUTABLE_ENV)
@@ -128,7 +134,7 @@ mod tests {
     fn prefers_native_install_over_path() {
         let home = tempfile::tempdir().unwrap();
         let bin = tempfile::tempdir().unwrap();
-        let native = make_exe(&home.path().join(".local/bin"));
+        let native = make_exe(&native_dir(home.path()));
         make_exe(bin.path());
         let mut env = vec![];
         apply_with(&mut env, Some(home.path()), bin.path().to_str());
@@ -156,7 +162,7 @@ mod tests {
     #[test]
     fn user_path_wins() {
         let home = tempfile::tempdir().unwrap();
-        make_exe(&home.path().join(".local/bin"));
+        make_exe(&native_dir(home.path()));
         let mut env = vec![(EXECUTABLE_ENV.to_string(), "/opt/claude".to_string())];
         apply_with(&mut env, Some(home.path()), None);
         assert_eq!(get(&env), Some("/opt/claude"));
@@ -165,7 +171,7 @@ mod tests {
     #[test]
     fn bundled_opts_out() {
         let home = tempfile::tempdir().unwrap();
-        make_exe(&home.path().join(".local/bin"));
+        make_exe(&native_dir(home.path()));
         let mut env = vec![(EXECUTABLE_ENV.to_string(), "bundled".to_string())];
         apply_with(&mut env, Some(home.path()), None);
         assert_eq!(get(&env), None);
