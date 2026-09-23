@@ -3161,6 +3161,8 @@ export type SettingsSection =
   | "experts"
   | "science"
   | "office-tools"
+  | "collaboration"
+  | "browser"
   | "version-control"
   | "shortcuts"
   | "system"
