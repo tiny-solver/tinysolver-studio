@@ -145,5 +145,5 @@ if GH_TOKEN="$(gh auth token -u tiny-solver 2>/dev/null)" && [ -n "${GH_TOKEN:-}
         --body "$(printf '업스트림 codeg **%s** 자동 머지 (scripts/studio-upstream-sync.sh).\n\n- 충돌 없음 · 브랜드 불변식 통과(업스트림 제품명 잔존 0 · brand.rs · tauri.conf · package.json)\n- 검사는 이 PR 의 Test 워크플로가 돌린다\n- 초록이면 land, 그 뒤 릴리스는 `scripts/studio-release.sh`\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)' "$tag")" 2>&1 | tail -n1)" || pr="PR 생성 실패: $pr"
 fi
 
-notify info "studio: 업스트림 $tag 머지 준비됨" "$(printf '충돌 없음 · 브랜드 불변식 통과\n%s\n\nland:\n  git switch main && git merge --ff-only %s && git push\n그 뒤 릴리스: scripts/studio-release.sh' "${pr:-브랜치 $branch}" "$branch")"
+notify info "studio: 업스트림 $tag 머지 준비됨" "$(printf '충돌 없음 · 브랜드 불변식 통과\n%s\n\nland (squash 금지 — 업스트림 조상을 지켜야 다음 머지가 안 깨진다):\n  git switch main && git merge --ff-only %s && git push && git branch -d %s && git push origin --delete %s\n그 뒤 릴리스: scripts/studio-release.sh' "${pr:-브랜치 $branch}" "$branch" "$branch" "$branch")"
 say "준비됨: $branch ${pr:+· $pr}"
