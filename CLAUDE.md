@@ -119,3 +119,16 @@ INSTA_UPDATE=auto cargo test --features test-utils     # 自动写新 .snap
 - ESLint：next/core-web-vitals + typescript + prettier
 - TypeScript：strict 模式，启用 `noUnusedLocals` 和 `noUnusedParameters`
 - Rust：2021 edition，使用 `thiserror` 定义错误类型
+
+## Fork 운영 — tinysolver
+
+> 이 절은 fork 만의 것이다. 업스트림 파일이라 **끝에만 덧붙인다**(중간을 고치면 업스트림 머지마다 충돌).
+
+- 이 repo 는 `xintaofei/codeg` 의 fork 다. **업스트림은 받기만 한다** — `upstream` 리모트는 fetch 전용(push URL 막힘), 업스트림에 PR · push 하지 않는다.
+- **업스트림 추종은 기계가 한다** — linux-1 크론 `studio-upstream-sync`(매일 07:20)가 새 태그를 `upstream-sync/<태그>` 로 머지하고 PR 을 연다.
+  land 는 알림의 명령대로 **ff 로 — squash 금지**(업스트림 조상이 끊기면 다음 머지가 충돌한다).
+- **내 개발은 토픽 브랜치로**:
+  `W=~/k-codepoet/my-devops/scripts/work.sh` → `$W start <type>/<주제>` → 커밋 → `$W land`.
+  PR 은 **tiny-solver/tinysolver-studio** 에만 선다(work.sh 가 `-R` 고정 · 이 체크아웃의 gh 기본 repo 도 이것).
+- **계정** — PR 은 gh `tiny-solver`, 커밋은 `iam.tinysolver@gmail.com`. linux-1 의 gh 기본 계정은 choigawoon 이라 `gh` 를 맨손으로 쓰지 않는다.
+- 업스트림 파일은 되도록 고치지 않는다. 브랜드 불변식 · 릴리스는 my-devops `docs/plans/tinysolver/studio-release.md`.
