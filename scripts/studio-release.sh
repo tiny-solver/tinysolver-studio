@@ -28,7 +28,9 @@ tag="studio-v$ver-$day.$seq"
 prev="$(git tag --list 'studio-v*' --sort=-creatordate | head -n1)"
 echo "tag:    $tag"
 echo "commit: $(git log -1 --format='%h %s')"
-[ -z "$prev" ] || { echo "since $prev:"; git log --oneline "$prev..HEAD" | head -n 20; }
+# -n, not `| head`: with pipefail, head closing the pipe early (>20 commits) SIGPIPEs git log
+# and set -e ends the script here — silently, exit 0, before the tag is cut.
+[ -z "$prev" ] || { echo "since $prev:"; git log --oneline -n 20 "$prev..HEAD"; }
 [ "$MODE" = "--check" ] && exit 0
 
 git tag -a "$tag" -m "Tinysolver Studio $tag"
