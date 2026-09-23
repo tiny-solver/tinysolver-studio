@@ -18,6 +18,9 @@ set -euo pipefail
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 REPO_DIR="$PWD"
+# 업스트림은 받기만 한다 — push 를 막고, gh 기본 repo 를 fork 자신으로. 매 실행 되맞춘다(새 클론도 하루 안에 따라온다)
+git remote set-url --push upstream "DISABLED--upstream-is-fetch-only" 2>/dev/null || true
+git config remote.origin.gh-resolved base
 MODE="${1:-}"
 WT_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/tinysolver-studio-upstream"
 NOTIFY="$HOME/k-codepoet/my-devops/scripts/notify.sh"
