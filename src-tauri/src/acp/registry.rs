@@ -2130,8 +2130,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             name: "Cline",
             description: "Autonomous coding agent CLI",
             distribution: AgentDistribution::Npx {
-                version: "3.0.62",
-                package: "cline@3.0.62",
+                version: "3.0.64",
+                package: "cline@3.0.64",
                 cmd: "cline",
                 args: &["--acp"],
                 env: &[],
@@ -2433,9 +2433,64 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // reads `kimi-k3` = 1048576 and `kimi-k2.*` = 262144, so the
             // `parsers/mod.rs::infer_context_window_max_tokens` mirror still
             // holds. No live run, same as 2.0.1.
+            //
+            // 2.1.0 is a minor release and the mandated check passes verbatim:
+            // byte-identical converter body (`{transport: "stdio", command,
+            // args, env, runtime_id: "local"}`), the same three entry points
+            // routing through it, and neither `acpMcpServersToConfigs` nor the
+            // "does not declare a runtime identity" throw anywhere in the
+            // bundle. `engines.node` is unmoved at >=22.19.0. Every
+            // `packages/acp-server/` region is renumber-only, and so are the
+            // engine's `wire/*` regions, the auth gate (`server.ts` →
+            // `authService.summarize()`), `skillRoots` and `mcp.json`. What
+            // does reach disk is additive: `tool.result` gains
+            // `result.durationMs`, the sub-agent lifecycle events
+            // (`subagent.spawned` … `subagent.cancelled`) become durable wire
+            // records that `parsers/kimi_code.rs` passes over, and config.toml
+            // gains an optional `auto_session_title` that `dist/main.mjs` only
+            // parses — the `kimi web` UI shows a toggle for it, but nothing in
+            // the engine acts on it yet. File watching is now OFF by default
+            // (`KIMI_CODE_WATCH=1` or `[watch] enabled = true` turn it back
+            // on), so config.toml, `mcp.json` and skill roots are no longer
+            // watched mid-process.
+            // Nothing codeg does at launch depends on that — config.toml is
+            // written before the spawn and codeg-mcp rides `session/new` — but
+            // an MCP server or skill added from codeg's settings while a Kimi
+            // session is open now lands on the next connect. The bundled
+            // models.dev catalog grew, yet its `moonshotai` rows are untouched,
+            // so the `infer_context_window_max_tokens` mirror still holds. A
+            // live A/B against 2.0.2 matched on `initialize`, the
+            // `session/update` kinds, a stdio MCP server handed over on
+            // `session/new` (spawned, listed, called as
+            // `mcp__<server>__<tool>`), and the `agents/main/wire.jsonl` record
+            // and loop-event type sets.
+            //
+            // ONE change does reach codeg: a new symlink-escape guard in the
+            // `Read` / `Glob` / `Grep` / `ReadMediaFile` / `Edit` / `Write`
+            // tools refuses a path that is lexically inside `cwd` +
+            // `additionalDirectories` + the skill roots but whose real path
+            // lands outside all of them ("… through a symbolic link that
+            // points outside the working directory. Access is blocked; use the
+            // real path directly or add the target directory to the
+            // workspace."). codeg builds two things in exactly that shape, and
+            // 2.0.2 read through both: a multi-folder workspace's folders are
+            // real symlinks under the cwd (codeg sends no
+            // `additionalDirectories`), and an expert or office skill is
+            // `~/.kimi-code/skills/<id>` linked to `~/.codeg/skills/<id>` —
+            // still listed as `skill:<id>`, but a `Read` of the skill's own
+            // supporting files through the link is now refused. Both degrade
+            // rather than break: the error names the real path, and reading
+            // the real path goes through with no approval prompt. Passing the
+            // link targets as `additionalDirectories` on `session/new` lifts
+            // the block for that process only — `session/resume` and
+            // `session/load` ignore the field and nothing persists it, so
+            // every reconnect would lose it again. The one persistent lever is
+            // the project's `.kimi-code/local.toml` (`[workspace]
+            // additional_dir`), which 2.1.0 reads only for a trusted
+            // workspace.
             distribution: AgentDistribution::Npx {
-                version: "2.0.2",
-                package: "@moonshot-ai/kimi-code@2.0.2",
+                version: "2.1.0",
+                package: "@moonshot-ai/kimi-code@2.1.0",
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
@@ -2501,16 +2556,16 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // `models` that the composer's selectors and context ring read, and
             // prompting straight after it works. It also skips `session/load`'s
             // history replay, which codeg only drained to discard. The 1.0.1–
-            // 1.0.40 patches add nothing further here: re-probed live against
-            // the 1.0.40 binary, `initialize` still answers
+            // 1.0.41 patches add nothing further here: re-probed live against
+            // the 1.0.41 binary, `initialize` still answers
             // `sessionCapabilities: {list, resume, close}` plus the same
             // `promptCapabilities.embeddedContext` (and `mcpCapabilities`
             // http+sse, `loadSession: true`), so the resume rung stands. All
             // six `@xai-official/grok-<os>-<arch>` optional deps are published
-            // at 1.0.40 — they are OPTIONAL, so a platform that lags would fail
+            // at 1.0.41 — they are OPTIONAL, so a platform that lags would fail
             // only for that platform's users, at run time, in the trampoline.
             // The pin tracks `dist-tags.latest`, NOT the highest version
-            // number; at 1.0.40 `latest` and `alpha` point at the same version,
+            // number; at 1.0.41 `latest` and `alpha` point at the same version,
             // so nothing is staged ahead of it.
             //
             // 1.0.40 DID add one thing that reaches codeg, and it needed a fix
@@ -2526,14 +2581,14 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // those frames before they can be parked, so this bump is safe only
             // together with that guard.
             distribution: AgentDistribution::Npx {
-                version: "1.0.40",
-                package: "@xai-official/grok@1.0.40",
+                version: "1.0.41",
+                package: "@xai-official/grok@1.0.41",
                 cmd: "grok",
                 // Only the ACP subcommand lives here. Grok's ROOT-level launch
                 // flags (`--no-auto-update` always, `--permission-mode <value>`
                 // only for a non-default permission mode) MUST precede this
                 // subcommand — `grok agent stdio` itself rejects them (re-verified
-                // against 1.0.40: it still only accepts --debug/--debug-file/
+                // against 1.0.41: it still only accepts --debug/--debug-file/
                 // --leader-socket) — so `build_agent` inserts them ahead of these
                 // args rather than appending after. Since 1.0.3 `grok --help` no
                 // longer LISTS `--no-auto-update`, but it is still accepted:
@@ -2544,7 +2599,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 // auto/dontAsk/bypassPermissions/plan).
                 args: &["agent", "stdio"],
                 env: &[],
-                // `@xai-official/grok@1.0.40` declares `engines.node: ">=20"`;
+                // `@xai-official/grok@1.0.41` declares `engines.node: ">=20"`;
                 // surface that in preflight so Node 18 isn't silently accepted.
                 node_required: Some("20.0.0"),
             },
@@ -2830,8 +2885,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // `runtime_env` override it, so a user who wants the redaction back
             // sets `QODER_EXPOSE_TOKEN_USAGE=0` in the agent's env settings.
             distribution: AgentDistribution::Npx {
-                version: "1.1.60",
-                package: "@qoder-ai/qodercli@1.1.60",
+                version: "1.1.62",
+                package: "@qoder-ai/qodercli@1.1.62",
                 cmd: "qoder",
                 args: &["--acp"],
                 env: &[("QODER_EXPOSE_TOKEN_USAGE", "1")],
@@ -3260,8 +3315,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Cline,
-            "3.0.62",
-            "cline@3.0.62",
+            "3.0.64",
+            "cline@3.0.64",
             Some("22.0.0"),
         );
         assert_npx_version(
@@ -3274,8 +3329,8 @@ mod tests {
         // range dies on the codeg-mcp stdio entry (see the registry entry).
         assert_npx_version(
             AgentType::KimiCode,
-            "2.0.2",
-            "@moonshot-ai/kimi-code@2.0.2",
+            "2.1.0",
+            "@moonshot-ai/kimi-code@2.1.0",
             Some("22.19.0"),
         );
         assert_npx_version(
@@ -3287,8 +3342,8 @@ mod tests {
         assert_npx_version(AgentType::Pi, "0.0.33", "pi-acp@0.0.33", Some("22.0.0"));
         assert_npx_version(
             AgentType::Grok,
-            "1.0.40",
-            "@xai-official/grok@1.0.40",
+            "1.0.41",
+            "@xai-official/grok@1.0.41",
             Some("20.0.0"),
         );
         assert_npx_version(
@@ -3299,8 +3354,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::Qoder,
-            "1.1.60",
-            "@qoder-ai/qodercli@1.1.60",
+            "1.1.62",
+            "@qoder-ai/qodercli@1.1.62",
             Some("20.0.0"),
         );
         assert_binary_version(AgentType::OpenCode, "1.18.32", "/releases/download/v1.18.32/");
