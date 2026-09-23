@@ -1834,6 +1834,8 @@ async fn build_agent(
                 None
             };
             apply_codex_env_policy(agent_type, &mut merged_env, codex_initial_mode.as_deref());
+            // Studio: run Claude Code on the machine's self-updating CLI (see module).
+            crate::studio_agent_cli::apply_claude_cli_policy(agent_type, &mut merged_env);
             // codex-acp 1.0.0 honors APP_SERVER_LOGS as a directory for its
             // adapter-side logs. Surface it only under CODEG_ACP_DEBUG so
             // default runs are unchanged; a directory-creation failure silently
