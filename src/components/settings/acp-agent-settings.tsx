@@ -11715,7 +11715,7 @@ supports_websockets = true`}
                                   event.target.value
                                 )
                               }}
-                              placeholder="claude-opus-5"
+                              placeholder="claude-opus-5-5"
                             />
                           </div>
                           <div className="space-y-1.5">
@@ -11772,7 +11772,7 @@ supports_websockets = true`}
                                   event.target.value
                                 )
                               }}
-                              placeholder="claude-opus-5"
+                              placeholder="claude-opus-5-5"
                             />
                           </div>
                         </div>
@@ -11797,7 +11797,7 @@ supports_websockets = true`}
                                     event.target.value
                                   )
                                 }}
-                                placeholder="my-gateway/claude-opus-5"
+                                placeholder="my-gateway/claude-opus-5-5"
                               />
                             </div>
                             <div className="space-y-1.5">
