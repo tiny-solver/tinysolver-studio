@@ -1,4 +1,4 @@
-// codeg-engine · three-web runtime v0.3.0
+// codeg-engine · three-web runtime v0.4.0
 //
 // Tinysolver Studio 가 제공하는 2D 장면 런타임이다. 프로젝트에 복사되지 않는다.
 // 미리보기 서버가 `__codeg/engine/three-web/runtime.js` 로 서빙하고, 빌드가
@@ -8,6 +8,9 @@
 // 편집기 계약:
 //   1. `?scene=<id>` 로 장면을 고른다 (기본 main). `?codeg=edit` 면 편집 모드로 시작.
 //   2. 로드되면 parent 에 `codeg:ready { hot: true, modes: true }` 를 보낸다.
+//      편집기 프로토콜(codeg:*)은 미리보기 서버가 심은 표식(`window.__codegPreview`)이
+//      있을 때만 말한다. iframe 안이라는 것만으로는 편집기가 아니다 — afterplay 도
+//      게임을 iframe 에 띄운다.
 //   3. `codeg:scene { scene }` → 받은 문서를 다시 그린다.
 //      `codeg:mode { mode: "edit" | "play" }` → 모드 전환. 편집 모드에서는
 //      스크립트·행동·입력이 멈추고 장면이 문서 그대로 그려진다.
@@ -15,7 +18,7 @@
 // 좌표계: 컨테이너 픽셀, 원점 좌상단, y 아래 방향.
 import * as THREE from "three"
 
-export const VERSION = "0.3.0"
+export const VERSION = "0.4.0"
 export { THREE }
 
 const ID = /^[a-zA-Z0-9_-]{1,100}$/
@@ -50,7 +53,8 @@ export async function start(options = {}) {
     options.assetBase ?? "../../assets/",
     document.baseURI
   )
-  const embedded = window.parent !== window
+  // Studio 편집기 안인가 — iframe 이면서 미리보기 서버의 표식이 있을 때만.
+  const embedded = window.parent !== window && !!window.__codegPreview
   let mode = params.get("codeg") === "edit" ? "edit" : "play"
 
   // ── 렌더러 ──────────────────────────────────────────────────────

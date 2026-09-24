@@ -385,9 +385,21 @@ pub struct ContentBuild {
     /// Captured stdout/stderr of `engine.build`, empty when there was none.
     #[serde(default)]
     pub log: String,
+    /// Platform the build was made for — which `codeg-platform` adapter it
+    /// carries. Builds from before the platform layer read as `web`.
+    #[serde(default = "default_build_target")]
+    pub target: String,
+    /// "Runs anywhere" findings ([`crate::content_compat`]). Warnings on a
+    /// `web` build.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     /// Where this build has been released, at most one record per target.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub published: Vec<PublishRecord>,
+}
+
+fn default_build_target() -> String {
+    crate::content_engine::BUILD_TARGETS[0].to_string()
 }
 
 /// One release of a build.
@@ -704,6 +716,9 @@ fn package_build(
     }
     let staging = dir.join(format!(".{version}.partial"));
     let _ = fs::remove_dir_all(&staging);
+    let target_name = default_build_target();
+    let platform_files = crate::content_engine::build_files(&target_name)
+        .ok_or_else(|| AppCommandError::invalid_input(format!("Unknown build target {target_name}")))?;
 
     let result = (|| {
         let mut size = 0u64;
@@ -719,12 +734,20 @@ fn package_build(
         // A top-level index.html so the folder (or zip) opens straight into
         // the game from any static host.
         let entry = engine.entry.trim_start_matches("./").to_string();
-        // The managed runtime and the vendored Three.js are not in the
-        // project; the entry page import-maps them to `../../__codeg/…`. Write
-        // them at that path so the build runs with no Studio and no CDN.
+        // The managed runtime, the vendored Three.js and the target's
+        // platform adapter are not in the project; the entry page
+        // import-maps them to `../../__codeg/…`. Write them at that path so
+        // the build runs with no Studio and no CDN. A page from before the
+        // platform layer gets its import-map entry here, as in the preview.
         let entry_html = fs::read_to_string(root.join(&entry)).unwrap_or_default();
         if crate::content_engine::page_uses_managed_engine(&entry_html) {
-            for file in crate::content_engine::files() {
+            if let Some(html) = crate::content_engine::with_platform_import(&entry_html) {
+                let staged_entry = staging.join(&entry);
+                if staged_entry.is_file() {
+                    fs::write(&staged_entry, html).map_err(AppCommandError::io)?;
+                }
+            }
+            for file in platform_files {
                 let dest = staging.join(file.path);
                 if let Some(parent) = dest.parent() {
                     fs::create_dir_all(parent).map_err(AppCommandError::io)?;
@@ -741,6 +764,18 @@ fn package_build(
             ),
         )
         .map_err(AppCommandError::io)?;
+        let warnings = crate::content_compat::check_build(&staging, size);
+        let mut log = log.clone();
+        if !warnings.is_empty() {
+            log.push_str(&format!(
+                "{}compat: {} warning(s) — see ENGINE.md \"어디서든 돌려면\"\n",
+                if log.is_empty() || log.ends_with('\n') { "" } else { "\n" },
+                warnings.len()
+            ));
+            for w in &warnings {
+                log.push_str(&format!("  {w}\n"));
+            }
+        }
         let info = ContentBuild {
             version: version.clone(),
             built_at: now.to_rfc3339(),
@@ -750,7 +785,9 @@ fn package_build(
             dir: target.to_string_lossy().to_string(),
             zip: None,
             size_bytes: size,
-            log: log.clone(),
+            log,
+            target: target_name.clone(),
+            warnings,
             published: Vec::new(),
         };
         fs::write(
@@ -783,8 +820,10 @@ fn package_build(
     result
 }
 
-/// Recursive copy that skips dot-files, `node_modules`, and symlinks.
-/// Returns the bytes copied.
+/// Recursive copy for a build: skips dot-files, `node_modules`, symlinks and
+/// Markdown (GDD · README · ENGINE.md — authoring docs, not something the
+/// game runs; the GDD is not meant to be public either). Returns the bytes
+/// copied.
 fn copy_tree(from: &Path, to: &Path) -> Result<u64, AppCommandError> {
     let mut total = 0u64;
     fs::create_dir_all(to).map_err(AppCommandError::io)?;
@@ -796,6 +835,9 @@ fn copy_tree(from: &Path, to: &Path) -> Result<u64, AppCommandError> {
             continue;
         }
         let file_type = entry.file_type().map_err(AppCommandError::io)?;
+        if file_type.is_file() && name_str.to_ascii_lowercase().ends_with(".md") {
+            continue;
+        }
         if file_type.is_symlink() {
             continue;
         }
@@ -1095,7 +1137,7 @@ const STARTER_SCENE: &str = r##"{
 }
 "##;
 
-const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Tinysolver Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Tinysolver Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Tinysolver Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Tinysolver Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 그대로 복사하고 엔진(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Tinysolver Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
+const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Tinysolver Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Tinysolver Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Tinysolver Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Tinysolver Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 복사하고(문서 `*.md`는 빠진다) 엔진과 플랫폼 층(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 같은 게임이 미리보기 · 독립 웹 · afterplay · 데스크톱 · 폰 앱에서 돈다. 저장 · 플레이어 · 순위 · 공유 · 광고는 `codeg-platform`(`import { platform } from \"codeg-platform\"`)으로만 부르고, 없는 능력은 `platform.has()`로 보고 UI를 숨긴다. 바깥 네트워크(CDN · 웹폰트) · `localStorage` 직접 · `alert`/`window.open` · Service Worker를 쓰지 않는다 — `outputs/game/ENGINE.md`의 \"어디서든 돌려면\". 빌드 결과의 `warnings`가 이 규칙 위반이다. 있으면 고친다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Tinysolver Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
 
 const THREE_INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ko">
@@ -1111,7 +1153,8 @@ const THREE_INDEX_HTML: &str = r#"<!doctype html>
       {
         "imports": {
           "three": "../../__codeg/vendor/three.module.min.js",
-          "codeg-engine": "../../__codeg/engine/three-web/runtime.js"
+          "codeg-engine": "../../__codeg/engine/three-web/runtime.js",
+          "codeg-platform": "../../__codeg/platform/current.js"
         }
       }
     </script>
@@ -1342,8 +1385,23 @@ mod tests {
         // entry page references nothing off-host.
         assert!(out.join("__codeg/engine/three-web/runtime.js").is_file());
         assert!(out.join("__codeg/vendor/three.module.min.js").is_file());
+        // The platform layer rides along with the build target's adapter.
+        assert_eq!(build.target, "web");
+        assert!(out.join("__codeg/platform/core.js").is_file());
+        let adapter = fs::read_to_string(out.join("__codeg/platform/current.js")).unwrap();
+        assert!(adapter.contains("makePlatform(\"web\""));
+        // Only what runs: authoring docs stay behind.
+        assert!(root.join("outputs/game/ENGINE.md").is_file());
+        assert!(!out.join("outputs/game/ENGINE.md").exists());
+        assert!(!out.join("outputs/game/GDD.md").exists());
+        assert!(!out.join("outputs/game/README.md").exists());
+        assert!(!out.join("assets/README.md").exists());
+        assert!(!out.join("__codeg/engine/three-web/ENGINE.md").exists());
+        // The scaffold keeps the rules it teaches.
+        assert!(build.warnings.is_empty(), "{:?}", build.warnings);
         let page = fs::read_to_string(out.join("outputs/game/index.html")).unwrap();
         assert!(page.contains("../../__codeg/vendor/three.module.min.js"));
+        assert!(page.contains("\"codeg-platform\": \"../../__codeg/platform/current.js\""));
         assert!(!page.contains("http://") && !page.contains("https://"));
         assert!(!root.join("__codeg").exists(), "never written into the project");
         assert!(out.join("assets/backgrounds/bg_1x1.png").is_file());
@@ -1402,8 +1460,26 @@ mod tests {
         assert!(failed.message.contains("publish.command exited"));
 
         // Second build gets the next counter; listing is newest first.
+        // A page from before the platform layer gets the import in the build
+        // (the project file is left alone), and rule breaks become warnings.
+        let entry_path = root.join("outputs/game/index.html");
+        let current = fs::read_to_string(&entry_path).unwrap();
+        let old_page = current.replace(
+            ",\n          \"codeg-platform\": \"../../__codeg/platform/current.js\"",
+            "",
+        );
+        assert_ne!(old_page, current);
+        fs::write(&entry_path, &old_page).unwrap();
+        fs::write(root.join("outputs/game/src/best.js"), "export const best = () => localStorage.getItem(\"best\")\n").unwrap();
         let second = build_content_project(path.clone()).await.unwrap();
         assert!(second.version.starts_with("v2-"));
+        let second_page = fs::read_to_string(Path::new(&second.dir).join("outputs/game/index.html")).unwrap();
+        assert!(second_page.contains("\"codeg-platform\": \"../../__codeg/platform/current.js\""));
+        assert_eq!(fs::read_to_string(&entry_path).unwrap(), old_page);
+        assert_eq!(second.warnings.len(), 1, "{:?}", second.warnings);
+        assert!(second.warnings[0].starts_with("[2] outputs/game/src/best.js:1 · localStorage"));
+        assert!(second.log.contains("compat: 1 warning(s)"));
+        fs::remove_file(root.join("outputs/game/src/best.js")).unwrap();
         let listed = list_content_builds(path.clone()).await.unwrap();
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].version, second.version);
