@@ -2208,8 +2208,9 @@ mod tests {
         assert!(
             matches!(&turns[0].blocks[1], ContentBlock::Text { text } if text == "[report.pdf](file:///tmp/report.pdf)")
         );
+        // A text resource: the attachment it is shown as, without its body.
         assert!(
-            matches!(&turns[0].blocks[2], ContentBlock::Text { text } if text == "[clipboard://notes.txt-1](clipboard://notes.txt-1)")
+            matches!(&turns[0].blocks[2], ContentBlock::Text { text } if text == "clipboard://notes.txt-1\n<context ref=\"clipboard://notes.txt-1\">\n\n</context>")
         );
     }
 

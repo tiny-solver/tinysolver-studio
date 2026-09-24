@@ -109,6 +109,7 @@ import {
   buildSteerPayload,
   extractUserImagesFromDraft,
   getPromptDraftDisplayText,
+  promptDraftTitleSeed,
 } from "@/lib/prompt-draft"
 import {
   type AgentType,
@@ -1171,10 +1172,7 @@ const ConversationTabView = memo(function ConversationTabView({
       // depends on the flush-on-connect queue to deliver its first prompt.
       if (createConversationPendingRef.current) return
       createConversationPendingRef.current = true
-      const title = getPromptDraftDisplayText(
-        draft,
-        sharedT("attachedResources")
-      ).slice(0, 80)
+      const title = promptDraftTitleSeed(draft, sharedT("attachedResources"))
       const chatSend = sendOwnTab?.isChat === true
       const chatExistingDir = sendOwnTab?.workingDir
 

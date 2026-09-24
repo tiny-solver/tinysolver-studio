@@ -28,6 +28,7 @@ import { getAgentLabel } from "@/lib/custom-agents"
 import {
   extractUserImagesFromDraft,
   getPromptDraftDisplayText,
+  promptDraftTitleSeed,
 } from "@/lib/prompt-draft"
 import {
   getSavedModeId,
@@ -581,12 +582,10 @@ export function CanvasConversationSurface({
       setCreateError(null)
       void (async () => {
         try {
-          const title = getPromptDraftDisplayText(
+          const title = promptDraftTitleSeed(
             draft,
             sharedT("attachedResources")
           )
-            .trim()
-            .slice(0, 80)
           let newId: number
           let sendFolderId: number
           if (draftTarget.kind === "chat") {
