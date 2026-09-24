@@ -1,4 +1,11 @@
-import { render, screen, act, fireEvent, waitFor } from "@testing-library/react"
+import {
+  render,
+  screen,
+  act,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { NextIntlClientProvider } from "next-intl"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -92,7 +99,16 @@ vi.mock("remark-gfm", () => ({ default: () => undefined }))
 
 import { SystemNetworkSettings } from "./system-network-settings"
 import { UpdateProvider } from "@/components/providers/update-provider"
+import arMessages from "@/i18n/messages/ar.json"
+import deMessages from "@/i18n/messages/de.json"
 import enMessages from "@/i18n/messages/en.json"
+import esMessages from "@/i18n/messages/es.json"
+import frMessages from "@/i18n/messages/fr.json"
+import jaMessages from "@/i18n/messages/ja.json"
+import koMessages from "@/i18n/messages/ko.json"
+import ptMessages from "@/i18n/messages/pt.json"
+import zhCNMessages from "@/i18n/messages/zh-CN.json"
+import zhTWMessages from "@/i18n/messages/zh-TW.json"
 import {
   getSystemAutostartSettings,
   getSystemProxySettings,
@@ -639,7 +655,7 @@ describe("SystemNetworkSettings — proxy bypass list", () => {
     mockSetProxy.mockResolvedValue({
       enabled: true,
       proxy_url: "http://10.0.0.2:3128",
-      no_proxy: "corp.example.com, 192.168.1.10",
+      no_proxy: "corp.example.com,192.168.1.10",
     })
 
     renderWithIntl()
@@ -653,7 +669,7 @@ describe("SystemNetworkSettings — proxy bypass list", () => {
     fireEvent.blur(bypass)
 
     await waitFor(() =>
-      expect(bypass).toHaveValue("corp.example.com, 192.168.1.10")
+      expect(bypass).toHaveValue("corp.example.com,192.168.1.10")
     )
     expect(mockSetProxy).toHaveBeenCalledWith({
       enabled: true,
@@ -715,6 +731,36 @@ describe("SystemNetworkSettings — proxy bypass list", () => {
     await waitFor(() => expect(bypass).toHaveValue(""))
   })
 
+  it("states the list format with the same literals as the placeholder", async () => {
+    mockGetProxy.mockResolvedValue({
+      enabled: false,
+      proxy_url: null,
+      no_proxy: null,
+    })
+
+    renderWithIntl()
+
+    const bypass = await screen.findByLabelText("Bypass proxy for")
+    const example = bypass.getAttribute("placeholder") ?? ""
+    // The form the backend stores and shows back: commas, no spaces.
+    expect(example).toMatch(/^[^\s,]+(,[^\s,]+)+$/)
+    // Hosts read left to right even in Arabic.
+    expect(bypass).toHaveAttribute("dir", "ltr")
+
+    const hint = screen.getByText(/Separate entries with commas and no spaces/)
+    for (const literal of [
+      example,
+      "example.com",
+      ".example.com",
+      "localhost,127.0.0.1,::1",
+    ]) {
+      const node = within(hint).getByText(literal)
+      expect(node.tagName).toBe("CODE")
+      // Kept whole in Arabic, where a leading `.` would otherwise move.
+      expect(node).toHaveAttribute("dir", "ltr")
+    }
+  })
+
   it("shows an empty list for a server that predates the setting", async () => {
     // A remote workspace on an older server never sends `no_proxy`.
     mockGetProxy.mockResolvedValue({
@@ -727,4 +773,35 @@ describe("SystemNetworkSettings — proxy bypass list", () => {
     expect(await screen.findByLabelText("Bypass proxy for")).toHaveValue("")
     expect(screen.queryByText(/Load failed/)).not.toBeInTheDocument()
   })
+})
+
+describe("SystemNetworkSettings — proxy bypass hint in every locale", () => {
+  it.each([
+    ["ar", arMessages],
+    ["de", deMessages],
+    ["en", enMessages],
+    ["es", esMessages],
+    ["fr", frMessages],
+    ["ja", jaMessages],
+    ["ko", koMessages],
+    ["pt", ptMessages],
+    ["zh-CN", zhCNMessages],
+    ["zh-TW", zhTWMessages],
+  ] as const)(
+    "%s writes every value the way the field takes it",
+    (_, messages) => {
+      const hint = messages.SystemSettings.proxyBypassHint
+      for (const literal of [
+        "{example}",
+        "example.com",
+        ".example.com",
+        "localhost,127.0.0.1,::1",
+      ]) {
+        expect(hint).toContain(`<code>${literal}</code>`)
+      }
+      // The local hosts appear once, as that literal — never listed with the
+      // locale's own punctuation (、 ، or ", "), which reads as a separator.
+      expect(hint.split("localhost")).toHaveLength(2)
+    }
+  )
 })

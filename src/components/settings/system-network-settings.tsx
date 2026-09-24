@@ -1,6 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
 import {
   ArrowUpCircle,
   CheckCircle2,
@@ -76,7 +82,18 @@ function formatBytes(bytes: number): string {
 }
 
 const PROXY_EXAMPLE = "http://127.0.0.1:7890"
-const PROXY_BYPASS_EXAMPLE = "corp.example.com, 192.168.1.10"
+// Written exactly as the backend stores the list — comma-separated, no spaces —
+// so the example, the placeholder and the saved value all read the same.
+const PROXY_BYPASS_EXAMPLE = "git.example.com,.example.org,192.168.1.10"
+
+// A value in a hint, set apart from the prose so its punctuation is not read
+// as the sentence's. `dir="ltr"` keeps it intact in Arabic, where the leading
+// `.` of `.example.com` would otherwise move to the far end.
+const hintLiteral = (chunks: ReactNode) => (
+  <code dir="ltr" className="rounded bg-muted px-1 font-mono break-words">
+    {chunks}
+  </code>
+)
 const APP_LANGUAGE_VALUES = APP_LOCALES
 
 type LanguageSelectValue = "system" | AppLocale
@@ -764,6 +781,9 @@ export function SystemNetworkSettings() {
             </label>
             <Input
               id="system-proxy-bypass"
+              // Hosts read left to right in every locale; in Arabic an entry
+              // typed first as `.example.com` would show its dot at the end.
+              dir="ltr"
               value={noProxy}
               onChange={(event) => setNoProxy(event.target.value)}
               onBlur={() => saveProxySettings(enabled, proxyUrl, noProxy)}
@@ -771,7 +791,10 @@ export function SystemNetworkSettings() {
               disabled={saving}
             />
             <p className="text-2xs text-muted-foreground">
-              {t("proxyBypassHint", { example: PROXY_BYPASS_EXAMPLE })}
+              {t.rich("proxyBypassHint", {
+                example: PROXY_BYPASS_EXAMPLE,
+                code: hintLiteral,
+              })}
             </p>
           </div>
         </section>

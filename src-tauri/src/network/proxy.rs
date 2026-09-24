@@ -124,12 +124,20 @@ pub(crate) fn proxy_env_value(
 }
 
 /// The entries of a bypass list as people write one: commas, semicolons and
-/// whitespace all separate (so a pasted one-per-line list works too), blanks
-/// drop out, and a repeat — hosts are case-insensitive — keeps its first
-/// spelling.
+/// whitespace all separate (so a pasted one-per-line list works too), and so
+/// do the ones a Chinese, Japanese or Arabic keyboard types (`，` `、` `；`
+/// `،`) — a host never contains one, and `a，b` would otherwise stay a single
+/// entry that matches nothing. Blanks drop out, and a repeat — hosts are
+/// case-insensitive — keeps its first spelling.
+///
+/// Entries themselves are kept as written. `*.example.com` in particular is
+/// not respelled `.example.com`, even though curl, Python, Bun and reqwest
+/// skip the star form: they read the dot form as `example.com` itself too, so
+/// the rewrite would send the one host the star form leaves out around the
+/// proxy. The settings page documents the dot form instead.
 fn no_proxy_entries(raw: &str) -> Vec<&str> {
     let mut entries: Vec<&str> = Vec::new();
-    for entry in raw.split(|c: char| c == ',' || c == ';' || c.is_whitespace()) {
+    for entry in raw.split(is_no_proxy_separator) {
         if !entry.is_empty() && !entries.iter().any(|seen| seen.eq_ignore_ascii_case(entry)) {
             entries.push(entry);
         }
@@ -137,13 +145,25 @@ fn no_proxy_entries(raw: &str) -> Vec<&str> {
     entries
 }
 
-/// Canonicalize the settings' bypass list: its entries joined by `", "`, or
-/// `None` when nothing is left. A control character cannot be part of a host,
-/// and a NUL would make the env write panic, so either rejects the list.
-pub(crate) fn normalize_no_proxy(raw: &str) -> Result<Option<String>, AppCommandError> {
+fn is_no_proxy_separator(c: char) -> bool {
+    matches!(c, ',' | ';' | '，' | '、' | '；' | '،') || c.is_whitespace()
+}
+
+/// The settings' bypass list in canonical form: its entries joined by `,` with
+/// no spaces — the form `NO_PROXY` itself takes, and the one the settings page
+/// shows back — or `None` when nothing is left. Never fails, so a list reads
+/// the same whether or not the proxy is on.
+pub(crate) fn canonical_no_proxy(raw: &str) -> Option<String> {
     let entries = no_proxy_entries(raw);
-    if let Some(entry) = entries
-        .iter()
+    (!entries.is_empty()).then(|| entries.join(","))
+}
+
+/// [`canonical_no_proxy`] for a list that is about to be exported. A control
+/// character cannot be part of a host, and a NUL would make the env write
+/// panic, so either rejects the list.
+pub(crate) fn normalize_no_proxy(raw: &str) -> Result<Option<String>, AppCommandError> {
+    if let Some(entry) = no_proxy_entries(raw)
+        .into_iter()
         .find(|entry| entry.chars().any(char::is_control))
     {
         return Err(
@@ -151,7 +171,7 @@ pub(crate) fn normalize_no_proxy(raw: &str) -> Result<Option<String>, AppCommand
                 .with_detail(format!("{entry:?} contains a control character")),
         );
     }
-    Ok((!entries.is_empty()).then(|| entries.join(", ")))
+    Ok(canonical_no_proxy(raw))
 }
 
 /// The `NO_PROXY` value for an environment that carries a proxy: the loopback
@@ -446,6 +466,23 @@ mod tests {
                 "{proxy:?}"
             );
         }
+    }
+
+    /// Per-agent and inherited lists are read by the same rules as the
+    /// settings' own: a full-width or ideographic comma separates, and every
+    /// entry — a `*.x` one included — reaches the agent as written.
+    #[test]
+    fn a_launch_list_is_read_by_the_settings_rules() {
+        let mut merged = launch_env(&[
+            ("HTTP_PROXY", "http://10.0.0.2:3128"),
+            ("NO_PROXY", "*.llm.corp，git.corp"),
+        ]);
+        add_no_proxy_to_launch_env(&mut merged, &inherited("wiki.corp、.build.corp"));
+        let expected = format!("{LOOPBACK},wiki.corp,.build.corp,*.llm.corp,git.corp");
+        assert_eq!(
+            no_proxy_pair(&merged),
+            (Some(expected.as_str()), Some(expected.as_str()))
+        );
     }
 
     /// `*` from any source wins alone: inside a list Python and curl skip it.

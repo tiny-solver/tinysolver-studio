@@ -44,8 +44,9 @@ pub(crate) const TERMINAL_SHELL_OPTION_CUSTOM: &str = "custom";
 /// echoed back to the settings page, and the value exported to child processes
 /// are then the same string. Because the load path normalizes too, a row saved
 /// by an older build with a bare `host:port` heals on read; no migration. The
-/// bypass list gets the same treatment: canonicalized and checked only while it
-/// is exported (see [`proxy::normalize_no_proxy`]).
+/// bypass list is canonicalized either way, so the page always shows it in the
+/// form it documents (see [`proxy::canonical_no_proxy`]), and checked only
+/// while it is exported (see [`proxy::normalize_no_proxy`]).
 pub(crate) fn normalize_proxy_settings(
     settings: SystemProxySettings,
 ) -> Result<SystemProxySettings, AppCommandError> {
@@ -59,9 +60,7 @@ pub(crate) fn normalize_proxy_settings(
         let no_proxy = settings
             .no_proxy
             .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
+            .and_then(proxy::canonical_no_proxy);
 
         return Ok(SystemProxySettings {
             enabled: false,
@@ -1267,7 +1266,8 @@ mod tests {
     }
 
     /// Commas, semicolons and line breaks all separate entries, so a list
-    /// pasted from anywhere lands as one canonical list; a repeat keeps its
+    /// pasted from anywhere lands as one canonical list — comma-separated with
+    /// no spaces, the format the settings page asks for; a repeat keeps its
     /// first spelling.
     #[test]
     fn bypass_list_is_canonicalized_when_the_proxy_is_on() {
@@ -1276,18 +1276,69 @@ mod tests {
             normalize_proxy_settings(enabled_proxy_bypassing(raw)).expect("a host list is valid");
         assert_eq!(
             normalized.no_proxy.as_deref(),
-            Some("corp.example.com, 10.0.0.5, .internal")
+            Some("corp.example.com,10.0.0.5,.internal")
         );
 
         let once = normalized.no_proxy.expect("kept");
         let again = normalize_proxy_settings(enabled_proxy_bypassing(&once)).expect("valid");
         assert_eq!(again.no_proxy.as_deref(), Some(once.as_str()), "idempotent");
 
-        for blank in ["", " , ;\n"] {
+        for blank in ["", " , ;\n", "，、 "] {
             let normalized =
                 normalize_proxy_settings(enabled_proxy_bypassing(blank)).expect("blank is valid");
             assert_eq!(normalized.no_proxy, None, "{blank:?} leaves nothing to store");
         }
+    }
+
+    /// The commas a Chinese, Japanese or Arabic keyboard types separate too:
+    /// no host contains one, and kept inside an entry they would leave a list
+    /// that bypasses nothing.
+    #[test]
+    fn bypass_list_takes_the_commas_other_keyboards_type() {
+        let raw = "a.example，b.example、c.example；d.example،e.example";
+        let normalized =
+            normalize_proxy_settings(enabled_proxy_bypassing(raw)).expect("a host list is valid");
+        assert_eq!(
+            normalized.no_proxy.as_deref(),
+            Some("a.example,b.example,c.example,d.example,e.example")
+        );
+    }
+
+    /// Only the separators change; entries are stored and exported as written.
+    /// `*.corp.example.com` stays distinct from `.corp.example.com`: most tools
+    /// read the dot form as `corp.example.com` itself too, the one host the
+    /// star form leaves on the proxy.
+    #[test]
+    fn a_star_dot_entry_is_kept_as_written() {
+        let settings = enabled_proxy_bypassing("*.corp.example.com, .corp.example.com");
+        assert_eq!(
+            normalize_proxy_settings(settings.clone())
+                .expect("valid")
+                .no_proxy
+                .as_deref(),
+            Some("*.corp.example.com,.corp.example.com")
+        );
+        assert_eq!(
+            proxy::no_proxy_env_value(&settings).expect("valid"),
+            "localhost,127.0.0.1,::1,[::1],*.corp.example.com,.corp.example.com"
+        );
+    }
+
+    /// The page shows back whatever the save returns, so a list typed before
+    /// the proxy is switched on reads in the same canonical form. (That the
+    /// disabled path still never validates is pinned by the control-character
+    /// test above.)
+    #[test]
+    fn bypass_list_is_canonicalized_while_the_proxy_is_off_too() {
+        let disabled = normalize_proxy_settings(SystemProxySettings {
+            enabled: false,
+            ..enabled_proxy_bypassing(" corp.example.com, 10.0.0.5；.internal ")
+        })
+        .expect("disabled is not an error");
+        assert_eq!(
+            disabled.no_proxy.as_deref(),
+            Some("corp.example.com,10.0.0.5,.internal")
+        );
     }
 
     /// A control character cannot name a host, and a NUL in the exported value

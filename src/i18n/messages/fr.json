@@ -242,7 +242,7 @@
     "proxyAddress": "Adresse du proxy",
     "proxyHint": "Prend en charge http(s)/socks5, exemple : {example}. Actif uniquement lorsque le proxy système est activé.",
     "proxyBypass": "Ne pas utiliser le proxy pour",
-    "proxyBypassHint": "Hôtes, domaines ou adresses IP joints directement, sans passer par le proxy (NO_PROXY), séparés par des virgules, exemple : {example}. Les adresses locales (localhost, 127.0.0.1, ::1) sont toujours jointes directement.",
+    "proxyBypassHint": "Séparez les entrées par des virgules, sans espaces, par exemple <code>{example}</code>. <code>example.com</code> correspond à ce domaine et <code>.example.com</code> à tous ses sous-domaines ; les adresses IP sont également acceptées. Les adresses locales <code>localhost,127.0.0.1,::1</code> sont toujours jointes directement et n’ont pas besoin d’être ajoutées. La liste s’applique comme variable d’environnement NO_PROXY.",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "proxyRequired": "L’URL du proxy est requise lorsque le proxy est activé",
