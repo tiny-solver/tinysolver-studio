@@ -211,6 +211,7 @@ fn merge_agent_env_with_color(
     for (key, value) in proxy::current_proxy_env_vars() {
         merged.insert(key, value);
     }
+    proxy::add_no_proxy_to_launch_env(&mut merged, &proxy::current_no_proxy_env_vars());
 
     // Ensure agent-invoked `officecli …` (from an enabled office skill) resolves
     // even when codeg installed the binary outside the user's shell PATH — the
@@ -25409,6 +25410,27 @@ mod tests {
             merge_agent_env_with_color(false, &[("FROM_REGISTRY", "registry")], &runtime_env, None);
         assert_eq!(merged_value(&merged, "FROM_REGISTRY"), Some("registry"));
         assert_eq!(merged_value(&merged, "FROM_ROW"), Some("row"));
+    }
+
+    /// A launch that carries a proxy leaves with the loopback exception, in
+    /// both spellings — the agent's own local services (OpenCode's embedded
+    /// server, Antigravity's harness socket) must never be sent to it. The proxy
+    /// comes from the per-agent row so the test does not depend on this
+    /// machine's environment; `*` is what an inherited `NO_PROXY=*` yields.
+    #[test]
+    fn a_proxied_launch_env_carries_the_loopback_exception() {
+        let runtime_env = BTreeMap::from([(
+            "HTTP_PROXY".to_string(),
+            "http://10.0.0.2:3128".to_string(),
+        )]);
+        let merged = merge_agent_env_with_color(false, &[], &runtime_env, None);
+        for key in ["NO_PROXY", "no_proxy"] {
+            let value = merged_value(&merged, key).unwrap_or_default();
+            assert!(
+                value.starts_with("localhost,127.0.0.1,::1,[::1]") || value == "*",
+                "{key}: {value:?}"
+            );
+        }
     }
 
     // ─── trim_partial_ansi_tail ─────────────────────────────────────────

@@ -241,6 +241,8 @@
     "enableProxy": "Enable system proxy",
     "proxyAddress": "Proxy address",
     "proxyHint": "Supports http(s)/socks5, example: {example}. Only effective when system proxy is enabled.",
+    "proxyBypass": "Bypass proxy for",
+    "proxyBypassHint": "Hosts, domains or IP addresses that connect directly instead of through the proxy (NO_PROXY), separated by commas, example: {example}. Local addresses (localhost, 127.0.0.1, ::1) always connect directly.",
     "save": "Save",
     "saving": "Saving...",
     "proxyRequired": "Proxy URL is required when proxy is enabled",

@@ -241,6 +241,8 @@
     "enableProxy": "System-Proxy aktivieren",
     "proxyAddress": "Proxy-Adresse",
     "proxyHint": "Unterstützt http(s)/socks5, Beispiel: {example}. Wirksam nur bei aktiviertem System-Proxy.",
+    "proxyBypass": "Proxy umgehen für",
+    "proxyBypassHint": "Hosts, Domains oder IP-Adressen, die direkt statt über den Proxy verbunden werden (NO_PROXY), durch Kommas getrennt, Beispiel: {example}. Lokale Adressen (localhost, 127.0.0.1, ::1) werden immer direkt verbunden.",
     "save": "Speichern",
     "saving": "Wird gespeichert...",
     "proxyRequired": "Bei aktiviertem Proxy ist eine Proxy-URL erforderlich",

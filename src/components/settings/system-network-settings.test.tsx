@@ -97,9 +97,11 @@ import {
   getSystemAutostartSettings,
   getSystemProxySettings,
   updateSystemAutostartSettings,
+  updateSystemProxySettings,
 } from "@/lib/api"
 
 const mockGetProxy = vi.mocked(getSystemProxySettings)
+const mockSetProxy = vi.mocked(updateSystemProxySettings)
 const mockGetAutostart = vi.mocked(getSystemAutostartSettings)
 const mockSetAutostart = vi.mocked(updateSystemAutostartSettings)
 
@@ -119,6 +121,7 @@ beforeEach(() => {
   call.mockReset()
   subscribe.mockClear()
   mockGetProxy.mockReset()
+  mockSetProxy.mockReset()
   mockGetAutostart.mockReset()
   mockSetAutostart.mockReset()
   desktopShell = false
@@ -617,6 +620,111 @@ describe("SystemNetworkSettings — launch at login", () => {
     expect(
       screen.getByDisplayValue("http://proxy.local:8080")
     ).toBeInTheDocument()
+    expect(screen.queryByText(/Load failed/)).not.toBeInTheDocument()
+  })
+})
+
+describe("SystemNetworkSettings — proxy bypass list", () => {
+  beforeEach(() => {
+    call.mockImplementation(liveServerCalls({ seq: 1, status: "idle" }))
+  })
+
+  it("saves the list with the proxy and shows what the backend stored", async () => {
+    mockGetProxy.mockResolvedValue({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com",
+    })
+    // The backend canonicalizes the list; the field follows its answer.
+    mockSetProxy.mockResolvedValue({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com, 192.168.1.10",
+    })
+
+    renderWithIntl()
+
+    const bypass = await screen.findByLabelText("Bypass proxy for")
+    expect(bypass).toHaveValue("corp.example.com")
+
+    fireEvent.change(bypass, {
+      target: { value: " corp.example.com;192.168.1.10 " },
+    })
+    fireEvent.blur(bypass)
+
+    await waitFor(() =>
+      expect(bypass).toHaveValue("corp.example.com, 192.168.1.10")
+    )
+    expect(mockSetProxy).toHaveBeenCalledWith({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com;192.168.1.10",
+    })
+  })
+
+  it("keeps the list when the proxy address or switch is saved", async () => {
+    // Every save sends the whole settings row, so saving one field must not
+    // wipe the bypass list the backend already has.
+    mockGetProxy.mockResolvedValue({
+      enabled: false,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com",
+    })
+    mockSetProxy.mockImplementation(async (settings) => settings)
+
+    renderWithIntl()
+
+    const address = await screen.findByDisplayValue("http://10.0.0.2:3128")
+    fireEvent.blur(address)
+    await waitFor(() => expect(mockSetProxy).toHaveBeenCalledTimes(1))
+    expect(mockSetProxy).toHaveBeenLastCalledWith({
+      enabled: false,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com",
+    })
+
+    fireEvent.click(screen.getByLabelText("Enable system proxy"))
+    await waitFor(() => expect(mockSetProxy).toHaveBeenCalledTimes(2))
+    expect(mockSetProxy).toHaveBeenLastCalledWith({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com",
+    })
+  })
+
+  it("clears the list with an empty field", async () => {
+    mockGetProxy.mockResolvedValue({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: "corp.example.com",
+    })
+    mockSetProxy.mockImplementation(async (settings) => settings)
+
+    renderWithIntl()
+
+    const bypass = await screen.findByLabelText("Bypass proxy for")
+    fireEvent.change(bypass, { target: { value: "   " } })
+    fireEvent.blur(bypass)
+
+    await waitFor(() => expect(mockSetProxy).toHaveBeenCalledTimes(1))
+    expect(mockSetProxy).toHaveBeenCalledWith({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+      no_proxy: null,
+    })
+    await waitFor(() => expect(bypass).toHaveValue(""))
+  })
+
+  it("shows an empty list for a server that predates the setting", async () => {
+    // A remote workspace on an older server never sends `no_proxy`.
+    mockGetProxy.mockResolvedValue({
+      enabled: true,
+      proxy_url: "http://10.0.0.2:3128",
+    })
+
+    renderWithIntl()
+
+    expect(await screen.findByLabelText("Bypass proxy for")).toHaveValue("")
     expect(screen.queryByText(/Load failed/)).not.toBeInTheDocument()
   })
 })

@@ -241,6 +241,8 @@
     "enableProxy": "システムプロキシを有効化",
     "proxyAddress": "プロキシアドレス",
     "proxyHint": "http(s)/socks5 をサポート。例: {example}。システムプロキシ有効時のみ有効です。",
+    "proxyBypass": "プロキシを使用しないアドレス",
+    "proxyBypassHint": "プロキシを経由せず直接接続するホスト、ドメイン、IP アドレス（NO_PROXY）。複数はカンマで区切ります。例: {example}。ローカルアドレス（localhost、127.0.0.1、::1）は常に直接接続します。",
     "save": "保存",
     "saving": "保存中...",
     "proxyRequired": "プロキシ有効時はプロキシ URL が必要です",

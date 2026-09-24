@@ -241,6 +241,8 @@
     "enableProxy": "Ativar proxy do sistema",
     "proxyAddress": "Endereço do proxy",
     "proxyHint": "Suporta http(s)/socks5, exemplo: {example}. Só funciona quando o proxy do sistema está ativado.",
+    "proxyBypass": "Ignorar o proxy para",
+    "proxyBypassHint": "Hosts, domínios ou endereços IP que se conectam diretamente, sem passar pelo proxy (NO_PROXY), separados por vírgulas, exemplo: {example}. Endereços locais (localhost, 127.0.0.1, ::1) sempre se conectam diretamente.",
     "save": "Salvar",
     "saving": "Salvando...",
     "proxyRequired": "A URL do proxy é obrigatória quando o proxy está ativado",

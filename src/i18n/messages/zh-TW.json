@@ -241,6 +241,8 @@
     "enableProxy": "啟用系統代理",
     "proxyAddress": "代理位址",
     "proxyHint": "支援 http(s)/socks5，範例：{example}。僅在啟用系統代理時生效。",
+    "proxyBypass": "不經過代理的位址",
+    "proxyBypassHint": "這些主機、網域或 IP 位址將直連、不經過代理（即 NO_PROXY），多個以逗號分隔，範例：{example}。本機位址（localhost、127.0.0.1、::1）一律直連。",
     "save": "儲存",
     "saving": "儲存中...",
     "proxyRequired": "啟用代理時必須填寫代理位址",
