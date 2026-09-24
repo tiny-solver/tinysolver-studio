@@ -17,8 +17,9 @@
 | --- | --- | --- |
 | 문서 | 엔진과 편집기가 공유하는 장면 파일 `outputs/game/content/<scene>.studio.json`, 검증된 명령, etag 저장 | 프로젝트 폴더 안에서만 |
 | 도구 | iframe 위 오버레이로 선택·드래그, 인스펙터(transform·그리기 속성·행동·클릭 액션), 액션 단계 편집, 플레이 중 게임 변수와 다시 시작, 장면 추가·전환 | 이미지 업로드·타일맵·타임라인은 후속 |
-| 엔진 | Studio가 제공하는 관리형 런타임 `codeg-engine`(three-web 0.3.0). 프로젝트에는 장면과 스크립트만 있고, 미리보기 서버가 `__codeg/`로 서빙하며 빌드가 같은 경로에 넣는다 | 편집/플레이 모드, 스크립트, 트윈, 입력. 3D·물리·타일맵은 없다 |
-| 출시 | 빌드 버튼 → `build/game/<version>/` + zip(엔진 포함, CDN 없음). 빌드마다 **출시** → Studio의 `/play/<slug>/` 링크, **배포** → 매니페스트의 `publish.command` | 외부 호스트 계정·자격 증명은 호출되는 CLI의 것 |
+| 엔진 | Studio가 제공하는 관리형 런타임 `codeg-engine`(three-web 0.4.0). 프로젝트에는 장면과 스크립트만 있고, 미리보기 서버가 `__codeg/`로 서빙하며 빌드가 같은 경로에 넣는다 | 편집/플레이 모드, 스크립트, 트윈, 입력. 3D·물리·타일맵은 없다 |
+| 플랫폼 층 | 게임은 저장·플레이어·순위·공유·광고를 `codeg-platform` 하나로 부른다. importmap이 `__codeg/platform/current.js`를 가리키고, 그 파일이 대상의 어댑터다 — 미리보기는 `studio`(가짜판), 빌드는 `web`. 같은 게임 코드가 대상만 바꿔 돈다 | 대상은 지금 `studio`·`web`. afterplay·Tauri·Capacitor는 다음 단계 |
+| 출시 | 빌드 버튼 → `build/game/<version>/` + zip(엔진·플랫폼 어댑터 포함, CDN 없음, 문서 `*.md` 제외). "어디서든 돌려면" 검사 결과가 빌드의 `warnings`로 남는다. 빌드마다 **출시** → Studio의 `/play/<slug>/` 링크, **배포** → 매니페스트의 `publish.command` | 외부 호스트 계정·자격 증명은 호출되는 CLI의 것 |
 
 ## 실행 — 전체 빌드 없이 미리보기
 
@@ -88,6 +89,7 @@ pnpm dev
 - 에이전트는 같은 명령을 MCP 도구로 쓴다. 콘텐츠 프로젝트 폴더에서 연 세션에는 codeg-mcp 동반 프로세스가 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`를 노출한다. 검증기는 `src-tauri/src/studio_scene.rs`(이 문서의 `document.ts`와 같은 규칙)이고, 파일에 쓰면 편집기와 미리보기가 감시 스트림으로 알아챈다.
 - 편집기 → 에이전트: 헤더의 **대화로 보내기**가 장면 파일 배지와 함께 현재 장면·선택한 노드·미리보기 런타임 오류를 옆 대화의 입력창에 넣는다. 전송은 사용자가 한다. 게임 보기의 오류 띠에도 같은 버튼이 있다.
 - 미리보기 서버는 서빙하는 HTML에 오류 보고 스크립트를 주입한다(`codeg:error` postMessage). 엔진을 에이전트가 새로 썼더라도 예외·거부된 프로미스·`console.error`·리소스 로드 실패가 편집기에 뜬다. 빌드 산출물에는 들어가지 않는다.
+- 같은 자리에 미리보기 표식 `window.__codegPreview`를 심는다. 엔진은 이 표식이 있는 iframe에서만 편집기 프로토콜(`codeg:*`)을 말한다 — afterplay처럼 게임을 iframe에 띄우는 다른 곳에 편집기 메시지를 보내지 않는다. 플랫폼 층 이전에 만든 프로젝트의 importmap에는 `codeg-platform` 항목을 미리보기·빌드가 채워 준다(프로젝트 파일은 고치지 않는다).
 
 ## 구조
 
@@ -113,6 +115,8 @@ flowchart LR
 - `src/lib/studio/agent-context.ts`, `src/components/studio/use-chat-bridge.ts`: 대화로 보내는 컨텍스트와 대화 입력창 연결.
 - `src-tauri/src/commands/content_project.rs`: 스캐폴드, 매니페스트, 장면 목록, 빌드 패키징. `content_project_game_main.js`·`content_project_game_scripts.js`가 스캐폴드되는 게임 코드.
 - `src-tauri/engines/three-web/runtime.js`·`ENGINE.md`, `engines/vendor/`: 관리형 런타임과 벤더링된 Three.js. `src-tauri/src/content_engine.rs`가 내장해 미리보기와 빌드에 제공한다.
+- `src-tauri/engines/platform/`: 플랫폼 층 — `core.js`(표면·검사·없는 능력의 기본 동작)와 대상별 어댑터(`studio.js`·`web.js`). 표면은 afterplay SDK v2의 부분집합이다.
+- `src-tauri/src/content_compat.rs`: 빌드 폴더를 훑어 "어디서든 돌려면" 규칙(바깥 네트워크·저장소 직접·`alert`/`window.open`·Service Worker·40MB)을 어긴 곳을 찾는다.
 - `src/components/studio/game-preview.tsx`, `studio-pane.tsx`: 작업공간 파일 창의 게임 보기/장면 편집 전환.
 
 ## 검증과 계획 유지관리

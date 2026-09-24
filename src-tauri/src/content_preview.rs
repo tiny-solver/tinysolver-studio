@@ -157,7 +157,13 @@ pub(crate) fn content_type(path: &Path) -> &'static str {
 /// of the engine because an agent is free to rewrite the engine, and the
 /// errors that matter most are the ones from code nobody has reviewed yet.
 /// Only the preview gets it — a packaged build is a plain file copy.
-const ERROR_REPORTER: &str = r#"<script data-codeg-preview>(function(){
+///
+/// It is preceded by the preview marker `window.__codegPreview = { scope }`:
+/// the engine speaks the editor protocol only when it sees it (an iframe
+/// alone is not proof — afterplay runs games in one too), and the `studio`
+/// platform adapter keys its fake saves by `scope`, which, unlike the
+/// preview id, survives a Studio restart.
+const ERROR_REPORTER: &str = r#"(function(){
 if(window.parent===window)return;
 var seen=0;
 function send(kind,detail){
@@ -178,17 +184,33 @@ console.error=function(){
 };
 })();</script>"#;
 
-/// Put the reporter first in `<head>` (or at the very top when the page has
-/// none) so it is installed before any other script runs.
-fn inject_reporter(html: &[u8]) -> Vec<u8> {
+/// Stable per-folder key for the preview marker. Not a secret — it only
+/// separates one project's fake saves from another's in the same webview.
+fn preview_scope(root: &Path) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    root.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+/// Prepare a served page: add the platform to an old import map, then put
+/// the marker and the reporter first in `<head>` (or at the very top when the
+/// page has none) so they are installed before any other script runs.
+fn inject_reporter(html: &[u8], scope: &str) -> Vec<u8> {
     let text = String::from_utf8_lossy(html);
+    let text = crate::content_engine::with_platform_import(&text)
+        .map(std::borrow::Cow::Owned)
+        .unwrap_or(text);
     let lower = text.to_ascii_lowercase();
     let at = lower
         .find("<head")
         .and_then(|start| lower[start..].find('>').map(|end| start + end + 1))
         .unwrap_or(0);
-    let mut out = String::with_capacity(text.len() + ERROR_REPORTER.len());
+    let mut out = String::with_capacity(text.len() + ERROR_REPORTER.len() + 100);
     out.push_str(&text[..at]);
+    out.push_str("<script data-codeg-preview>window.__codegPreview={scope:\"");
+    out.push_str(scope);
+    out.push_str("\"};");
     out.push_str(ERROR_REPORTER);
     out.push_str(&text[at..]);
     out.into_bytes()
@@ -219,7 +241,7 @@ pub async fn serve(id: &str, rel: &str) -> Response {
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
             let bytes = if content_type(&path).starts_with("text/html") {
-                inject_reporter(&bytes)
+                inject_reporter(&bytes, &preview_scope(&root))
             } else {
                 bytes
             };
@@ -340,6 +362,7 @@ mod tests {
         let body = axum::body::to_bytes(ok.into_body(), usize::MAX).await.unwrap();
         let body = String::from_utf8(body.to_vec()).unwrap();
         assert!(body.starts_with("<script data-codeg-preview>"), "no <head>: reporter goes first");
+        assert!(body.contains(&format!("window.__codegPreview={{scope:\"{}\"}}", preview_scope(root))));
         assert!(body.ends_with("<h1>hi</h1>"));
 
         let js = serve(&id, "outputs/game/src/main.js").await;
@@ -364,6 +387,12 @@ mod tests {
         let body = axum::body::to_bytes(runtime.into_body(), usize::MAX).await.unwrap();
         assert!(body.starts_with(b"// codeg-engine"));
         assert_eq!(serve(&id, "__codeg/vendor/three.module.min.js").await.status(), StatusCode::OK);
+        // The platform entry is the preview's fake, whatever the build target.
+        let platform = serve(&id, "__codeg/platform/current.js").await;
+        assert_eq!(platform.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(platform.into_body(), usize::MAX).await.unwrap();
+        assert!(String::from_utf8_lossy(&body).contains("makePlatform(\"studio\""));
+        assert_eq!(serve(&id, "__codeg/platform/core.js").await.status(), StatusCode::OK);
         assert_eq!(serve(&id, "__codeg/other.js").await.status(), StatusCode::NOT_FOUND);
         assert_eq!(serve("nope", "__codeg/vendor/three.module.min.js").await.status(), StatusCode::NOT_FOUND);
         assert_eq!(serve(&id, "outputs/game/missing.png").await.status(), StatusCode::NOT_FOUND);
@@ -372,11 +401,17 @@ mod tests {
     #[test]
     fn reporter_lands_right_after_the_head_tag() {
         let page = b"<!doctype html><html><HEAD lang=\"ko\"><script type=\"module\" src=\"a.js\"></script></head></html>";
-        let out = String::from_utf8(inject_reporter(page)).unwrap();
+        let out = String::from_utf8(inject_reporter(page, "s")).unwrap();
         let head = out.find("<HEAD lang=\"ko\">").unwrap() + "<HEAD lang=\"ko\">".len();
         assert!(out[head..].starts_with("<script data-codeg-preview>"));
         assert!(out.find("data-codeg-preview").unwrap() < out.find("a.js").unwrap());
         assert_eq!(out.matches("codeg:error").count(), 1);
+        assert!(out.contains("window.__codegPreview={scope:\"s\"}"));
+
+        // An import map from before the platform layer gets the entry.
+        let old = b"<head><script type=\"importmap\">{\"imports\":{\"codeg-engine\":\"../../__codeg/engine/three-web/runtime.js\"}}</script></head>";
+        let out = String::from_utf8(inject_reporter(old, "s")).unwrap();
+        assert!(out.contains("\"codeg-platform\": \"../../__codeg/platform/current.js\""));
     }
 
     #[test]

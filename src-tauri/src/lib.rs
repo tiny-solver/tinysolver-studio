@@ -24,6 +24,7 @@ pub mod brand;
 pub mod browser;
 pub mod chat_channel;
 pub mod commands;
+pub mod content_compat;
 pub mod content_engine;
 pub mod content_preview;
 pub mod content_publish;

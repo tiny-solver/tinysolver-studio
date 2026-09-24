@@ -6380,6 +6380,7 @@
     "building": "Compilando…",
     "builds": "Compilações",
     "noBuilds": "Ainda não há compilações. Compilar empacota outputs/game e assets em build/game/(version)/ mais um zip.",
+    "buildWarnings": "{count} aviso(s) de compatibilidade — passe o cursor para ver",
     "buildDone": "A compilação {version} está pronta em build/game/.",
     "openBuildFolder": "Mostrar",
     "buildZip": "zip",
