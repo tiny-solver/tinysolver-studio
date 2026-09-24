@@ -29,7 +29,7 @@ import {
 import { Shimmer } from "./shimmer"
 import { markdownLinkComponents } from "./markdown-link"
 import { mermaidComponents } from "./mermaid-block"
-import { normalizeMathDelimiters } from "./message"
+import { LIVE_REMEND, normalizeMathDelimiters } from "./message"
 import { remarkTrimCjkAutolinkTail } from "./remark-cjk-autolink-tail"
 import { withRelativeFileLinks } from "./rehype-relative-file-links"
 import { remarkRewriteFileUriLinks } from "./remark-file-uri-links"
@@ -253,6 +253,9 @@ export const ReasoningContent = memo(
           {...props}
           mode={isStreaming ? "streaming" : "static"}
           parseIncompleteMarkdown={isStreaming}
+          // An unclosed link shows as text, as in MessageResponse — see
+          // LIVE_REMEND for why the default placeholder cannot be used.
+          remend={LIVE_REMEND}
           // Enforce the link icon + safety override after spreading props.
           components={reasoningComponents}
         >
