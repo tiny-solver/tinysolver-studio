@@ -9,7 +9,12 @@ import { makePlatform, browserStorage } from "./core.js"
 const scope = `codeg-studio:${window.__codegPreview?.scope || location.pathname.split("/").slice(0, 4).join("/")}`
 const storage = browserStorage(scope)
 
-const me = { id: "studio-player", name: "나 (미리보기)", avatar: null, level: 1 }
+const me = {
+  id: "studio-player",
+  name: "나 (미리보기)",
+  avatar: null,
+  level: 1,
+}
 let signedIn = true
 
 // 순위표가 비어 보이지 않게 가짜 경쟁자 셋.
@@ -46,15 +51,22 @@ export const platform = makePlatform("studio", {
     const rows = [...RIVALS]
     if (mine !== null) rows.push({ name: me.name, score: mine, me: true })
     rows.sort((a, b) => b.score - a.score)
-    return rows.slice(0, limit).map((row, i) => ({ rank: i + 1, me: false, ...row }))
+    return rows
+      .slice(0, limit)
+      .map((row, i) => ({ rank: i + 1, me: false, ...row }))
   },
   async share(text) {
-    console.info("[codeg-platform] share (미리보기 — 실제로 올리지 않는다):", text)
+    console.info(
+      "[codeg-platform] share (미리보기 — 실제로 올리지 않는다):",
+      text
+    )
     return true
   },
   // 진짜 광고처럼 pause → 잠깐 → resume 을 낸다. 게임의 멈춤 처리를 여기서 본다.
   async adsBreak({ type, name }, emit) {
-    console.info(`[codeg-platform] ads.break ${type} ${name} (미리보기 — 가짜 광고)`)
+    console.info(
+      `[codeg-platform] ads.break ${type} ${name} (미리보기 — 가짜 광고)`
+    )
     emit("pause")
     await new Promise((r) => setTimeout(r, 400))
     emit("resume")
