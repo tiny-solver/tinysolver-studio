@@ -6380,6 +6380,7 @@
     "building": "建置中…",
     "builds": "建置",
     "noBuilds": "還沒有建置。建置會把 outputs/game 和 assets 打包到 build/game/(version)/ 並產生 zip。",
+    "buildWarnings": "{count} 則相容性警告 — 滑過以查看",
     "buildDone": "建置 {version} 已在 build/game/ 中就緒。",
     "openBuildFolder": "檢視",
     "buildZip": "zip",

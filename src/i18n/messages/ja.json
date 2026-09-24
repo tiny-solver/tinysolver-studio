@@ -6380,6 +6380,7 @@
     "building": "ビルド中…",
     "builds": "ビルド",
     "noBuilds": "ビルドはまだありません。ビルドは outputs/game と assets を build/game/(version)/ と zip にまとめます。",
+    "buildWarnings": "互換性の警告 {count} 件 — ホバーで表示",
     "buildDone": "ビルド {version} が build/game/ に用意できました。",
     "openBuildFolder": "表示",
     "buildZip": "zip",

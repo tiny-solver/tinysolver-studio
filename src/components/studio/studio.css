@@ -721,6 +721,10 @@
   color: var(--muted-foreground);
   font-size: 10px;
 }
+.studio-root .studio-build-row > .studio-build-warnings {
+  color: #d97706;
+  cursor: help;
+}
 .studio-build-row > div {
   display: flex;
   align-items: center;

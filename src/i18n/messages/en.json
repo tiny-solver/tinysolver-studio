@@ -6380,6 +6380,7 @@
     "building": "Building…",
     "builds": "Builds",
     "noBuilds": "No build yet. Build packages outputs/game and assets into build/game/(version)/ plus a zip.",
+    "buildWarnings": "{count} portability warning(s) — hover to see",
     "buildDone": "Build {version} is ready in build/game/.",
     "openBuildFolder": "Show",
     "buildZip": "zip",

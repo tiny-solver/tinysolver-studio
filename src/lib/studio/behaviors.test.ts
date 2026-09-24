@@ -11,7 +11,7 @@ import {
 
 const info = readEngineInfo({
   type: "codeg:ready",
-  version: "0.3.0",
+  version: "0.4.0",
   modes: true,
   scripts: ["float", "patrol", "bad name", 7],
   ops: ["say", "shake"],

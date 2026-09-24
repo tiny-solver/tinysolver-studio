@@ -791,6 +791,14 @@ export function StudioWorkspace({
                       {new Date(b.built_at).toLocaleString()} ·{" "}
                       {Math.ceil(b.size_bytes / 1024)} KB
                     </span>
+                    {(b.warnings?.length ?? 0) > 0 && (
+                      <span
+                        className="studio-build-warnings"
+                        title={b.warnings!.join("\n")}
+                      >
+                        {t("buildWarnings", { count: b.warnings!.length })}
+                      </span>
+                    )}
                     <div>
                       {isLocalDesktop() && (
                         <button

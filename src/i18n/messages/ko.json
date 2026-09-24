@@ -6380,6 +6380,7 @@
     "building": "빌드 중…",
     "builds": "빌드",
     "noBuilds": "아직 빌드가 없습니다. 빌드는 outputs/game과 assets를 build/game/(version)/ 폴더와 zip으로 묶습니다.",
+    "buildWarnings": "어디서든 돌려면 경고 {count}개 — 마우스를 올려 보기",
     "buildDone": "빌드 {version}이(가) build/game/에 준비됐습니다.",
     "openBuildFolder": "보기",
     "buildZip": "zip",

@@ -3926,6 +3926,10 @@ export interface ContentBuild {
   zip?: string | null
   size_bytes: number
   log: string
+  /** Which `codeg-platform` adapter the build carries (`web`, …). */
+  target?: string
+  /** "Runs anywhere" findings: `[rule] path:line · what — why`. */
+  warnings?: string[]
   /** Where this build has been released; at most one record per target. */
   published?: ContentPublishRecord[]
 }

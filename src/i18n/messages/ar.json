@@ -6380,6 +6380,7 @@
     "building": "جارٍ البناء…",
     "builds": "البناءات",
     "noBuilds": "لا يوجد بناء بعد. البناء يحزم outputs/game و assets في build/game/(version)/ مع ملف zip.",
+    "buildWarnings": "{count} تحذير توافق — مرّر المؤشر للعرض",
     "buildDone": "البناء {version} جاهز في build/game/.",
     "openBuildFolder": "عرض",
     "buildZip": "zip",
