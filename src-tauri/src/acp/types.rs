@@ -71,9 +71,10 @@ pub struct EventEnvelope {
 /// It replaces, on the connections that advertise it, the `**bold label:** …`
 /// agent-message line both adapters used to fold these into, and it OUTRANKS
 /// the AIR advisory lane (claude gates its model-fallback publish on
-/// `!supportsNotices`; codex says the same in readme-dev). So the consumer
-/// mirrors `warning`/`error` back into [`SessionFailureRecord`] to keep the
-/// banner's behaviour — see `acp-connections-context`.
+/// `!supportsNotices`; codex says the same in readme-dev). The consumer shows
+/// each one as a notification: a toast, which for `warning`/`error` is also
+/// kept in the status-bar alert list (see the frontend's
+/// `lib/session-notices.ts`).
 ///
 /// `severity` stays a plain string for the same reason the AIR vocabulary does:
 /// a future level degrades to the frontend's fallback rendering instead of
@@ -597,9 +598,8 @@ pub enum AcpEvent {
     /// `SessionFailure` neighbour this is NOT a record: there is no id to merge
     /// on and no revision to reject, so every emission is a distinct event and
     /// `SessionState::apply_event` deliberately keeps none of it. The frontend
-    /// raises a toast and, for `warning`/`error`, mirrors a synthetic
-    /// `SessionFailureRecord` so the banner keeps the role the AIR advisory
-    /// lane used to fill.
+    /// shows each one as a notification: a toast, which for `warning`/`error`
+    /// is also kept in the status-bar alert list.
     ///
     /// Reaches codeg from the two adapters `build_client_capabilities`
     /// advertises `session.notices` to: claude-agent-acp (0.81+) and codex-acp
