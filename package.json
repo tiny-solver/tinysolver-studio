@@ -1,7 +1,7 @@
 {
   "name": "tinysolver-studio",
   "private": true,
-  "version": "0.31.2",
+  "version": "0.32.1",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "pnpm prepare:monaco && next dev --turbopack -p 3100",
